@@ -1,0 +1,42 @@
+name: Feature or requirement
+description: Propose a requirement, a change to one, or an idea.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should leverage do? Describe behavior, not implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How would we know this is done?
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: false
+  - type: input
+    id: requirement
+    attributes:
+      label: Related requirement
+      description: The ID from docs/PRD.md this relates to (for example FR-001), if any.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
