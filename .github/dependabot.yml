@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keeps the actions in .github/workflows up to date. They are pinned to
+  # commit SHAs, so nothing changes until one of these pull requests is merged.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      # Gives pull request titles the Conventional Commits form the "PR title"
+      # check requires, e.g. "chore(deps): bump actions/checkout from …".
+      prefix: "chore(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"

@@ -16,3 +16,18 @@ once it makes its first release.
   follow).
 - Architecture and deployment document structure in `docs/`.
 - `AGENTS.md` with instructions for AI coding agents.
+- `MAINTENANCE.md`: what to expect from the maintainer, and the project's
+  scope limits.
+- An AI-assisted contributions policy in `CONTRIBUTING.md`, a matching
+  disclosure section in the pull request template, and a rule for AI-assisted
+  vulnerability reports in `SECURITY.md`.
+- Automated checks on every pull request: Markdown lint, internal links, PRD
+  requirement IDs, and pull request title format. External links are checked
+  weekly.
+- Dependabot updates for the pinned GitHub Actions.
+- A ruleset on `main`: changes land through pull requests with passing
+  checks; force pushes and deletion are blocked.
+
+### Changed
+
+- Pull requests are welcome at any time; opening an issue first is optional.

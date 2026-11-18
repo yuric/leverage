@@ -25,9 +25,24 @@ A useful report includes:
 - the impact you believe it has;
 - any fix or mitigation you have in mind.
 
+## AI-assisted reports
+
+Reports found or drafted with the help of AI tools are welcome, on one
+condition: you have verified the finding yourself. Before you report:
+
+- reproduce the problem, and include the steps that worked for you;
+- confirm that the code or configuration you describe exists in this
+  repository, at the commit you name;
+- say which tool you used.
+
+A model-generated report that nobody has reproduced is not a security report
+and will be closed. See also
+[AI-assisted contributions](CONTRIBUTING.md#ai-assisted-contributions).
+
 ## What to expect
 
-leverage is maintained by volunteers, so these are targets rather than
+leverage has one maintainer (see the
+[maintenance policy](MAINTENANCE.md)), so these are targets rather than
 guarantees:
 
 - acknowledgement of your report within 7 days;

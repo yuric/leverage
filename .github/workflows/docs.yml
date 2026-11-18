@@ -1,0 +1,99 @@
+name: Docs checks
+
+# Rules for this file are in AGENTS.md ("GitHub Actions"):
+# least-privilege permissions, actions pinned to a full commit SHA,
+# no pull_request_target, untrusted values passed through env.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Mondays 06:17 UTC: catches external links that have gone stale.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown:
+    name: Markdown lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: DavidAnson/markdownlint-cli2-action@696eb3f2509270d7b882d2aa68347bc676e7af34 # v25.0.0
+        with:
+          globs: "**/*.md"
+
+  internal-links:
+    name: Internal links
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # --offline checks only links between files in the repository, so
+          # this job cannot fail because someone else's website is down.
+          args: --offline --include-fragments --no-progress './**/*.md'
+          fail: true
+
+  prd-ids:
+    name: PRD requirement IDs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check_prd_ids.py
+
+  pr-title:
+    name: PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Check that the title follows Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|chore|refactor|test|build|ci|perf|style|revert)(\([a-z0-9._/-]+\))?!?: [^[:space:]].*$'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "OK: title follows Conventional Commits."
+          else
+            echo "::error::The pull request title must follow Conventional Commits, for example 'docs: clarify FR-003'."
+            echo "Allowed types: feat, fix, docs, chore, refactor, test, build, ci, perf, style, revert."
+            echo "See https://www.conventionalcommits.org/"
+            exit 1
+          fi
+
+  external-links:
+    name: External links
+    # Not run on pull requests or pushes: a third-party outage must never
+    # block a merge. Runs weekly and on demand.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --no-progress --max-retries 3 --accept '200..=299,429' './**/*.md'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

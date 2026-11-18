@@ -1,0 +1,25 @@
+# Markdown lint configuration. Rule reference:
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+config:
+  default: true
+  # Line length: prose is wrapped by hand at about 80 columns, but tables and
+  # URLs cannot be.
+  MD013: false
+  # Duplicate headings are fine under different parents. Keep a Changelog
+  # repeats "Added" / "Changed" under every release.
+  MD024:
+    siblings_only: true
+  # Table column style: requiring every pipe to line up makes tables painful
+  # to edit and adds nothing for readers of the rendered page.
+  MD060: false
+
+# Skip files that .gitignore excludes.
+gitignore: true
+
+ignores:
+  # One-line import of AGENTS.md; not a document.
+  - CLAUDE.md
+  # Deliberately starts at a second-level heading: GitHub renders it inside
+  # the pull request, under the title.
+  - .github/PULL_REQUEST_TEMPLATE.md
