@@ -27,6 +27,8 @@ once it makes its first release.
 - Dependabot updates for the pinned GitHub Actions.
 - A ruleset on `main`: changes land through pull requests with passing
   checks; force pushes and deletion are blocked.
+- Research report on open source repository practices, with its notes and
+  survey data, in `docs/research/open-source-practices/`.
 
 ### Changed
 

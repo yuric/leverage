@@ -21,6 +21,7 @@ deployment, and implementation follow from them.
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability. |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Expected behavior in project spaces. |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes, release by release. |
+| [docs/research/](docs/research/open-source-practices/README.md) | Research behind the project's repository practices: advice versus what young popular repositories do. |
 
 ## Getting involved
 

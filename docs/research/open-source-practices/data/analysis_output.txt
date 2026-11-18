@@ -1,0 +1,487 @@
+# N valid = 100
+
+## Overall adoption ranked
+| Practice | Count | % | Tier |
+|---|---|---|---|
+| README present | 99/100 | 99% | >80% |
+| Issues enabled | 99/100 | 99% | >80% |
+| .gitignore | 94/100 | 94% | >80% |
+| README any image/video incl. badges (loose) | 91/100 | 91% | >80% |
+| LICENSE file in tree | 90/100 | 90% | >80% |
+| README demo image/GIF/video (strict: badges excluded) | 87/100 | 87% | >80% |
+| Git tags >=1 | 84/100 | 84% | >80% |
+| License detected by GitHub (SPDX, not NOASSERTION) | 81/100 | 81% | >80% |
+| GitHub Releases >=1 | 81/100 | 81% | >80% |
+| GitHub Actions workflows >=1 | 80/100 | 80% | 40-80% |
+| Any CI config (Actions or other CI) | 80/100 | 80% | 40-80% |
+| Tests directory or test files | 74/100 | 74% | 40-80% |
+| Workflows declare a permissions: block (read up to 8 workflows) | 73/100 | 73% | 40-80% |
+| README install/quick-start/usage heading | 73/100 | 73% | 40-80% |
+| README badges | 72/100 | 72% | 40-80% |
+| Semver-style tags (>=50% of up to 30 latest) | 71/100 | 71% | 40-80% |
+| Workflow release/publish automation (heuristic) | 68/100 | 68% | 40-80% |
+| Homepage URL set | 64/100 | 64% | 40-80% |
+| Workflow runs tests or build (loose) | 58/100 | 58% | 40-80% |
+| docs/ directory | 57/100 | 57% | 40-80% |
+| Topics set (>=1) | 57/100 | 57% | 40-80% |
+| Wiki enabled | 56/100 | 56% | 40-80% |
+| Issue templates (own) | 54/100 | 54% | 40-80% |
+| Issue templates (own or inherited) | 54/100 | 54% | 40-80% |
+| GitHub Discussions enabled | 54/100 | 54% | 40-80% |
+| Workflow runs tests (strict test-command regex) | 53/100 | 53% | 40-80% |
+| CONTRIBUTING (own repo) | 51/100 | 51% | 40-80% |
+| CONTRIBUTING (own or inherited) | 51/100 | 51% | 40-80% |
+| Agent-instruction file/dir (any kind, root-level) | 49/100 | 49% | 40-80% |
+| Workflow runs lint/format/typecheck (regex heuristic) | 48/100 | 48% | 40-80% |
+| SECURITY policy or PVR | 47/100 | 47% | 40-80% |
+| AGENTS.md or CLAUDE.md at any depth | 47/100 | 47% | 40-80% |
+| AGENTS.md or CLAUDE.md at repo root | 45/100 | 45% | 40-80% |
+| Issue templates: YAML forms | 42/100 | 42% | 40-80% |
+| .gitattributes | 41/100 | 41% | 40-80% |
+| SECURITY policy (own or inherited) | 39/100 | 39% | 10-40% |
+| AGENTS.md (root) | 39/100 | 39% | 10-40% |
+| Issue template config.yml | 38/100 | 38% | 10-40% |
+| PR template (own or inherited) | 37/100 | 37% | 10-40% |
+| SECURITY policy (own repo) | 36/100 | 36% | 10-40% |
+| Private vulnerability reporting enabled | 36/100 | 36% | 10-40% |
+| CHANGELOG-type file | 36/100 | 36% | 10-40% |
+| Discord/Slack/chat link in README | 34/100 | 34% | 10-40% |
+| Blank issues disabled | 30/100 | 30% | 10-40% |
+| CODE_OF_CONDUCT (own or inherited) | 29/100 | 29% | 10-40% |
+| CODE_OF_CONDUCT (own repo) | 28/100 | 28% | 10-40% |
+| README translations (README.xx.md) | 24/100 | 24% | 10-40% |
+| CLAUDE.md (root) | 23/100 | 23% | 10-40% |
+| FUNDING.yml (own or inherited) | 22/100 | 22% | 10-40% |
+| Makefile/justfile/Taskfile | 19/100 | 19% | 10-40% |
+| Dependabot or Renovate | 19/100 | 19% | 10-40% |
+| Dockerfile/compose at root | 18/100 | 18% | 10-40% |
+| ARCHITECTURE doc | 17/100 | 17% | 10-40% |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 17/100 | 17% | 10-40% |
+| CODEOWNERS | 16/100 | 16% | 10-40% |
+| Issue templates: legacy .md | 15/100 | 15% | 10-40% |
+| Dependabot | 15/100 | 15% | 10-40% |
+| pre-commit/husky/lefthook | 14/100 | 14% | 10-40% |
+| README sponsor link | 13/100 | 13% | 10-40% |
+| .editorconfig | 12/100 | 12% | 10-40% |
+| Other SAST/secret/dependency scan in workflows | 11/100 | 11% | 10-40% |
+| Deploy/self-host/install docs (heuristic) | 11/100 | 11% | 10-40% |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 11/100 | 11% | 10-40% |
+| AI review/agent bot (strict workflow regex or config file) | 11/100 | 11% | 10-40% |
+| CodeQL | 10/100 | 10% | 10-40% |
+| CLA or DCO (manually verified) | 9/100 | 9% | <10% |
+| RFC/spec/PRD/design-doc directory | 8/100 | 8% | <10% |
+|   ...of which AI-review config file (coderabbit/greptile/gemini) | 8/100 | 8% | <10% |
+| devcontainer | 7/100 | 7% | <10% |
+| Renovate | 5/100 | 5% | <10% |
+| GOVERNANCE (own or inherited) | 5/100 | 5% | <10% |
+| Stale bot (actions/stale) | 4/100 | 4% | <10% |
+| SUPPORT (own or inherited) | 4/100 | 4% | <10% |
+| ROADMAP | 4/100 | 4% | <10% |
+| ADR directory | 4/100 | 4% | <10% |
+| MAINTAINERS | 2/100 | 2% | <10% |
+| CITATION.cff | 2/100 | 2% | <10% |
+| AUTHORS | 1/100 | 1% | <10% |
+| OpenSSF Scorecard action | 0/100 | 0% | <10% |
+
+## By owner type
+| Practice | Organization (n=53) | User (n=47) |
+|---|---|---|
+| README present | 100% | 98% |
+| Issues enabled | 100% | 98% |
+| .gitignore | 92% | 96% |
+| README any image/video incl. badges (loose) | 94% | 87% |
+| LICENSE file in tree | 92% | 87% |
+| README demo image/GIF/video (strict: badges excluded) | 89% | 85% |
+| Git tags >=1 | 87% | 81% |
+| License detected by GitHub (SPDX, not NOASSERTION) | 81% | 81% |
+| GitHub Releases >=1 | 85% | 77% |
+| GitHub Actions workflows >=1 | 89% | 70% |
+| Any CI config (Actions or other CI) | 89% | 70% |
+| Tests directory or test files | 72% | 77% |
+| Workflows declare a permissions: block (read up to 8 workflows) | 81% | 64% |
+| README install/quick-start/usage heading | 77% | 68% |
+| README badges | 77% | 66% |
+| Semver-style tags (>=50% of up to 30 latest) | 75% | 66% |
+| Workflow release/publish automation (heuristic) | 77% | 57% |
+| Homepage URL set | 72% | 55% |
+| Workflow runs tests or build (loose) | 64% | 51% |
+| docs/ directory | 68% | 45% |
+| Topics set (>=1) | 57% | 57% |
+| Wiki enabled | 45% | 68% |
+| Issue templates (own) | 62% | 45% |
+| Issue templates (own or inherited) | 62% | 45% |
+| GitHub Discussions enabled | 62% | 45% |
+| Workflow runs tests (strict test-command regex) | 60% | 45% |
+| CONTRIBUTING (own repo) | 58% | 43% |
+| CONTRIBUTING (own or inherited) | 58% | 43% |
+| Agent-instruction file/dir (any kind, root-level) | 53% | 45% |
+| Workflow runs lint/format/typecheck (regex heuristic) | 58% | 36% |
+| SECURITY policy or PVR | 58% | 34% |
+| AGENTS.md or CLAUDE.md at any depth | 55% | 38% |
+| AGENTS.md or CLAUDE.md at repo root | 51% | 38% |
+| Issue templates: YAML forms | 51% | 32% |
+| .gitattributes | 47% | 34% |
+| SECURITY policy (own or inherited) | 49% | 28% |
+| AGENTS.md (root) | 47% | 30% |
+| Issue template config.yml | 49% | 26% |
+| PR template (own or inherited) | 47% | 26% |
+| SECURITY policy (own repo) | 43% | 28% |
+| Private vulnerability reporting enabled | 43% | 28% |
+| CHANGELOG-type file | 42% | 30% |
+| Discord/Slack/chat link in README | 38% | 30% |
+| Blank issues disabled | 40% | 19% |
+| CODE_OF_CONDUCT (own or inherited) | 42% | 15% |
+| CODE_OF_CONDUCT (own repo) | 40% | 15% |
+| README translations (README.xx.md) | 28% | 19% |
+| CLAUDE.md (root) | 23% | 23% |
+| FUNDING.yml (own or inherited) | 19% | 26% |
+| Makefile/justfile/Taskfile | 23% | 15% |
+| Dependabot or Renovate | 26% | 11% |
+| Dockerfile/compose at root | 21% | 15% |
+| ARCHITECTURE doc | 21% | 13% |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 23% | 11% |
+| CODEOWNERS | 23% | 9% |
+| Issue templates: legacy .md | 13% | 17% |
+| Dependabot | 23% | 6% |
+| pre-commit/husky/lefthook | 21% | 6% |
+| README sponsor link | 9% | 17% |
+| .editorconfig | 15% | 9% |
+| Other SAST/secret/dependency scan in workflows | 13% | 9% |
+| Deploy/self-host/install docs (heuristic) | 19% | 2% |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 17% | 4% |
+| AI review/agent bot (strict workflow regex or config file) | 15% | 6% |
+| CodeQL | 13% | 6% |
+| CLA or DCO (manually verified) | 15% | 2% |
+| RFC/spec/PRD/design-doc directory | 8% | 9% |
+|   ...of which AI-review config file (coderabbit/greptile/gemini) | 11% | 4% |
+| devcontainer | 11% | 2% |
+| Renovate | 6% | 4% |
+| GOVERNANCE (own or inherited) | 9% | 0% |
+| Stale bot (actions/stale) | 6% | 2% |
+| SUPPORT (own or inherited) | 8% | 0% |
+| ROADMAP | 6% | 2% |
+| ADR directory | 6% | 2% |
+| MAINTAINERS | 4% | 0% |
+| CITATION.cff | 2% | 2% |
+| AUTHORS | 0% | 2% |
+| OpenSSF Scorecard action | 0% | 0% |
+
+## By star band
+| Practice | 1k-2k (n=25) | 2k-5k (n=25) | 5k-20k (n=25) | 20k+ (n=25) |
+|---|---|---|---|---|
+| README present | 96% | 100% | 100% | 100% |
+| Issues enabled | 96% | 100% | 100% | 100% |
+| .gitignore | 84% | 100% | 92% | 100% |
+| README any image/video incl. badges (loose) | 88% | 88% | 88% | 100% |
+| LICENSE file in tree | 84% | 92% | 92% | 92% |
+| README demo image/GIF/video (strict: badges excluded) | 88% | 88% | 84% | 88% |
+| Git tags >=1 | 80% | 80% | 80% | 96% |
+| License detected by GitHub (SPDX, not NOASSERTION) | 76% | 80% | 88% | 80% |
+| GitHub Releases >=1 | 80% | 76% | 76% | 92% |
+| GitHub Actions workflows >=1 | 72% | 72% | 80% | 96% |
+| Any CI config (Actions or other CI) | 72% | 72% | 80% | 96% |
+| Tests directory or test files | 72% | 76% | 68% | 80% |
+| Workflows declare a permissions: block (read up to 8 workflows) | 56% | 68% | 76% | 92% |
+| README install/quick-start/usage heading | 64% | 80% | 64% | 84% |
+| README badges | 72% | 60% | 72% | 84% |
+| Semver-style tags (>=50% of up to 30 latest) | 64% | 72% | 68% | 80% |
+| Workflow release/publish automation (heuristic) | 52% | 64% | 76% | 80% |
+| Homepage URL set | 40% | 52% | 92% | 72% |
+| Workflow runs tests or build (loose) | 52% | 52% | 52% | 76% |
+| docs/ directory | 28% | 64% | 60% | 76% |
+| Topics set (>=1) | 56% | 56% | 60% | 56% |
+| Wiki enabled | 56% | 64% | 60% | 44% |
+| Issue templates (own) | 48% | 40% | 64% | 64% |
+| Issue templates (own or inherited) | 48% | 40% | 64% | 64% |
+| GitHub Discussions enabled | 52% | 44% | 64% | 56% |
+| Workflow runs tests (strict test-command regex) | 44% | 44% | 48% | 76% |
+| CONTRIBUTING (own repo) | 48% | 48% | 52% | 56% |
+| CONTRIBUTING (own or inherited) | 48% | 48% | 52% | 56% |
+| Agent-instruction file/dir (any kind, root-level) | 36% | 48% | 48% | 64% |
+| Workflow runs lint/format/typecheck (regex heuristic) | 36% | 52% | 44% | 60% |
+| SECURITY policy or PVR | 28% | 40% | 60% | 60% |
+| AGENTS.md or CLAUDE.md at any depth | 28% | 48% | 48% | 64% |
+| AGENTS.md or CLAUDE.md at repo root | 28% | 44% | 48% | 60% |
+| Issue templates: YAML forms | 24% | 36% | 52% | 56% |
+| .gitattributes | 28% | 32% | 36% | 68% |
+| SECURITY policy (own or inherited) | 24% | 32% | 44% | 56% |
+| AGENTS.md (root) | 20% | 40% | 40% | 56% |
+| Issue template config.yml | 24% | 24% | 52% | 52% |
+| PR template (own or inherited) | 28% | 28% | 48% | 44% |
+| SECURITY policy (own repo) | 24% | 28% | 36% | 56% |
+| Private vulnerability reporting enabled | 24% | 36% | 44% | 40% |
+| CHANGELOG-type file | 36% | 40% | 24% | 44% |
+| Discord/Slack/chat link in README | 28% | 28% | 36% | 44% |
+| Blank issues disabled | 24% | 24% | 40% | 32% |
+| CODE_OF_CONDUCT (own or inherited) | 12% | 24% | 44% | 36% |
+| CODE_OF_CONDUCT (own repo) | 12% | 24% | 44% | 32% |
+| README translations (README.xx.md) | 20% | 16% | 32% | 28% |
+| CLAUDE.md (root) | 16% | 24% | 24% | 28% |
+| FUNDING.yml (own or inherited) | 20% | 20% | 24% | 24% |
+| Makefile/justfile/Taskfile | 16% | 24% | 12% | 24% |
+| Dependabot or Renovate | 8% | 12% | 12% | 44% |
+| Dockerfile/compose at root | 12% | 20% | 20% | 20% |
+| ARCHITECTURE doc | 8% | 20% | 16% | 24% |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 12% | 16% | 12% | 28% |
+| CODEOWNERS | 4% | 4% | 16% | 40% |
+| Issue templates: legacy .md | 24% | 4% | 16% | 16% |
+| Dependabot | 4% | 8% | 8% | 40% |
+| pre-commit/husky/lefthook | 12% | 16% | 8% | 20% |
+| README sponsor link | 20% | 4% | 8% | 20% |
+| .editorconfig | 8% | 4% | 12% | 24% |
+| Other SAST/secret/dependency scan in workflows | 0% | 16% | 16% | 12% |
+| Deploy/self-host/install docs (heuristic) | 12% | 16% | 0% | 16% |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 8% | 12% | 12% | 12% |
+| AI review/agent bot (strict workflow regex or config file) | 4% | 0% | 8% | 32% |
+| CodeQL | 4% | 4% | 12% | 20% |
+| CLA or DCO (manually verified) | 8% | 8% | 12% | 8% |
+| RFC/spec/PRD/design-doc directory | 8% | 0% | 8% | 16% |
+|   ...of which AI-review config file (coderabbit/greptile/gemini) | 4% | 0% | 8% | 20% |
+| devcontainer | 4% | 0% | 8% | 16% |
+| Renovate | 4% | 4% | 4% | 8% |
+| GOVERNANCE (own or inherited) | 0% | 4% | 4% | 12% |
+| Stale bot (actions/stale) | 4% | 4% | 4% | 4% |
+| SUPPORT (own or inherited) | 0% | 8% | 4% | 4% |
+| ROADMAP | 0% | 0% | 0% | 16% |
+| ADR directory | 0% | 4% | 0% | 12% |
+| MAINTAINERS | 0% | 0% | 0% | 8% |
+| CITATION.cff | 0% | 4% | 0% | 4% |
+| AUTHORS | 0% | 4% | 0% | 0% |
+| OpenSSF Scorecard action | 0% | 0% | 0% | 0% |
+
+## By age
+| Practice | 1-2yr (n=52) | <1yr (created >=2025-11-18) (n=48) |
+|---|---|---|
+| README present | 100% | 98% |
+| Issues enabled | 98% | 100% |
+| .gitignore | 92% | 96% |
+| README any image/video incl. badges (loose) | 96% | 85% |
+| LICENSE file in tree | 90% | 90% |
+| README demo image/GIF/video (strict: badges excluded) | 94% | 79% |
+| Git tags >=1 | 87% | 81% |
+| License detected by GitHub (SPDX, not NOASSERTION) | 81% | 81% |
+| GitHub Releases >=1 | 85% | 77% |
+| GitHub Actions workflows >=1 | 79% | 81% |
+| Any CI config (Actions or other CI) | 79% | 81% |
+| Tests directory or test files | 69% | 79% |
+| Workflows declare a permissions: block (read up to 8 workflows) | 75% | 71% |
+| README install/quick-start/usage heading | 75% | 71% |
+| README badges | 79% | 65% |
+| Semver-style tags (>=50% of up to 30 latest) | 75% | 67% |
+| Workflow release/publish automation (heuristic) | 69% | 67% |
+| Homepage URL set | 69% | 58% |
+| Workflow runs tests or build (loose) | 50% | 67% |
+| docs/ directory | 56% | 58% |
+| Topics set (>=1) | 65% | 48% |
+| Wiki enabled | 52% | 60% |
+| Issue templates (own) | 56% | 52% |
+| Issue templates (own or inherited) | 56% | 52% |
+| GitHub Discussions enabled | 60% | 48% |
+| Workflow runs tests (strict test-command regex) | 42% | 65% |
+| CONTRIBUTING (own repo) | 42% | 60% |
+| CONTRIBUTING (own or inherited) | 42% | 60% |
+| Agent-instruction file/dir (any kind, root-level) | 44% | 54% |
+| Workflow runs lint/format/typecheck (regex heuristic) | 46% | 50% |
+| SECURITY policy or PVR | 46% | 48% |
+| AGENTS.md or CLAUDE.md at any depth | 40% | 54% |
+| AGENTS.md or CLAUDE.md at repo root | 38% | 52% |
+| Issue templates: YAML forms | 40% | 44% |
+| .gitattributes | 35% | 48% |
+| SECURITY policy (own or inherited) | 35% | 44% |
+| AGENTS.md (root) | 37% | 42% |
+| Issue template config.yml | 33% | 44% |
+| PR template (own or inherited) | 31% | 44% |
+| SECURITY policy (own repo) | 31% | 42% |
+| Private vulnerability reporting enabled | 35% | 38% |
+| CHANGELOG-type file | 38% | 33% |
+| Discord/Slack/chat link in README | 44% | 23% |
+| Blank issues disabled | 25% | 35% |
+| CODE_OF_CONDUCT (own or inherited) | 21% | 38% |
+| CODE_OF_CONDUCT (own repo) | 19% | 38% |
+| README translations (README.xx.md) | 27% | 21% |
+| CLAUDE.md (root) | 17% | 29% |
+| FUNDING.yml (own or inherited) | 23% | 21% |
+| Makefile/justfile/Taskfile | 17% | 21% |
+| Dependabot or Renovate | 21% | 17% |
+| Dockerfile/compose at root | 19% | 17% |
+| ARCHITECTURE doc | 13% | 21% |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 15% | 19% |
+| CODEOWNERS | 13% | 19% |
+| Issue templates: legacy .md | 19% | 10% |
+| Dependabot | 13% | 17% |
+| pre-commit/husky/lefthook | 19% | 8% |
+| README sponsor link | 13% | 12% |
+| .editorconfig | 12% | 12% |
+| Other SAST/secret/dependency scan in workflows | 13% | 8% |
+| Deploy/self-host/install docs (heuristic) | 13% | 8% |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 12% | 10% |
+| AI review/agent bot (strict workflow regex or config file) | 13% | 8% |
+| CodeQL | 10% | 10% |
+| CLA or DCO (manually verified) | 8% | 10% |
+| RFC/spec/PRD/design-doc directory | 8% | 8% |
+|   ...of which AI-review config file (coderabbit/greptile/gemini) | 8% | 8% |
+| devcontainer | 12% | 2% |
+| Renovate | 8% | 2% |
+| GOVERNANCE (own or inherited) | 2% | 8% |
+| Stale bot (actions/stale) | 4% | 4% |
+| SUPPORT (own or inherited) | 0% | 8% |
+| ROADMAP | 2% | 6% |
+| ADR directory | 6% | 2% |
+| MAINTAINERS | 2% | 2% |
+| CITATION.cff | 2% | 2% |
+| AUTHORS | 0% | 2% |
+| OpenSSF Scorecard action | 0% | 0% |
+
+## By category
+| Practice | AI/LLM tooling (n=53) | application (n=21) | developer tool (n=12) | framework/library (n=4) | infrastructure (n=6) | other (n=4) |
+|---|---|---|---|---|---|---|
+| README present | 100% | 95% | 100% | 100% | 100% | 100% |
+| Issues enabled | 100% | 100% | 100% | 75% | 100% | 100% |
+| .gitignore | 96% | 95% | 92% | 100% | 83% | 75% |
+| README any image/video incl. badges (loose) | 96% | 90% | 83% | 100% | 83% | 50% |
+| LICENSE file in tree | 92% | 86% | 83% | 100% | 100% | 75% |
+| README demo image/GIF/video (strict: badges excluded) | 94% | 90% | 58% | 100% | 83% | 50% |
+| Git tags >=1 | 85% | 81% | 92% | 75% | 100% | 50% |
+| License detected by GitHub (SPDX, not NOASSERTION) | 81% | 86% | 75% | 100% | 67% | 75% |
+| GitHub Releases >=1 | 81% | 81% | 83% | 75% | 100% | 50% |
+| GitHub Actions workflows >=1 | 79% | 81% | 92% | 75% | 100% | 25% |
+| Any CI config (Actions or other CI) | 79% | 81% | 92% | 75% | 100% | 25% |
+| Tests directory or test files | 77% | 71% | 67% | 100% | 67% | 50% |
+| Workflows declare a permissions: block (read up to 8 workflows) | 75% | 67% | 92% | 50% | 100% | 0% |
+| README install/quick-start/usage heading | 83% | 48% | 92% | 75% | 83% | 0% |
+| README badges | 74% | 81% | 58% | 75% | 67% | 50% |
+| Semver-style tags (>=50% of up to 30 latest) | 74% | 67% | 58% | 75% | 100% | 50% |
+| Workflow release/publish automation (heuristic) | 64% | 76% | 92% | 25% | 100% | 0% |
+| Homepage URL set | 58% | 62% | 67% | 100% | 83% | 75% |
+| Workflow runs tests or build (loose) | 64% | 52% | 50% | 50% | 67% | 25% |
+| docs/ directory | 64% | 33% | 67% | 50% | 83% | 25% |
+| Topics set (>=1) | 64% | 52% | 33% | 75% | 50% | 50% |
+| Wiki enabled | 53% | 62% | 58% | 25% | 67% | 75% |
+| Issue templates (own) | 55% | 67% | 50% | 25% | 50% | 25% |
+| Issue templates (own or inherited) | 55% | 67% | 50% | 25% | 50% | 25% |
+| GitHub Discussions enabled | 49% | 62% | 50% | 75% | 83% | 25% |
+| Workflow runs tests (strict test-command regex) | 60% | 48% | 50% | 50% | 33% | 25% |
+| CONTRIBUTING (own repo) | 49% | 57% | 50% | 75% | 67% | 0% |
+| CONTRIBUTING (own or inherited) | 49% | 57% | 50% | 75% | 67% | 0% |
+| Agent-instruction file/dir (any kind, root-level) | 60% | 33% | 50% | 25% | 33% | 25% |
+| Workflow runs lint/format/typecheck (regex heuristic) | 58% | 29% | 50% | 50% | 50% | 0% |
+| SECURITY policy or PVR | 49% | 38% | 42% | 75% | 83% | 0% |
+| AGENTS.md or CLAUDE.md at any depth | 57% | 29% | 50% | 50% | 33% | 25% |
+| AGENTS.md or CLAUDE.md at repo root | 55% | 29% | 50% | 25% | 33% | 25% |
+| Issue templates: YAML forms | 45% | 48% | 50% | 0% | 33% | 0% |
+| .gitattributes | 43% | 38% | 58% | 50% | 17% | 0% |
+| SECURITY policy (own or inherited) | 40% | 33% | 33% | 75% | 67% | 0% |
+| AGENTS.md (root) | 49% | 19% | 50% | 25% | 33% | 0% |
+| Issue template config.yml | 40% | 38% | 50% | 25% | 33% | 0% |
+| PR template (own or inherited) | 40% | 43% | 33% | 25% | 33% | 0% |
+| SECURITY policy (own repo) | 38% | 33% | 25% | 50% | 67% | 0% |
+| Private vulnerability reporting enabled | 36% | 33% | 33% | 50% | 67% | 0% |
+| CHANGELOG-type file | 42% | 19% | 25% | 75% | 33% | 50% |
+| Discord/Slack/chat link in README | 36% | 29% | 33% | 25% | 50% | 25% |
+| Blank issues disabled | 34% | 29% | 25% | 25% | 33% | 0% |
+| CODE_OF_CONDUCT (own or inherited) | 28% | 29% | 25% | 75% | 33% | 0% |
+| CODE_OF_CONDUCT (own repo) | 28% | 29% | 17% | 75% | 33% | 0% |
+| README translations (README.xx.md) | 30% | 14% | 8% | 25% | 33% | 25% |
+| CLAUDE.md (root) | 32% | 14% | 8% | 25% | 0% | 25% |
+| FUNDING.yml (own or inherited) | 19% | 24% | 33% | 25% | 33% | 0% |
+| Makefile/justfile/Taskfile | 17% | 14% | 33% | 25% | 33% | 0% |
+| Dependabot or Renovate | 26% | 5% | 25% | 0% | 17% | 0% |
+| Dockerfile/compose at root | 17% | 14% | 8% | 0% | 83% | 0% |
+| ARCHITECTURE doc | 15% | 19% | 17% | 25% | 17% | 25% |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 21% | 10% | 8% | 25% | 33% | 0% |
+| CODEOWNERS | 26% | 5% | 0% | 0% | 17% | 0% |
+| Issue templates: legacy .md | 15% | 19% | 0% | 25% | 17% | 25% |
+| Dependabot | 25% | 5% | 0% | 0% | 17% | 0% |
+| pre-commit/husky/lefthook | 21% | 5% | 8% | 25% | 0% | 0% |
+| README sponsor link | 8% | 24% | 8% | 50% | 17% | 0% |
+| .editorconfig | 9% | 24% | 8% | 0% | 0% | 25% |
+| Other SAST/secret/dependency scan in workflows | 13% | 10% | 17% | 0% | 0% | 0% |
+| Deploy/self-host/install docs (heuristic) | 13% | 5% | 8% | 0% | 17% | 25% |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 8% | 10% | 17% | 25% | 33% | 0% |
+| AI review/agent bot (strict workflow regex or config file) | 19% | 0% | 8% | 0% | 0% | 0% |
+| CodeQL | 11% | 10% | 8% | 0% | 17% | 0% |
+| CLA or DCO (manually verified) | 11% | 5% | 8% | 25% | 0% | 0% |
+| RFC/spec/PRD/design-doc directory | 9% | 5% | 8% | 25% | 0% | 0% |
+|   ...of which AI-review config file (coderabbit/greptile/gemini) | 13% | 0% | 8% | 0% | 0% | 0% |
+| devcontainer | 9% | 5% | 8% | 0% | 0% | 0% |
+| Renovate | 4% | 0% | 25% | 0% | 0% | 0% |
+| GOVERNANCE (own or inherited) | 8% | 0% | 0% | 0% | 17% | 0% |
+| Stale bot (actions/stale) | 4% | 0% | 0% | 0% | 33% | 0% |
+| SUPPORT (own or inherited) | 4% | 5% | 0% | 0% | 17% | 0% |
+| ROADMAP | 8% | 0% | 0% | 0% | 0% | 0% |
+| ADR directory | 8% | 0% | 0% | 0% | 0% | 0% |
+| MAINTAINERS | 4% | 0% | 0% | 0% | 0% | 0% |
+| CITATION.cff | 2% | 0% | 0% | 0% | 17% | 0% |
+| AUTHORS | 0% | 0% | 8% | 0% | 0% | 0% |
+| OpenSSF Scorecard action | 0% | 0% | 0% | 0% | 0% | 0% |
+
+## Distributions
+
+License: MIT=38; Apache-2.0=23; NONE=11; GPL-3.0=10; NOASSERTION=8; AGPL-3.0=8; GPL-2.0=1; BSD-3-Clause=1
+
+Language: Python=26; TypeScript=24; JavaScript=12; Rust=9; C#=5; Swift=5; Go=4; C=4; Dart=3; Shell=3; HTML=2; Kotlin=1; Java=1; None=1
+
+Category: AI/LLM tooling=53; application=21; developer tool=12; infrastructure=6; framework/library=4; other=4
+
+Owner type: Organization=53; User=47
+
+Action pinning (repos with external uses): none=43; all_sha=23; n/a=21; mixed=13
+
+Band: 1k-2k=25; 2k-5k=25; 5k-20k=25; 20k+=25
+Community health %: n=100 median=60 mean=60.8 min=14 max=100
+Workflows: n=100 median=3 mean=7.4 min=0 max=41
+Contributors: n=100 median=16 mean=64.6 min=1 max=478
+Releases: n=100 median=24 mean=91.1 min=0 max=1747
+README lines: n=99 median=237 mean=333.4 min=68 max=2216
+Open issues+PRs: n=100 median=39 mean=660.7 min=0 max=27817
+Topics: n=100 median=4 mean=5.8 min=0 max=20
+Health % = 100: 11 ; >=80: 25
+
+Agent file kinds (root): [('AGENTS.md', 39), ('CLAUDE.md', 23), ('.claude/', 20), ('.agents/', 20), ('copilot-instructions', 7), ('.cursor/rules', 5), ('.gemini/', 4), ('.codex/', 3), ('.opencode/', 3), ('.cursorrules', 2), ('.windsurfrules', 1), ('.clinerules', 1), ('openspec/', 1), ('.kiro/', 1), ('GEMINI.md', 1)]
+Pinning among repos with workflows: Counter({'none': 43, 'all_sha': 23, 'mixed': 13, 'n/a': 1})
+Zero-workflow repos: ['zarazhangrui/tab-out', 'ChenmienTan/RL2', '1692775560/deepseek_project', 'Mr-sans-and-InitLoader-s-team/Escape-From-Duckov-Coop-Mod-Preview', 'good-lly/s3mini', 'BookracyFOS/bookracy', 'fudan-generative-vision/hallo3', 'VonChange/utao', 'wendy7756/AI-Video-Transcriber', 'N4darae/shrt', 'xzf-thu/VoiceMem', 'eastlondoner/vibe-tools', 'littledivy/mimic', 'TurixAI/TuriX-CUA', 'garinasset/leak-check', 'bytedance/LatentSync', 'srizzon/git-city', 'iflow-ai/iflow-cli', 'geeklee/srt-whiteboard-animation', 'baidu/Unlimited-OCR']
+
+No license: [('elevenyellow/handcrafted-persona-engine', '1402'), ('Numbersf/Action-Build', '1411'), ('Ido-Levi/Hephaestus', '1188'), ('1692775560/deepseek_project', '1340'), ('ddlmanus/MacOptimizer', '1844'), ('BookracyFOS/bookracy', '1848'), ('supabitapp/supacode', '2401'), ('tsingyuai/scientify', '2258'), ('youpi-pg/YouPI-PG', '3096'), ('mangowm/mango', '4086'), ('visa/visa-vulnerability-agentic-harness', '3092'), ('Sjj1024/PakePlus-Win7', '5163'), ('iflow-ai/iflow-cli', '5073'), ('telemt/telemt', '5808'), ('Zagitta/gpu-unlock', '20374'), ('Ebony-Vinyl/dsh-our-free-model', '79739'), ('virattt/dexter', '27849'), ('anthropics/claude-code', '156151'), ('getpaseo/paseo', '24373')]
+
+No CONTRIBUTING any: [('elevenyellow/handcrafted-persona-engine', '1402'), ('zarazhangrui/tab-out', '1819'), ('Numbersf/Action-Build', '1411'), ('ChenmienTan/RL2', '1323'), ('jeremy-prt/bloub', '1988'), ('1692775560/deepseek_project', '1340'), ('Mr-sans-and-InitLoader-s-team/Escape-From-Duckov-Coop-Mod-Preview', '1145'), ('ddlmanus/MacOptimizer', '1844'), ('good-lly/s3mini', '1347'), ('BookracyFOS/bookracy', '1848'), ('agentscope-ai/OpenJudge', '1115'), ('mytv-android/myDV', '1779'), ('fudan-generative-vision/hallo3', '1423'), ('VonChange/utao', '4611'), ('wendy7756/AI-Video-Transcriber', '3425'), ('N4darae/shrt', '2982'), ('PrimeIntellect-ai/verifiers', '4793'), ('Barre/ZeroFS', '3194'), ('xzf-thu/VoiceMem', '2904'), ('eastlondoner/vibe-tools', '4817'), ('superagent-ai/grok-cli', '3513'), ('jqssun/android-titanium-browser', '3259'), ('littledivy/mimic', '3006'), ('automazeio/vibeproxy', '3412'), ('tsingyuai/scientify', '2258'), ('youpi-pg/YouPI-PG', '3096'), ('openclaw/mcporter', '5128'), ('garinasset/leak-check', '6040'), ('bytedance/LatentSync', '6291'), ('appshubcc/Bettbox', '5024'), ('WUBING2023/PaperSpine', '6348'), ('Sjj1024/PakePlus-Win7', '5163'), ('denoland/celld', '6341'), ('iflow-ai/iflow-cli', '5073'), ('MatrixSeven/file-transfer-go', '5202'), ('donlon/cloudflare-error-page', '5792'), ('geeklee/srt-whiteboard-animation', '5684'), ('Mai-with-u/MaiBot', '7069'), ('ATH-MaaS/Pixelle-Video', '30220'), ('openai/codex-plugin-cc', '35260'), ('firecrawl/anydoc', '23603'), ('openai/gpt-oss', '20549'), ('Zagitta/gpu-unlock', '20374'), ('huggingface/open-r1', '26483'), ('steipete/CodexBar', '23213'), ('Ebony-Vinyl/dsh-our-free-model', '79739'), ('virattt/dexter', '27849'), ('vercel-labs/skills', '39956'), ('anthropics/claude-code', '156151')]
+
+No SECURITY any and no PVR: [('elevenyellow/handcrafted-persona-engine', '1402'), ('koosoli/ESPHomeDesigner', '1163'), ('zarazhangrui/tab-out', '1819'), ('Numbersf/Action-Build', '1411'), ('Ido-Levi/Hephaestus', '1188'), ('patoles/agent-flow', '1794'), ('ChenmienTan/RL2', '1323'), ('mfat/sshpilot', '1152'), ('jeremy-prt/bloub', '1988'), ('1692775560/deepseek_project', '1340'), ('Mr-sans-and-InitLoader-s-team/Escape-From-Duckov-Coop-Mod-Preview', '1145'), ('ddlmanus/MacOptimizer', '1844'), ('Xanerix/guoapp', '1976'), ('spring-ai-alibaba/Lynxe', '1115'), ('BookracyFOS/bookracy', '1848'), ('agentscope-ai/OpenJudge', '1115'), ('mytv-android/myDV', '1779'), ('fudan-generative-vision/hallo3', '1423'), ('VonChange/utao', '4611'), ('wendy7756/AI-Video-Transcriber', '3425'), ('N4darae/shrt', '2982'), ('PrimeIntellect-ai/verifiers', '4793'), ('xzf-thu/VoiceMem', '2904'), ('eastlondoner/vibe-tools', '4817'), ('jqssun/android-titanium-browser', '3259'), ('matz/spinel', '2326'), ('littledivy/mimic', '3006'), ('automazeio/vibeproxy', '3412'), ('tsingyuai/scientify', '2258'), ('youpi-pg/YouPI-PG', '3096'), ('mangowm/mango', '4086'), ('TurixAI/TuriX-CUA', '3177'), ('atomicstrata/llm-wiki-compiler', '2270'), ('garinasset/leak-check', '6040'), ('appshubcc/Bettbox', '5024'), ('WUBING2023/PaperSpine', '6348'), ('zerx-lab/FluxDown', '5799'), ('zumerlab/snapdom', '8248'), ('Sjj1024/PakePlus-Win7', '5163'), ('iflow-ai/iflow-cli', '5073'), ('MatrixSeven/file-transfer-go', '5202'), ('donlon/cloudflare-error-page', '5792'), ('geeklee/srt-whiteboard-animation', '5684'), ('ATH-MaaS/Pixelle-Video', '30220'), ('openai/codex-plugin-cc', '35260'), ('firecrawl/anydoc', '23603'), ('openai/gpt-oss', '20549'), ('Zagitta/gpu-unlock', '20374'), ('huggingface/open-r1', '26483'), ('Ebony-Vinyl/dsh-our-free-model', '79739'), ('baidu/Unlimited-OCR', '31315'), ('virattt/dexter', '27849'), ('vercel-labs/skills', '39956')]
+
+No releases: [('zarazhangrui/tab-out', '1819'), ('ChenmienTan/RL2', '1323'), ('1692775560/deepseek_project', '1340'), ('BookracyFOS/bookracy', '1848'), ('fudan-generative-vision/hallo3', '1423'), ('wendy7756/AI-Video-Transcriber', '3425'), ('N4darae/shrt', '2982'), ('eastlondoner/vibe-tools', '4817'), ('facebookincubator/muse-gadget-sdk', '2788'), ('littledivy/mimic', '3006'), ('youpi-pg/YouPI-PG', '3096'), ('garinasset/leak-check', '6040'), ('bytedance/LatentSync', '6291'), ('srizzon/git-city', '5999'), ('vAPI-Network/vapi-network', '5170'), ('iflow-ai/iflow-cli', '5073'), ('donlon/cloudflare-error-page', '5792'), ('huggingface/open-r1', '26483'), ('baidu/Unlimited-OCR', '31315')]
+
+No CI: [('zarazhangrui/tab-out', '1819'), ('ChenmienTan/RL2', '1323'), ('1692775560/deepseek_project', '1340'), ('Mr-sans-and-InitLoader-s-team/Escape-From-Duckov-Coop-Mod-Preview', '1145'), ('good-lly/s3mini', '1347'), ('BookracyFOS/bookracy', '1848'), ('fudan-generative-vision/hallo3', '1423'), ('VonChange/utao', '4611'), ('wendy7756/AI-Video-Transcriber', '3425'), ('N4darae/shrt', '2982'), ('xzf-thu/VoiceMem', '2904'), ('eastlondoner/vibe-tools', '4817'), ('littledivy/mimic', '3006'), ('TurixAI/TuriX-CUA', '3177'), ('garinasset/leak-check', '6040'), ('bytedance/LatentSync', '6291'), ('srizzon/git-city', '5999'), ('iflow-ai/iflow-cli', '5073'), ('geeklee/srt-whiteboard-animation', '5684'), ('baidu/Unlimited-OCR', '31315')]
+
+Repos with API errors: []
+
+Cross-tab: agent file vs contributors/owner:
+has agent file 49 owner Org: 28 has CONTRIBUTING: 33 has CI: 45
+no agent file 51 owner Org: 25 has CONTRIBUTING: 18 has CI: 35
+
+## Extras
+NONE license with a license-type file: [('anthropics/claude-code', 'LICENSE.md')]
+NOASSERTION repos: ['Numbersf/Action-Build', 'Ido-Levi/Hephaestus', 'supabitapp/supacode', 'mangowm/mango', 'visa/visa-vulnerability-agentic-harness', 'telemt/telemt', 'Ebony-Vinyl/dsh-our-free-model', 'getpaseo/paseo']
+Repos with >=1 release: 81 latest release within 90d: 63
+Pushed within 30d: 73
+Contributors <=3: 20  <=10: 40  >=50: 31
+Of SECURITY-policy repos (any): 39 with PVR on: 28 ; PVR on without policy: 8
+Of repos with workflows: 80 strict tests: 53 release: 68 dep bot: 19 pinned all_sha: 23 mixed: 13 tags only: 43
+Workflow count median among repos with >=1: 5.0
+Release workflow loose; CodeQL repos: ['Numbersf/Action-Build', 'youpi-pg/YouPI-PG', 'openclaw/mcporter', 'telemt/telemt', 'MatrixSeven/file-transfer-go', 'headroomlabs-ai/headroom', 'Kilo-Org/kilocode', 'ruvnet/ruflo', 'career-ops-hq/career-ops', 'alibaba/open-code-review']
+Agent-file by owner:  {'Organization': 28, 'User': 21}
+Agent root AGENTS.md AND CLAUDE.md both: 17  CLAUDE only: 6  AGENTS only: 22
+Any agent artifacts in .claude/.agents/.cursor only (no AGENTS/CLAUDE md root): 4
+Repos w/ agent file (n=49) CONTRIBUTING:33; w/o (n=51): 18
+Community health bands: {'<40': 19, '40-59': 31, '60-79': 25, '80-99': 14, '100': 11}
+Issue forms+config blank disabled both: 27
+Has own README but demo missing: ['zarazhangrui/tab-out', 'Mr-sans-and-InitLoader-s-team/Escape-From-Duckov-Coop-Mod-Preview', 'N4darae/shrt', 'matz/spinel', 'littledivy/mimic', 'garinasset/leak-check', 'pyrefly-org/pyrefly', 'vAPI-Network/vapi-network', 'denoland/celld', 'firecrawl/anydoc', 'Zagitta/gpu-unlock', 'vercel-labs/skills']
+Repos w/ all five core (README, license-detected, CONTRIBUTING, COC, SECURITY): 20
+Repos with CONTRIBUTING and COC and SECURITY and issue templates and PR template (any): 19
+Org .github repo exists for owner: 26  inherited any health file: 8
+Inherited counts:  {'contributing': 0, 'code_of_conduct': 1, 'security': 3, 'support': 0, 'governance': 0, 'funding': 5, 'pr_template': 0}
+README lines >=500: 18  <150: 26
+Tests dir but no CI: 10
+CI present but no tests dir: 16
+Docs-only-ish check: repos w/ AGENTS/CLAUDE + CONTRIBUTING + COC + SECURITY + CHANGELOG all: 7
+CHANGELOG-type file among repos with releases: 34 / 81
+Top 15 by stars sanity:  [('affaan-m/ECC', '306359'), ('anthropics/claude-code', '156151'), ('openai/codex', '135787'), ('paperclipai/paperclip', '114789'), ('career-ops-hq/career-ops', '83533')]
+Windows: Counter({'W1': 28, 'W2': 24, 'W3': 24, 'W4': 24})
