@@ -2,16 +2,18 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; design not started — waiting on requirements in [PRD.md](PRD.md) |
-| **Last updated** | 2026-11-18 |
+| **Status** | Rules in force; first technology choices recorded; design not started — waiting on requirements in [PRD.md](PRD.md) |
+| **Last updated** | 2026-11-19 |
 
 This document describes how leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
 describes the system **as it exists**, not as it is hoped to be. Planned work
 belongs in the PRD or in issues.
 
-No design has been decided yet: the design sections below are not commitments
-until their _TBD_ markers are replaced. The [rules](#rules) are in force now.
+The first technology choices are recorded under
+[Technology choices](#technology-choices). The other design sections below are
+not commitments until their _TBD_ markers are replaced. The [rules](#rules) are
+in force now.
 
 ## Rules
 
@@ -247,8 +249,18 @@ boundary enforces. Security review starts here; see
 
 ## Technology choices
 
-_TBD — languages, frameworks, and infrastructure, each with the reason it was
-chosen._
+Each choice is recorded in the ADR named beside it.
+
+| Part | Choice | Decided in |
+| --- | --- | --- |
+| Backend | Ruby on Rails, API mode, in `api/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+| Datastore | PostgreSQL | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+| Hosting | A server the owner controls, one installation per owner; for the first run, the owner's Mac | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+| Docker containers | The backend ships as a container image; the backend and PostgreSQL run in Docker containers | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+| Owner's interface | A native Mac app in Swift with SwiftUI, a thin client of the API, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+| Mac helper | Runs the providers' tools on the owner's Mac; written in Swift, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+
+Versions are pinned by the pull request that adds the first manifest.
 
 ## Architecture decision records
 
@@ -281,4 +293,6 @@ not rewritten: only its status line changes, apart from repairs such as a
 broken link, and a later ADR supersedes it. If two open pull requests take
 the same number, the second to merge takes the next one.
 
-No ADRs have been recorded yet.
+Recorded so far:
+
+- [0001. Rails API with PostgreSQL, a Mac client and a Mac helper](adr/0001-rails-api-postgresql-and-a-mac-client.md)

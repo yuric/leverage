@@ -39,6 +39,11 @@ once it makes its first release.
   `.claude/skills/`.
 - The version 1 product requirements in `docs/PRD.md` (a draft), with the
   record of its adversarial review in `docs/research/prd-review/`.
+- The first architecture decision record: a Rails API with PostgreSQL,
+  shipped in Docker containers that run on the owner's Mac for the first run
+  and later on a server the owner controls; a native Swift and SwiftUI Mac
+  app as a thin client; and a Swift helper on the owner's Mac that runs the
+  providers' tools (`docs/adr/0001-rails-api-postgresql-and-a-mac-client.md`).
 
 ### Changed
 
