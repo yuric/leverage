@@ -59,12 +59,42 @@ struct RequestLoop: Sendable {
         return .cancelled
     }
 
+    /// How many times one result is sent before the helper gives up on it.
+    static let reportAttempts = 30
+
+    /// Sends a request's result under one key, again with the same key
+    /// while the network or the server fails (a lost result would leave the
+    /// request picked up and unfinished), pausing at most 2 seconds between
+    /// sends (CL-31), until it is accepted, refused, the helper stops, or
+    /// `reportAttempts` sends have failed.
     private func report(_ result: HelperRequestResult, of request: HelperRequest) async {
-        do {
-            _ = try await api.reportRequestResult(requestID: request.id, result, key: IdempotencyKey())
-        } catch {
-            log.warning("the result of request \(request.id.contractString) was not accepted")
+        let key = IdempotencyKey()
+        var pause = timings.pauseAfterError
+        for attempt in 1...Self.reportAttempts {
+            do {
+                _ = try await api.reportRequestResult(requestID: request.id, result, key: key)
+                return
+            } catch {
+                if !Self.isWorthSendingAgain(error) {
+                    log.warning("the result of request \(request.id.contractString) was not accepted")
+                    return
+                }
+                if Task.isCancelled || attempt == Self.reportAttempts {
+                    log.warning("the result of request \(request.id.contractString) could not be sent")
+                    return
+                }
+                try? await Task.sleep(for: pause)
+                pause = min(pause * 2, .seconds(2))
+            }
         }
+    }
+
+    /// A failure the same send may get past: the network, or the server
+    /// answering 5xx. An answer the server gave (a refusal, 4xx) is final.
+    static func isWorthSendingAgain(_ error: any Error) -> Bool {
+        if error is URLError { return true }
+        if case LeverageClientError.unexpectedStatus(let status)? = error as? LeverageClientError { return status >= 500 }
+        return false
     }
 
     /// A `401`, with its transport body or without one.

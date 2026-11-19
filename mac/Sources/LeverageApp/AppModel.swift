@@ -159,7 +159,7 @@ final class AppModel {
         let raw = makeOwnerAPI(url, token)
         let guarded = SessionGuard(base: raw) { [weak self] in self?.sessionEnded() }
         let feed = EventFeed(owner: guarded)
-        let health = HealthLineModel(owner: guarded, helper: runtime.helper)
+        let health = HealthLineModel(owner: guarded, helper: runtime.helper, server: runtime.server)
         rawOwner = raw
         screens = ScreenContext(owner: guarded, feed: feed, health: health, runtime: runtime)
         signIn = nil

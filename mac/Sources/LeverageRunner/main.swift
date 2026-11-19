@@ -5,7 +5,8 @@ import LeverageKit
 // launcher with its environment (plan §2.4), or `LeverageRunner probe`, the
 // add flow's answering check. It reads its environment, builds the loop,
 // and turns SIGTERM or SIGINT into a stop: the tool is ended, what the seat
-// holds is given back, and it exits 0 (CL-23).
+// holds is given back, and it exits 0 (CL-23). The helper that started it
+// going away (a crash, SIGKILL) is the same stop (RunnerParent, PK-8).
 
 let environment = ProcessInfo.processInfo.environment
 
@@ -44,8 +45,13 @@ let loop = RunnerLoop(
     driver: driver, workRoot: configuration.workRoot, home: configuration.tool.home, log: log)
 
 let stopSignals = loop.stopOnSignals([SIGTERM, SIGINT])
+let parentWatch = RunnerParent.watch { [loop] in
+    log.warning("the helper that started the runner is gone; stopping")
+    loop.stop()
+}
 
 log.info("started: \(configuration)")
 let code = await loop.run()
+parentWatch?.cancel()
 stopSignals.forEach { $0.cancel() }
 exit(code)

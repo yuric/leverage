@@ -101,6 +101,18 @@ final class ConnectAgentModel {
         role == .reviewer && allLogins.contains { $0.provider == .gemini }
     }
 
+    /// The provider whose tool the agent will run: the picked login's, or
+    /// the one chosen for an agent that connects on its own.
+    var chosenProvider: Provider? {
+        switch mode {
+        case .runOnLogin: logins.first { $0.id == credentialID }?.provider
+        case .connectsOnItsOwn: provider
+        }
+    }
+
+    /// Effort is asked for only where the tool is given one.
+    var offersEffort: Bool { chosenProvider.map(ProviderCatalog.takesEffort) ?? true }
+
     /// The owner chose to run the agent on a login, and there is none to run it on.
     var needsLogin: Bool { mode == .runOnLogin && logins.isEmpty }
 
@@ -145,7 +157,7 @@ final class ConnectAgentModel {
     private func makeRequest() -> ConnectSeatRequest? {
         let typed = trimmedName
         let modelText = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let effortText = effort.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effortText = offersEffort ? effort.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         switch mode {
         case .runOnLogin:
             guard let login = logins.first(where: { $0.id == credentialID }) else { return nil }

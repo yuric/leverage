@@ -6,17 +6,18 @@ import Darwin
 import Glibc
 #endif
 
-/// Notices that the process which started the helper is gone (PK-8): a
-/// crashed or force-quit app tells no child, so the helper watches, and then
-/// stops its runs and exits. On macOS a process source reports the exit; on
+/// Notices that the process which started this one is gone (PK-8): a
+/// crashed or force-quit app tells no child, so the helper watches the app
+/// and then stops its runs and exits, and a runner watches the helper and
+/// then stops as on SIGTERM. On macOS a process source reports the exit; on
 /// Linux (the end-to-end job) the process is looked at every `interval`.
 /// Either way a process already gone when the watch starts is noticed at
 /// once, and `onGone` is called once.
-final class ParentWatch: @unchecked Sendable {
-    let pid: pid_t
-    let interval: Duration
-    /// When the process watched is the helper's parent, being given another
-    /// parent also means it is gone.
+public final class ParentWatch: @unchecked Sendable {
+    public let pid: pid_t
+    public let interval: Duration
+    /// When the process watched is this process's parent, being given
+    /// another parent also means it is gone.
     private let isParent: Bool
     private let onGone: @Sendable () -> Void
 
@@ -29,14 +30,14 @@ final class ParentWatch: @unchecked Sendable {
     #endif
     private var poller: Task<Void, Never>?
 
-    init(watching pid: pid_t, interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void) {
+    public init(watching pid: pid_t, interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void) {
         self.pid = pid
         self.interval = interval
         self.isParent = pid == getppid()
         self.onGone = onGone
     }
 
-    func start() {
+    public func start() {
         #if canImport(Darwin)
         let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global())
         source.setEventHandler { [weak self] in self?.fire() }
@@ -57,7 +58,7 @@ final class ParentWatch: @unchecked Sendable {
         lock.withLock { self.poller = poller }
     }
 
-    func cancel() {
+    public func cancel() {
         lock.withLock {
             cancelled = true
             #if canImport(Darwin)
@@ -80,7 +81,7 @@ final class ParentWatch: @unchecked Sendable {
 
     /// False once the process is gone or is a zombie waiting for its
     /// parent; true while it runs or while it is not ours to signal.
-    static func exists(_ pid: pid_t) -> Bool {
+    public static func exists(_ pid: pid_t) -> Bool {
         if kill(pid, 0) != 0 { return errno == EPERM }
         #if canImport(Darwin)
         var info = kinfo_proc()

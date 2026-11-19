@@ -35,7 +35,11 @@ struct BuilderFlow: Sendable {
             try await api.claimNextTask(key: $0)
         }) else { return nil }
         context.log.info("claimed task \(claim.task.id.contractString)")
-        let start = BriefingResponse(briefing: claim.briefing, workReference: claim.workReference)
+        // A task past round 0 was sent back by a review: the claim's answer
+        // carries no review notes, so the first step reads the briefing,
+        // which does (PRD L127, L493).
+        let start = claim.task.round > 0
+            ? nil : BriefingResponse(briefing: claim.briefing, workReference: claim.workReference)
         return try await work(claim.task.id, start: start, leaseDue: claim.lease.leaseDueAt)
     }
 

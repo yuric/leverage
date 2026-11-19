@@ -52,9 +52,10 @@ struct RunnerTiming: Sendable {
 final class RunnerLoop: @unchecked Sendable {
     /// How long a stop waits to give back what the seat holds. The tool is
     /// given 5 seconds to end before it is forced (Subprocess's grace
-    /// period), and the helper ends the runner's group 10 seconds after it
-    /// asked it to stop (CL-23), so 4 seconds are left for one call.
-    static let giveBackLimit: Duration = .seconds(4)
+    /// period), and the helper ends the runner's group
+    /// `StopTimings.runnerStopGrace` (10 seconds) after it asked it to stop
+    /// (CL-23), so 4 seconds are left for one call.
+    static let giveBackLimit: Duration = StopTimings.runnerGiveBack
 
     private let role: SeatRole
     private let context: FlowContext

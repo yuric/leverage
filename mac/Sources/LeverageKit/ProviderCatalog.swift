@@ -186,7 +186,9 @@ public enum ProviderCatalog {
             environment: Evidenced([], .probe)),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
-            accountFolderVariable: Evidenced(nil, .probe),
+            // One sign-in for the Mac: the PRD states it, and `agy --help`
+            // lists no account variable. No probe showed that none exists.
+            accountFolderVariable: Evidenced(nil, .help),
             version: Evidenced(["--version"], .probe),
             // `agy --help` lists no status and no sign-in command.
             status: Evidenced(StatusCheck(arguments: nil, reading: .testPrompt), .help),
@@ -221,6 +223,16 @@ public enum ProviderCatalog {
 
     public static func entry(for id: String) -> ProviderEntry? {
         entries.first { $0.id == id }
+    }
+
+    /// Whether a seat's effort is passed to the provider's tool. Claude's
+    /// and Antigravity's drivers pass `--effort`; Codex's effort is a
+    /// configuration key that was never verified, and Grok's flag is known
+    /// from `--help` only, so their drivers pass none and the app neither
+    /// asks for one nor shows one (DriverTests holds the drivers to this).
+    /// An API key has no tool, and so no driver, in this milestone.
+    public static func takesEffort(_ provider: Provider) -> Bool {
+        provider == .claude || provider == .gemini
     }
 
     /// Where a provider's tool is looked for, in order (PV-3): only

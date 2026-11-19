@@ -420,7 +420,11 @@ today.
   token in its environment) and stopping it. It never adopts an existing
   account folder: Add always starts from a new, empty one. It stops its
   runs and exits when its token answers `401` (exit 3) or when the app that
-  started it is gone (`ParentWatch`).
+  started it is gone (`ParentWatch`, in LeverageKit). A runner watches the
+  helper the same way and stops as on SIGTERM when the helper is gone.
+  How long each part of a stop is given is `StopTimings`, in LeverageKit:
+  the app waits 16 seconds for the helper, the helper 10 for a runner, and
+  a runner 4 to give back what its seat holds.
 - **Owns:** the account folders, the tools leverage installed, and the
   runs' logs, under the support folder (see [Data](#data)).
 - **Depends on:** LeverageKit and Foundation.
@@ -640,9 +644,9 @@ documentation, never run; `unverified` is none of these. Nothing below
 | Provider (tool) | Account | Status and sign-in | Installer | Reviewer run | Builder run differs by |
 | --- | --- | --- | --- | --- | --- |
 | Claude (Claude Code, `claude`) | `CLAUDE_CONFIG_DIR` (`probe`); needs `USER` (`probe`) | `claude auth status`, field `loggedIn` (`probe`); `claude auth login` (`help`) | `https://claude.ai/install.sh` with `/bin/bash` (`documented`) | `claude -p <prompt> --output-format json --no-session-persistence --permission-mode dontAsk` (`probe`), with `--strict-mcp-config --setting-sources user` (`help`) | `--permission-mode acceptEdits`, `--model`, `--effort` (`help`) |
-| Codex (Codex, `codex`) | `CODEX_HOME` (`probe`) | `codex login status`, exit code (`probe`); `codex login` (`help`) | `https://chatgpt.com/codex/install.sh` with `/bin/sh` (`documented`) | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <dir> -o <file>` (`probe`) | `--sandbox workspace-write`, `-m` (`help`) |
-| Gemini (Antigravity, `agy`) | One sign-in for the Mac (`probe`) | No status or sign-in command (`help`): the test prompt is repeated | `https://antigravity.google/cli/install.sh` with `/bin/bash` (`documented`) | Not offered: `agy -p <prompt> --output-format json --print-timeout <n>s --mode plan` answered with a plan, not the word asked for (`probe`), so the runner refuses a Gemini reviewer and Connect does not list a Gemini login for one | Builder: the same without `--mode plan`, with `--mode accept-edits`, `--model`, `--effort` (`help`) |
-| Grok (Grok Build, `grok`) | Treated as one sign-in for the Mac (`unverified`) | `grok models`, signed out when it says "You are not authenticated." (`probe`); `grok login --oauth` (`help`) | None: no documented source was reachable (`unverified`) | `grok -p <prompt> --cwd <dir> --permission-mode plan` (`help`) | `--permission-mode acceptEdits`, `-m` (`help`) |
+| Codex (Codex, `codex`) | `CODEX_HOME` (`probe`) | `codex login status`, exit code (`probe`); `codex login` (`help`) | `https://chatgpt.com/codex/install.sh` with `/bin/sh` (`documented`) | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <dir> -o <file>` (`probe`) | `--sandbox workspace-write`, `-m` (`help`); no effort is passed, and Connect asks for none |
+| Gemini (Antigravity, `agy`) | One sign-in for the Mac (`help`; the PRD states it) | No status or sign-in command (`help`): the test prompt is repeated | `https://antigravity.google/cli/install.sh` with `/bin/bash` (`documented`) | Not offered: `agy -p <prompt> --output-format json --print-timeout <n>s --mode plan` answered with a plan, not the word asked for (`probe`), so the runner refuses a Gemini reviewer and Connect does not list a Gemini login for one | Builder: the same without `--mode plan`, with `--mode accept-edits`, `--model`, `--effort` (`help`) |
+| Grok (Grok Build, `grok`) | Treated as one sign-in for the Mac (`unverified`) | `grok models`, signed out when it says "You are not authenticated." (`probe`); `grok login --oauth` (`help`) | None: no documented source was reachable (`unverified`) | `grok -p <prompt> --cwd <dir> --permission-mode plan` (`help`) | `--permission-mode acceptEdits`, `-m` (`help`); no effort is passed, and Connect asks for none |
 
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.

@@ -28,8 +28,9 @@ public actor HelperSupervisor: HelperSupervising {
         public var restartWindow: TimeInterval = 60
         /// The pause before a start after a failed one.
         public var restartDelay: Duration = .seconds(1)
-        /// How long the helper is given to stop before it is forced.
-        public var stopGracePeriod: Duration = .seconds(10)
+        /// How long the helper is given to stop before it is forced: longer
+        /// than the helper gives its runners plus a runner's give-back.
+        public var stopGracePeriod: Duration = StopTimings.helperStopGrace
         public var logLimitBytes = 5_000_000
 
         public init(helperProgram: URL, supportFolder: URL, environment: [String: String]) {

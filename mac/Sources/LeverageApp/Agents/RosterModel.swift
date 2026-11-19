@@ -39,7 +39,10 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         roleLine = AgentsCopy.roleLine.filled(["role": AgentsCopy.role(seat.role).text, "state": stateText])
 
         let model = seat.model.flatMap { $0.isEmpty ? nil : $0 } ?? AgentsCopy.defaultModel.text
-        let effort = seat.effort.flatMap { $0.isEmpty ? nil : AgentsCopy.effortNamed.filled(["effort": $0]) }
+        // A tool that is given no effort runs on its own default, whatever
+        // effort the agent was given.
+        let given = ProviderCatalog.takesEffort(seat.provider) ? seat.effort : nil
+        let effort = given.flatMap { $0.isEmpty ? nil : AgentsCopy.effortNamed.filled(["effort": $0]) }
             ?? AgentsCopy.defaultEffort.text
         let onOff = (seat.enabled && !seat.paused ? AgentsCopy.on : .off).text
         detailLine = [ProviderNames.name(seat.provider), model, effort, onOff].joined(separator: " · ")

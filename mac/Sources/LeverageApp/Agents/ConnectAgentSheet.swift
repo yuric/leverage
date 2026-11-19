@@ -112,9 +112,11 @@ struct ConnectAgentForm: View {
                 TextField(AgentsCopy.defaultModel.text, text: $model.modelName)
                     .textFieldStyle(.roundedBorder)
             }
-            FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
-                TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
-                    .textFieldStyle(.roundedBorder)
+            if model.offersEffort {
+                FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
+                    TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
+                        .textFieldStyle(.roundedBorder)
+                }
             }
         }
     }

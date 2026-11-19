@@ -83,7 +83,7 @@ struct HelperTimings: Sendable {
     /// The limit of one installer run.
     var installLimit: Duration = .seconds(600)
     /// How long a stopped runner is given before its group is ended (CL-23).
-    var stopGrace: Duration = .seconds(10)
+    var stopGrace: Duration = StopTimings.runnerStopGrace
     /// The pause after a failed call; never more than 2 seconds (CL-31).
     var pauseAfterError: Duration = .seconds(1)
     /// The `wait` of `GET /v1/helper/next`.

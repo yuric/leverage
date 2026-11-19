@@ -26,11 +26,16 @@ final class HealthLineModel {
 
     @ObservationIgnored private let owner: any OwnerAPI
     @ObservationIgnored private let helper: any HelperSupervising
+    @ObservationIgnored private let server: (any ServerSupervising)?
     @ObservationIgnored private let interval: Duration
 
-    init(owner: any OwnerAPI, helper: any HelperSupervising, interval: Duration = .seconds(15)) {
+    init(
+        owner: any OwnerAPI, helper: any HelperSupervising, server: (any ServerSupervising)? = nil,
+        interval: Duration = .seconds(15)
+    ) {
         self.owner = owner
         self.helper = helper
+        self.server = server
         self.interval = interval
     }
 
@@ -53,8 +58,9 @@ final class HealthLineModel {
         }
     }
 
-    /// Try again is offered once the helper has given up.
-    var offersTryAgain: Bool { status == .agentsStopped }
+    /// Try again is offered once the helper has given up, and when
+    /// leverage does not answer and there is a server to start again.
+    var offersTryAgain: Bool { status == .agentsStopped || (status == .unreachable && server != nil) }
 
     /// Reads the server's health and the helper's state once.
     func refresh() async {
@@ -75,9 +81,15 @@ final class HealthLineModel {
         }
     }
 
-    /// Starts the helper again after it gave up, then reads the line again.
+    /// Starts the server again when leverage does not answer (it goes
+    /// through Docker again when it must), or the helper again after it gave
+    /// up, then reads the line again.
     func tryAgain() async {
-        _ = await helper.tryAgain()
+        if status == .unreachable, let server {
+            _ = await server.start()
+        } else {
+            _ = await helper.tryAgain()
+        }
         await refresh()
     }
 

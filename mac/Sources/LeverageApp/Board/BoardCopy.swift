@@ -59,7 +59,7 @@ enum BoardCopy: OwnerFacingCopy {
         case .chipOverBudget: "Over budget"
         case .chipProjectPaused: "Project paused"
         case .chipCheckFailed: "A check could not run"
-        case .chipSentBack: "Sent back 3 times"
+        case .chipSentBack: "Sent back too many times"
         case .chipActionStopped: "Action stopped"
         case .chipNeedsLook: "Needs a look"
         case .chipNoAgentCanTake: "No agent can take it"

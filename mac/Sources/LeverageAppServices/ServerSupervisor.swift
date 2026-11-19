@@ -88,9 +88,17 @@ public actor ServerSupervisor: ServerSupervising {
     /// Starts what is not running yet. A call while a start is under way
     /// waits for that start; a call after a state the owner can act on
     /// (Docker missing, not starting, the image missing, failed) tries again.
+    /// After running, a call asks the server's health first: it answers
+    /// running only while the server answers, and otherwise goes through
+    /// Docker again (Docker Desktop or the containers may have stopped while
+    /// the app was open).
     public func start() async -> ServerState {
-        if case .running = current { return current }
         if let starting { return await starting.value }
+        if case .running(let url) = current {
+            if await healthCheck(url) { return current }
+            log.warning("the server no longer answers at \(url.absoluteString); starting it again")
+            if let starting { return await starting.value }
+        }
         let task = Task { await self.run() }
         starting = task
         let reached = await task.value

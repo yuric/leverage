@@ -51,8 +51,9 @@ carry the working assumptions (Q-5 to Q-7).
    not running, with Try again.
 4. **The app's life bounds the agents.** Closing the window leaves the app,
    the helper and the runs going. Quitting asks the helper to stop and
-   waits up to 10 seconds. If the app dies without quitting, the helper's
-   `ParentWatch` notices and stops its runs. One app runs per support
+   waits up to 16 seconds, longer than the helper gives its runners. If the
+   app dies without quitting, the helper's `ParentWatch` notices and stops
+   its runs; if the helper dies, each runner's does and the runner stops. One app runs per support
    folder (`AppLock`, a lock on `<support folder>/app.lock`); a second copy
    brings the first to the front and quits. The server's containers keep
    running after the app quits.
