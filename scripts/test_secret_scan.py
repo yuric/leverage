@@ -16,10 +16,13 @@ Usage: python3 scripts/test_secret_scan.py [-v]
 Standard library only; exits 0 when every case behaves as expected.
 """
 
+import base64
+import json
 import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -27,6 +30,10 @@ SCRIPT = HERE / "secret_scan.py"
 
 # Made-up values in the shapes the run uses.
 PASSWORD = "made-up-e2e-owner-password"
+# A made-up password with the characters that JSON, a URL and a form
+# encode differently from the raw text.
+ODD_PASSWORD = 'made-up "pass/word" & more+'
+
 SESSION = "lvo_" + "A" * 21 + "b-c_d" + "E" * 17
 HELPER = "lvh_" + "x" * 43
 SEAT = "lvs_" + "0123456789abcdef" * 2 + "ABCDEFGHIJK"
@@ -193,6 +200,49 @@ class SecretScanTests(unittest.TestCase):
         self.assertEqual(code, 2, output)
         self.assertIn("too short", output)
         self.assertNotIn("abc\n", output)
+
+    def test_a_secret_written_json_escaped_is_found(self):
+        self.scan.file("api.log", json.dumps({"password": ODD_PASSWORD}) + "\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(ODD_PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("api.log:1: secret 1", output)
+        self.assertIn("JSON-escaped", output)
+        self.assertNotIn(ODD_PASSWORD, output)
+
+    def test_a_secret_written_url_or_form_encoded_is_found(self):
+        self.scan.file("url.log", "GET /x?p=" + urllib.parse.quote(ODD_PASSWORD, safe="") + "\n")
+        self.scan.file("form.log", "password=" + urllib.parse.quote_plus(ODD_PASSWORD) + "\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(ODD_PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("url.log:1: secret 1", output)
+        self.assertIn("form.log:1: secret 1", output)
+        self.assertNotIn(ODD_PASSWORD, output)
+
+    def test_a_secret_written_in_base64_is_found_at_any_offset(self):
+        alone = base64.b64encode(PASSWORD.encode()).decode()
+        inside = base64.b64encode(b"x" + PASSWORD.encode() + b"yz").decode()
+        self.scan.file("alone.log", f"blob {alone}\n")
+        self.scan.file("inside.log", f"blob {inside}\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("alone.log:1: secret 1", output)
+        self.assertIn("inside.log:1: secret 1", output)
+        self.assertIn("base64", output)
+
+    def test_a_secret_wrapped_across_lines_is_found_where_it_starts(self):
+        self.scan.file("wrapped.log", "first line\nvalue " + PASSWORD[:10] + "\n" + PASSWORD[10:] + " end\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("wrapped.log:2: secret 1", output)
+        self.assertNotIn(PASSWORD, output)
+
+    def test_a_bearer_value_is_found_whatever_its_case(self):
+        self.scan.file("lower.log", "authorization: bearer abcdefghijklmnopqrstuvwxyz012345\n")
+        self.scan.file("upper.log", "AUTHORIZATION: BEARER abcdefghijklmnopqrstuvwxyz012345\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("lower.log:1: bearer value", output)
+        self.assertIn("upper.log:1: bearer value", output)
 
     def test_no_path_is_refused(self):
         code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD))
