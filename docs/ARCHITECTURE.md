@@ -221,6 +221,37 @@ assertion and the reason.
 
 - **Pending:** the pull request that activates this rule adds the CI check.
 
+## Engineering practices
+
+These are how the work is done. The [rules](#rules) say what a pull request
+must satisfy; where a practice is also a rule, the rule is the authority.
+
+- **Test-driven development.** Write the test first, see it fail, make it
+  pass, then tidy with the tests green. Rule AR-007 is the requirement. To
+  show it, commit the test before the code, or quote the test's failure on
+  the base branch under "How it was verified".
+- **The contract first.** What two parts share (tables, event types, the
+  fixed lists, the interface schema) is written and reviewed before either
+  part is built, and it lives in one place. Parts are built against it, with
+  stand-ins where the other side does not exist yet.
+- **Small steps that leave `main` working.** Every merge leaves the checks
+  green and the product runnable; how work is split into pull requests is
+  [AR-001](#ar-001-requirement-scoped-pull-requests).
+- **Tests at the level of the behavior.** Unit tests for rules that are pure
+  logic, tests against the interface schema for every call, and a run of the
+  whole task loop for what crosses parts. A provider's tool is replaced by a
+  stand-in in automated tests; nothing in CI calls a provider.
+- **No secret in the repository, a log, an event, a fixture or a
+  screenshot.** Tests use made-up values. Records name a credential by its
+  id.
+- **An adversarial review before merge in a delegated run.** In a run
+  delegated under [CONTRIBUTING.md](../CONTRIBUTING.md#ai-assisted-contributions),
+  a reviewer who did not write the change tries to break it, and its
+  findings are fixed or answered in the pull request.
+- **Documents in step.** A change that alters behavior, structure,
+  configuration or deployment updates the matching document, and
+  [IMPLEMENTATION.md](IMPLEMENTATION.md), in the same pull request.
+
 ## System overview
 
 _TBD — one diagram and one paragraph: the major components and how a request
