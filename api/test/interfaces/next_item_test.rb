@@ -10,11 +10,6 @@ require "test_helper"
 class NextItemTest < ActiveSupport::TestCase
   include OpenapiAssertions
 
-  # OpenapiAssertions#escape leaves the braces of a path template in the
-  # JSON pointer, which is not a URI; percent-encode them (reported to the
-  # managing agent in notes.md, WP8: the support file is WP1's).
-  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
-
   Item = Struct.new(:kind, :id, :review_id) do
     def self.none = new("none", nil, nil)
     def to_h = { "kind" => kind, "id" => id, "review_id" => review_id }

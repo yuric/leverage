@@ -4,6 +4,10 @@
 # before the action runs (IN-13). current_caller.id is the owner's user.
 # setup and sign-in, which have no session yet, skip it with
 # skip_before_action :authenticate_owner!.
+#
+# A signed-in call also records the session's last use, at most every five
+# minutes (milestone 2 plan EN-20), through Transitions::RecordPoll, which
+# takes the workspace lock only when the write is due.
 module AuthenticatesOwner
   extend ActiveSupport::Concern
 
@@ -16,5 +20,8 @@ module AuthenticatesOwner
 
   private
 
-  def authenticate_owner! = authenticate!(:owner)
+  def authenticate_owner!
+    authenticate!(:owner)
+    Leverage::Transitions::RecordPoll.session(current_session)
+  end
 end

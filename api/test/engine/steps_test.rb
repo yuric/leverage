@@ -11,7 +11,7 @@ require "test_helper"
 # as it was when it opened: the criterion back-fill (rule 5) later gives an
 # open build row its criterion, which a trace cannot show (TS8-check), so
 # the back-fill has a test of its own.
-class StepsTest < ActiveSupport::TestCase
+class StepTrackerTest < ActiveSupport::TestCase
   START = Time.utc(2026, 11, 19, 9, 0, 0)
 
   setup do

@@ -9,7 +9,6 @@ module V1
     class TasksController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
-      include CheckedBody
 
       def show
         page = Leverage::Reads::TaskPage.call(current_caller.workspace_id, uuid_param!(:id))

@@ -11,7 +11,6 @@ module V1
     class SeatsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
-      include CheckedBody
 
       def index
         render json: Leverage::Reads::Seats.call(current_caller.workspace_id)

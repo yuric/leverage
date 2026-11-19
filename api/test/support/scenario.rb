@@ -170,10 +170,13 @@ class Scenario
     end
   end
 
-  # Puts a task's or a review's lease due time in the past (EN-18): the
-  # engine has no clock stub, and no test sleeps past a lease.
+  # Puts a task's or a review's lease due time at the database's now
+  # (EN-18): the engine has no clock stub, and no test sleeps past a lease.
+  # Any later command's clock is past it, and it is never before the events
+  # Scenario has just written, so no test relies on the timers' clamp of
+  # effective_at to the task's latest event (WP5's choice 3).
   def make_due(record, at: nil)
-    record.update_columns(lease_due_at: at || (database_now - 1))
+    record.update_columns(lease_due_at: at || database_now)
     record
   end
 

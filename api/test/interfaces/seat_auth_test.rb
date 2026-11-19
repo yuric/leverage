@@ -8,13 +8,6 @@ require "test_helper"
 class SeatAuthTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
 
-  # OpenapiAssertions builds a JSON pointer from the path template, and a
-  # template with {id} is not a valid URI fragment (URI::InvalidURIError).
-  # Percent-encoding the braces makes it one; json_schemer decodes it. Until
-  # test/support/openapi_assertions.rb does this itself (asked in notes.md,
-  # WP6), these tests do it here.
-  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
-
   class SeatController < ApplicationController
     include AuthenticatesSeat
 

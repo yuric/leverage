@@ -605,7 +605,7 @@
         {"command": "delete_content", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["content.deleted"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
         {"command": "change_workspace_settings", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["workspace.settings_changed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
         {"command": "sign_in", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Owner sign-in opens a session; it changes nothing in the log (plan IF-17)."},
-        {"command": "issue_helper_token", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The token is shown once and stored hashed; no event (plan IF-16, SM-32)."}
+        {"command": "issue_helper_token", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [{"event": "review.released", "when": "seat_holds_review"}], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The token is shown once and stored hashed. A seat still marked running is treated as stopped, which releases a review it holds (milestone 2 plan IN-30, IF-21); nothing else is written (plan IF-16, SM-32)."}
       ]
     },
     {

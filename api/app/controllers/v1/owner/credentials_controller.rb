@@ -6,7 +6,6 @@ module V1
     class CredentialsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
-      include CheckedBody
 
       def index
         render json: Leverage::Reads::Credentials.call(current_caller.workspace_id)

@@ -22,11 +22,6 @@ class LongPollHttpTest < CommittingTestCase
   include ActionDispatch::IntegrationTest::Behavior
   include OpenapiAssertions
 
-  # OpenapiAssertions#escape leaves the braces of a path template in the
-  # JSON pointer, which is not a URI; percent-encode them (reported to the
-  # managing agent in notes.md, WP8: the support file is WP1's).
-  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
-
   # Eligibility's and Briefing's answers, scripted: nothing is waiting and
   # the briefing's hash never changes (WP3's own are not under test here).
   class Waiting

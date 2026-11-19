@@ -15,6 +15,7 @@ class StateTableAccountsTest < ActiveSupport::TestCase
 
   # The conditional events of each row and the entry test that proves each.
   CONDITIONAL = {
+    "issue_helper_token" => { "review.released" => "seat_holds_review" },
     "remove_seat" => { "task.released" => "seat_holds_working_task" },
     "report_run_stopped" => { "review.released" => "seat_holds_review" },
     "report_request_result" => { "credential.added" => "add_checks_passed", "credential.verified" => "verify_passed",

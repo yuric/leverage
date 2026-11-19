@@ -58,7 +58,7 @@ module TimerTestEntries
   end
 end
 
-class TimersTest < CommittingTestCase
+class TimersDueTest < CommittingTestCase
   T = Leverage::Transitions
   E = TimerTestEntries
 

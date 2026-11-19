@@ -13,11 +13,6 @@ require "test_helper"
 class OwnerCallsTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
 
-  # openapi_assertions.rb leaves { and } raw in the pointer it hands to
-  # json_schemer, which refuses them as a URI; encode them here (notes.md,
-  # WP9, request 2).
-  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
-
   Outcome = Leverage::Transitions::Outcome
   Refusal = Leverage::Transitions::Refusal
 

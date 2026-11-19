@@ -6,7 +6,6 @@ module V1
     class ToolsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
-      include CheckedBody
 
       def install
         body = checked_body("install_tool")

@@ -15,8 +15,7 @@ module V1
       private
 
       def run(operation_id)
-        body = V1::Agent::BaseController.body!(operation_id, request.raw_post)
-        run_command(operation_id, params: { "id" => uuid_param!(:id) }.merge(body))
+        run_command(operation_id, params: { "id" => uuid_param!(:id) }.merge(checked_body(operation_id)))
       end
     end
   end

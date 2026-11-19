@@ -89,7 +89,8 @@ module OpenapiAssertions
     contract_operation(method, path) || flunk("no operation in openapi.json for #{method} #{path}")
   end
 
-  def escape(template)
-    template.gsub("~", "~0").gsub("/", "~1")
-  end
+  # A path template as one token of a JSON pointer in a URI fragment
+  # (Leverage::Http::RequestSchema.escape): the braces of a path parameter
+  # are percent-encoded, which json_schemer needs.
+  def escape(template) = Leverage::Http::RequestSchema.escape(template)
 end

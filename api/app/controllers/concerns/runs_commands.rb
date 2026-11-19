@@ -53,6 +53,12 @@ module RunsCommands
 
   private
 
+  # The request's body checked against the operation's request schema in
+  # openapi.json (Leverage::Http::RequestSchema.body!): a Hash with string
+  # keys, or {} for an operation that takes no body. Raises
+  # RequestSchema::Malformed (400) or RequestSchema::Invalid (422).
+  def checked_body(operation_id) = Leverage::Http::RequestSchema.body!(operation_id, request.raw_post)
+
   # Runs command and renders the outcome.
   #
   # params:       - the checked body and the path's ids, for the entry.

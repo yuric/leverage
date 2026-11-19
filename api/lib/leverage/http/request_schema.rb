@@ -42,8 +42,15 @@ module Leverage
         template, verb, operation = operation(operation_id)
         return nil unless operation.key?("requestBody")
 
-        escaped = template.gsub("~", "~0").gsub("/", "~1")
-        "#/paths/#{escaped}/#{verb}/requestBody/content/application~1json/schema"
+        "#/paths/#{escape(template)}/#{verb}/requestBody/content/application~1json/schema"
+      end
+
+      # A path template as one token of a JSON pointer inside a URI
+      # fragment: "~" and "/" escaped as RFC 6901 says, and the braces of
+      # a path parameter ({id}) percent-encoded, because json_schemer reads
+      # the pointer as a URI and a raw brace is not allowed in one.
+      def escape(template)
+        template.gsub("~", "~0").gsub("/", "~1").gsub("{", "%7B").gsub("}", "%7D")
       end
 
       def operation(operation_id)
