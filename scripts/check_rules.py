@@ -30,7 +30,11 @@ sys.dont_write_bytecode = True
 import os  # noqa: E402  (already loaded by the interpreter; not a path lookup)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != _HERE]
+# Compared as real paths: Python puts the script's folder on the path with
+# symbolic links resolved, and __file__ may name it through one.
+sys.path[:] = [
+    p for p in sys.path if os.path.realpath(p or os.curdir) != os.path.realpath(_HERE)
+]
 
 import argparse  # noqa: E402
 import importlib.util  # noqa: E402
@@ -159,6 +163,20 @@ ODD_LINE_BREAKS = "\x0b\x0c\x1c\x1d\x1e\x85  "
 PINNED = re.compile(r"^[\w.-]+(?:/[\w.-]+)+@[0-9a-f]{40}$", A)
 PINNED_IMAGE = re.compile(r"^docker://[\w.:/-]+@sha256:[0-9a-f]{64}$", A)
 MIN_WORDS = 2  # a reason or a purpose is at least this many words
+# AR-007: the code folders of the components, and the folders of their tests.
+# A file under SOURCE_DIRS is product source unless it is Markdown or is in a
+# test folder; a test file is test code (TEST_SUFFIXES) in a test folder.
+SOURCE_DIRS = ("api/", "mac/")
+TEST_DIRS = ("api/test/", "mac/Tests/")
+TEST_SUFFIXES = (".rb", ".swift")
+# AR-007: a line that asserts something in a test, and a line that skips one.
+ASSERTION = re.compile(
+    r"\b(?:assert\w*|refute\w*|flunk|must_\w+|wont_\w+|XCTAssert\w*|XCTFail|XCTUnwrap)\b"
+    r"|#(?:expect|require)\b",
+    A,
+)
+SKIP = re.compile(r"^\s*(?:skip|pending|omit)\b|\bXCTSkip\w*|\.disabled\b|\bwithKnownIssue\b", A)
+HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", A)
 REGULAR_FILE_MODES = ("100644", "100755")  # as git records them
 
 
@@ -1144,6 +1162,107 @@ def check_new_actions(start, body, kinds, files, report):
         report.ok(f"AR-004: the description names {len(new)} new action(s)")
 
 
+def is_test_file(name):
+    return name.startswith(TEST_DIRS) and PurePosixPath(name).suffix in TEST_SUFFIXES
+
+
+def is_product_source(name):
+    path = PurePosixPath(name)
+    return (
+        name.startswith(SOURCE_DIRS)
+        and not name.startswith(TEST_DIRS)
+        and path.suffix.lower() not in (".md", ".markdown")
+    )
+
+
+def changed_lines(start, name):
+    """Return (removed, added) for a file: lists of (line number, text).
+
+    Removed lines are numbered as in the start commit, added lines as in the
+    working tree. A deleted file has all its lines removed.
+    """
+    if kind_of(name) == "missing":
+        text = show(start, name) or ""
+        return list(enumerate(text.splitlines(), 1)), []
+    patch = git(
+        "diff", "--no-ext-diff", "--no-textconv", "--no-color", "-U0", start, "--", name
+    ).decode("utf-8", errors="replace")
+    removed, added = [], []
+    old = new = None
+    for line in patch.split("\n"):
+        hunk = HUNK.match(line)
+        if hunk:
+            old, new = int(hunk.group(1)), int(hunk.group(2))
+            continue
+        if old is None:
+            continue  # the header of the patch, before the first hunk
+        if line.startswith("-"):
+            removed.append((old, line[1:]))
+            old += 1
+        elif line.startswith("+"):
+            added.append((new, line[1:]))
+            new += 1
+    return removed, added
+
+
+def _quote(found):
+    number, text = found
+    text = text.strip()
+    return f"line {number}: '{text[:80]}{'...' if len(text) > 80 else ''}'"
+
+
+def check_tests(start, deleted, touched, kinds, report):
+    """AR-007: product source comes with a test; weakened tests are pointed out."""
+    source = sorted(name for name in touched if is_product_source(name))
+    tests = sorted(name for name in touched - deleted if is_test_file(name))
+    if source and tests:
+        report.ok(f"AR-007: the change to product source comes with {len(tests)} test file(s)")
+    elif source:
+        shown = ", ".join(source[:3]) + (", ..." if len(source) > 3 else "")
+        message = (
+            f"AR-007: this pull request changes product source ({shown}) but "
+            f"adds or changes no test file under {' or '.join(TEST_DIRS)}"
+        )
+        kind = kinds.get("AR-007")
+        if kind == "n/a":
+            report.warn(
+                message + ". It answers 'N/A': the maintainer must confirm that "
+                "no behavior changes before merging."
+            )
+        elif kind == "deviates":
+            report.ok(message + ", as its accepted 'Deviates' answer allows")
+        else:
+            report.error(
+                message + ". Add a test that fails without the change, or answer "
+                "'N/A' with the reason no behavior changes."
+            )
+
+    existing = tree_at(start)
+    for name in sorted(touched):
+        if not is_test_file(name) or name not in existing:
+            continue
+        removed, added = changed_lines(start, name)
+        weaker = [found for found in removed if ASSERTION.search(found[1])]
+        skips = [found for found in added if SKIP.search(found[1])]
+        if name in deleted and weaker:
+            what = f"deletes a test file with {len(weaker)} assertion(s)"
+        else:
+            parts = []
+            if weaker:
+                parts.append(
+                    f"removes or changes {len(weaker)} assertion(s) "
+                    f"({'; '.join(_quote(found) for found in weaker[:3])})"
+                )
+            if skips:
+                parts.append(f"skips a test ({'; '.join(_quote(found) for found in skips[:3])})")
+            what = " and ".join(parts)
+        if weaker or skips:
+            report.warn(
+                f"AR-007: {name} {what}. If this weakens a test, the description must "
+                "name the assertion and the reason."
+            )
+
+
 def warn_about_enforcement_changes(start, touched, report):
     """Point the reviewer at changes to the files that do the checking."""
     changed = sorted(
@@ -1207,6 +1326,7 @@ def check_pull_request(args, rules, requirements, files, report):
     base_rules = parse_rules(show(base, ARCHITECTURE))
     start, added, deleted, touched = changes_since(base)
     check_rules_kept(parse_rules(show(start, ARCHITECTURE)), rules, report)
+    required = active(rules) | active(base_rules)
     kinds = {}
     if author in EXEMPT_AUTHORS:
         report.ok(
@@ -1215,7 +1335,6 @@ def check_pull_request(args, rules, requirements, files, report):
             "checks on the change apply"
         )
     else:
-        required = active(rules) | active(base_rules)
         answers, duplicates = parse_answers(body)
         kinds = check_answers(required, answers, duplicates, report)
         # A description may name a rule or requirement that this change removes.
@@ -1227,6 +1346,8 @@ def check_pull_request(args, rules, requirements, files, report):
         )
     check_decision_record(start, added, deleted, touched, kinds, report)
     check_new_actions(start, body, kinds, files, report)
+    if "AR-007" in required:
+        check_tests(start, deleted, touched, kinds, report)
     warn_about_enforcement_changes(start, touched, report)
 
 

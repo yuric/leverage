@@ -1,0 +1,79 @@
+name: CI
+
+# Rules for this file are in AGENTS.md ("GitHub Actions"):
+# least-privilege permissions, actions pinned to a full commit SHA,
+# no pull_request_target, untrusted values passed through env.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API tests, RuboCop and Brakeman
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The same containers as on the owner's Mac (compose.yaml): the API
+      # image built from api/Dockerfile, and the PostgreSQL service the tests
+      # run against. The example values are made up; they never leave this job.
+      - name: Use the example configuration
+        run: cp .env.example .env
+      - name: Build the API image
+        run: docker compose build
+      - name: Run the API tests against PostgreSQL
+        run: docker compose run --rm api bin/rails test
+      - name: RuboCop
+        run: docker compose run --rm --no-deps api bin/rubocop
+      - name: Brakeman
+        run: docker compose run --rm --no-deps api bin/brakeman --no-pager
+      - name: Stop the containers
+        if: always()
+        run: docker compose down --volumes
+
+  mac:
+    name: Swift build and tests
+    # macos-26 defaults to Xcode 26.6, the toolchain the package is built
+    # with locally; its swift-tools-version needs Xcode 26 or later.
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the toolchain
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  imports:
+    name: Import directions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # -I keeps the script's folder, which a pull request controls, off
+      # Python's import path.
+      - name: Check the dependency directions
+        run: python3 -I scripts/check_imports.py
+      - name: Self-test of the import check
+        run: python3 -I scripts/test_check_imports.py
