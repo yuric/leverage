@@ -534,7 +534,7 @@ A seat has one of four roles. Evidence is an `https` link or a note that locates
 
 | Role | May change | May read |
 | --- | --- | --- |
-| Builder | The task it holds | That task's contract, criteria, evidence, questions and work reference, and its project's brief |
+| Builder | The task it holds | That task's contract, criteria, evidence, questions and work reference, its project's brief, and the notes of its task's failed reviews |
 | Reviewer | The review it holds | The same, for the task under review |
 | Planner | The contract of the task its job names | That task and its project's brief |
 | Orchestrator | The result of the job it holds | The task its job names and that task's project. Nothing from other projects. |
