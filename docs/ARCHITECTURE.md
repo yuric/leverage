@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; first technology choices recorded; design not started — waiting on requirements in [PRD.md](PRD.md) |
+| **Status** | Rules in force; the skeleton's components, mechanisms and versions recorded; the product's design not started |
 | **Last updated** | 2026-11-19 |
 
 This document describes how leverage is built: its components, how they
@@ -10,9 +10,10 @@ communicate, where data lives, and why the design is the way it is. It
 describes the system **as it exists**, not as it is hoped to be. Planned work
 belongs in the PRD or in issues.
 
-The first technology choices are recorded under
-[Technology choices](#technology-choices). The other design sections below are
-not commitments until their _TBD_ markers are replaced. The [rules](#rules) are
+The technology choices are recorded under
+[Technology choices](#technology-choices), and the skeleton's components
+under [Components](#components). The other design sections below are not
+commitments until their _TBD_ markers are replaced. The [rules](#rules) are
 in force now.
 
 ## Rules
@@ -284,8 +285,29 @@ must satisfy; where a practice is also a rule, the rule is the authority.
 
 ## System overview
 
-_TBD — one diagram and one paragraph: the major components and how a request
-or job flows through them._
+```mermaid
+flowchart LR
+  subgraph mac["Owner's Mac"]
+    app["LeverageApp"]
+    helper["LeverageHelper"]
+    kit["LeverageKit"]
+    subgraph docker["Docker containers (compose.yaml)"]
+      api["API (Rails)"]
+      db[("PostgreSQL")]
+    end
+  end
+  app --> kit
+  helper --> kit
+  kit -- "HTTP, 127.0.0.1" --> api
+  api --> db
+```
+
+Today the system is a skeleton: no PRD behavior is built. The API runs in a
+Docker container next to a PostgreSQL container on the owner's Mac, and
+answers only on the Mac's loopback address. The Mac app and the helper are
+built from one Swift package and reach the API only through LeverageKit,
+which sends `GET /v1/health` and decodes the answer. Nothing else crosses a
+component boundary yet.
 
 ## Components
 
@@ -389,8 +411,13 @@ Each choice is recorded in the ADR named beside it.
 | Docker containers | The backend ships as a container image; the backend and PostgreSQL run in Docker containers | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Owner's interface | A native Mac app in Swift with SwiftUI, a thin client of the API, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Mac helper | Runs the providers' tools on the owner's Mac; written in Swift, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
-
-Versions are pinned by the pull request that adds the first manifest.
+| Ruby and Rails | Ruby 4.0.10 (image `ruby:4.0.10-slim`), Rails 8.1.4.1; gem versions fixed in `api/Gemfile.lock` | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| PostgreSQL version | 17.12 (image `postgres:17.12-trixie`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| API checks | Minitest, RuboCop (`rubocop-rails-omakase`), Brakeman | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Swift | Swift tools version 6.2, macOS 14 or later, no third-party packages | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Swift tests | Swift Testing | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Continuous integration | GitHub Actions: `ubuntu-24.04` for the API and the import check, `macos-26` for Swift | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Code units | `api`, `LeverageKit`, `LeverageApp`, `LeverageHelper`, with the directions under [Components](#allowed-dependency-directions) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 
 ## Architecture decision records
 
@@ -426,3 +453,4 @@ the same number, the second to merge takes the next one.
 Recorded so far:
 
 - [0001. Rails API with PostgreSQL, a Mac client and a Mac helper](adr/0001-rails-api-postgresql-and-a-mac-client.md)
+- [0002. Pinned versions, test tools and code units of the skeleton](adr/0002-pinned-versions-test-tools-and-code-units.md)

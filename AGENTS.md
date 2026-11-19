@@ -5,11 +5,21 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage is in its definition phase. The repository contains documentation,
-the research behind its practices, and the scripts and checks that keep them
-consistent: there is no product source code, no build, no test suite other
-than a self-test of the rules check, and no deployment. Update this file in
-the same pull request that changes any of that.
+leverage has a skeleton and no product behavior yet. The repository holds
+the documentation, the research behind its practices, and the scripts and
+checks that keep them consistent, plus:
+
+- `api/`: a Rails application in API mode that answers `GET /v1/health`,
+  with Minitest tests;
+- `mac/`: a Swift package with the library LeverageKit, the helper
+  LeverageHelper and the Mac app LeverageApp, with Swift Testing tests;
+- `compose.yaml` and `.env.example`: the API and PostgreSQL in Docker
+  containers on the owner's Mac, the one environment in
+  [docs/DEPLOY.md](docs/DEPLOY.md);
+- `.github/workflows/ci.yml`: the API and Swift test suites and the import
+  check on every pull request.
+
+Update this file in the same pull request that changes any of that.
 
 ## Start here
 
@@ -121,7 +131,12 @@ lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules
 python3 scripts/test_check_rules.py                  # self-test of that check
+python3 scripts/check_imports.py                     # dependency directions
+python3 scripts/test_check_imports.py                # self-test of that check
 ```
+
+CI also runs the API's tests, RuboCop and Brakeman, and the Swift build and
+tests, listed under "Build, test, and run" below.
 
 With a base commit and a description file, the last one also checks a pull
 request: `python3 scripts/check_rules.py --base origin/main --body-file <file>`.
@@ -146,9 +161,44 @@ or changing one:
 
 ## Build, test, and run
 
-Not applicable yet. When the first code lands, this section must list the
-exact commands to install, build, lint, test, and run the project, and an
-agent must run them before reporting work as done.
+Run these before reporting work as done. Ruby is never run on the Mac
+itself: every Ruby and Rails command runs in the `api` container. Run them
+from the repository root unless a line says otherwise.
+
+Once, to configure (then replace the made-up values in `.env`):
+
+```bash
+cp .env.example .env
+```
+
+The API (`api/`):
+
+```bash
+docker compose build                                 # build the API image
+docker compose run --rm api bin/rails test           # tests, against PostgreSQL
+docker compose run --rm api bin/rubocop              # style
+docker compose run --rm api bin/brakeman --no-pager  # security scan
+docker compose up -d                                 # run the API and the database
+curl -s http://127.0.0.1:3000/v1/health              # check it answers
+docker compose down                                  # stop; the data is kept
+```
+
+`API_PORT` in `.env` moves the API off port 3000 when that port is taken;
+use the same port in the `curl` line.
+
+The Mac side (`mac/`):
+
+```bash
+cd mac
+swift build                                          # build every target
+swift test                                           # tests
+swift run LeverageHelper                             # print the API's health
+swift run LeverageApp                                # open the app's window
+```
+
+`LEVERAGE_API_URL` gives the helper and the app the API's address when it
+is not `http://127.0.0.1:3000`. How to run and operate it all is in
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Documentation style
 

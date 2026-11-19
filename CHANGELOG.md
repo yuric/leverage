@@ -10,6 +10,21 @@ once it makes its first release.
 
 ### Added
 
+- The skeleton of the build: a Rails API in `api/` that answers
+  `GET /v1/health` and turns every unhandled error into one JSON shape; a Swift
+  package in `mac/` with the library LeverageKit, the helper
+  LeverageHelper and a one-window Mac app; `compose.yaml` to run the API and
+  PostgreSQL in Docker containers on the owner's Mac; and a CI workflow that
+  runs both test suites, RuboCop, Brakeman and the import check. The pinned
+  versions and test tools are recorded in
+  `docs/adr/0002-pinned-versions-test-tools-and-code-units.md`.
+- Architecture rules AR-005, AR-006 and AR-007 are active: the components
+  and their allowed dependency directions with an import check
+  (`scripts/check_imports.py`), one mechanism per cross-cutting concern, and
+  a check that a change to product source comes with a test.
+- `docs/DEPLOY.md` describes how to configure, start, check and stop the
+  skeleton on the owner's Mac.
+
 - Repository scaffolding: README, MIT license, AUTHORS, contribution guide,
   code of conduct, security policy, and issue and pull request templates.
 - Product requirements document structure in `docs/PRD.md` (requirements to

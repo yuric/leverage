@@ -63,7 +63,7 @@ ends when the build is done or the owner stops it.
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
 | The PRD change that settles the gate before the contract | `docs/prd-gate` | #9 | In review |
-| Milestone 0 skeleton | `chore/skeleton` | None yet | No commits yet |
+| Milestone 0 skeleton | `chore/skeleton` | None yet | Built and checked locally; not pushed |
 
 ## Milestones
 
@@ -74,7 +74,7 @@ the PRD's milestone list. How the build is run locally is in
 
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
-| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too |
+| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Not started | | |
 | 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
 | 3 | Handoff | Not started | | |
@@ -92,11 +92,34 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
-Nothing yet.
+- **`API_PORT`.** `compose.yaml` publishes the API on `127.0.0.1` at the
+  port in `API_PORT`, 3000 by default, because port 3000 on the owner's Mac
+  was already taken by another program during the skeleton's checks.
+- **TLS switches.** `RAILS_ASSUME_SSL` and `RAILS_FORCE_SSL` default to on
+  in production mode, and `.env.example` turns both off, because the API is
+  served over plain HTTP on `127.0.0.1` during the first run.
+- **The API's tests run in the production image.** compose has one `api`
+  service built from Rails' default production Dockerfile, and
+  `bin/rails test` switches to the test environment and its own database.
+- **`bundler-audit` and the local CI runner kept.** Both are `rails new`
+  defaults; `bin/ci` is not used by the CI workflow. See question 6.
 
 ## Installed for the build
 
-Nothing yet.
+Nothing was installed on the owner's Mac. Every Ruby command ran in a
+container, and Swift ran with the Xcode already installed (Xcode 26.6,
+build 17F113, Swift 6.3.3).
+
+| What | Version | Source | Used for |
+| --- | --- | --- | --- |
+| `ruby` image | `4.0.10-trixie` | Docker Hub official image | Running `rails new` once; no file refers to it |
+| `ruby` image | `4.0.10-slim` | Docker Hub official image | The base of the API image |
+| `postgres` image | `17.12-trixie` | Docker Hub official image | The `db` service |
+| Gems in `api/Gemfile.lock` | As locked | RubyGems, installed inside the API image | The API, its tests and its checks |
+| `markdownlint-cli2` | 0.24.1 | npm, fetched by `npx` | Running the Markdown lint; not part of the repository |
+
+The direct gems, their licenses and why each is needed are listed in the
+skeleton's pull request description, as rule AR-004 asks.
 
 ## Questions for the owner
 
@@ -120,6 +143,13 @@ Nothing yet.
    asked the agent to settle every review finding in the gate and to review
    them afterwards. The pull request that made that change lists each
    choice in one sentence with its alternative.
+6. **The licenses of Brakeman and `bundler-audit`.** Rule AR-004 asks for a
+   license compatible with the MIT License. According to RubyGems, Brakeman
+   8.1.0 is under the "Brakeman Public Use License" and `bundler-audit`
+   0.9.3 under GPL-3.0-or-later. Both are development and test tools, and
+   the default Dockerfile puts them in the API image. *Chosen meanwhile:*
+   both are kept as `rails new` put them, and the skeleton's pull request
+   names them under AR-004 with their licenses.
 
 ## Waiting for the owner
 
@@ -131,3 +161,4 @@ run is also listed here until the owner has read it.
 | --- | --- |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
+| [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) | Added in the delegated run: the pinned versions, the test tools and the code units of the skeleton. The owner has not read it |
