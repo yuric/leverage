@@ -5,15 +5,17 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage is in its definition phase. The repository contains documentation
-and the checks that keep it consistent: there is no product source code, no
-build, no test suite, and no deployment. Update this file in the same pull
-request that changes any of that.
+leverage is in its definition phase. The repository contains documentation,
+the research behind its practices, and the scripts and checks that keep them
+consistent: there is no product source code, no build, no test suite other
+than a self-test of the rules check, and no deployment. Update this file in
+the same pull request that changes any of that.
 
 ## Source of truth
 
-1. [docs/PRD.md](docs/PRD.md) defines **what** is built. Work that is not
-   traceable to a requirement there does not belong in a pull request.
+1. [docs/PRD.md](docs/PRD.md) defines **what** is built. Product behavior
+   that is not traceable to a requirement there does not belong in a pull
+   request.
 2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) defines **how** it is built.
 3. [docs/DEPLOY.md](docs/DEPLOY.md) defines how it is shipped and operated.
 4. [MAINTENANCE.md](MAINTENANCE.md) defines scope limits and what gets
@@ -26,15 +28,15 @@ undecided, stop and ask, or open an issue.
 ## Architecture rules
 
 - **Read the rules before you change anything.** They are in the
-  [Rules](docs/ARCHITECTURE.md#rules) section of the architecture document.
-  Every rule marked Active applies to your change.
+  [Rules](docs/ARCHITECTURE.md#rules) section of the architecture document,
+  with IDs that start `AR-`. Every rule marked Active applies to your change.
 - **Check your pull request against them before you open or update it.**
-  Answer every active rule in the "Architecture rules" section of the
-  description, from evidence in your diff, not from memory. The
-  [check-rules skill](.agents/skills/check-rules/SKILL.md) is the procedure.
-  If your change breaks a rule, stop and ask; do not answer `Complies`.
+  Follow the [check-rules skill](.agents/skills/check-rules/SKILL.md): it
+  answers every active rule from the evidence in your diff, not from memory.
+  `.claude/skills` is a symbolic link to `.agents/skills`; if it is a plain
+  file in your checkout, read `.agents/skills/` directly.
 
-## Rules
+## Working rules
 
 - **Do not invent requirements.** Propose them as a change to the PRD and let a
   maintainer accept them.
@@ -47,11 +49,9 @@ undecided, stop and ask, or open an issue.
   the same pull request.
 - **Never commit secrets.** No credentials, tokens, keys, or personal data, in
   code, docs, tests, fixtures, or commit messages. Use placeholders.
-- **Stay in scope.** Make the change that was asked for. Report unrelated
-  problems as issues instead of fixing them in passing. Rule AR-001 has the
-  detail.
-- **Do not add dependencies, licenses, or services without saying so.** Rule
-  AR-004 says what to declare.
+- **Stay in scope.** One purpose per pull request; rule AR-001 defines it.
+- **Do not add a dependency or service without declaring it.** Rule AR-004
+  says what to declare.
 - **Security-sensitive findings go through [SECURITY.md](SECURITY.md)**, not
   public issues or pull requests.
 
@@ -62,8 +62,14 @@ undecided, stop and ask, or open an issue.
   through a pull request whose checks have passed. Do not try to work around
   the ruleset; if it blocks something legitimate, say so and stop.
 - Branch from `main`, open a pull request, and fill in the template, including
-  the architecture rules and AI assistance sections. `gh pr create --body`
-  skips the template, so copy its sections into the body yourself.
+  the architecture rules and AI assistance sections. `gh pr create` with
+  `--body` or `--body-file` skips the template, so start the description from
+  the template file yourself.
+- In the AI assistance section, name the tool and what it did, and leave both
+  boxes unticked: the person you work for ticks one after reading the change.
+- Do not open a pull request that the person you work for has not asked for
+  or seen. See "No unattended agents" in
+  [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
 - Pull request titles and commit messages follow
   [Conventional Commits](https://www.conventionalcommits.org/)
   (`docs:`, `feat:`, `fix:`, `chore:` …), written in the imperative, explaining
@@ -87,10 +93,12 @@ npx markdownlint-cli2 "**/*.md"                      # Markdown lint
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules
+python3 scripts/test_check_rules.py                  # self-test of that check
 ```
 
-The last one also checks a pull request description when you give it one:
-`python3 scripts/check_rules.py --base origin/main --body-file <file>`.
+With a base commit and a description file, the last one also checks a pull
+request: `python3 scripts/check_rules.py --base origin/main --body-file <file>`.
+The two options only work together.
 
 If a tool is not installed, say which check you could not run instead of
 claiming it passed.
@@ -104,7 +112,7 @@ or changing one:
   is `contents: read`.
 - Pin every third-party action to a full commit SHA, with the version in a
   trailing comment. Never pin to a tag or branch. Dependabot proposes the
-  updates, and the rules check fails on an unpinned action.
+  updates, and the "Rules compliance" check fails on an unpinned action.
 - Never use the `pull_request_target` trigger.
 - Pass untrusted values (titles, branch names, issue text) to scripts through
   `env:`, never by interpolating `${{ … }}` into a `run:` script.

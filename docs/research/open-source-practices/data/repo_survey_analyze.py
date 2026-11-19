@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Reads repo_survey_data.csv and prints every table used in repo_survey.md. Usage: repo_survey_analyze.py repo_survey_data.csv"""
+"""Reads repo_survey_data.csv and prints every table used in repo_survey.md and the weighted
+figures used in the report's README. Usage: repo_survey_analyze.py repo_survey_data.csv"""
 import csv, sys, collections, statistics
 rows = list(csv.DictReader(open(sys.argv[1])))
 def b(r, k): return str(r.get(k, "")).strip().lower() in ("true", "1")
@@ -27,7 +28,7 @@ P = {  # label -> predicate
  "Workflow runs tests or build (loose)": lambda r: b(r, "wf_ci_test"),
  "Workflow runs lint/format/typecheck (regex heuristic)": lambda r: b(r, "wf_ci_lint"),
  "Workflow release/publish automation (heuristic)": lambda r: b(r, "wf_release"),
- "CodeQL": lambda r: b(r, "wf_codeql"),
+ "CodeQL analysis workflow (codeql-action init/analyze in workflows read)": lambda r: b(r, "wf_codeql"),
  "OpenSSF Scorecard action": lambda r: b(r, "wf_scorecard"),
  "Stale bot (actions/stale)": lambda r: b(r, "wf_stale"),
  "Other SAST/secret/dependency scan in workflows": lambda r: b(r, "wf_dependency_review_or_sast"),
@@ -79,7 +80,7 @@ P = {  # label -> predicate
  "Discord/Slack/chat link in README": lambda r: b(r, "readme_chat_link"),
  "README install/quick-start/usage heading": lambda r: b(r, "readme_install_section"),
  "README badges": lambda r: b(r, "readme_badges"),
- "README demo image/GIF/video (strict: badges excluded)": lambda r: b(r, "v_readme_demo_strict"),
+ "README non-badge image or video (strict: badges excluded, logos count)": lambda r: b(r, "v_readme_demo_strict"),
  "README any image/video incl. badges (loose)": lambda r: b(r, "readme_demo_media"),
  "README translations (README.xx.md)": lambda r: (n(r, "readme_translations") or 0) >= 1,
  ".editorconfig": lambda r: b(r, "editorconfig"),
@@ -113,7 +114,7 @@ for k, name in (("license_spdx", "License"), ("language", "Language"), ("categor
     print(f"\n{name}: " + "; ".join(f"{a}={c}" for a, c in collections.Counter(r[k] or "None" for r in rows).most_common()))
 def stats(k, label):
     v = [n(r, k) for r in rows if n(r, k) is not None]
-    if v: print(f"{label}: n={len(v)} median={statistics.median(v):.0f} mean={statistics.mean(v):.1f} min={min(v):.0f} max={max(v):.0f}")
+    if v: print(f"{label}: n={len(v)} median={statistics.median(v):g} mean={statistics.mean(v):.1f} min={min(v):.0f} max={max(v):.0f}")
 for k, l in (("health_pct", "Community health %"), ("n_workflows", "Workflows"), ("contributors", "Contributors"), ("releases_count", "Releases"), ("readme_lines", "README lines"), ("open_issues_and_prs", "Open issues+PRs"), ("n_topics", "Topics")): stats(k, l)
 print("Health % = 100:", sum(1 for r in rows if n(r, "health_pct") == 100), "; >=80:", sum(1 for r in rows if (n(r, "health_pct") or 0) >= 80))
 print("\nAgent file kinds (root):", collections.Counter(a for r in rows for a in r["agent_files_root"].split(";") if a).most_common())
@@ -155,10 +156,56 @@ print("Repos w/ all five core (README, license-detected, CONTRIBUTING, COC, SECU
 print("Repos with CONTRIBUTING and COC and SECURITY and issue templates and PR template (any):", sum(f(r["contributing_any"]) and f(r["code_of_conduct_any"]) and f(r["security_any"]) and (f(r["issue_tpl_any_own"])) and f(r["pr_template_any"]) for r in rows))
 print("Org .github repo exists for owner:", sum(f(r["has_org_dotgithub_repo"]) for r in rows), " inherited any health file:", sum(any(f(r[k+"_inherited"]) for k in ("contributing","code_of_conduct","security","support","governance","funding","pr_template")) or f(r["issue_tpl_inherited"]) for r in rows))
 print("Inherited counts: ", {k: sum(f(r[k+"_inherited"]) for r in rows) for k in ("contributing","code_of_conduct","security","support","governance","funding","pr_template")})
-print("README lines >=500:", sum((n(r,"readme_lines") or 0)>=500 for r in rows), " <150:", sum((n(r,"readme_lines") or 0)<150 for r in rows))
+rl = [n(r, "readme_lines") for r in rows if n(r, "readme_lines") is not None]  # repos without a README are excluded
+print("README lines, of", len(rl), "READMEs: >=500:", sum(x >= 500 for x in rl), " <150:", sum(x < 150 for x in rl))
 print("Tests dir but no CI:", sum(f(r["tests_dir"]) and not (n(r,"n_workflows") or 0) for r in rows))
 print("CI present but no tests dir:", sum((n(r,"n_workflows") or 0)>=1 and not f(r["tests_dir"]) for r in rows))
 print("Docs-only-ish check: repos w/ AGENTS/CLAUDE + CONTRIBUTING + COC + SECURITY + CHANGELOG all:", sum(f(r["agents_or_claude_md_root"]) and f(r["contributing_any"]) and f(r["code_of_conduct_any"]) and f(r["security_any"]) and f(r["changelog_own"]) for r in rows))
 print("CHANGELOG-type file among repos with releases:", sum(f(r["changelog_own"]) for r in rows if (n(r,"releases_count") or 0)>=1), "/", sum(1 for r in rows if (n(r,"releases_count") or 0)>=1))
 print("Top 15 by stars sanity: ", [(r["full_name"], r["stars"]) for r in sorted(rows,key=lambda r:-int(r["stars"]))[:5]])
 print("Windows:", collections.Counter(r["window"] for r in rows))
+
+print("\n## Workflow read cap and other counts")
+wfr = [r for r in rows if (n(r, "n_workflows") or 0) >= 1]
+capped = [r for r in rows if (n(r, "n_workflows") or 0) > (n(r, "n_workflows_read") or 0)]
+print("Repos with more workflows than were read (cap of 8):", len(capped), "of", len(wfr), "with workflows")
+print("  ...of these, coded all_sha:", sum(r["pinning"] == "all_sha" for r in capped), "; strict tests False:", sum(not f(r["v_wf_test_strict"]) for r in capped), "; permissions False:", sum(not f(r["v_wf_permissions_block"]) for r in capped), "; CodeQL False:", sum(not f(r["wf_codeql"]) for r in capped))
+print("  ...capped all_sha repos by band:", collections.Counter(r["band"] for r in capped if r["pinning"] == "all_sha"))
+ext = [r for r in rows if r["pinning"] in ("all_sha", "mixed", "none")]
+print("Repos with external actions:", len(ext), " all SHA-pinned:", sum(r["pinning"] == "all_sha" for r in ext))
+print("pull_request_target trigger in workflows read:", sum(f(r["v_wf_triggers_pr_target"]) for r in rows))
+print("Workflow repos with neither a test/build nor a lint pattern:", sum(not f(r["wf_tests_or_lint"]) for r in wfr))
+print("AI-contribution policy (manual) in AI/LLM tooling:", sum(f(r["ai_policy_manual"]) for r in rows if r["category"] == "AI/LLM tooling"), "/", sum(r["category"] == "AI/LLM tooling" for r in rows), "; elsewhere:", sum(f(r["ai_policy_manual"]) for r in rows if r["category"] != "AI/LLM tooling"), "/", sum(r["category"] != "AI/LLM tooling" for r in rows))
+print("Agent file in AI/LLM tooling:", sum(f(r["has_agent_file"]) for r in rows if r["category"] == "AI/LLM tooling"), "; elsewhere:", sum(f(r["has_agent_file"]) for r in rows if r["category"] != "AI/LLM tooling"))
+print("1k-2k: contributors <=2:", sum((n(r, "contributors") or 0) <= 2 for r in rows if r["band"] == "1k-2k"), " <=10:", sum((n(r, "contributors") or 0) <= 10 for r in rows if r["band"] == "1k-2k"), " user-owned:", sum(r["owner_type"] == "User" for r in rows if r["band"] == "1k-2k"), "of", sum(r["band"] == "1k-2k" for r in rows))
+
+# ---------- weighted figures ----------
+# Population per star band and per band x creation window: search total_count at query time,
+# 2026-11-18 (see notes/repo_survey.md). These counts include repositories of kinds the sample
+# excluded (about 14% of those examined were not software).
+BAND_N = {"1k-2k": 3638, "2k-5k": 2348, "5k-20k": 1176, "20k+": 353}
+CELL_N = {("1k-2k", "W1"): 729, ("1k-2k", "W2"): 734, ("1k-2k", "W3"): 1254, ("1k-2k", "W4"): 921,
+          ("2k-5k", "W1"): 515, ("2k-5k", "W2"): 459, ("2k-5k", "W3"): 837, ("2k-5k", "W4"): 537,
+          ("5k-20k", "W1"): 261, ("5k-20k", "W2"): 208, ("5k-20k", "W3"): 440, ("5k-20k", "W4"): 267,
+          ("20k+", "W1"): 71, ("20k+", "W2"): 76, ("20k+", "W3"): 163, ("20k+", "W4"): 43}
+BANDS = ["1k-2k", "2k-5k", "5k-20k", "20k+"]
+def share(g, fn): return sum(1 for r in g if fn(r)) / len(g)
+def wmean(groups, weights, fn): return sum(weights[k] * share(groups[k], fn) for k in groups) / sum(weights[k] for k in groups)
+byband = {k: [r for r in rows if r["band"] == k] for k in BANDS}
+bycell = collections.defaultdict(list)
+for r in rows: bycell[(r["band"], r["window"])].append(r)
+EXTRA = {
+ "All Actions SHA-pinned (share of all repos)": lambda r: r["pinning"] == "all_sha",
+ "Five-file bundle (README, recognised license, CONTRIBUTING, CoC, SECURITY)": lambda r: f(r["readme"]) and r["license_spdx"] not in ("NONE", "NOASSERTION") and f(r["contributing_any"]) and f(r["code_of_conduct_any"]) and f(r["security_any"]),
+ "Community health = 100%": lambda r: n(r, "health_pct") == 100,
+ "Category AI/LLM tooling": lambda r: r["category"] == "AI/LLM tooling",
+}
+print("\n## Weighted by star band (population weights " + ", ".join(f"{k}={v}" for k, v in BAND_N.items()) + ")")
+print("1k-5k pooled weights the two lower bands 3,638:2,348. 16-cell weights use each band x window cell's total instead (sensitivity check).")
+print("| Practice | 1k-2k | 2k-5k | 5k-20k | 20k+ | 1k-5k pooled | Weighted overall | 16-cell weighted | Unweighted |\n|---|---|---|---|---|---|---|---|---|")
+for k, fn in list(P.items()) + list(EXTRA.items()):
+    cells = [100 * share(byband[g], fn) for g in BANDS]
+    pooled = 100 * wmean({g: byband[g] for g in BANDS[:2]}, BAND_N, fn)
+    overall = 100 * wmean(byband, BAND_N, fn)
+    cell = 100 * wmean(bycell, CELL_N, fn)
+    print(f"| {k.strip()} | " + " | ".join(f"{x:.0f}" for x in cells + [pooled, overall, cell, 100 * share(rows, fn)]) + " |")

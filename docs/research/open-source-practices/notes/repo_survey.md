@@ -7,7 +7,17 @@ All figures below are primary measurements made on 2026-11-18 (search run 19:42 
 - Printed results: [analysis_output.txt](../data/analysis_output.txt), the full ranked table plus segment tables by owner type, star band, age and category.
 - Raw API captures (search results, the examined pool, the selected sample, the exclusion list, and the first- and second-pass survey output, about 10 MB of JSON in total) are not published in this repository. Where the text below cites one of those files by name, it is naming the capture the figure came from.
 
-In this document "n=100" is the denominator unless stated. Every percentage is reproducible from the CSV with the analyze script. No secondary datasets (Octoverse, academic studies, Scorecard aggregates) were consulted, so nothing here is compared to outside figures.
+In this document "I" is the AI research agent that ran the survey (the report's "survey's author"). "n=100" is the denominator unless stated. Every percentage and count about the 100 repositories is printed by the analyze script from the CSV, or is a sum of counts it prints; figures about the candidate pool and exclusions come from the unpublished captures named where used. No secondary datasets (Octoverse, academic studies, Scorecard aggregates) were consulted, so nothing here is compared to outside figures.
+
+## Corrections after review
+
+An adversarial review after publication found the following; corrected 2026-11-19.
+
+- CodeQL: the regex in `repo_survey_script.py` matched the bare word `codeql`. It counted a `REMOVE_CODEQL` disk clean-up option (Numbersf/Action-Build), `codeql-action/upload-sarif` used to upload Trivy results (MatrixSeven/file-transfer-go) and a CodeQL triage workflow (headroomlabs-ai/headroom). The regex now requires a `codeql-action` `init` or `analyze` step, and those three `wf_codeql` cells were set to False after re-reading the live workflow files. The other seven positives each have such a step. headroom does run CodeQL, in `security.yml`, which is beyond the 8 workflows read. CodeQL: 10 to 7 of 100.
+- Script output: medians now print unrounded (community health 59.5, contributors 15.5, topics 4.5), and the repository with no README is no longer counted among READMEs under 150 lines (26 to 25 of 99). The script now also prints the weighted figures used in the report and several counts that were previously computed by hand.
+- Figures in this note that did not match the CSV: CODE_OF_CONDUCT for org-owned repos (42%, not 40%) and Dependabot/Renovate at 20k+ (44%, not 40%); one cell, not two, had fewer than 10 candidates; the 80% workflows row was listed under the wrong tier; the five-file bundle count in section 6.
+- The CSV column that held verbatim excerpts of surveyed CONTRIBUTING files was removed; `v_contrib_ai_hits` and `ai_policy_manual` remain.
+- The 8-workflow read limit and its direction of bias are now stated in section 1.
 
 ## Sample construction, queries, exclusions and method
 
@@ -19,26 +29,26 @@ In this document "n=100" is the denominator unless stated. Every percentage is r
 
 - Universe size at query time (search `total_count`, `created:>=2024-11-18 fork:false archived:false`): stars 1001-2000 = 3,638; 2001-5000 = 2,348; 5001-20000 = 1,176; >20000 = 353; total 7,515 repos. — `search_candidates_raw.json` (raw capture, not published)
 - Queries used (16 cells = 4 star bands x 4 created-date windows; `sort=stars&per_page=100`, one random page per cell, page number in brackets; `q` = `created:{window} stars:{band} fork:false archived:false`). Windows: W1 = 2024-11-18..2025-05-17, W2 = 2025-05-18..2025-11-17, W3 = 2025-11-18..2026-05-17, W4 = 2026-05-18..2026-11-18. Cell totals (page): 1001..2000: W1 729 (p4), W2 734 (p6), W3 1254 (p2), W4 921 (p1); 2001..5000: W1 515 (p1), W2 459 (p2), W3 837 (p7), W4 537 (p3); 5001..20000: W1 261 (p2), W2 208 (p3), W3 440 (p4), W4 267 (p3); >20000: W1 71 (p1), W2 76 (p1), W3 163 (p1), W4 43 (p1). Random seed 20261118. Search was preceded by a `per_page=1` call per cell to read `total_count`. — `search_candidates_raw.json` (raw capture, not published)
-- 10 repos were randomly drawn per cell (seed 7) = 158 examined (two cells had fewer than 10 candidates: 5k-20k W2 has only 8 results). I read name, description and topics of all 158 by hand and excluded 22; then took 25 per star band round-robin across windows. — `examined_pool.json` (raw capture, not published), `sample_selected.json` (raw capture, not published)
+- 10 repos were randomly drawn per cell (seed 7) = 158 examined (one cell had fewer than 10 candidates: 5k-20k W2 has only 8 results). I read name, description and topics of all 158 by hand and excluded 22; then took 25 per star band round-robin across windows. — `examined_pool.json` (raw capture, not published), `sample_selected.json` (raw capture, not published)
 - Exclusions: 22 of 158 examined (13.9%). By band: 20k+ 7 of 40 (17.5%); 5k-20k 6 of 38 (15.8%); 2k-5k 5 of 40 (12.5%); 1k-2k 4 of 40 (10%). Reasons: prompt/skill/template collections or "awesome" lists (about 10), books/courses/guides (6), leaked-source dumps or mirrors (3), 1 exploit-PoC dump, 1 hardware-files-only repo, 1 binary-releases-only repo. The individual repositories are not named here. — `exclusions.json` (raw capture, not published)
 - Sample composition: owner type Organization 53 / User 47; category (my manual labels) AI/LLM tooling 53, application 21, developer tool 12, infrastructure 6, framework/library 4, other 4; primary language Python 26, TypeScript 24, JavaScript 12, Rust 9, C# 5, Swift 5, Go 4, C 4, Dart 3, Shell 3, HTML 2, Kotlin/Java/none 1 each. — [analysis_output.txt](../data/analysis_output.txt)
 - Per-repo calls: `repos/{o}/{r}`, `git/trees/{branch}?recursive=1` (0 truncated), `{owner}/.github` repo + tree (cached per owner, 26 of the 100 repos belong to an owner that has a `.github` repo), README raw, CONTRIBUTING raw, issue `config.yml` raw, up to 8 workflow files raw, `releases?per_page=1` (count from Link header), `tags?per_page=30`, `contributors?per_page=1&anon=false`, `community/profile`, `private-vulnerability-reporting`. All 100 repos returned every endpoint without error. A second pass re-read README, CONTRIBUTING and workflows with stricter regexes. — [repo_survey_script.py](../data/repo_survey_script.py)
 
 ### Inferences
 
-- The universe is large (7,515), so n=100 gives roughly +/-10 percentage points (95%) on a 50% proportion; differences under about 15 points between segments of 25-50 repos are within noise.
+- If the sample were a simple random sample, n=100 would give roughly +/-10 percentage points (95%) on a 50% proportion, and a difference between two segments would need about 20 points (50 vs 50 repos) or 28 points (25 vs 25) to stand out. The sample is clustered (16 cells, each one page of search results), so real margins are wider.
 - About 1 in 7 young 1,000+ star repos is not a software project in the ordinary sense, and the share rises with stars (17.5% at 20k+ vs 10% at 1k-2k, though these are small counts).
 
 ### Gaps
 
-- Within-cell sampling is a random page among the first (up to) 10 pages of star-sorted results, so each cell is sampled from its top 1,000 results only; for the >20000 W3 cell (163 repos) only page 1 (top 100) was available to the sampler. Cells with fewer than 1,000 results are sampled across their whole range; only 1k-2k W3 (1,254 results) exceeds the 1,000-result search cap, so its lowest-star repos were unreachable.
+- Within-cell sampling is one random page among the first (up to) 10 pages of star-sorted results, and all 10 candidates come from that page. Each cell is therefore one contiguous block of about 100 repositories in star order, covering a narrow star range (for example 1,115-1,188 stars for 1k-2k W2), and the sample is 16 clusters, not 100 independent draws. For the >20000 W3 cell (163 repos) the sampler could pick page 1 or 2 and drew page 1. Cells with fewer than 1,000 results are sampled across their whole range; only 1k-2k W3 (1,254 results) exceeds the 1,000-result search cap, so its lowest-star repos were unreachable.
 - Exclusion judgments are mine, from names/descriptions; borderline repos (e.g. affaan-m/ECC, vercel-labs/skills, geeklee/srt-whiteboard-animation, 1692775560/deepseek_project) were kept.
 
 ## 1. Adoption per practice, ranked, with tiers
 
 ### Takeaway
 
-Basic hygiene (README, issues, .gitignore, a detectable license, tags/releases, some CI) is near-universal; community files (CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, templates) sit around 30-55%; governance/process documents (ADR, RFC, ROADMAP, GOVERNANCE, MAINTAINERS), supply-chain tooling (Scorecard, pinning, Dependabot) and AI-contribution policies are rare. Community-profile health percentage median is 60 (mean 60.8, min 14, max 100); only 11 of 100 reach 100% and 25 reach 80%+.
+Basic hygiene (README, issues, .gitignore, a detectable license, tags/releases, some CI) is near-universal; community files (CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, templates) sit around 30-55%; governance/process documents (ADR, RFC, ROADMAP, GOVERNANCE, MAINTAINERS), supply-chain tooling (Scorecard, pinning, Dependabot) and AI-contribution policies are rare. Community-profile health percentage median is 59.5 (mean 60.8, min 14, max 100); only 11 of 100 reach 100% and 25 reach 80%+.
 
 ### Cited Findings
 
@@ -51,23 +61,23 @@ Counts out of n=100 unless noted. "Any" = own repo or inherited from the owner's
 | README present | 99 | 99 |
 | Issues enabled | 99 | 99 |
 | .gitignore | 94 | 94 |
-| README has an image/GIF/video (strict, badges excluded; of 99 with README = 88%) | 87 | 87 |
+| README has a non-badge image or video (strict regex, badges excluded, logos count; of 99 with README = 88%) | 87 | 87 |
 | A LICENSE-type file in tree | 90 | 90 |
 | Git tags | 84 | 84 |
 | GitHub-recognised license (SPDX id) | 81 | 81 |
 | GitHub Releases >= 1 | 81 | 81 |
-| GitHub Actions workflows >= 1 (any CI = also 80) | 80 | 80 |
 
 #### Common (40-80%)
 
 | Practice | n | % |
 |---|---|---|
+| GitHub Actions workflows >= 1 (any CI = also 80) | 80 | 80 |
 | Test directory or test files in tree | 74 | 74 |
 | README install/quick-start/usage heading | 73 | 73 |
 | README badges | 72 | 72 |
 | Semver-style tags (>=50% of latest 30 tags) | 71 | 71 |
 | Release/publish automation in a workflow (loose regex: any "release/publish/goreleaser/docker build-push"; of the 80 CI repos 68 = 85%) | 68 | 68 |
-| Workflows declare a `permissions:` block (of up to 8 workflows read) | 73 | 73 |
+| A workflow read has a `permissions:` key, any value (of up to 8 workflows read) | 73 | 73 |
 | Homepage URL set | 64 | 64 |
 | docs/ directory | 57 | 57 |
 | Topics set | 57 | 57 |
@@ -109,16 +119,16 @@ Counts out of n=100 unless noted. "Any" = own repo or inherited from the owner's
 | .editorconfig | 12 | 12 |
 | Legacy `.md` issue templates (YAML forms 42, so forms outnumber legacy about 3:1) | 15 | 15 |
 | AI-review bot (strict workflow regex or `.coderabbit.yaml`/greptile/gemini config) | 11 | 11 |
-| AI-contribution policy (manually verified) | 11 | 11 |
+| AI-contribution policy (regex hits in CONTRIBUTING read by hand, plus policy files) | 11 | 11 |
 | Deploy/self-host docs (filename heuristic) | 11 | 11 |
 | Other security scanners in workflows (semgrep, trivy, dependency-review, zizmor etc.) | 11 | 11 |
-| CodeQL workflow | 10 | 10 |
 
 #### Rare (<10%)
 
 | Practice | n | % |
 |---|---|---|
-| CLA or DCO (manually verified) | 9 | 9 |
+| CLA or DCO (regex hits less one false positive; two of nine not read) | 9 | 9 |
+| CodeQL analysis workflow (`codeql-action` init/analyze in workflows read; corrected) | 7 | 7 |
 | RFC/spec/PRD/design-doc directory | 8 | 8 |
 | devcontainer | 7 | 7 |
 | GOVERNANCE | 5 | 5 |
@@ -139,9 +149,9 @@ Counts out of n=100 unless noted. "Any" = own repo or inherited from the owner's
 - Releases: 81 have at least one; median release count 24 (mean 91; max 1,747); 63 of the 81 published their latest release within 90 days of 2026-11-18. 73 of 100 repos were pushed within the last 30 days. CHANGELOG-type files exist in 34 of those 81 release-publishing repos (42%).
 - Release hygiene: of 80 repos with workflows, 23 pin every external action to a commit SHA, 13 are mixed, 43 use tags/branches only, 1 uses no external actions. So 29% of repos with external actions are fully SHA-pinned (23 of 79). 73 of the 80 workflow repos (91%) declare a `permissions:` block in at least one of the workflows read (up to 8 per repo). 19 repos have a `pull_request_target` trigger in the workflows read.
 - Workflows: median 3 across all 100 (mean 7.4, max 41); among the 80 with at least one, median 5. 20 repos had zero workflows and none of the six named external CI configs (CircleCI, Travis, GitLab, Azure, Jenkins, Buildkite); no sampled repo used only an external CI config.
-- CodeQL appears in 10 repos (Numbersf/Action-Build, YouPI-PG, mcporter, telemt, file-transfer-go, headroom, kilocode, ruflo, career-ops, open-code-review); 0 Scorecard.
-- Contributors (from Link header, `anon=false`): median 16, mean 64.6, max 478; 20 repos have 3 or fewer contributors, 40 have 10 or fewer, 31 have 50 or more.
-- README: median 237 lines (mean 333; 26 under 150 lines, 18 at 500+). Of 99 READMEs, 73 have an install/quick-start/usage-type heading (regex on headings). 12 repos' READMEs have no screenshot/GIF/video by the strict regex.
+- A CodeQL analysis step appears in 7 repos (YouPI-PG, mcporter, telemt, kilocode, ruflo, career-ops, open-code-review); 0 Scorecard. The survey first reported 10; see Corrections after review.
+- Contributors (from Link header, `anon=false`): median 15.5, mean 64.6, max 478; 20 repos have 3 or fewer contributors, 40 have 10 or fewer, 31 have 50 or more.
+- README: median 237 lines (mean 333; of the 99 READMEs, 25 are under 150 lines and 18 at 500+). Of 99 READMEs, 73 have an install/quick-start/usage-type heading (regex on headings). 12 repos' READMEs have no screenshot/GIF/video by the strict regex.
 - Open issues + PRs count (GitHub's `open_issues_count` includes PRs): median 39, mean 661, max 27,817.
 - Combined bundles: README + detectable license + CONTRIBUTING + CODE_OF_CONDUCT + SECURITY (any) = 20 of 100; the same plus issue templates and PR template (without the license condition) = 19. AGENTS/CLAUDE.md + CONTRIBUTING + CoC + SECURITY + CHANGELOG all together = 7 of 100. Health percentage bands: under 40: 19; 40-59: 31; 60-79: 25; 80-99: 14; exactly 100: 11.
 
@@ -149,11 +159,11 @@ Counts out of n=100 unless noted. "Any" = own repo or inherited from the owner's
 
 - The tiers show that the first thing young popular repos get right is distribution (license, tags, releases, CI to build/publish), not governance. Community files are present in roughly half, and CODE_OF_CONDUCT/SECURITY/PR template are each in a minority.
 - Wiki, Discussions and topics are largely settings defaults or low-effort toggles; their prevalence should not be read as deliberate "practice".
-- Supply-chain hardening (SHA pinning 29%, Scorecard 0%, CodeQL 10%, Dependabot/Renovate 19%) lags what the security-advice literature recommends.
+- Supply-chain hardening (SHA pinning at most 29%, Scorecard 0%, CodeQL analysis at least 7%, Dependabot/Renovate 19%) lags what the security-advice literature recommends.
 
 ### Gaps
 
-- Release automation, CI lint and "AI review" are regex heuristics on up to 8 workflow files per repo (31 repos have more than 8 workflows, so their flags may be under-counted); a workflow matching "release" does not prove it publishes. The strict test regex (53%) and loose (58%) bracket test-in-CI.
+- Every workflow-based flag reads at most 8 workflow files per repo, in file-name order, and 31 of the 80 repos with workflows have more. Flags that look for a match (tests, lint, release, CodeQL, AI review) can only gain from unread files, so they are lower bounds; 5 of the 31 are coded as not running tests. "All SHA-pinned" can only lose, so it is an upper bound: 14 of the 23 all-pinned repos (2 at 1k-2k, 2 at 2k-5k) were judged on a subset. All 31 already have a `permissions:` key. A live check after review of the unread workflows of the five capped repos without a test match found test commands in three (mfat/sshpilot, Barre/ZeroFS, pyrefly-org/pyrefly); the CSV keeps the survey's coding, and counting them would make tests-in-CI 56 of 100. A workflow matching "release" does not prove it publishes.
 - "Deploy/self-host docs" is a file/folder-name heuristic and likely undercounts docs buried in README or a docs site.
 - Behaviour behind GitHub settings (branch protection, required reviews, rulesets, secret scanning) is not visible through unauthenticated-as-collaborator GETs and was not measured.
 
@@ -161,7 +171,7 @@ Counts out of n=100 unless noted. "Any" = own repo or inherited from the owner's
 
 ### Takeaway
 
-Organization-owned repos beat user-owned on almost every governance/process practice (CoC 40% vs 15%, CODEOWNERS 23% vs 9%, CI 89% vs 70%, PVR 43% vs 28%); the top star band (20k+) is clearly more mature (CI 96%, CODEOWNERS 40%, Dependabot 40%, AI review 32%), while repos under one year old differ from older ones mainly in newer agent files and tests-in-CI, not in community files. Category differences are driven by the AI/LLM tooling majority (53 of 100); other categories have n of 4-21 and are indicative only.
+Organization-owned repos beat user-owned on almost every governance/process practice (CoC 42% vs 15%, CODEOWNERS 23% vs 9%, CI 89% vs 70%, PVR 43% vs 28%); the top star band (20k+) is clearly more mature (CI 96%, CODEOWNERS 40%, Dependabot/Renovate 44%, AI review 32%), while repos under one year old differ from older ones mainly in newer agent files and tests-in-CI, not in community files. Category differences are driven by the AI/LLM tooling majority (53 of 100); other categories have n of 4-21 and are indicative only.
 
 ### Cited Findings
 
@@ -240,7 +250,7 @@ Roughly half (49%) of young popular repos ship an agent-instruction artifact at 
 - Artifact kinds at root (counts; a repo can have several): AGENTS.md 39; CLAUDE.md 23; `.claude/` 20; `.agents/` 20; `.github/copilot-instructions.md` or `.github/instructions|prompts|chatmodes` 7; `.cursor/` rules/commands 5; `.gemini/` 4; `.codex/` 3; `.opencode/` 3; `.cursorrules` 2; `.windsurfrules` 1; `.clinerules` 1; `.kiro/` 1; `GEMINI.md` 1; `openspec/` 1. — [analysis_output.txt](../data/analysis_output.txt)
 - Adoption by segment: AI/LLM tooling 60% vs 36% for non-AI repos; org 53% vs user 45%; 20k+ band 64% vs 36% at 1k-2k; under 1 yr old 54% vs 44% older. — [analysis_output.txt](../data/analysis_output.txt)
 - Repos with an agent file also more often have CONTRIBUTING (33 of 49 = 67%) than repos without one (18 of 51 = 35%); CI: 45 of 49 (92%) vs 35 of 51 (69%). — [analysis_output.txt](../data/analysis_output.txt)
-- AI-contribution policy, manually verified from CONTRIBUTING text, or a dedicated AI policy file/workflow: 11/100. These are: ZhFahim/anchor ("AI tools" section), daeuniverse/honk ("LLM Contribution Policy"), supabitapp/supacode, stickerdaniel/linkedin-mcp-server (disclosure format for agent-authored work), Dispatcharr/Dispatcharr ("On AI-Assisted Code"), pyrefly-org/pyrefly (AI_POLICY.md plus a "human" checkbox in the PR template), zumerlab/snapdom ("Using AI"), telemt/telemt ("AI Usage Policy"), Kilo-Org/kilocode (ownership of AI-assisted work), career-ops-hq/career-ops (rules for unattended coding agents), astral-sh/ty (`ai-policy.yml` workflow). Regex first-pass flagged 17 CONTRIBUTING files with AI-related terms; I read the contexts and discarded 7 (tool mentions or project structure, not policy). — [CSV columns `ai_policy_manual`, `v_contrib_ai_context`](../data/repo_survey_data.csv)
+- AI-contribution policy, manually verified from CONTRIBUTING text, or a dedicated AI policy file/workflow: 11/100. These are: ZhFahim/anchor ("AI tools" section), daeuniverse/honk ("LLM Contribution Policy"), supabitapp/supacode, stickerdaniel/linkedin-mcp-server (disclosure format for agent-authored work), Dispatcharr/Dispatcharr ("On AI-Assisted Code"), pyrefly-org/pyrefly (AI_POLICY.md plus a "human" checkbox in the PR template), zumerlab/snapdom ("Using AI"), telemt/telemt ("AI Usage Policy"), Kilo-Org/kilocode (ownership of AI-assisted work), career-ops-hq/career-ops (rules for unattended coding agents), astral-sh/ty (`ai-policy.yml` workflow). Regex first-pass flagged 17 CONTRIBUTING files with AI-related terms; I read the contexts and discarded 7 (tool mentions or project structure, not policy). The contexts are verbatim repository text and are not published. — [CSV columns `ai_policy_manual`, `v_contrib_ai_hits`](../data/repo_survey_data.csv)
 - AI-review bots: 11 repos (strict): workflow-based `claude-code-action`/`@claude` (anthropics/claude-code, ruflo), `openai/codex-action` (openai/codex) plus config files for CodeRabbit (hk, testsprite-cli, MaiBot, ECC, career-ops), Greptile (hk, ECC, paperclip), Gemini Code Assist (airi, A2A). — [CSV `ai_review_strict`, `ai_review_config_file`]
 - CLA/DCO: 9/100 manually verified (CLA text in CONTRIBUTING for agent-flow, Lynxe, muse-gadget-sdk, Dispatcharr, pyrefly via a CLA bot, open-code-review; CLA/DCO workflow or config for vAPI-Network, openai/codex, vercel/eve DCO). One regex hit (TestSprite) was a false positive ("No separate CLA is required") and was removed. Two of the 9 (vAPI-Network, openai/codex) were counted from workflow regex hits that I did not read in full. — [CSV `cla_dco_manual`]
 
@@ -265,7 +275,7 @@ MIT (38) and Apache-2.0 (23) dominate; 19 of 100 have no OSI-style license recog
 
 - License SPDX (GitHub): MIT 38; Apache-2.0 23; GPL-3.0 10; AGPL-3.0 8; GPL-2.0 1; BSD-3-Clause 1; NOASSERTION (a license file GitHub does not recognise, mostly custom or source-available) 8; no license 11. — [analysis_output.txt](../data/analysis_output.txt)
 - Of the 11 with no license detected, 10 have no LICENSE-type file at all and 1 (anthropics/claude-code) has a LICENSE.md with proprietary text. The 8 NOASSERTION repos: Action-Build, Hephaestus, supacode, mango, visa-vulnerability-agentic-harness, telemt, dsh-our-free-model, paseo. — [CSV `license_spdx`, `license_file_path`]
-- No-license repos include high-star ones: anthropics/claude-code (156k stars), dsh-our-free-model (80k), virattt/dexter (28k), gpu-unlock (20k), getpaseo/paseo (24k, NOASSERTION). — [CSV]
+- Repos without a recognised license include high-star ones: anthropics/claude-code (156k stars), dsh-our-free-model (80k, NOASSERTION), virattt/dexter (28k), gpu-unlock (20k), getpaseo/paseo (24k, NOASSERTION). — [CSV]
 - Permissive (MIT, Apache, BSD) = 62; copyleft (GPL, AGPL) = 19. Org-owned and user-owned repos both have 81% recognised licenses. — [CSV]
 
 ### Inferences
@@ -294,7 +304,7 @@ Missing basics are not confined to small repos: 11 of 25 repos at 20k+ stars lac
 
 ### Inferences
 
-- High star counts do not imply governance hygiene; many viral repos (leaked-tools, model drops, one-person tools) are published as code drops with little scaffolding.
+- High star counts do not imply governance hygiene; many viral repos (model drops, one-person tools) are published as code drops with little scaffolding.
 - Only 7 of 100 repos have the combination of agent file + CONTRIBUTING + CODE_OF_CONDUCT + SECURITY + CHANGELOG.
 
 ### Gaps
@@ -305,13 +315,13 @@ Missing basics are not confined to small repos: 11 of 25 repos at 20k+ stars lac
 
 ### Takeaway
 
-Relative to this cohort, a repo that starts with README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY with PVR, CHANGELOG, YAML issue forms, PR template, CODEOWNERS, AGENTS.md + CLAUDE.md, .editorconfig and .gitattributes already exceeds almost all the sampled repos on community files (only 11 of 100 reach 100% community health and 7 of 100 have the five-file bundle above); what it lacks, CI, dependency updates and releases, are the practices the cohort does have (CI 80%, releases 81%, tags 84%), though the cohort's own supply-chain practices are weak.
+Relative to this cohort, a repo that starts with README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY with PVR, CHANGELOG, YAML issue forms, PR template, CODEOWNERS, AGENTS.md + CLAUDE.md, .editorconfig and .gitattributes already exceeds almost all the sampled repos on community files (only 11 of 100 reach 100% community health and 20 of 100 have the five-file bundle of README, recognised license, CONTRIBUTING, CODE_OF_CONDUCT and SECURITY); what it lacks, CI, dependency updates and releases, are the practices the cohort does have (CI 80%, releases 81%, tags 84%), though the cohort's own supply-chain practices are weak.
 
 ### Cited Findings
 
 - Practices in the comparison repo versus this cohort: README 99%, license 81% (detected), CONTRIBUTING 51%, CODE_OF_CONDUCT 29%, SECURITY 39% + PVR 36%, CHANGELOG 36%, YAML issue forms 42%, PR template 37%, CODEOWNERS 16%, AGENTS.md 39% / CLAUDE.md 23% / both 17%, .editorconfig 12%, .gitattributes 41%, AUTHORS 1%. — [CSV]
 - Practices the comparison repo lacks: GitHub Actions workflows 80%, tests in CI 53%, Dependabot/Renovate 19%, GitHub Releases 81%, semver tags 71%. — [CSV]
-- Practices neither has that the cohort mostly skips: SHA-pinning (29% of repos with external actions), Scorecard (0%), CodeQL (10%), AI-contribution policy (11%), ADR (4%), RFC/spec/PRD directory (8%), GOVERNANCE (5%), ROADMAP (4%), MAINTAINERS (2%), SUPPORT (4%), CLA/DCO (9%).
+- Practices neither has that the cohort mostly skips: SHA-pinning (29% of repos with external actions), Scorecard (0%), CodeQL analysis (7%), AI-contribution policy (11%), ADR (4%), RFC/spec/PRD directory (8%), GOVERNANCE (5%), ROADMAP (4%), MAINTAINERS (2%), SUPPORT (4%), CLA/DCO (9%).
 - A PRD/spec docs directory is present in only 8 of 100 repos (RFC/spec/PRD/design-doc heuristic: `docs/`-`rfcs/specs/prd/design` or `openspec/` and `.specify/`).
 
 ### Inferences
@@ -323,8 +333,8 @@ Relative to this cohort, a repo that starts with README, LICENSE, CONTRIBUTING, 
 
 - Survivorship: these are repos that already crossed 1,000 stars in under two years. Practices of repos that never got popular are not measured, so nothing here shows that a practice caused popularity.
 - Skew: 53% are AI/LLM tooling; the cohort leans toward company-backed or viral projects, includes many Chinese-language repos, and star counts may be inflated for some (no check made for star manipulation). The sampling frame is search results sorted by stars within bands and creation windows; random pages within a cell are not a uniformly random draw from all matching repos (see Section 1 gaps).
-- n=100: margins of roughly +/-10 points; segments of 25 have wider margins and small categories (n=4-6) are anecdotal.
-- Unobservable settings: branch protection, rulesets, required reviews, secret scanning, Dependabot alerts (security updates without a yml), code scanning default setup (CodeQL can be enabled without a workflow file, so the 10% CodeQL figure is a floor), repo-level CLA apps and GitHub Apps (e.g. CodeRabbit installed without a config file), org-level required workflows, discussions categories.
+- n=100: margins of roughly +/-10 points under simple random sampling, wider given the 16-cluster design; segments of 25 have wider margins and small categories (n=4-6) are anecdotal.
+- Unobservable settings: branch protection, rulesets, required reviews, secret scanning, Dependabot alerts (security updates without a yml), code scanning default setup (CodeQL can be enabled without a workflow file, so the 7% CodeQL figure is a lower bound), repo-level CLA apps and GitHub Apps (e.g. CodeRabbit installed without a config file), org-level required workflows, discussions categories.
 - Heuristics: release automation (loose regex), lint-in-CI (loose regex), tests-in-CI (strict test-command regex, only first 8 workflows read), README install section (heading regex), README demo media (strict regex after excluding badge-like images; may count logos), chat-link (domain regex), deploy docs (filename heuristic), SHA-pinning (up to 8 workflows), agent files (path patterns), architecture/ADR/RFC (path patterns). Manual review applied only to the AI-policy hits and CLA/DCO hits. Regex hits for AI review in workflows were reduced to a strict list; two CLA/DCO workflow hits (vAPI-Network, openai/codex) were not read manually.
 - `open_issues_count` includes PRs. Contributors endpoint excludes anonymous contributors and is a lower-bound for commit authors; contributor count for repos with squash-merged bot commits may be off.
 - Singular snapshot: figures are a single day; many young repos change quickly (e.g. agent files added within weeks).

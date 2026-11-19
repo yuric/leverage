@@ -4,7 +4,13 @@ Read-only: GET requests only via authenticated `gh api`.
 Usage:
   repo_survey_script.py candidates OUT.json   # stage 1: build stratified candidate pool via search API
   repo_survey_script.py survey SAMPLE.json OUTDIR  # stage 2: measure each sampled repo
-Sample selection/exclusion between the stages is done by sample_select step (see notes)."""
+  repo_survey_script.py validate SURVEY.json OUT.json  # stage 3: stricter second pass
+Between stages 1 and 2, 10 candidates per cell were drawn at random (seed 7), read by hand,
+excluded if not software, and 25 per star band were taken round-robin across windows. That
+selection step has no published code. SAMPLE.json is a list of
+{"item": <search API repository item>, "band": "1k-2k"|..., "win": "W1"|...}.
+Stages 1-3 call the live GitHub API, so rerunning them measures today's repositories, not the
+2026-11-18 snapshot. Only repo_survey_analyze.py runs from the published CSV alone."""
 import subprocess, json, re, sys, time, math, random, datetime, csv, os, urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -132,7 +138,10 @@ WF_RX = {
  "ci_test": r"(pytest|npm (run )?test|pnpm( run)? test|yarn test|bun test|cargo (test|nextest)|go test|vitest|jest|ctest|make test|gradlew? (test|build|check)|mvn |dotnet test|rspec|phpunit|unittest|tox|nox|swift test|flutter test|playwright|cypress|deno test|npm run build|pnpm( run)? build|cargo build|go build|uv run|hatch run|just test|turbo run)",
  "ci_lint": r"(lint|eslint|ruff|flake8|mypy|pyright|tsc\b|clippy|rustfmt|cargo fmt|prettier|biome|golangci|black|isort|pre-commit|typecheck|type-check|shellcheck|oxlint)",
  "release": r"(release|publish|goreleaser|semantic-release|release-please|changesets|pypi-publish|npm publish|gh-release|twine|cargo publish|docker/build-push-action|vsce publish)",
- "codeql": r"(github/codeql-action|codeql)",
+ # Corrected after review: the survey as run used r"(github/codeql-action|codeql)", which also
+ # matched REMOVE_CODEQL options, codeql-action/upload-sarif for other scanners, a CodeQL triage
+ # workflow, and workflow file names. Only an init or analyze step is a CodeQL analysis.
+ "codeql": r"github/codeql-action/(init|analyze)@",
  "scorecard": r"ossf/scorecard-action",
  "stale": r"actions/stale",
  "cla_dco": r"(cla-assistant|contributor-assistant|\bdco\b|cla\.ya?ml|check-cla|signed-off-by|\bcla\b)",
@@ -349,7 +358,10 @@ def validate(sample_json, outfile):
         if ctxt:
             for m in re.finditer(STRICT_AIPOL, ctxt):
                 ctx.append(ctxt[max(0, m.start() - 80): m.end() + 80].replace("\n", " "))
-        v["v_contrib_ai_hits"] = len(ctx); v["v_contrib_ai_context"] = " || ".join(ctx[:3])
+        # Contexts are printed for the manual policy review but not stored: they are verbatim
+        # text from the surveyed repositories and are not published.
+        v["v_contrib_ai_hits"] = len(ctx)
+        if ctx: print(full, " || ".join(ctx[:3]), file=sys.stderr)
         wfs = [w for w in (d.get("workflow_names") or "").split(";") if w]
         txt = ""
         for w in wfs[:8]:

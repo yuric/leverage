@@ -48,13 +48,18 @@ def expected_prefix(heading):
 
 
 def check(path):
+    return check_text(path.read_text(encoding="utf-8"))
+
+
+def check_text(text):
+    """Return ({ID: line number}, [problems]) for the text of a PRD."""
     errors = []
     defined = {}  # id -> line number of first definition
     references = []  # (id, line number)
     section_prefix = None
     in_code_block = False
 
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for number, line in enumerate(text.splitlines(), 1):
         if line.strip().startswith("```"):
             in_code_block = not in_code_block
             continue

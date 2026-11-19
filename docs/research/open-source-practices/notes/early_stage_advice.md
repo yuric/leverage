@@ -1,5 +1,7 @@
 # Early-stage open source advice from named maintainers (partial pass)
 
+"I" in this note is the AI research agent that did this pass. Quotations in it were re-checked against the live pages after an adversarial review on 2026-11-19.
+
 Scope note: tool budget was exhausted before several sub-questions were reached. Everything below was read via page fetch (summarised by the fetch tool, not read verbatim) unless labelled "search snippet" or "secondhand". Coverage is thin; see Gaps in each section.
 
 ## README and first impressions
@@ -71,7 +73,7 @@ Only Geerling and Valsorda reached (see above). Others (Ronacher, antirez, Evan 
 
 ### Cited Findings
 
-- Geerling's liberal-no rule and Cannon's "accepting a patch means long-term upkeep" are the relevant claims; see Setting expectations section for sources. — [Geerling](https://www.jeffgeerling.com/blog/2022/just-say-no/); [Cannon](https://snarky.ca/setting-expectations-for-open-source-participation/)
+- Geerling's liberal-no rule and Cannon's point that accepting a contribution means years of upkeep (he likens it to being handed a puppy; paraphrase, corrected after review) are the relevant claims; see Setting expectations section for sources. — [Geerling](https://www.jeffgeerling.com/blog/2022/just-say-no/); [Cannon](https://snarky.ca/setting-expectations-for-open-source-participation/)
 - Valsorda: narrow scope for most projects; prefers detailed issues over PRs. — [Valsorda](https://words.filippo.io/maintenance-policy/)
 - Valsorda on paid maintenance (search snippets, secondhand from Geomys/Valsorda pages): left Google in 2022, full-time independent maintainer by 2023, runs Geomys, funded by company retainers; reportedly does not solicit individual donations because he does not depend on crowdfunding. — [Valsorda dispatch](https://words.filippo.io/dispatches/geomys/); [Geomys](https://geomys.org/)
 
@@ -130,12 +132,12 @@ Only survey data and Valsorda's stance found; no practitioner advice on day-one 
 
 ### Cited Findings
 
-- Tidelift 2024 State of the Open Source Maintainer (about 400+ respondents, Sept 2024; Tidelift notes its t-shirt incentive may skew geography): donations (e.g. GitHub Sponsors) are the largest income source at 25%; company salaries covering maintenance 24%; Tidelift 19%; direct company payments 5%; foundations 3%; government 1%. 60% call themselves unpaid hobbyists; 47% unpaid. Data (vendor survey, self-selected). — [The Register](https://www.theregister.com/2024/09/18/open_source_maintainers_underpaid/); [Business Wire release](https://www.businesswire.com/news/home/20240917030299/en)
+- Tidelift 2024 State of the Open Source Maintainer (about 400+ respondents, Sept 2024; Tidelift notes its t-shirt incentive may skew geography): maintainers "largely receive income from" donations (e.g. GitHub Sponsors, 25 percent), company salaries covering maintenance (24%) and Tidelift (19%); direct company payments 5%, foundations 3%, government 1%. The Register does not say whether these are shares of income or of maintainers (corrected after review). 60% call themselves unpaid hobbyists; 47% unpaid. Data (vendor survey, self-selected). — [The Register](https://www.theregister.com/2024/09/18/open_source_maintainers_underpaid/); [Business Wire release](https://www.businesswire.com/news/home/20240917030299/en)
 - Same report: security work is 11% of maintainer time (4% in 2021); 66% trust non-maintainer PRs less since the xz backdoor; 64% would be less inclined to accept PRs from contributors known to use AI tools (Register). Almost 60% quit or considered quitting a project (secondhand via Sonar summary in search results, not verified against the original). — [The Register](https://www.theregister.com/2024/09/18/open_source_maintainers_underpaid/); [Sonar summary](https://www.sonarsource.com/resources/library/open-source-maintainers/)
 
 ### Inferences
 
-- Even donations being the largest source is only 25% of income, which gives no support for expecting early revenue from Sponsors.
+- Even the largest listed source, donations, is reported at only 25% (of income or of maintainers; the summary is ambiguous), which gives no support for expecting early revenue from Sponsors.
 
 ### Gaps
 

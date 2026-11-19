@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Merge survey_cat.json (stage 2 + manual categories) with validate.json (stage 3) and manual review flags; write CSV+JSON.
-Usage: repo_survey_merge.py survey_cat.json validate.json OUTDIR"""
+Usage: repo_survey_merge.py survey_cat.json validate.json OUTDIR
+Both inputs are raw captures that are not published, so this step cannot be rerun from the
+published files. After review, the published CSV was corrected by hand in two ways (see
+notes/repo_survey.md, "Corrections after review"): three wf_codeql cells set to False, and the
+column of verbatim CONTRIBUTING excerpts removed."""
 import json, csv, sys, os
 r = json.load(open(sys.argv[1])); v = {x["full_name"]: x for x in json.load(open(sys.argv[2]))}
 # Manual review of regex hits (contexts printed during validation, read by hand):

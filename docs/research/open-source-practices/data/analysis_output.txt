@@ -8,7 +8,7 @@
 | .gitignore | 94/100 | 94% | >80% |
 | README any image/video incl. badges (loose) | 91/100 | 91% | >80% |
 | LICENSE file in tree | 90/100 | 90% | >80% |
-| README demo image/GIF/video (strict: badges excluded) | 87/100 | 87% | >80% |
+| README non-badge image or video (strict: badges excluded, logos count) | 87/100 | 87% | >80% |
 | Git tags >=1 | 84/100 | 84% | >80% |
 | License detected by GitHub (SPDX, not NOASSERTION) | 81/100 | 81% | >80% |
 | GitHub Releases >=1 | 81/100 | 81% | >80% |
@@ -67,11 +67,11 @@
 | Deploy/self-host/install docs (heuristic) | 11/100 | 11% | 10-40% |
 | AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 11/100 | 11% | 10-40% |
 | AI review/agent bot (strict workflow regex or config file) | 11/100 | 11% | 10-40% |
-| CodeQL | 10/100 | 10% | 10-40% |
 | CLA or DCO (manually verified) | 9/100 | 9% | <10% |
 | RFC/spec/PRD/design-doc directory | 8/100 | 8% | <10% |
 |   ...of which AI-review config file (coderabbit/greptile/gemini) | 8/100 | 8% | <10% |
 | devcontainer | 7/100 | 7% | <10% |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 7/100 | 7% | <10% |
 | Renovate | 5/100 | 5% | <10% |
 | GOVERNANCE (own or inherited) | 5/100 | 5% | <10% |
 | Stale bot (actions/stale) | 4/100 | 4% | <10% |
@@ -91,7 +91,7 @@
 | .gitignore | 92% | 96% |
 | README any image/video incl. badges (loose) | 94% | 87% |
 | LICENSE file in tree | 92% | 87% |
-| README demo image/GIF/video (strict: badges excluded) | 89% | 85% |
+| README non-badge image or video (strict: badges excluded, logos count) | 89% | 85% |
 | Git tags >=1 | 87% | 81% |
 | License detected by GitHub (SPDX, not NOASSERTION) | 81% | 81% |
 | GitHub Releases >=1 | 85% | 77% |
@@ -150,11 +150,11 @@
 | Deploy/self-host/install docs (heuristic) | 19% | 2% |
 | AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 17% | 4% |
 | AI review/agent bot (strict workflow regex or config file) | 15% | 6% |
-| CodeQL | 13% | 6% |
 | CLA or DCO (manually verified) | 15% | 2% |
 | RFC/spec/PRD/design-doc directory | 8% | 9% |
 |   ...of which AI-review config file (coderabbit/greptile/gemini) | 11% | 4% |
 | devcontainer | 11% | 2% |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 11% | 2% |
 | Renovate | 6% | 4% |
 | GOVERNANCE (own or inherited) | 9% | 0% |
 | Stale bot (actions/stale) | 6% | 2% |
@@ -174,7 +174,7 @@
 | .gitignore | 84% | 100% | 92% | 100% |
 | README any image/video incl. badges (loose) | 88% | 88% | 88% | 100% |
 | LICENSE file in tree | 84% | 92% | 92% | 92% |
-| README demo image/GIF/video (strict: badges excluded) | 88% | 88% | 84% | 88% |
+| README non-badge image or video (strict: badges excluded, logos count) | 88% | 88% | 84% | 88% |
 | Git tags >=1 | 80% | 80% | 80% | 96% |
 | License detected by GitHub (SPDX, not NOASSERTION) | 76% | 80% | 88% | 80% |
 | GitHub Releases >=1 | 80% | 76% | 76% | 92% |
@@ -233,11 +233,11 @@
 | Deploy/self-host/install docs (heuristic) | 12% | 16% | 0% | 16% |
 | AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 8% | 12% | 12% | 12% |
 | AI review/agent bot (strict workflow regex or config file) | 4% | 0% | 8% | 32% |
-| CodeQL | 4% | 4% | 12% | 20% |
 | CLA or DCO (manually verified) | 8% | 8% | 12% | 8% |
 | RFC/spec/PRD/design-doc directory | 8% | 0% | 8% | 16% |
 |   ...of which AI-review config file (coderabbit/greptile/gemini) | 4% | 0% | 8% | 20% |
 | devcontainer | 4% | 0% | 8% | 16% |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 0% | 4% | 8% | 16% |
 | Renovate | 4% | 4% | 4% | 8% |
 | GOVERNANCE (own or inherited) | 0% | 4% | 4% | 12% |
 | Stale bot (actions/stale) | 4% | 4% | 4% | 4% |
@@ -257,7 +257,7 @@
 | .gitignore | 92% | 96% |
 | README any image/video incl. badges (loose) | 96% | 85% |
 | LICENSE file in tree | 90% | 90% |
-| README demo image/GIF/video (strict: badges excluded) | 94% | 79% |
+| README non-badge image or video (strict: badges excluded, logos count) | 94% | 79% |
 | Git tags >=1 | 87% | 81% |
 | License detected by GitHub (SPDX, not NOASSERTION) | 81% | 81% |
 | GitHub Releases >=1 | 85% | 77% |
@@ -316,11 +316,11 @@
 | Deploy/self-host/install docs (heuristic) | 13% | 8% |
 | AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 12% | 10% |
 | AI review/agent bot (strict workflow regex or config file) | 13% | 8% |
-| CodeQL | 10% | 10% |
 | CLA or DCO (manually verified) | 8% | 10% |
 | RFC/spec/PRD/design-doc directory | 8% | 8% |
 |   ...of which AI-review config file (coderabbit/greptile/gemini) | 8% | 8% |
 | devcontainer | 12% | 2% |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 6% | 8% |
 | Renovate | 8% | 2% |
 | GOVERNANCE (own or inherited) | 2% | 8% |
 | Stale bot (actions/stale) | 4% | 4% |
@@ -340,7 +340,7 @@
 | .gitignore | 96% | 95% | 92% | 100% | 83% | 75% |
 | README any image/video incl. badges (loose) | 96% | 90% | 83% | 100% | 83% | 50% |
 | LICENSE file in tree | 92% | 86% | 83% | 100% | 100% | 75% |
-| README demo image/GIF/video (strict: badges excluded) | 94% | 90% | 58% | 100% | 83% | 50% |
+| README non-badge image or video (strict: badges excluded, logos count) | 94% | 90% | 58% | 100% | 83% | 50% |
 | Git tags >=1 | 85% | 81% | 92% | 75% | 100% | 50% |
 | License detected by GitHub (SPDX, not NOASSERTION) | 81% | 86% | 75% | 100% | 67% | 75% |
 | GitHub Releases >=1 | 81% | 81% | 83% | 75% | 100% | 50% |
@@ -399,11 +399,11 @@
 | Deploy/self-host/install docs (heuristic) | 13% | 5% | 8% | 0% | 17% | 25% |
 | AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 8% | 10% | 17% | 25% | 33% | 0% |
 | AI review/agent bot (strict workflow regex or config file) | 19% | 0% | 8% | 0% | 0% | 0% |
-| CodeQL | 11% | 10% | 8% | 0% | 17% | 0% |
 | CLA or DCO (manually verified) | 11% | 5% | 8% | 25% | 0% | 0% |
 | RFC/spec/PRD/design-doc directory | 9% | 5% | 8% | 25% | 0% | 0% |
 |   ...of which AI-review config file (coderabbit/greptile/gemini) | 13% | 0% | 8% | 0% | 0% | 0% |
 | devcontainer | 9% | 5% | 8% | 0% | 0% | 0% |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 9% | 5% | 0% | 0% | 17% | 0% |
 | Renovate | 4% | 0% | 25% | 0% | 0% | 0% |
 | GOVERNANCE (own or inherited) | 8% | 0% | 0% | 0% | 17% | 0% |
 | Stale bot (actions/stale) | 4% | 0% | 0% | 0% | 33% | 0% |
@@ -428,13 +428,13 @@ Owner type: Organization=53; User=47
 Action pinning (repos with external uses): none=43; all_sha=23; n/a=21; mixed=13
 
 Band: 1k-2k=25; 2k-5k=25; 5k-20k=25; 20k+=25
-Community health %: n=100 median=60 mean=60.8 min=14 max=100
+Community health %: n=100 median=59.5 mean=60.8 min=14 max=100
 Workflows: n=100 median=3 mean=7.4 min=0 max=41
-Contributors: n=100 median=16 mean=64.6 min=1 max=478
+Contributors: n=100 median=15.5 mean=64.6 min=1 max=478
 Releases: n=100 median=24 mean=91.1 min=0 max=1747
 README lines: n=99 median=237 mean=333.4 min=68 max=2216
 Open issues+PRs: n=100 median=39 mean=660.7 min=0 max=27817
-Topics: n=100 median=4 mean=5.8 min=0 max=20
+Topics: n=100 median=4.5 mean=5.8 min=0 max=20
 Health % = 100: 11 ; >=80: 25
 
 Agent file kinds (root): [('AGENTS.md', 39), ('CLAUDE.md', 23), ('.claude/', 20), ('.agents/', 20), ('copilot-instructions', 7), ('.cursor/rules', 5), ('.gemini/', 4), ('.codex/', 3), ('.opencode/', 3), ('.cursorrules', 2), ('.windsurfrules', 1), ('.clinerules', 1), ('openspec/', 1), ('.kiro/', 1), ('GEMINI.md', 1)]
@@ -466,7 +466,7 @@ Contributors <=3: 20  <=10: 40  >=50: 31
 Of SECURITY-policy repos (any): 39 with PVR on: 28 ; PVR on without policy: 8
 Of repos with workflows: 80 strict tests: 53 release: 68 dep bot: 19 pinned all_sha: 23 mixed: 13 tags only: 43
 Workflow count median among repos with >=1: 5.0
-Release workflow loose; CodeQL repos: ['Numbersf/Action-Build', 'youpi-pg/YouPI-PG', 'openclaw/mcporter', 'telemt/telemt', 'MatrixSeven/file-transfer-go', 'headroomlabs-ai/headroom', 'Kilo-Org/kilocode', 'ruvnet/ruflo', 'career-ops-hq/career-ops', 'alibaba/open-code-review']
+Release workflow loose; CodeQL repos: ['youpi-pg/YouPI-PG', 'openclaw/mcporter', 'telemt/telemt', 'Kilo-Org/kilocode', 'ruvnet/ruflo', 'career-ops-hq/career-ops', 'alibaba/open-code-review']
 Agent-file by owner:  {'Organization': 28, 'User': 21}
 Agent root AGENTS.md AND CLAUDE.md both: 17  CLAUDE only: 6  AGENTS only: 22
 Any agent artifacts in .claude/.agents/.cursor only (no AGENTS/CLAUDE md root): 4
@@ -478,10 +478,109 @@ Repos w/ all five core (README, license-detected, CONTRIBUTING, COC, SECURITY): 
 Repos with CONTRIBUTING and COC and SECURITY and issue templates and PR template (any): 19
 Org .github repo exists for owner: 26  inherited any health file: 8
 Inherited counts:  {'contributing': 0, 'code_of_conduct': 1, 'security': 3, 'support': 0, 'governance': 0, 'funding': 5, 'pr_template': 0}
-README lines >=500: 18  <150: 26
+README lines, of 99 READMEs: >=500: 18  <150: 25
 Tests dir but no CI: 10
 CI present but no tests dir: 16
 Docs-only-ish check: repos w/ AGENTS/CLAUDE + CONTRIBUTING + COC + SECURITY + CHANGELOG all: 7
 CHANGELOG-type file among repos with releases: 34 / 81
 Top 15 by stars sanity:  [('affaan-m/ECC', '306359'), ('anthropics/claude-code', '156151'), ('openai/codex', '135787'), ('paperclipai/paperclip', '114789'), ('career-ops-hq/career-ops', '83533')]
 Windows: Counter({'W1': 28, 'W2': 24, 'W3': 24, 'W4': 24})
+
+## Workflow read cap and other counts
+Repos with more workflows than were read (cap of 8): 31 of 80 with workflows
+  ...of these, coded all_sha: 14 ; strict tests False: 5 ; permissions False: 0 ; CodeQL False: 25
+  ...capped all_sha repos by band: Counter({'20k+': 6, '5k-20k': 4, '1k-2k': 2, '2k-5k': 2})
+Repos with external actions: 79  all SHA-pinned: 23
+pull_request_target trigger in workflows read: 19
+Workflow repos with neither a test/build nor a lint pattern: 16
+AI-contribution policy (manual) in AI/LLM tooling: 4 / 53 ; elsewhere: 7 / 47
+Agent file in AI/LLM tooling: 32 ; elsewhere: 17
+1k-2k: contributors <=2: 7  <=10: 15  user-owned: 17 of 25
+
+## Weighted by star band (population weights 1k-2k=3638, 2k-5k=2348, 5k-20k=1176, 20k+=353)
+1k-5k pooled weights the two lower bands 3,638:2,348. 16-cell weights use each band x window cell's total instead (sensitivity check).
+| Practice | 1k-2k | 2k-5k | 5k-20k | 20k+ | 1k-5k pooled | Weighted overall | 16-cell weighted | Unweighted |
+|---|---|---|---|---|---|---|---|---|
+| README present | 96 | 100 | 100 | 100 | 98 | 98 | 98 | 99 |
+| License detected by GitHub (SPDX, not NOASSERTION) | 76 | 80 | 88 | 80 | 78 | 79 | 80 | 81 |
+| LICENSE file in tree | 84 | 92 | 92 | 92 | 87 | 88 | 88 | 90 |
+| Topics set (>=1) | 56 | 56 | 60 | 56 | 56 | 57 | 55 | 57 |
+| Homepage URL set | 40 | 52 | 92 | 72 | 45 | 53 | 54 | 64 |
+| Dockerfile/compose at root | 12 | 20 | 20 | 20 | 15 | 16 | 16 | 18 |
+| Issues enabled | 96 | 100 | 100 | 100 | 98 | 98 | 99 | 99 |
+| Tests directory or test files | 72 | 76 | 68 | 80 | 74 | 73 | 73 | 74 |
+| .gitignore | 84 | 100 | 92 | 100 | 90 | 91 | 92 | 94 |
+| GitHub Releases >=1 | 80 | 76 | 76 | 92 | 78 | 79 | 80 | 81 |
+| Git tags >=1 | 80 | 80 | 80 | 96 | 80 | 81 | 82 | 84 |
+| Semver-style tags (>=50% of up to 30 latest) | 64 | 72 | 68 | 80 | 67 | 68 | 69 | 71 |
+| GitHub Actions workflows >=1 | 72 | 72 | 80 | 96 | 72 | 74 | 77 | 80 |
+| Any CI config (Actions or other CI) | 72 | 72 | 80 | 96 | 72 | 74 | 77 | 80 |
+| Workflow runs tests (strict test-command regex) | 44 | 44 | 48 | 76 | 44 | 46 | 50 | 53 |
+| Workflow runs tests or build (loose) | 52 | 52 | 52 | 76 | 52 | 53 | 56 | 58 |
+| Workflow runs lint/format/typecheck (regex heuristic) | 36 | 52 | 44 | 60 | 42 | 43 | 45 | 48 |
+| Workflow release/publish automation (heuristic) | 52 | 64 | 76 | 80 | 57 | 61 | 62 | 68 |
+| CodeQL analysis workflow (codeql-action init/analyze in workflows read) | 0 | 4 | 8 | 16 | 2 | 3 | 3 | 7 |
+| OpenSSF Scorecard action | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Stale bot (actions/stale) | 4 | 4 | 4 | 4 | 4 | 4 | 4 | 4 |
+| Other SAST/secret/dependency scan in workflows | 0 | 16 | 16 | 12 | 6 | 8 | 7 | 11 |
+| AI review/agent bot (strict workflow regex or config file) | 4 | 0 | 8 | 32 | 2 | 5 | 4 | 11 |
+| ...of which AI-review config file (coderabbit/greptile/gemini) | 4 | 0 | 8 | 20 | 2 | 4 | 4 | 8 |
+| Workflows declare a permissions: block (read up to 8 workflows) | 56 | 68 | 76 | 92 | 61 | 65 | 64 | 73 |
+| Dependabot or Renovate | 8 | 12 | 12 | 44 | 10 | 12 | 11 | 19 |
+| Dependabot | 4 | 8 | 8 | 40 | 6 | 8 | 8 | 15 |
+| Renovate | 4 | 4 | 4 | 8 | 4 | 4 | 3 | 5 |
+| CONTRIBUTING (own repo) | 48 | 48 | 52 | 56 | 48 | 49 | 52 | 51 |
+| CONTRIBUTING (own or inherited) | 48 | 48 | 52 | 56 | 48 | 49 | 52 | 51 |
+| CODE_OF_CONDUCT (own repo) | 12 | 24 | 44 | 32 | 17 | 22 | 24 | 28 |
+| CODE_OF_CONDUCT (own or inherited) | 12 | 24 | 44 | 36 | 17 | 22 | 24 | 29 |
+| SECURITY policy (own repo) | 24 | 28 | 36 | 56 | 26 | 29 | 30 | 36 |
+| SECURITY policy (own or inherited) | 24 | 32 | 44 | 56 | 27 | 31 | 32 | 39 |
+| Private vulnerability reporting enabled | 24 | 36 | 44 | 40 | 29 | 32 | 33 | 36 |
+| SECURITY policy or PVR | 28 | 40 | 60 | 60 | 33 | 38 | 40 | 47 |
+| Issue templates (own) | 48 | 40 | 64 | 64 | 45 | 49 | 50 | 54 |
+| Issue templates (own or inherited) | 48 | 40 | 64 | 64 | 45 | 49 | 50 | 54 |
+| Issue templates: YAML forms | 24 | 36 | 52 | 56 | 29 | 34 | 34 | 42 |
+| Issue templates: legacy .md | 24 | 4 | 16 | 16 | 16 | 16 | 17 | 15 |
+| Issue template config.yml | 24 | 24 | 52 | 52 | 24 | 30 | 31 | 38 |
+| Blank issues disabled | 24 | 24 | 40 | 32 | 24 | 27 | 28 | 30 |
+| PR template (own or inherited) | 28 | 28 | 48 | 44 | 28 | 32 | 34 | 37 |
+| CODEOWNERS | 4 | 4 | 16 | 40 | 4 | 8 | 8 | 16 |
+| Agent-instruction file/dir (any kind, root-level) | 36 | 48 | 48 | 64 | 41 | 43 | 44 | 49 |
+| AGENTS.md (root) | 20 | 40 | 40 | 56 | 28 | 31 | 32 | 39 |
+| CLAUDE.md (root) | 16 | 24 | 24 | 28 | 19 | 20 | 22 | 23 |
+| AGENTS.md or CLAUDE.md at any depth | 28 | 48 | 48 | 64 | 36 | 39 | 41 | 47 |
+| CHANGELOG-type file | 36 | 40 | 24 | 44 | 38 | 36 | 35 | 36 |
+| FUNDING.yml (own or inherited) | 20 | 20 | 24 | 24 | 20 | 21 | 20 | 22 |
+| README sponsor link | 20 | 4 | 8 | 20 | 14 | 13 | 13 | 13 |
+| GOVERNANCE (own or inherited) | 0 | 4 | 4 | 12 | 2 | 2 | 3 | 5 |
+| MAINTAINERS | 0 | 0 | 0 | 8 | 0 | 0 | 0 | 2 |
+| ROADMAP | 0 | 0 | 0 | 16 | 0 | 1 | 1 | 4 |
+| SUPPORT (own or inherited) | 0 | 8 | 4 | 4 | 3 | 3 | 4 | 4 |
+| ARCHITECTURE doc | 8 | 20 | 16 | 24 | 13 | 14 | 15 | 17 |
+| AUTHORS | 0 | 4 | 0 | 0 | 2 | 1 | 2 | 1 |
+| ADR directory | 0 | 4 | 0 | 12 | 2 | 2 | 2 | 4 |
+| RFC/spec/PRD/design-doc directory | 8 | 0 | 8 | 16 | 5 | 6 | 6 | 8 |
+| Deploy/self-host/install docs (heuristic) | 12 | 16 | 0 | 16 | 14 | 12 | 10 | 11 |
+| docs/ directory | 28 | 64 | 60 | 76 | 42 | 47 | 47 | 57 |
+| CLA or DCO (manually verified) | 8 | 8 | 12 | 8 | 8 | 9 | 8 | 9 |
+| AI-contribution policy (manually verified: CONTRIBUTING section or AI policy file/workflow) | 8 | 12 | 12 | 12 | 10 | 10 | 11 | 11 |
+| AI-term hits in CONTRIBUTING (regex, incl. false positives) | 12 | 16 | 12 | 28 | 14 | 14 | 15 | 17 |
+| AGENTS.md or CLAUDE.md at repo root | 28 | 44 | 48 | 60 | 34 | 38 | 40 | 45 |
+| GitHub Discussions enabled | 52 | 44 | 64 | 56 | 49 | 52 | 49 | 54 |
+| Wiki enabled | 56 | 64 | 60 | 44 | 59 | 59 | 58 | 56 |
+| Discord/Slack/chat link in README | 28 | 28 | 36 | 44 | 28 | 30 | 27 | 34 |
+| README install/quick-start/usage heading | 64 | 80 | 64 | 84 | 70 | 70 | 69 | 73 |
+| README badges | 72 | 60 | 72 | 84 | 67 | 69 | 67 | 72 |
+| README non-badge image or video (strict: badges excluded, logos count) | 88 | 88 | 84 | 88 | 88 | 87 | 86 | 87 |
+| README any image/video incl. badges (loose) | 88 | 88 | 88 | 100 | 88 | 89 | 87 | 91 |
+| README translations (README.xx.md) | 20 | 16 | 32 | 28 | 18 | 21 | 21 | 24 |
+| .editorconfig | 8 | 4 | 12 | 24 | 6 | 8 | 8 | 12 |
+| .gitattributes | 28 | 32 | 36 | 68 | 30 | 32 | 31 | 41 |
+| pre-commit/husky/lefthook | 12 | 16 | 8 | 20 | 14 | 13 | 12 | 14 |
+| devcontainer | 4 | 0 | 8 | 16 | 2 | 4 | 3 | 7 |
+| Makefile/justfile/Taskfile | 16 | 24 | 12 | 24 | 19 | 18 | 20 | 19 |
+| CITATION.cff | 0 | 4 | 0 | 4 | 2 | 1 | 1 | 2 |
+| All Actions SHA-pinned (share of all repos) | 16 | 16 | 20 | 40 | 16 | 18 | 17 | 23 |
+| Five-file bundle (README, recognised license, CONTRIBUTING, CoC, SECURITY) | 0 | 16 | 28 | 36 | 6 | 11 | 13 | 20 |
+| Community health = 100% | 0 | 8 | 24 | 12 | 3 | 7 | 9 | 11 |
+| Category AI/LLM tooling | 32 | 56 | 40 | 84 | 41 | 43 | 41 | 53 |

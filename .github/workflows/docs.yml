@@ -71,15 +71,17 @@ jobs:
           # parent (HEAD^1) is the base branch, which is where the script
           # reads the rule list from, so two commits of history are enough.
           fetch-depth: 2
+      # The description and author are read from the event file, not passed
+      # through the environment: a description can be longer than one
+      # environment variable may be.
       - name: Check the pull request against the architecture rules
         if: github.event_name == 'pull_request'
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-        run: python3 scripts/check_rules.py --base 'HEAD^1'
+        run: python3 scripts/check_rules.py --base 'HEAD^1' --event "$GITHUB_EVENT_PATH"
       - name: Check the repository against the architecture rules
         if: github.event_name != 'pull_request'
         run: python3 scripts/check_rules.py
+      - name: Self-test of the rules check
+        run: python3 scripts/test_check_rules.py
 
   pr-title:
     name: PR title
@@ -96,7 +98,7 @@ jobs:
           if [[ "$TITLE" =~ $pattern ]]; then
             echo "OK: title follows Conventional Commits."
           else
-            echo "::error::The pull request title must follow Conventional Commits, for example 'docs: clarify FR-003'."
+            echo "::error::The pull request title must follow Conventional Commits, for example 'docs: fix a broken link'."
             echo "Allowed types: feat, fix, docs, chore, refactor, test, build, ci, perf, style, revert."
             echo "See https://www.conventionalcommits.org/"
             exit 1

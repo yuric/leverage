@@ -30,8 +30,9 @@ once it makes its first release.
 - Research report on open source repository practices, with its notes and
   survey data, in `docs/research/open-source-practices/`.
 - Architecture rules in `docs/ARCHITECTURE.md`: four active now and three
-  that wait for code. Every pull request answers the active rules in its
-  description, and a new "Rules compliance" check verifies the answers.
+  that wait for code. A pull request answers the active rules in its
+  description (Dependabot is exempt from that part), and a new required
+  "Rules compliance" check verifies the answers.
 - A `check-rules` skill for agents in `.agents/skills/`, linked from
   `.claude/skills/`.
 

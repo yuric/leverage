@@ -26,5 +26,8 @@ Thumbs.db
 tmp/
 
 # Local research working folders (published copies live in docs/research/)
-reports/
-research_notes/
+/reports/
+/research_notes/
+
+# Python bytecode
+__pycache__/

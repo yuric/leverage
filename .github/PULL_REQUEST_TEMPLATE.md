@@ -12,8 +12,8 @@
 
 ## Architecture rules
 
-<!-- Answer every line. The rules are in docs/ARCHITECTURE.md, "Rules".
-     Write one of:  Complies  |  N/A — reason  |  Deviates — docs/adr/NNNN-title.md
+<!-- Answer every line. The rules, and the three answers a line can have, are in
+     docs/ARCHITECTURE.md under "Rules" and "How the rules are applied".
      The "Rules compliance" check fails while any line is unanswered. -->
 
 - AR-001:
@@ -33,8 +33,7 @@
 ## Checklist
 
 - [ ] The title follows Conventional Commits (for example `docs: fix a broken link`).
-- [ ] The change is focused on one thing.
 - [ ] Documentation affected by the change is updated (PRD, ARCHITECTURE, DEPLOY, AGENTS, README).
 - [ ] `CHANGELOG.md` has an entry under `Unreleased` if the change is user-visible.
 - [ ] No secrets, credentials, or personal data are included.
-- [ ] Any new dependency or third-party material is named above and is MIT-compatible.
+- [ ] Any third-party material is named above, with its copyright and license notices intact.

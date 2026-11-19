@@ -6,13 +6,15 @@ description: Check a pull request against the architecture rules in docs/ARCHITE
 # Check a pull request against the architecture rules
 
 The rules are in the [Rules](../../../docs/ARCHITECTURE.md#rules) section of
-the architecture document. This skill is the procedure for answering them. It
-does not restate them: read them there, every time, because they change.
+the architecture document, and
+[How the rules are applied](../../../docs/ARCHITECTURE.md#how-the-rules-are-applied)
+defines the three answers. This skill is only the order of work. Read both
+there, every time, because they change.
 
 ## Steps
 
-1. **Read the rules.** Open the Rules section and note every rule marked
-   Active, with its "Checked automatically" and "Left to review" lines.
+1. **Read the rules and the answer forms.** Note every rule marked Active,
+   with its "Checked automatically" and "Left to review" lines.
 
 2. **Get the evidence.** Look at what the pull request changes, not at what
    you remember changing:
@@ -23,34 +25,32 @@ does not restate them: read them there, every time, because they change.
    git diff origin/main...HEAD
    ```
 
-3. **Answer each active rule from the diff.** For each one, find the lines in
-   the diff that the rule is about, then choose:
+3. **Answer each active rule from the diff.** Find the lines in the diff that
+   the rule is about before you choose an answer. If the change breaks a
+   rule, stop and ask the person you work for.
 
-   - `Complies` when the rule applies and the diff follows it. Say what you
-     checked, in a few words, after the answer.
-   - `N/A` with a reason when nothing in the diff is covered by the rule.
-   - `Deviates` only when the maintainer has agreed to break the rule and an
-     ADR records why. Otherwise stop and ask before going further.
-
-4. **Write the section** into the file that holds the pull request
-   description, one line per active rule, in the form the Rules section shows
-   under "How the rules are applied". Start from
-   [the template](../../../.github/PULL_REQUEST_TEMPLATE.md) so the other
-   sections are there too.
+4. **Write the description** to `tmp/pr-body.md`, which git and the Markdown
+   lint both ignore. Start from
+   [the template](../../../.github/PULL_REQUEST_TEMPLATE.md) so that every
+   section is there.
 
 5. **Run the check** and fix what it reports, in the change or in the answer,
    whichever is wrong:
 
    ```bash
-   python3 scripts/check_rules.py --base origin/main --body-file <file>
+   python3 scripts/check_rules.py --base origin/main --body-file tmp/pr-body.md
    ```
 
-6. **Open or update the pull request** with that file
-   (`gh pr create --body-file <file>` or `gh pr edit --body-file <file>`).
+6. **Report to the person you work for** before anything is opened: every
+   answer that is not `Complies`, every warning the check printed, and what
+   each rule leaves to review.
 
-7. **Tell the person you are working for** which rules you answered `N/A` or
-   `Deviates`, and what each rule leaves to review. The check proves the
-   answers are present, not that they are true.
+7. **Open or update the pull request** once they have asked you to:
+
+   ```bash
+   gh pr create --title "<type>: <summary>" --body-file tmp/pr-body.md
+   gh pr edit <number> --body-file tmp/pr-body.md
+   ```
 
 ## Never
 
