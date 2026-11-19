@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "action.withdrawn v1",
+  "description": "A return for rework puts the action back to contracted.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "required": [],
+  "examples": [
+    {}
+  ]
+}

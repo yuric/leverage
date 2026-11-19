@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "job.queued v1",
+  "description": "A job is queued for a seat to pull.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "description": "The job kind.",
+      "enum": ["rule_check", "question", "approval", "contract_draft"]
+    }
+  },
+  "required": ["kind"],
+  "examples": [
+    {"kind": "contract_draft"},
+    {"kind": "rule_check"}
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.contract_changed v1",
+  "description": "Complete or edit a contract. Lists the criteria and actions the change adds, resets to open (text changed) or removes; a criterion with unchanged text keeps its state.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "description": "The task's contract version after the change.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "added_criterion_ids": {
+      "description": "Criteria added, in state open.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "reset_criterion_ids": {
+      "description": "Criteria whose text changed, reset to open.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "removed_criterion_ids": {
+      "description": "Criteria removed.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "added_action_ids": {
+      "description": "Outward actions added, in state contracted.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "removed_action_ids": {
+      "description": "Outward actions removed.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  },
+  "required": ["contract_version", "added_criterion_ids", "reset_criterion_ids", "removed_criterion_ids", "added_action_ids", "removed_action_ids"],
+  "examples": [
+    {"contract_version": 1, "added_criterion_ids": ["2b7f9d14-6e3a-4c05-b8d2-9f1a7e4c3b60", "71c3e8a5-9d24-4b6f-a1e7-3c5b8d0f2e94"], "reset_criterion_ids": [], "removed_criterion_ids": [], "added_action_ids": ["a6d4f1b8-2c97-4e3d-8b50-1f7e9c2a6d35"], "removed_action_ids": []},
+    {"contract_version": 2, "added_criterion_ids": [], "reset_criterion_ids": ["2b7f9d14-6e3a-4c05-b8d2-9f1a7e4c3b60"], "removed_criterion_ids": ["71c3e8a5-9d24-4b6f-a1e7-3c5b8d0f2e94"], "added_action_ids": [], "removed_action_ids": []}
+  ]
+}

@@ -1,0 +1,712 @@
+{
+  "unlisted_pair_refusal": "invalid_state",
+  "guard_families": [
+    {"family": "add_target", "guards": [{"guard": "adds_to_imaginarium", "means": "The call adds the task to Imaginarium.", "prd_lines": [77, 108]}, {"guard": "adds_to_backlog", "means": "The call adds the task to Backlog.", "prd_lines": [77, 108]}]},
+    {"family": "builder_availability", "guards": [{"guard": "builder_free", "means": "The task's previous builder holds nothing and is enabled and not paused.", "prd_lines": [127, 139]}, {"guard": "builder_busy", "means": "The previous builder holds another task or review, or is disabled, paused or removed.", "prd_lines": [127, 139]}]},
+    {"family": "escalation", "guards": [{"guard": "escalates", "means": "The review.failed policy escalates: it sets a minimum strength rank above the previous builder's.", "prd_lines": [91, 129, 442]}, {"guard": "does_not_escalate", "means": "The review.failed policy does not escalate, or the rule is off.", "prd_lines": [91, 129, 442]}]},
+    {"family": "outward_actions", "guards": [{"guard": "has_outward_action", "means": "The task's contract names at least one outward action.", "prd_lines": [92, 93]}, {"guard": "no_outward_action", "means": "The contract names no outward action.", "prd_lines": [92, 93]}]},
+    {"family": "open_actions", "guards": [{"guard": "last_open_action", "means": "After this command every contracted action is reported done, marked done or waived.", "prd_lines": [97, 100, 101, 140]}, {"guard": "not_last_open_action", "means": "After this command an action is still open.", "prd_lines": [97, 100, 101, 140]}]},
+    {"family": "approvals", "guards": [{"guard": "approvals_complete", "means": "After this command no action waits for a decision and none is stopped.", "prd_lines": [139]}, {"guard": "approvals_pending", "means": "After this command an action still waits for a decision or is stopped.", "prd_lines": [139]}]},
+    {"family": "action_unconfirmed_hold", "guards": [{"guard": "held_action_unconfirmed", "means": "The task has an open action_unconfirmed hold.", "prd_lines": [101, 102, 165]}, {"guard": "not_held_action_unconfirmed", "means": "The task has no open action_unconfirmed hold.", "prd_lines": [101, 102]}]},
+    {"family": "actions_started", "guards": [{"guard": "no_action_started", "means": "No action of the task has been announced as started or reported done.", "prd_lines": [98, 142]}, {"guard": "action_started", "means": "An action of the task has been announced as started or reported done.", "prd_lines": [98, 142]}]},
+    {"family": "approved_action_state", "guards": [{"guard": "approved_action_open", "means": "The action whose approval is overturned is not yet reported done.", "prd_lines": [144], "action_states": ["approved", "started"]}, {"guard": "approved_action_done", "means": "The action whose approval is overturned is already reported done.", "prd_lines": [144], "action_states": ["done"]}]},
+    {"family": "owner_hold", "guards": [{"guard": "held_owner_hold", "means": "The task has an open owner_hold.", "prd_lines": [176]}, {"guard": "not_held_owner_hold", "means": "The task has no open owner_hold.", "prd_lines": [176]}]},
+    {"family": "review_holder", "guards": [{"guard": "reviewer_holds_review", "means": "A reviewer holds the task's review.", "prd_lines": [105]}, {"guard": "no_reviewer_holds_review", "means": "No reviewer holds the task's review.", "prd_lines": [105]}]},
+    {"family": "candidates", "guards": [{"guard": "candidate_available", "means": "A candidate below the stopped credential is available for this piece of work.", "prd_lines": [679, 682, 670]}, {"guard": "no_candidate_available", "means": "No candidate below the stopped credential is available.", "prd_lines": [692, 694, 698]}]},
+    {"family": "timeout_miss", "guards": [{"guard": "first_miss", "means": "The attempt that timed out is the job's first.", "prd_lines": [399]}, {"guard": "second_miss", "means": "The attempt that timed out is already the retry.", "prd_lines": [399]}]}
+  ],
+  "guard_conditions": [
+    {"guard": "credential_differs", "means": "The run starts on a credential other than the one last recorded for the task.", "prd_lines": [688, 694]},
+    {"guard": "stopped_by_check", "means": "A failed rule check stopped the action.", "prd_lines": [142, 189]},
+    {"guard": "held_action_stopped", "means": "The task has an open action_stopped hold on the action.", "prd_lines": [164]},
+    {"guard": "owner_must_act", "means": "A candidate is signed out, or no candidate has a reset time.", "prd_lines": [694, 696, 697]},
+    {"guard": "seat_holds_working_task", "means": "The seat holds a task in Working.", "prd_lines": [148]},
+    {"guard": "seat_disabled_by_change", "means": "The change disables the seat.", "prd_lines": [146, 148]},
+    {"guard": "disables_seat_holding_working_task", "means": "The change disables the seat, and the seat holds a task in Working.", "prd_lines": [148]},
+    {"guard": "target_project_paused", "means": "The project the task is added to or moved into is paused.", "prd_lines": [160]},
+    {"guard": "source_project_paused", "means": "The project the task is moved out of is paused.", "prd_lines": [160]},
+    {"guard": "seat_holds_review", "means": "The seat holds a review.", "prd_lines": [120, 698]},
+    {"guard": "add_checks_passed", "means": "The helper reports that every check of Add credential passed.", "prd_lines": [600]},
+    {"guard": "verify_passed", "means": "The helper reports that Verify passed for the credential.", "prd_lines": [641, 697]},
+    {"guard": "found_signed_out", "means": "The helper reports the credential signed out.", "prd_lines": [261, 682]},
+    {"guard": "question_answered", "means": "The question job's outcome is answered, not passed on.", "prd_lines": [440, 252]},
+    {"guard": "project_budget_reached", "means": "With the budget rule on, the project's spent reaches its budget.", "prd_lines": [443]},
+    {"guard": "project_under_budget", "means": "The project's new budget is above what it has spent.", "prd_lines": [197]},
+    {"guard": "builder_seat_enabled", "means": "The task's builder seat is enabled and not removed.", "prd_lines": [146]}
+  ],
+  "side_event_exceptions": [
+    {"event": "cost.reported", "prd_lines": [510, 514], "why": "A verdict carries tokens and spend that run cost.reported (L510), but L114 does not list cost.reported among the events a row may write beside its own."},
+    {"event": "project.paused", "prd_lines": [358, 443], "why": "The cost.reported policy may pause the project when a verdict reports spend; L114 does not list project.paused either."}
+  ],
+  "commands": [
+    {"command": "add_task", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "promote", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "draft_contract", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "complete_contract", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "edit_contract", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "claim", "work_call": false, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "acknowledge_briefing", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "acknowledge_review_briefing", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "start_criterion", "work_call": true, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "pass_criterion", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "submit", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "claim_review", "work_call": false, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "release_review", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "fail_review", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "pass_review", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "request_action", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "approve_action", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "grant_action_lease", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "stop_action", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "waive_action", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "return_for_rework", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "start_action", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "report_action_done", "work_call": true, "blocked_by_hold": true, "allowed_while_pending": false},
+    {"command": "mark_action_done", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "offer_task_again", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "release", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "hold", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "resume", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_limit", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_signed_out", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_job_limit", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_job_signed_out", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "cancel", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "ask_question", "work_call": true, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "request_access", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "answer_question", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "overturn_answer", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "overturn_approval", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_cost", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "change_task_priority", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_task_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_task_cap", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_budget", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "pause_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "resume_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "allow_another_round", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "grant_access", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "rerun_check", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "override_check", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "add_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "save_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "enable_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "disable_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "revert_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "remove_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "create_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "edit_brief", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "delete_content", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_workspace_settings", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "sign_in", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "issue_helper_token", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "connect_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "pause_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "resume_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "remove_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "start_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "stop_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "add_credential", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "verify_credential", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "sign_in_again", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "rename_credential", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "remove_credential", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "refresh_usage", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "reorder_credentials", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "install_tool", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "heartbeat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "heartbeat_review", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "claim_job", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false, "note": "Not blocked by the task's hold: a hold opened while a transition is pending leaves its checks running (L378), so their jobs are still claimed. L545 also names job claims; that tension is a question for the owner (docs/IMPLEMENTATION.md)."},
+    {"command": "submit_job_result", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "issue_seat_token", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_run_started", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_run_stopped", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_request_result", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_reading", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "builder_lease_expiry", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "review_lease_expiry", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "check_queue_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "check_run_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "question_job_queue_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "question_job_run_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "contract_draft_job_queue_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "contract_draft_job_run_timeout", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "credential_hold_release", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "orchestrator_offline", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "reviewer_eligibility", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "command_key_retention", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false}
+  ],
+  "groups": [
+    {
+      "id": "add_task",
+      "source": "prd",
+      "prd_cells": ["Add task", "None", "Imaginarium or Backlog", "Owner", "None", "`task.created`"],
+      "rows": [
+        {"command": "add_task", "from": null, "guard": ["adds_to_imaginarium"], "to": "imaginarium", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.created"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": "target_project_paused", "note": "project_paused, when the task's project is paused (L160)."}], "holds_opened": ["project_paused"], "holds_closed": []},
+        {"command": "add_task", "from": null, "guard": ["adds_to_backlog"], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.created"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": "target_project_paused", "note": "project_paused, when the task's project is paused (L160)."}], "holds_opened": ["project_paused"], "holds_closed": [], "note": "The Add task form adds to Backlog and then sends Complete contract (L108, plan SM-4)."}
+      ]
+    },
+    {
+      "id": "promote",
+      "source": "prd",
+      "prd_cells": ["Promote", "Imaginarium", "Backlog", "Owner", "None", "`task.promoted`"],
+      "rows": [
+        {"command": "promote", "from": "imaginarium", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.promoted"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "draft_contract",
+      "source": "prd",
+      "prd_cells": ["Draft contract", "Backlog", "Backlog", "Owner", "None", "`job.queued`"],
+      "rows": [
+        {"command": "draft_contract", "from": "backlog", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["job.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a contract_draft job for a planner; its result is the Complete contract command (L110)."}
+      ]
+    },
+    {
+      "id": "complete_contract",
+      "source": "prd",
+      "prd_cells": ["Complete contract", "Backlog", "Ready", "Owner or planner seat", "`task.before_ready`", "`task.contract_changed`, `task.ready`"],
+      "rows": [
+        {"command": "complete_contract", "from": "backlog", "guard": [], "to": "ready", "refusal": null, "who": ["owner", "planner"], "hook": "task.before_ready", "builder_lease": null, "events": ["task.contract_changed", "task.ready"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "An open contract_incomplete hold closes first (L175)."}, {"event": "hold.opened", "when": null, "note": "rerun_limit, when a fourth run on changed inputs in one round would be queued (L422, plan SM-35)."}, {"event": "inbox.opened", "when": null, "note": "Check past the re-run limit."}], "holds_opened": ["contract_incomplete", "rerun_limit"], "holds_closed": ["contract_incomplete"], "note": "Allowed under a hold (L175). A failed gate keeps the task in Backlog: task.contract_changed and hold.opened contract_incomplete are written, task.ready is not (hooks.json, failed_gate)."}
+      ]
+    },
+    {
+      "id": "edit_contract_backlog",
+      "source": "prd",
+      "prd_cells": ["Edit contract", "Backlog", "Backlog", "Owner", "None", "`task.contract_changed`"],
+      "rows": [
+        {"command": "edit_contract", "from": "backlog", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.contract_changed"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "contract_incomplete, rounds_exceeded, claim_gate_failed or rerun_limit, which a contract edit answers (L161-L167), and check_error of a check it withdraws (L162)."}, {"event": "inbox.resolved", "when": null, "note": "The items of the holds it closes."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["contract_incomplete", "rounds_exceeded", "claim_gate_failed", "rerun_limit", "check_error"]}
+      ]
+    },
+    {
+      "id": "edit_contract_active",
+      "source": "prd",
+      "prd_cells": ["Edit contract", "Ready, Working, In review", "Backlog", "Owner", "None", "`task.contract_changed`, `task.returned`"],
+      "rows": [
+        {"command": "edit_contract", "from": "ready", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.contract_changed", "task.returned"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Holds a contract edit answers (rounds_exceeded, claim_gate_failed, rerun_limit), and seat-bound holds (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "inbox.resolved", "when": null, "note": "The items of the holds it closes."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["rounds_exceeded", "claim_gate_failed", "rerun_limit", "seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "Ends any builder lease and any review lease; task.returned clears holder, builder and reviewer in replay (plan SM-16)."},
+        {"command": "edit_contract", "from": "working", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.contract_changed", "task.returned"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Holds a contract edit answers (rounds_exceeded, claim_gate_failed, rerun_limit), and seat-bound holds (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "inbox.resolved", "when": null, "note": "The items of the holds it closes."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["rounds_exceeded", "claim_gate_failed", "rerun_limit", "seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "Ends any builder lease and any review lease; task.returned clears holder, builder and reviewer in replay (plan SM-16)."},
+        {"command": "edit_contract", "from": "in_review", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.contract_changed", "task.returned"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Holds a contract edit answers (rounds_exceeded, claim_gate_failed, rerun_limit), and seat-bound holds (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "inbox.resolved", "when": null, "note": "The items of the holds it closes."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["rounds_exceeded", "claim_gate_failed", "rerun_limit", "seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "Ends any builder lease and any review lease; task.returned clears holder, builder and reviewer in replay (plan SM-16)."}
+      ]
+    },
+    {
+      "id": "claim",
+      "source": "prd",
+      "prd_cells": ["Claim", "Ready", "Working", "Builder seat", "`task.before_claim`", "`task.claimed`"],
+      "rows": [
+        {"command": "claim", "from": "ready", "guard": [], "to": "working", "refusal": null, "who": ["builder"], "hook": "task.before_claim", "builder_lease": "claim", "events": ["task.claimed"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "claim_gate_failed, when the gate has failed for 3 different seats (L393)."}, {"event": "inbox.opened", "when": null, "note": "Refused for every agent."}, {"event": "hold.opened", "when": null, "note": "rerun_limit, when a fourth run on changed inputs in one round would be queued (L422, plan SM-35)."}, {"event": "inbox.opened", "when": null, "note": "Check past the re-run limit."}], "holds_opened": ["claim_gate_failed", "rerun_limit"], "holds_closed": [], "note": "A model check at task.before_claim makes the claim provisional: the task stays Ready, reserved for the seat, with no lease, until the check passes (L390-L392, plan SM-14)."}
+      ]
+    },
+    {
+      "id": "acknowledge_briefing",
+      "source": "prd",
+      "prd_cells": ["Acknowledge briefing", "Working, Finishing", "Unchanged", "Holder", "None", "`task.briefing_acknowledged`"],
+      "rows": [
+        {"command": "acknowledge_briefing", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": null, "events": ["task.briefing_acknowledged"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "acknowledge_briefing", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": null, "events": ["task.briefing_acknowledged"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "With no holder in Finishing the caller is refused with not_holder (plan SM-28)."}
+      ]
+    },
+    {
+      "id": "acknowledge_review_briefing",
+      "source": "prd",
+      "prd_cells": ["Acknowledge review briefing", "In review", "In review", "Reviewer holding the review", "None", "`task.briefing_acknowledged` (the payload names the review)"],
+      "rows": [
+        {"command": "acknowledge_review_briefing", "from": "in_review", "guard": [], "to": "in_review", "refusal": null, "who": ["reviewer"], "hook": null, "builder_lease": null, "events": ["task.briefing_acknowledged"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "start_criterion",
+      "source": "prd",
+      "prd_cells": ["Start criterion (optional)", "Working", "Working", "Builder", "None", "`criterion.started`"],
+      "rows": [
+        {"command": "start_criterion", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["builder"], "hook": null, "builder_lease": null, "events": ["criterion.started"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "pass_criterion",
+      "source": "prd",
+      "prd_cells": ["Pass criterion", "Working", "Working", "Builder", "None", "`criterion.passed`, `evidence.attached`"],
+      "rows": [
+        {"command": "pass_criterion", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["builder"], "hook": null, "builder_lease": null, "events": ["criterion.passed", "evidence.attached"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "submit",
+      "source": "prd",
+      "prd_cells": ["Submit", "Working", "In review", "Builder", "`task.before_submit`", "`task.submitted`"],
+      "rows": [
+        {"command": "submit", "from": "working", "guard": [], "to": "in_review", "refusal": null, "who": ["builder"], "hook": "task.before_submit", "builder_lease": "ends", "events": ["task.submitted"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "hold.opened", "when": null, "note": "rerun_limit, when a fourth run on changed inputs in one round would be queued (L422, plan SM-35)."}, {"event": "inbox.opened", "when": null, "note": "Check past the re-run limit."}], "holds_opened": ["rerun_limit"], "holds_closed": [], "note": "Refused with criteria_incomplete before every builder criterion has passed with evidence (L548). The review row of the round is created here (plan DB-20)."}
+      ]
+    },
+    {
+      "id": "claim_review",
+      "source": "prd",
+      "prd_cells": ["Claim review", "In review", "In review", "Reviewer seat", "`review.assign`", "`review.started`"],
+      "rows": [
+        {"command": "claim_review", "from": "in_review", "guard": [], "to": "in_review", "refusal": null, "who": ["reviewer"], "hook": "review.assign", "builder_lease": null, "events": ["review.started"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "A reviewer that may not take the review is skipped; not_eligible only when none is left (plan RC-50)."}
+      ]
+    },
+    {
+      "id": "release_review",
+      "source": "prd",
+      "prd_cells": ["Release review, or review lease expiry", "In review", "In review, unassigned", "Reviewer or the app", "None", "`review.released` or `review.lease_expired`"],
+      "rows": [
+        {"command": "release_review", "from": "in_review", "guard": [], "to": "in_review", "refusal": null, "who": ["reviewer"], "hook": null, "builder_lease": null, "events": ["review.released"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": []},
+        {"command": "review_lease_expiry", "from": "in_review", "guard": [], "to": "in_review", "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["review.lease_expired"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "A timer: effective_at is the review lease's due time."}
+      ]
+    },
+    {
+      "id": "fail_review",
+      "source": "prd",
+      "prd_cells": ["Review fails", "In review", "Working, or Ready when the previous builder is not free", "Reviewer", "`review.failed`", "`review.failed`, `criterion.reopened`, and `task.reassigned` if it escalates"],
+      "note": "A failed gate at task.before_done is a failed review in full and takes these rows (plan SM-6).",
+      "rows": [
+        {"command": "fail_review", "from": "in_review", "guard": ["escalates"], "to": "ready", "refusal": null, "who": ["reviewer"], "hook": "review.failed", "builder_lease": null, "events": ["review.failed", "criterion.reopened", "task.reassigned"], "conditional_events": [], "side_events": [{"event": "cost.reported", "when": null, "note": "The verdict's tokens and spend run cost.reported for the task's project (L510). A declared exception: see side_event_exceptions."}, {"event": "project.paused", "when": null, "note": "When the cost.reported policy pauses the project (L358, L443). A declared exception: see side_event_exceptions."}, {"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}, {"event": "hold.opened", "when": null, "note": "rounds_exceeded, when the review fails at the round limit, on top of the normal move (plan SM-5)."}, {"event": "inbox.opened", "when": null, "note": "Past the round limit."}], "holds_opened": ["rounds_exceeded", "budget", "project_paused"], "holds_closed": [], "note": "Escalation sets a minimum strength rank above the previous builder's, so the task goes to Ready (L129, plan DB-17)."},
+        {"command": "fail_review", "from": "in_review", "guard": ["does_not_escalate", "builder_free"], "to": "working", "refusal": null, "who": ["reviewer"], "hook": "review.failed", "builder_lease": "fresh", "events": ["review.failed", "criterion.reopened"], "conditional_events": [], "side_events": [{"event": "cost.reported", "when": null, "note": "The verdict's tokens and spend run cost.reported for the task's project (L510). A declared exception: see side_event_exceptions."}, {"event": "project.paused", "when": null, "note": "When the cost.reported policy pauses the project (L358, L443). A declared exception: see side_event_exceptions."}, {"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}, {"event": "hold.opened", "when": null, "note": "rounds_exceeded, when the review fails at the round limit, on top of the normal move (plan SM-5)."}, {"event": "inbox.opened", "when": null, "note": "Past the round limit."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": ["rounds_exceeded", "budget", "project_paused"], "holds_closed": [], "note": "review.failed carries lease_seat_id: the previous builder's fresh lease (kind rework)."},
+        {"command": "fail_review", "from": "in_review", "guard": ["does_not_escalate", "builder_busy"], "to": "ready", "refusal": null, "who": ["reviewer"], "hook": "review.failed", "builder_lease": null, "events": ["review.failed", "criterion.reopened"], "conditional_events": [], "side_events": [{"event": "cost.reported", "when": null, "note": "The verdict's tokens and spend run cost.reported for the task's project (L510). A declared exception: see side_event_exceptions."}, {"event": "project.paused", "when": null, "note": "When the cost.reported policy pauses the project (L358, L443). A declared exception: see side_event_exceptions."}, {"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}, {"event": "hold.opened", "when": null, "note": "rounds_exceeded, when the review fails at the round limit, on top of the normal move (plan SM-5)."}, {"event": "inbox.opened", "when": null, "note": "Past the round limit."}], "holds_opened": ["rounds_exceeded", "budget", "project_paused"], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "pass_review_done",
+      "source": "prd",
+      "prd_cells": ["Review passes, no outward action", "In review", "Done", "Reviewer", "`task.before_done`", "`review.passed`, `task.done`"],
+      "rows": [
+        {"command": "pass_review", "from": "in_review", "guard": ["no_outward_action"], "to": "done", "refusal": null, "who": ["reviewer"], "hook": "task.before_done", "builder_lease": null, "events": ["review.passed", "task.done"], "conditional_events": [], "side_events": [{"event": "cost.reported", "when": null, "note": "The verdict's tokens and spend run cost.reported for the task's project (L510). A declared exception: see side_event_exceptions."}, {"event": "project.paused", "when": null, "note": "When the cost.reported policy pauses the project (L358, L443). A declared exception: see side_event_exceptions."}, {"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}, {"event": "hold.opened", "when": null, "note": "rerun_limit, when a fourth run on changed inputs in one round would be queued (L422, plan SM-35)."}, {"event": "inbox.opened", "when": null, "note": "Check past the re-run limit."}], "holds_opened": ["budget", "project_paused", "rerun_limit"], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "pass_review_finishing",
+      "source": "prd",
+      "prd_cells": ["Review passes, with an outward action", "In review", "Finishing", "Reviewer", "`task.before_done`", "`review.passed`, `action.requested` (one per action)"],
+      "rows": [
+        {"command": "pass_review", "from": "in_review", "guard": ["has_outward_action"], "to": "finishing", "refusal": null, "who": ["reviewer"], "hook": "task.before_done", "builder_lease": null, "events": ["review.passed", "action.requested"], "conditional_events": [], "side_events": [{"event": "cost.reported", "when": null, "note": "The verdict's tokens and spend run cost.reported for the task's project (L510). A declared exception: see side_event_exceptions."}, {"event": "project.paused", "when": null, "note": "When the cost.reported policy pauses the project (L358, L443). A declared exception: see side_event_exceptions."}, {"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}, {"event": "hold.opened", "when": null, "note": "rerun_limit, when a fourth run on changed inputs in one round would be queued (L422, plan SM-35)."}, {"event": "inbox.opened", "when": null, "note": "Check past the re-run limit."}], "holds_opened": ["budget", "project_paused", "rerun_limit"], "holds_closed": [], "note": "action.requested is written once per action; the server then runs request_action for each."}
+      ]
+    },
+    {
+      "id": "approve_action",
+      "source": "prd",
+      "prd_cells": ["Approve action", "Finishing", "Finishing", "Owner, or the orchestrator through its approval job", "None", "`action.approved`"],
+      "note": "The orchestrator approves through its approval job's result (submit_job_result).",
+      "rows": [
+        {"command": "approve_action", "from": "finishing", "guard": ["approvals_pending"], "to": "finishing", "refusal": null, "who": ["owner", "orchestrator"], "hook": null, "builder_lease": null, "events": ["action.approved"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "An owner_approval hold on the action closes (L157)."}, {"event": "inbox.resolved", "when": null, "note": "Approval."}], "holds_opened": [], "holds_closed": ["owner_approval"]},
+        {"command": "approve_action", "from": "finishing", "guard": ["approvals_complete", "builder_free"], "to": "finishing", "refusal": null, "who": ["owner", "orchestrator"], "hook": null, "builder_lease": "fresh", "events": ["action.approved"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "An owner_approval hold on the action closes (L157)."}, {"event": "inbox.resolved", "when": null, "note": "Approval."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": [], "holds_closed": ["owner_approval"], "note": "action.approved carries lease_seat_id: the previous builder's fresh lease covering every approved action (L139)."},
+        {"command": "approve_action", "from": "finishing", "guard": ["approvals_complete", "builder_busy"], "to": "finishing", "refusal": null, "who": ["owner", "orchestrator"], "hook": null, "builder_lease": null, "events": ["action.approved"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "An owner_approval hold on the action closes (L157)."}, {"event": "inbox.resolved", "when": null, "note": "Approval."}], "holds_opened": [], "holds_closed": ["owner_approval"], "note": "The task waits in Finishing with no holder; grant_action_lease runs when the builder is freed (L139)."}
+      ]
+    },
+    {
+      "id": "grant_action_lease",
+      "source": "prd",
+      "prd_cells": ["Grant the action lease", "Finishing, an approved action waits for a builder that now holds nothing", "Finishing", "The app, in the command that frees the builder", "None", "`action.lease_granted`"],
+      "rows": [
+        {"command": "grant_action_lease", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["app"], "hook": null, "builder_lease": "fresh", "events": ["action.lease_granted"], "conditional_events": [], "side_events": [{"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": [], "holds_closed": [], "note": "Runs inside the command that frees the builder (submit, release, a lease expiry, a contract edit, cancel); no hook runs (plan SM-8)."}
+      ]
+    },
+    {
+      "id": "stop_action",
+      "source": "prd",
+      "prd_cells": ["Stop action", "Finishing", "Finishing, held with `action_stopped`", "Owner or the orchestrator", "None", "`action.stopped`, `hold.opened`"],
+      "rows": [
+        {"command": "stop_action", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["owner", "orchestrator"], "hook": null, "builder_lease": null, "events": ["action.stopped", "hold.opened"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "Stopped action."}, {"event": "hold.closed", "when": null, "note": "An owner_approval hold on the action closes (L157)."}, {"event": "inbox.resolved", "when": null, "note": "Approval."}], "holds_opened": ["action_stopped"], "holds_closed": ["owner_approval"]}
+      ]
+    },
+    {
+      "id": "waive_action",
+      "source": "prd",
+      "prd_cells": ["Waive action", "Finishing", "Finishing, or Done when it was the last open action", "Owner", "None", "`action.waived`, and `task.done` when last"],
+      "note": "Waive is allowed from requested, approved, stopped and started (plan SM-10).",
+      "rows": [
+        {"command": "waive_action", "from": "finishing", "guard": ["last_open_action"], "to": "done", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.waived", "task.done"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": "held_action_stopped", "note": "The action_stopped hold the waive answers (plan SM-10)."}, {"event": "hold.closed", "when": "held_action_unconfirmed", "note": "The action_unconfirmed hold the waive answers (plan SM-10)."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for the checks of a waived action still running."}], "holds_opened": [], "holds_closed": ["action_stopped", "action_unconfirmed", "owner_approval"]},
+        {"command": "waive_action", "from": "finishing", "guard": ["not_last_open_action", "approvals_pending"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.waived"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": "held_action_stopped", "note": "The action_stopped hold the waive answers (plan SM-10)."}, {"event": "hold.closed", "when": "held_action_unconfirmed", "note": "The action_unconfirmed hold the waive answers (plan SM-10)."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for the checks of a waived action still running."}], "holds_opened": [], "holds_closed": ["action_stopped", "action_unconfirmed", "owner_approval"]},
+        {"command": "waive_action", "from": "finishing", "guard": ["not_last_open_action", "approvals_complete", "builder_free"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "fresh", "events": ["action.waived"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": "held_action_stopped", "note": "The action_stopped hold the waive answers (plan SM-10)."}, {"event": "hold.closed", "when": "held_action_unconfirmed", "note": "The action_unconfirmed hold the waive answers (plan SM-10)."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for the checks of a waived action still running."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": [], "holds_closed": ["action_stopped", "action_unconfirmed", "owner_approval"], "note": "With no action left waiting for a decision, the approval rule of L139 gives the builder its fresh lease (plan SM-11)."},
+        {"command": "waive_action", "from": "finishing", "guard": ["not_last_open_action", "approvals_complete", "builder_busy"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.waived"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": "held_action_stopped", "note": "The action_stopped hold the waive answers (plan SM-10)."}, {"event": "hold.closed", "when": "held_action_unconfirmed", "note": "The action_unconfirmed hold the waive answers (plan SM-10)."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for the checks of a waived action still running."}], "holds_opened": [], "holds_closed": ["action_stopped", "action_unconfirmed", "owner_approval"]}
+      ]
+    },
+    {
+      "id": "return_for_rework",
+      "source": "prd",
+      "prd_cells": ["Return for rework", "Finishing, only while no action has been announced as started or reported done", "Working, or Ready when the previous builder is not free", "Owner", "None", "`task.returned_for_rework`, `criterion.reopened`, `action.withdrawn` for each action that goes back to contracted, `hold.closed`"],
+      "rows": [
+        {"command": "return_for_rework", "from": "finishing", "guard": ["action_started"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Rework is offered only while no action has been announced as started or reported done (L142)."},
+        {"command": "return_for_rework", "from": "finishing", "guard": ["no_action_started", "builder_free"], "to": "working", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "fresh", "events": ["task.returned_for_rework", "criterion.reopened", "action.withdrawn"], "conditional_events": [{"event": "hold.closed", "when": "held_action_stopped"}], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Stopped action."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "hold.closed", "when": null, "note": "check_error of a check this withdraws: a withdrawn check closes its hold (L162)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["action_stopped", "check_error"], "note": "task.returned_for_rework carries lease_seat_id. Owner rework never escalates and does not count toward the round limit (L131, plan SM-18)."},
+        {"command": "return_for_rework", "from": "finishing", "guard": ["no_action_started", "builder_busy"], "to": "ready", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.returned_for_rework", "criterion.reopened", "action.withdrawn"], "conditional_events": [{"event": "hold.closed", "when": "held_action_stopped"}], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Stopped action."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "check_error of a check this withdraws: a withdrawn check closes its hold (L162)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["action_stopped", "check_error"]}
+      ]
+    },
+    {
+      "id": "start_action",
+      "source": "prd",
+      "prd_cells": ["Start action", "Finishing", "Finishing", "Builder", "None", "`action.started`"],
+      "rows": [
+        {"command": "start_action", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["builder"], "hook": null, "builder_lease": null, "events": ["action.started"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "report_action_done",
+      "source": "prd",
+      "prd_cells": ["Report action done", "Finishing", "Done, once every action is done or waived", "Builder", "None", "`action.reported_done`, and `task.done` when last"],
+      "rows": [
+        {"command": "report_action_done", "from": "finishing", "guard": ["last_open_action"], "to": "done", "refusal": null, "who": ["builder"], "hook": null, "builder_lease": null, "events": ["action.reported_done", "task.done"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_action_done", "from": "finishing", "guard": ["not_last_open_action"], "to": "finishing", "refusal": null, "who": ["builder"], "hook": null, "builder_lease": null, "events": ["action.reported_done"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "mark_action_done",
+      "source": "prd",
+      "prd_cells": ["Mark action done", "Finishing, held with `action_unconfirmed`", "Finishing, or Done when it was the last open action", "Owner", "None", "`action.marked_done`, `hold.closed`, and `task.done` when last"],
+      "rows": [
+        {"command": "mark_action_done", "from": "finishing", "guard": ["not_held_action_unconfirmed"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "mark_action_done", "from": "finishing", "guard": ["held_action_unconfirmed", "last_open_action"], "to": "done", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.marked_done", "hold.closed", "task.done"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"]},
+        {"command": "mark_action_done", "from": "finishing", "guard": ["held_action_unconfirmed", "not_last_open_action", "approvals_pending"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.marked_done", "hold.closed"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"], "note": "Another action still waits for a decision or is stopped: no lease yet (L139)."},
+        {"command": "mark_action_done", "from": "finishing", "guard": ["held_action_unconfirmed", "not_last_open_action", "approvals_complete", "builder_free"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "fresh", "events": ["action.marked_done", "hold.closed"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"], "note": "hold.closed carries lease_seat_id: the previous builder's fresh lease for the approved actions still open (L139), offered as kind action."},
+        {"command": "mark_action_done", "from": "finishing", "guard": ["held_action_unconfirmed", "not_last_open_action", "approvals_complete", "builder_busy"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.marked_done", "hold.closed"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"], "note": "The builder holds something else: the task waits in Finishing, and grant_action_lease runs when it is freed (L139)."}
+      ]
+    },
+    {
+      "id": "offer_task_again",
+      "source": "prd",
+      "prd_cells": ["Offer task again", "Finishing, held with `action_unconfirmed`", "Finishing", "Owner", "None", "`hold.closed`"],
+      "rows": [
+        {"command": "offer_task_again", "from": "finishing", "guard": ["not_held_action_unconfirmed"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "offer_task_again", "from": "finishing", "guard": ["held_action_unconfirmed", "builder_free"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "fresh", "events": ["hold.closed"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"], "note": "hold.closed carries lease_seat_id: the same builder's fresh lease, offered as kind action (L146). Not offered when the builder seat is disabled or removed (plan SM-29)."},
+        {"command": "offer_task_again", "from": "finishing", "guard": ["held_action_unconfirmed", "builder_busy"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [{"event": "inbox.resolved", "when": null, "note": "Unconfirmed action."}], "holds_opened": [], "holds_closed": ["action_unconfirmed"], "note": "The builder holds something else: the task waits for it as after an approval, and grant_action_lease runs when it is freed (L139)."}
+      ]
+    },
+    {
+      "id": "release",
+      "source": "prd",
+      "prd_cells": ["Release, or lease expiry", "Working, Finishing", "Ready from Working. From Finishing, the task stays in Finishing, held with `action_unconfirmed`", "Holder or the app", "None", "`task.released` or `task.lease_expired`, and from Finishing `hold.opened` and `inbox.opened`"],
+      "rows": [
+        {"command": "release", "from": "working", "guard": [], "to": "ready", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": "ends", "events": ["task.released"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "task.released carries a seat-chosen release reason (registry release_reasons)."},
+        {"command": "release", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": "ends", "events": ["task.released", "hold.opened", "inbox.opened"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": ["action_unconfirmed"], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"]},
+        {"command": "builder_lease_expiry", "from": "working", "guard": [], "to": "ready", "refusal": null, "who": ["app"], "hook": null, "builder_lease": "ends", "events": ["task.lease_expired"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": [], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "A timer: effective_at is the lease's due time. A rework lease that expires also returns the task to Ready."},
+        {"command": "builder_lease_expiry", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["app"], "hook": null, "builder_lease": "ends", "events": ["task.lease_expired", "hold.opened", "inbox.opened"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "hold.closed", "when": null, "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": ["action_unconfirmed"], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"]}
+      ]
+    },
+    {
+      "id": "hold_and_resume",
+      "source": "prd",
+      "prd_cells": ["Hold and resume", "Any", "Unchanged", "Owner or the app", "None", "`hold.opened`, `hold.closed`"],
+      "note": "The app opens and closes its own holds as part of the other rows (holds_opened, holds_closed). Not in Done or Cancelled (plan SM-2).",
+      "who_in_other_rows": ["app"],
+      "rows": [
+        {"command": "hold", "from": "imaginarium", "guard": [], "to": "imaginarium", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "hold", "from": "backlog", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "hold", "from": "ready", "guard": [], "to": "ready", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn: a provisional claim's reservation lapses when a hold opens (L378)."}, {"event": "job.withdrawn", "when": null, "note": "The job of that lapsed provisional claim."}], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "hold", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "hold", "from": "in_review", "guard": [], "to": "in_review", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "hold", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["owner_hold"], "holds_closed": []},
+        {"command": "resume", "from": "imaginarium", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "imaginarium", "guard": ["held_owner_hold"], "to": "imaginarium", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."},
+        {"command": "resume", "from": "backlog", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "backlog", "guard": ["held_owner_hold"], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."},
+        {"command": "resume", "from": "ready", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "ready", "guard": ["held_owner_hold"], "to": "ready", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."},
+        {"command": "resume", "from": "working", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "working", "guard": ["held_owner_hold"], "to": "working", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."},
+        {"command": "resume", "from": "in_review", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "in_review", "guard": ["held_owner_hold"], "to": "in_review", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."},
+        {"command": "resume", "from": "finishing", "guard": ["not_held_owner_hold"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Resume closes only an owner_hold (L176)."},
+        {"command": "resume", "from": "finishing", "guard": ["held_owner_hold"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["owner_hold"], "note": "When this was the last open hold, a pending transition is re-entered and may complete (L378)."}
+      ]
+    },
+    {
+      "id": "report_limit_or_sign_out",
+      "source": "prd",
+      "prd_cells": ["Report a limit or a sign-out", "Working, Finishing, or In review while a reviewer holds the review", "Unchanged", "The helper, acting as the app", "None", "`credential.limit_reached` or `credential.signed_out`, then `credential.switched` when the work is handed off. When no candidate is available: `hold.opened`, with `inbox.opened` when the owner must act, or `review.released` for a review"],
+      "note": "Events carry the helper's idempotency key as command_id (L241). A report about a job's run is report_job_limit or report_job_signed_out (group report_job_limit_or_sign_out), which reads no task state.",
+      "rows": [
+        {"command": "report_limit", "from": "working", "guard": ["candidate_available"], "to": "working", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_limit", "from": "working", "guard": ["no_candidate_available"], "to": "working", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "hold.opened"], "conditional_events": [{"event": "inbox.opened", "when": "owner_must_act"}], "side_events": [], "holds_opened": ["credential_limit", "credential_signed_out"], "holds_closed": [], "note": "credential_signed_out when a candidate is signed out, else credential_limit; Needs you only when the owner must act (L694-L697)."},
+        {"command": "report_limit", "from": "finishing", "guard": ["candidate_available"], "to": "finishing", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_limit", "from": "finishing", "guard": ["no_candidate_available"], "to": "finishing", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "hold.opened"], "conditional_events": [{"event": "inbox.opened", "when": "owner_must_act"}], "side_events": [], "holds_opened": ["credential_limit", "credential_signed_out"], "holds_closed": [], "note": "credential_signed_out when a candidate is signed out, else credential_limit; Needs you only when the owner must act (L694-L697)."},
+        {"command": "report_limit", "from": "in_review", "guard": ["no_reviewer_holds_review"], "to": null, "refusal": "invalid_state", "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_limit", "from": "in_review", "guard": ["reviewer_holds_review", "candidate_available"], "to": "in_review", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_limit", "from": "in_review", "guard": ["reviewer_holds_review", "no_candidate_available"], "to": "in_review", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "review.released"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "review.released has the credential event as cause_id; no task hold opens (L698)."},
+        {"command": "report_signed_out", "from": "working", "guard": ["candidate_available"], "to": "working", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_signed_out", "from": "working", "guard": ["no_candidate_available"], "to": "working", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "hold.opened"], "conditional_events": [{"event": "inbox.opened", "when": "owner_must_act"}], "side_events": [], "holds_opened": ["credential_limit", "credential_signed_out"], "holds_closed": [], "note": "credential_signed_out when a candidate is signed out, else credential_limit; Needs you only when the owner must act (L694-L697)."},
+        {"command": "report_signed_out", "from": "finishing", "guard": ["candidate_available"], "to": "finishing", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_signed_out", "from": "finishing", "guard": ["no_candidate_available"], "to": "finishing", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "hold.opened"], "conditional_events": [{"event": "inbox.opened", "when": "owner_must_act"}], "side_events": [], "holds_opened": ["credential_limit", "credential_signed_out"], "holds_closed": [], "note": "credential_signed_out when a candidate is signed out, else credential_limit; Needs you only when the owner must act (L694-L697)."},
+        {"command": "report_signed_out", "from": "in_review", "guard": ["no_reviewer_holds_review"], "to": null, "refusal": "invalid_state", "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_signed_out", "from": "in_review", "guard": ["reviewer_holds_review", "candidate_available"], "to": "in_review", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "report_signed_out", "from": "in_review", "guard": ["reviewer_holds_review", "no_candidate_available"], "to": "in_review", "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "review.released"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "review.released has the credential event as cause_id; no task hold opens (L698)."}
+      ]
+    },
+    {
+      "id": "report_job_limit_or_sign_out",
+      "source": "derived",
+      "prd_lines": [399, 401, 562, 698],
+      "decision": "SM-1, IF-21",
+      "note": "The helper's limit and sign-out reports for a job's run: the same endpoints as report_limit and report_signed_out, with job_id set (LimitReport, SignOutReport). Events carry the helper's idempotency key as command_id (L241).",
+      "rows": [
+        {"command": "report_job_limit", "from": null, "guard": ["candidate_available"], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The report names a job_id: the job's run goes on with the first available candidate below (L679, L688). No task state is read and no task hold opens."},
+        {"command": "report_job_limit", "from": null, "guard": ["no_candidate_available"], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.limit_reached"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "With no candidate the seat stops claiming jobs and the job is left to its run timeout (L399, L401, L698); orchestrator_offline counts the role offline when every seat of it is in that state."},
+        {"command": "report_job_signed_out", "from": null, "guard": ["candidate_available"], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out", "credential.switched"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The report names a job_id: the job's run goes on with the first available candidate below (L679, L688). No task state is read and no task hold opens."},
+        {"command": "report_job_signed_out", "from": null, "guard": ["no_candidate_available"], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": ["credential.signed_out"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "With no candidate the seat stops claiming jobs and the job is left to its run timeout (L399, L401, L698); orchestrator_offline counts the role offline when every seat of it is in that state."}
+      ]
+    },
+    {
+      "id": "cancel",
+      "source": "prd",
+      "prd_cells": ["Cancel", "Any except Done", "Cancelled", "Owner", "None", "`task.cancelled`"],
+      "note": "Not in Cancelled (plan SM-2).",
+      "rows": [
+        {"command": "cancel", "from": "imaginarium", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]},
+        {"command": "cancel", "from": "backlog", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]},
+        {"command": "cancel", "from": "ready", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]},
+        {"command": "cancel", "from": "working", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]},
+        {"command": "cancel", "from": "in_review", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]},
+        {"command": "cancel", "from": "finishing", "guard": [], "to": "cancelled", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": "ends", "events": ["task.cancelled"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "Every open hold (L207)."}, {"event": "inbox.resolved", "when": null, "note": "The task's Needs you items."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "action.revoked", "when": null, "note": "Each action not yet reported done (L207)."}, {"event": "action.lease_granted", "when": null, "note": "On the Finishing task whose approved action waits for the seat this command frees (L114, L139)."}], "holds_opened": [], "holds_closed": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]}
+      ]
+    },
+    {
+      "id": "request_action",
+      "source": "derived",
+      "prd_lines": [112, 138, 354],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "request_action", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["app"], "hook": "action.requested", "builder_lease": null, "events": [], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "owner_approval when the approval rule is off, does not cover the action, or passes it on (L138)."}, {"event": "inbox.opened", "when": null, "note": "Approval."}], "holds_opened": ["owner_approval"], "holds_closed": [], "note": "Writes no event of its own: action.requested is written by the passing verdict, then the server runs the hook once per action, with no command_id (L112, L384). A failed gate stops the action as stop_action does (hooks.json, failed_gate)."}
+      ]
+    },
+    {
+      "id": "release_provisional_claim",
+      "source": "derived",
+      "prd_lines": [122, 390],
+      "decision": "SM-13",
+      "rows": [
+        {"command": "release", "from": "ready", "guard": [], "to": "ready", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": "ends", "events": ["task.released"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for the running check of the provisional claim it releases. An errored check has already lapsed the reservation (L392), so no check_error hold is the claim's."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}], "holds_opened": [], "holds_closed": [], "note": "Releasing a provisional claim cancels its pending transition and withdraws its checks."}
+      ]
+    },
+    {
+      "id": "ask_question",
+      "source": "derived",
+      "prd_lines": [252, 357, 498],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "ask_question", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["holder"], "hook": "question.asked", "builder_lease": null, "events": ["question.asked"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "owner_question when a blocking question is passed on to the owner (L156)."}, {"event": "inbox.opened", "when": null, "note": "Question passed on."}], "holds_opened": ["owner_question"], "holds_closed": []},
+        {"command": "ask_question", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["holder"], "hook": "question.asked", "builder_lease": null, "events": ["question.asked"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "owner_question when a blocking question is passed on to the owner (L156)."}, {"event": "inbox.opened", "when": null, "note": "Question passed on."}], "holds_opened": ["owner_question"], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "request_access",
+      "source": "derived",
+      "prd_lines": [158, 500],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "request_access", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": null, "events": ["hold.opened", "inbox.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["access"], "holds_closed": [], "note": "Not a work call and not blocked by a hold (L173, L473; plan SM-1)."},
+        {"command": "request_access", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["holder"], "hook": null, "builder_lease": null, "events": ["hold.opened", "inbox.opened"], "conditional_events": [], "side_events": [], "holds_opened": ["access"], "holds_closed": [], "note": "Not a work call and not blocked by a hold (L173, L473; plan SM-1)."}
+      ]
+    },
+    {
+      "id": "answer_question",
+      "source": "derived",
+      "prd_lines": [156, 252],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "answer_question", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["question.answered"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "owner_question."}, {"event": "inbox.resolved", "when": null, "note": "Question passed on."}], "holds_opened": [], "holds_closed": ["owner_question"]}
+      ]
+    },
+    {
+      "id": "overturn_answer",
+      "source": "derived",
+      "prd_lines": [252, 523],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "overturn_answer", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["question.overturned"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "overturn_approval",
+      "source": "derived",
+      "prd_lines": [144],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "overturn_approval", "from": "finishing", "guard": ["approved_action_open"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["action.stopped", "hold.opened"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "Stopped action."}], "holds_opened": ["action_stopped"], "holds_closed": []},
+        {"command": "overturn_approval", "from": "finishing", "guard": ["approved_action_done"], "to": "finishing", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "An approval whose action is already reported done is recorded and changes nothing (L144); the PRD names no event for it."},
+        {"command": "overturn_approval", "from": "done", "guard": ["approved_action_open"], "to": null, "refusal": "invalid_state", "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "overturn_approval", "from": "done", "guard": ["approved_action_done"], "to": "done", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "As in Finishing: recorded, nothing changes, no event (L144)."}
+      ]
+    },
+    {
+      "id": "report_cost",
+      "source": "derived",
+      "prd_lines": [358, 501],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "report_cost", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["holder"], "hook": "cost.reported", "builder_lease": null, "events": ["cost.reported"], "conditional_events": [{"event": "project.paused", "when": "project_budget_reached"}], "side_events": [{"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}], "holds_opened": ["budget", "project_paused"], "holds_closed": []},
+        {"command": "report_cost", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["holder"], "hook": "cost.reported", "builder_lease": null, "events": ["cost.reported"], "conditional_events": [{"event": "project.paused", "when": "project_budget_reached"}], "side_events": [{"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, or budget on this task at its own cap (L446)."}, {"event": "inbox.opened", "when": null, "note": "Project budget reached, or Task budget reached."}], "holds_opened": ["budget", "project_paused"], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "change_task",
+      "source": "derived",
+      "prd_lines": [248, 558],
+      "decision": "SM-1, SM-31",
+      "rows": [
+        {"command": "change_task_priority", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.changed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "change_task_project", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.changed"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": "target_project_paused", "note": "project_paused, when the task's project is paused (L160)."}, {"event": "hold.closed", "when": "source_project_paused", "note": "project_paused, when the task leaves a paused project (L160)."}], "holds_opened": ["project_paused"], "holds_closed": ["project_paused"]},
+        {"command": "change_task_cap", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["task.changed"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "budget, when the new cap is above what the task has spent (L159)."}, {"event": "inbox.resolved", "when": null, "note": "Task budget reached."}], "holds_opened": [], "holds_closed": ["budget"]}
+      ]
+    },
+    {
+      "id": "projects",
+      "source": "derived",
+      "prd_lines": [160, 258, 558],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "change_budget", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["project.budget_changed"], "conditional_events": [{"event": "project.resumed", "when": "project_under_budget"}], "side_events": [{"event": "hold.closed", "when": null, "note": "project_paused on each task of the project, when it resumes."}, {"event": "inbox.resolved", "when": null, "note": "Project budget reached."}], "holds_opened": [], "holds_closed": ["project_paused"]},
+        {"command": "pause_project", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["project.paused"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "project_paused on each task of the project, in bounded batches (L217, plan DB-23)."}], "holds_opened": ["project_paused"], "holds_closed": []},
+        {"command": "resume_project", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["project.resumed"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "project_paused on each task of the project."}, {"event": "inbox.resolved", "when": null, "note": "Project budget reached."}], "holds_opened": [], "holds_closed": ["project_paused"]},
+        {"command": "create_project", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["project.created"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "edit_brief", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["brief.changed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []}
+      ]
+    },
+    {
+      "id": "task_holds_answered",
+      "source": "derived",
+      "prd_lines": [158, 163, 191, 195],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "allow_another_round", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed", "inbox.resolved"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["rounds_exceeded"], "note": "Raises the task's extra rounds by one (plan DB-15); the next failure opens the hold again."},
+        {"command": "grant_access", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["hold.closed", "inbox.resolved"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": ["access"]}
+      ]
+    },
+    {
+      "id": "rule_checks",
+      "source": "derived",
+      "prd_lines": [162, 381, 382, 383, 400, 423],
+      "decision": "SM-1, RC-24",
+      "rows": [
+        {"command": "rerun_check", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["check.queued", "job.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Runs an errored check again as a new attempt; a result other than error closes check_error when it arrives (L400)."},
+        {"command": "override_check", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["check.overridden"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "check_error, claim_gate_failed, rerun_limit or action_stopped, which an override answers (L162-L167)."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}], "holds_opened": [], "holds_closed": ["check_error", "claim_gate_failed", "rerun_limit", "action_stopped"], "note": "Overriding the check that stopped an action is the owner approving it (L383, plan RC-24): in the same command the override runs approve_action's rows, as submit_job_result does, so action.approved and L139's fresh lease follow approve_action's split. Overriding an errored check completes its pending transition in place (L382)."}
+      ]
+    },
+    {
+      "id": "rules",
+      "source": "derived",
+      "prd_lines": [255, 342, 379, 826],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "add_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.created"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "A custom rule: a model-checked gate that blocks (L464)."},
+        {"command": "save_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.changed"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": []},
+        {"command": "enable_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.enabled"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": []},
+        {"command": "disable_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.disabled"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for the rule's checks in flight (L379)."}, {"event": "job.withdrawn", "when": null, "note": "The jobs of those checks."}, {"event": "hold.closed", "when": null, "note": "check_error or claim_gate_failed recorded for the rule (L162, L166)."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": ["check_error", "claim_gate_failed"]},
+        {"command": "revert_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.reverted"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Shipped rules only (plan DB-29)."},
+        {"command": "remove_rule", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.removed"], "conditional_events": [], "side_events": [{"event": "check.finished", "when": null, "note": "Result withdrawn, for the rule's checks in flight (L379)."}, {"event": "job.withdrawn", "when": null, "note": "The jobs of those checks."}, {"event": "hold.closed", "when": null, "note": "check_error or claim_gate_failed recorded for the rule (L162, L166)."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": ["check_error", "claim_gate_failed"], "note": "Custom rules only (plan DB-29)."}
+      ]
+    },
+    {
+      "id": "workspace",
+      "source": "derived",
+      "prd_lines": [259, 558, 826],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "delete_content", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["content.deleted"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "change_workspace_settings", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["workspace.settings_changed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": []},
+        {"command": "sign_in", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Owner sign-in opens a session; it changes nothing in the log (plan IF-17)."},
+        {"command": "issue_helper_token", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The token is shown once and stored hashed; no event (plan IF-16, SM-32)."}
+      ]
+    },
+    {
+      "id": "seats",
+      "source": "derived",
+      "prd_lines": [146, 148, 169, 258, 558],
+      "decision": "SM-1, SM-30",
+      "rows": [
+        {"command": "connect_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["seat.connected"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": []},
+        {"command": "pause_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["seat.paused"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "seat_paused on the task the seat holds (L169)."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": ["seat_paused"], "holds_closed": []},
+        {"command": "resume_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["seat.resumed"], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "seat_paused."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": ["seat_paused"]},
+        {"command": "change_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["seat.changed"], "conditional_events": [{"event": "task.released", "when": "disables_seat_holding_working_task"}], "side_events": [{"event": "hold.opened", "when": "seat_disabled_by_change", "note": "action_unconfirmed when the seat holds a Finishing task with an approved action not reported done (L146)."}, {"event": "inbox.opened", "when": "seat_disabled_by_change", "note": "Unconfirmed action."}, {"event": "hold.closed", "when": "seat_disabled_by_change", "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "check.finished", "when": "seat_disabled_by_change", "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": "seat_disabled_by_change", "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}, {"event": "inbox.resolved", "when": "seat_disabled_by_change", "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": ["action_unconfirmed"], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "A change that disables the seat takes its task away: a Working task is released to Ready with reason seat_disabled (L148), a Finishing one is held with action_unconfirmed (L146). A change of model, effort or rank alone writes only seat.changed and the SM-42 re-evaluation."},
+        {"command": "remove_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["seat.removed"], "conditional_events": [{"event": "task.released", "when": "seat_holds_working_task"}], "side_events": [{"event": "hold.opened", "when": null, "note": "action_unconfirmed when the seat holds a Finishing task with an approved action not reported done (L146)."}, {"event": "inbox.opened", "when": null, "note": "Unconfirmed action."}, {"event": "hold.closed", "when": null, "note": "Seat-bound holds (seat_paused, credential_limit, credential_signed_out) close when the seat loses the task (plan SM-15), and check_error of a check it withdraws (L162)."}, {"event": "check.finished", "when": null, "note": "Result withdrawn, for each check of a pending transition this cancels (L377-L380)."}, {"event": "job.withdrawn", "when": null, "note": "For each job of a cancelled pending transition (L114, L205)."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "Check could not run, for the check_error hold it closes."}], "holds_opened": ["action_unconfirmed"], "holds_closed": ["seat_paused", "credential_limit", "credential_signed_out", "check_error"], "note": "A Working task the seat holds is released to Ready with reason seat_removed (L148)."},
+        {"command": "start_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a start_seat helper request; no event (plan SM-32)."},
+        {"command": "stop_seat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a stop_seat helper request; no event (plan SM-32)."}
+      ]
+    },
+    {
+      "id": "credentials",
+      "source": "derived",
+      "prd_lines": [261, 590, 607, 641, 708],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "add_credential", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues the add checks for the helper; credential.added is written by its report (plan IF-22)."},
+        {"command": "verify_credential", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a verify request; the helper's report writes the outcome."},
+        {"command": "sign_in_again", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Asks the helper to open the provider's own sign-in window (L697)."},
+        {"command": "rename_credential", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["credential.renamed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Refused with duplicate_name for a name already used within its provider and kind (L607)."},
+        {"command": "remove_credential", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["credential.removed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Refused with credential_in_use while a seat uses it or open work records it (L590)."},
+        {"command": "refresh_usage", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Asks the helper to read usage; a reading is not an event (L642)."},
+        {"command": "reorder_credentials", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["credential.order_changed"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Credential hold release times are recomputed (L118); that writes no event."},
+        {"command": "install_tool", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues an install_tool helper request; no event (plan SM-32)."}
+      ]
+    },
+    {
+      "id": "leases",
+      "source": "derived",
+      "prd_lines": [119, 263, 495, 507],
+      "decision": "SM-1, SM-14",
+      "rows": [
+        {"command": "heartbeat", "from": null, "guard": [], "to": null, "refusal": null, "who": ["holder"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Moves the lease's expiry only; refused with lease_expired after its due time (L119, L263). A provisional claimant's heartbeat is accepted and does nothing (plan SM-14)."},
+        {"command": "heartbeat_review", "from": null, "guard": [], "to": null, "refusal": null, "who": ["reviewer"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Moves the review lease's expiry only (L263)."}
+      ]
+    },
+    {
+      "id": "jobs",
+      "source": "derived",
+      "prd_lines": [256, 399, 511, 512, 514],
+      "decision": "SM-1",
+      "rows": [
+        {"command": "claim_job", "from": null, "guard": [], "to": null, "refusal": null, "who": ["orchestrator", "planner"], "hook": null, "builder_lease": null, "events": ["job.claimed"], "conditional_events": [], "side_events": [{"event": "check.started", "when": null, "note": "For a rule check or approval job: its attempt starts (plan DB-30)."}], "holds_opened": [], "holds_closed": [], "note": "job.claimed carries the credential id (L688). Claiming a contract draft opens the draft step (plan SM-24)."},
+        {"command": "submit_job_result", "from": null, "guard": [], "to": null, "refusal": null, "who": ["orchestrator", "planner"], "hook": null, "builder_lease": null, "events": ["job.finished", "cost.reported"], "conditional_events": [{"event": "question.answered", "when": "question_answered"}, {"event": "project.paused", "when": "project_budget_reached"}], "side_events": [{"event": "check.finished", "when": null, "note": "For a rule check job: its result; for an approval job, with effect (plan RC-9)."}, {"event": "hold.opened", "when": null, "note": "owner_question when a question is passed on, owner_approval when an approval is passed to the owner, check_error, claim_gate_failed or a gate's own hold when the check fails or errs."}, {"event": "hold.closed", "when": null, "note": "check_error when a re-run ends in a result other than error (L400)."}, {"event": "inbox.opened", "when": null, "note": "The item of the hold it opens."}, {"event": "inbox.resolved", "when": null, "note": "The item of the hold it closes."}], "holds_opened": ["owner_question", "owner_approval", "claim_gate_failed", "contract_incomplete", "project_paused"], "holds_closed": ["check_error"], "note": "A result that arrives after its timeout is discarded (L399). An approval's approve or stop runs approve_action or stop_action, and a contract draft's result runs complete_contract, in the same command (L512). A completed pending transition writes its own row's events with the requester's key (L241)."}
+      ]
+    },
+    {
+      "id": "helper_reports",
+      "source": "derived",
+      "prd_lines": [118, 562, 589, 694, 697],
+      "decision": "SM-1, IF-21, IF-22",
+      "rows": [
+        {"command": "issue_seat_token", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Issues the seat's fresh token, stores only its hash, returns it once; never in an event (plan IF-15, SM-32)."},
+        {"command": "report_run_started", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Updates seats.run_state only."},
+        {"command": "report_run_stopped", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [{"event": "review.released", "when": "seat_holds_review"}], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Updates seats.run_state; a review the seat holds is released (plan IF-21)."},
+        {"command": "report_request_result", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [{"event": "credential.added", "when": "add_checks_passed"}, {"event": "credential.verified", "when": "verify_passed"}, {"event": "credential.signed_out", "when": "found_signed_out"}], "side_events": [{"event": "hold.closed", "when": null, "note": "credential_signed_out on tasks waiting for this credential when it is verified (L697)."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Account signed out."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": ["credential_signed_out"], "note": "The outcome of the helper request: add checks, verify, install, sign-in window. Writes an event only for the credential outcomes named."},
+        {"command": "report_reading", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "credential_limit with no reset time, when the reading shows capacity (L696)."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Limit with no reset time."}], "holds_opened": [], "holds_closed": ["credential_limit"], "note": "A reading is not an event (L642); it writes only the hold close of L696."}
+      ]
+    },
+    {
+      "id": "timers",
+      "source": "derived",
+      "prd_lines": [118, 399, 401, 680, 694, 696],
+      "decision": "TM-1, SM-37",
+      "rows": [
+        {"command": "check_queue_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued", "check.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "check_queue_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "check.finished"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "check_error on a blocking rule (L400); owner_approval when it is the approval policy (L354)."}, {"event": "inbox.opened", "when": null, "note": "Check could not run, only while the orchestrator is online (plan SM-39); Approval."}], "holds_opened": ["check_error", "owner_approval"], "holds_closed": [], "note": "A second miss gives the result error (L399)."},
+        {"command": "check_run_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued", "check.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "check_run_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "check.finished"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "check_error on a blocking rule (L400); owner_approval when it is the approval policy (L354)."}, {"event": "inbox.opened", "when": null, "note": "Check could not run, only while the orchestrator is online (plan SM-39); Approval."}], "holds_opened": ["check_error", "owner_approval"], "holds_closed": [], "note": "A second miss gives the result error (L399)."},
+        {"command": "question_job_queue_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "question_job_queue_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "owner_question when the question blocks."}, {"event": "inbox.opened", "when": null, "note": "Question passed on."}], "holds_opened": ["owner_question"], "holds_closed": [], "note": "The question is treated as passed on to the owner (plan DB-31)."},
+        {"command": "question_job_run_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "question_job_run_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out"], "conditional_events": [], "side_events": [{"event": "hold.opened", "when": null, "note": "owner_question when the question blocks."}, {"event": "inbox.opened", "when": null, "note": "Question passed on."}], "holds_opened": ["owner_question"], "holds_closed": [], "note": "The question is treated as passed on to the owner (plan DB-31)."},
+        {"command": "contract_draft_job_queue_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "contract_draft_job_queue_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The task stays in Backlog (plan DB-31)."},
+        {"command": "contract_draft_job_run_timeout", "from": null, "guard": ["first_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out", "job.requeued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queued once more as a new attempt (L399)."},
+        {"command": "contract_draft_job_run_timeout", "from": null, "guard": ["second_miss"], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["job.timed_out"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "The task stays in Backlog (plan DB-31)."},
+        {"command": "credential_hold_release", "from": "working", "guard": [], "to": "working", "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [{"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Account signed out."}], "holds_opened": [], "holds_closed": ["credential_limit", "credential_signed_out"], "note": "Due at the earliest reset among the seat's candidates; the run resumes on the first available one, which is the seat's own credential when it reset first (L680, plan SM-37)."},
+        {"command": "credential_hold_release", "from": "finishing", "guard": [], "to": "finishing", "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["hold.closed"], "conditional_events": [], "side_events": [{"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Account signed out."}], "holds_opened": [], "holds_closed": ["credential_limit", "credential_signed_out"], "note": "As in Working."},
+        {"command": "orchestrator_offline", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "Orchestrator offline, once per workspace, when no enabled seat of the role has polled for 90 s (L401)."}, {"event": "inbox.resolved", "when": null, "note": "When a seat of the role polls again (L402)."}, {"event": "check.queued", "when": null, "note": "Waiting and errored checks queued again when the role is back (L402); not an errored task.before_claim check (plan RC-37)."}, {"event": "job.queued", "when": null, "note": "The jobs of those checks."}, {"event": "hold.closed", "when": null, "note": "check_error of an errored task.before_claim check, which is not queued again (L392)."}], "holds_opened": [], "holds_closed": ["check_error"], "note": "Writes Needs you events only when the role's state changes."},
+        {"command": "reviewer_eligibility", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Runs on every sweep for changes no command writes, such as a credential reset (plan SM-42)."},
+        {"command": "command_key_retention", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Purges command rows past 7 days (L818); it writes no event."}
+      ]
+    }
+  ],
+  "action_machine": {
+    "states": ["contracted", "requested", "approved", "started", "stopped", "waived", "revoked", "done"],
+    "transitions": [
+      {"from": ["contracted"], "event": "action.requested", "to": "requested", "commands": ["pass_review"]},
+      {"from": ["requested", "stopped"], "event": "action.approved", "to": "approved", "commands": ["approve_action", "override_check"]},
+      {"from": ["requested", "approved", "started"], "event": "action.stopped", "to": "stopped", "commands": ["stop_action", "request_action", "overturn_approval"]},
+      {"from": ["approved"], "event": "action.started", "to": "started", "commands": ["start_action"]},
+      {"from": ["approved", "started"], "event": "action.reported_done", "to": "done", "commands": ["report_action_done"]},
+      {"from": ["approved", "started"], "event": "action.marked_done", "to": "done", "commands": ["mark_action_done"]},
+      {"from": ["requested", "approved", "stopped", "started"], "event": "action.waived", "to": "waived", "commands": ["waive_action"]},
+      {"from": ["requested", "approved", "stopped"], "event": "action.withdrawn", "to": "contracted", "commands": ["return_for_rework"]},
+      {"from": ["contracted", "requested", "approved", "stopped", "started"], "event": "action.revoked", "to": "revoked", "commands": ["cancel"]}
+    ]
+  }
+}

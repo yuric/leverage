@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "action.lease_granted v1",
+  "description": "The builder an approved action waited for is now free and gets its fresh lease. The subject is the first approved action not yet reported done.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "lease_seat_id": {
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it.",
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": ["lease_seat_id"],
+  "examples": [
+    {"lease_seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13"}
+  ]
+}

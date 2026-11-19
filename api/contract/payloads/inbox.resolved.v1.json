@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "inbox.resolved v1",
+  "description": "A Needs you item resolves. The subject is the item.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "choice": {
+      "description": "The owner's choice that resolved it, or null when it closed on its own.",
+      "enum": ["answer", "approve", "stop", "waive", "return_for_rework", "cancel", "override_once", "offer_again", "mark_done", "allow_another_round", "edit_contract", "turn_rule_off", "run_again", "mark_access_granted", "raise_cap", "change_budget", "resume_project", "sign_in_again", "connect_seat", null]
+    }
+  },
+  "required": ["choice"],
+  "examples": [
+    {"choice": "approve"},
+    {"choice": null}
+  ]
+}

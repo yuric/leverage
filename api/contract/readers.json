@@ -1,0 +1,569 @@
+{
+  "readers": [
+    {
+      "provider": "claude",
+      "kind": "login",
+      "read_from": "claude -p /usage --output-format json",
+      "figures": [
+        {
+          "label": "Week, all models",
+          "kind": "limit",
+          "window": "weekly"
+        },
+        {
+          "label": "Week, per model",
+          "kind": "limit",
+          "window": "per_model"
+        },
+        {
+          "label": "5-hour session",
+          "kind": "limit",
+          "window": "five_hour"
+        }
+      ],
+      "also_reports": [],
+      "resets": {
+        "available": true,
+        "kinds": [
+          "five_hour",
+          "weekly",
+          "per_model",
+          "full"
+        ],
+        "source": "cachedUsageUtilization.utilization.cedar_ember in the account's settings folder, behind a version check; 0 only when present and empty"
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": true,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000101",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "Week, all models",
+            "kind": "limit",
+            "window": "weekly",
+            "percent_used": 42.5,
+            "reset_at": "2026-01-05T00:00:00Z",
+            "value": null
+          },
+          {
+            "label": "Week, per model",
+            "kind": "limit",
+            "window": "per_model",
+            "percent_used": 0,
+            "reset_at": "2026-01-05T00:00:00Z",
+            "value": null
+          },
+          {
+            "label": "5-hour session",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 10.0,
+            "reset_at": "2026-01-01T05:00:00Z",
+            "value": null
+          }
+        ],
+        "resets": [
+          {
+            "count": 1,
+            "kind": "five_hour",
+            "expires_at": null
+          }
+        ]
+      },
+      "example_limit_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000101",
+        "seat_id": "00000000-0000-4000-8000-000000000151",
+        "task_id": "00000000-0000-4000-8000-000000000181",
+        "review_id": null,
+        "job_id": null,
+        "window": "five_hour",
+        "reset_at": "2026-01-01T05:00:00Z",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      },
+      "example_sign_out_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000101",
+        "seat_id": "00000000-0000-4000-8000-000000000151",
+        "task_id": "00000000-0000-4000-8000-000000000181",
+        "review_id": null,
+        "job_id": null,
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      }
+    },
+    {
+      "provider": "codex",
+      "kind": "login",
+      "read_from": "app-server account/rateLimits/read and account/usage/read",
+      "figures": [
+        {
+          "label": "5-hour window",
+          "kind": "limit",
+          "window": "five_hour"
+        },
+        {
+          "label": "Weekly window",
+          "kind": "limit",
+          "window": "weekly"
+        },
+        {
+          "label": "Lifetime tokens",
+          "kind": "activity",
+          "window": null
+        },
+        {
+          "label": "Peak daily tokens",
+          "kind": "activity",
+          "window": null
+        }
+      ],
+      "also_reports": [],
+      "resets": {
+        "available": true,
+        "kinds": [
+          "full"
+        ],
+        "source": "rateLimitResetCredits.availableCount, with each reset's expiry date"
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": true,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000102",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "5-hour window",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 30.0,
+            "reset_at": "2026-01-01T05:00:00Z",
+            "value": null
+          },
+          {
+            "label": "Weekly window",
+            "kind": "limit",
+            "window": "weekly",
+            "percent_used": 12.0,
+            "reset_at": "2026-01-05T00:00:00Z",
+            "value": null
+          },
+          {
+            "label": "Lifetime tokens",
+            "kind": "activity",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 1234567
+          },
+          {
+            "label": "Peak daily tokens",
+            "kind": "activity",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 89000
+          }
+        ],
+        "resets": [
+          {
+            "count": 2,
+            "kind": "full",
+            "expires_at": "2026-02-01T00:00:00Z"
+          }
+        ]
+      },
+      "example_limit_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000102",
+        "seat_id": "00000000-0000-4000-8000-000000000152",
+        "task_id": null,
+        "review_id": "00000000-0000-4000-8000-000000000182",
+        "job_id": null,
+        "window": "weekly",
+        "reset_at": "2026-01-01T05:00:00Z",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      },
+      "example_sign_out_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000102",
+        "seat_id": "00000000-0000-4000-8000-000000000152",
+        "task_id": null,
+        "review_id": "00000000-0000-4000-8000-000000000182",
+        "job_id": null,
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      }
+    },
+    {
+      "provider": "gemini",
+      "kind": "login",
+      "read_from": "Antigravity's usage screen, captured from the terminal",
+      "figures": [],
+      "also_reports": [
+        "what the usage screen shows (not yet captured)"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": false,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000103",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "unavailable",
+        "tool_version": null,
+        "figures": [],
+        "resets": null
+      },
+      "example_limit_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000103",
+        "seat_id": "00000000-0000-4000-8000-000000000153",
+        "task_id": null,
+        "review_id": null,
+        "job_id": "00000000-0000-4000-8000-000000000183",
+        "window": "weekly",
+        "reset_at": "2026-01-01T05:00:00Z",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      },
+      "example_sign_out_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000103",
+        "seat_id": "00000000-0000-4000-8000-000000000153",
+        "task_id": null,
+        "review_id": null,
+        "job_id": "00000000-0000-4000-8000-000000000183",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      }
+    },
+    {
+      "provider": "grok",
+      "kind": "login",
+      "read_from": "Grok Build's usage screen, captured from the terminal",
+      "figures": [],
+      "also_reports": [
+        "what the usage screen shows (not yet captured)"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": false,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000104",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "unavailable",
+        "tool_version": null,
+        "figures": [],
+        "resets": null
+      },
+      "example_limit_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000104",
+        "seat_id": "00000000-0000-4000-8000-000000000154",
+        "task_id": null,
+        "review_id": null,
+        "job_id": "00000000-0000-4000-8000-000000000184",
+        "window": "weekly",
+        "reset_at": "2026-01-01T05:00:00Z",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      },
+      "example_sign_out_report": {
+        "credential_id": "00000000-0000-4000-8000-000000000104",
+        "seat_id": "00000000-0000-4000-8000-000000000154",
+        "task_id": null,
+        "review_id": null,
+        "job_id": "00000000-0000-4000-8000-000000000184",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "tool_version": "0.0.0-example"
+      }
+    },
+    {
+      "provider": "claude_api",
+      "kind": "api_token",
+      "read_from": "GET /v1/models",
+      "figures": [],
+      "also_reports": [
+        "rate limits, from the headers of each reply"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": true,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000105",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "Requests remaining",
+            "kind": "allowance",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 900
+          }
+        ],
+        "resets": null
+      },
+      "example_limit_report": null,
+      "example_sign_out_report": null
+    },
+    {
+      "provider": "openai_api",
+      "kind": "api_token",
+      "read_from": "GET /v1/models (not verified)",
+      "figures": [],
+      "also_reports": [
+        "rate limits, from the headers of each reply"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": false,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000106",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "Requests remaining",
+            "kind": "allowance",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 900
+          }
+        ],
+        "resets": null
+      },
+      "example_limit_report": null,
+      "example_sign_out_report": null
+    },
+    {
+      "provider": "gemini_api",
+      "kind": "api_token",
+      "read_from": "GET /v1beta/models",
+      "figures": [],
+      "also_reports": [
+        "nothing beyond valid"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": false,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000107",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [],
+        "resets": null
+      },
+      "example_limit_report": null,
+      "example_sign_out_report": null
+    },
+    {
+      "provider": "grok_api",
+      "kind": "api_token",
+      "read_from": "GET /v1/api-key",
+      "figures": [],
+      "also_reports": [
+        "key name, team, and whether it is blocked"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": true,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000108",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [],
+        "resets": null
+      },
+      "example_limit_report": null,
+      "example_sign_out_report": null
+    },
+    {
+      "provider": "openrouter",
+      "kind": "api_token",
+      "read_from": "GET /api/v1/key",
+      "figures": [
+        {
+          "label": "Spending limit",
+          "kind": "limit",
+          "window": "spend"
+        },
+        {
+          "label": "Left",
+          "kind": "allowance",
+          "window": null
+        },
+        {
+          "label": "Use today",
+          "kind": "activity",
+          "window": null
+        },
+        {
+          "label": "Use this week",
+          "kind": "activity",
+          "window": null
+        },
+        {
+          "label": "Use this month",
+          "kind": "activity",
+          "window": null
+        }
+      ],
+      "also_reports": [
+        "free tier",
+        "expiry"
+      ],
+      "resets": {
+        "available": false,
+        "kinds": [],
+        "source": null
+      },
+      "capture": {
+        "usage": "none",
+        "limit": "none",
+        "sign_out": "none"
+      },
+      "provisional": true,
+      "verified": true,
+      "tested_tool_versions": [],
+      "prd_source": "PRD, What each account shows",
+      "example_reading": {
+        "credential_id": "00000000-0000-4000-8000-000000000109",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "Spending limit",
+            "kind": "limit",
+            "window": "spend",
+            "percent_used": 12.5,
+            "reset_at": null,
+            "value": null
+          },
+          {
+            "label": "Left",
+            "kind": "allowance",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 87.5
+          },
+          {
+            "label": "Use today",
+            "kind": "activity",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 0
+          },
+          {
+            "label": "Use this week",
+            "kind": "activity",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 3.25
+          },
+          {
+            "label": "Use this month",
+            "kind": "activity",
+            "window": null,
+            "percent_used": null,
+            "reset_at": null,
+            "value": 12.5
+          }
+        ],
+        "resets": null
+      },
+      "example_limit_report": null,
+      "example_sign_out_report": null
+    }
+  ]
+}

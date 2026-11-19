@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.released v1",
+  "description": "Release: the holder gives the task back, or the app takes it back from a disabled or removed seat. Carries a reason code from the registry, never text.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reason": {
+      "description": "The release reason, from the registry's release_reasons.",
+      "enum": ["unable_to_continue", "not_suited_to_this_seat", "stopping", "seat_disabled", "seat_removed"]
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    }
+  },
+  "required": ["reason", "wait_cause"],
+  "examples": [
+    {"reason": "unable_to_continue", "wait_cause": null},
+    {"reason": "seat_removed", "wait_cause": "credential_limit"}
+  ]
+}

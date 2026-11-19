@@ -1,0 +1,33 @@
+{
+  "breaks": "closed_strings",
+  "type": "task.released",
+  "description": "A release reason as free text: plain type string with no enum.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "task.released v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "reason": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "wait_cause": {
+        "enum": [
+          "credential_limit",
+          null
+        ]
+      }
+    },
+    "required": [
+      "reason",
+      "wait_cause"
+    ],
+    "examples": [
+      {
+        "reason": "the build server is down",
+        "wait_cause": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "breaks": "wait_cause",
+  "type": "task.ready",
+  "description": "task.ready opens wait_ready but carries no wait_cause (SM-41).",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "task.ready v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {},
+    "required": [],
+    "examples": [
+      {}
+    ]
+  }
+}

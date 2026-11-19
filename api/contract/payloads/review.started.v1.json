@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "review.started v1",
+  "description": "Claim review. Records the credential that does the review and the model actually used.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "credential_id": {
+      "description": "The credential the review runs on, or null for a seat that connects on its own.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "model": {
+      "description": "The model actually used; null when none is set.",
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$"
+    }
+  },
+  "required": ["credential_id", "model"],
+  "examples": [
+    {"credential_id": "e9a2c5f7-3b18-4d64-a0c9-52e7f1b4d683", "model": "gpt-5-codex"}
+  ]
+}

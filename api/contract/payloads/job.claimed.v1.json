@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "job.claimed v1",
+  "description": "A seat claims the job. Records the credential that does the work and the model actually used.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "credential_id": {
+      "description": "The credential the job runs on, or null for a seat that connects on its own.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "model": {
+      "description": "The model actually used; null when none is set.",
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$"
+    }
+  },
+  "required": ["credential_id", "model"],
+  "examples": [
+    {"credential_id": "c41e7b92-0d36-4a8f-95e2-7b1f3c6d8a20", "model": "claude-opus-4-1"}
+  ]
+}

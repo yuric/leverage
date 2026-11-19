@@ -1,0 +1,27 @@
+{
+  "breaks": "enum_from_registry",
+  "type": "task.created",
+  "description": "drafting is not a task state, so the enum is drawn from no registry list.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "task.created v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "state": {
+        "enum": [
+          "imaginarium",
+          "drafting"
+        ]
+      }
+    },
+    "required": [
+      "state"
+    ],
+    "examples": [
+      {
+        "state": "drafting"
+      }
+    ]
+  }
+}

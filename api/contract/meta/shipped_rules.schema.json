@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "shipped_rules.json",
+  "description": "The rules a new workspace is created with, as version 1 of each rule record. name, prd_checker and prd_when_off are cells of the PRD's Shipped rules table, verbatim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rules"],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "name", "prd_checker", "prd_when_off", "hook", "kind", "checker", "scope", "on_fail", "route", "checker_function", "parameters", "instruction", "checker_role", "queue_timeout_seconds", "run_timeout_seconds", "enabled", "origin", "version"],
+        "properties": {
+          "key": {"$ref": "#/$defs/name"},
+          "name": {"type": "string", "minLength": 1},
+          "prd_checker": {"type": "string", "minLength": 1},
+          "prd_when_off": {"type": "string", "minLength": 1},
+          "hook": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+          "kind": {"$ref": "#/$defs/name"},
+          "checker": {"$ref": "#/$defs/name"},
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "values"],
+            "properties": {
+              "kind": {"$ref": "#/$defs/name"},
+              "values": {"description": "Project ids or action kinds, by scope kind; empty for all tasks.", "type": "array"}
+            }
+          },
+          "on_fail": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+          "route": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+          "checker_function": {
+            "description": "The built-in function an app-checked rule calls; null for a model-checked rule.",
+            "oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]
+          },
+          "parameters": {
+            "description": "The typed parameters of an app-checked rule, by name: their type, bounds and the shipped value.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "minimum", "default"],
+              "properties": {
+                "type": {"enum": ["integer"]},
+                "minimum": {"type": "integer"},
+                "default": {"type": "integer"}
+              }
+            }
+          },
+          "instruction": {
+            "description": "A model-checked rule's instruction is content, kept on its rule version and never in a payload. Its text is written in the milestone named here; null for an app-checked rule.",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["to_be_written_in"],
+                "properties": {"to_be_written_in": {"enum": ["rule_checks", "questions_and_approvals"]}}
+              },
+              {"type": "null"}
+            ]
+          },
+          "checker_role": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+          "queue_timeout_seconds": {"description": "Seconds; null means the workspace's check queue timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+          "run_timeout_seconds": {"description": "Seconds; null means the workspace's check run timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+          "enabled": {"type": "boolean"},
+          "origin": {"$ref": "#/$defs/name"},
+          "version": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+  }
+}

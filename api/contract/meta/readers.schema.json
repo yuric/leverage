@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "readers.json",
+  "description": "The shape of the credential readers file: one reader per provider, which of its facts are provisional, and example readings and reports that validate against CredentialReading, LimitReport and SignOutReport in openapi.json (readers_test.rb). Membership in the registry's lists is checked by the test, not here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "readers"
+  ],
+  "properties": {
+    "readers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "kind",
+          "read_from",
+          "figures",
+          "also_reports",
+          "resets",
+          "capture",
+          "provisional",
+          "verified",
+          "tested_tool_versions",
+          "prd_source",
+          "example_reading",
+          "example_limit_report",
+          "example_sign_out_report"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "kind": {
+            "enum": [
+              "login",
+              "api_token"
+            ]
+          },
+          "read_from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Where the figures come from, as the PRD states it."
+          },
+          "figures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "kind",
+                "window"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "limit",
+                    "activity",
+                    "allowance"
+                  ]
+                },
+                "window": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "five_hour",
+                        "weekly",
+                        "per_model",
+                        "spend"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The figures the reader is expected to supply, as far as the PRD names them."
+          },
+          "also_reports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What else the provider reports that is not a figure."
+          },
+          "resets": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "available",
+              "kinds",
+              "source"
+            ],
+            "properties": {
+              "available": {
+                "type": "boolean",
+                "description": "False shows a dash."
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "five_hour",
+                    "weekly",
+                    "per_model",
+                    "full"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "source": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "capture": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "usage",
+              "limit",
+              "sign_out"
+            ],
+            "description": "Whether a real reply of that kind has been recorded (scrubbed). The output shape stays provisional until limit and sign-out replies exist.",
+            "properties": {
+              "usage": {
+                "enum": [
+                  "none",
+                  "recorded"
+                ]
+              },
+              "limit": {
+                "enum": [
+                  "none",
+                  "recorded"
+                ]
+              },
+              "sign_out": {
+                "enum": [
+                  "none",
+                  "recorded"
+                ]
+              }
+            }
+          },
+          "provisional": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "False where the PRD says the facts are not verified."
+          },
+          "tested_tool_versions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The tool versions the reader was tested against. A reader shows unavailable instead of a wrong number."
+          },
+          "prd_source": {
+            "type": "string"
+          },
+          "example_reading": {
+            "type": "object",
+            "description": "Validates against CredentialReading."
+          },
+          "example_limit_report": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Validates against LimitReport; null for an API token."
+          },
+          "example_sign_out_report": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Validates against SignOutReport; null for an API token."
+          }
+        }
+      }
+    }
+  }
+}

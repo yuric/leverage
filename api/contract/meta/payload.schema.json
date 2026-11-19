@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "payloads/<type>.v<n>.json",
+  "description": "The rules every event payload schema follows. The instance is the payload schema itself. A payload holds ids, numbers and short fixed values only (PRD, Event log, principle 7): test/contract/payload_schemas_test.rb also requires every string property, at any depth, to be closed by enum, const, format uuid or format date-time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "title", "type", "additionalProperties", "properties", "required", "examples"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "title": {
+      "description": "The event type and the version, as in the file name: \"task.created v1\".",
+      "type": "string",
+      "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)* v[1-9][0-9]*$"
+    },
+    "description": {"type": "string"},
+    "type": {"const": "object"},
+    "additionalProperties": {"const": false},
+    "properties": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+      "additionalProperties": {"type": "object"}
+    },
+    "required": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "object"}
+    },
+    "$defs": {
+      "type": "object",
+      "additionalProperties": {"type": "object"}
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "breaks": "closed_strings",
+  "type": "job.claimed",
+  "description": "model is an allowed open string but has no pattern, so any text fits.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "job.claimed v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "credential_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "model": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "credential_id",
+      "model"
+    ],
+    "examples": [
+      {
+        "credential_id": null,
+        "model": "any text at all"
+      }
+    ]
+  }
+}

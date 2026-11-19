@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "question.answered v1",
+  "description": "A question is answered.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "basis": {
+      "description": "From the record, by the orchestrator's decision, or by the owner.",
+      "enum": ["record", "decision", "owner"]
+    }
+  },
+  "required": ["basis"],
+  "examples": [
+    {"basis": "record"}
+  ]
+}

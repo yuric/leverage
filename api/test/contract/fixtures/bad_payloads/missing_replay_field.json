@@ -1,0 +1,48 @@
+{
+  "breaks": "required_fields",
+  "type": "review.failed",
+  "description": "No lease_seat_id: replay cannot tell whether the builder got a fresh lease (SM-7, DB-43).",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "review.failed v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "failed_criterion_ids": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "failed_rule_check_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "wait_cause": {
+        "enum": [
+          "credential_limit",
+          null
+        ]
+      }
+    },
+    "required": [
+      "failed_criterion_ids",
+      "failed_rule_check_id",
+      "wait_cause"
+    ],
+    "examples": [
+      {
+        "failed_criterion_ids": [
+          "0b5e8c1a-2f43-4c8e-9d61-7a3f2e1b9c04"
+        ],
+        "failed_rule_check_id": null,
+        "wait_cause": null
+      }
+    ]
+  }
+}

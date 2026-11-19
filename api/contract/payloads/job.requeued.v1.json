@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "job.requeued v1",
+  "description": "The job is queued again as a new attempt (written on the old job).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "required": [],
+  "examples": [
+    {}
+  ]
+}

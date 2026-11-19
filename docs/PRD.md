@@ -92,6 +92,7 @@ Each forward move names the hook where rules run. A failed review loops back to 
 | Review passes, no outward action | In review | Done | Reviewer | `task.before_done` | `review.passed`, `task.done` |
 | Review passes, with an outward action | In review | Finishing | Reviewer | `task.before_done` | `review.passed`, `action.requested` (one per action) |
 | Approve action | Finishing | Finishing | Owner, or the orchestrator through its approval job | None | `action.approved` |
+| Grant the action lease | Finishing, an approved action waits for a builder that now holds nothing | Finishing | The app, in the command that frees the builder | None | `action.lease_granted` |
 | Stop action | Finishing | Finishing, held with `action_stopped` | Owner or the orchestrator | None | `action.stopped`, `hold.opened` |
 | Waive action | Finishing | Finishing, or Done when it was the last open action | Owner | None | `action.waived`, and `task.done` when last |
 | Return for rework | Finishing, only while no action has been announced as started or reported done | Working, or Ready when the previous builder is not free | Owner | None | `task.returned_for_rework`, `criterion.reopened`, `action.withdrawn` for each action that goes back to contracted, `hold.closed` |
@@ -110,7 +111,7 @@ Draft contract queues a planner job. Its result is the Complete contract command
 
 `action.requested` runs once per action. The server starts it, not a command.
 
-The last column names the events of the move itself. A command also writes the registered events for whatever else it changes: `check.*` and `job.*` events for the rule checks at its hook, `hold.opened` and `inbox.opened` when it holds the task or opens a Needs you item, and, on Cancel, `hold.closed`, `inbox.resolved`, `check.finished` with the result `withdrawn`, `job.withdrawn` and `action.revoked` for what it closes, resolves, withdraws and revokes.
+The last column names the events of the move itself. A command also writes the registered events for whatever else it changes: `check.*` and `job.*` events for the rule checks at its hook, `hold.opened` and `inbox.opened` when it holds the task or opens a Needs you item, `credential.switched` when it gives a builder a fresh lease or closes a credential hold and the run starts on a credential other than the one last recorded for the task, `action.lease_granted` on the Finishing task whose approved action waits for a builder it frees, and, on Cancel, `hold.closed`, `inbox.resolved`, `check.finished` with the result `withdrawn`, `job.withdrawn` and `action.revoked` for what it closes, resolves, withdraws and revokes.
 
 ### Timers and leases
 
@@ -135,7 +136,7 @@ An outward action happens only after the independent review has passed.
 
 1. The contract names each outward action the task ends in.
 2. When the review passes, the task moves to Finishing and the server requests each action at the `action.requested` hook. Each action is checked on its own. Gate rules at `action.requested` run first, and the approval policy runs only when every gate has passed, did not apply, was withdrawn or was overridden. If the approval rule is off, or its scope does not cover the action, or the orchestrator passes it on, the action holds the task with `owner_approval`.
-3. When no action is waiting for a decision and none is stopped, the previous builder gets a fresh lease covering every approved action, if it holds nothing. It acknowledges the briefing again, announces each action as it starts it, carries the actions out in contract order and reports each done. If it holds something else, the task waits in Finishing with no holder. That seat is offered the action through `GET /v1/next` (kind `action`) as soon as it holds nothing, and may not claim new work while an approved action waits for it.
+3. When no action is waiting for a decision and none is stopped, the previous builder gets a fresh lease covering every approved action, if it holds nothing. It acknowledges the briefing again, announces each action as it starts it, carries the actions out in contract order and reports each done. If it holds something else, the task waits in Finishing with no holder. That seat is offered the action through `GET /v1/next` (kind `action`) as soon as it holds nothing, and may not claim new work while an approved action waits for it. The command that frees it gives it the fresh lease and writes `action.lease_granted` on the waiting task.
 4. The task is Done when every contracted action is reported done by the builder, marked done by the owner or waived by the owner.
 
 A stopped action holds the task with the reason `action_stopped` and opens a Needs you item with three choices: waive the action, return the task for rework, or cancel it. When a failed rule check stopped the action, the item also offers to override that check once, which is the owner approving the action. Rework is offered only while none of the task's actions has been announced as started or reported done. It adds one to the round, reopens the criteria the owner names and the review criterion, and gives the previous builder a fresh lease as after a failed review. Actions not yet carried out go back to contracted, and the review and `task.before_done` run again before any action is requested again. An owner rework does not trigger the round limit. No action can be requested in any other state.
@@ -143,6 +144,8 @@ A stopped action holds the task with the reason `action_stopped` and opens a Nee
 Overturning an approval the orchestrator gave, before the action is reported done, stops the action in the same way. Overturning an approval whose action is already reported done is recorded and changes nothing.
 
 If the builder releases the task or its lease expires after an approval and before every approved action is reported done, or the builder seat is disabled or removed before it has carried out an approved action, the task is held with the reason `action_unconfirmed` and a Needs you item opens with four choices: offer the task again to the same builder (a fresh lease, delivered through `GET /v1/next` as kind `action`), mark the action done (recorded as reported by the owner), waive it, or cancel. The task is never given to another seat automatically. The item names what was approved and by whom, and says whether the builder announced that it had started the action.
+
+Disabling or removing a seat that holds a task in Working releases the task to Ready with `task.released`, whose reason is `seat_disabled` or `seat_removed`.
 
 ### Holds
 
@@ -233,21 +236,21 @@ The log is one table that the server appends to. No row is ever updated or delet
 | `actor_kind`, `actor_id` | enum, uuid | Who caused it: the owner, a seat or the app. |
 | `project_id`, `task_id` | uuid, nullable | What it is about. |
 | `round` | int | The task's review round, starting at 0. |
-| `subject_kind`, `subject_id` | enum, uuid | The criterion, question, rule check, review, job, rule, hold, action, seat or credential concerned. |
+| `subject_kind`, `subject_id` | enum, uuid | The criterion, question, rule check, review, job, rule, hold, action, seat, credential, Needs you item, brief entry or evidence concerned. |
 | `cause_id` | uuid, nullable | The event that led to this one. |
-| `command_id` | text, nullable | The idempotency key of the command. All events of one command share it. Events written when a pending transition completes carry the original requester's key, with `cause_id` set to the `check.finished` event. A refused transition never completes later, so no later event carries its key. Empty for app-originated events, the checks at `action.requested` included. Indexed, not unique. |
+| `command_id` | text, nullable | The idempotency key of the command. All events of one command share it. Events written when a pending transition completes carry the original requester's key, with `cause_id` set to the `check.finished` event. A refused transition never completes later, so no later event carries its key. Events written by a helper report carry the helper's idempotency key. Empty for app-originated events, which are the events the server's own timers and requests write, the checks at `action.requested` included. Indexed, not unique. |
 | `payload` | json | Type-specific facts, validated against the schema. |
 
 ### Event types
 
 | Group | Types |
 | --- | --- |
-| Task | `task.created`, `task.promoted`, `task.contract_changed`, `task.changed` (priority, project), `task.ready`, `task.returned`, `task.returned_for_rework`, `task.claimed`, `task.briefing_acknowledged`, `task.released` (with a reason from the fixed list), `task.lease_expired`, `task.submitted`, `task.reassigned`, `task.done`, `task.cancelled` |
+| Task | `task.created`, `task.promoted`, `task.contract_changed`, `task.changed` (priority, project, cap), `task.ready`, `task.returned`, `task.returned_for_rework`, `task.claimed`, `task.briefing_acknowledged`, `task.released` (with a reason from the fixed list), `task.lease_expired`, `task.submitted`, `task.reassigned`, `task.done`, `task.cancelled` |
 | Criteria | `criterion.started`, `criterion.passed`, `criterion.reopened`, `evidence.attached` |
 | Review | `review.started`, `review.released`, `review.lease_expired`, `review.passed`, `review.failed` |
 | Holds | `hold.opened`, `hold.closed`, each with a reason and, where one applies, the rule or the credential that caused it |
 | Questions | `question.asked`, `question.answered` (from the record, by the orchestrator or by the owner), `question.overturned` |
-| Outward actions | `action.requested`, `action.approved`, `action.stopped`, `action.started`, `action.reported_done`, `action.marked_done` (by the owner), `action.waived`, `action.withdrawn` (an action put back to contracted by a return for rework), `action.revoked` (by Cancel only) |
+| Outward actions | `action.requested`, `action.approved`, `action.lease_granted` (the builder an approved action waited for gets its fresh lease), `action.stopped`, `action.started`, `action.reported_done`, `action.marked_done` (by the owner), `action.waived`, `action.withdrawn` (an action put back to contracted by a return for rework), `action.revoked` (by Cancel only) |
 | Rule checks | `check.queued`, `check.started`, `check.finished` (with the result, `withdrawn` included), `check.overridden` |
 | Rules | `rule.created`, `rule.changed`, `rule.enabled`, `rule.disabled`, `rule.reverted`, `rule.removed` |
 | Jobs | `job.queued`, `job.claimed`, `job.finished`, `job.timed_out`, `job.requeued`, `job.withdrawn` |
@@ -276,6 +279,7 @@ A task's life is a row of steps that touch end to end, so every minute of it bel
 5. A builder can announce the criterion it is starting, and the `build` step then carries that criterion. Without an announcement the step has no criterion. When a criterion passes, an open step without one, for the same seat and round, is given that criterion. Whatever is left is reported as unattributed build time. The reference runner and the MCP server always announce.
 6. The sum of a task's steps equals its lifetime. This is a tested invariant.
 7. Reports measure a task from its promotion to Backlog, or from its creation if it was added straight to Backlog. Time in Imaginarium is shown apart.
+8. A step's cause and subject are fixed when it opens. A change of credential state with no task event does not open a new step.
 
 ### Step kinds
 
@@ -299,7 +303,7 @@ A task's life is a row of steps that touch end to end, so every minute of it bel
 
 Things that do not block the task open no step. A non-blocking question, a cost report and an instant app-run check each keep their own times on their own rows.
 
-The contract's step table records these openings and closings: `review.failed` and an action's approval open `wait_builder` when they give the builder a fresh lease; `task.briefing_acknowledged` closes it and opens `rework` or `finish`; `task.submitted` closes `rework`; `action.reported_done` or `task.done` closes `finish`.
+The contract's step table records these openings and closings: `review.failed` and an action's approval open `wait_builder` when they give the builder a fresh lease; `action.lease_granted` keeps `wait_builder` open, because its kind and subject do not change; `task.briefing_acknowledged` closes it and opens `rework` or `finish`; `task.submitted` closes `rework`; `action.reported_done` or `task.done` closes `finish`.
 
 ### What can be measured
 
@@ -538,10 +542,10 @@ A seat has one of four roles. Evidence is an `https` link or a note that locates
 ### Behaviour every client can rely on
 
 - **Claiming is atomic.** The server picks the task, by priority and then age, and two seats can never receive the same one.
-- **Eligibility.** A seat can claim when it is enabled, its role may build, it holds no task, review or provisional claim, no approved action is waiting for it, it meets the task's minimum strength rank, the project is running, and the task has no hold and no pending transition. While the budget rule is on, the project must also be under budget. A seat the app runs is eligible only if one of its candidates is available (see Handoff). The same applies to review claims and job claims.
+- **Eligibility.** A seat can claim when it is enabled, its role may build, it holds no task, review or provisional claim, no approved action is waiting for it, it meets the task's minimum strength rank, the project is running, and the task has no hold and no pending transition. While the budget rule is on, the project must also be under budget. A seat the app runs is eligible only if one of its candidates is available (see Handoff). The same applies to review claims and job claims, except that the task's hold does not stop a job claim: a hold opened while a transition is pending leaves its checks running (see Pending transitions).
 - **Leases.** The lease length is a workspace setting, 60 minutes by default. A heartbeat renews it.
 - **Pending answers.** A call that meets a model-checked gate answers `202 pending`. The seat learns the outcome from `GET /v1/commands/{key}` or from `GET /v1/next`.
-- **Specific refusals.** Refusals name their cause: `not_holder`, `not_eligible`, `forbidden` (wrong role for a call other than a claim), `invalid_state` (the command is not allowed in the task's current state), `briefing_not_acknowledged`, `briefing_changed`, `criteria_incomplete` (submit before every builder criterion has passed with evidence), `blocked_by_rule` (with the rule and the reason), `pending`, `on_hold`, `lease_expired`, `task_cancelled`. When several causes apply, the first in this order is returned: `lease_expired`, `task_cancelled`, `not_holder`, `forbidden`, `invalid_state`, `pending`, `on_hold`, `briefing_not_acknowledged`, `briefing_changed`, `criteria_incomplete`, `blocked_by_rule`. `not_eligible` applies to claims only. A held task answers `on_hold`, whatever the hold's reason. Transport codes (not found, a key reused with a different body) are defined in the interface schema.
+- **Specific refusals.** Refusals name their cause: `not_holder`, `not_eligible`, `forbidden` (wrong role for a call other than a claim), `invalid_state` (the command is not allowed in the task's current state), `briefing_not_acknowledged`, `briefing_changed`, `criteria_incomplete` (submit before every builder criterion has passed with evidence), `blocked_by_rule` (with the rule and the reason), `pending`, `on_hold`, `lease_expired`, `task_cancelled`, `credential_in_use` (removing a credential that a seat uses or that open work records), `duplicate_name` (a credential name already used within its provider and kind). When several causes apply, the first in this order is returned: `lease_expired`, `task_cancelled`, `not_holder`, `forbidden`, `invalid_state`, `pending`, `on_hold`, `briefing_not_acknowledged`, `briefing_changed`, `criteria_incomplete`, `blocked_by_rule`, `credential_in_use`, `duplicate_name`. `not_eligible` applies to claims only. `credential_in_use` and `duplicate_name` are owner refusals and apply to owner commands only. A held task answers `on_hold`, whatever the hold's reason. Transport codes (not found, a key reused with a different body) are defined in the interface schema.
 
 ### Clients
 
@@ -551,7 +555,7 @@ An MCP server exposes the same calls as tools. It heartbeats for the agent only 
 
 ### Owner interface
 
-The Mac app uses a separate interface on the same server, with a signed-in session. Its commands are part of the contract and run through the same transition function: add, promote, complete and edit a contract, ask a planner to draft a contract, change a task's priority or project, cancel, hold and resume, return a task for rework, allow one more round, run a check again, answer, overturn, approve or stop an action, waive an action, mark an action done, offer a task again, grant access, override a check, save, switch, revert and remove a rule, create a project, edit a brief, pause and resume a project, change a budget or a task's cap, connect, pause, resume, change and remove a seat, start and stop a seat the app runs, delete content, change workspace settings, and the Credentials commands listed under What this adds to the contract.
+The Mac app uses a separate interface on the same server, with a signed-in session. Its commands are part of the contract and run through the same transition function: add, promote, complete and edit a contract, ask a planner to draft a contract, change a task's priority or project, cancel, hold and resume, return a task for rework, allow one more round, run a check again, answer, overturn, approve or stop an action, waive an action, mark an action done, offer a task again, grant access, override a check, save, switch, revert and remove a rule, create a project, edit a brief, pause and resume a project, change a budget or a task's cap, connect, pause, resume, change and remove a seat, start and stop a seat the app runs, issue the helper's token, delete content, change workspace settings, and the Credentials commands listed under What this adds to the contract.
 
 ### Helper interface
 
@@ -701,7 +705,7 @@ When no candidate is available:
 - **Tables.** `credentials`, `credential_readings`, `helpers`, and a credential on each seat the app runs. They are listed under Data model.
 - **Events.** `credential.added`, `credential.verified`, `credential.signed_out`, `credential.renamed`, `credential.removed`, `credential.order_changed`, `credential.limit_reached` and `credential.switched`. A sign-out found during a run is `credential.signed_out`. A limit that clears writes `hold.closed` and no credential event.
 - **Hold reasons and a step.** `credential_limit` and `credential_signed_out`, and the step kind `wait_limit`.
-- **Owner commands.** Add, verify, sign in again, rename, remove, refresh usage, reorder, install a provider's tool, and start and stop a seat the app runs.
+- **Owner commands.** Add, verify, sign in again, rename, remove, refresh usage, reorder, install a provider's tool, start and stop a seat the app runs, and issue the helper's token.
 - **The helper.** A separate program on the owner's Mac. It finds and installs the providers' tools, starts and stops the seats the app runs, detects a limit or a sign-out, runs the checks of Add credential and reads usage. It signs in to the server with its own token, and the contract defines its calls (see Helper interface). The server holds no provider login and no provider code.
 - **Build.** One more track, across three milestones. The helper with its launcher for seats the app runs, and Add credential, arrive in the Core loop milestone. Limit and sign-out detection, the two holds and the Handoff tab arrive in the Handoff milestone, directly after it. The usage readers, reordering and the full Credentials screen arrive in the Credentials milestone.
 
@@ -745,7 +749,7 @@ These tables are part of the shared contract, which is listed in full under Buil
 | `holds` | Why something cannot move | Task or project, reason, causing rule or credential, opened at, closed at |
 | `pending_transitions` | A transition waiting on checks | Task, command key, command, requester, frozen rule versions, state (pending, completed, refused, cancelled; a transition under a `check_error` hold stays pending), reasons |
 | `rules` | One row per rule | Key, enabled, current version |
-| `rule_versions` | Immutable rule versions | Rule, version, every field of the rule record, author, created at |
+| `rule_versions` | Immutable rule versions | Rule, version, every field of the rule record except `enabled` (it lives on `rules`), author, created at |
 | `rule_checks` | One row per check | Task, project, rule, rule version, hook, round, subject, input hash, result, effect, reason, override (who, when, why) |
 | `rule_check_attempts` | Each run of a check | Check, attempt number, job, checker seat, queued at, started at, finished at, tokens, spend |
 | `jobs` | Model work queued for seats | Kind, target, seat role, claimed by, state, queued at, claimed at, finished at, result, tokens, spend |
@@ -772,7 +776,7 @@ Constraints the database enforces, not the application code alone:
 
 Replaying the log into empty tables must reproduce exactly these columns:
 
-- `tasks`: state, round, holder, builder, minimum strength rank, contract version. The holder is set by `task.claimed` and by the event that gives a builder a fresh lease (after a failed review, an approved action, or the owner offering the task again). It is cleared by `task.submitted`, `task.released`, `task.lease_expired`, `task.returned` and `task.cancelled`. The builder is set by `task.claimed` and cleared when the task returns to Ready or Backlog or is cancelled.
+- `tasks`: state, round, holder, builder, minimum strength rank, contract version. The holder is set by `task.claimed` and by the event that gives a builder a fresh lease (after a failed review, an approved action, or the owner offering the task again), and by `action.lease_granted` when an approved action waited for a builder that held something else. It is cleared by `task.submitted`, `task.released`, `task.lease_expired`, `task.returned` and `task.cancelled`. The builder is set by `task.claimed` and cleared when the task returns to Ready or Backlog or is cancelled.
 - `criteria`: state. `reviews`: verdict. `actions`: state.
 - `holds`: the open set with reasons.
 - `rule_checks`: result, and override (who and when; the reason is text and outside the replay). `rules`: enabled and current version.
@@ -887,7 +891,7 @@ Every track starts from the contract. B and C build against the gating and trans
 Version 1 is done when every line below is shown to hold.
 
 - [ ] A task added through the form reaches Done through a builder seat and a reviewer seat that the app started from the owner's connected logins, with no manual database change and no terminal.
-- [ ] Every command in that run that has a row in the lifecycle table wrote the events the table names for it, plus only the rule check, job, hold and Needs you events this PRD requires alongside them, and the replay test passes on its log.
+- [ ] Every command in that run that has a row in the lifecycle table wrote the events the table names for it, plus only the rule check, job, hold, Needs you, `credential.switched` and `action.lease_granted` events this PRD requires alongside them, and the replay test passes on its log.
 - [ ] The task page shows steps that sum to the task's lifetime to within one second.
 - [ ] Every line of Acceptance criteria for Credentials holds. The line on a Claude reset grant is shown only if a test account with a reset grant exists.
 - [ ] Each of the Claude, Codex, Gemini and Grok logins can be added and verified through the pop-up.

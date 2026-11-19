@@ -5,19 +5,28 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has a skeleton and no product behavior yet. The repository holds
-the documentation, the research behind its practices, and the scripts and
-checks that keep them consistent, plus:
+leverage has a skeleton and its contract, and no product behavior yet. The
+repository holds the documentation, the research behind its practices, and
+the scripts and checks that keep them consistent, plus:
 
 - `api/`: a Rails application in API mode that answers `GET /v1/health`,
   with Minitest tests;
+- `api/contract/`: the contract every part is built against (the fixed
+  lists, event payloads, state and step tables, hooks, jobs, roles, timers,
+  Needs you, the interface schema and the golden traces), described in its
+  [README](api/contract/README.md); `api/db/`: the migrations and
+  `structure.sql` for every table of the Data model;
+  `api/lib/leverage/`: `Leverage::Contract`, which reads the contract, and
+  `Leverage::Gating`, the gating interface with a stand-in;
 - `mac/`: a Swift package with the library LeverageKit, the helper
   LeverageHelper and the Mac app LeverageApp, with Swift Testing tests;
 - `compose.yaml` and `.env.example`: the API and PostgreSQL in Docker
   containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md);
-- `.github/workflows/ci.yml`: the API and Swift test suites and the import
-  check on every pull request.
+- `.github/workflows/ci.yml`: the API and Swift test suites, the
+  migrations-from-zero check and the import check on every pull request;
+  `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
+  checks, and the comparison of the PRD's tables with the contract.
 
 Update this file in the same pull request that changes any of that.
 
@@ -133,6 +142,10 @@ python3 scripts/check_rules.py                       # architecture rules
 python3 scripts/test_check_rules.py                  # self-test of that check
 python3 scripts/check_imports.py                     # dependency directions
 python3 scripts/test_check_imports.py                # self-test of that check
+python3 scripts/check_registry.py                    # PRD lists vs the registry
+python3 scripts/test_check_registry.py               # self-test of that check
+python3 scripts/check_contract_tables.py             # PRD tables vs the contract
+python3 scripts/test_check_contract_tables.py        # self-test of that check
 ```
 
 CI also runs the API's tests and RuboCop, and the Swift build and tests, listed under "Build, test, and run" below.
@@ -176,6 +189,7 @@ The API (`api/`):
 ```bash
 docker compose build                                 # build the API image
 docker compose run --rm api bin/rails test           # tests, against PostgreSQL
+docker compose run --rm --no-deps api bin/rails zeitwerk:check  # autoloading
 docker compose run --rm api bin/rubocop              # style
 docker compose up -d                                 # run the API and the database
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
@@ -184,6 +198,18 @@ docker compose down                                  # stop; the data is kept
 
 `API_PORT` in `.env` moves the API off port 3000 when that port is taken;
 use the same port in the `curl` line.
+
+The contract tests need no database. While you change the code, run them
+from your checkout through a bind mount, without rebuilding the image:
+
+```bash
+docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test
+```
+
+When several checkouts (git worktrees) of this repository run containers at
+once, export `COMPOSE_PROJECT_NAME` and `API_IMAGE_TAG` with a value of
+their own in each, so that each has its own containers, image tag and
+database volume.
 
 The Mac side (`mac/`):
 

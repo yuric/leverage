@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "registry.json",
+  "description": "The shape of the contract's registry: the fixed lists and the names every other contract file uses. Membership between lists is checked by test/contract/registry_test.rb; the four lists the PRD also holds are compared with it by scripts/check_registry.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_types", "hold_reasons", "refusals", "check_results", "release_reasons", "next_kinds",
+    "step_kinds", "needs_you_items", "hooks", "custom_rule_hooks", "commands", "operations", "job_kinds",
+    "guards", "due_time_sources", "policy_effects", "credential_providers", "lists"
+  ],
+  "properties": {
+    "event_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "group", "subject_kinds", "schema_versions", "written_as_side_event"],
+        "properties": {
+          "type": {"$ref": "#/$defs/dotted"},
+          "group": {"type": "string", "minLength": 1},
+          "subject_kinds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]}
+          },
+          "schema_versions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1}
+          },
+          "written_as_side_event": {"type": "boolean"}
+        }
+      }
+    },
+    "hold_reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "lease_clock", "in_blocked", "step", "needs_you_item"],
+        "properties": {
+          "reason": {"$ref": "#/$defs/name"},
+          "lease_clock": {"enum": ["pauses", "runs", "no_lease"]},
+          "in_blocked": {"type": "boolean"},
+          "step": {"$ref": "#/$defs/name"},
+          "needs_you_item": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]}
+        }
+      }
+    },
+    "refusals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "precedence", "claims_only", "owner_only"],
+        "properties": {
+          "code": {"$ref": "#/$defs/name"},
+          "precedence": {"anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+          "claims_only": {"type": "boolean"},
+          "owner_only": {"type": "boolean"}
+        }
+      }
+    },
+    "check_results": {"$ref": "#/$defs/names"},
+    "release_reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "chosen_by"],
+        "properties": {
+          "reason": {"$ref": "#/$defs/name"},
+          "chosen_by": {"enum": ["seat", "app"]}
+        }
+      }
+    },
+    "next_kinds": {"$ref": "#/$defs/names"},
+    "step_kinds": {"$ref": "#/$defs/names"},
+    "needs_you_items": {"$ref": "#/$defs/names"},
+    "hooks": {"$ref": "#/$defs/dotted_names"},
+    "custom_rule_hooks": {"$ref": "#/$defs/dotted_names"},
+    "commands": {"$ref": "#/$defs/names"},
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation_id", "method", "path", "caller", "commands", "tag"],
+        "properties": {
+          "operation_id": {"$ref": "#/$defs/name"},
+          "method": {"enum": ["GET", "POST"]},
+          "path": {"type": "string", "pattern": "^/v1(/([a-z0-9-]+|\\{[a-z]+\\}))+$"},
+          "caller": {"$ref": "#/$defs/name"},
+          "commands": {"$ref": "#/$defs/names"},
+          "tag": {"$ref": "#/$defs/name"}
+        }
+      }
+    },
+    "job_kinds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "input_component", "result_component"],
+        "properties": {
+          "kind": {"$ref": "#/$defs/name"},
+          "input_component": {"$ref": "#/$defs/component"},
+          "result_component": {"$ref": "#/$defs/component"}
+        }
+      }
+    },
+    "guards": {"$ref": "#/$defs/names"},
+    "due_time_sources": {"$ref": "#/$defs/dotted_names"},
+    "policy_effects": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/dotted"},
+      "additionalProperties": {"$ref": "#/$defs/names"}
+    },
+    "credential_providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "kind", "provider_group"],
+        "properties": {
+          "provider": {"$ref": "#/$defs/name"},
+          "kind": {"$ref": "#/$defs/name"},
+          "provider_group": {"$ref": "#/$defs/name"}
+        }
+      }
+    },
+    "lists": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/name"},
+      "additionalProperties": {"$ref": "#/$defs/names"}
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+    "dotted": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+    "component": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$"},
+    "names": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/name"}
+    },
+    "dotted_names": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/dotted"}
+    }
+  }
+}

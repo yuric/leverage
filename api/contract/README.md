@@ -1,0 +1,349 @@
+# The contract
+
+This folder is the one home of everything two parts of leverage share: the
+fixed lists, the event payload schemas, the state, step, hook, job, role,
+timer and Needs you tables, the interface schema and the golden traces.
+
+What it must contain is set by the PRD's Contract milestone
+([Build order and tracks](../../docs/PRD.md#build-order-and-tracks)). The
+PRD says what each list means; this folder says how it is written down.
+Nothing here restates a PRD rule: a file names a PRD value by its spelling
+and leaves its meaning to the PRD.
+
+## Files
+
+| File | What it holds |
+| --- | --- |
+| `registry.json` | The fixed lists and every name the other files use. |
+| `payloads/<type>.v<n>.json` | One JSON Schema per event type and version. |
+| `state_machine.json` | Each command: from-state, guard, to-state, caller, hook, events. |
+| `steps.json` | The step kinds and the events that open and close each. |
+| `hooks.json` | The hooks, what a failed gate does, hashed inputs, moment names. |
+| `shipped_rules.json` | The seven shipped rules, their version-1 fields. |
+| `jobs.json` | The job kinds: who claims them, timeouts, their input and result components. |
+| `roles.json` | The four seat roles: may change, may read, calls. |
+| `timers.json` | Each timer: scope, due-time source, events. |
+| `needs_you.json` | The Needs you items, their choices and the facts each stores. |
+| `readers.json` | The credential readers per provider, and which are provisional. |
+| `openapi.json` | The agent, owner and helper interfaces, in OpenAPI 3.1. |
+| `traces/<nn>-<name>.json` | The golden traces. |
+| `meta/<file>.schema.json` | The shape of each data file above, in JSON Schema 2020-12. |
+| [`decisions.md`](decisions.md) | The choices made where the PRD leaves a gap, under the IDs the files cite (`plan SM-24`, `"decision": "DB-31"`). |
+
+The tests under `api/test/contract/` validate each data file against its
+meta-schema and check every name it uses against `registry.json`.
+
+## Formats
+
+- **JSON, everywhere.** Ruby (`json`), Python (`json`) and Swift
+  (`JSONDecoder`) all read it with no extra parser. Two-space indentation, a
+  newline at the end, UTF-8. An array of small objects may keep one object
+  per line.
+- **JSON Schema 2020-12** for every schema, with
+  `"$schema": "https://json-schema.org/draft/2020-12/schema"`.
+  `json_schemer` (in `api/Gemfile`) validates them.
+- **OpenAPI 3.1** for `openapi.json`.
+- No comments inside JSON. A schema explains itself in `description`; a
+  table row cites the PRD in a field the file's meta-schema defines.
+
+## Names
+
+- Values of every list are lower snake case: `in_review`,
+  `credential_limit`, `not_suited_to_this_seat`.
+- Event types and hooks keep the PRD's dotted form: `task.claimed`,
+  `task.before_ready`. Four hooks share their name with an event type
+  (`action.requested`, `review.failed`, `question.asked`, `cost.reported`);
+  they are still two lists, `hooks` and `event_types`.
+- A `table.column` string names a database column: `tasks.lease_due_at`.
+- Operation ids are snake case (`claim_next_task`); OpenAPI component names
+  are upper camel case (`RuleCheckJobInput`); path segments are lower case
+  with hyphens (`/v1/tasks/claim-next`) and path parameters are `{id}`,
+  `{cid}`, `{aid}`, `{qid}`, `{key}`, `{provider}`.
+- JSON fields are the Data model's column names in snake case. A reference
+  to a row is `<name>_id`; a polymorphic reference is `<name>_kind` plus
+  `<name>_id`. `test/contract/columns_test.rb` holds the interface
+  components, the shipped rules and the traces to the columns of
+  `api/test/db/expected_schema.rb`, with a short cited list of fields that
+  are not a column.
+- A duration that is a setting is integer seconds with a `_seconds` suffix:
+  `workspaces.lease_length_seconds`, `rule_versions.queue_timeout_seconds`.
+- Two columns do not carry the PRD's word, because Active Record reserves
+  it: a step's class is `task_steps.step_class` and a briefing's hash is
+  `briefing_acknowledgements.briefing_hash`. `steps.json` keeps `class` for
+  the PRD's step table it copies.
+- Use the PRD's [Terms](../../docs/PRD.md#terms). A word the PRD does not
+  have is not coined here.
+
+## `registry.json`
+
+The registry is the authority for its lists. Every other contract file, test
+and track uses its names and never types a list of its own. Its shape is
+`meta/registry.schema.json`; its consistency is `registry_test.rb`.
+
+Four lists are also tables or sentences in the PRD, and
+`scripts/check_registry.py` (the "Registry matches the PRD" job) fails when
+the two differ:
+
+| Key | Entry | Compared with the PRD |
+| --- | --- | --- |
+| `event_types` | `type`, `group` (the PRD's group cell), `subject_kinds`, `schema_versions`, `written_as_side_event` | type and group |
+| `hold_reasons` | `reason`, `lease_clock` (`pauses`, `runs`, `no_lease`), `in_blocked`, `step`, `needs_you_item` | reason, lease clock, In Blocked, step |
+| `refusals` | `code`, `precedence` (1 is returned first; `null` for a claims-only code), `claims_only`, `owner_only` | code, order, claims only, owner only |
+| `check_results` | a string | the value |
+
+What the other fields mean:
+
+- `subject_kinds` lists the `subject_kind` values an event of that type may
+  carry, each from `lists.event_subject_kinds`; `null` in the list means
+  the event may have no subject, because it is about the task, the project
+  or the workspace itself.
+- `written_as_side_event` is true for the types any command may write
+  beside the events of its own row, as the paragraph under the PRD's
+  lifecycle table lists them: every `check.*` and `job.*` type, `hold.*`,
+  `inbox.*`, `credential.switched`, `action.lease_granted` and
+  `action.revoked`.
+- `needs_you_item` is the item the hold's row of the PRD's Needs you
+  choices table opens, from `needs_you_items`, or `null` when none does.
+
+The other keys are lists the PRD does not table, or names other files need:
+
+| Key | What it is |
+| --- | --- |
+| `release_reasons` | The reasons `task.released` carries. `chosen_by: seat` reasons are the ones a seat may send with release; `chosen_by: app` reasons are written by the server. Kept in the registry only. |
+| `next_kinds` | The kinds of `GET /v1/next`, in precedence order: the first true one is returned. |
+| `step_kinds` | The step kinds. `steps.json` gives each its class and events. |
+| `needs_you_items` | The Needs you items, one per row of the PRD's Needs you choices table. `needs_you.json` gives each its choices. |
+| `hooks` | Every hook. `hooks.json` gives each its details. |
+| `custom_rule_hooks` | The hooks a custom rule may use. |
+| `commands` | Every command of the state table: the lifecycle rows, the commands with no lifecycle row, and the timers, which the server runs as commands with the app as caller. Each has one or more rows in `state_machine.json`. |
+| `operations` | Every HTTP call: `operation_id`, `method` (`GET` reads, `POST` changes something), `path`, `caller`, `commands` (the `commands` it can run, or `["read"]`), `tag`. `openapi.json` has exactly these operations. |
+| `job_kinds` | The job kinds, each naming the `openapi.json` components that hold its input and result shapes. |
+| `guards` | The conditions a state-table row or a conditional event may name. |
+| `due_time_sources` | The columns a timer's due time is read from. |
+| `policy_effects` | For each policy hook, the effects an `applied` check may record. |
+| `credential_providers` | The nine providers with their `kind` and `provider_group`. The provider rule alone compares by `provider_group`, so that a login and an API token of one vendor count as one provider. |
+| `lists` | Every other closed vocabulary, as `{name: [value]}`. |
+
+An operation's `caller`:
+
+| Caller | Who |
+| --- | --- |
+| `any` | Any signed-in seat. |
+| `builder`, `reviewer` | A seat with that role. |
+| `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
+| `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts. |
+| `job_holder` | The seat that claimed the job. |
+| `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
+| `helper` | The helper, with its own token. |
+| `public` | No sign-in; the infrastructure health check only. |
+
+### Adding a name
+
+- **A value of one of the four PRD-compared lists** is a change to the PRD
+  first. Edit the PRD table or sentence and the registry in the same pull
+  request; the check fails until both agree.
+- **A name another file needs** (a command, a guard, a due-time source, a
+  list value) is added to its list here with one small edit, in the same
+  pull request as the file that uses it. Do not reformat the file.
+- **A new event type** needs a PRD change and a `payloads/<type>.v1.json`.
+
+## Event payloads
+
+`payloads/<type>.v<n>.json` holds version `n` of `<type>`'s payload schema,
+one file for each number in the type's `schema_versions`. Every file follows
+`meta/payload.schema.json`:
+
+- `title` is `"<type> v<n>"`; the root is `"type": "object"` with
+  `"additionalProperties": false`, `properties`, `required` and at least one
+  entry in `examples`, each of which validates.
+- A payload holds ids, numbers and short fixed values only (PRD, Event log,
+  [principle 7](../../docs/PRD.md#principles)). Every string property, at
+  any depth, is closed: an `enum` or `const` drawn from a registry list,
+  `"format": "uuid"`, or `"format": "date-time"`. There is no free text, so
+  a reason a model or a person wrote stays on its own row, never in the log.
+- An id is `<name>_id` with `"format": "uuid"`. A credential is named by
+  `credential_id` only.
+- A time is an RFC 3339 string with `"format": "date-time"`. Tokens are
+  integers. Spend is a JSON number in US dollars, as reported, with at most
+  six decimal places (the database keeps `numeric(14,6)`).
+- A field that may be absent in fact is required and `null`, so every
+  version has one shape.
+
+**Versioning.** A released version is never edited. A change adds
+`payloads/<type>.v<n+1>.json` and appends `n+1` to the type's
+`schema_versions`; the server writes the newest version, and every reader
+handles every listed version. Old events are never rewritten. Until the
+pull request that adds a type merges, its `v1` may still change.
+
+## The event record
+
+The PRD's [event record](../../docs/PRD.md#the-event-record) is the
+authority. How its fields are filled:
+
+- `actor_kind` is `owner`, `seat` or `app`; `actor_id` is the user, the
+  seat, the helper for an event its report caused, or `null` for the
+  server's own timers and requests.
+- `round` is `null` exactly when `task_id` is `null`.
+- `subject_kind` is `null` when the event is about the task, the project or
+  the workspace itself; otherwise it is one of the type's `subject_kinds`.
+- `command_id` is the caller's `Idempotency-Key`. A helper report is a
+  command, so its events carry the helper's key. Events the server writes on
+  its own carry none.
+- `at` is the database clock, read once after the workspace lock, and every
+  event of one command shares it. `effective_at` equals `at` except for a
+  timer's events, which carry the due time.
+
+## The state table
+
+`state_machine.json` has one group per row of the PRD's lifecycle table
+(`source: prd`, with the row's six cells verbatim in `prd_cells`) and one
+per set of commands the table does not list (`source: derived`, with the
+PRD lines and the plan decision). Each group has rows, one per command,
+from-state and guard:
+
+- `from` and `to` are task states. `from: null` means the command does not
+  read a task's state (Add task has no task yet).
+- `guard` is a conjunction of guards from the registry's `guards`. For each
+  command and from-state, every combination of the guard families its rows
+  name matches exactly one row; a family a row does not name does not
+  matter. A command and state with no row is refused with `invalid_state`.
+- `events` are always written; `conditional_events` are written when their
+  `when` guard holds. The PRD's Events cell is these two together.
+- `side_events` are the events the paragraph under the PRD's lifecycle
+  table lets any command write beside its row. Two that a verdict writes
+  and that paragraph does not name, `cost.reported` and `project.paused`
+  (PRD Cost), are declared once in `side_event_exceptions`.
+- `builder_lease` is `claim`, `fresh`, `ends` or `null`. Every event that
+  grants a fresh lease names the seat in `lease_seat_id`.
+- `holds_opened` and `holds_closed` name hold reasons; `refusal` marks a
+  refused row, which has no `to` and no events.
+- `commands` gives each command's `work_call`, `blocked_by_hold` and
+  `allowed_while_pending`, with a `note` where the PRD needs reading;
+  `action_machine` is the outward action's own states. A guard about one
+  action names the `action_states` it holds in, and every action event a
+  row writes is a move of `action_machine` from each of them.
+- An operation that runs another command's rows names both (the verdict
+  runs `pass_review` or `fail_review`; a job result may run
+  `approve_action`; an override of the check that stopped an action runs
+  `approve_action`), so the lease rule of the run command applies.
+- `who_in_other_rows` on a group names a caller of the PRD's Who may ask
+  cell whose part other rows write (the app's own holds).
+
+`scripts/check_contract_tables.py` (in the "Registry matches the PRD" job)
+compares every `prd_*` field and every `source: prd` group here (their
+from-states, to-states, callers, hooks and events), in `steps.json`,
+`hooks.json`, `needs_you.json` (with the operations of the choices),
+`roles.json` and `shipped_rules.json`, the agent calls and `GET /v1/next`
+kinds of the registry, and the commands a hold blocks, with the PRD's
+tables. A From cell of "Any" means every state but Done and Cancelled; a
+To cell "X, once ..." also names the state the task starts from.
+
+## Golden traces
+
+Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
+(settings, users, helpers, credentials, seats, projects and rules that
+exist before the trace starts), then `commands` in order. Each command gives
+`at`, `caller`, `command` (from `commands`), `operation_id` (or `null` for a
+timer), `key`, `path_params`, `body` and `expect`: the `outcome`, the
+`refusal`, every event it writes in `seq` order, the steps it opens and
+closes, and optionally `result_fields`, fields of the result the trace
+fixes (trace 05 shows the credential and model its claims run on).
+
+Values in a trace are written as symbols, never as literal ids or times:
+
+| Form | Means | Bound to |
+| --- | --- | --- |
+| `$kind:name` | The id of a row, or a key (`$task:1`, `$seat:builder`, `$key:claim`). | A UUIDv5 of the symbol under one fixed namespace. |
+| `@event:n` | The trace's n-th expected event, counted from 1 across all commands. Each expected event names itself in `ref`. | That event's id. |
+| `@t:s` | `s` seconds after the trace starts (may be negative). | An ISO 8601 instant. |
+| `app` | As a `caller`: the server or a timer. | Itself. |
+
+`Leverage::Contract::TraceBinder` does the binding and raises on any other
+string that starts with `$` or `@`. An expected event lists every column
+but `workspace_id` and `seq`, with its full payload: after binding, the
+payload validates against its type's schema unchanged, and a field the
+writer adds that the trace does not list is a failure. The events that
+`setup` implies (the shipped rules' `rule.created`, for instance) are not
+part of the trace. Setup rows and step rows use column names; a rules row
+also carries `current_version_id`, the version its checks name.
+
+How the traces write what the PRD leaves to the writer:
+
+- **Timers** are commands of their own, with caller `app`, no operation and
+  no key. Their events carry the due time as `effective_at`.
+- **The server's own requests** inside a seat's command (the checks and
+  jobs at `action.requested`) carry actor `app` and no key. Every other
+  event of a seat's or the owner's command carries that command's key, or
+  the key of the pending command it completes.
+- **A check's identity** (`subject_kind`, `subject_id`, `input_hash`) is
+  in `check.queued` and `check.finished`; the traces' hashes are made-up
+  digests, the same for every attempt of one check.
+  `action.lease_granted` carries actor `app` and the key of the command that
+  frees the builder.
+- **A pending transition's completion** carries the original requester's
+  key, and its `cause_id` is the `check.finished` that completed it, even
+  inside another caller's command.
+- **Order** inside a command: the hook's check events, the row's events,
+  `cost.reported`, then the other side events.
+- **Round**: every event of a command carries the task's round before the
+  command; `review.failed` and `task.returned_for_rework` raise it for what
+  follows, and a step they open carries the new round.
+- **`cause_id`** is set only for a chain the PRD names or that is plain (a
+  completion, a helper report's later events, an item opened by a hold);
+  otherwise it is `null`.
+- **Jobs** are claimed oldest first. Each attempt is a job of its own:
+  `job.requeued` is written on the job that timed out, and the next
+  `check.queued` names the new one.
+
+## How each side reads it
+
+- **Ruby.** `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads
+  each file once, deep-frozen: `registry`, `list(name)`,
+  `event_type(type)`, `payload_schema(type, version)`,
+  `validate_payload(type, version, payload)` (returns the errors, empty
+  when valid; raises `KeyError` for an unregistered type or version),
+  `state_machine`, `steps`, `hooks`, `shipped_rules`, `jobs`, `roles`,
+  `timers`, `needs_you`, `readers`, `openapi`, `trace(name)`,
+  `meta_schema(name)` and `load(path)`. The folder is `Rails.root/contract`,
+  or this folder found from the file when Rails is not loaded. The Docker
+  build context is `api/`, so the image holds the contract.
+- **Python.** `scripts/` reads the JSON files with the standard library and
+  `docs/PRD.md` beside them. The PRD is not in the image, so every
+  comparison with the PRD is a Python check.
+- **Swift.** SwiftPM takes no resources from outside `mac/`.
+  `mac/Tests/LeverageKitTests/RegistryDecodingTests.swift` finds
+  `registry.json` from its own path and decodes it into plain `Codable`
+  structs with explicit coding keys (`.convertFromSnakeCase` would also
+  rewrite the keys of `lists`). No Swift code reads the contract at run
+  time yet.
+
+## Tests
+
+Contract tests need no database. Each starts with
+`require_relative "contract_helper"` and may `include ContractTestHelpers`
+(`registry`, `meta_errors(name, data)`, `duplicates(values)`). Each file's
+own test asserts against `registry.json`; `traces_test.rb` and
+`columns_test.rb` then tie the files to each other and to the columns. No
+test holds a copy of a PRD table or a hard-coded count. From the
+repository root, with `.env` in place:
+
+```bash
+docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test
+docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test test/contract/registry_test.rb
+python3 scripts/check_registry.py
+python3 scripts/test_check_registry.py
+python3 scripts/check_contract_tables.py
+python3 scripts/test_check_contract_tables.py
+(cd mac && swift test --filter RegistryDecodingTests)
+```
+
+`bin/rails test` runs them too, in the same process as the database tests:
+`contract_helper` then loads the application, so one Zeitwerk loader
+manages `lib/`.
+
+## Migrations
+
+A migration's timestamp is the moment it was generated
+(`bin/rails generate migration`), never a hand-typed one: a stamp set in
+the future would sort after migrations generated later and run after them
+on a fresh database. `api/db/structure.sql` is the schema.

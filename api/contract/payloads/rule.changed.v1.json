@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rule.changed v1",
+  "description": "Save: a new immutable version.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rule_version_id": {
+      "description": "The new current version's row.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "description": "The new current version number.",
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": ["rule_version_id", "version"],
+  "examples": [
+    {"rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "version": 2}
+  ]
+}

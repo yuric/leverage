@@ -31,6 +31,10 @@ module Leverage
     # Common ones are `templates`, `generators`, or `middleware`, for example.
     config.autoload_lib(ignore: %w[assets tasks])
 
+    # db/structure.sql, not schema.rb: the schema has triggers, partial and
+    # NULLS NOT DISTINCT indexes, and a deferrable constraint.
+    config.active_record.schema_format = :sql
+
     # Configuration for the application, engines, and railties goes here.
     #
     # These settings can be overridden in specific environments using the files

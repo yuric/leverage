@@ -19,7 +19,7 @@ services:
 
   api:
     build: ./api
-    image: leverage-api
+    image: leverage-api:${API_IMAGE_TAG:-local}
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432

@@ -10,6 +10,16 @@ once it makes its first release.
 
 ### Added
 
+- The contract, the PRD's Contract milestone: `api/contract/` holds the
+  fixed lists and event payload schemas, the state, step, hook, job, role,
+  timer and Needs you tables, the shipped rules, the credential readers,
+  the agent, owner and helper interfaces in OpenAPI 3.1, and eight golden
+  traces; `api/db/` holds the migrations for every table of the Data model,
+  with an append-only event log and a task state that changes only with an
+  event; `Leverage::Gating` is the gating interface, with a stand-in and a
+  conformance suite, including the re-entry of an outward action's gates.
+  Two checks compare the PRD's tables with the contract in CI. The PRD gains the eleven changes the contract needed. The format
+  is recorded in `docs/adr/0003-contract-format.md`.
 - The skeleton of the build: a Rails API in `api/` that answers
   `GET /v1/health` and turns every unhandled error into one JSON shape; a Swift
   package in `mac/` with the library LeverageKit, the helper

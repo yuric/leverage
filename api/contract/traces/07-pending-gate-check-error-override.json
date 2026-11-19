@@ -1,0 +1,191 @@
+{
+  "name": "07-pending-gate-check-error-override",
+  "description": "Complete contract meets the model-checked shipped gate at task.before_ready and answers pending. No orchestrator has polled, so the workspace's Orchestrator offline item opens; the check misses its queue timeout twice and ends in error, which holds the task with check_error and opens no task item; the owner overrides the check once, the hold closes and the pending move to Ready completes with the owner's original key; when the orchestrator polls again the workspace item closes.",
+  "covers": [
+    "PRD How a transition is gated, steps 5 and 6: a blocking model check stores the pending transition, queues a job, opens a check step and answers pending.",
+    "PRD When a check cannot run: a second miss of the queue timeout gives error; an error on a blocking rule leaves the transition pending under check_error; the override closes the hold and the transition completes in place.",
+    "PRD Event record, command_id: the completing events carry the original requester's key with cause_id set to the check.finished event.",
+    "PRD When a check cannot run, and plan SM-39: while the orchestrator is offline the workspace-level item covers the waiting check and no task item opens for check_error.",
+    "Plan TM-1: check_queue_timeout first and second miss and orchestrator_offline run as timers with the app as caller and their due time as effective_at."
+  ],
+  "setup": {
+    "settings": {},
+    "users": [
+      {"id": "$user:owner"}
+    ],
+    "helpers": [
+      {"id": "$helper:mac", "name": "Owner's Mac"}
+    ],
+    "credentials": [],
+    "seats": [
+      {"id": "$seat:orchestrator", "name": "Orchestrator", "provider": "codex", "model": "codex-model-1", "effort": "high", "role": "orchestrator", "strength_rank": 2, "credential_id": null, "enabled": true, "paused": false, "last_polled_at": "@t:-60"}
+    ],
+    "projects": [
+      {"id": "$project:site", "name": "Website", "budget": null, "spent": 0, "paused": false}
+    ],
+    "rules": [
+      {"id": "$rule:acceptance_criteria", "key": "acceptance_criteria", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:acceptance_criteria_1"},
+      {"id": "$rule:specific_details", "key": "specific_details", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:specific_details_1"},
+      {"id": "$rule:ask_orchestrator_first", "key": "ask_orchestrator_first", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:ask_orchestrator_first_1"},
+      {"id": "$rule:different_provider_review", "key": "different_provider_review", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:different_provider_review_1"},
+      {"id": "$rule:escalate_after_failed_reviews", "key": "escalate_after_failed_reviews", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:escalate_after_failed_reviews_1"},
+      {"id": "$rule:project_budget_pause", "key": "project_budget_pause", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:project_budget_pause_1"},
+      {"id": "$rule:orchestrator_approves_actions", "key": "orchestrator_approves_actions", "origin": "shipped", "enabled": true, "current_version": 1, "current_version_id": "$rule_version:orchestrator_approves_actions_1"}
+    ]
+  },
+  "commands": [
+    {
+      "at": "@t:0",
+      "caller": "$user:owner",
+      "command": "add_task",
+      "operation_id": "add_task",
+      "key": "$key:t1_add",
+      "path_params": {},
+      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:1", "type": "task.created", "schema_version": 1, "at": "@t:0", "effective_at": "@t:0", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_add", "payload": {"state": "backlog"}}
+        ],
+        "steps_opened": [
+          {"task_id": "$task:1", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:1"}
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:10",
+      "caller": "$user:owner",
+      "command": "complete_contract",
+      "operation_id": "complete_contract",
+      "key": "$key:t1_complete",
+      "path_params": {"id": "$task:1"},
+      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "details": "Use the figures in the brief.", "criteria": [{"text": "Criterion build of task 1 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "expect": {
+        "outcome": "pending",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:2", "type": "check.finished", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_criteria", "cause_id": null, "command_id": "$key:t1_complete", "payload": {"hook": "task.before_ready", "rule_id": "$rule:acceptance_criteria", "rule_version_id": "$rule_version:acceptance_criteria_1", "result": "passed", "effect": null, "wait_cause": null, "subject_kind": null, "subject_id": null, "input_hash": "b244976f1ce9c1209a24222176282b9ebb7bfbf690acb1388cfe176fddf61601"}},
+          {"ref": "@event:3", "type": "check.queued", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_details", "cause_id": null, "command_id": "$key:t1_complete", "payload": {"hook": "task.before_ready", "rule_id": "$rule:specific_details", "rule_version_id": "$rule_version:specific_details_1", "attempt_number": 1, "job_id": "$job:t1_details", "blocking": true, "claimant_seat_id": null, "pending_transition_id": "$pending_transition:t1_ready", "action_id": null, "subject_kind": null, "subject_id": null, "input_hash": "cde192e4791a05f15aa5aa8b0b7a23d70be50b9cff80b2558b1256a26942e73f"}},
+          {"ref": "@event:4", "type": "job.queued", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_details", "cause_id": null, "command_id": "$key:t1_complete", "payload": {"kind": "rule_check"}}
+        ],
+        "steps_opened": [
+          {"task_id": "$task:1", "kind": "check", "step_class": "rule_check", "round": 0, "subject_kind": "pending_transition", "subject_id": "$pending_transition:t1_ready", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:3"}
+        ],
+        "steps_closed": [
+          {"task_id": "$task:1", "kind": "wait_contract", "closing_event_id": "@event:3"}
+        ]
+      }
+    },
+    {
+      "note": "No orchestrator has polled for 90 seconds (last at -60) and a check waits.",
+      "at": "@t:40",
+      "caller": "app",
+      "command": "orchestrator_offline",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:5", "type": "inbox.opened", "schema_version": 1, "at": "@t:40", "effective_at": "@t:30", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": null, "round": null, "subject_kind": "inbox_item", "subject_id": "$inbox:orchestrator_offline", "cause_id": null, "command_id": null, "payload": {"kind": "orchestrator_offline"}}
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "First miss: queued at 10, queue timeout 120 s.",
+      "at": "@t:140",
+      "caller": "app",
+      "command": "check_queue_timeout",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:6", "type": "job.timed_out", "schema_version": 1, "at": "@t:140", "effective_at": "@t:130", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_details", "cause_id": null, "command_id": null, "payload": {}},
+          {"ref": "@event:7", "type": "job.requeued", "schema_version": 1, "at": "@t:140", "effective_at": "@t:130", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_details", "cause_id": null, "command_id": null, "payload": {}},
+          {"ref": "@event:8", "type": "check.queued", "schema_version": 1, "at": "@t:140", "effective_at": "@t:130", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_details", "cause_id": null, "command_id": null, "payload": {"hook": "task.before_ready", "rule_id": "$rule:specific_details", "rule_version_id": "$rule_version:specific_details_1", "attempt_number": 2, "job_id": "$job:t1_details_2", "blocking": true, "claimant_seat_id": null, "pending_transition_id": "$pending_transition:t1_ready", "action_id": null, "subject_kind": null, "subject_id": null, "input_hash": "cde192e4791a05f15aa5aa8b0b7a23d70be50b9cff80b2558b1256a26942e73f"}}
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "Second miss: requeued at 130.",
+      "at": "@t:260",
+      "caller": "app",
+      "command": "check_queue_timeout",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:9", "type": "job.timed_out", "schema_version": 1, "at": "@t:260", "effective_at": "@t:250", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_details_2", "cause_id": null, "command_id": null, "payload": {}},
+          {"ref": "@event:10", "type": "check.finished", "schema_version": 1, "at": "@t:260", "effective_at": "@t:250", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_details", "cause_id": null, "command_id": null, "payload": {"hook": "task.before_ready", "rule_id": "$rule:specific_details", "rule_version_id": "$rule_version:specific_details_1", "result": "error", "effect": null, "wait_cause": null, "subject_kind": null, "subject_id": null, "input_hash": "cde192e4791a05f15aa5aa8b0b7a23d70be50b9cff80b2558b1256a26942e73f"}},
+          {"ref": "@event:11", "type": "hold.opened", "schema_version": 1, "at": "@t:260", "effective_at": "@t:250", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_check_error", "cause_id": "@event:10", "command_id": null, "payload": {"reason": "check_error", "rule_id": "$rule:specific_details", "credential_id": null}}
+        ],
+        "steps_opened": [
+          {"task_id": "$task:1", "kind": "wait_owner", "step_class": "waiting", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_check_error", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:11"}
+        ],
+        "steps_closed": [
+          {"task_id": "$task:1", "kind": "check", "closing_event_id": "@event:11"}
+        ]
+      }
+    },
+    {
+      "at": "@t:400",
+      "caller": "$user:owner",
+      "command": "override_check",
+      "operation_id": "override_check",
+      "key": "$key:t1_override",
+      "path_params": {"id": "$rule_check:t1_details"},
+      "body": {"reason": "The details were checked by hand."},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:12", "type": "check.overridden", "schema_version": 1, "at": "@t:400", "effective_at": "@t:400", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_details", "cause_id": null, "command_id": "$key:t1_override", "payload": {}},
+          {"ref": "@event:13", "type": "hold.closed", "schema_version": 1, "at": "@t:400", "effective_at": "@t:400", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_check_error", "cause_id": null, "command_id": "$key:t1_override", "payload": {"reason": "check_error", "rule_id": "$rule:specific_details", "credential_id": null, "lease_seat_id": null, "wait_cause": null}},
+          {"ref": "@event:14", "type": "task.contract_changed", "schema_version": 1, "at": "@t:400", "effective_at": "@t:400", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": "@event:10", "command_id": "$key:t1_complete", "payload": {"contract_version": 1, "added_criterion_ids": ["$criterion:t1_build", "$criterion:t1_review"], "reset_criterion_ids": [], "removed_criterion_ids": [], "added_action_ids": [], "removed_action_ids": []}},
+          {"ref": "@event:15", "type": "task.ready", "schema_version": 1, "at": "@t:400", "effective_at": "@t:400", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": "@event:10", "command_id": "$key:t1_complete", "payload": {"wait_cause": null}}
+        ],
+        "steps_opened": [
+          {"task_id": "$task:1", "kind": "wait_ready", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:15"}
+        ],
+        "steps_closed": [
+          {"task_id": "$task:1", "kind": "wait_owner", "closing_event_id": "@event:13"}
+        ]
+      }
+    },
+    {
+      "note": "The orchestrator polled at 490; the sweep closes the workspace item.",
+      "at": "@t:500",
+      "caller": "app",
+      "command": "orchestrator_offline",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {"ref": "@event:16", "type": "inbox.resolved", "schema_version": 1, "at": "@t:500", "effective_at": "@t:490", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": null, "round": null, "subject_kind": "inbox_item", "subject_id": "$inbox:orchestrator_offline", "cause_id": null, "command_id": null, "payload": {"choice": null}}
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    }
+  ]
+}

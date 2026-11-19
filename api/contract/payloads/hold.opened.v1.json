@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hold.opened v1",
+  "description": "A hold opens. The subject is the hold.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reason": {
+      "description": "The hold reason.",
+      "enum": ["owner_question", "owner_approval", "access", "budget", "project_paused", "contract_incomplete", "check_error", "rounds_exceeded", "action_stopped", "action_unconfirmed", "claim_gate_failed", "rerun_limit", "owner_hold", "seat_paused", "credential_limit", "credential_signed_out"]
+    },
+    "rule_id": {
+      "description": "The rule that caused the hold, where one applies.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "credential_id": {
+      "description": "The credential that caused the hold, where one applies. For credential_limit, the candidate that resets first (the wait_limit step's subject).",
+      "type": ["string", "null"],
+      "format": "uuid"
+    }
+  },
+  "required": ["reason", "rule_id", "credential_id"],
+  "examples": [
+    {"reason": "owner_hold", "rule_id": null, "credential_id": null},
+    {"reason": "claim_gate_failed", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "credential_id": null},
+    {"reason": "credential_limit", "rule_id": null, "credential_id": "e9a2c5f7-3b18-4d64-a0c9-52e7f1b4d683"}
+  ]
+}

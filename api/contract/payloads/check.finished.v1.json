@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check.finished v1",
+  "description": "A rule check row gets its result. Codes only: the checker's reason is text and stays on the rule_checks row.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hook": {
+      "description": "The hook the check ran at.",
+      "enum": ["task.before_ready", "task.before_claim", "task.before_submit", "task.before_done", "action.requested", "review.assign", "review.failed", "question.asked", "cost.reported"]
+    },
+    "rule_id": {
+      "description": "The rule.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "rule_version_id": {
+      "description": "The rule version the check ran against.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "result": {
+      "description": "The result.",
+      "enum": ["passed", "failed", "not_applicable", "applied", "error", "withdrawn"]
+    },
+    "effect": {
+      "description": "For applied, the policy's effect; else null.",
+      "enum": ["approved", "stopped", "passed_to_owner", "refused", "same_builder", "to_ready", "escalated", "to_orchestrator", "to_owner", "project_paused", "task_held", null]
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    },
+    "subject_kind": {
+      "description": "The kind of the check's subject: seat at task.before_claim and review.assign, question at question.asked, action at action.requested, review at review.failed, event at cost.reported; null at a hook with no subject (L408).",
+      "enum": ["seat", "question", "action", "review", "event", null]
+    },
+    "subject_id": {
+      "description": "The check's subject, or null.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "input_hash": {
+      "description": "SHA-256 of the hook's hashed inputs in lower-case hex (Gating.input_hash). With task, rule version, hook, round and subject it is the check's identity (L408, L771), so replay into empty tables can insert the rule_checks row.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": ["hook", "rule_id", "rule_version_id", "result", "effect", "wait_cause", "subject_kind", "subject_id", "input_hash"],
+  "examples": [
+    {"hook": "task.before_submit", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "passed", "effect": null, "wait_cause": null, "subject_kind": null, "subject_id": null, "input_hash": "5d1e3f2a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e"},
+    {"hook": "action.requested", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "applied", "effect": "approved", "wait_cause": null, "subject_kind": "action", "subject_id": "a6d4f1b8-2c97-4e3d-8b50-1f7e9c2a6d35", "input_hash": "5d1e3f2a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e"},
+    {"hook": "task.before_claim", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "failed", "effect": null, "wait_cause": null, "subject_kind": "seat", "subject_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "input_hash": "5d1e3f2a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e"}
+  ]
+}
