@@ -23,6 +23,17 @@ Sections marked _TBD_ are undecided. Do not fill them in by guessing, and do
 not treat a plausible assumption as a decision. If a task depends on something
 undecided, stop and ask, or open an issue.
 
+## Architecture rules
+
+- **Read the rules before you change anything.** They are in the
+  [Rules](docs/ARCHITECTURE.md#rules) section of the architecture document.
+  Every rule marked Active applies to your change.
+- **Check your pull request against them before you open or update it.**
+  Answer every active rule in the "Architecture rules" section of the
+  description, from evidence in your diff, not from memory. The
+  [check-rules skill](.agents/skills/check-rules/SKILL.md) is the procedure.
+  If your change breaks a rule, stop and ask; do not answer `Complies`.
+
 ## Rules
 
 - **Do not invent requirements.** Propose them as a change to the PRD and let a
@@ -37,10 +48,10 @@ undecided, stop and ask, or open an issue.
 - **Never commit secrets.** No credentials, tokens, keys, or personal data, in
   code, docs, tests, fixtures, or commit messages. Use placeholders.
 - **Stay in scope.** Make the change that was asked for. Report unrelated
-  problems as issues instead of fixing them in passing.
-- **Do not add dependencies, licenses, or services without saying so.** Any new
-  dependency must be compatible with the MIT License and called out in the
-  pull request description.
+  problems as issues instead of fixing them in passing. Rule AR-001 has the
+  detail.
+- **Do not add dependencies, licenses, or services without saying so.** Rule
+  AR-004 says what to declare.
 - **Security-sensitive findings go through [SECURITY.md](SECURITY.md)**, not
   public issues or pull requests.
 
@@ -51,7 +62,8 @@ undecided, stop and ask, or open an issue.
   through a pull request whose checks have passed. Do not try to work around
   the ruleset; if it blocks something legitimate, say so and stop.
 - Branch from `main`, open a pull request, and fill in the template, including
-  the AI assistance section.
+  the architecture rules and AI assistance sections. `gh pr create --body`
+  skips the template, so copy its sections into the body yourself.
 - Pull request titles and commit messages follow
   [Conventional Commits](https://www.conventionalcommits.org/)
   (`docs:`, `feat:`, `fix:`, `chore:` …), written in the imperative, explaining
@@ -74,7 +86,11 @@ report work as done:
 npx markdownlint-cli2 "**/*.md"                      # Markdown lint
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
+python3 scripts/check_rules.py                       # architecture rules
 ```
+
+The last one also checks a pull request description when you give it one:
+`python3 scripts/check_rules.py --base origin/main --body-file <file>`.
 
 If a tool is not installed, say which check you could not run instead of
 claiming it passed.
@@ -88,7 +104,7 @@ or changing one:
   is `contents: read`.
 - Pin every third-party action to a full commit SHA, with the version in a
   trailing comment. Never pin to a tag or branch. Dependabot proposes the
-  updates.
+  updates, and the rules check fails on an unpinned action.
 - Never use the `pull_request_target` trigger.
 - Pass untrusted values (titles, branch names, issue text) to scripts through
   `env:`, never by interpolating `${{ … }}` into a `run:` script.

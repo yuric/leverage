@@ -10,6 +10,17 @@
 
 <!-- Commands run, tests added, or what you checked by hand. "Docs only" is a valid answer. -->
 
+## Architecture rules
+
+<!-- Answer every line. The rules are in docs/ARCHITECTURE.md, "Rules".
+     Write one of:  Complies  |  N/A — reason  |  Deviates — docs/adr/NNNN-title.md
+     The "Rules compliance" check fails while any line is unanswered. -->
+
+- AR-001:
+- AR-002:
+- AR-003:
+- AR-004:
+
 ## AI assistance
 
 <!-- Tick one. See CONTRIBUTING.md, "AI-assisted contributions". -->
@@ -21,7 +32,7 @@
 
 ## Checklist
 
-- [ ] The title follows Conventional Commits (for example `docs: clarify FR-003`).
+- [ ] The title follows Conventional Commits (for example `docs: fix a broken link`).
 - [ ] The change is focused on one thing.
 - [ ] Documentation affected by the change is updated (PRD, ARCHITECTURE, DEPLOY, AGENTS, README).
 - [ ] `CHANGELOG.md` has an entry under `Unreleased` if the change is user-visible.

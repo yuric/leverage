@@ -44,7 +44,10 @@ wise: it is the best way to find out whether the change fits the project's
    automatically.
 5. Fill in the pull request template, including the AI assistance section.
    Reference the requirement ID (`FR-…`, `NFR-…`) or issue it relates to.
-6. Add yourself to [AUTHORS](AUTHORS) in your first pull request.
+6. Answer each line of the template's "Architecture rules" section. The
+   [rules](docs/ARCHITECTURE.md#rules) are short, and that section explains
+   the three possible answers.
+7. Add yourself to [AUTHORS](AUTHORS) in your first pull request.
 
 Every change to `main` goes through a pull request, including the
 maintainer's. A maintainer will review yours when time allows. Expect
@@ -60,6 +63,7 @@ be merged:
 | Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.yaml`. | `npx markdownlint-cli2 "**/*.md"` |
 | Internal links | Links between files in the repository resolve. | `lychee --offline --include-fragments './**/*.md'` |
 | PRD requirement IDs | IDs in `docs/PRD.md` are well formed and unique. | `python3 scripts/check_prd_ids.py` |
+| Rules compliance | The description answers every active [architecture rule](docs/ARCHITECTURE.md#rules), and the parts of the rules a script can check hold. | `python3 scripts/check_rules.py --base origin/main --body-file <file>` |
 | PR title | The title follows Conventional Commits. | — |
 
 ## AI-assisted contributions
