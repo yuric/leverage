@@ -10,6 +10,11 @@ class LandingPromptTest < CommittingTestCase
   include ActionDispatch::IntegrationTest::Behavior
   include OpenapiAssertions
 
+  # openapi_assertions.rb leaves { and } raw in the pointer it hands to
+  # json_schemer, which refuses them as a URI; encode them here (notes.md,
+  # WP9, request 2).
+  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
+
   TOKEN_SHAPE = /lv[sho]_[A-Za-z0-9_-]{6,}/
 
   setup do
@@ -101,6 +106,8 @@ class LandingPromptTest < CommittingTestCase
     assert_match(/Idempotency-Key/, text)
 
     reviewer_text = text_for(@reviewer)
+    assert_match(/one review at a time/i, reviewer_text)
+    refute_match(/one task at a time/i, reviewer_text)
     assert_match %r{http://www\.example\.com/v1/reviews/claim-next}, reviewer_text
     refute_includes reviewer_text, "/v1/tasks/claim-next"
   end

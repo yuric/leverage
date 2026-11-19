@@ -103,7 +103,9 @@ class ReadSnapshotTest < CommittingTestCase
 
     assert fired
     assert_equal 1, health.fetch(:ready_tasks)
-    assert_equal 2, Task.where(workspace_id: scenario.workspace_id, state: "ready").count
+    # Uncached: the test runs inside the executor, whose query cache would answer
+    # the read's own count again.
+    assert_equal 2, Task.uncached { Task.where(workspace_id: scenario.workspace_id, state: "ready").count }
   end
 
   test "a read of an unknown workspace is a not found, never an empty answer" do

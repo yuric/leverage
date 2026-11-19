@@ -11,6 +11,11 @@ class OwnerReadsTest < CommittingTestCase
   include ActionDispatch::IntegrationTest::Behavior
   include OpenapiAssertions
 
+  # openapi_assertions.rb leaves { and } raw in the pointer it hands to
+  # json_schemer, which refuses them as a URI; encode them here (notes.md,
+  # WP9, request 2).
+  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
+
   setup do
     @owner_token = scenario.owner_token
   end
@@ -191,10 +196,10 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal Criterion.where(task_id: task.id, removed_at: nil).order(:position).pluck(:id), body["criteria"].map { |row| row["id"] }
     refute_includes body["criteria"].map { |row| row["id"] }, removed.id
     with_proof = body["criteria"].find { |row| row["id"] == criterion.id }
-    assert_equal [ { "id" => Evidence.sole.id, "criterion_id" => criterion.id, "kind" => "note", "value" => "See the notes folder." } ],
+    assert_equal [ { "id" => Evidence.where(criterion_id: criterion.id).sole.id, "criterion_id" => criterion.id, "kind" => "note", "value" => "See the notes folder." } ],
       with_proof["evidence"]
     assert_equal [], body["criteria"].find { |row| row["kind"] == "review" }["evidence"]
-    assert_equal [ { "id" => Review.sole.id, "task_id" => task.id, "round" => task.round, "reviewer_seat_id" => reviewer.id,
+    assert_equal [ { "id" => Review.where(task_id: task.id).sole.id, "task_id" => task.id, "round" => task.round, "reviewer_seat_id" => reviewer.id,
                      "lease_due_at" => body["reviews"].sole["lease_due_at"], "verdict" => nil, "failed_criteria" => [], "notes" => nil } ],
       body["reviews"]
     assert_equal Event.where(task_id: task.id).order(:seq).pluck(:seq), body["events"].map { |event| event["seq"] }

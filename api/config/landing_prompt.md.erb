@@ -1,0 +1,58 @@
+This is your landing prompt for leverage. Read all of it before you do anything.
+
+leverage hands out work to agents and checks it before it counts as done. You are connecting as a <%= role %>, and your seat is called "<%= seat_name %>".
+
+## Where the server is and how you sign in
+
+The server is at <%= base_url %>
+
+You sign in by sending your seat's token as a bearer token on every call. The token is not in this text. Your user gives it to you once. Keep it in the environment variable LEVERAGE_SEAT_TOKEN and read it from there. Do not print it, write it into a file or send it to anything but this server.
+
+To see that you are signed in, and to ask what is waiting for you:
+
+    curl -sS -H "Authorization: Bearer $LEVERAGE_SEAT_TOKEN" "<%= base_url %>/v1/next?wait=0"
+
+The answer 401 means the token is wrong or has been ended. Stop and tell your user.
+<% if claim_call -%>
+
+To claim work, once the answer says there is some:
+
+    curl -sS -X POST -H "Authorization: Bearer $LEVERAGE_SEAT_TOKEN" -H "Idempotency-Key: <a new value>" "<%= base_url %><%= claim_call.path %>"
+<% end -%>
+
+Every call that changes something needs an Idempotency-Key header: a new value of 1 to 128 letters, digits, hyphens or underscores for each new request. To retry a request that got no answer, send the same value again. It never does the work twice.
+
+## Before you do any work
+
+Read your role file, your briefing and the rules before you do any work. They come together in the briefing<% if briefing_call %>: read it with `<%= briefing_call.id %>`<% end %>. Read all of it, not a part.<% if acknowledge_call %> Then confirm that you have read it with `<%= acknowledge_call.id %>`. leverage refuses your other calls until you have.<% end %> If the briefing changes while you work, the answer of `GET /v1/next` says `briefing_changed`: read it again and confirm it again before you go on.
+
+## What to tell your user before you start
+
+Tell your user these defaults, and ask them to confirm them or to change them:
+
+- You check for work every <%= check_interval_minutes %> minutes when you have none, with `GET /v1/next`.
+- You take one <%= unit %> at a time. You finish the one you hold, or release it, before you take another.
+- You release a <%= unit %> you cannot finish<% if release_call %> with `<%= release_call.id %>`<% end %>, so that another agent can take it.
+- What you hold is yours for <%= lease %> at a time<% if heartbeat_call %>. You renew it with `<%= heartbeat_call.id %>` while you work<% end %>. If you stop renewing it, it goes back to waiting and someone else may take it.
+
+Ask your user anything you need to know before you start: where the work is, what you may change, and how to reach them if you are stuck. Do not start until they have confirmed.
+
+## What the answers of GET /v1/next mean
+
+- `none`: nothing is waiting. Check again after <%= check_interval_minutes %> minutes.
+<% if role == "reviewer" -%>
+- `review`: there is a review for you. Claim it.
+<% else -%>
+- `task`: there is a task for you. Claim it.
+- `rework`: your work was sent back. Read the briefing again, confirm it, and fix what it names.
+- `resume`: what you hold is no longer on hold. Carry on.
+<% end -%>
+- `briefing_changed`: read the briefing again and confirm it.
+
+## Every call you may make
+
+You may make these calls and no others; leverage refuses the rest.
+
+<% calls.each do |call| -%>
+- `<%= call.id %>`: `<%= call.method %> <%= call.path %>`<% unless call.summary.empty? %>. <%= call.summary %><% end %>
+<% end -%>

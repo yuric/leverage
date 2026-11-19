@@ -13,6 +13,11 @@ require "test_helper"
 class OwnerCallsTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
 
+  # openapi_assertions.rb leaves { and } raw in the pointer it hands to
+  # json_schemer, which refuses them as a URI; encode them here (notes.md,
+  # WP9, request 2).
+  def escape(template) = super.gsub("{", "%7B").gsub("}", "%7D")
+
   Outcome = Leverage::Transitions::Outcome
   Refusal = Leverage::Transitions::Refusal
 
@@ -39,7 +44,7 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
         result: { "task_id" => @task_id } },
       { op: "complete_contract", command: "complete_contract", path: "/v1/owner/tasks/#{@task_id}/complete-contract",
         body: { "title" => "Fix the totals", "goal" => "Totals add up.", "details" => nil,
-                "criteria" => [ { "text" => "The totals add up." } ], "actions" => [], "minimum_strength_rank" => nil,
+                "criteria" => [ { "text" => "The totals add up.", "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ], "actions" => [], "minimum_strength_rank" => nil,
                 "budget_cap" => nil, "work_reference" => "~/work/invoices" },
         ids: { "id" => @task_id }, result: nil },
       { op: "cancel_task", command: "cancel", path: "/v1/owner/tasks/#{@task_id}/cancel", ids: { "id" => @task_id }, result: nil },
@@ -102,7 +107,11 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       assert_equal({ "key" => "key-#{call[:op]}", "command" => call[:command], "outcome" => "completed", "refusal" => nil },
         body.slice("key", "command", "outcome", "refusal"), call[:op])
       expected = call[:result] && call[:result].merge(call[:once] || {})
-      assert_equal expected, body["result"], call[:op]
+      if expected.nil?
+        assert_nil body["result"], call[:op]
+      else
+        assert_equal expected, body["result"], call[:op]
+      end
 
       request = stand_in.requests.sole
       assert_equal call[:command], request.command
