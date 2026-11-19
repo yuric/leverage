@@ -11,7 +11,7 @@
   "setup": {
     "settings": {},
     "users": [
-      {"id": "$user:owner", "name": "Owner"}
+      {"id": "$user:owner"}
     ],
     "helpers": [
       {"id": "$helper:mac", "name": "Owner's Mac"}
@@ -54,7 +54,7 @@
           {"ref": "@event:1", "type": "task.created", "schema_version": 1, "at": "@t:0", "effective_at": "@t:0", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_add", "payload": {"state": "backlog"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_contract", "class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:1"}
+          {"task_id": "$task:1", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:1"}
         ],
         "steps_closed": []
       }
@@ -76,10 +76,10 @@
           {"ref": "@event:4", "type": "task.ready", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_complete", "payload": {"wait_cause": null}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_ready", "class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:4"}
+          {"task_id": "$task:1", "kind": "wait_ready", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:4"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_contract", "closing_event": "@event:4"}
+          {"task_id": "$task:1", "kind": "wait_contract", "closing_event_id": "@event:4"}
         ]
       }
     },
@@ -98,10 +98,10 @@
           {"ref": "@event:5", "type": "task.claimed", "schema_version": 1, "at": "@t:20", "effective_at": "@t:20", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_builder", "payload": {"seat_id": "$seat:builder", "credential_id": "$credential:claude_a", "model": "claude-model-1"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "briefing", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:5"}
+          {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:5"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_ready", "closing_event": "@event:5"}
+          {"task_id": "$task:1", "kind": "wait_ready", "closing_event_id": "@event:5"}
         ]
       }
     },
@@ -120,10 +120,10 @@
           {"ref": "@event:6", "type": "task.briefing_acknowledged", "schema_version": 1, "at": "@t:30", "effective_at": "@t:30", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_ack_30", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:6"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:6"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "briefing", "closing_event": "@event:6"}
+          {"task_id": "$task:1", "kind": "briefing", "closing_event_id": "@event:6"}
         ]
       }
     },
@@ -142,10 +142,10 @@
           {"ref": "@event:7", "type": "criterion.started", "schema_version": 1, "at": "@t:40", "effective_at": "@t:40", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_build", "cause_id": null, "command_id": "$key:t1_start_build_40", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_build", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:7"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_build", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:7"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:7"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:7"}
         ]
       }
     },
@@ -165,10 +165,10 @@
           {"ref": "@event:9", "type": "evidence.attached", "schema_version": 1, "at": "@t:300", "effective_at": "@t:300", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "evidence", "subject_id": "$evidence:t1_build_300", "cause_id": null, "command_id": "$key:t1_pass_build_300", "payload": {"criterion_id": "$criterion:t1_build", "kind": "link"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "finish", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:8"}
+          {"task_id": "$task:1", "kind": "finish", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:8"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:8"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:8"}
         ]
       }
     },
@@ -187,10 +187,10 @@
           {"ref": "@event:10", "type": "task.submitted", "schema_version": 1, "at": "@t:320", "effective_at": "@t:320", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:t1_submit_320", "payload": {"work_reference_changed": true}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_review", "class": "waiting", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:10"}
+          {"task_id": "$task:1", "kind": "wait_review", "step_class": "waiting", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:10"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "finish", "closing_event": "@event:10"}
+          {"task_id": "$task:1", "kind": "finish", "closing_event_id": "@event:10"}
         ]
       }
     },
@@ -209,10 +209,10 @@
           {"ref": "@event:11", "type": "review.started", "schema_version": 1, "at": "@t:330", "effective_at": "@t:330", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:t1_review_claim_330", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "review", "class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:11"}
+          {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:11"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_review", "closing_event": "@event:11"}
+          {"task_id": "$task:1", "kind": "wait_review", "closing_event_id": "@event:11"}
         ]
       }
     },
@@ -253,10 +253,10 @@
           {"ref": "@event:17", "type": "job.queued", "schema_version": 1, "at": "@t:600", "effective_at": "@t:600", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_approval_r0", "cause_id": null, "command_id": null, "payload": {"kind": "approval"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "check", "class": "rule_check", "round": 0, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:16"}
+          {"task_id": "$task:1", "kind": "check", "step_class": "rule_check", "round": 0, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:16"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "review", "closing_event": "@event:16"}
+          {"task_id": "$task:1", "kind": "review", "closing_event_id": "@event:16"}
         ]
       }
     },
@@ -299,10 +299,10 @@
           {"ref": "@event:25", "type": "inbox.opened", "schema_version": 1, "at": "@t:620", "effective_at": "@t:620", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "inbox_item", "subject_id": "$inbox:t1_stopped", "cause_id": "@event:24", "command_id": "$key:job_result_620", "payload": {"kind": "stopped_action"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_owner", "class": "waiting", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_stopped", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:24"}
+          {"task_id": "$task:1", "kind": "wait_owner", "step_class": "waiting", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_stopped", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:24"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "check", "closing_event": "@event:24"}
+          {"task_id": "$task:1", "kind": "check", "closing_event_id": "@event:24"}
         ]
       }
     },
@@ -313,7 +313,7 @@
       "operation_id": "return_for_rework",
       "key": "$key:t1_rework",
       "path_params": {"id": "$task:1"},
-      "body": {},
+      "body": {"criterion_ids": []},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -325,10 +325,10 @@
           {"ref": "@event:30", "type": "inbox.resolved", "schema_version": 1, "at": "@t:700", "effective_at": "@t:700", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "inbox_item", "subject_id": "$inbox:t1_stopped", "cause_id": null, "command_id": "$key:t1_rework", "payload": {"choice": "return_for_rework"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_builder", "class": "waiting", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:29"}
+          {"task_id": "$task:1", "kind": "wait_builder", "step_class": "waiting", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:29"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_owner", "closing_event": "@event:29"}
+          {"task_id": "$task:1", "kind": "wait_owner", "closing_event_id": "@event:29"}
         ]
       }
     },
@@ -347,10 +347,10 @@
           {"ref": "@event:31", "type": "task.briefing_acknowledged", "schema_version": 1, "at": "@t:710", "effective_at": "@t:710", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_ack_710", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "rework", "class": "working", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:31"}
+          {"task_id": "$task:1", "kind": "rework", "step_class": "working", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:31"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_builder", "closing_event": "@event:31"}
+          {"task_id": "$task:1", "kind": "wait_builder", "closing_event_id": "@event:31"}
         ]
       }
     },
@@ -369,10 +369,10 @@
           {"ref": "@event:32", "type": "task.submitted", "schema_version": 1, "at": "@t:800", "effective_at": "@t:800", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:t1_submit_800", "payload": {"work_reference_changed": false}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_review", "class": "waiting", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:32"}
+          {"task_id": "$task:1", "kind": "wait_review", "step_class": "waiting", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:32"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "rework", "closing_event": "@event:32"}
+          {"task_id": "$task:1", "kind": "rework", "closing_event_id": "@event:32"}
         ]
       }
     },
@@ -391,10 +391,10 @@
           {"ref": "@event:33", "type": "review.started", "schema_version": 1, "at": "@t:810", "effective_at": "@t:810", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:t1_review_claim_810", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "review", "class": "working", "round": 1, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:33"}
+          {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 1, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:33"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_review", "closing_event": "@event:33"}
+          {"task_id": "$task:1", "kind": "wait_review", "closing_event_id": "@event:33"}
         ]
       }
     },
@@ -435,10 +435,10 @@
           {"ref": "@event:39", "type": "job.queued", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "job", "subject_id": "$job:t1_approval_r1", "cause_id": null, "command_id": null, "payload": {"kind": "approval"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "check", "class": "rule_check", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:38"}
+          {"task_id": "$task:1", "kind": "check", "step_class": "rule_check", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:38"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "review", "closing_event": "@event:38"}
+          {"task_id": "$task:1", "kind": "review", "closing_event_id": "@event:38"}
         ]
       }
     },
@@ -479,10 +479,10 @@
           {"ref": "@event:45", "type": "action.approved", "schema_version": 1, "at": "@t:920", "effective_at": "@t:920", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "cause_id": null, "command_id": "$key:job_result_920", "payload": {"lease_seat_id": "$seat:builder"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_builder", "class": "waiting", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:45"}
+          {"task_id": "$task:1", "kind": "wait_builder", "step_class": "waiting", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:45"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "check", "closing_event": "@event:45"}
+          {"task_id": "$task:1", "kind": "check", "closing_event_id": "@event:45"}
         ]
       }
     },
@@ -501,10 +501,10 @@
           {"ref": "@event:46", "type": "task.briefing_acknowledged", "schema_version": 1, "at": "@t:930", "effective_at": "@t:930", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_ack_930", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "finish", "class": "working", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:46"}
+          {"task_id": "$task:1", "kind": "finish", "step_class": "working", "round": 1, "subject_kind": "action", "subject_id": "$action:t1_publish", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:46"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_builder", "closing_event": "@event:46"}
+          {"task_id": "$task:1", "kind": "wait_builder", "closing_event_id": "@event:46"}
         ]
       }
     },
@@ -543,7 +543,7 @@
         ],
         "steps_opened": [],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "finish", "closing_event": "@event:49"}
+          {"task_id": "$task:1", "kind": "finish", "closing_event_id": "@event:49"}
         ]
       }
     }

@@ -3377,6 +3377,16 @@
             "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnForReworkRequest"
+              }
+            }
+          }
+        },
         "security": [
           {
             "ownerSession": []
@@ -7752,13 +7762,13 @@
             ],
             "format": "date-time"
           },
-          "lease_time_left": {
+          "lease_time_left_while_paused": {
             "type": [
               "integer",
               "null"
             ],
             "minimum": 0,
-            "description": "Seconds of lease left while paused."
+            "description": "Seconds of lease left while the task is held (tasks.lease_time_left_while_paused)."
           },
           "minimum_strength_rank": {
             "type": [
@@ -7808,7 +7818,7 @@
           "holder_seat_id",
           "builder_seat_id",
           "lease_due_at",
-          "lease_time_left",
+          "lease_time_left_while_paused",
           "minimum_strength_rank",
           "contract_version",
           "budget_cap",
@@ -7828,7 +7838,7 @@
             "holder_seat_id": "00000000-0000-4000-8000-000000000016",
             "builder_seat_id": "00000000-0000-4000-8000-000000000017",
             "lease_due_at": "2026-01-01T00:00:00Z",
-            "lease_time_left": 1,
+            "lease_time_left_while_paused": 1,
             "minimum_strength_rank": 1,
             "contract_version": 1,
             "budget_cap": 0.0,
@@ -8305,7 +8315,7 @@
               "holder_seat_id": "00000000-0000-4000-8000-000000000062",
               "builder_seat_id": "00000000-0000-4000-8000-000000000063",
               "lease_due_at": "2026-01-01T00:00:00Z",
-              "lease_time_left": 1,
+              "lease_time_left_while_paused": 1,
               "minimum_strength_rank": 1,
               "contract_version": 1,
               "budget_cap": 0.0,
@@ -9346,6 +9356,34 @@
           }
         ]
       },
+      "ReturnForReworkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The criteria the owner reopens. The review criterion is reopened as well, always, so it need not be named (PRD Outward actions).",
+        "properties": {
+          "criterion_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "criterion_ids"
+        ],
+        "examples": [
+          {
+            "criterion_ids": [
+              "00000000-0000-4000-8000-000000000001"
+            ]
+          },
+          {
+            "criterion_ids": []
+          }
+        ]
+      },
       "ContractDraftJobResult": {
         "$ref": "#/components/schemas/CompleteContractRequest",
         "description": "A contract draft's result is the Complete contract command."
@@ -9829,14 +9867,14 @@
               null
             ]
           },
-          "queue_timeout": {
+          "queue_timeout_seconds": {
             "type": [
               "integer",
               "null"
             ],
             "minimum": 1
           },
-          "run_timeout": {
+          "run_timeout_seconds": {
             "type": [
               "integer",
               "null"
@@ -9894,8 +9932,8 @@
           "checker",
           "on_fail",
           "route",
-          "queue_timeout",
-          "run_timeout",
+          "queue_timeout_seconds",
+          "run_timeout_seconds",
           "instruction",
           "parameters",
           "origin",
@@ -9924,8 +9962,8 @@
             "checker": "app",
             "on_fail": "block",
             "route": "builder",
-            "queue_timeout": 1,
-            "run_timeout": 1,
+            "queue_timeout_seconds": 1,
+            "run_timeout_seconds": 1,
             "instruction": "example",
             "parameters": {},
             "origin": "shipped",
@@ -10032,14 +10070,14 @@
               null
             ]
           },
-          "queue_timeout": {
+          "queue_timeout_seconds": {
             "type": [
               "integer",
               "null"
             ],
             "minimum": 1
           },
-          "run_timeout": {
+          "run_timeout_seconds": {
             "type": [
               "integer",
               "null"
@@ -10054,8 +10092,8 @@
           "scope",
           "on_fail",
           "route",
-          "queue_timeout",
-          "run_timeout"
+          "queue_timeout_seconds",
+          "run_timeout_seconds"
         ],
         "examples": [
           {
@@ -10073,8 +10111,8 @@
             },
             "on_fail": "block",
             "route": "builder",
-            "queue_timeout": 1,
-            "run_timeout": 1
+            "queue_timeout_seconds": 1,
+            "run_timeout_seconds": 1
           }
         ]
       },
@@ -10121,8 +10159,8 @@
               "checker": "app",
               "on_fail": "block",
               "route": "builder",
-              "queue_timeout": 1,
-              "run_timeout": 1,
+              "queue_timeout_seconds": 1,
+              "run_timeout_seconds": 1,
               "instruction": "example",
               "parameters": {},
               "origin": "shipped",
@@ -10285,15 +10323,15 @@
         "additionalProperties": false,
         "description": "Workspace settings. The recovery time ceiling has no value yet.",
         "properties": {
-          "lease_length_minutes": {
+          "lease_length_seconds": {
             "type": "integer",
             "minimum": 1
           },
-          "queue_timeout_seconds": {
+          "check_queue_timeout_seconds": {
             "type": "integer",
             "minimum": 1
           },
-          "run_timeout_seconds": {
+          "check_run_timeout_seconds": {
             "type": "integer",
             "minimum": 1
           },
@@ -10314,21 +10352,21 @@
           }
         },
         "required": [
-          "lease_length_minutes",
-          "queue_timeout_seconds",
-          "run_timeout_seconds",
+          "lease_length_seconds",
+          "check_queue_timeout_seconds",
+          "check_run_timeout_seconds",
           "maximum_rounds",
           "rerun_limit",
           "recovery_time_ceiling_seconds"
         ],
         "examples": [
           {
-            "lease_length_minutes": 1,
-            "queue_timeout_seconds": 1,
-            "run_timeout_seconds": 1,
-            "maximum_rounds": 1,
-            "rerun_limit": 1,
-            "recovery_time_ceiling_seconds": 1
+            "lease_length_seconds": 3600,
+            "check_queue_timeout_seconds": 120,
+            "check_run_timeout_seconds": 300,
+            "maximum_rounds": 3,
+            "rerun_limit": 3,
+            "recovery_time_ceiling_seconds": null
           }
         ]
       },
@@ -10336,15 +10374,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "lease_length_minutes": {
+          "lease_length_seconds": {
             "type": "integer",
             "minimum": 1
           },
-          "queue_timeout_seconds": {
+          "check_queue_timeout_seconds": {
             "type": "integer",
             "minimum": 1
           },
-          "run_timeout_seconds": {
+          "check_run_timeout_seconds": {
             "type": "integer",
             "minimum": 1
           },
@@ -12512,7 +12550,7 @@
               "holder_seat_id": "00000000-0000-4000-8000-000000000197",
               "builder_seat_id": "00000000-0000-4000-8000-000000000198",
               "lease_due_at": "2026-01-01T00:00:00Z",
-              "lease_time_left": 1,
+              "lease_time_left_while_paused": 1,
               "minimum_strength_rank": 1,
               "contract_version": 1,
               "budget_cap": 0.0,
@@ -12559,7 +12597,7 @@
                   "holder_seat_id": "00000000-0000-4000-8000-000000000202",
                   "builder_seat_id": "00000000-0000-4000-8000-000000000203",
                   "lease_due_at": "2026-01-01T00:00:00Z",
-                  "lease_time_left": 1,
+                  "lease_time_left_while_paused": 1,
                   "minimum_strength_rank": 1,
                   "contract_version": 1,
                   "budget_cap": 0.0,
@@ -12631,7 +12669,7 @@
               "holder_seat_id": "00000000-0000-4000-8000-000000000207",
               "builder_seat_id": "00000000-0000-4000-8000-000000000208",
               "lease_due_at": "2026-01-01T00:00:00Z",
-              "lease_time_left": 1,
+              "lease_time_left_while_paused": 1,
               "minimum_strength_rank": 1,
               "contract_version": 1,
               "budget_cap": 0.0,
@@ -12882,8 +12920,8 @@
                   "checker": "app",
                   "on_fail": "block",
                   "route": "builder",
-                  "queue_timeout": 1,
-                  "run_timeout": 1,
+                  "queue_timeout_seconds": 1,
+                  "run_timeout_seconds": 1,
                   "instruction": "example",
                   "parameters": {},
                   "origin": "shipped",
@@ -13077,7 +13115,7 @@
                 "holder_seat_id": "00000000-0000-4000-8000-000000000242",
                 "builder_seat_id": "00000000-0000-4000-8000-000000000243",
                 "lease_due_at": "2026-01-01T00:00:00Z",
-                "lease_time_left": 1,
+                "lease_time_left_while_paused": 1,
                 "minimum_strength_rank": 1,
                 "contract_version": 1,
                 "budget_cap": 0.0,
@@ -13587,9 +13625,9 @@
             "command": "add_task",
             "outcome": "completed",
             "result": {
-              "lease_length_minutes": 1,
-              "queue_timeout_seconds": 1,
-              "run_timeout_seconds": 1,
+              "lease_length_seconds": 1,
+              "check_queue_timeout_seconds": 1,
+              "check_run_timeout_seconds": 1,
               "maximum_rounds": 1,
               "rerun_limit": 1,
               "recovery_time_ceiling_seconds": 1

@@ -11,7 +11,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["key", "name", "prd_checker", "prd_when_off", "hook", "kind", "checker", "scope", "on_fail", "route", "checker_function", "parameters", "instruction", "checker_role", "queue_timeout", "run_timeout", "enabled", "origin", "version"],
+        "required": ["key", "name", "prd_checker", "prd_when_off", "hook", "kind", "checker", "scope", "on_fail", "route", "checker_function", "parameters", "instruction", "checker_role", "queue_timeout_seconds", "run_timeout_seconds", "enabled", "origin", "version"],
         "properties": {
           "key": {"$ref": "#/$defs/name"},
           "name": {"type": "string", "minLength": 1},
@@ -62,8 +62,8 @@
             ]
           },
           "checker_role": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
-          "queue_timeout": {"description": "Seconds; null means the workspace's check queue timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
-          "run_timeout": {"description": "Seconds; null means the workspace's check run timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+          "queue_timeout_seconds": {"description": "Seconds; null means the workspace's check queue timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+          "run_timeout_seconds": {"description": "Seconds; null means the workspace's check run timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
           "enabled": {"type": "boolean"},
           "origin": {"$ref": "#/$defs/name"},
           "version": {"type": "integer", "minimum": 1}

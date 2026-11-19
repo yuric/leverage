@@ -10,7 +10,7 @@
   "setup": {
     "settings": {"lease_length_seconds": 600},
     "users": [
-      {"id": "$user:owner", "name": "Owner"}
+      {"id": "$user:owner"}
     ],
     "helpers": [
       {"id": "$helper:mac", "name": "Owner's Mac"}
@@ -52,7 +52,7 @@
           {"ref": "@event:1", "type": "task.created", "schema_version": 1, "at": "@t:0", "effective_at": "@t:0", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_add", "payload": {"state": "backlog"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_contract", "class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:1"}
+          {"task_id": "$task:1", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:1"}
         ],
         "steps_closed": []
       }
@@ -74,10 +74,10 @@
           {"ref": "@event:4", "type": "task.ready", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_complete", "payload": {"wait_cause": null}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_ready", "class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:4"}
+          {"task_id": "$task:1", "kind": "wait_ready", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:4"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_contract", "closing_event": "@event:4"}
+          {"task_id": "$task:1", "kind": "wait_contract", "closing_event_id": "@event:4"}
         ]
       }
     },
@@ -96,10 +96,10 @@
           {"ref": "@event:5", "type": "task.claimed", "schema_version": 1, "at": "@t:20", "effective_at": "@t:20", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_builder", "payload": {"seat_id": "$seat:builder", "credential_id": "$credential:claude_a", "model": "claude-model-1"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "briefing", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:5"}
+          {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:5"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_ready", "closing_event": "@event:5"}
+          {"task_id": "$task:1", "kind": "wait_ready", "closing_event_id": "@event:5"}
         ]
       }
     },
@@ -118,10 +118,10 @@
           {"ref": "@event:6", "type": "task.briefing_acknowledged", "schema_version": 1, "at": "@t:30", "effective_at": "@t:30", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_ack_30", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:6"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:6"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "briefing", "closing_event": "@event:6"}
+          {"task_id": "$task:1", "kind": "briefing", "closing_event_id": "@event:6"}
         ]
       }
     },
@@ -140,10 +140,10 @@
           {"ref": "@event:7", "type": "criterion.started", "schema_version": 1, "at": "@t:40", "effective_at": "@t:40", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_copy", "cause_id": null, "command_id": "$key:t1_start_copy_40", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_copy", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:7"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_copy", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:7"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:7"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:7"}
         ]
       }
     },
@@ -198,10 +198,10 @@
           {"ref": "@event:10", "type": "criterion.started", "schema_version": 1, "at": "@t:210", "effective_at": "@t:210", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_layout", "cause_id": null, "command_id": "$key:t1_start_layout_210", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_layout", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:10"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_layout", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:10"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:10"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:10"}
         ]
       }
     },
@@ -221,10 +221,10 @@
           {"ref": "@event:11", "type": "task.lease_expired", "schema_version": 1, "at": "@t:900", "effective_at": "@t:800", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": null, "payload": {"wait_cause": null}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "wait_ready", "class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:11"}
+          {"task_id": "$task:1", "kind": "wait_ready", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:11"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:11"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:11"}
         ]
       }
     },
@@ -259,10 +259,10 @@
           {"ref": "@event:12", "type": "task.claimed", "schema_version": 1, "at": "@t:950", "effective_at": "@t:950", "actor_kind": "seat", "actor_id": "$seat:second_builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_second_builder", "payload": {"seat_id": "$seat:second_builder", "credential_id": "$credential:codex_b", "model": "codex-model-1"}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "briefing", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:second_builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:12"}
+          {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:second_builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:12"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "wait_ready", "closing_event": "@event:12"}
+          {"task_id": "$task:1", "kind": "wait_ready", "closing_event_id": "@event:12"}
         ]
       }
     },
@@ -281,10 +281,10 @@
           {"ref": "@event:13", "type": "task.briefing_acknowledged", "schema_version": 1, "at": "@t:960", "effective_at": "@t:960", "actor_kind": "seat", "actor_id": "$seat:second_builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_ack_960", "payload": {}}
         ],
         "steps_opened": [
-          {"task_id": "$task:1", "kind": "build", "class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:second_builder", "cause_kind": null, "cause_rule_id": null, "opening_event": "@event:13"}
+          {"task_id": "$task:1", "kind": "build", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:second_builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:13"}
         ],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "briefing", "closing_event": "@event:13"}
+          {"task_id": "$task:1", "kind": "briefing", "closing_event_id": "@event:13"}
         ]
       }
     },
@@ -304,7 +304,7 @@
         ],
         "steps_opened": [],
         "steps_closed": [
-          {"task_id": "$task:1", "kind": "build", "closing_event": "@event:14"}
+          {"task_id": "$task:1", "kind": "build", "closing_event_id": "@event:14"}
         ]
       }
     },

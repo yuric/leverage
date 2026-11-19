@@ -2,7 +2,7 @@
   "rules": [
     {"source": "prd", "rule": "One step is open from the task's creation until it is done or cancelled; opening a step closes the one before at the same effective time.", "prd_lines": [275, 276]},
     {"source": "prd", "rule": "A step's cause and subject are fixed when it opens; a change of credential state with no task event opens no new step.", "prd_lines": [282]},
-    {"source": "derived", "rule": "Within one command the open step changes at the last of its events that the step table names, and every step of the command shares its effective time.", "prd_lines": [216, 218]},
+    {"source": "derived", "rule": "Within one command a task's open step changes at most once, and every step the command opens or closes shares its effective time. The step closes at an event its closed_by names and the next opens at an event its opened_by names; the opening event is the same as the closing one or later in the command.", "prd_lines": [216, 218]},
     {"source": "derived", "rule": "Things that do not block the task open no step: a non-blocking question, a cost report and an instant app-run check (L304), and a warn model check (plan RC-16).", "prd_lines": [304, 337]}
   ],
   "close_without_opening": ["task.done", "task.cancelled"],
@@ -83,6 +83,7 @@
       "prd_subject": "The pending transition, or the action",
       "opened_by": [
         {"event": "check.queued", "when": "the first model check of a pending transition, or of an outward action at action.requested, is queued (L366)", "source": "derived"},
+        {"event": "action.approved", "when": "the action this step is about is approved while a later action still waits on its checks or approval job: the step closes and a new one opens on that action, because a subject is fixed when its step opens (rule 8, L282)", "source": "derived", "decision": "SM-27"},
         {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
       ],
       "closed_by": [

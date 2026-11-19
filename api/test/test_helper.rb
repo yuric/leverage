@@ -54,3 +54,8 @@ module DatabaseTestHooks
     raise unless error.cause.is_a?(PG::InFailedSqlTransaction)
   end
 end
+
+# rails/test_help reloads the test database from db/structure.sql when the
+# schema changed (maintain_test_schema), with no rake task and so no grants:
+# grant the application role there too, for a run in one process.
+DatabaseTestHooks.grant_app_role

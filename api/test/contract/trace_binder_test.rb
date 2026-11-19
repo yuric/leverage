@@ -112,9 +112,9 @@ class TraceBinderTest < Minitest::Test
             "command_id" => "$key:add", "payload" => {}
           } ],
           "steps_opened" => [ {
-            "task_id" => "$task:1", "kind" => "wait_contract", "class" => "waiting", "round" => 0,
+            "task_id" => "$task:1", "kind" => "wait_contract", "step_class" => "waiting", "round" => 0,
             "subject_kind" => nil, "subject_id" => nil, "seat_id" => nil, "cause_kind" => nil,
-            "cause_rule_id" => nil, "opening_event" => "@event:1"
+            "cause_rule_id" => nil, "opening_event_id" => "@event:1"
           } ],
           "steps_closed" => []
         }

@@ -79,6 +79,9 @@ module PayloadRules
     # Rework and escalation: the event records whether the builder got a
     # fresh lease (SM-7); the failed criteria or rule (SM-6, DB-18).
     "review.failed" => %w[lease_seat_id failed_criterion_ids failed_rule_check_id],
+    # Replay: the holder when a waive lets the approval rule grant the lease
+    # with no hold to close (SM-11, DB-43).
+    "action.waived" => %w[lease_seat_id],
     # Holds: a reason and the rule or credential; wait_limit's subject (SM-41).
     "hold.opened" => %w[reason rule_id credential_id],
     # Replay: the holder after Offer task again (DB-43).

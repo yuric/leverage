@@ -58,6 +58,15 @@ class StepsTest < Minitest::Test
     assert_equal [ "credential_limit" ], step("wait_ready")["cause_kinds"]
   end
 
+  # A check step's subject is the first action waiting on its checks (SM-27)
+  # and is fixed when the step opens (PRD Rules for steps, rule 8). When that
+  # action is approved while a later one still waits, its step closes and a
+  # new one opens on the next action at the same event.
+  def test_a_check_step_moves_to_the_next_action_by_closing_and_opening
+    assert_includes step("check")["closed_by"].map { |boundary| boundary["event"] }, "action.approved"
+    assert_includes step("check")["opened_by"].map { |boundary| boundary["event"] }, "action.approved"
+  end
+
   def test_the_step_table_sentence_of_the_prd_is_kept
     # L306: action.lease_granted keeps wait_builder open, so it opens and
     # closes no step.

@@ -368,7 +368,7 @@ class TracesTest < Minitest::Test
         fail_step(index, "#{task}: at most one step closes and one opens per command") if closed.size > 1 || opened.size > 1
         close_step(index, task, closed.first, opened.first, refs) if closed.first
         open_step(index, task, opened.first, refs) if opened.first
-        if opened.first && closed.first && number(opened.first["opening_event"]) < number(closed.first["closing_event"])
+        if opened.first && closed.first && number(opened.first["opening_event_id"]) < number(closed.first["closing_event_id"])
           fail_step(index, "#{task}: the new step opens before the old one closes")
         end
       end
@@ -386,11 +386,11 @@ class TracesTest < Minitest::Test
     end
 
     def close_step(index, task, step, opened, refs)
-      event = refs[step["closing_event"]]
+      event = refs[step["closing_event_id"]]
       open = @open[task]
       fail_step(index, "#{task}: closes #{step["kind"]}, but #{open&.fetch(:kind).inspect} is open") unless open && open[:kind] == step["kind"]
       unless event && event["task_id"] == task
-        fail_step(index, "#{task}: #{step["closing_event"]} is not one of this command's events on the task")
+        fail_step(index, "#{task}: #{step["closing_event_id"]} is not one of this command's events on the task")
         return
       end
       allowed = @steps.fetch(step["kind"], {}).fetch("closed_by", []).map { |entry| entry["event"] } + @close_without_opening
@@ -408,9 +408,9 @@ class TracesTest < Minitest::Test
 
     def open_step(index, task, step, refs)
       fail_step(index, "#{task}: #{step["kind"]} opens while #{@open[task][:kind]} stays open") if @open[task]
-      event = refs[step["opening_event"]]
+      event = refs[step["opening_event_id"]]
       unless event && event["task_id"] == task
-        fail_step(index, "#{task}: #{step["opening_event"]} is not one of this command's events on the task")
+        fail_step(index, "#{task}: #{step["opening_event_id"]} is not one of this command's events on the task")
         return
       end
       kind = @steps[step["kind"]]
@@ -419,7 +419,7 @@ class TracesTest < Minitest::Test
         return
       end
       fail_step(index, "#{task}: #{event["type"]} does not open #{step["kind"]}") unless kind["opened_by"].any? { |entry| entry["event"] == event["type"] }
-      fail_step(index, "#{task}: #{step["kind"]} has class #{kind["class"]}") unless step["class"] == kind["class"]
+      fail_step(index, "#{task}: #{step["kind"]} has class #{kind["class"]}") unless step["step_class"] == kind["class"]
       fail_step(index, "#{task}: #{step["kind"]} has no subject #{step["subject_kind"].inspect}") unless kind["subject_kinds"].include?(step["subject_kind"])
       fail_step(index, "#{task}: subject_id and subject_kind are null together") unless step["subject_kind"].nil? == step["subject_id"].nil?
       fail_step(index, "#{task}: #{step["kind"]} has no cause #{step["cause_kind"]}") unless step["cause_kind"].nil? || kind["cause_kinds"].include?(step["cause_kind"])
@@ -621,6 +621,25 @@ class TracesTest < Minitest::Test
             end
             refute_nil event["command_id"], "#{where}: only events of the server's own requests carry no key" if event["actor_kind"] != "app"
           end
+        end
+      end
+    end
+  end
+
+  # One job row per attempt (plan DB-31): a check queued again runs on a new
+  # job, and job.requeued is written on the job it replaces.
+  def test_each_attempt_of_a_check_runs_on_a_job_of_its_own
+    traces.each do |name, trace|
+      jobs_by_check = Hash.new { |hash, key| hash[key] = [] }
+      all_events(trace).each do |event|
+        case event["type"]
+        when "check.queued"
+          earlier = jobs_by_check[event["subject_id"]]
+          refute_includes earlier, event.dig("payload", "job_id"), "#{name} #{event["ref"]}: an attempt reuses a job"
+          earlier << event.dig("payload", "job_id")
+        when "job.requeued"
+          assert jobs_by_check.values.any? { |jobs| jobs.last == event["subject_id"] },
+            "#{name} #{event["ref"]}: job.requeued is not on the latest attempt's job"
         end
       end
     end

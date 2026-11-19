@@ -178,6 +178,15 @@ class StateMachineTest < Minitest::Test
     end
   end
 
+  # Replay sets the holder from the event that grants a fresh lease (DB-43,
+  # SM-7), so each such event names the seat in its payload.
+  def test_every_event_that_grants_a_fresh_lease_names_the_seat
+    FRESH_LEASE_EVENTS.each do |type|
+      schema = Leverage::Contract.payload_schema(type, 1)
+      assert_includes schema.fetch("required"), "lease_seat_id", type
+    end
+  end
+
   def test_a_task_back_in_working_has_a_fresh_lease
     rows.each do |row|
       next unless row["to"] == "working" && %w[in_review finishing].include?(row["from"])

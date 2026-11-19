@@ -4,9 +4,16 @@
   "description": "The owner waives the action.",
   "type": "object",
   "additionalProperties": false,
-  "properties": {},
-  "required": [],
+  "properties": {
+    "lease_seat_id": {
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Set when the waive leaves approved actions to carry out, no action waiting and none stopped, no hold to close, and the builder holds nothing (plan SM-11).",
+      "type": ["string", "null"],
+      "format": "uuid"
+    }
+  },
+  "required": ["lease_seat_id"],
   "examples": [
-    {}
+    {"lease_seat_id": null},
+    {"lease_seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13"}
   ]
 }

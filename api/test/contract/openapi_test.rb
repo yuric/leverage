@@ -390,6 +390,16 @@ class OpenapiTest < Minitest::Test
     assert_equal %w[email_address password].sort, schemas.fetch("SignInRequest").fetch("required").sort
   end
 
+  # PRD Outward actions: rework "reopens the criteria the owner names and the
+  # review criterion", so the owner's call names them.
+  def test_return_for_rework_names_the_criteria_to_reopen
+    schema = deref(request_schema("return_for_rework"))
+    assert_includes schema.fetch("required"), "criterion_ids"
+    ids = deref(schema.fetch("properties").fetch("criterion_ids"))
+    assert_equal "array", ids.fetch("type")
+    assert_equal "uuid", deref(ids.fetch("items")).fetch("format")
+  end
+
   def test_json_field_names_are_the_data_model_column_names
     columns = {
       "TaskSummary" => %w[project_id title goal state round holder_seat_id builder_seat_id lease_due_at minimum_strength_rank

@@ -28,6 +28,7 @@ and leaves its meaning to the PRD.
 | `openapi.json` | The agent, owner and helper interfaces, in OpenAPI 3.1. |
 | `traces/<nn>-<name>.json` | The golden traces. |
 | `meta/<file>.schema.json` | The shape of each data file above, in JSON Schema 2020-12. |
+| [`decisions.md`](decisions.md) | The choices made where the PRD leaves a gap, under the IDs the files cite (`plan SM-24`, `"decision": "DB-31"`). |
 
 The tests under `api/test/contract/` validate each data file against its
 meta-schema and check every name it uses against `registry.json`.
@@ -60,7 +61,16 @@ meta-schema and check every name it uses against `registry.json`.
   `{cid}`, `{aid}`, `{qid}`, `{key}`, `{provider}`.
 - JSON fields are the Data model's column names in snake case. A reference
   to a row is `<name>_id`; a polymorphic reference is `<name>_kind` plus
-  `<name>_id`.
+  `<name>_id`. `test/contract/columns_test.rb` holds the interface
+  components, the shipped rules and the traces to the columns of
+  `api/test/db/expected_schema.rb`, with a short cited list of fields that
+  are not a column.
+- A duration that is a setting is integer seconds with a `_seconds` suffix:
+  `workspaces.lease_length_seconds`, `rule_versions.queue_timeout_seconds`.
+- Two columns do not carry the PRD's word, because Active Record reserves
+  it: a step's class is `task_steps.step_class` and a briefing's hash is
+  `briefing_acknowledgements.briefing_hash`. `steps.json` keeps `class` for
+  the PRD's step table it copies.
 - Use the PRD's [Terms](../../docs/PRD.md#terms). A word the PRD does not
   have is not coined here.
 
@@ -183,6 +193,40 @@ authority. How its fields are filled:
   event of one command shares it. `effective_at` equals `at` except for a
   timer's events, which carry the due time.
 
+## The state table
+
+`state_machine.json` has one group per row of the PRD's lifecycle table
+(`source: prd`, with the row's six cells verbatim in `prd_cells`) and one
+per set of commands the table does not list (`source: derived`, with the
+PRD lines and the plan decision). Each group has rows, one per command,
+from-state and guard:
+
+- `from` and `to` are task states. `from: null` means the command does not
+  read a task's state (Add task has no task yet).
+- `guard` is a conjunction of guards from the registry's `guards`. For each
+  command and from-state, every combination of the guard families its rows
+  name matches exactly one row; a family a row does not name does not
+  matter. A command and state with no row is refused with `invalid_state`.
+- `events` are always written; `conditional_events` are written when their
+  `when` guard holds. The PRD's Events cell is these two together.
+- `side_events` are the events the paragraph under the PRD's lifecycle
+  table lets any command write beside its row. Two that a verdict writes
+  and that paragraph does not name, `cost.reported` and `project.paused`
+  (PRD Cost), are declared once in `side_event_exceptions`.
+- `builder_lease` is `claim`, `fresh`, `ends` or `null`. Every event that
+  grants a fresh lease names the seat in `lease_seat_id`.
+- `holds_opened` and `holds_closed` name hold reasons; `refusal` marks a
+  refused row, which has no `to` and no events.
+- `commands` gives each command's `work_call`, `blocked_by_hold` and
+  `allowed_while_pending`; `action_machine` is the outward action's own
+  states.
+
+`scripts/check_contract_tables.py` (in the "Registry matches the PRD" job)
+compares every `prd_*` field and every `source: prd` group here, in
+`steps.json`, `hooks.json`, `needs_you.json` and `roles.json`, and the
+agent calls of the registry, with the PRD's tables. A From cell of "Any"
+means every state but Done and Cancelled.
+
 ## Golden traces
 
 Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
@@ -208,7 +252,31 @@ but `workspace_id` and `seq`, with its full payload: after binding, the
 payload validates against its type's schema unchanged, and a field the
 writer adds that the trace does not list is a failure. The events that
 `setup` implies (the shipped rules' `rule.created`, for instance) are not
-part of the trace.
+part of the trace. Setup rows and step rows use column names; a rules row
+also carries `current_version_id`, the version its checks name.
+
+How the traces write what the PRD leaves to the writer:
+
+- **Timers** are commands of their own, with caller `app`, no operation and
+  no key. Their events carry the due time as `effective_at`.
+- **The server's own requests** inside a seat's command (the checks and
+  jobs at `action.requested`) carry actor `app` and no key.
+  `action.lease_granted` carries actor `app` and the key of the command that
+  frees the builder.
+- **A pending transition's completion** carries the original requester's
+  key, and its `cause_id` is the `check.finished` that completed it, even
+  inside another caller's command.
+- **Order** inside a command: the hook's check events, the row's events,
+  `cost.reported`, then the other side events.
+- **Round**: every event of a command carries the task's round before the
+  command; `review.failed` and `task.returned_for_rework` raise it for what
+  follows, and a step they open carries the new round.
+- **`cause_id`** is set only for a chain the PRD names or that is plain (a
+  completion, a helper report's later events, an item opened by a hold);
+  otherwise it is `null`.
+- **Jobs** are claimed oldest first. Each attempt is a job of its own:
+  `job.requeued` is written on the job that timed out, and the next
+  `check.queued` names the new one.
 
 ## How each side reads it
 
@@ -236,16 +304,19 @@ part of the trace.
 
 Contract tests need no database. Each starts with
 `require_relative "contract_helper"` and may `include ContractTestHelpers`
-(`registry`, `meta_errors(name, data)`, `duplicates(values)`). They assert
-against `registry.json`, never against a file another part writes, and hold
-no copy of a PRD table and no hard-coded count. From the repository root,
-with `.env` in place:
+(`registry`, `meta_errors(name, data)`, `duplicates(values)`). Each file's
+own test asserts against `registry.json`; `traces_test.rb` and
+`columns_test.rb` then tie the files to each other and to the columns. No
+test holds a copy of a PRD table or a hard-coded count. From the
+repository root, with `.env` in place:
 
 ```bash
 docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test
 docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test test/contract/registry_test.rb
 python3 scripts/check_registry.py
 python3 scripts/test_check_registry.py
+python3 scripts/check_contract_tables.py
+python3 scripts/test_check_contract_tables.py
 (cd mac && swift test --filter RegistryDecodingTests)
 ```
 

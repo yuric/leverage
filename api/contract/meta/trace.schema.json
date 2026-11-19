@@ -146,30 +146,30 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "task_id", "kind", "class", "round", "subject_kind", "subject_id", "seat_id", "cause_kind",
-        "cause_rule_id", "opening_event"
+        "task_id", "kind", "step_class", "round", "subject_kind", "subject_id", "seat_id", "cause_kind",
+        "cause_rule_id", "opening_event_id"
       ],
       "properties": {
         "task_id": {"$ref": "#/$defs/symbol"},
         "kind": {"$ref": "#/$defs/name"},
-        "class": {"$ref": "#/$defs/name"},
+        "step_class": {"$ref": "#/$defs/name"},
         "round": {"type": "integer", "minimum": 0},
         "subject_kind": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
         "subject_id": {"$ref": "#/$defs/symbol_or_null"},
         "seat_id": {"$ref": "#/$defs/symbol_or_null"},
         "cause_kind": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
         "cause_rule_id": {"$ref": "#/$defs/symbol_or_null"},
-        "opening_event": {"$ref": "#/$defs/event_link"}
+        "opening_event_id": {"$ref": "#/$defs/event_link"}
       }
     },
     "step_closed": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["task_id", "kind", "closing_event"],
+      "required": ["task_id", "kind", "closing_event_id"],
       "properties": {
         "task_id": {"$ref": "#/$defs/symbol"},
         "kind": {"$ref": "#/$defs/name"},
-        "closing_event": {"$ref": "#/$defs/event_link"}
+        "closing_event_id": {"$ref": "#/$defs/event_link"}
       }
     }
   }

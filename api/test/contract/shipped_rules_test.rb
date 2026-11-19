@@ -73,8 +73,8 @@ class ShippedRulesTest < Minitest::Test
       assert entry["enabled"], entry["key"]
       assert_equal "shipped", entry["origin"], entry["key"]
       assert_equal 1, entry["version"], entry["key"]
-      assert_nil entry["queue_timeout"], entry["key"]
-      assert_nil entry["run_timeout"], entry["key"]
+      assert_nil entry["queue_timeout_seconds"], entry["key"]
+      assert_nil entry["run_timeout_seconds"], entry["key"]
       assert_equal({ "kind" => "all_tasks", "values" => [] }, entry["scope"], entry["key"])
     end
   end
