@@ -1,0 +1,58 @@
+{
+  "breaks": "enum_matches_list",
+  "type": "hold.opened",
+  "description": "The hold reason enum leaves out rerun_limit, so it differs from registry hold_reasons.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "hold.opened v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "reason": {
+        "enum": [
+          "owner_question",
+          "owner_approval",
+          "access",
+          "budget",
+          "project_paused",
+          "contract_incomplete",
+          "check_error",
+          "rounds_exceeded",
+          "action_stopped",
+          "action_unconfirmed",
+          "claim_gate_failed",
+          "owner_hold",
+          "seat_paused",
+          "credential_limit",
+          "credential_signed_out"
+        ]
+      },
+      "rule_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "credential_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "reason",
+      "rule_id",
+      "credential_id"
+    ],
+    "examples": [
+      {
+        "reason": "owner_hold",
+        "rule_id": null,
+        "credential_id": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "breaks": "ids_are_uuid",
+  "type": "task.claimed",
+  "description": "seat_id closed by an enum instead of format uuid.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "task.claimed v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "seat_id": {
+        "enum": [
+          "builder"
+        ]
+      },
+      "credential_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "model": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$"
+      }
+    },
+    "required": [
+      "seat_id",
+      "credential_id",
+      "model"
+    ],
+    "examples": [
+      {
+        "seat_id": "builder",
+        "credential_id": null,
+        "model": null
+      }
+    ]
+  }
+}

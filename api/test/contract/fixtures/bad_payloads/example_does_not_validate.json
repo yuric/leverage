@@ -1,0 +1,31 @@
+{
+  "breaks": "examples_validate",
+  "type": "cost.reported",
+  "description": "The example's tokens is negative.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "cost.reported v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "tokens": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "spend": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "tokens",
+      "spend"
+    ],
+    "examples": [
+      {
+        "tokens": -1,
+        "spend": 0.5
+      }
+    ]
+  }
+}

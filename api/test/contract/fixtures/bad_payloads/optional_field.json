@@ -1,0 +1,20 @@
+{
+  "breaks": "all_required",
+  "type": "question.asked",
+  "description": "blocking may be left out, so the payload has two shapes.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "question.asked v1",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "blocking": {
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "examples": [
+      {}
+    ]
+  }
+}

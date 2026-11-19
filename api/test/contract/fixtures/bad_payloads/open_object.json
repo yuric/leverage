@@ -1,0 +1,16 @@
+{
+  "breaks": "meta",
+  "type": "task.done",
+  "description": "additionalProperties true lets a writer add any field.",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "task.done v1",
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {},
+    "required": [],
+    "examples": [
+      {}
+    ]
+  }
+}
