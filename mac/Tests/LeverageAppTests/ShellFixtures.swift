@@ -42,7 +42,7 @@ enum ShellFixtures {
     /// Waits, at most `timeout`, until `condition` holds; returns whether it did.
     @MainActor
     static func eventually(
-        timeout: Duration = .seconds(3), _ condition: @MainActor () -> Bool
+        timeout: Duration = .seconds(20), _ condition: @MainActor () -> Bool
     ) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {

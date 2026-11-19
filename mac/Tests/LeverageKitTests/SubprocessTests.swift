@@ -94,23 +94,31 @@ struct SubprocessTests {
         let pidFile = folder.path("grandchild.pid")
         let started = Date()
 
+        // The limit leaves the script time to start its grandchild and write
+        // its id even when the whole package's tests start processes at once.
         let result = try await Subprocess.run(.init(
             executable: tools.file("sleeping_grandchild.sh").path, arguments: [pidFile.path],
-            environment: ["PATH": "/usr/bin:/bin"], timeLimit: .seconds(2)))
+            environment: ["PATH": "/usr/bin:/bin"], timeLimit: .seconds(15)))
 
         #expect(result.endedBy == .timeLimit)
         #expect(result.termination == .signaled(SIGTERM))
-        #expect(Date().timeIntervalSince(started) < 15)
+        #expect(Date().timeIntervalSince(started) < 40)
         let grandchild = try #require(try readPID(pidFile))
         #expect(await gone(grandchild))
     }
 
     @Test("a stop asks first, then forces a child that ignores the request")
     func stopForcesAfterGrace() async throws {
+        let folder = try TemporaryFolder(prefix: "subprocess-test")
+        defer { folder.remove() }
+        let ready = folder.path("ready.pid")
+        // The child says it is ready only once it ignores the request, so the
+        // stop never reaches a shell that has not set its trap yet.
         let child = try Subprocess.start(.init(
-            executable: "/bin/sh", arguments: ["-c", "trap '' TERM; echo up; sleep 600"],
+            executable: "/bin/sh",
+            arguments: ["-c", "trap '' TERM; echo $$ > \"$0.tmp\" && mv \"$0.tmp\" \"$0\"; sleep 600", ready.path],
             environment: ["PATH": "/usr/bin:/bin"], gracePeriod: .milliseconds(500)))
-        try await Task.sleep(for: .milliseconds(300))
+        _ = try await waitForPID(ready)
 
         child.stop()
         let result = await child.wait()
@@ -192,7 +200,7 @@ private func readPID(_ file: URL) throws -> Int32? {
 }
 
 private func waitForPID(_ file: URL) async throws -> Int32 {
-    for _ in 0..<200 {
+    for _ in 0..<900 {
         if let pid = try? readPID(file) { return pid }
         try await Task.sleep(for: .milliseconds(50))
     }

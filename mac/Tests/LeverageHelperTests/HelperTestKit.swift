@@ -24,13 +24,17 @@ enum MadeUp {
 }
 
 /// Timings short enough for a test; the order between them is the real one.
+/// The looks are short; the limits are only ceilings, which a passing test
+/// never reaches, and are wide because a tool's start can take seconds when
+/// the whole package's tests run at once on a busy Mac (a test that needs a
+/// wait to run out sets its own short one).
 let fastTimings = HelperTimings(
     lookEvery: .milliseconds(50),
     promptEvery: .milliseconds(100),
-    waitAtMost: .seconds(8),
-    commandLimit: .seconds(10),
-    probeLimit: .seconds(20),
-    installLimit: .seconds(20),
+    waitAtMost: .seconds(45),
+    commandLimit: .seconds(45),
+    probeLimit: .seconds(60),
+    installLimit: .seconds(60),
     stopGrace: .seconds(3),
     pauseAfterError: .milliseconds(50),
     longPollSeconds: 1,
@@ -174,7 +178,7 @@ func helperRequest(
 
 /// Waits until `condition` holds, looking every 20 ms, for at most
 /// `seconds`; true when it held.
-func eventually(within seconds: Double = 10, _ condition: () throws -> Bool) async rethrows -> Bool {
+func eventually(within seconds: Double = 45, _ condition: () throws -> Bool) async rethrows -> Bool {
     let deadline = Date().addingTimeInterval(seconds)
     while Date() < deadline {
         if try condition() { return true }

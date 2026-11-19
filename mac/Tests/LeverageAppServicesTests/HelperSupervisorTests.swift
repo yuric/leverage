@@ -25,8 +25,10 @@ final class FakeHelperProgram: @unchecked Sendable {
             #!/bin/sh
             dir='\(dir)'
             n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
-            echo "$n" > "$dir/count"
+            # The trap is set before the run is counted: a test that stops the
+            # helper as soon as it sees the count still finds the run's line.
             trap 'echo "fake helper run $n asked to stop" >&2; exit 0' TERM
+            echo "$n" > "$dir/count"
             env | grep -v -E '^(PWD|OLDPWD|SHLVL|_)=' | sort > "$dir/env-$n"
             printf '%s\\n' "$0" "$@" > "$dir/args-$n"
             echo "fake helper run $n" >&2
@@ -287,7 +289,10 @@ struct HelperSupervisorTests {
         #expect(await eventually { fake.runs == 1 })
         await helper.stop()
         let files = textOfEveryFile(under: fake.support)
-        #expect(files["logs/helper.log"]?.hasPrefix("fake helper run 1") == true)
+        // The new log holds this run's lines and none of the old one's (the
+        // shell may first say that the fake's sleep was ended).
+        let current = files["logs/helper.log"] ?? ""
+        #expect(current.contains("fake helper run 1") && !current.contains("xxxxxxxxxx"), "\(current)")
         #expect(files["logs/helper.log.1"]?.count == 2_000)
     }
 }

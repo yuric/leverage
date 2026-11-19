@@ -13,7 +13,10 @@ import Testing
 @Suite("Render smoke")
 struct RenderSmokeTests {
     private func render(_ view: some View, width: CGFloat = 900, height: CGFloat = 620) -> NSImage? {
-        let renderer = ImageRenderer(content: view.frame(width: width, height: height))
+        // An opaque white ground under the view: where the view draws nothing
+        // the picture is one flat colour, whatever the renderer's buffer held
+        // before (a clear picture was once read as drawn in a full run).
+        let renderer = ImageRenderer(content: view.frame(width: width, height: height).background(Color.white))
         renderer.scale = 1
         return renderer.nsImage
     }

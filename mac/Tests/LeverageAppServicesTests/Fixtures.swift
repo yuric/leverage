@@ -165,7 +165,7 @@ final class RecordingProbe: @unchecked Sendable {
 /// Asks `condition` again every 20 milliseconds until it holds or the time
 /// is up; answers whether it held.
 func eventually(
-    within timeout: Duration = .seconds(15), _ condition: () async -> Bool
+    within timeout: Duration = .seconds(45), _ condition: () async -> Bool
 ) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {

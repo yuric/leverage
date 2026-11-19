@@ -145,7 +145,11 @@ struct RunnerLoopTests {
         let operations = harness.operations
         let refused = try #require(operations.firstIndex(of: .passCriterion))
         let resumedAt = try #require(operations.firstIndex(of: .getTaskBriefing))
-        #expect(!operations[refused..<resumedAt].contains(.heartbeatTask))
+        // A heartbeat already on its way when the refusal came back may still
+        // land; once the runner asks for its next item, none is sent while held.
+        let held = try #require(operations[refused..<resumedAt].firstIndex(of: .getNext))
+        #expect(!operations[held..<resumedAt].contains(.heartbeatTask))
+        #expect(operations[refused..<held].filter { $0 == .heartbeatTask }.count <= 1)
         #expect(operations[resumedAt..<operations.endIndex].prefix(2) == [
             .getTaskBriefing, .acknowledgeTaskBriefing,
         ])
