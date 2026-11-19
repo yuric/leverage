@@ -87,4 +87,35 @@ class GoldenTracesTest < ActiveSupport::TestCase
       assert_empty runner.failures, runner.failures.join("\n")
     end
   end
+
+  # The runner checks the traces' lease arithmetic (L116-L120), not only the
+  # order of their times: a timer's due time is one lease length after the
+  # grant, in the trace and in the engine's own row, before make_due moves
+  # it (EN-18).
+  def changed_trace(name)
+    JSON.parse(JSON.generate(self.class.trace(name)))
+  end
+
+  test "a trace whose lease ends at another time than one lease length after its grant fails" do
+    trace = changed_trace("10-leases-no-rules")
+    expiry = trace.fetch("commands").find { |command| command.fetch("command") == "builder_lease_expiry" }
+    expiry.dig("expect", "events").first["effective_at"] = "@t:640"
+    runner = TraceRunner.new("10-leases-no-rules", trace: trace).run
+
+    assert(runner.failures.any? { |failure| failure.include?("lease") }, runner.failures.join("\n"))
+  end
+
+  test "an engine whose lease is not one lease length long fails the trace" do
+    grant = Leverage::Leases.method(:grant)
+    Leverage::Leases.define_singleton_method(:grant) do |ctx, subject, paused: false|
+      grant.call(ctx, subject, paused: paused)
+      subject.update!(lease_due_at: subject.lease_due_at + 1) if subject.lease_due_at
+    end
+    runner = TraceRunner.new("10-leases-no-rules").run
+
+    assert(runner.failures.any? { |failure| failure.include?("lease") }, runner.failures.join("\n"))
+  ensure
+    Leverage::Leases.define_singleton_method(:grant, grant) if grant
+  end
+
 end

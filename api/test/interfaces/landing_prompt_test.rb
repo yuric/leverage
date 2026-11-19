@@ -162,6 +162,7 @@ class LandingPromptTest < CommittingTestCase
       assert_response :bad_request, host
       assert_equal "malformed", response.parsed_body.dig("error", "code")
       assert_matches_component("TransportError", response.parsed_body)
+      assert_response_matches_contract
       refute_includes response.body, "touch x"
     end
   end
@@ -219,4 +220,17 @@ class LandingPromptTest < CommittingTestCase
     refute text.end_with?("\n\n")
     refute_match(/\{\{|\}\}/, text)
   end
+
+  # The PRD's plain-language rule (L794): the owner reads this text in the
+  # Connect sheet, so none of the ten engine terms appears in it. The same
+  # pattern as the app's CopyTests (BannedTerms.pattern).
+  BANNED_TERMS = /\b(?:hooks?|leases?|leased|rule versions?|pending transitions?|seats?|holds?|rounds?|strength ranks?|overrides?|imaginarium)\b/i
+
+  test "neither role's prompt uses an engine term the owner would stop at" do
+    [ @builder, @reviewer ].each do |seat|
+      found = text_for(seat).scan(BANNED_TERMS).map(&:downcase).uniq
+      assert_empty found, "#{seat.role}'s landing prompt uses #{found.join(", ")}"
+    end
+  end
+
 end

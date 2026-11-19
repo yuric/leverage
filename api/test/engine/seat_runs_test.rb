@@ -41,8 +41,8 @@ class SeatRunsTest < ActiveSupport::TestCase
     released = Leverage::SeatRuns.release_working_task(context, builder, reason: "seat_removed", cause: removed)
 
     assert_equal "task.released", released.type
-    assert_equal [ "ready", nil, nil, nil ],
-      [ task.reload.state, task.holder_seat_id, task.lease_due_at, task.lease_time_left_while_paused ]
+    assert_equal [ "ready", nil, nil, nil, nil ],
+      [ task.reload.state, task.holder_seat_id, task.builder_seat_id, task.lease_due_at, task.lease_time_left_while_paused ]
   end
 
   test "the inputs of a start request are the seat's role, provider, model and effort, with null for empty" do

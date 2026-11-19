@@ -123,4 +123,30 @@ class SweepTest < ActiveSupport::TestCase
 
     assert_equal 2, calls
   end
+
+  # PRD principle 3 (L217): the first statement of every transaction that
+  # changes anything takes the workspace lock. The sweep_runs row is a
+  # change too: it is written in a transaction of its own that first locks
+  # the workspace, and ran_at is that lock's clock reading.
+  test "the sweep_runs row is written under the workspace lock" do
+    seen = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+      seen << [ payload[:name], payload[:sql] ] unless payload[:name] == "SCHEMA"
+    end
+    begin
+      S.sweep_workspace(@scenario.workspace_id)
+    ensure
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+    end
+
+    insert = seen.rindex { |_name, sql| sql.match?(/\AINSERT INTO "sweep_runs"/) }
+    assert insert, seen.map(&:last).inspect
+    opened = seen[0...insert].rindex { |name, sql| name == "TRANSACTION" && sql.match?(/\A(BEGIN|SAVEPOINT)/) }
+    assert opened, "the insert runs in a transaction of its own"
+    inside = seen[(opened + 1)...insert].map(&:last)
+    assert_match(/\ASELECT .*FROM "workspaces" WHERE "workspaces"\."id" = .* FOR UPDATE\z/m, inside.first.to_s,
+      "the transaction's first statement locks the workspace")
+    assert_equal "SELECT clock_timestamp()", inside.second
+  end
+
 end

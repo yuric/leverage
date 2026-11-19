@@ -92,4 +92,22 @@ class ClaimReviewTest < ActiveSupport::TestCase
     assert_equal @reviewer.id, nxt.reload.reviewer_seat_id
     assert_equal @reviewer.id, @review.reload.reviewer_seat_id
   end
+
+  # A review whose lease is past its due time has no reviewer (L120,
+  # EN-14), whether or not the sweep has run: another reviewer claims it,
+  # after its review.lease_expired at the due time.
+  test "a review whose lease is past its due time is claimed by another reviewer, after the lease ends" do
+    first = @scenario.seat(role: "reviewer")
+    @scenario.review(@task, reviewer: first)
+    due = @scenario.make_due(@review.reload).lease_due_at
+    before = @scenario.workspace.reload.last_seq
+
+    assert apply(@reviewer).completed?
+    assert_equal @reviewer.id, @review.reload.reviewer_seat_id
+    events = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).to_a
+    assert_equal %w[review.lease_expired review.started], events.map(&:type)
+    assert_in_delta due.to_f, events.first.effective_at.to_f, 0.000_001
+    assert_nil events.first.command_id
+  end
+
 end

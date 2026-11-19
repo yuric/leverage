@@ -105,4 +105,19 @@ class ClaimTest < ActiveSupport::TestCase
     ids = [ apply(@builder), apply(other) ].map { |outcome| outcome.result.dig("task", "id") }
     assert_equal [ first.id, second.id ].sort, ids.sort
   end
+
+  # The same for a task: a Working task whose lease is past its due time
+  # goes back to Ready at its due time and another builder claims it.
+  test "a task whose builder lease is past its due time is claimed by another builder, after the lease ends" do
+    first = @scenario.seat(role: "builder")
+    task = @scenario.make_due(@scenario.task(state: "working", builder: first))
+    before = @scenario.workspace.reload.last_seq
+
+    outcome = apply(@builder)
+    assert outcome.completed?, outcome.refusal&.code
+    assert_equal [ "working", @builder.id ], task.reload.attributes.values_at("state", "holder_seat_id")
+    types = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
+    assert_equal %w[task.lease_expired task.claimed], types
+  end
+
 end

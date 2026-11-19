@@ -58,9 +58,10 @@ class TraceRunner
 
   attr_reader :name, :trace, :scenario, :failures, :setup_seq
 
-  def initialize(name)
+  # trace: the trace itself, when a test runs a changed copy of one.
+  def initialize(name, trace: nil)
     @name = name
-    @trace = Leverage::Contract.trace(name)
+    @trace = trace || Leverage::Contract.trace(name)
     @binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 1, 1))
     @ids = {}
     @symbols = {}

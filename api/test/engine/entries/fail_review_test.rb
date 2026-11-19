@@ -127,4 +127,21 @@ class FailReviewTest < ActiveSupport::TestCase
   test "before the reviewer's briefing is acknowledged it is briefing_not_acknowledged" do
     assert_equal "briefing_not_acknowledged", fail_with([ @copy.id ]).refusal.code
   end
+
+  # A lease ends at its due time (L120, EN-14): a builder whose only other
+  # lease is past it holds nothing, whether or not the sweep has run. The
+  # lease's timer is written first, at its due time, so the log says why.
+  test "a builder whose other lease is past its due time is free: that lease ends first, then the task is its again" do
+    acknowledge
+    other = @scenario.make_due(@scenario.task(state: "working", builder: @builder))
+    before = @scenario.workspace.reload.last_seq
+    assert fail_with([ @layout.id ]).completed?
+
+    assert_equal [ "working", @builder.id ], @task.reload.attributes.values_at("state", "holder_seat_id")
+    assert_equal [ "ready", nil ], other.reload.attributes.values_at("state", "holder_seat_id")
+    types = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
+    assert_equal %w[task.lease_expired review.failed criterion.reopened cost.reported], types
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+  end
+
 end

@@ -4,8 +4,9 @@ require_relative "accounts_support"
 # remove_seat (PRD L148, L823; milestone 2 plan IN-17, IN-40, SC-10): writes
 # seat.removed, sets removed_at, ends the token at once, clears wanted
 # running and, for a seat the app runs, queues stop_seat. A Working task the
-# seat holds is released to Ready with seat_removed; a review it holds is
-# not released by this command.
+# seat holds is released to Ready with seat_removed, with no builder, as
+# every return to Ready clears it (the PRD's replay list); a review it holds
+# with a live lease is released, so another reviewer can claim it.
 class RemoveSeatTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -51,7 +52,8 @@ class RemoveSeatTest < ActiveSupport::TestCase
     assert_equal [ task.id, nil, nil, written.first.id ], [ released.task_id, released.subject_kind, released.subject_id, released.cause_id ]
     task.reload
     assert_equal [ "ready", nil, nil, nil ], [ task.state, task.holder_seat_id, task.lease_due_at, task.lease_time_left_while_paused ]
-    assert_equal seat.id, task.builder_seat_id, "the task keeps the seat that last claimed it"
+    assert_nil task.builder_seat_id, "a task back in Ready has no builder"
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id), "the replay of the log agrees with the tables"
   end
 
   test "a task whose lease is already past its due time is left to the lease timer" do
@@ -63,13 +65,27 @@ class RemoveSeatTest < ActiveSupport::TestCase
     assert_not_includes written.map(&:type), "task.released", "an ended lease is the timer's (task.lease_expired), not a release"
   end
 
-  test "a review the seat holds is not released by Remove" do
+  test "a review the seat holds is released by Remove, so another reviewer can claim it" do
     reviewer = own_seat(role: "reviewer")
     review = @scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer)
     written = events_written { assert_completed(remove(reviewer)) }
 
+    assert_equal [ "seat.removed", "review.released" ], written.map(&:type)
+    released = written.last
+    assert_equal [ "review", review.id, "owner" ], [ released.subject_kind, released.subject_id, released.actor_kind ]
+    review.reload
+    assert_equal [ nil, nil, nil ], [ review.reviewer_seat_id, review.lease_due_at, review.lease_time_left_while_paused ]
+    other = own_seat(role: "reviewer")
+    assert_equal review.id, Leverage::Eligibility.next_review(other)&.id
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id), "the replay of the log agrees with the tables"
+  end
+
+  test "a review whose lease is already past its due time is left to the review lease timer" do
+    reviewer = own_seat(role: "reviewer")
+    @scenario.make_due(@scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer))
+    written = events_written { assert_completed(remove(reviewer)) }
+
     assert_equal [ "seat.removed" ], written.map(&:type)
-    assert_equal reviewer.id, review.reload.reviewer_seat_id
   end
 
   test "a removed seat is not found" do

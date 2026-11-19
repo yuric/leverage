@@ -104,4 +104,52 @@ class GrantsTest < ActiveSupport::TestCase
     fixtures = Dir.glob(Rails.root.join("test/fixtures/**/*.yml")).map { |path| File.basename(path, ".yml") }
     assert_empty fixtures & APPEND_ONLY
   end
+
+  # The parallel test workers each run the hook at once, and ALTER ROLE on
+  # one pg_authid row from several transactions fails with "tuple
+  # concurrently updated". No test logs in as leverage_api, so the hook
+  # leaves its password to db:grants.
+  test "the test hook grants the rights but never sets leverage_api's password, even when one is configured" do
+    saved = ENV["LEVERAGE_API_DB_PASSWORD"]
+    ENV["LEVERAGE_API_DB_PASSWORD"] = "made-up-test-password"
+    original = DbGrants.method(:set_api_password)
+    calls = []
+    DbGrants.define_singleton_method(:set_api_password) { |*arguments| calls << arguments.last }
+    run_grants
+    assert_empty calls, "the test hook set leverage_api's password"
+    assert_equal expected_grants(tables), grants
+  ensure
+    DbGrants.define_singleton_method(:set_api_password, original) if original
+    ENV["LEVERAGE_API_DB_PASSWORD"] = saved
+  end
+
+end
+
+# db:grants run at once from several connections, as two containers that
+# both prepare the database would: setting leverage_api's password is
+# serialized, so no run fails with "tuple concurrently updated".
+class GrantsPasswordRaceTest < CommittingTestCase
+  test "concurrent password updates of leverage_api all succeed" do
+    configured = ENV["LEVERAGE_API_DB_PASSWORD"].to_s
+    password = configured.empty? ? "made-up-test-password" : configured
+    DatabaseTestHooks.grant_app_role
+    errors = Array.new(4) do
+      Thread.new do
+        ActiveRecord::Base.connection_pool.with_connection do |connection|
+          connection.transaction do
+            DbGrants.set_api_password(connection, password)
+            connection.execute("SELECT pg_sleep(0.2)")
+          end
+        end
+        nil
+      rescue StandardError => error
+        error
+      end
+    end.map(&:value).compact
+    assert_empty errors.map(&:message)
+  ensure
+    if configured.to_s.empty?
+      ActiveRecord::Base.lease_connection.execute("ALTER ROLE #{DbGrants.api_role} NOLOGIN PASSWORD NULL")
+    end
+  end
 end

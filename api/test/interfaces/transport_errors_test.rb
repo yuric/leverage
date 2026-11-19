@@ -211,4 +211,58 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
   ensure
     TransportErrorsTest::CommandController.remove_method(:boom) if TransportErrorsTest::CommandController.method_defined?(:boom)
   end
+
+  # One rule for an operation that takes no body, the same on the agent,
+  # owner and helper interfaces (RequestSchema.body!): an empty body or
+  # exactly {} is accepted, and any other body is 422 invalid.
+  test "an operation with no body accepts {} and refuses any other body as 422 invalid, on every interface" do
+    builder = @scenario.seat(role: "builder")
+    own = @scenario.seat(role: "builder", provider: "codex")
+    paths = Leverage::Contract.registry.fetch("operations").to_h { |op| [ op.fetch("operation_id"), op.fetch("path") ] }
+    {
+      "claim_next_task" => [ @scenario.token_for(builder), {} ],
+      "stop_seat" => [ @token, { "id" => own.id } ],
+      "issue_seat_token" => [ @scenario.helper_token, { "id" => SecureRandom.uuid } ]
+    }.each do |operation_id, (token, ids)|
+      path = paths.fetch(operation_id).gsub(/\{([a-z]+)\}/) { ids.fetch(Regexp.last_match(1)) }
+      post path, params: "{}", headers: headers(key: "key-#{SecureRandom.hex(6)}", token: token)
+      assert_not_includes [ 400, 422 ], response.status, "#{operation_id} with {}: #{response.body}"
+      post path, params: { "x" => 1 }.to_json, headers: headers(key: "key-#{SecureRandom.hex(6)}", token: token)
+      assert_transport_error :unprocessable_entity, "invalid"
+    end
+  end
+
+  # A body sent without the JSON media type is never parsed into params
+  # (Leverage::Http::JsonBodiesOnly): Rails would read it as a form, and
+  # its "Parameters:" log line would print the whole body as one key, the
+  # password with it (PRD, Security: no secret in a log).
+  test "a body that is not sent as JSON is 400 malformed before any controller, and its password never reaches the log" do
+    password = "made-up-secret-#{SecureRandom.hex(4)}"
+    body = { email_address: "made-up@example.test", password: password }.to_json
+    io = StringIO.new
+    capture = ActiveSupport::Logger.new(io)
+    Rails.logger.broadcast_to(capture)
+    begin
+      [ "application/x-www-form-urlencoded", "text/plain", nil ].each do |type|
+        head = { "Idempotency-Key" => "key-#{SecureRandom.hex(6)}" }
+        head["Content-Type"] = type if type
+        %w[/v1/owner/session /v1/owner/setup].each do |path|
+          post path, params: body, headers: head, env: (type ? {} : { "CONTENT_TYPE" => nil })
+          assert_transport_error :bad_request, "malformed"
+        end
+      end
+    ensure
+      Rails.logger.stop_broadcasting_to(capture)
+    end
+    assert_not_includes io.string, password
+    assert_not_includes io.string, "made-up@example.test"
+  end
+
+  test "an empty POST with no media type still reaches its controller" do
+    own = @scenario.seat(role: "builder", provider: "codex")
+    post "/v1/owner/seats/#{own.id}/stop", headers: { "Authorization" => "Bearer #{@token}", "Idempotency-Key" => "key-1" }
+    assert_response :conflict
+    assert_equal "invalid_state", response.parsed_body.dig("refusal", "code")
+  end
+
 end
