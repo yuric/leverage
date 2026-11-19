@@ -75,7 +75,8 @@ If you work in a fork, use the name of the remote that points here.
 
 leverage itself is built largely with AI coding agents, so AI-assisted
 contributions are welcome. What matters is that a person stands behind the
-work. The rules are the same for everyone, including the maintainer.
+work. The rules are the same for everyone, including the maintainer, with
+the one exception below.
 
 - **Disclose it.** Say in the pull request which tool you used and what you
   used it for (writing code, drafting text, review, finding the bug). Tick the
@@ -94,13 +95,17 @@ work. The rules are the same for everyone, including the maintainer.
   repository to open issues or pull requests without a person reviewing each
   one before it is submitted.
 - **A delegated run is the one exception, and only the maintainer can start
-  one.** The maintainer may hand a defined piece of work to an agent the
-  maintainer directs, and let it open and merge pull requests unattended. In a
-  delegated run every pull request gets an adversarial review by a separate
-  agent before it is merged, the run is recorded in
-  [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and the maintainer reads
-  each merged pull request afterwards and ticks its AI-assistance box then.
-  The maintainer remains responsible for everything merged.
+  one.** The maintainer may hand a defined piece of work to one managing
+  agent, named in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) with the
+  date the run started, and let it open and merge pull requests unattended.
+  Agents it gives work to open pull requests but do not merge them. Every
+  pull request gets an adversarial review by a separate agent before it is
+  merged. The run's terms are recorded in docs/IMPLEMENTATION.md, and the run
+  ends when the work is done or the maintainer stops it. Merged pull requests
+  keep both AI-assistance boxes unticked until the maintainer reads each one
+  and ticks the second box, and they are listed in docs/IMPLEMENTATION.md as
+  waiting until then. The maintainer remains responsible for everything
+  merged.
 - **Security reports have their own rule.** A model-generated vulnerability
   report that you have not reproduced yourself is not a security report. See
   [SECURITY.md](SECURITY.md#ai-assisted-reports).

@@ -9,7 +9,13 @@ person can pick it up after an interruption.
   [AGENTS.md](../AGENTS.md).
 - **Update it in the same pull request as the work.** A pull request that
   starts, finishes or changes the plan for a milestone edits the tables
-  below. A milestone is `Merged` only when its pull request is on `main`.
+  below. A milestone is `Merged` when its pull request is on `main` and
+  every item and test the PRD's "Build order and tracks" assigns to it
+  exists and passes in CI; the pull request description lists each with
+  where it is.
+- **Push each branch and open a draft pull request at once**, then record
+  both under [In flight](#in-flight). Where this file and GitHub disagree,
+  GitHub is right, and the next agent corrects this file first.
 - **Keep it true.** It records what is done and what is in flight. What is
   built is defined in [PRD.md](PRD.md), how in
   [ARCHITECTURE.md](ARCHITECTURE.md), and how it is run in
@@ -21,10 +27,13 @@ person can pick it up after an interruption.
 ## How the build is run
 
 The owner delegated this build to one managing agent on 2026-11-19, under
-the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md).
+the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md). The managing
+agent is Claude Code (Claude Fable 5.2); the run started on 2026-11-19 and
+ends when the build is done or the owner stops it.
 
 - The managing agent plans each milestone, gives the work to other agents,
-  reviews what they return, and keeps this file current.
+  reviews what they return, merges, and keeps this file current. Agents it
+  gives work to open pull requests but do not merge them.
 - One pull request per milestone. Each leaves `main` working.
 - Every pull request gets an adversarial review by a separate agent before it
   is merged, and its findings are fixed or answered in the pull request.
@@ -33,7 +42,9 @@ the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md).
   development first.
 - When something cannot be settled without the owner, the agent decides,
   records it under [Questions for the owner](#questions-for-the-owner), and
-  continues. Anything that cannot be undone outside this repository waits.
+  continues.
+- Anything that cannot be undone outside this repository waits. This term
+  is the managing agent's choice, not the owner's; see question 3.
 - Software is installed from official sources only, pinned, and listed under
   [Installed for the build](#installed-for-the-build).
 - No agent signs in to a provider or types a credential. Tests against real
@@ -45,26 +56,35 @@ the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md).
 | --- | --- |
 | **As of** | 2026-11-19 |
 | **On `main`** | The rules, the PRD, the first decision record, the design reference and the provider-terms record |
-| **In flight** | The PRD change that settles the gate before the contract; the project skeleton |
 | **Next** | The contract milestone, once the PRD change is merged |
+
+### In flight
+
+| Work | Branch | Pull request | State |
+| --- | --- | --- | --- |
+| Progress file, practices and the delegated-run rule | `docs/implementation-setup` | #8 | In review |
+| The PRD change that settles the gate before the contract | `docs/prd-gate` | None yet | Uncommitted; to be rebased on `main` |
+| Milestone 0 skeleton | `chore/skeleton` | None yet | No commits yet |
 
 ## Milestones
 
 The milestones and their content are defined in the PRD under "Build order
-and tracks". This table tracks them; it does not define them.
+and tracks". This table tracks them; it does not define them. Its rows follow
+the PRD's milestone list; see question 4. How the build is run locally is in
+[DEPLOY.md](DEPLOY.md).
 
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
-| 0 | Skeleton: the `api/` and `mac/` directories, containers and CI | In progress | | Not a PRD milestone; it gives the others a place to land |
+| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 CI check, as their Pending lines say |
 | 1 | Contract | Not started | | Waits for the PRD gate change |
-| 2 | Core loop, account setup and the part that starts agents | Not started | | The first milestone usable without a terminal |
-| 3 | Handoff | Not started | | |
-| 4 | Rule checks | Not started | | |
-| 5 | Questions and approvals | Not started | | |
-| 6 | Credentials | Not started | | |
-| 7 | Local deployment and the release acceptance run | Not started | | The backend in containers on the owner's Mac; the Mac app built and run there |
+| 2 | Core loop | Not started | | |
+| 3 | Rule checks | Not started | | |
+| 4 | Questions and approvals | Not started | | |
+| 5 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
+| 6 | Analytics page | Not in this build | | See question 1 |
 
-Status is one of `Not started`, `In progress`, `In review`, `Merged`.
+Status is one of `Not started`, `In progress`, `In review`, `Merged`,
+`Not in this build`.
 
 ## Decisions made during the build
 
@@ -72,9 +92,7 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
-| Date | Choice | Where it is recorded |
-| --- | --- | --- |
-| 2026-11-19 | The directory names `api/` and `mac/`, and the helper written in Swift | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
+Nothing yet.
 
 ## Installed for the build
 
@@ -87,6 +105,20 @@ Nothing yet.
 2. **A notarized installer and a move to a real server.** *Chosen meanwhile:*
    neither is part of this build; the backend runs in containers on the
    owner's Mac and the Mac app is built and run there.
-3. **The AI-assistance box on each merged pull request.** Only the owner can
-   tick it, after reading the pull request. Every pull request merged under
-   the delegated run is waiting for that.
+3. **Waiting before anything irreversible outside this repository.** The
+   owner's terms do not say this. *Chosen meanwhile:* the managing agent
+   holds any such step and records it here, because it cannot be undone
+   while the owner is away.
+4. **Where handoff comes in the milestone order.** The PRD draft's prose
+   puts handoff directly after the core loop, but its milestone list still
+   puts Credentials fifth. *Chosen meanwhile:* the PRD gate pull request
+   changes the list, putting account setup into Core loop and Handoff
+   directly after it; this table follows the PRD once that is merged.
+
+## Waiting for the owner
+
+Merged pull requests keep both AI-assistance boxes unticked until the owner
+reads each one and ticks the second box. Every ADR added in the delegated
+run is also listed here until the owner has read it.
+
+Nothing yet.

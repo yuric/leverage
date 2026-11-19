@@ -226,16 +226,17 @@ assertion and the reason.
 These are how the work is done. The [rules](#rules) say what a pull request
 must satisfy; where a practice is also a rule, the rule is the authority.
 
-- **Test-driven development.** Write the failing test first, then the code
-  that makes it pass, then tidy with the tests green. A behavior change
-  without a test that failed before it is not done. Rule AR-007 checks this
-  once it is active.
+- **Test-driven development.** Write the test first, see it fail, make it
+  pass, then tidy with the tests green. Rule AR-007 is the requirement. To
+  show it, commit the test before the code, or quote the test's failure on
+  the base branch under "How it was verified".
 - **The contract first.** What two parts share (tables, event types, the
   fixed lists, the interface schema) is written and reviewed before either
   part is built, and it lives in one place. Parts are built against it, with
   stand-ins where the other side does not exist yet.
-- **Small steps that leave `main` working.** One pull request per milestone,
-  and every merge leaves the checks green and the product runnable.
+- **Small steps that leave `main` working.** Every merge leaves the checks
+  green and the product runnable; how work is split into pull requests is
+  [AR-001](#ar-001-requirement-scoped-pull-requests).
 - **Tests at the level of the behavior.** Unit tests for rules that are pure
   logic, tests against the interface schema for every call, and a run of the
   whole task loop for what crosses parts. A provider's tool is replaced by a
@@ -243,9 +244,10 @@ must satisfy; where a practice is also a rule, the rule is the authority.
 - **No secret in the repository, a log, an event, a fixture or a
   screenshot.** Tests use made-up values. Records name a credential by its
   id.
-- **An adversarial review before merge.** A reviewer who did not write the
-  change tries to break it, and its findings are fixed or answered in the
-  pull request.
+- **An adversarial review before merge in a delegated run.** In a run
+  delegated under [CONTRIBUTING.md](../CONTRIBUTING.md#ai-assisted-contributions),
+  a reviewer who did not write the change tries to break it, and its
+  findings are fixed or answered in the pull request.
 - **Documents in step.** A change that alters behavior, structure,
   configuration or deployment updates the matching document, and
   [IMPLEMENTATION.md](IMPLEMENTATION.md), in the same pull request.
