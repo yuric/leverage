@@ -13,6 +13,9 @@ module Leverage
     #                   default); effect is what an app policy chooses.
     #   transitions:    {pending_transition_id => {task_id:, held:,
     #                     inputs_changed:, checks: [{id:, rule_id:, result:, overridden:}]}}
+    #   actions:        {action_id => {request:, checks: [{id:, rule_id:, result:, overridden:}]}}
+    #                   the Request evaluated at action.requested and the
+    #                   action's gate checks, for reenter_action.
     #   claim_checks:   [{task_id:, seat_id:, rule_id:, result:, overridden:, current:}]
     #                   task.before_claim checks, for claimable_filter.
     #   built_by:       {task_id => [credential provider]}
@@ -20,10 +23,11 @@ module Leverage
     #   reviews:        {review_id => task_id}
     #   seat_providers: {seat_id => credential provider}
     class StandIn
-      def initialize(rules: [], transitions: {}, claim_checks: [], built_by: {}, past_holders: {}, reviews: {},
+      def initialize(rules: [], transitions: {}, actions: {}, claim_checks: [], built_by: {}, past_holders: {}, reviews: {},
                      seat_providers: {})
         @rules = rules
         @transitions = transitions
+        @actions = actions
         @claim_checks = claim_checks
         @built_by = built_by
         @past_holders = past_holders
@@ -35,12 +39,51 @@ module Leverage
         hook!(request.hook)
         input_hash = Gating.input_hash(hook: request.hook, inputs: request.inputs)
         enabled = rules_at(request.hook)
-        plan = { checks: [], jobs: [], failures: [], warnings: [], effects: [], pending: false }
-        enabled.each { |rule| plan_rule(rule, request, input_hash, plan) }
+        plan = new_plan
+        deferred = []
+        if request.hook == ACTION_HOOK
+          # L138: the gates first; the approval policy only once every gate
+          # has cleared, and never after a failed gate.
+          gates, policies = enabled.partition { |rule| rule[:kind] == "gate" }
+          gates.each { |rule| plan_rule(rule, request, input_hash, plan) }
+          if plan[:failures].empty? && plan[:pending]
+            deferred = policies.map { |rule| rule[:id] }
+          elsif plan[:failures].empty?
+            policies.each { |rule| plan_rule(rule, request, input_hash, plan) }
+          end
+        else
+          enabled.each { |rule| plan_rule(rule, request, input_hash, plan) }
+        end
         Evaluation.new(outcome: plan[:pending] ? :pending : :completed,
                        frozen_rule_version_ids: enabled.map { |rule| rule[:version_id] },
                        checks: plan[:checks], jobs: plan[:jobs], failures: plan[:failures],
-                       warnings: plan[:warnings], effects: plan[:effects], holds_to_open: [])
+                       warnings: plan[:warnings], effects: plan[:effects], holds_to_open: [],
+                       deferred_rule_ids: deferred)
+      end
+
+      def reenter_action(action_id:, trigger:)
+        action = @actions.fetch(action_id)
+        gates = action.fetch(:checks).select { |check| blocking?(rule(check[:rule_id])) && !check[:overridden] }
+        return decision(:keep_pending) if gates.any? { |check| check[:result].nil? }
+
+        errored = gates.select { |check| check[:result] == "error" }
+        unless errored.empty?
+          holds = errored.map { |check| PlannedHold.new(reason: "check_error", rule_id: check[:rule_id], rule_check_id: check[:id]) }
+          return decision(:keep_pending, holds_to_open: holds)
+        end
+        failed = gates.select { |check| check[:result] == "failed" }
+        unless failed.empty?
+          failures = failed.map do |check|
+            Failure.new(rule_id: check[:rule_id], rule_check_ref: check[:id], reason: nil, route: rule(check[:rule_id])[:route])
+          end
+          return decision(:refuse, failures: failures)
+        end
+
+        request = action.fetch(:request)
+        input_hash = Gating.input_hash(hook: request.hook, inputs: request.inputs)
+        plan = new_plan
+        rules_at(ACTION_HOOK).select { |rule| rule[:kind] == "policy" }.each { |rule| plan_rule(rule, request, input_hash, plan) }
+        decision(:complete, checks: plan[:checks], jobs: plan[:jobs])
       end
 
       def reenter(pending_transition_id:, trigger:)
@@ -100,6 +143,10 @@ module Leverage
       end
 
       private
+
+      ACTION_HOOK = "action.requested".freeze
+
+      def new_plan = { checks: [], jobs: [], failures: [], warnings: [], effects: [], pending: false }
 
       def hook!(hook)
         raise ArgumentError, "unknown hook #{hook.inspect}" unless Contract.registry.fetch("hooks").include?(hook)
@@ -169,9 +216,9 @@ module Leverage
                          checker: rule[:checker], result: result, effect: effect, reason: nil)
       end
 
-      def decision(action, failures: [], holds_to_open: [], checks_to_withdraw: [])
+      def decision(action, failures: [], holds_to_open: [], checks_to_withdraw: [], checks: [], jobs: [])
         Decision.new(action: action, failures: failures, effects: [], holds_to_open: holds_to_open, holds_to_close: [],
-                     checks_to_withdraw: checks_to_withdraw)
+                     checks_to_withdraw: checks_to_withdraw, checks: checks, jobs: jobs)
       end
 
       def may_review?(seat_id, task_id)

@@ -24,7 +24,11 @@ module Leverage
       #
       # Returns an Evaluation: :pending when a blocking model check is planned,
       # :completed otherwise, with the rule check rows, jobs, failures, warnings,
-      # policy effects and holds the transition function must write.
+      # policy effects and holds the transition function must write. At
+      # action.requested the gates are planned first; the approval policy is
+      # planned too when every gate has a result and none failed, is left out
+      # when a gate failed (the action is stopped), and is returned in
+      # deferred_rule_ids while a gate is still running (see reenter_action).
       def evaluate(request)
         implementation!.evaluate(request)
       end
@@ -39,6 +43,26 @@ module Leverage
       # Returns a Decision: :complete, :refuse, :cancel or :keep_pending.
       def reenter(pending_transition_id:, trigger:)
         implementation!.reenter(pending_transition_id: pending_transition_id, trigger: trigger)
+      end
+
+      # Gates one outward action again when one of its gate checks finishes,
+      # times out, is overridden, re-run or withdrawn, or its rule is switched
+      # off. Checks at action.requested are keyed per action and are not
+      # pending transitions (PRD L384), and the approval policy runs only once
+      # every gate has passed, did not apply, was withdrawn or was overridden
+      # (L138), so evaluate returns the approval policy in deferred_rule_ids
+      # while a gate is still running, and this call plans it.
+      #
+      # action_id - the actions id.
+      # trigger   - a Trigger.
+      #
+      # Returns a Decision: :complete with the approval policy's check rows and
+      # jobs in checks and jobs (none when the policy is off: the transition
+      # function then holds the action with owner_approval), :refuse with the
+      # gate failures that stop the action, or :keep_pending while a gate runs
+      # or has ended in error (with its check_error hold).
+      def reenter_action(action_id:, trigger:)
+        implementation!.reenter_action(action_id: action_id, trigger: trigger)
       end
 
       # The input hash of a rule check: SHA-256, in lower-case hex, of

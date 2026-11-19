@@ -40,6 +40,25 @@ class GatingTest < Minitest::Test
 
   def trigger(kind = :check_finished) = Leverage::Gating::Trigger.new(kind: kind, rule_check_id: CHECK)
 
+  ACTION = "00000000-0000-4000-8000-0000000000f1".freeze
+  APPROVAL_RULE = "00000000-0000-4000-8000-0000000000c9".freeze
+  ACTION_INPUTS = { "contract_version" => 1, "action_kind" => "publish", "action_description" => "Publish it." }.freeze
+
+  def action_request
+    submit_request.with(hook: "action.requested", subject_kind: "action", subject_id: ACTION, requester_kind: "app",
+      requester_id: nil, command_key: nil, inputs: ACTION_INPUTS)
+  end
+
+  def approval_policy
+    rule(APPROVAL_RULE, hook: "action.requested", kind: "policy", checker: "model", on_fail: nil, route: nil)
+  end
+
+  def action_gate(id = RULE, **fields) = rule(id, hook: "action.requested", route: "owner", **fields)
+
+  def action_world(*checks)
+    { ACTION => { request: action_request, checks: checks } }
+  end
+
   def build_scenario(name)
     case name
     when :blocking_model_gate
@@ -79,6 +98,25 @@ class GatingTest < Minitest::Test
         { task_id: OTHER_TASK, seat_id: SEAT, rule_id: RULE, result: "failed", overridden: true, current: true }
       ])
       { seat_id: SEAT, failed_task_id: TASK, overridden_task_id: OTHER_TASK }
+    when :action_gate_pending
+      stand_in(rules: [ approval_policy, action_gate ])
+      { request: action_request, approval_rule_id: APPROVAL_RULE }
+    when :action_gate_fails_at_once
+      stand_in(rules: [ approval_policy, action_gate(checker: "app", app_result: "failed") ])
+      { request: action_request, rule_id: RULE, approval_rule_id: APPROVAL_RULE }
+    when :action_no_gate
+      stand_in(rules: [ approval_policy ])
+      { request: action_request, approval_rule_id: APPROVAL_RULE }
+    when :action_gates_passed
+      stand_in(rules: [ approval_policy, action_gate, action_gate(OTHER_RULE) ],
+        actions: action_world({ id: CHECK, rule_id: RULE, result: "passed", overridden: false },
+          { id: OTHER_CHECK, rule_id: OTHER_RULE, result: "failed", overridden: true }))
+      { action_id: ACTION, trigger: trigger, approval_rule_id: APPROVAL_RULE }
+    when :action_gate_failed
+      stand_in(rules: [ approval_policy, action_gate, action_gate(OTHER_RULE) ],
+        actions: action_world({ id: CHECK, rule_id: RULE, result: "failed", overridden: false },
+          { id: OTHER_CHECK, rule_id: OTHER_RULE, result: "not_applicable", overridden: false }))
+      { action_id: ACTION, trigger: trigger, rule_id: RULE, approval_rule_id: APPROVAL_RULE }
     when :briefing
       stand_in(rules: [ rule, rule(OTHER_RULE, scope: "checker_decides"), rule(THIRD_RULE, enabled: false) ])
       { task_id: TASK, seat_id: SEAT, covering_rule_id: RULE, checker_decides_rule_id: OTHER_RULE,
@@ -92,6 +130,7 @@ class GatingTest < Minitest::Test
     expected = {
       evaluate: [ [ :req, :request ] ],
       reenter: [ [ :keyreq, :pending_transition_id ], [ :keyreq, :trigger ] ],
+      reenter_action: [ [ :keyreq, :action_id ], [ :keyreq, :trigger ] ],
       input_hash: [ [ :keyreq, :hook ], [ :keyreq, :inputs ] ],
       briefing_rules: [ [ :keyreq, :task_id ], [ :keyreq, :seat_id ], [ :key, :review_id ] ],
       built_by_providers: [ [ :keyreq, :task_id ] ],
