@@ -8579,11 +8579,18 @@
               "string",
               "null"
             ]
+          },
+          "review_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewNote"
+            }
           }
         },
         "required": [
           "briefing",
-          "work_reference"
+          "work_reference",
+          "review_notes"
         ],
         "examples": [
           {
@@ -8655,9 +8662,89 @@
                 ]
               }
             },
-            "work_reference": "example"
+            "work_reference": "example",
+            "review_notes": []
+          },
+          {
+            "briefing": {
+              "hash": "example",
+              "versions": {
+                "rule_version_ids": [
+                  "00000000-0000-4000-8000-000000000046"
+                ],
+                "brief_version": 1,
+                "role_file_version": "example",
+                "contract_version": 1
+              },
+              "rules": [
+                {
+                  "rule_id": "00000000-0000-4000-8000-000000000047",
+                  "rule_version_id": "00000000-0000-4000-8000-000000000048",
+                  "key": "example",
+                  "name": "example",
+                  "instruction": "example",
+                  "may_apply": false
+                }
+              ],
+              "brief": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000049",
+                  "project_id": "00000000-0000-4000-8000-000000000050",
+                  "kind": "rule",
+                  "text": "example",
+                  "author_kind": "owner",
+                  "author_id": "00000000-0000-4000-8000-000000000051"
+                }
+              ],
+              "role_file": "example",
+              "contract": {
+                "contract_version": 1,
+                "goal": "example",
+                "details": "example",
+                "criteria": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000052",
+                    "task_id": "00000000-0000-4000-8000-000000000053",
+                    "position": 1,
+                    "text": "example",
+                    "kind": "build",
+                    "state": "open",
+                    "passed_at": "2026-01-01T00:00:00Z",
+                    "passed_by_seat_id": "00000000-0000-4000-8000-000000000054",
+                    "evidence": [
+                      {
+                        "id": "00000000-0000-4000-8000-000000000055",
+                        "criterion_id": "00000000-0000-4000-8000-000000000056",
+                        "kind": "link",
+                        "value": "example"
+                      }
+                    ]
+                  }
+                ],
+                "actions": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000057",
+                    "task_id": "00000000-0000-4000-8000-000000000058",
+                    "kind": "publish",
+                    "description": "example",
+                    "state": "contracted",
+                    "approved_by_kind": "owner",
+                    "approved_by_id": "00000000-0000-4000-8000-000000000059"
+                  }
+                ]
+              }
+            },
+            "work_reference": "example",
+            "review_notes": [
+              {
+                "review_id": "00000000-0000-4000-8000-000000000310",
+                "round": 0,
+                "notes": "The second criterion does not hold yet."
+              }
+            ]
           }
-        ]
+        ],
+        "description": "The briefing with its hash, the work reference and, for the builder after a failed review, the notes of the task's failed reviews, oldest first (PRD Agent interface; milestone 2 plan Q-9). The work reference and the notes are outside the hash. A reviewer's briefing has no notes."
       },
       "ClaimTaskResult": {
         "type": "object",
@@ -15136,6 +15223,39 @@
             "kind": "seat",
             "id": "00000000-0000-4000-8000-000000000300",
             "name": "example"
+          }
+        ]
+      },
+      "ReviewNote": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The notes of one failed review of the task, which the builder reworks from (milestone 2 plan Q-9, CL-6). Outside the briefing's hash, like the work reference.",
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "review_id",
+          "round",
+          "notes"
+        ],
+        "examples": [
+          {
+            "review_id": "00000000-0000-4000-8000-000000000310",
+            "round": 0,
+            "notes": "The second criterion does not hold yet."
           }
         ]
       }
