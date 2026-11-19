@@ -62,7 +62,8 @@ struct AddChecksTests {
         let folder = try #require(rig.folders.existing(for: credential))
         #expect(rig.tools.isSignedIn("claude", accountFolder: folder))
         #expect(!rig.tools.isSignedIn("claude"))
-        for call in try rig.tools.calls() where call.tool == "claude" {
+        // Every call but the version's is about this account.
+        for call in try rig.tools.calls() where call.tool == "claude" && call.argv != ["--version"] {
             #expect(call.env["CLAUDE_CONFIG_DIR"] == folder.path)
         }
     }
@@ -71,10 +72,11 @@ struct AddChecksTests {
     func geminiByRepeatedPrompt() async throws {
         let rig = try HelperRig()
         let request = addRequest(.gemini)
-        let tools = rig.tools
+        // The owner signs in only once the helper says it is waiting, so
+        // the first prompt is always answered signed out.
         let signer = Task {
-            try await Task.sleep(for: .milliseconds(400))
-            try tools.signIn("agy")
+            _ = await eventually { rig.progress(of: request.id).contains { $0.state == .waitingForSignIn } }
+            try rig.tools.signIn("agy")
         }
 
         let result = await rig.checks().add(request)
@@ -131,11 +133,13 @@ struct AddChecksTests {
     func noInstallerKeepsLooking() async throws {
         let rig = try HelperRig(emptyToolDir: true)
         let request = addRequest(.grok)
-        let from = rig.tools.tool("grok")
         let into = rig.toolDir.appendingPathComponent("grok")
+        let launcher = "#!/bin/sh\nexec '\(rig.tools.tool("grok").path)' \"$@\"\n"
+        // The owner installs it by hand once the helper says it is waiting.
         let installer = Task {
-            try await Task.sleep(for: .milliseconds(400))
-            try FileManager.default.copyItem(at: from, to: into)
+            _ = await eventually { rig.progress(of: request.id).contains { $0.state == .waitingForInstall } }
+            try Data(launcher.utf8).write(to: into)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: into.path)
         }
 
         let result = await rig.checks().add(request)
@@ -170,10 +174,22 @@ struct AddChecksTests {
         _ = await rig.checks().add(addRequest(.codex))
         _ = await rig.checks().add(addRequest(.grok))
 
+        // What each tool saw (the shell and the system's python3 add a few
+        // variables of their own, so this looks for what must not be there).
         for call in try rig.tools.calls() {
-            #expect(Set(call.env.keys).isSubset(of: ["PATH", "HOME", "TMPDIR", "LANG", "USER", "CLAUDE_CONFIG_DIR", "CODEX_HOME"]))
+            #expect(!call.env.keys.contains { $0.hasPrefix("LEVERAGE_") })
+            #expect(call.env["SOME_OTHER_SECRET"] == nil)
             #expect(!call.env.values.contains { $0.contains("lvh_") || $0.contains("lvo_") || $0.contains("lvs_") })
         }
+        // What the helper gives a tool is exactly the allow-list (CL-10).
+        let locator = ToolLocator(settings: rig.settings, timings: fastTimings)
+        let claude = ProviderCatalog.entry(for: "claude")!
+        let built = locator.toolEnvironment(
+            claude, toolPath: rig.tools.tool("claude").path, accountFolder: rig.folder.path("account"))
+        #expect(Set(built.keys) == ["PATH", "HOME", "TMPDIR", "LANG", "USER", "CLAUDE_CONFIG_DIR"])
+        let codex = ProviderCatalog.entry(for: "codex")!
+        #expect(Set(locator.toolEnvironment(codex, toolPath: rig.tools.tool("codex").path, accountFolder: nil).keys)
+            == ["PATH", "HOME", "TMPDIR", "LANG"])
         let sent = rig.everythingSent()
         #expect(!sent.contains(StandIns.statusEmail))
         #expect(!sent.contains(StandIns.statusOrganisation))
