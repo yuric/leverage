@@ -311,6 +311,11 @@ module Speed
     end
   end
 
+  # When each seat's first tick is, in the order the seats were connected.
+  def self.seat_starts(start_at, seats:, tick:)
+    Array.new(seats, start_at)
+  end
+
   def self.main(argv)
     options = Options.new(url: ENV.fetch("SPEED_API_URL", "http://api:3000"), seats: 50, seconds: 120, tick: 2.0)
     OptionParser.new do |o|
@@ -332,9 +337,10 @@ module Speed
 
     start_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 1
     deadline = start_at + options.seconds
-    threads = setup.seats.map do |role, token|
+    starts = seat_starts(start_at, seats: setup.seats.size, tick: options.tick)
+    threads = setup.seats.each_with_index.map do |(role, token), index|
       client = Client.new(options.url, tally, token: token)
-      Thread.new { Seat.new(client, tally, role: role, tick: options.tick, deadline: deadline).run(start_at) }
+      Thread.new { Seat.new(client, tally, role: role, tick: options.tick, deadline: deadline).run(starts[index]) }
     end
     threads.each(&:join)
 
