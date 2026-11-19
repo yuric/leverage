@@ -218,14 +218,25 @@ from-state and guard:
 - `holds_opened` and `holds_closed` name hold reasons; `refusal` marks a
   refused row, which has no `to` and no events.
 - `commands` gives each command's `work_call`, `blocked_by_hold` and
-  `allowed_while_pending`; `action_machine` is the outward action's own
-  states.
+  `allowed_while_pending`, with a `note` where the PRD needs reading;
+  `action_machine` is the outward action's own states. A guard about one
+  action names the `action_states` it holds in, and every action event a
+  row writes is a move of `action_machine` from each of them.
+- An operation that runs another command's rows names both (the verdict
+  runs `pass_review` or `fail_review`; a job result may run
+  `approve_action`; an override of the check that stopped an action runs
+  `approve_action`), so the lease rule of the run command applies.
+- `who_in_other_rows` on a group names a caller of the PRD's Who may ask
+  cell whose part other rows write (the app's own holds).
 
 `scripts/check_contract_tables.py` (in the "Registry matches the PRD" job)
-compares every `prd_*` field and every `source: prd` group here, in
-`steps.json`, `hooks.json`, `needs_you.json` and `roles.json`, and the
-agent calls of the registry, with the PRD's tables. A From cell of "Any"
-means every state but Done and Cancelled.
+compares every `prd_*` field and every `source: prd` group here (their
+from-states, to-states, callers, hooks and events), in `steps.json`,
+`hooks.json`, `needs_you.json` (with the operations of the choices),
+`roles.json` and `shipped_rules.json`, the agent calls and `GET /v1/next`
+kinds of the registry, and the commands a hold blocks, with the PRD's
+tables. A From cell of "Any" means every state but Done and Cancelled; a
+To cell "X, once ..." also names the state the task starts from.
 
 ## Golden traces
 
@@ -234,8 +245,9 @@ Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
 exist before the trace starts), then `commands` in order. Each command gives
 `at`, `caller`, `command` (from `commands`), `operation_id` (or `null` for a
 timer), `key`, `path_params`, `body` and `expect`: the `outcome`, the
-`refusal`, every event it writes in `seq` order, and the steps it opens and
-closes.
+`refusal`, every event it writes in `seq` order, the steps it opens and
+closes, and optionally `result_fields`, fields of the result the trace
+fixes (trace 05 shows the credential and model its claims run on).
 
 Values in a trace are written as symbols, never as literal ids or times:
 
@@ -260,7 +272,12 @@ How the traces write what the PRD leaves to the writer:
 - **Timers** are commands of their own, with caller `app`, no operation and
   no key. Their events carry the due time as `effective_at`.
 - **The server's own requests** inside a seat's command (the checks and
-  jobs at `action.requested`) carry actor `app` and no key.
+  jobs at `action.requested`) carry actor `app` and no key. Every other
+  event of a seat's or the owner's command carries that command's key, or
+  the key of the pending command it completes.
+- **A check's identity** (`subject_kind`, `subject_id`, `input_hash`) is
+  in `check.queued` and `check.finished`; the traces' hashes are made-up
+  digests, the same for every attempt of one check.
   `action.lease_granted` carries actor `app` and the key of the command that
   frees the builder.
 - **A pending transition's completion** carries the original requester's

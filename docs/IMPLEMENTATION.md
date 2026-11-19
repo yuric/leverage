@@ -160,12 +160,29 @@ from that record, or settles what it left open:
   fixed when it opens.
 - **Each check attempt is a job of its own** (DB-31), and jobs are claimed
   oldest first; the PRD gives no order for jobs.
-- **Gaps left as the PRD says them.** Overturning an approval whose action
-  is already reported done writes no event, because no event type exists
-  for it. Marking one action done while others are open closes the
-  `action_unconfirmed` hold without saying who carries out the rest; the
-  owner can offer the task again. A limit or sign-out report about a job's
-  run is described in the state table's notes, not as rows.
+- **Changes from the contract's adversarial review.** An overturned
+  approval stops a started action too (L144). An override of the check
+  that stopped an action runs approve_action's rows, and Mark action done
+  with approved actions left splits as Waive does, so the builder gets its
+  fresh lease when nothing waits for a decision (L139). A withdrawn
+  pending transition closes its `check_error` hold (L162). A limit or
+  sign-out report for a job's run is its own unbound command
+  (`report_job_limit`, `report_job_signed_out`). Review claims are blocked
+  by a hold. A seat change releases its task only when it disables the
+  seat. A task added to or moved into a paused project gets
+  `project_paused`. At `action.requested` the approval policy waits for
+  the action's gates (`Gating.reenter_action`). Check events carry their
+  subject and input hash. One-time tokens come in the completed envelope,
+  and a repeat of the key answers a `*Repeated` result without the token.
+  Claim results name their credential and model. The reviewer index counts
+  only reviews with no verdict; the token constraints refuse any
+  `*_token` key; the state trigger reads `events.xact_id`; composite keys
+  tie a check's version and a rule's current version to their rule.
+- **The tables check reads two cells with care.** A To cell "Done, once
+  every action is done or waived" also names the state the task starts
+  from, since it stays there until the condition holds; and the app's part
+  in "Hold and resume" is written by other rows, which the group says with
+  `who_in_other_rows`.
 - **The helper's check names and failure codes** are enums inside
   `openapi.json`, not registry lists, because nothing else uses them.
 - **Commit trailers.** The agents of this milestone signed their commits
@@ -269,10 +286,11 @@ skeleton's pull request description, as rule AR-004 asks.
      `not_suited_to_this_seat` and `stopping` for a seat, and
      `seat_disabled` and `seat_removed` for the app. Alternative: other
      names, or a longer list.
-   - **DB-7**: the event log is append-only for every role by triggers,
-     and the `leverage_app` role cannot change it; the API connects as a
-     member of that role from the Core loop milestone. Alternative: switch
-     now, or keep one role.
+   - **DB-7**: triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` on the
+     event log for every role, but a superuser or the table owner can
+     switch them off, so the guarantee holds only once the API logs in as
+     a member of `leverage_app`, which cannot change the log (planned for
+     the Core loop milestone). Alternative: switch now, or keep one role.
    - **DB-16**: priorities `low`, `normal`, `high`, default `normal`.
      Alternative: another scale.
    - **DB-17**: a strength rank is an integer, higher is stronger, no
@@ -298,6 +316,37 @@ skeleton's pull request description, as rule AR-004 asks.
      each part reads the rule tables itself.
    - **IF-21**: a run-stopped report writes no event; a held review is
      released. Alternative: an event of its own for it.
+   - **Job claims under a hold** (review finding; PRD line on Eligibility
+     changed): L545 said the eligibility rule, "no hold" included, applies
+     to job claims, while L378 says a hold opened during a pending
+     transition leaves its checks running. Chosen: the hold does not stop a
+     job claim (`claim_job` is not `blocked_by_hold`), and the Eligibility
+     line now says so. Alternative: block job claims under a hold, which
+     stalls every pending check until the last hold lifts.
+
+8. **Overturning an approval whose action is already reported done.** The
+   PRD says it "is recorded and changes nothing" (L144, L801), but no event
+   type or column records it, and the only command row, kept until command
+   keys are purged after 7 days, is not a durable record. The contract's
+   rows for it write nothing. *Proposed:* a PRD change adding a durable
+   record, for example an `action.overturn_recorded` event, or an
+   `overturned_by` column on `actions` that replay covers. *Chosen
+   meanwhile:* nothing is written, and the gap stays open.
+9. **Who carries out the approved actions left after Mark action done.**
+   The PRD's row writes `hold.closed` and says nothing about a lease
+   (L101). The contract applies L139: when no action waits for a decision
+   the previous builder gets a fresh lease if it holds nothing, carried on
+   that `hold.closed`, and otherwise the task waits for it. *Alternative:*
+   keep the hold open until the owner offers the task again, which the
+   PRD's row does not allow.
+10. **Changing a credential's model, effort or strength rank.** Add
+    credential now carries them (PRD Data model), nullable, without
+    deciding the PRD's open decision "How a credential's model is set":
+    whether the Mac app fills them from a provider default or the owner
+    chooses them, they reach the server in that request. No owner command
+    changes them later; the PRD's Credentials commands name none.
+    *Proposed:* answer it with that open decision, and add a "Change
+    credential" owner command if the owner chooses them.
 
 ## Waiting for the owner
 

@@ -11494,7 +11494,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when the helper reports every check passed. The masked label is made on the Mac; model, effort and strength rank are what handoff uses.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when the helper reports every check passed. The masked label is made on the Mac. Model, effort and strength rank are what handoff uses; whether the Mac app fills them from a provider default or the owner chooses them is the PRD's open decision \"How a credential's model is set\", and either way they arrive here.",
         "properties": {
           "credential_id": {
             "type": "string",

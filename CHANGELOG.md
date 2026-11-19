@@ -17,8 +17,8 @@ once it makes its first release.
   traces; `api/db/` holds the migrations for every table of the Data model,
   with an append-only event log and a task state that changes only with an
   event; `Leverage::Gating` is the gating interface, with a stand-in and a
-  conformance suite. Two checks compare the PRD's tables with the contract
-  in CI. The PRD gains the eleven changes the contract needed. The format
+  conformance suite, including the re-entry of an outward action's gates.
+  Two checks compare the PRD's tables with the contract in CI. The PRD gains the eleven changes the contract needed. The format
   is recorded in `docs/adr/0003-contract-format.md`.
 - The skeleton of the build: a Rails API in `api/` that answers
   `GET /v1/health` and turns every unhandled error into one JSON shape; a Swift

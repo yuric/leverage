@@ -43,7 +43,8 @@ of the contract means changing every reader, so the choice is recorded here
 5. **Two database roles.** Migrations run as the database's owner role.
    `leverage_app`, a `NOLOGIN` role kept by the `db:grants` task, has no
    right to change or remove an event or a rule version; triggers refuse
-   those changes for every role as well.
+   those changes for every role as well, though a superuser or the table
+   owner can switch the triggers off.
 6. **Comparison with the PRD in Python.** `scripts/check_registry.py` and
    `scripts/check_contract_tables.py`, with the standard library only,
    compare the PRD's tables with the registry and the contract files in CI.

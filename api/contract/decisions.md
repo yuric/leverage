@@ -104,8 +104,11 @@ Where two inventories chose differently, the decision names the conflict.
   constraint trigger after insert or update of `tasks.state` that requires
   an `events` row for that task written by the current transaction,
   counting rows written in released savepoints and not in rolled-back ones.
-  Inserts count. The mechanism is pinned in WP3 (a transaction-local
-  setting appended by an `AFTER INSERT` trigger on `events`), and
+  Inserts count. The mechanism is pinned in WP3 and was changed by the
+  review: `events.xact_id` (default `pg_current_xact_id()`, the top-level
+  transaction id inside savepoints too) must equal the committing
+  transaction's for an event of the same task and workspace; the earlier
+  transaction-local setting could be written by any caller. And
   `test_helper` fires deferred constraints before every test's rollback
   (§1.5), so the rule is enforced in every database test.
 - **DB-7** `[owner]` Append-only is enforced by triggers on `events` and
@@ -304,8 +307,10 @@ Where two inventories chose differently, the decision names the conflict.
   open_sign_in, read_usage` and states `queued, picked_up, finished,
   failed`; `helpers.token_hash` unique; one helper per workspace. No row
   of `helper_requests` and no `commands` row ever holds a seat token: the
-  token is returned once by the pickup (IF-15), and a check constraint on
-  `helper_requests.result` rejects a token key. D-G44.
+  token is returned once by the pickup (IF-15), and check constraints on
+  `helper_requests.result`, `commands.result` and `commands.refusal`
+  reject any key named `token` or ending in `_token`, in any letter case.
+  D-G44.
 - **DB-40** `[shape]` Owner sign-in: `users.email_address` unique,
   `password_digest`, `users.workspace_id` unique; `sessions (user_id,
   token_hash, created_at, last_used_at)`. D-G45, I-G17.

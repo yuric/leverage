@@ -402,17 +402,29 @@ the first change that needs one chooses it and adds it here.
 
 - **Where.** PostgreSQL, in the `db` container, is the only store. The PRD's
   [Data model](PRD.md#data-model) is the requirement; `api/db/structure.sql`
-  is the schema, built by the migrations in `api/db/migrate/`. It has every
-  table the Data model names, 29, and each but `workspaces` has a
-  `workspace_id` with a foreign key. CI migrates from zero and fails when
-  the result differs from the committed `structure.sql`.
+  is the schema, built by the migrations in `api/db/migrate/`. It has the
+  26 tables the Data model names plus `sessions`, `helper_requests` and
+  `briefing_acknowledgements` (owner sign-in, the helper's requests and
+  briefing acknowledgements), 29 in all, and each but `workspaces` has a
+  `workspace_id` with a foreign key. CI migrates from zero, with
+  `structure.sql` moved away so the migrations run, and fails when the
+  result differs from the committed file.
 - **Who writes.** No product code reads or writes the tables yet. The
-  schema itself refuses what the PRD forbids, whoever connects:
+  schema itself refuses what the PRD forbids:
   - `events` and `rule_versions` are append-only: a trigger refuses
-    `UPDATE`, `DELETE` and `TRUNCATE` for every role.
+    `UPDATE`, `DELETE` and `TRUNCATE` for every role. A superuser or the
+    table owner can still switch the triggers off, so the guarantee holds
+    only once the API logs in as a member of `leverage_app` (planned for
+    the Core loop).
   - A task's state changes only in a transaction that writes an event for
-    that task: two deferred constraint triggers on `tasks` check it at
-    commit.
+    that task in its workspace: two deferred constraint triggers on
+    `tasks` check at commit for an `events` row whose `xact_id` (set by
+    default to `pg_current_xact_id()`) is the transaction's own.
+  - `rule_checks (rule_id, rule_version_id)` and `rules (id,
+    current_version)` are composite foreign keys, so a check's version and
+    a rule's current version belong to that rule.
+  - A seat reviews at most one review at a time: the unique index on
+    `reviews.reviewer_seat_id` counts only reviews with no verdict.
   - The `leverage_app` role (`NOLOGIN`, kept by the `db:grants` task after
     every task that builds or changes the schema) has `SELECT, INSERT` on
     `events` and `rule_versions`, `SELECT, INSERT, UPDATE, DELETE` on every
@@ -420,9 +432,10 @@ the first change that needs one chooses it and adds it here.
     database's owner role from `.env`; no login uses `leverage_app` yet.
 - **What is never stored.** No column holds a token or a password in the
   clear: the only such names are `token_hash` (`sessions`, `helpers`,
-  `seats`) and `users.password_digest`. A check constraint refuses a
-  `token` or `seat_token` key anywhere in `commands.result` and
-  `helper_requests.result`. A credential is a row with a name, a kind and
+  `seats`) and `users.password_digest`. A check constraint refuses any key
+  named `token` or ending in `_token`, in any letter case and at any
+  depth, in `commands.result`, `commands.refusal` and
+  `helper_requests.result`; a count named `tokens` is allowed. A credential is a row with a name, a kind and
   a state; no login, sign-in token, settings folder or keychain reference
   has a column.
 - **How long.** The PRD's Data model says what is kept and for how long;
@@ -480,8 +493,12 @@ starts here; see [SECURITY.md](../SECURITY.md).
 - **Untrusted input.** Everything a seat sends (contract text, notes,
   evidence, questions, answers), every model job result and every helper
   report is untrusted. Job results and reports have fixed shapes in
-  `openapi.json`, and an event payload holds only ids, numbers and values
-  from closed lists, never free text. A link is never fetched.
+  `openapi.json`, and an event payload holds only ids, numbers, digests
+  and values from closed lists, never free text. The one exception is
+  `model` (in `task.claimed`, `review.started`, `job.claimed` and
+  `credential.switched`), a model name of at most 128 characters from a
+  fixed character set that has no `@`, so it cannot hold an email
+  address. A link is never fetched.
 - **Secrets.** No request or stored outcome carries a provider login,
   sign-in token, link, code or API token; the four one-time tokens appear
   only in the response that issues each.
