@@ -121,4 +121,7 @@ Merged pull requests keep both AI-assistance boxes unticked until the owner
 reads each one and ticks the second box. Every ADR added in the delegated
 run is also listed here until the owner has read it.
 
-Nothing yet.
+| Item | What is waiting |
+| --- | --- |
+| Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
+| [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
