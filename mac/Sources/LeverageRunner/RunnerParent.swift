@@ -14,13 +14,17 @@ import Glibc
 /// gone, `onGone` is called once: main.swift passes the same stop SIGTERM
 /// starts.
 enum RunnerParent {
-    /// Watches `parent`, nil when there is no parent to watch (it is
-    /// already launchd, pid 1: the helper was gone before the runner
-    /// looked).
+    /// Watches `parent`. When there is no parent to watch (it is already
+    /// launchd, pid 1: the helper was gone before the runner looked, since
+    /// the helper always starts the runner itself), `onGone` is called at
+    /// once and the answer is nil.
     static func watch(
         parent: pid_t = getppid(), interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void
     ) -> ParentWatch? {
-        guard parent > 1 else { return nil }
+        guard parent > 1 else {
+            onGone()
+            return nil
+        }
         let watch = ParentWatch(watching: parent, interval: interval, onGone: onGone)
         watch.start()
         return watch
