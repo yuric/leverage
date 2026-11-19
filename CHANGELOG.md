@@ -16,6 +16,12 @@ once it makes its first release.
   follow).
 - Architecture and deployment document structure in `docs/`.
 - `AGENTS.md` with instructions for AI coding agents.
+- A progress file for the build (`docs/IMPLEMENTATION.md`), engineering
+  practices in the architecture document with test-driven development first,
+  and a rule in `CONTRIBUTING.md` for a run the maintainer delegates to an
+  agent.
+- The design reference: a working mockup of the app with a left pane, a
+  project list, a Handoff tab and an app icon (`docs/design/`).
 - `MAINTENANCE.md`: what to expect from the maintainer, and the project's
   scope limits.
 - An AI-assisted contributions policy in `CONTRIBUTING.md`, a matching
@@ -25,6 +31,10 @@ once it makes its first release.
   requirement IDs, and pull request title format. External links are checked
   weekly.
 - Dependabot updates for the pinned GitHub Actions.
+- A record of what four providers' published documents say about driving
+  their subscription tools from another app, rotating accounts at a usage
+  limit, and other software handling a login
+  (`docs/research/provider-terms/`).
 - A ruleset on `main`: changes land through pull requests with passing
   checks; force pushes and deletion are blocked.
 - Research report on open source repository practices, with its notes and
@@ -37,6 +47,11 @@ once it makes its first release.
   `.claude/skills/`.
 - The version 1 product requirements in `docs/PRD.md` (a draft), with the
   record of its adversarial review in `docs/research/prd-review/`.
+- The first architecture decision record: a Rails API with PostgreSQL,
+  shipped in Docker containers that run on the owner's Mac for the first run
+  and later on a server the owner controls; a native Swift and SwiftUI Mac
+  app as a thin client; and a Swift helper on the owner's Mac that runs the
+  providers' tools (`docs/adr/0001-rails-api-postgresql-and-a-mac-client.md`).
 
 ### Changed
 
