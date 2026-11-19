@@ -97,7 +97,8 @@ class Folder:
         return self.calls.read_text(encoding="utf-8") if self.calls.exists() else ""
 
     def left_behind(self):
-        return sorted(p.name for p in self.tmp.iterdir() if p.name.startswith("leverage-real-provider"))
+        """Anything in the test's TMPDIR: the script's folder, or Swift's."""
+        return sorted(p.name for p in self.tmp.iterdir())
 
 
 class Case(unittest.TestCase):
@@ -284,7 +285,8 @@ class ThroughTheDriver(Case):
         self.assertEqual(len(self.prompt_calls()), 1)
         self.assertEqual(self.folder.left_behind(), [])
 
-    def test_a_timeout_ends_the_tool_and_its_child(self):
+    def write_sleeper(self):
+        """An agy that answers its version, then sleeps with a child."""
         sleeper_bin = self.folder.root / "sleeper-bin"
         sleeper_bin.mkdir()
         pids = self.folder.root / "sleeper-pids"
@@ -297,6 +299,18 @@ class ThroughTheDriver(Case):
             "sleep 600\n",
             encoding="utf-8")
         sleeper.chmod(0o755)
+        return sleeper_bin, pids
+
+    def assertEnded(self, pids):
+        self.assertTrue(pids.exists(), "the sleeper never started")
+        for pid in (int(value) for value in pids.read_text(encoding="utf-8").split()):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and alive(pid):
+                time.sleep(0.2)
+            self.assertFalse(alive(pid), f"process {pid} was left behind")
+
+    def test_a_timeout_ends_the_tool_and_its_child(self):
+        sleeper_bin, pids = self.write_sleeper()
         started = time.monotonic()
         code, out, err = self.run_script(
             "gemini", "--timeout", "2", path=self.real_swift_path(sleeper_bin), LEVERAGE_REAL_PROVIDER="gemini")
@@ -304,14 +318,36 @@ class ThroughTheDriver(Case):
         self.assertIn("outcome: failed", out)
         self.assertIn("exit_status: timed out", out)
         self.assertIn("tool_version: 0.0.1-sleeper", out)
-        self.assertTrue(pids.exists(), "the sleeper never started")
-        for pid in (int(value) for value in pids.read_text(encoding="utf-8").split()):
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline and alive(pid):
-                time.sleep(0.2)
-            self.assertFalse(alive(pid), f"process {pid} was left behind")
+        self.assertEnded(pids)
         self.assertEqual(self.folder.left_behind(), [])
         self.assertLess(time.monotonic() - started, RUN_LIMIT)
+
+    def test_a_stop_ends_the_tool_and_its_child_and_removes_the_folder(self):
+        # SIGTERM to the script while the tool runs, long before its limit:
+        # the driver never reaches its own limit, so the script must end the
+        # tool's process group itself.
+        sleeper_bin, pids = self.write_sleeper()
+        environment = {
+            "PATH": self.real_swift_path(sleeper_bin), "HOME": str(self.folder.home),
+            "TMPDIR": str(self.folder.tmp), "LANG": "C", "USER": "standin", "LEVERAGE_REAL_PROVIDER": "gemini",
+        }
+        script = subprocess.Popen(
+            [str(SCRIPT), "gemini", "--timeout", "300"], env=environment, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, cwd=str(self.folder.root))
+        try:
+            deadline = time.monotonic() + RUN_LIMIT
+            while not pids.exists() and script.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.2)
+            self.assertTrue(pids.exists(), "the sleeper never started")
+            script.terminate()
+            out, err = script.communicate(timeout=60)
+        finally:
+            if script.poll() is None:
+                script.kill()
+                script.communicate()
+        self.assertNotEqual(script.returncode, 0, out + err)
+        self.assertEnded(pids)
+        self.assertEqual(self.folder.left_behind(), [])
 
 
 def alive(pid):
