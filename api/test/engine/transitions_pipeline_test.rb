@@ -194,7 +194,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = PendingGating.new
     with_entry(AtHook, command: "claim") do
       assert_raises(T::Gate::Unsupported) { T.apply(request(command: "claim")) }
-      assert_equal 0, Command.where(command: "claim").count
+      assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "claim").count
     end
   end
 
@@ -232,7 +232,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
 
   test "a command that is not in the table is refused before anything runs" do
     assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "promote")) }
-    assert_equal 0, Command.where(command: "promote").count
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "promote").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -264,7 +264,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
     assert_equal %w[claim submit release], stand_in.requests.map(&:command)
     assert_nil T.stand_in
-    assert_equal 0, Command.where(command: %w[claim submit]).count
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: %w[claim submit]).count
   end
 
   test "precedence follows the registry, with not_eligible after every ranked code" do
