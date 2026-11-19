@@ -185,11 +185,12 @@ class StepsTest < ActiveSupport::TestCase
     acknowledge(open_task, builder)
     assert_equal "build", open_step(open_task).kind
 
-    passed_task = @scenario.task(state: "working", builder: builder, criteria: %w[build review])
+    other = @scenario.seat(role: "builder")
+    passed_task = @scenario.task(state: "working", builder: other, criteria: %w[build review])
     Criterion.where(task_id: passed_task.id, kind: "build").find_each do |criterion|
-      @scenario.append("criterion.passed", task: passed_task, subject: criterion, actor_kind: "seat", actor_id: builder.id)
+      @scenario.append("criterion.passed", task: passed_task, subject: criterion, actor_kind: "seat", actor_id: other.id)
     end
-    acknowledge(passed_task, builder)
+    acknowledge(passed_task, other)
     assert_equal "finish", open_step(passed_task).kind
   end
 
@@ -342,7 +343,7 @@ class StepsTest < ActiveSupport::TestCase
     @scenario = Scenario.new
     task = @scenario.task(state: "ready")
     assert_raises(Leverage::Steps::Unsupported) do
-      in_context(key: "k-later") { |ctx| ctx.emit("task.reassigned", task: task, payload: { wait_cause: nil }) }
+      in_context(key: "k-later") { |ctx| ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil }) }
     end
   end
 
