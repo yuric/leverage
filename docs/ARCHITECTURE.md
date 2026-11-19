@@ -375,12 +375,29 @@ libraries are not code units: rule AR-004 covers them. Across components,
 the Mac side reaches the API only over HTTP, through LeverageKit, and the
 API calls nothing on the Mac side.
 
+The runner and the helper never import each other: the helper starts the
+runner as a process. The app imports neither: it reaches the helper only
+through the server and by starting its process. The units of the core loop
+milestone (`LeverageRunner`, `LeverageAppServices`, `LeverageTestSupport` and
+the test units) are listed here from the first commit of that milestone's
+pull request, before their first files, so that each new file is checked
+against its row; the component entries above describe them once their code
+exists.
+
 | Code unit | Folder | May import |
 |---|---|---|
 | `LeverageKit` | `mac/Sources/LeverageKit/` | nothing |
+| `LeverageRunner` | `mac/Sources/LeverageRunner/` | `LeverageKit` |
 | `LeverageHelper` | `mac/Sources/LeverageHelper/` | `LeverageKit` |
-| `LeverageApp` | `mac/Sources/LeverageApp/` | `LeverageKit` |
-| `LeverageKitTests` | `mac/Tests/LeverageKitTests/` | `LeverageKit` |
+| `LeverageAppServices` | `mac/Sources/LeverageAppServices/` | `LeverageKit` |
+| `LeverageApp` | `mac/Sources/LeverageApp/` | `LeverageKit`, `LeverageAppServices` |
+| `LeverageTestSupport` | `mac/Tests/LeverageTestSupport/` | `LeverageKit` |
+| `LeverageKitTests` | `mac/Tests/LeverageKitTests/` | `LeverageKit`, `LeverageTestSupport` |
+| `LeverageRunnerTests` | `mac/Tests/LeverageRunnerTests/` | `LeverageKit`, `LeverageRunner`, `LeverageTestSupport` |
+| `LeverageHelperTests` | `mac/Tests/LeverageHelperTests/` | `LeverageKit`, `LeverageHelper`, `LeverageTestSupport` |
+| `LeverageAppServicesTests` | `mac/Tests/LeverageAppServicesTests/` | `LeverageKit`, `LeverageAppServices`, `LeverageTestSupport` |
+| `LeverageAppTests` | `mac/Tests/LeverageAppTests/` | `LeverageKit`, `LeverageApp`, `LeverageTestSupport` |
+| `LeverageEndToEndTests` | `mac/Tests/LeverageEndToEndTests/` | `LeverageKit`, `LeverageTestSupport` |
 | `api` | `api/` | nothing |
 
 `python3 scripts/check_imports.py` checks the code against this table.
