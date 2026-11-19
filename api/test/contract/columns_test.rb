@@ -30,7 +30,11 @@ class ColumnsTest < Minitest::Test
     "Criterion" => %w[evidence],
     # The seq of the item's inbox.opened event, so that after_seq on the
     # Needs you list has a meaning (IF-18).
-    "InboxItem" => %w[opened_seq]
+    "InboxItem" => %w[opened_seq],
+    # Text made from the seat's role, the contract and a template, and the
+    # fixed interval it tells the agent (milestone 2 plan, Q-15, the owner's
+    # issue 11). A read with no table behind it.
+    "LandingPrompt" => %w[text check_interval_minutes]
   }.freeze
 
   # A trace's rules rows carry the rule's columns, its current version's

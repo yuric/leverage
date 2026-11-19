@@ -44,6 +44,37 @@ class GrantsTest < ActiveSupport::TestCase
     assert_equal [ [ false ] ], sql("SELECT rolcanlogin FROM pg_roles WHERE rolname = 'leverage_app'").rows
   end
 
+  # Milestone 2 plan, EN-24: the server and the sweep sign in as
+  # leverage_api, a login role that holds leverage_app's rights and nothing
+  # of its own. Without LEVERAGE_API_DB_PASSWORD (as in a test run) it is
+  # created unable to log in.
+  test "the leverage_api role exists, is a member of leverage_app and owns nothing" do
+    run_grants
+    member = sql(<<~SQL).rows
+      SELECT r.rolinherit FROM pg_auth_members m
+      JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles r ON r.oid = m.member
+      WHERE g.rolname = 'leverage_app' AND r.rolname = 'leverage_api'
+    SQL
+    assert_equal [ [ true ] ], member
+    attributes = sql("SELECT rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'leverage_api'").rows
+    assert_equal [ [ false, false, false ] ], attributes
+    own = sql(<<~SQL).rows
+      SELECT table_name, privilege_type FROM information_schema.table_privileges
+      WHERE grantee = 'leverage_api' AND table_schema = 'public'
+    SQL
+    assert_empty own
+  end
+
+  # Roles belong to the cluster, so a server started earlier on the same
+  # cluster may have given the role its password: it logs in exactly when it
+  # has one (pg_authid needs the owner role, which every test run uses).
+  test "the leverage_api role can log in only when it was given a password" do
+    run_grants
+    assert_equal [ [ true ] ], sql(<<~SQL).rows
+      SELECT rolcanlogin = (rolpassword IS NOT NULL) FROM pg_authid WHERE rolname = 'leverage_api'
+    SQL
+  end
+
   test "the role holds exactly the expected rights on every table, and no TRUNCATE" do
     run_grants
     assert_equal expected_grants(tables), grants

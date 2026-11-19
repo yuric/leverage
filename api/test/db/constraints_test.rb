@@ -44,6 +44,23 @@ class ConstraintsTest < ActiveSupport::TestCase
     assert_accepted { command.call("owner", caller_id) }
   end
 
+  # Milestone 2 plan, IN-22 and IN-23: a helper request's non-secret inputs
+  # and its per-check progress never hold a credential's name or a token.
+  test "IN-22: helper request params and progress refuse a name key and any token key" do
+    request = ->(values) {
+      insert("helper_requests", { workspace_id: workspace, kind: "run_add_checks", requested_at: Time.current }.merge(values))
+    }
+    assert_accepted { request.call(params: { provider: "claude", credential_kind: "login" }) }
+    assert_accepted { request.call(params: { role: "builder", provider: "codex", model: nil, effort: "" }) }
+    assert_accepted { request.call(progress: [ { check: "signed_in", state: "running", failure: nil, install: nil } ]) }
+    assert_rejected { request.call(params: { provider: "claude", name: "Made-up login" }) }
+    assert_rejected { request.call(params: { Name: "Made-up login" }) }
+    assert_rejected { request.call(params: { seat_token: "made-up" }) }
+    assert_rejected { request.call(params: { outer: { Token: "made-up" } }) }
+    assert_rejected { request.call(progress: [ { check: "signed_in", helper_token: "made-up" } ]) }
+    assert_rejected { request.call(progress: [ { check: "signed_in", name: "Made-up login" } ]) }
+  end
+
   def step(task_id, opened_at: Time.current, closed_at: nil)
     insert("task_steps", workspace_id: workspace, task_id: task_id, round: 0, kind: "build",
       step_class: "working", opened_at: opened_at, closed_at: closed_at, opening_event_id: event(task_id: task_id))
