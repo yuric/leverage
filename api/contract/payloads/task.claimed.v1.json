@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.claimed v1",
+  "description": "Claim: the seat becomes holder and builder. Records the credential that does the work and the model actually used.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "seat_id": {
+      "description": "The claiming seat: the new holder and builder.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "credential_id": {
+      "description": "The credential the run starts on, or null for a seat that connects on its own.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "model": {
+      "description": "The model actually used, as the credential or seat names it; null when none is set.",
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$"
+    }
+  },
+  "required": ["seat_id", "credential_id", "model"],
+  "examples": [
+    {"seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "credential_id": "c41e7b92-0d36-4a8f-95e2-7b1f3c6d8a20", "model": "claude-opus-4-1"},
+    {"seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "credential_id": null, "model": null}
+  ]
+}

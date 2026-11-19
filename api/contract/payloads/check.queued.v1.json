@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check.queued v1",
+  "description": "A model check attempt is queued as a job.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hook": {
+      "description": "The hook the check runs at.",
+      "enum": ["task.before_ready", "task.before_claim", "task.before_submit", "task.before_done", "action.requested", "review.assign", "review.failed", "question.asked", "cost.reported"]
+    },
+    "rule_id": {
+      "description": "The rule.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "rule_version_id": {
+      "description": "The frozen rule version the check runs against.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "attempt_number": {
+      "description": "The attempt, from 1.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "job_id": {
+      "description": "The job that runs this attempt.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "blocking": {
+      "description": "True when the check makes its transition or action wait (a gate with on_fail block, or the approval policy).",
+      "type": "boolean"
+    },
+    "claimant_seat_id": {
+      "description": "At task.before_claim, the seat holding the provisional claim; else null.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "pending_transition_id": {
+      "description": "The pending transition the check gates, or null (at action.requested, or for a warn check).",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "action_id": {
+      "description": "At action.requested, the action checked; else null.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    }
+  },
+  "required": ["hook", "rule_id", "rule_version_id", "attempt_number", "job_id", "blocking", "claimant_seat_id", "pending_transition_id", "action_id"],
+  "examples": [
+    {"hook": "task.before_claim", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "attempt_number": 1, "job_id": "4f9a2d6c-1e8b-4c73-b5d0-6a2e9f3c7b18", "blocking": true, "claimant_seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "pending_transition_id": "b8e3a7f1-4d29-4c6e-a7b3-5f1d8c2e9a46", "action_id": null},
+    {"hook": "action.requested", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "attempt_number": 2, "job_id": "4f9a2d6c-1e8b-4c73-b5d0-6a2e9f3c7b18", "blocking": true, "claimant_seat_id": null, "pending_transition_id": null, "action_id": "a6d4f1b8-2c97-4e3d-8b50-1f7e9c2a6d35"}
+  ]
+}

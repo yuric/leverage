@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.reassigned v1",
+  "description": "A failed review escalates: only a seat at or above the rank may claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "minimum_strength_rank": {
+      "description": "The task's minimum strength rank after escalation; higher is stronger.",
+      "type": "integer"
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    }
+  },
+  "required": ["minimum_strength_rank", "wait_cause"],
+  "examples": [
+    {"minimum_strength_rank": 3, "wait_cause": null}
+  ]
+}

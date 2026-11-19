@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "brief.changed v1",
+  "description": "Edit a brief: the subject is the brief entry added, changed or removed.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "brief_version": {
+      "description": "The project's brief version after the change.",
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": ["brief_version"],
+  "examples": [
+    {"brief_version": 4}
+  ]
+}

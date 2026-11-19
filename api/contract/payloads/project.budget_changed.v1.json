@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "project.budget_changed v1",
+  "description": "Change a project's budget.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "budget": {
+      "description": "The project's budget in US dollars, or null for none.",
+      "type": ["number", "null"],
+      "minimum": 0
+    }
+  },
+  "required": ["budget"],
+  "examples": [
+    {"budget": 200.0},
+    {"budget": null}
+  ]
+}

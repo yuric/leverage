@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.returned_for_rework v1",
+  "description": "Return for rework from Finishing: Working under a fresh lease, or Ready when the previous builder is not free.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "lease_seat_id": {
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    }
+  },
+  "required": ["lease_seat_id", "wait_cause"],
+  "examples": [
+    {"lease_seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "wait_cause": null},
+    {"lease_seat_id": null, "wait_cause": null}
+  ]
+}

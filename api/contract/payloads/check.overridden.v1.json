@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check.overridden v1",
+  "description": "The owner overrides a failed or errored check once. Who and when are the actor and the time; why is content on the rule_checks row.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "required": [],
+  "examples": [
+    {}
+  ]
+}

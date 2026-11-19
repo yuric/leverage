@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "review.failed v1",
+  "description": "A review failed, or a gate failed at task.before_done. Records which criteria (or which rule check) failed and whether the previous builder got a fresh lease.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "failed_criterion_ids": {
+      "description": "The criteria the reviewer named as failed; the review criterion when a gate failed.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "failed_rule_check_id": {
+      "description": "The rule check whose failure at task.before_done counts as this failed review, or null.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "lease_seat_id": {
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Null means the task went to Ready.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    }
+  },
+  "required": ["failed_criterion_ids", "failed_rule_check_id", "lease_seat_id", "wait_cause"],
+  "examples": [
+    {"failed_criterion_ids": ["2b7f9d14-6e3a-4c05-b8d2-9f1a7e4c3b60"], "failed_rule_check_id": null, "lease_seat_id": "5f0c2a9e-1b7d-4e3a-8c61-2d9f4b7a0e13", "wait_cause": null},
+    {"failed_criterion_ids": ["71c3e8a5-9d24-4b6f-a1e7-3c5b8d0f2e94"], "failed_rule_check_id": "d1b7e4c9-8a35-4f2e-9c6b-7e0a3d5f1b84", "lease_seat_id": null, "wait_cause": null}
+  ]
+}

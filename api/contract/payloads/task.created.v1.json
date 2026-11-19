@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.created v1",
+  "description": "Add task. The task lands in Imaginarium or Backlog.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "state": {
+      "description": "The state the task was created in.",
+      "enum": ["imaginarium", "backlog"]
+    }
+  },
+  "required": ["state"],
+  "examples": [
+    {"state": "backlog"},
+    {"state": "imaginarium"}
+  ]
+}

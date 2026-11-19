@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evidence.attached v1",
+  "description": "Evidence for a criterion. The subject is the evidence row; its value is content and stays on that row.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "criterion_id": {
+      "description": "The criterion the evidence proves.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "description": "Link or note.",
+      "enum": ["link", "note"]
+    }
+  },
+  "required": ["criterion_id", "kind"],
+  "examples": [
+    {"criterion_id": "2b7f9d14-6e3a-4c05-b8d2-9f1a7e4c3b60", "kind": "link"}
+  ]
+}

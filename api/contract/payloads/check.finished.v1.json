@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check.finished v1",
+  "description": "A rule check row gets its result. Codes only: the checker's reason is text and stays on the rule_checks row.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "hook": {
+      "description": "The hook the check ran at.",
+      "enum": ["task.before_ready", "task.before_claim", "task.before_submit", "task.before_done", "action.requested", "review.assign", "review.failed", "question.asked", "cost.reported"]
+    },
+    "rule_id": {
+      "description": "The rule.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "rule_version_id": {
+      "description": "The rule version the check ran against.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "result": {
+      "description": "The result.",
+      "enum": ["passed", "failed", "not_applicable", "applied", "error", "withdrawn"]
+    },
+    "effect": {
+      "description": "For applied, the policy's effect; else null.",
+      "enum": ["approved", "stopped", "passed_to_owner", "refused", "same_builder", "to_ready", "escalated", "to_orchestrator", "to_owner", "project_paused", "task_held", null]
+    },
+    "wait_cause": {
+      "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",
+      "enum": ["credential_limit", null]
+    }
+  },
+  "required": ["hook", "rule_id", "rule_version_id", "result", "effect", "wait_cause"],
+  "examples": [
+    {"hook": "task.before_submit", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "passed", "effect": null, "wait_cause": null},
+    {"hook": "action.requested", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "applied", "effect": "approved", "wait_cause": null},
+    {"hook": "task.before_claim", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "result": "failed", "effect": null, "wait_cause": null}
+  ]
+}

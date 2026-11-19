@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rule.created v1",
+  "description": "A shipped rule at workspace creation, or a custom rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rule_version_id": {
+      "description": "The new current version's row.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "description": "The new current version number.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "enabled": {
+      "description": "Whether the rule is on when created.",
+      "type": "boolean"
+    }
+  },
+  "required": ["rule_version_id", "version", "enabled"],
+  "examples": [
+    {"rule_version_id": "9c2f5e8a-7b13-4d6c-a4e9-1b8d3f6c0a72", "version": 1, "enabled": true}
+  ]
+}

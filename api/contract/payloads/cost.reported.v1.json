@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cost.reported v1",
+  "description": "Tokens and spend since the last report: from a seat (no subject), a review verdict (the review) or a job result (the job).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tokens": {
+      "description": "Tokens used.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "spend": {
+      "description": "Spend in US dollars, as reported, at most six decimal places.",
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": ["tokens", "spend"],
+  "examples": [
+    {"tokens": 18250, "spend": 0.4125}
+  ]
+}

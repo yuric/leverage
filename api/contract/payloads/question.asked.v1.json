@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "question.asked v1",
+  "description": "Ask a question. Its text and assumption are content on the question row.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "blocking": {
+      "description": "True when the question blocks the work.",
+      "type": "boolean"
+    }
+  },
+  "required": ["blocking"],
+  "examples": [
+    {"blocking": true}
+  ]
+}

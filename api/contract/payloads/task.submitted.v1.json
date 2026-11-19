@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.submitted v1",
+  "description": "Submit. The event's subject is the review row created for the round. Records only whether the work reference changed, never its value.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "work_reference_changed": {
+      "description": "True when the submit changed the task's work reference.",
+      "type": "boolean"
+    }
+  },
+  "required": ["work_reference_changed"],
+  "examples": [
+    {"work_reference_changed": false}
+  ]
+}

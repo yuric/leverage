@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check.started v1",
+  "description": "A checker seat starts an attempt.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "attempt_number": {
+      "description": "The attempt, from 1.",
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": ["attempt_number"],
+  "examples": [
+    {"attempt_number": 1}
+  ]
+}

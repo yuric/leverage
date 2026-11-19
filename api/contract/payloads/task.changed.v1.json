@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.changed v1",
+  "description": "Change a task's priority, project or cap. Carries all three as they are after the change.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "priority": {
+      "description": "The task's priority.",
+      "enum": ["low", "normal", "high"]
+    },
+    "project_id": {
+      "description": "The task's project, or null for no project.",
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "budget_cap": {
+      "description": "The task's own cap in US dollars, or null for none.",
+      "type": ["number", "null"],
+      "minimum": 0
+    }
+  },
+  "required": ["priority", "project_id", "budget_cap"],
+  "examples": [
+    {"priority": "high", "project_id": "6c1d8f3a-9e52-4b7d-8f24-3a9c6e1b5d07", "budget_cap": null},
+    {"priority": "normal", "project_id": null, "budget_cap": 25.0}
+  ]
+}
