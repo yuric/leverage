@@ -514,7 +514,7 @@ the first change that needs one chooses it and adds it here.
 
 | Concern | API (`api/`) | Mac side (`mac/`) |
 |---|---|---|
-| Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
+| Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code and three timings (`Leverage::CommandLog`); never a header or a body. Logged parameters are filtered for anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
 | Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
 | Persistence | Active Record on PostgreSQL. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)). No token is ever written to a file. |
@@ -663,7 +663,10 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
 
 - **Network.** `compose.yaml` publishes the API on `127.0.0.1` only, and
   every Mac-side program calls it over plain HTTP. Nothing else on the
-  network can reach it. Before the server leaves the Mac the transport
+  network can reach it. In production the API answers only a request
+  addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
+  (`config.hosts`), so a web page in the owner's browser that rebinds its
+  own name to the loopback address is refused `403`. Before the server leaves the Mac the transport
   must become HTTPS ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md));
   `Configuration` already accepts an `https` address.
 - **Callers and their tokens.** Three callers reach the server, each with
@@ -682,8 +685,8 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
     removed. A seat that connects on its own gets its token once in the
     Connect sheet; Remove ends it.
 - **The setup call.** `POST /v1/owner/setup` needs no token and creates the
-  one owner. It answers `404` once an owner exists; until then anyone who
-  can reach the loopback address could call it.
+  one owner. It answers `404` once an owner exists; until then any program
+  on the Mac that can reach the loopback address could call it.
 - **Untrusted input.** Everything a seat sends (contract text, notes,
   evidence), every helper report and everything a provider's tool prints
   is untrusted. Of a tool's output the runner reads only its marker lines,
@@ -698,7 +701,9 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   login, sign-in token, link, code or API token. A provider's tool gets no
   leverage token: its environment is the allow-list above. The helper's
   requests carry only non-secret inputs (`params`), and the landing prompt
-  never contains the seat's token. The end-to-end run scans the
+  never contains the seat's token. A body under `/v1/` that is not sent
+  as JSON is answered `400` before Rails reads it (`JsonBodiesOnly`), so a
+  sign-in sent as a form never reaches the request log. The end-to-end run scans the
   containers' logs, the helper's and runs' logs and a dump of the database
   for every secret it used and anything shaped like a token
   (`scripts/secret_scan.py`).

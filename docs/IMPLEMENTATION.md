@@ -720,6 +720,23 @@ skeleton's pull request description, as rule AR-004 asks.
       - A seat's verdict that opens the round-limit hold records the hold
         and the Needs you item with the app as actor. Alternative: the seat
         as actor, as one of milestone 1's traces does for another hold.
+      - From the adversarial review: the Connect sheet asks for an effort
+        only for Claude and Antigravity, whose drivers pass `--effort`; a
+        Codex or Grok agent runs on its tool's own effort. Alternative:
+        pass Grok's `--effort`, known from its `--help` only.
+      - From the adversarial review: Remove seat also releases a review
+        the seat holds, and a claim first ends the leases past their due
+        time that stand in its way, as `fail_review` does for the
+        builder's. Alternative: leave both to the sweep, up to 15 seconds
+        later.
+      - From the adversarial review: in production the API answers only a
+        request addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
+        (the compose name the speed run uses), and refuses a body not sent
+        as JSON. Alternative: none that keeps a rebinding web page out.
+      - From the adversarial review: the landing prompt lists each call by
+        name, method and path, without the contract's one-line summary,
+        two of which use the engine word "lease". Alternative: reword the
+        contract's summaries and the PRD's agent-call table.
     - **Also for the owner to know:** the API still has no security scanner
       (question 6); nothing backs up the log yet (Q-14); Grok Build cannot
       be installed from the pop-up, and whether each tool's sign-in needs a
