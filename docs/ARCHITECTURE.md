@@ -425,7 +425,7 @@ Each choice is recorded in the ADR named beside it.
 | Mac helper | Runs the providers' tools on the owner's Mac; written in Swift, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Ruby and Rails | Ruby 4.0.10 (image `ruby:4.0.10-slim`), Rails 8.1.4.1; gem versions fixed in `api/Gemfile.lock` | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | PostgreSQL version | 17.12 (image `postgres:17.12-trixie`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
-| API checks | Minitest, RuboCop (`rubocop-rails-omakase`), Brakeman | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| API checks | Minitest, RuboCop (`rubocop-rails-omakase`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Swift | Swift tools version 6.2, macOS 14 or later, no third-party packages | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Swift tests | Swift Testing | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Continuous integration | GitHub Actions: `ubuntu-24.04` for the API and the import check, `macos-26` for Swift | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |

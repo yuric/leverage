@@ -135,8 +135,7 @@ python3 scripts/check_imports.py                     # dependency directions
 python3 scripts/test_check_imports.py                # self-test of that check
 ```
 
-CI also runs the API's tests, RuboCop and Brakeman, and the Swift build and
-tests, listed under "Build, test, and run" below.
+CI also runs the API's tests and RuboCop, and the Swift build and tests, listed under "Build, test, and run" below.
 
 With a base commit and a description file, `check_rules.py` also checks a
 pull request:
@@ -178,7 +177,6 @@ The API (`api/`):
 docker compose build                                 # build the API image
 docker compose run --rm api bin/rails test           # tests, against PostgreSQL
 docker compose run --rm api bin/rubocop              # style
-docker compose run --rm api bin/brakeman --no-pager  # security scan
 docker compose up -d                                 # run the API and the database
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
 docker compose down                                  # stop; the data is kept

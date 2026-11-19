@@ -101,13 +101,9 @@ them.
 - **The API's tests run in the production image.** compose has one `api`
   service built from Rails' default production Dockerfile, and
   `bin/rails test` switches to the test environment and its own database.
-- **`bundler-audit` and the local CI runner left out.** Both are
-  `rails new` defaults that nothing ran; `bin/ci`, `config/ci.rb`,
-  `bin/bundler-audit` and `config/bundler-audit.yml` were removed with the
-  gem.
-- **Brakeman upgrades only through `Gemfile.lock`.** `bin/brakeman` no
-  longer passes `--ensure-latest`, which failed CI whenever a newer Brakeman
-  was released.
+- **Brakeman, `bundler-audit` and the local CI runner left out.** All
+  three are `rails new` defaults. `bin/ci` and `config/ci.rb` were never
+  run. The two gems were removed because of their licenses; see question 6.
 - **Images pinned by digest.** `api/Dockerfile` and `compose.yaml` name each
   image by tag and digest; ADR 0002 records the digests.
 
@@ -151,13 +147,18 @@ skeleton's pull request description, as rule AR-004 asks.
    asked the agent to settle every review finding in the gate and to review
    them afterwards. The pull request that made that change lists each
    choice in one sentence with its alternative.
-6. **The license of Brakeman.** Rule AR-004 asks for a license compatible
-   with the MIT License. According to RubyGems, Brakeman 8.1.0 is under the
-   "Brakeman Public Use License". It is a development and test tool, and
-   the default Dockerfile puts it in the API image. *Chosen meanwhile:* it
-   is kept, because CI runs it as the API's security scan, and the skeleton's
-   pull request names it under AR-004 with its license. `bundler-audit`
-   (GPL-3.0-or-later), which raised the same question, was removed.
+6. **Security scanners for the API, and their licenses.** `rails new` adds
+   Brakeman (a security scan of the code) and `bundler-audit` (a check of
+   the gems for known defects). Rule AR-004 asks that a tool's license be
+   compatible with the MIT License. According to RubyGems, Brakeman 8.1.0
+   is under the "Brakeman Public Use License", which is not an open source
+   license, and `bundler-audit` 0.9.3 is under GPL-3.0-or-later. Both are
+   tools that run beside the code and are not part of it. *Chosen
+   meanwhile:* both are removed, because a delegated run does not answer
+   Deviates to a rule, so the API has no security scanner in CI. The
+   alternative is to keep them and say in AR-004 that the license clause
+   covers what is built into the product, not the tools that check it.
+   Putting either back is one line in `api/Gemfile` and one CI step.
 
 ## Waiting for the owner
 

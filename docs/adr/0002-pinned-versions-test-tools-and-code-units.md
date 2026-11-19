@@ -33,15 +33,15 @@ GitHub's list of runner images, not taken from memory.
    pinned to the image index digest
    `sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`.
 4. **Minitest**, the Rails default, tests the API, with Rails' request
-   tests. **RuboCop** (`rubocop-rails-omakase`) checks its style and
-   **Brakeman** checks it for security problems; both are Rails defaults.
+   tests. **RuboCop** (`rubocop-rails-omakase`), a Rails default, checks
+   its style.
 5. **Swift tools version 6.2**, with macOS 14 as the oldest supported
    system. 6.2 is the Swift in Xcode 26.0, the oldest Xcode on GitHub's
    `macos-26` runner image, so every Xcode on that image builds the
    package. **Swift Testing** tests it; it ships with the toolchain. The
    package uses no third-party package.
-6. **GitHub Actions** runs the checks: the API's tests, RuboCop and
-   Brakeman through `compose.yaml` on `ubuntu-24.04`, the Swift build and
+6. **GitHub Actions** runs the checks: the API's tests and RuboCop
+   through `compose.yaml` on `ubuntu-24.04`, the Swift build and
    tests on `macos-26`, and the import check.
 7. **Code units.** The API is one code unit, `api/`. The Swift package
    `Leverage` in `mac/` has three: `LeverageKit`, the library that is the
@@ -72,11 +72,12 @@ GitHub's list of runner images, not taken from memory.
   AR-004 for what it changes.
 - `macos-15`'s default Xcode, 16.4, cannot build the package; CI uses
   `macos-26`.
-- Brakeman is a development and test tool, and the default Dockerfile puts
-  it in the image. Its license, the "Brakeman Public Use License", is an
-  open question against rule AR-004, recorded in
-  [IMPLEMENTATION.md](../IMPLEMENTATION.md). `bundler-audit`, another
-  `rails new` default, is left out: nothing ran it.
+- Brakeman and `bundler-audit`, the two security scanners `rails new`
+  adds, are left out. Brakeman's license is not an open source license and
+  `bundler-audit`'s is the GPL, and rule AR-004 asks for a license
+  compatible with the MIT License. The API therefore has no security
+  scanner in CI. The question is recorded in
+  [IMPLEMENTATION.md](../IMPLEMENTATION.md).
 - A new image digest arrives only through a pull request that changes the
   digest here and in `api/Dockerfile` or `compose.yaml`. The Debian
   packages can still change between two builds of the same commit.
