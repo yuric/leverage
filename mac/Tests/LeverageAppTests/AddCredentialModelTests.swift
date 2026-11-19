@@ -265,8 +265,13 @@ struct AddCredentialModelTests {
             Fixtures.request(requestID, progress: [Fixtures.progress(.toolInstalled, .waitingForInstall, install: offer)], updated: 1)
         ])
         let install = installRequestID
-        owner.script {
-            $0.installTool = { _, key in Fixtures.plain(.installTool, key: key, helperRequest: install) }
+        owner.script { answers in
+            let before = answers.helperRequest
+            answers.helperRequest = { id, wait, after in
+                if id == install { return Fixtures.request(install, kind: .installTool, state: .finished, result: Fixtures.finished()) }
+                return try await before(id, wait, after)
+            }
+            answers.installTool = { _, key in Fixtures.plain(.installTool, key: key, helperRequest: install) }
         }
         let model = makeModel(owner)
         await start(model)
