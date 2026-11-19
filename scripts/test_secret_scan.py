@@ -229,6 +229,28 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("inside.log:1: secret 1", output)
         self.assertIn("base64", output)
 
+    def test_the_shortest_secret_allowed_is_found_in_base64_at_all_three_offsets(self):
+        # Eight characters is the shortest secret the scan takes, because a
+        # shorter one leaves a base64 piece too short to look for at one of
+        # the three offsets.
+        secret = "abcdefgh"
+        for offset in range(3):
+            encoded = base64.b64encode(b"x" * offset + secret.encode() + b"yyyy").decode()
+            self.scan.file(f"offset{offset}.log", f"blob {encoded}\n")
+        code, output = self.scan.run("--literal", secret, self.scan.logs)
+        self.assertEqual(code, 1, output)
+        for offset in range(3):
+            self.assertIn(f"offset{offset}.log:1: literal 1", output)
+        self.assertNotIn(secret, output)
+
+    def test_a_secret_under_eight_characters_is_refused(self):
+        # Its base64 copy could not be found at every offset.
+        self.scan.file("a.log", "text\n")
+        for secret in ("abcdef", "abcdefg"):
+            code, output = self.scan.run("--literal", secret, self.scan.logs)
+            self.assertEqual(code, 2, output)
+            self.assertIn("too short", output)
+
     def test_a_secret_wrapped_across_lines_is_found_where_it_starts(self):
         self.scan.file("wrapped.log", "first line\nvalue " + PASSWORD[:10] + "\n" + PASSWORD[10:] + " end\n")
         code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD), self.scan.logs)
