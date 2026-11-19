@@ -1,0 +1,85 @@
+require "test_helper"
+require_relative "accounts_support"
+
+# remove_seat (PRD L148, L823; milestone 2 plan IN-17, IN-40, SC-10): writes
+# seat.removed, sets removed_at, ends the token at once, clears wanted
+# running and, for a seat the app runs, queues stop_seat. A Working task the
+# seat holds is released to Ready with seat_removed; a review it holds is
+# not released by this command.
+class RemoveSeatTest < ActiveSupport::TestCase
+  include AccountsSupport
+
+  setup { use_scenario }
+
+  def remove(seat, **options) = owner_command("remove_seat", { "id" => seat.id }, **options)
+
+  test "a seat that connects on its own is removed and its token answers no more" do
+    seat = own_seat
+    key = new_key
+    written = events_written { assert_completed(remove(seat, key: key)) }
+
+    assert_equal [ "seat.removed" ], written.map(&:type)
+    assert_equal [ "seat", seat.id, "owner", @scenario.owner.id, key ],
+      [ written.first.subject_kind, written.first.subject_id, written.first.actor_kind, written.first.actor_id,
+        written.first.command_id ]
+    seat.reload
+    assert_equal written.first.at, seat.removed_at
+    assert_nil seat.token_hash
+    assert_not signs_in?(seat)
+    assert_equal 0, HelperRequest.where(seat_id: seat.id).count
+  end
+
+  test "a seat the app runs is no longer wanted running and is stopped" do
+    seat = running_seat
+    outcome = assert_completed(remove(seat))
+
+    seat.reload
+    assert_equal [ false, nil ], [ seat.wanted_running, seat.token_hash ]
+    stop = HelperRequest.find_by!(seat_id: seat.id, kind: "stop_seat")
+    assert_equal [ "queued", seat.credential_id ], [ stop.state, stop.credential_id ]
+    assert_equal stop.id, outcome.result.fetch("helper_request_id")
+  end
+
+  test "a Working task the seat holds is released to Ready with seat_removed, after seat.removed" do
+    seat = own_seat
+    task = @scenario.task(state: "working", builder: seat)
+    written = events_written { assert_completed(remove(seat)) }
+
+    assert_equal [ "seat.removed", "task.released" ], written.map(&:type)
+    released = written.last
+    assert_equal({ "reason" => "seat_removed", "wait_cause" => nil }, released.payload)
+    assert_equal [ task.id, nil, nil, written.first.id ], [ released.task_id, released.subject_kind, released.subject_id, released.cause_id ]
+    task.reload
+    assert_equal [ "ready", nil, nil, nil ], [ task.state, task.holder_seat_id, task.lease_due_at, task.lease_time_left_while_paused ]
+    assert_equal seat.id, task.builder_seat_id, "the task keeps the seat that last claimed it"
+  end
+
+  test "a task whose lease is already past its due time is left to the lease timer" do
+    seat = own_seat
+    @scenario.make_due(@scenario.task(state: "working", builder: seat))
+    written = events_written { assert_completed(remove(seat)) }
+
+    assert_includes written.map(&:type), "seat.removed"
+    assert_not_includes written.map(&:type), "task.released", "an ended lease is the timer's (task.lease_expired), not a release"
+  end
+
+  test "a review the seat holds is not released by Remove" do
+    reviewer = own_seat(role: "reviewer")
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer)
+    written = events_written { assert_completed(remove(reviewer)) }
+
+    assert_equal [ "seat.removed" ], written.map(&:type)
+    assert_equal reviewer.id, review.reload.reviewer_seat_id
+  end
+
+  test "a removed seat is not found" do
+    seat = own_seat
+    assert_completed(remove(seat))
+
+    assert_raises(T::NotFound) { remove(seat) }
+  end
+
+  test "an unknown seat is not found" do
+    assert_raises(T::NotFound) { owner_command("remove_seat", { "id" => SecureRandom.uuid }) }
+  end
+end
