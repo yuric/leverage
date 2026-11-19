@@ -46,7 +46,7 @@ class PassReviewTest < ActiveSupport::TestCase
       "briefing_hash" => B.hash_for(@task, seat: @reviewer, review: @review))
   end
 
-  def pass(failed: [])
+  def give_pass(failed: [])
     apply("pass_review", "id" => @review.id, "verdict" => "passed", "failed_criteria" => failed,
       "notes" => "Every criterion holds.", "tokens" => 1200, "spend" => 0.42)
   end
@@ -55,7 +55,7 @@ class PassReviewTest < ActiveSupport::TestCase
     acknowledge
     gating = Recording.new
     Leverage::Gating.implementation = gating
-    assert pass.completed?
+    assert give_pass.completed?
 
     @task.reload
     assert_equal [ "done", nil, @builder.id ], @task.attributes.values_at("state", "holder_seat_id", "builder_seat_id")
@@ -78,11 +78,11 @@ class PassReviewTest < ActiveSupport::TestCase
 
   test "naming failed criteria on a pass is 422 invalid" do
     acknowledge
-    assert_raises(T::Invalid) { pass(failed: [ Criterion.where(task_id: @task.id).first.id ]) }
+    assert_raises(T::Invalid) { give_pass(failed: [ Criterion.where(task_id: @task.id).first.id ]) }
   end
 
   test "before the reviewer's briefing is acknowledged it is briefing_not_acknowledged" do
-    assert_equal "briefing_not_acknowledged", pass.refusal.code
+    assert_equal "briefing_not_acknowledged", give_pass.refusal.code
     assert_empty written
   end
 
@@ -91,7 +91,7 @@ class PassReviewTest < ActiveSupport::TestCase
     ActiveRecord::Base.transaction(requires_new: true) do
       Leverage::Holds.open(@scenario.context, task: @task, reason: "owner_hold")
     end
-    assert_equal "on_hold", pass.refusal.code
+    assert_equal "on_hold", give_pass.refusal.code
   end
 
   test "a reviewer that does not hold the review is not_holder" do

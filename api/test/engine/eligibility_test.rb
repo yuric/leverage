@@ -175,11 +175,11 @@ class EligibilityTest < ActiveSupport::TestCase
     assert_equal %w[lease_expired], E.review_refusals(review, @reviewer)
 
     other = @scenario.seat(role: "reviewer")
-    @scenario.review(task, reviewer: other)
+    claimed = @scenario.review(task, reviewer: other)
     task.update!(state: "cancelled")
-    review.update!(reviewer_seat_id: nil, lease_due_at: nil)
+    claimed.update!(reviewer_seat_id: nil, lease_due_at: nil)
     @scenario.append("task.cancelled", task: task, actor_kind: "owner", actor_id: @scenario.owner.id)
-    assert_equal %w[task_cancelled], E.review_refusals(review.reload, other)
+    assert_equal %w[task_cancelled], E.review_refusals(claimed, other)
   end
 
   test "a review with a verdict is held by nobody" do

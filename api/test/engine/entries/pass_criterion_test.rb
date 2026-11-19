@@ -26,13 +26,13 @@ class PassCriterionTest < ActiveSupport::TestCase
 
   def acknowledge = apply("acknowledge_briefing", @builder, "id" => @task.id, "briefing_hash" => B.hash_for(@task, seat: @builder))
 
-  def pass(kind: "link", value: "https://example.test/work/pricing/t1_copy", criterion: @criterion, seat: @builder)
+  def pass_with(kind: "link", value: "https://example.test/work/pricing/t1_copy", criterion: @criterion, seat: @builder)
     apply("pass_criterion", seat, "id" => @task.id, "cid" => criterion.id, "evidence" => { "kind" => kind, "value" => value })
   end
 
   test "passes the criterion with its evidence" do
     acknowledge
-    assert pass.completed?
+    assert pass_with.completed?
 
     @criterion.reload
     assert_equal [ "passed", @builder.id ], [ @criterion.state, @criterion.passed_by_seat_id ]
@@ -49,14 +49,14 @@ class PassCriterionTest < ActiveSupport::TestCase
 
   test "a note is evidence too" do
     acknowledge
-    assert pass(kind: "note", value: "See the pricing section of README.md.").completed?
+    assert pass_with(kind: "note", value: "See the pricing section of README.md.").completed?
   end
 
   test "evidence that is not https, or that carries sign-in details, is 422 invalid and writes nothing" do
     acknowledge
     [ "http://example.test/proof", "https://made-up-user:made-up-pass@example.test/proof",
       "https://example.test/proof?token=made-up-value" ].each do |value|
-      assert_raises(T::Invalid, value) { pass(value: value) }
+      assert_raises(T::Invalid, value) { pass_with(value: value) }
     end
     assert_equal "open", @criterion.reload.state
     assert_equal 0, Evidence.where(criterion_id: @criterion.id).count
@@ -67,16 +67,16 @@ class PassCriterionTest < ActiveSupport::TestCase
     ActiveRecord::Base.transaction(requires_new: true) do
       Leverage::Holds.open(@scenario.context, task: @task, reason: "rounds_exceeded", facts: { round: 0 })
     end
-    assert_equal "on_hold", pass.refusal.code
+    assert_equal "on_hold", pass_with.refusal.code
   end
 
   test "before the briefing is acknowledged it is briefing_not_acknowledged" do
-    assert_equal "briefing_not_acknowledged", pass.refusal.code
+    assert_equal "briefing_not_acknowledged", pass_with.refusal.code
   end
 
   test "the review criterion is 422 invalid" do
     acknowledge
-    assert_raises(T::Invalid) { pass(criterion: Criterion.find_by!(task_id: @task.id, kind: "review")) }
+    assert_raises(T::Invalid) { pass_with(criterion: Criterion.find_by!(task_id: @task.id, kind: "review")) }
   end
 
   test "after the lease expired the builder's call is lease_expired, not invalid_state (trace 10)" do
@@ -84,7 +84,7 @@ class PassCriterionTest < ActiveSupport::TestCase
     @task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil, lease_due_at: nil)
     @scenario.append("task.lease_expired", task: @task, payload: { wait_cause: nil })
 
-    outcome = pass
+    outcome = pass_with
     assert_equal "lease_expired", outcome.refusal.code
     assert_empty written
   end
