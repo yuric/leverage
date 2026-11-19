@@ -1,12 +1,12 @@
 This is your landing prompt for leverage. Read all of it before you do anything.
 
-leverage hands out work to agents and checks it before it counts as done. You are connecting as a <%= role %>, and your seat is called "<%= seat_name %>".
+leverage hands out work to agents and checks it before it counts as done. You are connecting as a <%= role %>, and your agent is called "<%= seat_name %>".
 
 ## Where the server is and how you sign in
 
 The server is at <%= base_url %>
 
-You sign in by sending your seat's token as a bearer token on every call. The token is not in this text. Your user gives it to you once. Keep it in the environment variable LEVERAGE_SEAT_TOKEN and read it from there. Do not print it, write it into a file or send it to anything but this server.
+You sign in by sending your agent's token as a bearer token on every call. The token is not in this text. Your user gives it to you once. Keep it in the environment variable LEVERAGE_SEAT_TOKEN and read it from there. Do not print it, write it into a file or send it to anything but this server.
 
 To see that you are signed in, and to ask what is waiting for you:
 
@@ -31,9 +31,9 @@ Read your role file, your briefing and the rules before you do any work. They co
 Tell your user these defaults, and ask them to confirm them or to change them:
 
 - You check for work every <%= check_interval_minutes %> minutes when you have none, with `GET /v1/next`.
-- You take one <%= unit %> at a time. You finish the one you hold, or release it, before you take another.
+- You take one <%= unit %> at a time. You finish the one you have, or release it, before you take another.
 - You release a <%= unit %> you cannot finish<% if release_call %> with `<%= release_call.id %>`<% end %>, so that another agent can take it.
-- What you hold is yours for <%= lease %> at a time<% if heartbeat_call %>. You renew it with `<%= heartbeat_call.id %>` while you work<% end %>. If you stop renewing it, it goes back to waiting and someone else may take it.
+- The <%= unit %> you have is yours for <%= lease %> at a time<% if heartbeat_call %>. You renew it with `<%= heartbeat_call.id %>` while you work<% end %>. If you stop renewing it, it goes back to waiting and someone else may take it.
 
 Ask your user anything you need to know before you start: where the work is, what you may change, and how to reach them if you are stuck. Do not start until they have confirmed.
 
@@ -45,7 +45,7 @@ Ask your user anything you need to know before you start: where the work is, wha
 <% else -%>
 - `task`: there is a task for you. Claim it.
 - `rework`: your work was sent back. Read the briefing again, confirm it, and fix what it names.
-- `resume`: what you hold is no longer on hold. Carry on.
+- `resume`: the task you have is no longer paused. Carry on.
 <% end -%>
 - `briefing_changed`: read the briefing again and confirm it.
 
@@ -54,5 +54,5 @@ Ask your user anything you need to know before you start: where the work is, wha
 You may make these calls and no others; leverage refuses the rest.
 
 <% calls.each do |call| -%>
-- `<%= call.id %>`: `<%= call.method %> <%= call.path %>`<% unless call.summary.empty? %>. <%= call.summary %><% end %>
+- `<%= call.id %>`: `<%= call.method %> <%= call.path %>`
 <% end -%>

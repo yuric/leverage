@@ -109,5 +109,4 @@ class ClaimReviewTest < ActiveSupport::TestCase
     assert_in_delta due.to_f, events.first.effective_at.to_f, 0.000_001
     assert_nil events.first.command_id
   end
-
 end

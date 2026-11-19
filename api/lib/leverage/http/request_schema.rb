@@ -19,13 +19,14 @@ module Leverage
       module_function
 
       # The parsed body (a Hash with string keys) of an operation's
-      # request. An operation that takes no body accepts an empty one and
-      # answers {}.
+      # request. An operation that takes no body accepts an empty body or
+      # an empty JSON object, and answers {}; any other body is 422 invalid
+      # (one rule for the agent, owner and helper interfaces).
       def body!(operation_id, raw_body)
         pointer = schema_pointer(operation_id)
         text = raw_body.to_s
         if pointer.nil?
-          return {} if text.strip.empty?
+          return {} if text.strip.empty? || parse(text) == {}
 
           raise Invalid, "#{operation_id} takes no body"
         end

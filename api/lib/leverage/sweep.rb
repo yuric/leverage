@@ -4,7 +4,8 @@ module Leverage
   # the due task timers to tasks no command has touched and fires the
   # workspace timers, through the same entries a command applies first. It
   # is not a timer and writes no event of its own: each workspace's run
-  # leaves one sweep_runs row, the proof it is alive (L404).
+  # leaves one sweep_runs row, the proof it is alive (L404), written under
+  # the workspace lock like every other write.
   #
   # A pass goes through every workspace. In each, every timer runs as its
   # own command through Transitions.apply, by the app, in bounded batches:
@@ -47,8 +48,17 @@ module Leverage
         loop { break unless timer(workspace_id, "command_key_retention", "limit" => batch * 10).result.fetch("more") }
         fired += 1
       end
-      SweepRun.create!(workspace_id: workspace_id, ran_at: database_now, tasks_touched: touched.uniq.size,
-        workspace_timers_fired: fired)
+      record(workspace_id, tasks_touched: touched.uniq.size, workspace_timers_fired: fired)
+    end
+
+    # Writes the run's sweep_runs row. Like every write (PRD L217), in a
+    # transaction whose first statement takes the workspace lock; ran_at is
+    # the lock's clock reading.
+    def record(workspace_id, **counts)
+      ActiveRecord::Base.transaction(requires_new: true) do
+        _workspace, at = WorkspaceLock.take(workspace_id)
+        SweepRun.create!(workspace_id: workspace_id, ran_at: at, **counts)
+      end
     end
 
     # Runs the sweep until stop answers true: a pass every interval

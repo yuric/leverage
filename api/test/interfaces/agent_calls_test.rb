@@ -192,7 +192,7 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     assert_equal %w[pass_review fail_review], @stand_in.requests.map(&:command)
   end
 
-  test "a call without a body ignores the body it is sent" do
+  test "a call without a body accepts an empty object" do
     kase = CASES.find { |candidate| candidate.operation == "heartbeat_task" }
     @stand_in.script("heartbeat", T::Outcome.completed(kase.result))
     send_case(kase, raw: "{}")

@@ -119,5 +119,4 @@ class ClaimTest < ActiveSupport::TestCase
     types = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
     assert_equal %w[task.lease_expired task.claimed], types
   end
-
 end

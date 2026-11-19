@@ -26,15 +26,6 @@ module V1
         command = command.call(body) if command.respond_to?(:call)
         run_command(command, params: ids.to_h { |name| [ name.to_s, uuid_param!(name) ] }.merge(body))
       end
-
-      # The body as a Hash, checked against its schema in openapi.json; {}
-      # for a call whose operation takes none (what such a call is sent is
-      # ignored). Raises RequestSchema::Malformed (400) or ::Invalid (422).
-      def checked_body(operation_id)
-        return {} unless Leverage::Http::RequestSchema.schema_pointer(operation_id)
-
-        super
-      end
     end
   end
 end

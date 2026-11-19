@@ -3,7 +3,9 @@ module V1
     # The first sign-in of an installation (milestone 2 plan IN-2, IN-9):
     # get_setup_state says whether the owner exists, and create_owner makes
     # the workspace, the owner and a session. Both are public: no sign-in
-    # exists yet, and the API listens on loopback only.
+    # exists yet. The API listens on loopback only, and in production it
+    # answers only a request addressed to loopback (config.hosts), so a web
+    # page that rebinds its name to 127.0.0.1 cannot reach this.
     class SetupController < ApplicationController
       include RunsCommands
 

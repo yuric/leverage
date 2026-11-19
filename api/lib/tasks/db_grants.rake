@@ -15,7 +15,11 @@
 # right of its own. Its password is LEVERAGE_API_DB_PASSWORD; without that
 # variable the role is created unable to log in, and an existing role is
 # left as it is. The statement that sets the password is sent with
-# statement logging turned off and never through the Rails logger.
+# statement logging turned off and never through the Rails logger, under a
+# transaction-level advisory lock, so two runs at once (two containers, or
+# parallel test workers) never update the role's row together ("tuple
+# concurrently updated"). The test hook skips it (password: false): no test
+# logs in as leverage_api.
 #
 # Methods, not constants: `bin/rails test` loads the tasks into a Rake
 # application of its own, and test_helper loads them again into the default
@@ -27,7 +31,12 @@ module DbGrants
   def api_role = "leverage_api"
   def append_only = %w[events rule_versions]
 
-  def apply(connection)
+  # The advisory lock key that serializes setting leverage_api's password:
+  # "lvpw" in ASCII.
+  def password_lock_key = 0x6c767077
+
+  # password: false leaves leverage_api's password as it is.
+  def apply(connection, password: true)
     connection.transaction do
       create_role(connection)
       connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
@@ -39,7 +48,7 @@ module DbGrants
       end
       connection.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO #{role}")
       create_api_role(connection)
-      set_api_password(connection, ENV["LEVERAGE_API_DB_PASSWORD"].to_s)
+      set_api_password(connection, ENV["LEVERAGE_API_DB_PASSWORD"].to_s) if password
     end
   end
 
@@ -81,6 +90,7 @@ module DbGrants
     raw = connection.raw_connection
     superuser = raw.exec("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").getvalue(0, 0)
     raw.exec("SET LOCAL log_statement = 'none'") if superuser == "t" || superuser == true
+    raw.exec("SELECT pg_advisory_xact_lock(#{password_lock_key})")
     raw.exec("ALTER ROLE #{api_role} LOGIN PASSWORD #{raw.escape_literal(password)}")
   end
 

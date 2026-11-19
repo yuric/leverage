@@ -232,5 +232,4 @@ class LandingPromptTest < CommittingTestCase
       assert_empty found, "#{seat.role}'s landing prompt uses #{found.join(", ")}"
     end
   end
-
 end

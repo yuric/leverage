@@ -122,7 +122,6 @@ class GrantsTest < ActiveSupport::TestCase
     DbGrants.define_singleton_method(:set_api_password, original) if original
     ENV["LEVERAGE_API_DB_PASSWORD"] = saved
   end
-
 end
 
 # db:grants run at once from several connections, as two containers that

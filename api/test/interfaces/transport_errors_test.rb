@@ -233,7 +233,7 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
   end
 
   # A body sent without the JSON media type is never parsed into params
-  # (Leverage::Http::JsonBodiesOnly): Rails would read it as a form, and
+  # (JsonBodiesOnly, lib/middleware): Rails would read it as a form, and
   # its "Parameters:" log line would print the whole body as one key, the
   # password with it (PRD, Security: no secret in a log).
   test "a body that is not sent as JSON is 400 malformed before any controller, and its password never reaches the log" do
@@ -264,5 +264,4 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_response :conflict
     assert_equal "invalid_state", response.parsed_body.dig("refusal", "code")
   end
-
 end

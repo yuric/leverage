@@ -29,7 +29,15 @@ require "time"
 #               backwards.
 #
 # Timers. A timer command (caller app) cannot wait for a due time, so its
-# lease is put at its due time first with Scenario#make_due (EN-18). When
+# lease is put at its due time first with Scenario#make_due (EN-18). Before
+# that, the lease's arithmetic is checked (L116-L120): the lease is running,
+# not paused; in the trace, the timer's due @t is one lease length after
+# the @t of the lease's last grant (task.claimed, review.started, an event
+# naming lease_seat_id, or a heartbeat that completed); and in the engine,
+# the row's lease_due_at is one lease length after that grant's own time.
+# A hold on the task between the grant and the timer would pause the
+# clock, which this runner does not model: it fails the trace instead of
+# passing it unchecked. When
 # the next command comes at the same time (a late call, L913), the timer is
 # what that command applies first (Timers.apply_due), and the two are
 # compared together; otherwise it is run as the sweep runs it, as a command
@@ -67,6 +75,7 @@ class TraceRunner
     @symbols = {}
     @events = {}
     @times = {}
+    @leases = {}
     @failures = []
   end
 
@@ -133,12 +142,14 @@ class TraceRunner
 
   def apply_and_compare(request, expected, where)
     before = scenario.workspace.reload.last_seq
+    started = scenario.database_now
     outcome = begin
       T.apply(request)
     rescue T::NotFound, T::Invalid, Leverage::Idempotency::KeyReused => error
       fail_at(where, "raised #{error.class}: #{error.message}")
       return
     end
+    note_heartbeat(request, outcome, expected.last.first, started..scenario.database_now)
     written = Event.where(workspace_id: workspace_id).where("seq > ?", before).order(:seq).to_a
     command, = expected.last
     compare_outcome(command.fetch("expect"), outcome, where)
@@ -158,6 +169,7 @@ class TraceRunner
         when "review.lease_expired" then Review.find_by(id: @ids[event.fetch("subject_id")])
         end
       if record
+        check_lease(record, event, label(command, index))
         scenario.make_due(record, at: scenario.database_now)
       else
         fail_at(label(command, index), "cannot find what #{event.fetch("type")} expires")
@@ -239,6 +251,7 @@ class TraceRunner
     match_time(event.fetch("at"), row.at, at, "at")
     match_time(event.fetch("effective_at"), row.effective_at, at, "effective_at")
     match_value(event.fetch("payload"), row.payload, at, "payload")
+    note_lease(event, row)
   end
 
   # The steps the commands open and close, as the rows are now.
@@ -287,6 +300,77 @@ class TraceRunner
 
     result = outcome.result || {}
     fields.each { |key, value| match_value(value, result[key], where, "result #{key}") }
+  end
+
+  # --- lease arithmetic --------------------------------------------------
+
+  # The last grant of each lease, by the engine's id of its task or review:
+  # the trace's @t seconds, the engine's time (a Range for a heartbeat,
+  # which writes no event: the database clock before and after it), and
+  # whether a hold opened or closed on the task since.
+  def grant_lease(id, task_id, seconds, at)
+    @leases[id] = { task_id: task_id, seconds: seconds, at: at, interrupted: false }
+  end
+
+  def note_lease(event, row)
+    seconds = Integer(TIME.match(event.fetch("effective_at"))[1], 10)
+    case row.type
+    when Leverage::Leases::BUILDER_GRANT then grant_lease(row.task_id, row.task_id, seconds, row.effective_at)
+    when "review.started" then grant_lease(row.subject_id, row.task_id, seconds, row.effective_at)
+    when "hold.opened", "hold.closed"
+      @leases.each_value { |lease| lease[:interrupted] = true if lease[:task_id] == row.task_id }
+    end
+    return unless row.payload.is_a?(Hash) && row.payload["lease_seat_id"]
+
+    grant_lease(row.task_id, row.task_id, seconds, row.effective_at)
+  end
+
+  HEARTBEATS = { "heartbeat" => Task, "heartbeat_review" => Review }.freeze
+
+  def note_heartbeat(request, outcome, command, clock)
+    model = HEARTBEATS[request.command]
+    return unless model && outcome.completed?
+
+    record = model.find_by(id: request.params["id"])
+    return unless record
+
+    task_id = record.is_a?(Task) ? record.id : record.task_id
+    grant_lease(record.id, task_id, Integer(TIME.match(command.fetch("at"))[1], 10), clock)
+  end
+
+  def check_lease(record, event, where)
+    type = event.fetch("type")
+    length = scenario.workspace.reload.lease_length_seconds
+    record.reload
+    if record.lease_time_left_while_paused
+      fail_at(where, "#{type} ends a paused lease (#{record.lease_time_left_while_paused} s left), which no timer does")
+      return
+    end
+    grant = @leases[record.id]
+    return fail_at(where, "#{type}: no lease grant comes before it") unless grant
+    if grant[:interrupted]
+      return fail_at(where, "#{type}: a hold opened or closed on the task since the lease's grant at " \
+                            "@t:#{grant[:seconds]}; the runner does not model a paused lease")
+    end
+
+    due = Integer(TIME.match(event.fetch("effective_at"))[1], 10)
+    unless due - grant[:seconds] == length
+      fail_at(where, "#{type}: the trace's lease runs #{due - grant[:seconds]} s, from its grant at @t:#{grant[:seconds]} " \
+                     "to @t:#{due}; the lease length is #{length} s")
+    end
+    granted = grant[:at]
+    actual = record.lease_due_at
+    on_time = if actual.nil?
+      false
+    elsif granted.is_a?(Range)
+      (granted.begin + length..granted.end + length).cover?(actual)
+    else
+      (actual - (granted + length)).abs < 0.000_001
+    end
+    return if on_time
+
+    fail_at(where, "#{type}: the engine's lease is due #{actual&.iso8601(6).inspect}, not one lease length " \
+                   "(#{length} s) after its grant at #{granted.is_a?(Range) ? granted.begin.iso8601(6) : granted.iso8601(6)}")
   end
 
   # --- matching symbols, event links and times ---------------------------

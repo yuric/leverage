@@ -117,5 +117,4 @@ class GoldenTracesTest < ActiveSupport::TestCase
   ensure
     Leverage::Leases.define_singleton_method(:grant, grant) if grant
   end
-
 end

@@ -33,8 +33,47 @@ module Leverage
     def apply_due(ctx)
       return [] if ctx.workspace.nil? || Transitions::Table::TIMERS.include?(ctx.request.command)
 
+      apply_lease_timers(ctx, due_candidates(ctx))
+    end
+
+    # Applies the due lease timers on every task and review a seat holds,
+    # as apply_due does for the caller: for a command that decides by what
+    # another seat holds (fail_review asks whether the failed review's
+    # builder is free). A lease ends at its due time (L120, EN-14), so the
+    # answer must not depend on whether the sweep has run. Returns the
+    # Events it wrote.
+    def apply_held_by(ctx, seat)
+      return [] unless seat
+
+      workspace_id = ctx.workspace.id
+      held_reviews = Review.where(workspace_id: workspace_id, reviewer_seat_id: seat.id, verdict: nil).select(:task_id)
+      tasks = Task.where(workspace_id: workspace_id, holder_seat_id: seat.id)
+        .or(Task.where(workspace_id: workspace_id, id: held_reviews)).order(:id).to_a
+      apply_lease_timers(ctx, tasks)
+    end
+
+    # Applies the due lease timers a claim would otherwise find in its way:
+    # for :task, every builder lease of the workspace past its due time (its
+    # task goes back to Ready), for :review every review lease (the review
+    # loses its reviewer), so what was due is claimable now, after its
+    # lease_expired event at the due time. Returns the Events it wrote.
+    def apply_claimable(ctx, kind)
+      workspace_id = ctx.workspace.id
+      tasks = if kind == :review
+        due = Review.where(workspace_id: workspace_id, verdict: nil, lease_time_left_while_paused: nil)
+          .where.not(reviewer_seat_id: nil).where(lease_due_at: ..ctx.at).select(:task_id)
+        Task.where(workspace_id: workspace_id, id: due)
+      else
+        Task.where(workspace_id: workspace_id, lease_time_left_while_paused: nil).where(lease_due_at: ..ctx.at)
+      end
+      apply_lease_timers(ctx, tasks.order(:id).to_a)
+    end
+
+    # Runs the builder lease timer of each task whose lease is due, then
+    # the review lease timer of each of their due reviews. Returns the
+    # Events written.
+    def apply_lease_timers(ctx, tasks)
       written = ctx.events.size
-      tasks = due_candidates(ctx)
       tasks.each do |task|
         apply(ctx, Transitions::Entries::BuilderLeaseExpiry.new(BUILDER_LEASE, targets: [ task ])) if Leases.due?(task, ctx.at)
       end

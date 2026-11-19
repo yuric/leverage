@@ -17,6 +17,9 @@ module Leverage
       class Claim < Entry
         def load(ctx)
           @seat = Seat.find_by(id: ctx.request.caller_id, workspace_id: ctx.workspace.id) || raise(NotFound, "No such seat")
+          # A builder lease past its due time has ended (EN-14): its timer
+          # runs first, so its task is back in Ready and claimable now.
+          Timers.apply_claimable(ctx, :task)
           @task = Eligibility.next_task(@seat)
         end
 

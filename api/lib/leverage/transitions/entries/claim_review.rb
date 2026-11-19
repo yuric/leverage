@@ -16,6 +16,9 @@ module Leverage
       class ClaimReview < Entry
         def load(ctx)
           @seat = Seat.find_by(id: ctx.request.caller_id, workspace_id: ctx.workspace.id) || raise(NotFound, "No such seat")
+          # A review whose lease is past its due time has no reviewer
+          # (EN-14): its timer runs first, so it is claimable now.
+          Timers.apply_claimable(ctx, :review)
           @review = Eligibility.next_review(@seat)
           @task = @review && Task.find_by!(id: @review.task_id, workspace_id: ctx.workspace.id)
         end

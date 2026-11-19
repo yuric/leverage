@@ -89,5 +89,4 @@ class StartSeatTest < ActiveSupport::TestCase
     assert_equal first.result, second.result
     assert_equal 1, HelperRequest.where(seat_id: seat.id, kind: "start_seat").count
   end
-
 end

@@ -38,14 +38,17 @@ module Leverage
     end
 
     # Releases the Working task a seat holds to Ready (L148), with reason
-    # seat_removed or seat_disabled: no holder and no lease; the task keeps
-    # its builder seat. Returns the task.released Event, or nil when the
-    # seat holds no Working task with a live or paused lease.
+    # seat_removed or seat_disabled: no holder, no builder and no lease, as
+    # every return to Ready (Release, the builder lease's expiry; the PRD's
+    # replay list clears the builder there). Returns the task.released
+    # Event, or nil when the seat holds no Working task with a live or
+    # paused lease.
     def release_working_task(ctx, seat, reason:, cause: nil)
       task = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "working").order(:created_at).first
       return nil unless task && lease_live?(ctx, task)
 
-      task.update!(state: "ready", holder_seat_id: nil, lease_due_at: nil, lease_time_left_while_paused: nil)
+      task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil, resume_pending_since: nil, lease_due_at: nil,
+        lease_time_left_while_paused: nil)
       ctx.emit("task.released", task: task, cause_id: cause&.id, payload: { reason: reason, wait_cause: nil })
     end
 

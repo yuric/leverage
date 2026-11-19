@@ -9,8 +9,9 @@ module Leverage
       # escalates in this milestone (EN-5), so the row is does_not_escalate,
       # and task.reassigned is never written:
       #
-      #   builder_free  the previous builder holds nothing and is enabled,
-      #                 not paused and not removed: the task is Working again,
+      #   builder_free  the previous builder holds nothing (a lease of its
+      #                 past its due time is ended first, by its timer) and
+      #                 is enabled, not paused and not removed: Working again,
       #                 held by it under a fresh lease (lease_seat_id), which
       #                 it must acknowledge again (L127);
       #   builder_busy  the task is Ready with no holder and no builder.
@@ -40,6 +41,10 @@ module Leverage
           raise Invalid, "A failed review names the builder criteria that failed." if named.empty? || @failed.size != named.size
 
           @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)
+          # A lease of the builder's that is past its due time has ended
+          # (EN-14): its timer is written first, so builder_free reads it
+          # ended whether or not the sweep has run.
+          Timers.apply_held_by(ctx, @builder)
           @free = Eligibility.builder_free?(@builder)
         end
 

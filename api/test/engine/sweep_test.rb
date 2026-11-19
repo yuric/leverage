@@ -148,5 +148,4 @@ class SweepTest < ActiveSupport::TestCase
       "the transaction's first statement locks the workspace")
     assert_equal "SELECT clock_timestamp()", inside.second
   end
-
 end

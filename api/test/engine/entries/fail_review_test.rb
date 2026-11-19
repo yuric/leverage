@@ -143,5 +143,4 @@ class FailReviewTest < ActiveSupport::TestCase
     assert_equal %w[task.lease_expired review.failed criterion.reopened cost.reported], types
     assert_empty Leverage::Replay.diff(@scenario.workspace_id)
   end
-
 end

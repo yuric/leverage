@@ -5734,6 +5734,16 @@
               }
             }
           },
+          "400": {
+            "description": "400 `malformed`: the address the request came in on (its Host) cannot be put in a pasted command.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportError"
+                }
+              }
+            }
+          },
           "401": {
             "$ref": "#/components/responses/Unauthenticated"
           },

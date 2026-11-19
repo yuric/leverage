@@ -5,9 +5,14 @@ module Leverage
       # seat the app runs wanted running and queues start_seat with the
       # seat's role, provider, model and effort; no event. The seat's token
       # is issued when the helper picks the request up (issue_seat_token).
-      # While a start of the seat is still unfinished no second one is
-      # queued: the answer names that request, so one seat never has two
-      # runs racing for its token.
+      # While a start of the seat is still unfinished and the seat is still
+      # wanted running, no second one is queued: the answer names that
+      # request, so one seat never has two runs racing for its token. A
+      # start that the owner's Stop came after (the seat is no longer
+      # wanted running) is stale, for instance one whose result the helper
+      # never reported: it is failed, as a new helper token fails it, and a
+      # new request is queued, so Start never answers a request nobody will
+      # finish.
       #
       # A removed or unknown seat is 404; a seat that connects on its own
       # has no run the app starts: invalid_state.
@@ -26,10 +31,16 @@ module Leverage
         end
 
         def perform(ctx)
+          unfinished = HelperRequest.where(seat_id: @seat.id, kind: "start_seat",
+            state: IssueHelperToken::UNFINISHED).order(:requested_at).to_a
+          request = unfinished.first if @seat.wanted_running
+          unless request
+            unfinished.each do |stale|
+              stale.update!(state: "failed", finished_at: ctx.at, result: IssueHelperToken::FAILED_RESULT, updated_at: ctx.at)
+            end
+            request = SeatRuns.queue(ctx, "start_seat", seat: @seat, params: SeatRuns.start_params(@seat))
+          end
           @seat.update!(wanted_running: true)
-          request = HelperRequest.where(seat_id: @seat.id, kind: "start_seat", state: %w[queued picked_up])
-            .order(:requested_at).first
-          request ||= SeatRuns.queue(ctx, "start_seat", seat: @seat, params: SeatRuns.start_params(@seat))
           @result = { "helper_request_id" => request.id }
         end
       end

@@ -251,7 +251,8 @@ The plan's `[owner-later]` choices are in question 11, not here.
   Connect takes name and role, and a login for a seat the app runs. IN-33:
   `get_system_health`'s fields. IN-34: one log line per command. IN-35:
   the task read carries its events and names. IN-40: Remove seat ends the
-  token at once, stops a run, and releases a Working task.
+  token at once, stops a run, and releases a Working task (with no builder
+  left on it) and a review the seat holds.
 - **Clients and helper.** CL-2: one table drives the four tools; Claude's
   driver is the reference. CL-3, CL-4: with no rules, builder and reviewer
   may share a provider or a login. CL-5: the runner is its own executable.

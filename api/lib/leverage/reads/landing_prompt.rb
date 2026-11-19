@@ -15,7 +15,10 @@ module Leverage
     # The calls come from roles.json (what the role may make) and the
     # registry (method and path), kept to the operations Http::RouteTable
     # serves: a call the role may make that is not served yet answers 404, so
-    # it is left out.
+    # it is left out. Each is listed by name, method and path only: the
+    # owner reads this text in the Connect sheet, and the contract's
+    # one-line summaries use engine words the owner's screens do not (PRD
+    # L794); the briefing tells the agent what each call is for.
     module LandingPrompt
       CHECK_INTERVAL_MINUTES = 20
       TEMPLATE = "landing_prompt.md.erb".freeze
@@ -31,7 +34,7 @@ module Leverage
       ADDRESS = %r{\Ahttps?://(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(?::\d{1,5})?\z}
 
       # One call of the seat's role, as the template lists it.
-      Call = Data.define(:id, :method, :path, :summary)
+      Call = Data.define(:id, :method, :path)
 
       # What the template reads: the page's locals and nothing else.
       Page = Data.define(:seat_name, :role, :base_url, :calls, :lease, :check_interval_minutes) do
@@ -74,17 +77,9 @@ module Leverage
       def calls_for(role)
         entry = Contract.roles.fetch("roles").find { |candidate| candidate.fetch("role") == role }
         operations = Contract.registry.fetch("operations").to_h { |operation| [ operation.fetch("operation_id"), operation ] }
-        texts = summaries
         entry.fetch("operations").select { |id| Http::RouteTable.serves?(id) }.map do |id|
           operation = operations.fetch(id)
-          Call.new(id: id, method: operation.fetch("method"), path: operation.fetch("path"), summary: texts.fetch(id, ""))
-        end
-      end
-
-      # The one sentence openapi.json gives each operation.
-      def summaries
-        Contract.openapi.fetch("paths").each_value.with_object({}) do |item, found|
-          item.each_value { |operation| found[operation["operationId"]] = operation["summary"].to_s if operation.is_a?(Hash) }
+          Call.new(id: id, method: operation.fetch("method"), path: operation.fetch("path"))
         end
       end
 

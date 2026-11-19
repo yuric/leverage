@@ -63,7 +63,9 @@ module Leverage
 
     # Whether the failed review's previous builder is free (state machine
     # guard builder_free): it holds nothing and is enabled, not paused and
-    # not removed.
+    # not removed. It reads the rows: FailReview first ends the builder's
+    # leases that are past their due time (Timers.apply_held_by), as the
+    # claims end the leases in their way (Timers.apply_claimable).
     def builder_free?(seat)
       return false unless seat&.enabled && !seat.paused && seat.removed_at.nil?
 

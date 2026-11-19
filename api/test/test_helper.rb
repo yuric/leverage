@@ -45,12 +45,13 @@ end
 module DatabaseTestHooks
   module_function
 
-  # Runs db:grants (lib/tasks/db_grants.rake) on the current connection.
+  # Applies db:grants (lib/tasks/db_grants.rake) on the current
+  # connection, without setting leverage_api's password: the parallel
+  # workers would all update the role's one row at once, and no test logs
+  # in as leverage_api.
   def grant_app_role
     Rails.application.load_tasks unless Rake::Task.task_defined?("db:grants")
-    task = Rake::Task["db:grants"]
-    task.reenable
-    task.invoke
+    DbGrants.apply(ActiveRecord::Base.lease_connection, password: false)
   end
 
   def fire_deferred_constraints
