@@ -41,6 +41,8 @@ public final class FakeServer: ServerSupervising, @unchecked Sendable {
     public let afterStart = Locked(ServerState.running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!))
     public let startCount = Locked(0)
 
+    public init() {}
+
     public func state() async -> ServerState { current.value }
 
     public func start() async -> ServerState {
@@ -57,6 +59,8 @@ public final class FakeHelper: HelperSupervising, @unchecked Sendable {
     public let starts = Locked<[URL]>([])
     public let tryAgainCount = Locked(0)
     public let stopCount = Locked(0)
+
+    public init() {}
 
     public func state() async -> HelperState { current.value }
 
@@ -83,6 +87,8 @@ public final class FakeSessionStore: SessionStoring, @unchecked Sendable {
     public let token = Locked<String?>(nil)
     /// When set, every call throws it.
     public let failure = Locked<(any Error)?>(nil)
+
+    public init() {}
 
     public func load() throws -> String? {
         if let error = failure.value { throw error }

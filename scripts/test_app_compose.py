@@ -50,6 +50,8 @@ def run(text, *arguments, to_file=True):
 def service_block(text, name):
     """The lines of one service under `services:`, without its key line."""
     lines = text.splitlines()
+    if "services:" not in lines:
+        return []
     start = lines.index("services:")
     block, inside = [], False
     for line in lines[start + 1:]:

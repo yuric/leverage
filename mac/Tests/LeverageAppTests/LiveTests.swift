@@ -80,7 +80,7 @@ struct LiveTests {
         let settings = LiveSettings(info: [:], resources: resources, executable: executable)
 
         var first: (any AppRuntime)? = try Live.make(settings: settings, environment: environment, home: folder.url)
-        withExtendedLifetime(first) {
+        _ = withExtendedLifetime(first) {
             #expect(throws: LiveError.heldByAnotherCopy(processID: getpid())) {
                 _ = try Live.make(settings: settings, environment: environment, home: folder.url)
             }
