@@ -157,7 +157,7 @@ def main():
                 code == 1 and "mystery_table" in out, out)
 
     doctored = copy.deepcopy(registry)
-    doctored["lists"]["priorities"] += ["very_high", "veryHigh"]
+    doctored["lists"]["priorities"] += ["very_high", "very.high"]
     code, out, _ = run(doctored, openapi)
     cases.check("two values with one Swift name fail",
                 code == 1 and "veryHigh" in out, out)

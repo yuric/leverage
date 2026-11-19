@@ -1,7 +1,10 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// The body of `GET /v1/health`.
-public struct Health: Decodable, Equatable, Sendable {
+public struct Health: Codable, Equatable, Sendable {
     public let status: String
     public let version: String
 
@@ -11,44 +14,39 @@ public struct Health: Decodable, Equatable, Sendable {
     }
 }
 
-/// Every error the client raises itself. Transport failures pass through as
-/// the `URLError` that `URLSession` threw.
+/// Every error the clients raise themselves, besides a `TransportError`
+/// (the API's 400, 401, 404 and 422). Network failures pass through as the
+/// `URLError` that `URLSession` threw.
 public enum LeverageClientError: Error, Equatable, Sendable {
-    /// The API answered with a status other than 200.
+    /// The API answered with a status the operation does not have.
     case unexpectedStatus(Int)
-    /// The API answered 200 with a body that is not the expected JSON.
+    /// The API answered with a body that is not the operation's JSON.
     case invalidBody
     /// The answer was not an HTTP response.
     case notHTTP
+    /// A command was refused (409), or a read refused with a `Refusal`
+    /// (`get_landing_prompt` for a seat the app runs).
+    case refused(Refusal)
+    /// A command is pending (202) where its result was asked for.
+    case pending(CommandName)
+    /// An operation's path needs this parameter, and it was not given.
+    case missingPathParameter(String)
+    /// The value is not an idempotency key.
+    case invalidKey(String)
 }
 
-/// A client of the leverage API.
+/// The infrastructure client: the public health check.
 public struct LeverageClient: Sendable {
     public let baseURL: URL
-    private let session: URLSession
+    private let transport: HTTPTransport
 
     public init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL
-        self.session = session
+        transport = HTTPTransport(baseURL: baseURL, session: session)
     }
 
-    /// Reads `GET /v1/health`.
+    /// Reads `GET /v1/health` (`get_health`).
     public func health() async throws -> Health {
-        var request = URLRequest(url: baseURL.appending(path: "v1/health"))
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw LeverageClientError.notHTTP
-        }
-        guard http.statusCode == 200 else {
-            throw LeverageClientError.unexpectedStatus(http.statusCode)
-        }
-        do {
-            return try JSONDecoder().decode(Health.self, from: data)
-        } catch {
-            throw LeverageClientError.invalidBody
-        }
+        try await transport.read(.getHealth, signedIn: false)
     }
 }

@@ -97,7 +97,7 @@ enum ContractDocument {
     }
 }
 
-private func decodes<Model: Decodable>(_ type: Model.Type) -> @Sendable (Data) throws -> Void {
+private func decodes<Model: Decodable & SendableMetatype>(_ type: Model.Type) -> @Sendable (Data) throws -> Void {
     { data in _ = try LeverageJSON.decoder().decode(Model.self, from: data) }
 }
 

@@ -1,0 +1,94 @@
+import Foundation
+
+/// The owner's calls, one method per operation milestone 2 serves. The
+/// app's view models take `any OwnerAPI`: `OwnerClient` sends them over
+/// HTTP, and LeverageTestSupport's `FakeOwnerAPI` answers them in memory.
+///
+/// Every command takes its `IdempotencyKey`: a new one per command, and the
+/// same one when the same command is sent again (Retry, MA-16).
+public protocol OwnerAPI: Sendable {
+    // Setup and sign-in (public, then the owner's session).
+
+    /// `get_setup_state`: whether an owner exists (no sign-in).
+    func setupState() async throws -> SetupState
+    /// `create_owner`: the workspace, the owner and a session, once (no sign-in).
+    func createOwner(_ request: SignInRequest, key: IdempotencyKey) async throws -> CommandOutcome<OwnerSessionAnswer>
+    /// `sign_in_owner`: a new session.
+    func signIn(_ request: SignInRequest, key: IdempotencyKey) async throws -> CommandOutcome<OwnerSessionAnswer>
+    /// `sign_out_owner`: ends this session.
+    func signOut(key: IdempotencyKey) async throws -> PlainOutcome
+    /// `get_owner_command`: a command's outcome by its key.
+    func command(key: IdempotencyKey) async throws -> PlainOutcome
+
+    // Reads.
+
+    /// `list_events`: events after `afterSeq`; with `wait`, a long poll.
+    func events(afterSeq: Int, limit: Int?, wait: Int?) async throws -> EventsPage
+    /// `get_board`.
+    func board() async throws -> Board
+    /// `get_task`.
+    func task(id: UUID) async throws -> TaskPage
+    /// `list_seats`.
+    func seats() async throws -> SeatsList
+    /// `list_credentials`.
+    func credentials() async throws -> CredentialsList
+    /// `get_system_health`.
+    func systemHealth() async throws -> SystemHealth
+    /// `get_helper_request`: with `wait` and `changedAfter`, answers when
+    /// the request changed after that time or when the wait runs out.
+    func helperRequest(id: UUID, wait: Int?, changedAfter: Date?) async throws -> HelperRequestStatus
+    /// `get_landing_prompt`: for a seat that connects on its own; a seat
+    /// the app runs throws `LeverageClientError.refused` (`invalid_state`).
+    func landingPrompt(seatID: UUID) async throws -> LandingPrompt
+
+    // Tasks.
+
+    /// `add_task`.
+    func addTask(_ request: AddTaskRequest, key: IdempotencyKey) async throws -> CommandOutcome<TaskCreatedResult>
+    /// `complete_contract`.
+    func completeContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `cancel_task`.
+    func cancelTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `allow_another_round`.
+    func allowAnotherRound(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+
+    // Seats.
+
+    /// `connect_seat`: a seat that connects on its own gets its token once.
+    func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<SeatConnectedAnswer>
+    /// `start_seat`; the result's `helperRequestID` is the request to follow.
+    func startSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `stop_seat`.
+    func stopSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `remove_seat`.
+    func removeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+
+    // The helper and credentials.
+
+    /// `issue_helper_token`.
+    func issueHelperToken(name: String, key: IdempotencyKey) async throws -> CommandOutcome<HelperTokenAnswer>
+    /// `add_credential`.
+    func addCredential(_ request: AddCredentialRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<AddCredentialResult>
+    /// `verify_credential`; the result's `helperRequestID` is the request to follow.
+    func verifyCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `install_tool`, after the owner confirmed.
+    func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome
+}
+
+extension OwnerAPI {
+    /// `issueHelperToken` for the app services (`HelperTokenIssuing`): the
+    /// token from the first answer, nil from a repeated one; a refused or
+    /// pending command throws.
+    public func issueHelperToken(name: String, idempotencyKey: String) async throws -> String? {
+        guard let key = IdempotencyKey(idempotencyKey) else {
+            throw LeverageClientError.invalidKey(idempotencyKey)
+        }
+        switch try await issueHelperToken(name: name, key: key).completedResult() {
+        case .shown(let issued): return issued.helperToken
+        case .repeated, nil: return nil
+        }
+    }
+}

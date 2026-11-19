@@ -301,8 +301,10 @@ struct ClientPathsTests {
             let json = try JSONDecoder().decode(JSONValue.self, from: bodyData)
             Self.expect(json, fits: schema, at: schemaName)
             let text = String(decoding: bodyData, as: UTF8.self)
-            #expect(text.range(of: "[0-9A-F]{8}-[0-9A-F]{4}-", options: .regularExpression) == nil,
-                    "\(operation) sent an upper-case id: \(text)")
+            let ids = text.matches(of: /[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/)
+            for id in ids {
+                #expect(id.output == id.output.lowercased(), "\(operation) sent an upper-case id: \(text)")
+            }
         } else {
             #expect(sent.body == nil || sent.body?.isEmpty == true, "\(operation) sent a body")
         }
@@ -373,5 +375,100 @@ struct ClientPathsTests {
         await #expect(throws: LeverageClientError.invalidKey("not a key")) {
             _ = try await again.issueHelperToken(name: "This Mac", idempotencyKey: "not a key")
         }
+    }
+}
+
+@Suite("Fake APIs")
+struct FakeAPITests {
+    @Test("a fake throws for what was not scripted, answers what was, and records each call")
+    func ownerFake() async throws {
+        let fake = FakeOwnerAPI()
+        await #expect(throws: FakeAPIError.notScripted(.getBoard)) { _ = try await fake.board() }
+
+        let board = Board(tasks: [], asOfSeq: 7, reviewerSeatExists: false)
+        fake.script { $0.board = { board } }
+        #expect(try await fake.board() == board)
+
+        let task = UUID(uuidString: "00000000-0000-4000-8000-0000000000B1")!
+        let key = IdempotencyKey()
+        fake.script { $0.cancelTask = { _, key in .completed(.object([:]), key: key.value, command: .cancel) } }
+        let outcome = try await fake.cancelTask(taskID: task, key: key)
+        #expect(outcome.outcome == .completed)
+        #expect(fake.calls == [
+            FakeCall(.getBoard), FakeCall(.getBoard),
+            FakeCall(.cancelTask, path: ["id": "00000000-0000-4000-8000-0000000000b1"], key: key),
+        ])
+    }
+
+    @Test("a fake records the body the HTTP client sends")
+    func fakeBodyMatchesClient() async throws {
+        let request = AddTaskRequest(title: "Made-up task", goal: "A goal", priority: .high, state: .backlog)
+        let key = IdempotencyKey()
+        let fake = FakeOwnerAPI()
+        fake.script { $0.addTask = { _, key in
+            .completed(TaskCreatedResult(taskID: UUID()), key: key.value, command: .addTask)
+        } }
+        _ = try await fake.addTask(request, key: key)
+
+        let session = StubURLProtocol.session(host: "fake-parity.test", answer: .init(status: 200, json: """
+            {"key":"k","command":"add_task","outcome":"completed",
+             "result":{"task_id":"00000000-0000-4000-8000-000000000001"},"refusal":null}
+            """))
+        let client = OwnerClient(baseURL: URL(string: "http://fake-parity.test")!, sessionToken: "lvo_x", session: session)
+        _ = try await client.addTask(request, key: key)
+        let sent = try #require(StubURLProtocol.requests(host: "fake-parity.test").first?.body)
+
+        #expect(fake.calls.first?.body == (try JSONDecoder().decode(JSONValue.self, from: sent)))
+        #expect(fake.calls.first?.key == key)
+    }
+
+    @Test("the agent and helper fakes record their calls")
+    func agentAndHelperFakes() async throws {
+        let agent = FakeAgentAPI()
+        agent.script { $0.next = { _ in NextItem(kind: .none) } }
+        #expect(try await agent.next(wait: 30) == NextItem(kind: .none))
+        let task = UUID(), criterion = UUID(), key = IdempotencyKey()
+        agent.script { $0.passCriterion = { _, _, _, key in .completed(nil, key: key.value, command: .passCriterion) } }
+        _ = try await agent.passCriterion(
+            taskID: task, criterionID: criterion, evidence: EvidenceInput(kind: .note, value: "n"), key: key)
+        #expect(agent.calls.last == FakeCall(
+            .passCriterion, path: ["id": task.contractString, "cid": criterion.contractString], key: key,
+            body: .object(["evidence": .object(["kind": .string("note"), "value": .string("n")])])))
+
+        let helper = FakeHelperAPI()
+        await #expect(throws: FakeAPIError.notScripted(.issueSeatToken)) {
+            _ = try await helper.issueSeatToken(requestID: UUID(), key: IdempotencyKey())
+        }
+        #expect(helper.calls.map(\.operation) == [.issueSeatToken])
+    }
+
+    @Test("the owner fake issues the helper's token like the client")
+    func fakeIssuesHelperToken() async throws {
+        let fake = FakeOwnerAPI()
+        fake.script { $0.issueHelperToken = { _, key in
+            .completed(.shown(HelperTokenIssued(helperID: UUID(), helperToken: "lvh_made-up")),
+                       key: key.value, command: .issueHelperToken)
+        } }
+        let issuer: any HelperTokenIssuing = fake
+        #expect(try await issuer.issueHelperToken(name: "This Mac", idempotencyKey: "key-1") == "lvh_made-up")
+        #expect(fake.calls.first?.body == .object(["name": .string("This Mac")]))
+    }
+
+    @Test("a token answer never prints its token")
+    func tokensArePrintedRemoved() {
+        let session = OwnerSession(userID: UUID(), sessionToken: "lvo_secret-made-up", createdAt: Date())
+        let pickup = SeatTokenPickup(helperRequestID: UUID(), seatID: UUID(), seatToken: "lvs_secret-made-up")
+        let request = SignInRequest(emailAddress: "owner@example.invalid", password: "made-up-password")
+        for text in [
+            String(describing: session), String(reflecting: session), "\(pickup)",
+            String(describing: request), String(reflecting: request),
+            String(describing: OwnerSessionAnswer.shown(session)),
+        ] {
+            #expect(!text.contains("secret-made-up") && !text.contains("made-up-password")
+                    && !text.contains("example.invalid"), "\(text)")
+        }
+        var dumped = ""
+        dump(pickup, to: &dumped)
+        #expect(!dumped.contains("secret-made-up"))
     }
 }
