@@ -99,6 +99,9 @@ class HoldsTest < ActiveSupport::TestCase
     assert_nil task.reload.lease_due_at
     assert_equal 600, left(task)
 
+    Leverage::Leases.grant(ctx, task, paused: H.pausing?(task))
+    assert_equal [ nil, 600 ], [ task.reload.lease_due_at, left(task) ], "the same, through grant's paused:"
+
     free = @scenario.task(state: "working", builder: @scenario.seat(role: "builder"))
     due = free.lease_due_at
     H.pause_if_held(ctx, free)

@@ -4,9 +4,9 @@ module Leverage
   #
   # A hold whose reason pauses the lease clock (registry lease_clock
   # "pauses") stops both clocks a task can have: the builder's lease on the
-  # task and the reviewer's on its open review. A paused lease has no due
-  # time and keeps the time it had left in lease_time_left_while_paused, so
-  # no timer can end it. When the last pausing hold closes, both clocks run
+  # task and the reviewer's on its open review, through Leases.pause (a
+  # paused lease has no due time and keeps the time it had left, so no
+  # timer can end it). When the last pausing hold closes, both clocks run
   # again from the command's time with the time they had left, and when the
   # last hold of any reason closes on a task a seat holds, the seat's next
   # GET /v1/next answers resume (tasks.resume_pending_since, EN-31).
@@ -38,7 +38,7 @@ module Leverage
         ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: opened.id, actor_kind: actor_kind,
           actor_id: actor_id, payload: { kind: inbox.kind })
       end
-      leases_of(task).each { |subject| pause(ctx, subject) } if pauses?(reason)
+      leases_of(task).each { |subject| Leases.pause(ctx, subject) } if pauses?(reason)
       hold
     end
 
@@ -65,18 +65,19 @@ module Leverage
           payload: { choice: choice })
       end
       remaining = open_holds(task)
-      leases_of(task).each { |subject| restart(ctx, subject) } if remaining.none? { |open| pauses?(open.reason) }
+      leases_of(task).each { |subject| Leases.restart(ctx, subject) } if remaining.none? { |open| pauses?(open.reason) }
       mark_resume(ctx, task) if remaining.empty?
       hold
     end
 
     # Pauses a lease just granted on a task, or on its review, while a
     # pausing hold is open (L121, EN-13): it starts paused, with the whole
-    # length left. Called after Leases.grant by whoever grants one; a task
-    # with no pausing hold keeps its running clock.
+    # length left. The same as Leases.grant(ctx, subject, paused:
+    # Holds.pausing?(task)); a task with no pausing hold keeps its running
+    # clock.
     def pause_if_held(ctx, subject)
       task = subject.is_a?(Review) ? Task.find(subject.task_id) : subject
-      pause(ctx, subject) if pausing?(task)
+      Leases.pause(ctx, subject) if pausing?(task)
     end
 
     # The task's open holds, oldest first: in the order their hold.opened
@@ -125,23 +126,6 @@ module Leverage
     # read again, so the caller's Task is not changed under it.
     def leases_of(task)
       [ Task.find(task.id) ] + Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: nil).to_a
-    end
-
-    # Stops a running clock, keeping the time left (none once past due). A
-    # clock already paused, or no lease, is left as it is.
-    def pause(ctx, subject)
-      return if subject.lease_due_at.nil? || subject.lease_time_left_while_paused
-
-      left = [ subject.lease_due_at - ctx.at, 0 ].max
-      subject.update!(lease_due_at: nil, lease_time_left_while_paused: ActiveSupport::Duration.build(left))
-    end
-
-    # Runs a paused clock again from the command's time.
-    def restart(ctx, subject)
-      left = subject.lease_time_left_while_paused
-      return unless left
-
-      subject.update!(lease_due_at: ctx.at + left.to_f, lease_time_left_while_paused: nil)
     end
 
     def mark_resume(ctx, task)
