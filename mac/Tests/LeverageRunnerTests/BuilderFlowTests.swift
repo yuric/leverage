@@ -90,7 +90,8 @@ struct BuilderFlowTests {
         #expect(evidence?["value"]?.stringValue == "proof.txt in the work folder")
         for submit in harness.calls(.submitTask) {
             #expect(submit.body?["work_reference"]?.stringValue == reference)
-            #expect(!(submit.body?["handoff_note"]?.stringValue ?? "").isEmpty)
+            let note = submit.body?["handoff_note"]?.stringValue ?? ""
+            #expect(!note.isEmpty)
         }
         #expect(harness.calls(.releaseTask).isEmpty)
     }

@@ -140,21 +140,30 @@ struct WorkFolderTests {
     @Test("an existing local folder is used as it is, its reference kept")
     func existing() throws {
         let work = try folder.folder("site")
-        #expect(WorkFolder.builder(reference: work.path, taskID: taskID, workRoot: root, home: "/nowhere")
-                == .existing(work, reference: work.path))
         let home = folder.url.path
-        #expect(WorkFolder.builder(reference: "~/site", taskID: taskID, workRoot: root, home: home)
-                == .existing(work, reference: "~/site"))
-        #expect(WorkFolder.builder(reference: "file://\(work.path)", taskID: taskID, workRoot: root, home: home)
-                == .existing(work, reference: "file://\(work.path)"))
+        for reference in [work.path, "~/site", "file://\(work.path)"] {
+            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: home)
+            guard case .existing(let found, let kept) = resolution else {
+                Issue.record("\(reference) was not used: \(resolution)")
+                continue
+            }
+            #expect(found.path == work.path)
+            #expect(kept == reference)
+            #expect(resolution.reference == reference)
+        }
     }
 
     @Test("an empty reference makes <work root>/<task id>")
     func made() throws {
         let expected = root.appendingPathComponent(taskID.contractString)
         for reference in [nil, "", "   "] as [String?] {
-            #expect(WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: "/nowhere")
-                    == .made(expected))
+            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: "/nowhere")
+            guard case .made(let made) = resolution else {
+                Issue.record("no folder was made: \(resolution)")
+                continue
+            }
+            #expect(made.path == expected.path)
+            #expect(resolution.reference == expected.path)
         }
         var isFolder: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: expected.path, isDirectory: &isFolder) && isFolder.boolValue)
@@ -181,6 +190,6 @@ struct WorkFolderTests {
         #expect(WorkFolder.reviewer(reference: nil, home: "/nowhere") == nil)
         #expect(WorkFolder.reviewer(reference: "", home: "/nowhere") == nil)
         let work = try folder.folder("site")
-        #expect(WorkFolder.reviewer(reference: work.path, home: "/nowhere") == work)
+        #expect(WorkFolder.reviewer(reference: work.path, home: "/nowhere")?.path == work.path)
     }
 }

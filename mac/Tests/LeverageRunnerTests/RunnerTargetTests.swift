@@ -4,8 +4,8 @@ import Testing
 
 @testable import LeverageRunner
 
-// A placeholder until WP11: proves the runner lane builds and links its
-// target, LeverageKit and LeverageTestSupport.
+// Proves the runner lane builds and links its target, LeverageKit and
+// LeverageTestSupport, and that the seat token has one name.
 @Suite("LeverageRunner target")
 struct RunnerTargetTests {
     @Test("the runner reads its seat token from the one name for it")

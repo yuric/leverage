@@ -282,6 +282,17 @@ struct ProbeTests {
         #expect(await Probe.run(environment: incomplete, log: log) == 1)
     }
 
+    @Test("the probe's tool run is limited to 120 seconds unless the environment says otherwise")
+    func probeLimit() async throws {
+        let setup = try DriverTests.Setup()
+        let test = DriverTests.cases[2]
+        try setup.signIn(test)
+        var environment = setup.environment(test)
+        environment["LEVERAGE_TOOL_TIMEOUT_SECONDS"] = nil
+        #expect(await Probe.run(environment: environment, log: Log(component: "probe-test", write: { _ in })) == 0)
+        #expect(try setup.lastCall().argv.suffix(2) == ["--print-timeout", "120s"])
+    }
+
     @Test("the probe's log never carries the tool's output")
     func quiet() async throws {
         let setup = try DriverTests.Setup()

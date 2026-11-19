@@ -121,13 +121,14 @@ struct RunnerLoopTests {
         harness.api.script { $0.taskBriefing = { _ in resumed } }
         // While held, the next item is `none`, several times, slowly enough
         // that a heartbeat on a 10 ms timer would have shown.
-        let idle = Queue(Array(repeating: NextItem(kind: .none), count: 5)) {
+        let idle = Queue([NextItem(kind: .task)] + Array(repeating: NextItem(kind: .none), count: 5)) {
             NextItem(kind: .resume, id: self.taskID.contractString)
         }
         let afterResume = Counter()
         harness.api.script { [loop] in
             $0.next = { _ in
                 let item = idle.next()
+                if item.kind == .task { return item }
                 if item.kind == .none {
                     try? await Task.sleep(for: .milliseconds(30))
                     return item
