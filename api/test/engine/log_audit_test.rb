@@ -41,6 +41,25 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
   end
 
+  # IN-30: a new helper token treats every seat still marked running as
+  # stopped, which releases a review such a seat holds (IF-21). The release
+  # is the row's conditional event, as it is for report_run_stopped.
+  test "a new helper token that releases a review held by a running seat passes" do
+    scenario = Scenario.new
+    reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "codex"), run_state: "running",
+      wanted_running: true)
+    task = scenario.task(state: "in_review")
+    review = scenario.review(task, reviewer: reviewer)
+    after = scenario.workspace.reload.last_seq
+    outcome = T.apply(T::Request.new(command: "issue_helper_token", workspace_id: scenario.workspace_id,
+      caller_kind: "owner", caller_id: scenario.owner.id, key: "audit-helper-token", request_hash: "made-up-hash",
+      params: { "name" => "Made-up Mac" }))
+    assert outcome.completed?
+    assert_nil review.reload.reviewer_seat_id, "the review is released"
+    assert_equal [ "review.released" ], Event.where(workspace_id: scenario.workspace_id).where("seq > ?", after).pluck(:type)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   test "an event the command's row does not allow is found" do
     runner = run_trace("09-core-loop-no-rules")
     task = Task.find_by!(workspace_id: runner.workspace_id)
