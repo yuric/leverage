@@ -1,0 +1,343 @@
+{
+  "rules": [
+    {"source": "prd", "rule": "One step is open from the task's creation until it is done or cancelled; opening a step closes the one before at the same effective time.", "prd_lines": [275, 276]},
+    {"source": "prd", "rule": "A step's cause and subject are fixed when it opens; a change of credential state with no task event opens no new step.", "prd_lines": [282]},
+    {"source": "derived", "rule": "Within one command the open step changes at the last of its events that the step table names, and every step of the command shares its effective time.", "prd_lines": [216, 218]},
+    {"source": "derived", "rule": "Things that do not block the task open no step: a non-blocking question, a cost report and an instant app-run check (L304), and a warn model check (plan RC-16).", "prd_lines": [304, 337]}
+  ],
+  "close_without_opening": ["task.done", "task.cancelled"],
+  "steps": [
+    {
+      "kind": "idea",
+      "class": "waiting",
+      "subject_kinds": [null],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is in Imaginarium.",
+      "prd_subject": "None",
+      "opened_by": [
+        {"event": "task.created", "when": "the task is added to Imaginarium", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.promoted", "when": "the task is promoted to Backlog", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "draft",
+      "class": "working",
+      "subject_kinds": ["job"],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "A planner job is writing the contract.",
+      "prd_subject": "The job",
+      "opened_by": [
+        {"event": "job.claimed", "when": "a planner claims the task's contract_draft job; queue time stays wait_contract", "source": "derived", "decision": "SM-24"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.ready", "when": "the planner's Complete contract moves the task to Ready", "source": "derived"},
+        {"event": "check.queued", "when": "the planner's Complete contract waits on a model check at task.before_ready", "source": "derived"},
+        {"event": "job.timed_out", "when": "the claimed draft job times out", "source": "derived", "decision": "SM-24"},
+        {"event": "job.withdrawn", "when": "the draft job is withdrawn, by a contract edit", "source": "derived", "decision": "SM-24"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_contract",
+      "class": "waiting",
+      "subject_kinds": [null],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is in Backlog and nobody is writing its contract.",
+      "prd_subject": "None",
+      "opened_by": [
+        {"event": "task.created", "when": "the task is added to Backlog", "source": "derived"},
+        {"event": "task.promoted", "when": "the task is promoted to Backlog", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "job.timed_out", "when": "the claimed draft job times out", "source": "derived", "decision": "SM-24"},
+        {"event": "job.withdrawn", "when": "the claimed draft job is withdrawn", "source": "derived", "decision": "SM-24"},
+        {"event": "hold.opened", "when": "a contract_incomplete hold opens: a new wait_contract row (L161)", "source": "derived", "decision": "SM-24"},
+        {"event": "check.finished", "when": "a pending move to Ready is refused or its checks are withdrawn", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "job.claimed", "when": "a planner claims the draft job", "source": "derived", "decision": "SM-24"},
+        {"event": "task.ready", "when": "the task enters Ready", "source": "derived"},
+        {"event": "check.queued", "when": "Complete contract waits on a model check at task.before_ready", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "hold.closed", "when": "the contract_incomplete hold of this row closes: the step the task's state calls for opens (L277)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "check",
+      "class": "rule_check",
+      "subject_kinds": ["pending_transition", "action"],
+      "cause_kinds": [],
+      "prd_class": "Rule check",
+      "prd_open_while": "A transition is pending on one or more model checks, or an outward action is waiting on its checks or its approval job.",
+      "prd_subject": "The pending transition, or the action",
+      "opened_by": [
+        {"event": "check.queued", "when": "the first model check of a pending transition, or of an outward action at action.requested, is queued (L366)", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.ready", "when": "the pending move to Ready completes", "source": "derived"},
+        {"event": "task.claimed", "when": "the provisional claim completes", "source": "derived"},
+        {"event": "task.submitted", "when": "the pending submit completes", "source": "derived"},
+        {"event": "review.passed", "when": "the pending pass completes", "source": "derived"},
+        {"event": "review.failed", "when": "a gate at task.before_done fails (plan SM-6)", "source": "derived"},
+        {"event": "action.approved", "when": "the action is approved", "source": "derived"},
+        {"event": "action.stopped", "when": "the action is stopped", "source": "derived"},
+        {"event": "check.finished", "when": "the transition is refused, or its checks are withdrawn, or a provisional claim lapses", "source": "derived"},
+        {"event": "task.released", "when": "the provisional claim is released", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the lease ends while the transition is pending", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_ready",
+      "class": "waiting",
+      "subject_kinds": [null],
+      "cause_kinds": ["credential_limit"],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is in Ready with no seat. It names `credential_limit` as its cause when no seat is eligible only because none of its candidates is available, and none of them is signed out.",
+      "prd_subject": "None",
+      "opened_by": [
+        {"event": "task.ready", "when": "the task enters Ready", "source": "derived"},
+        {"event": "task.released", "when": "the holder releases the task, or a provisional claim", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the builder's lease ends in Working", "source": "derived"},
+        {"event": "review.failed", "when": "a failed review sends the task to Ready", "source": "derived"},
+        {"event": "task.reassigned", "when": "an escalation sends the task to Ready", "source": "derived"},
+        {"event": "task.returned_for_rework", "when": "an owner rework sends the task to Ready", "source": "derived"},
+        {"event": "check.finished", "when": "a provisional claim lapses: its check failed or erred", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.claimed", "when": "a seat claims the task", "source": "derived"},
+        {"event": "check.queued", "when": "a provisional claim waits on a model check", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "briefing",
+      "class": "working",
+      "subject_kinds": [null],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "A seat has claimed the task and not yet acknowledged the briefing.",
+      "prd_subject": "None",
+      "opened_by": [
+        {"event": "task.claimed", "when": "a seat claims the task", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.briefing_acknowledged", "when": "the holder acknowledges the briefing", "source": "derived"},
+        {"event": "task.released", "when": "the holder releases the task", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the lease ends", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "build",
+      "class": "working",
+      "subject_kinds": ["criterion", null],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "The builder is working toward a criterion.",
+      "prd_subject": "The criterion, if announced",
+      "opened_by": [
+        {"event": "task.briefing_acknowledged", "when": "the holder acknowledges after a claim and a builder criterion is still open", "source": "derived"},
+        {"event": "criterion.started", "when": "the builder announces a criterion: a new build row (plan SM-25)", "source": "derived", "decision": "SM-25"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "criterion.started", "when": "the builder announces another criterion", "source": "derived", "decision": "SM-25"},
+        {"event": "criterion.passed", "when": "the last builder criterion passes and finish opens", "source": "derived"},
+        {"event": "task.released", "when": "the holder releases the task", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the lease ends", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "finish",
+      "class": "working",
+      "subject_kinds": ["action", null],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "Every builder criterion has passed and the task is not yet submitted, or an approved outward action is being carried out. In the action case it opens when the builder acknowledges the briefing after the approval.",
+      "prd_subject": "The first approved action not yet reported done, if any",
+      "opened_by": [
+        {"event": "criterion.passed", "when": "the last builder criterion passes", "source": "derived"},
+        {"event": "task.briefing_acknowledged", "when": "the builder acknowledges after an approval (L295), or after a claim with every builder criterion already passed (plan SM-26)", "source": "stated"},
+        {"event": "action.reported_done", "when": "an approved action is reported done and another is still to be carried out: a new finish row for it", "source": "derived"},
+        {"event": "check.finished", "when": "a pending submit is refused or its checks are withdrawn", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.submitted", "when": "the builder submits", "source": "derived"},
+        {"event": "check.queued", "when": "the submit waits on a model check at task.before_submit", "source": "derived"},
+        {"event": "action.reported_done", "when": "an approved action is reported done (L306)", "source": "stated"},
+        {"event": "task.done", "when": "the task is done (L306)", "source": "stated"},
+        {"event": "task.released", "when": "the holder releases the task", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the lease ends", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_review",
+      "class": "waiting",
+      "subject_kinds": ["review"],
+      "cause_kinds": ["rule"],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is submitted and no reviewer has started. It names the provider rule as its cause when that rule refused a reviewer who was otherwise eligible.",
+      "prd_subject": "The review",
+      "opened_by": [
+        {"event": "task.submitted", "when": "the task is submitted", "source": "derived"},
+        {"event": "review.released", "when": "the reviewer releases the review", "source": "derived"},
+        {"event": "review.lease_expired", "when": "the review lease ends", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "review.started", "when": "a reviewer claims the review", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "review",
+      "class": "working",
+      "subject_kinds": ["criterion"],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "A reviewer is checking the work.",
+      "prd_subject": "The review criterion",
+      "opened_by": [
+        {"event": "review.started", "when": "a reviewer claims the review", "source": "derived"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "review.passed", "when": "the review passes", "source": "derived"},
+        {"event": "review.failed", "when": "the review fails", "source": "derived"},
+        {"event": "review.released", "when": "the reviewer releases the review", "source": "derived"},
+        {"event": "review.lease_expired", "when": "the review lease ends", "source": "derived"},
+        {"event": "check.queued", "when": "the pass waits on a model check at task.before_done", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_builder",
+      "class": "waiting",
+      "subject_kinds": ["review", "action"],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is waiting for its builder after a failed review or an approved action: the builder has a fresh lease and has not yet acknowledged the briefing under it, or an approved action waits for a builder that holds something else.",
+      "prd_subject": "The review, or the first approved action not yet reported done",
+      "opened_by": [
+        {"event": "review.failed", "when": "a failed review gives the previous builder a fresh lease (L306)", "source": "stated"},
+        {"event": "action.approved", "when": "an approval gives the builder a fresh lease, or leaves the action waiting for a builder that holds something else (L306)", "source": "stated"},
+        {"event": "task.returned_for_rework", "when": "an owner rework gives the previous builder a fresh lease", "source": "derived"},
+        {"event": "action.waived", "when": "a waive leaves only approved actions and gives the builder its fresh lease (plan SM-11)", "source": "derived", "decision": "SM-11"},
+        {"event": "hold.closed", "when": "Offer task again, or the last hold lifting while the builder has a fresh lease not yet acknowledged", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.briefing_acknowledged", "when": "the builder acknowledges under the fresh lease: rework or finish opens (L306)", "source": "stated"},
+        {"event": "task.lease_expired", "when": "the fresh lease ends", "source": "derived"},
+        {"event": "task.released", "when": "the builder releases the task", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "rework",
+      "class": "working",
+      "subject_kinds": ["review"],
+      "cause_kinds": [],
+      "prd_class": "Working",
+      "prd_open_while": "The builder is fixing the work after a failed review, from its acknowledgement of the briefing under the fresh lease until it submits again.",
+      "prd_subject": "The review",
+      "opened_by": [
+        {"event": "task.briefing_acknowledged", "when": "the builder acknowledges under the fresh lease after a failed review (L306)", "source": "stated"},
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "task.submitted", "when": "the builder submits again (L306)", "source": "stated"},
+        {"event": "check.queued", "when": "the submit waits on a model check", "source": "derived"},
+        {"event": "task.released", "when": "the builder releases the task", "source": "derived"},
+        {"event": "task.lease_expired", "when": "the lease ends", "source": "derived"},
+        {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
+        {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_owner",
+      "class": "waiting",
+      "subject_kinds": ["hold"],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "A hold that waits on the owner or the project is open. The table under Holds says which reasons those are.",
+      "prd_subject": "The oldest open hold",
+      "opened_by": [
+        {"event": "hold.opened", "when": "a hold whose step is wait_owner opens with no other hold open", "source": "derived"},
+        {"event": "hold.closed", "when": "an older hold closes and the oldest open hold now has step wait_owner", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "hold.closed", "when": "its hold closes", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_seat",
+      "class": "waiting",
+      "subject_kinds": ["seat"],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "The seat holding the task is paused.",
+      "prd_subject": "The seat",
+      "opened_by": [
+        {"event": "hold.opened", "when": "seat_paused opens with no other hold open", "source": "derived"},
+        {"event": "hold.closed", "when": "an older hold closes and seat_paused is now the oldest", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "hold.closed", "when": "seat_paused closes: the seat resumes or loses the task (plan SM-15)", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    },
+    {
+      "kind": "wait_limit",
+      "class": "waiting",
+      "subject_kinds": ["credential"],
+      "cause_kinds": [],
+      "prd_class": "Waiting",
+      "prd_open_while": "The task is held with `credential_limit`: none of the seat's candidates is available and none is signed out.",
+      "prd_subject": "The candidate that resets first",
+      "opened_by": [
+        {"event": "hold.opened", "when": "credential_limit opens with no other hold open; hold.opened carries the candidate that resets first (plan SM-41)", "source": "derived"},
+        {"event": "hold.closed", "when": "an older hold closes and credential_limit is now the oldest", "source": "derived"}
+      ],
+      "closed_by": [
+        {"event": "hold.closed", "when": "credential_limit closes: a candidate resets, a reading shows capacity, or the seat loses the task", "source": "derived"},
+        {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}
+      ]
+    }
+  ]
+}

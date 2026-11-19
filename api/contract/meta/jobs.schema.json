@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jobs.json",
+  "description": "The job kinds: who claims each, what queues it, and the timers that bound it. Input and result shapes are the openapi.json components the registry's job_kinds names.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobs"
+  ],
+  "properties": {
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "input_component",
+          "result_component",
+          "claimer_role",
+          "queued_by",
+          "queue_timer",
+          "run_timer",
+          "attempts",
+          "after_last_miss",
+          "prd_lines"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "input_component": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "result_component": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "claimer_role": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "queued_by": {
+            "description": "The commands whose rows queue this kind of job.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+            }
+          },
+          "queue_timer": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "run_timer": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "attempts": {
+            "description": "How many attempts a job gets before its last miss (L399).",
+            "type": "integer",
+            "minimum": 1
+          },
+          "after_last_miss": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prd_lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

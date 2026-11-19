@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "roles.json",
+  "description": "The four seat roles. prd_may_change and prd_may_read are the PRD's Roles table cells, verbatim; operations are the agent calls a seat of the role may make, which are the registry operations whose caller is one of callers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roles"
+  ],
+  "properties": {
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "prd_may_change",
+          "prd_may_read",
+          "callers",
+          "operations"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "prd_may_change": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prd_may_read": {
+            "type": "string",
+            "minLength": 1
+          },
+          "callers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+            }
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

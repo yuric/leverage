@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "needs_you.json",
+  "description": "Every Needs you item. prd_item, prd_choices and the about and hold reason come from the PRD's Needs you choices table. choices are the codes stored in inbox_items.choices; facts is the JSON Schema of inbox_items.facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item",
+          "prd_item",
+          "about",
+          "hold_reason",
+          "prd_choices",
+          "choices",
+          "facts",
+          "closes"
+        ],
+        "properties": {
+          "item": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "prd_item": {
+            "type": "string",
+            "minLength": 1
+          },
+          "about": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          },
+          "hold_reason": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd_choices": {
+            "type": "string",
+            "minLength": 1
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "choice",
+                "operation_id",
+                "when"
+              ],
+              "properties": {
+                "choice": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+                },
+                "operation_id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+                },
+                "when": {
+                  "description": "The guard under which the item offers this choice; null when always.",
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "facts": {
+            "type": "object",
+            "required": [
+              "type",
+              "additionalProperties",
+              "properties",
+              "required"
+            ]
+          },
+          "closes": {
+            "description": "How an item closes when no choice closes it, or null.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

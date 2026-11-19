@@ -1,0 +1,200 @@
+{
+  "items": [
+    {
+      "item": "question_passed_on",
+      "prd_item": "Question passed on",
+      "about": "task",
+      "hold_reason": "owner_question",
+      "prd_choices": "Answer.",
+      "choices": [
+        {"choice": "answer", "operation_id": "answer_question", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"question_id": {"type": "string", "format": "uuid"}}, "required": ["question_id"]},
+      "closes": null
+    },
+    {
+      "item": "approval",
+      "prd_item": "Approval",
+      "about": "task",
+      "hold_reason": "owner_approval",
+      "prd_choices": "Approve the action, or stop it.",
+      "choices": [
+        {"choice": "approve", "operation_id": "approve_action", "when": null},
+        {"choice": "stop", "operation_id": "stop_action", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"action_id": {"type": "string", "format": "uuid"}}, "required": ["action_id"]},
+      "closes": null
+    },
+    {
+      "item": "stopped_action",
+      "prd_item": "Stopped action",
+      "about": "task",
+      "hold_reason": "action_stopped",
+      "prd_choices": "Waive the action, return the task for rework (only while no action has been announced as started or reported done), or cancel. When a rule check stopped the action: override that check once, which approves the action.",
+      "choices": [
+        {"choice": "waive", "operation_id": "waive_action", "when": null},
+        {"choice": "return_for_rework", "operation_id": "return_for_rework", "when": "no_action_started"},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null},
+        {"choice": "override_once", "operation_id": "override_check", "when": "stopped_by_check"}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"action_id": {"type": "string", "format": "uuid"}, "rule_check_id": {"type": ["string", "null"], "format": "uuid"}, "any_action_started": {"type": "boolean"}}, "required": ["action_id", "rule_check_id", "any_action_started"]},
+      "closes": null
+    },
+    {
+      "item": "unconfirmed_action",
+      "prd_item": "Unconfirmed action",
+      "about": "task",
+      "hold_reason": "action_unconfirmed",
+      "prd_choices": "Offer the task again to the same builder, mark the action done, waive it, or cancel.",
+      "choices": [
+        {"choice": "offer_again", "operation_id": "offer_task_again", "when": "builder_seat_enabled"},
+        {"choice": "mark_done", "operation_id": "mark_action_done", "when": null},
+        {"choice": "waive", "operation_id": "waive_action", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"action_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}}, "approved_by_kind": {"type": "string", "enum": ["owner", "seat"]}, "approved_by_id": {"type": "string", "format": "uuid"}, "builder_announced_start": {"type": "boolean"}}, "required": ["action_ids", "approved_by_kind", "approved_by_id", "builder_announced_start"]},
+      "closes": null
+    },
+    {
+      "item": "past_round_limit",
+      "prd_item": "Past the round limit",
+      "about": "task",
+      "hold_reason": "rounds_exceeded",
+      "prd_choices": "Allow one more round, edit the contract, or cancel. One more round closes the hold, and the next failure opens it again.",
+      "choices": [
+        {"choice": "allow_another_round", "operation_id": "allow_another_round", "when": null},
+        {"choice": "edit_contract", "operation_id": "edit_contract", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"round": {"type": "integer", "minimum": 0}}, "required": ["round"]},
+      "closes": null
+    },
+    {
+      "item": "refused_for_every_agent",
+      "prd_item": "Refused for every agent",
+      "about": "task",
+      "hold_reason": "claim_gate_failed",
+      "prd_choices": "Edit the contract, override the check once, turn the rule off, or cancel.",
+      "choices": [
+        {"choice": "edit_contract", "operation_id": "edit_contract", "when": null},
+        {"choice": "override_once", "operation_id": "override_check", "when": null},
+        {"choice": "turn_rule_off", "operation_id": "disable_rule", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"rule_id": {"type": "string", "format": "uuid"}, "rule_check_id": {"type": "string", "format": "uuid"}}, "required": ["rule_id", "rule_check_id"]},
+      "closes": null
+    },
+    {
+      "item": "check_past_rerun_limit",
+      "prd_item": "Check past the re-run limit",
+      "about": "task",
+      "hold_reason": "rerun_limit",
+      "prd_choices": "Override the check once, edit the contract, or cancel.",
+      "choices": [
+        {"choice": "override_once", "operation_id": "override_check", "when": null},
+        {"choice": "edit_contract", "operation_id": "edit_contract", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"rule_id": {"type": "string", "format": "uuid"}, "rule_check_id": {"type": "string", "format": "uuid"}}, "required": ["rule_id", "rule_check_id"]},
+      "closes": null
+    },
+    {
+      "item": "check_could_not_run",
+      "prd_item": "Check could not run",
+      "about": "task",
+      "hold_reason": "check_error",
+      "prd_choices": "Run it again, override it once, or turn the rule off.",
+      "choices": [
+        {"choice": "run_again", "operation_id": "rerun_check", "when": null},
+        {"choice": "override_once", "operation_id": "override_check", "when": null},
+        {"choice": "turn_rule_off", "operation_id": "disable_rule", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"rule_id": {"type": "string", "format": "uuid"}, "rule_check_id": {"type": "string", "format": "uuid"}}, "required": ["rule_id", "rule_check_id"]},
+      "closes": null
+    },
+    {
+      "item": "access_request",
+      "prd_item": "Access request",
+      "about": "task",
+      "hold_reason": "access",
+      "prd_choices": "Mark the access granted, or cancel.",
+      "choices": [
+        {"choice": "mark_access_granted", "operation_id": "grant_access", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {}, "required": []},
+      "closes": null
+    },
+    {
+      "item": "task_budget_reached",
+      "prd_item": "Task budget reached",
+      "about": "task",
+      "hold_reason": "budget",
+      "prd_choices": "Raise the cap, or cancel.",
+      "choices": [
+        {"choice": "raise_cap", "operation_id": "change_task_cap", "when": null},
+        {"choice": "cancel", "operation_id": "cancel_task", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {}, "required": []},
+      "closes": null
+    },
+    {
+      "item": "project_budget_reached",
+      "prd_item": "Project budget reached",
+      "about": "project",
+      "hold_reason": "project_paused",
+      "prd_choices": "Change the budget, or resume the project.",
+      "choices": [
+        {"choice": "change_budget", "operation_id": "change_budget", "when": null},
+        {"choice": "resume_project", "operation_id": "resume_project", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {}, "required": []},
+      "closes": null
+    },
+    {
+      "item": "account_signed_out",
+      "prd_item": "Account signed out",
+      "about": "task",
+      "hold_reason": "credential_signed_out",
+      "prd_choices": "Sign in again. It opens the provider's own sign-in window.",
+      "choices": [
+        {"choice": "sign_in_again", "operation_id": "sign_in_again", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
+      "closes": null
+    },
+    {
+      "item": "limit_with_no_reset_time",
+      "prd_item": "Limit with no reset time",
+      "about": "task",
+      "hold_reason": "credential_limit",
+      "prd_choices": "None. It closes when a reading shows capacity.",
+      "choices": [],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
+      "closes": "When a reading shows capacity for the credential (L199, L696)."
+    },
+    {
+      "item": "no_reviewer_eligible",
+      "prd_item": "No reviewer is eligible",
+      "about": "task",
+      "hold_reason": null,
+      "prd_choices": "Connect an agent from another provider, or turn the provider rule off. It closes on its own when a connected seat may review the task.",
+      "choices": [
+        {"choice": "connect_seat", "operation_id": "connect_seat", "when": null},
+        {"choice": "turn_rule_off", "operation_id": "disable_rule", "when": null}
+      ],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"review_id": {"type": "string", "format": "uuid"}, "rule_id": {"type": "string", "format": "uuid"}}, "required": ["review_id", "rule_id"]},
+      "closes": "On its own when a connected seat may review the task (L200, plan SM-42)."
+    },
+    {
+      "item": "orchestrator_offline",
+      "prd_item": "Orchestrator offline",
+      "about": "workspace",
+      "hold_reason": null,
+      "prd_choices": "None. It closes on its own when a seat with the role polls again.",
+      "choices": [],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string", "enum": ["orchestrator", "planner"]}, "waiting_checks": {"type": "integer", "minimum": 0}, "credential_id": {"type": ["string", "null"], "format": "uuid"}}, "required": ["role", "waiting_checks", "credential_id"]},
+      "closes": "On its own when a seat with the role polls again (L201, L402)."
+    }
+  ]
+}

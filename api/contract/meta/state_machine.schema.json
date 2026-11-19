@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "state_machine.json",
+  "description": "The table of states and commands. Names are checked against registry.json by state_machine_test.rb; this schema fixes the shape.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unlisted_pair_refusal", "guard_families", "guard_conditions", "side_event_exceptions", "commands", "groups", "action_machine"],
+  "properties": {
+    "unlisted_pair_refusal": {
+      "description": "The refusal for a (command, task state) pair that no row lists, for a command whose rows are bound to task states.",
+      "$ref": "#/$defs/name"
+    },
+    "guard_families": {
+      "description": "Guards that split the rows of one (command, from-state): within a family exactly one guard is true.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "guards"],
+        "properties": {
+          "family": {"$ref": "#/$defs/name"},
+          "guards": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/guard_definition"}}
+        }
+      }
+    },
+    "guard_conditions": {
+      "description": "Guards that only name when a conditional or side event is written.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/guard_definition"}
+    },
+    "side_event_exceptions": {
+      "description": "Event types a row may write beside its own events although the registry does not mark them written_as_side_event, each with the PRD lines that require it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "prd_lines", "why"],
+        "properties": {
+          "event": {"$ref": "#/$defs/event"},
+          "prd_lines": {"$ref": "#/$defs/lines"},
+          "why": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "commands": {
+      "description": "What every command is, apart from its rows: whether it is a work call (needs an acknowledged briefing), whether a hold blocks it, and whether the holder may send it while a transition is pending.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "work_call", "blocked_by_hold", "allowed_while_pending"],
+        "properties": {
+          "command": {"$ref": "#/$defs/name"},
+          "work_call": {"type": "boolean"},
+          "blocked_by_hold": {"type": "boolean"},
+          "allowed_while_pending": {"type": "boolean"}
+        }
+      }
+    },
+    "groups": {
+      "description": "One group per row of the PRD's lifecycle table (source prd, with its six cells verbatim), and one per command or set of commands the table does not have (source derived, with the PRD lines and the plan decision).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "rows"],
+        "properties": {
+          "id": {"$ref": "#/$defs/name"},
+          "source": {"enum": ["prd", "derived"]},
+          "prd_cells": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "string", "minLength": 1}},
+          "prd_lines": {"$ref": "#/$defs/lines"},
+          "decision": {"type": "string", "pattern": "^[A-Z]+-[0-9]+(, [A-Z]+-[0-9]+)*$"},
+          "note": {"type": "string", "minLength": 1},
+          "rows": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/row"}}
+        },
+        "if": {"properties": {"source": {"const": "prd"}}},
+        "then": {"required": ["prd_cells"], "not": {"anyOf": [{"required": ["prd_lines"]}, {"required": ["decision"]}]}},
+        "else": {"required": ["prd_lines", "decision"], "not": {"required": ["prd_cells"]}}
+      }
+    },
+    "action_machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states", "transitions"],
+      "properties": {
+        "states": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "event", "to", "commands"],
+            "properties": {
+              "from": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+              "event": {"$ref": "#/$defs/event"},
+              "to": {"$ref": "#/$defs/name"},
+              "commands": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+    "event": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+    "lines": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 1}},
+    "state": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+    "guard_definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guard", "means", "prd_lines"],
+      "properties": {
+        "guard": {"$ref": "#/$defs/name"},
+        "means": {"type": "string", "minLength": 1},
+        "prd_lines": {"$ref": "#/$defs/lines"}
+      }
+    },
+    "row": {
+      "description": "One case of a command. from is the task's state, or null when the command does not read the task's state (add_task: there is no task yet). guard is a conjunction of family guards. A row with a refusal is refused with that code and changes nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "from", "guard", "to", "refusal", "who", "hook", "builder_lease", "events", "conditional_events", "side_events", "holds_opened", "holds_closed"],
+      "properties": {
+        "command": {"$ref": "#/$defs/name"},
+        "from": {"$ref": "#/$defs/state"},
+        "guard": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "to": {"$ref": "#/$defs/state"},
+        "refusal": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "who": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+        "hook": {"oneOf": [{"$ref": "#/$defs/event"}, {"type": "null"}]},
+        "builder_lease": {
+          "description": "What the row does to the builder's lease: claim (grants it, or a provisional claim while a model check is pending), fresh (a fresh lease to the previous builder), ends (ends any lease or provisional claim), or null.",
+          "enum": ["claim", "fresh", "ends", null]
+        },
+        "events": {"type": "array", "items": {"$ref": "#/$defs/event"}},
+        "conditional_events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event", "when"],
+            "properties": {"event": {"$ref": "#/$defs/event"}, "when": {"$ref": "#/$defs/name"}}
+          }
+        },
+        "side_events": {
+          "description": "Events the row may write beside its own (PRD L114), with the guard that decides it or null and a note.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event", "when"],
+            "properties": {
+              "event": {"$ref": "#/$defs/event"},
+              "when": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+              "note": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "holds_opened": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "holds_closed": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        "note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

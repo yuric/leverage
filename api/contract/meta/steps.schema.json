@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "steps.json",
+  "description": "The step kinds and the events that open and close each. prd_class, prd_open_while and prd_subject are the cells of the PRD's Step kinds table, verbatim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rules", "close_without_opening", "steps"],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "rule", "prd_lines"],
+        "properties": {
+          "source": {"enum": ["prd", "derived"]},
+          "rule": {"type": "string", "minLength": 1},
+          "prd_lines": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 1}}
+        }
+      }
+    },
+    "close_without_opening": {
+      "description": "Events that close the open step and open none.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/event"}
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "class", "subject_kinds", "cause_kinds", "prd_class", "prd_open_while", "prd_subject", "opened_by", "closed_by"],
+        "properties": {
+          "kind": {"$ref": "#/$defs/name"},
+          "class": {"$ref": "#/$defs/name"},
+          "subject_kinds": {
+            "description": "The subject kinds a row of this step may carry; null for no subject.",
+            "type": "array",
+            "minItems": 1,
+            "items": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]}
+          },
+          "cause_kinds": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+          "prd_class": {"type": "string", "minLength": 1},
+          "prd_open_while": {"type": "string", "minLength": 1},
+          "prd_subject": {"type": "string", "minLength": 1},
+          "opened_by": {"$ref": "#/$defs/boundaries"},
+          "closed_by": {"$ref": "#/$defs/boundaries"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+    "event": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+    "boundaries": {
+      "description": "Each event that opens or closes the step, when it does, and whether the PRD names it (stated) or the contract reads it off the PRD (derived, with the plan decision when one settles it).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "when", "source"],
+        "properties": {
+          "event": {"$ref": "#/$defs/event"},
+          "when": {"type": "string", "minLength": 1},
+          "source": {"enum": ["stated", "derived"]},
+          "decision": {"type": "string", "pattern": "^[A-Z]+-[0-9]+$"}
+        }
+      }
+    }
+  }
+}

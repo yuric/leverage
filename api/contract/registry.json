@@ -278,7 +278,13 @@
     "builder_free", "builder_busy", "last_open_action", "not_last_open_action",
     "held_action_unconfirmed", "held_action_stopped", "no_action_started", "action_started",
     "reviewer_holds_review", "has_outward_action", "no_outward_action", "escalates",
-    "does_not_escalate", "credential_differs", "stopped_by_check"
+    "does_not_escalate", "credential_differs", "stopped_by_check",
+    "adds_to_imaginarium", "adds_to_backlog", "not_held_action_unconfirmed", "no_reviewer_holds_review",
+    "candidate_available", "no_candidate_available", "approvals_complete", "approvals_pending",
+    "held_owner_hold", "not_held_owner_hold", "approved_action_open", "approved_action_done",
+    "first_miss", "second_miss", "owner_must_act", "seat_holds_working_task", "seat_holds_review",
+    "add_checks_passed", "verify_passed", "found_signed_out", "question_answered",
+    "project_budget_reached", "project_under_budget", "builder_seat_enabled"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",

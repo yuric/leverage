@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hooks.json",
+  "description": "The hooks: what a failed gate does, what each hashes, and the moment name shown to the owner. prd_moment, prd_checkers, prd_failed_gate and prd_hashed_inputs are PRD cells, verbatim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["failed_gate_effects", "hooks"],
+  "properties": {
+    "failed_gate_effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["effect", "means", "prd_lines"],
+        "properties": {
+          "effect": {"$ref": "#/$defs/name"},
+          "means": {"type": "string", "minLength": 1},
+          "prd_lines": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 1}}
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hook", "prd_moment", "prd_checkers", "prd_failed_gate", "checkers", "rule_kinds", "failed_gate", "policy_row", "subject_kind", "prd_hashed_inputs", "hashed_inputs", "moment_name", "custom_allowed", "also_event_type"],
+        "properties": {
+          "hook": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+          "prd_moment": {"type": "string", "minLength": 1},
+          "prd_checkers": {"type": "string", "minLength": 1},
+          "prd_failed_gate": {"type": "string", "minLength": 1},
+          "checkers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+          "rule_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
+          "failed_gate": {
+            "description": "One of failed_gate_effects, or null at a hook that takes no gate.",
+            "oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]
+          },
+          "policy_row": {
+            "description": "When a policy rule here writes a rule check row (L368): always, or only when it changes the outcome; null at a hook with no policy.",
+            "enum": ["always", "when_it_changes_the_outcome", null]
+          },
+          "subject_kind": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+          "prd_hashed_inputs": {
+            "description": "The PRD's cell, or null for a hook the PRD's table leaves out (plan RC-26).",
+            "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]
+          },
+          "hashed_inputs": {
+            "description": "The keys of the inputs Leverage::Gating.input_hash takes for this hook.",
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/name"}
+          },
+          "moment_name": {"type": "string", "minLength": 1},
+          "custom_allowed": {"type": "boolean"},
+          "also_event_type": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+  }
+}
