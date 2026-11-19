@@ -45,10 +45,16 @@ enum EndToEnd {
         guard dladdr(#dsohandle, &info) != 0, let name = info.dli_fname else {
             throw EndToEndFailure("could not find the test program's own path")
         }
-        var url = URL(fileURLWithPath: String(cString: name)).resolvingSymlinksInPath()
+        let url = URL(fileURLWithPath: String(cString: name)).resolvingSymlinksInPath()
         #else
-        var url = URL(fileURLWithPath: "/proc/self/exe").resolvingSymlinksInPath()
+        let url = URL(fileURLWithPath: "/proc/self/exe").resolvingSymlinksInPath()
         #endif
+        return try productsFolder(forTestProgram: url)
+    }
+
+    /// The products folder for the test program at `program`.
+    static func productsFolder(forTestProgram program: URL) throws -> URL {
+        var url = program
         while url.path != "/" {
             if url.pathExtension == "xctest" { return url.deletingLastPathComponent() }
             url.deleteLastPathComponent()
