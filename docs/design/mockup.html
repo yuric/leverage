@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>leverage mockups</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14.4' fill='%230A63E0'/%3E%3Cpath d='M8 30 56 46' stroke='%23fff' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M21 38 29 53H13z' fill='%23fff'/%3E%3Crect x='9' y='13' width='14' height='12' rx='2.5' fill='%23fff' transform='rotate(18.4 16 25)'/%3E%3Cpath d='M44 24l5.5 6 5.5-6' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!--
+  leverage app mockups, as one self-contained page.
+
+  How this file is laid out, top to bottom:
+    1. DESIGN TOKENS   the colors, glass, radii and type sizes. Change a value here and
+                       every screen follows. Light is the default; dark and
+                       reduced transparency override it.
+    2. MOCKUP STYLES   the classes the mockup uses (all start with "lv-").
+    3. INSPECTOR       the grey bar and panels around the mockup (classes start with
+                       "ix-"). They are not part of the design.
+    4. SCRIPT          NAMES (the two sets of labels), the sample data, the mockup's
+                       render functions, then the inspector.
+-->
+<style>
+/* ===== 1. DESIGN TOKENS ===== */
+.lv-root {
+  color-scheme: light;
+  /* backdrop: soft blue and lavender light for the glass to pick up */
+  --backdrop-base: #E8EDFA;
+  --tint-a: rgba(118,160,255,0.6);
+  --tint-b: rgba(180,150,255,0.55);
+  --backdrop: radial-gradient(900px 520px at 12% 0%, var(--tint-a), transparent 70%), radial-gradient(820px 560px at 92% 12%, var(--tint-b), transparent 70%), var(--backdrop-base);
+  /* glass: the window shell and the floating navigation */
+  --shell: rgba(255,255,255,0.5);
+  --nav: rgba(255,255,255,0.34);
+  --rim: rgba(255,255,255,0.8);
+  --blur: 30px;
+  --glass-filter: blur(var(--blur)) saturate(1.6);
+  --shell-shadow: 0 30px 70px rgba(40,52,118,0.2), inset 0 1px 0 rgba(255,255,255,0.9);
+  --nav-shadow: 0 10px 26px rgba(40,52,118,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+  /* steady content surfaces */
+  --surface: rgba(255,255,255,0.95);
+  --sheet: #FFFFFF;
+  --inset: #EEF2FC;
+  --control: #F3F5FB;
+  --line: #D5DAE8;
+  --field: #7A8298;
+  --text: #1A1E29;
+  --text2: #444C60;
+  --dot: #B4BBCF;
+  --ok: #1C8A52;
+  --placeholder: #6B7280;
+  --select: #CFE0FF;
+  /* the one blue */
+  --primary: #0A63E0;
+  --primary-fg: #FFFFFF;
+  --primary-shadow: 0 6px 16px rgba(10,99,224,0.32);
+  --focus: #0A63E0;
+  --hover: 0.96;
+  /* navigation tabs */
+  --tab-fg: #2F3648;
+  --tab-hover: rgba(26,30,41,0.05);
+  --tab-pressed: rgba(26,30,41,0.11);
+  --tab-on-bg: #FFFFFF;
+  --tab-on-fg: #11141D;
+  --tab-on-edge: rgba(26,30,41,0.14);
+  --tab-on-shadow: 0 4px 12px rgba(40,52,118,0.22), inset 0 1px 0 #FFFFFF;
+  /* depth */
+  --card-shadow: 0 1px 2px rgba(30,40,90,0.08);
+  --sheet-shadow: 0 30px 80px rgba(30,40,90,0.3);
+  --scrim: rgba(24,30,58,0.3);
+  /* state colors: used only where they signal state */
+  --wait-bg: #FFEFCF;  --wait-fg: #7A4300;
+  --done-bg: #DDF5E6;  --done-fg: #0B6237;
+  --info-bg: #E2EDFF;  --info-fg: #0B4AA8;
+  --stop-bg: #FFE4D3;  --stop-fg: #8A3A0B;
+  --plain-bg: #EEF2FC; --plain-fg: #1A1E29;
+  /* shape and type (shared by every appearance) */
+  --r-window: 18px;
+  --r-nav: 14px;
+  --r-card: 12px;
+  --r-tab: 10px;
+  --r-control: 8px;
+  --r-chip: 6px;
+  --fs-head: 15px;
+  --fs-body: 13px;
+  --fs-small: 12px;
+  --fs-badge: 11px;
+}
+.lv-root[data-appearance="dark"] {
+  color-scheme: dark;
+  --backdrop-base: #0D111E;
+  --tint-a: rgba(62,104,235,0.55);
+  --tint-b: rgba(136,92,224,0.5);
+  --shell: rgba(30,34,52,0.56);
+  --nav: rgba(44,49,72,0.6);
+  --rim: rgba(255,255,255,0.16);
+  --shell-shadow: 0 30px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+  --nav-shadow: 0 10px 26px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.14);
+  --surface: rgba(27,30,45,0.95);
+  --sheet: #1D2032;
+  --inset: #262A3F;
+  --control: #262A3F;
+  --line: #3A405A;
+  --field: #6B7391;
+  --text: #F2F4FA;
+  --text2: #BAC1D6;
+  --dot: #5C6382;
+  --ok: #57D08F;
+  --placeholder: #9AA3BC;
+  --select: #2C4A86;
+  --primary: #1F6FEB;
+  --primary-shadow: 0 6px 16px rgba(31,111,235,0.42);
+  --focus: #8AB4FF;
+  --hover: 1.12;
+  --tab-fg: #D5DAEA;
+  --tab-hover: rgba(255,255,255,0.06);
+  --tab-pressed: rgba(255,255,255,0.14);
+  --tab-on-bg: #3A4160;
+  --tab-on-fg: #FFFFFF;
+  --tab-on-edge: rgba(255,255,255,0.22);
+  --tab-on-shadow: 0 4px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  --sheet-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  --scrim: rgba(5,7,14,0.55);
+  --wait-bg: #4B3611;  --wait-fg: #FFD899;
+  --done-bg: #12402A;  --done-fg: #A6ECC4;
+  --info-bg: #17336A;  --info-fg: #C2DAFF;
+  --stop-bg: #4D2613;  --stop-fg: #FFCBAA;
+  --plain-bg: #262A3F; --plain-fg: #F2F4FA;
+}
+/* reduced transparency: same hierarchy, no blur, solid surfaces */
+.lv-root[data-flat="true"] {
+  --glass-filter: none;
+  --tint-a: transparent;
+  --tint-b: transparent;
+  --backdrop-base: #E4E9F6;
+  --shell: #F4F6FC;
+  --nav: #E3E8F4;
+  --rim: #B9C1D6;
+  --surface: #FFFFFF;
+  --tab-on-edge: #9AA3BC;
+  --shell-shadow: 0 16px 40px rgba(40,52,118,0.16);
+  --nav-shadow: 0 4px 12px rgba(40,52,118,0.14);
+}
+.lv-root[data-appearance="dark"][data-flat="true"] {
+  --backdrop-base: #0D111E;
+  --shell: #171A28;
+  --nav: #242838;
+  --rim: #4A5170;
+  --surface: #1B1E2D;
+  --tab-on-edge: #6B7391;
+  --shell-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  --nav-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ===== 2. MOCKUP STYLES ===== */
+.lv-root { position: relative; min-height: 920px; box-sizing: border-box; padding: 24px 16px 40px; background: var(--backdrop); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif; font-size: var(--fs-body); line-height: 1.4; font-variant-numeric: tabular-nums; text-align: left; }
+.lv-root *, .lv-root *::before, .lv-root *::after { box-sizing: border-box; }
+.lv-root h1, .lv-root h2, .lv-root h3, .lv-root h4 { margin: 0; text-wrap: balance; }
+.lv-root p { margin: 0; }
+.lv-root ::selection { background: var(--select); }
+.lv-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lv-root [tabindex="-1"]:focus { outline: none; }
+
+/* the window: a floating glass side pane, and the content beside it */
+.lv-root { container-type: inline-size; }
+.lv-frame { position: relative; max-width: 1440px; margin: 0 auto; }
+.lv-window { display: flex; align-items: stretch; gap: 6px; min-height: 856px; padding: 6px; border-radius: var(--r-window); background: var(--shell); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--shell-shadow); }
+.lv-side { flex: 0 0 188px; display: flex; flex-direction: column; gap: 14px; padding: 12px 8px; border-radius: calc(var(--r-window) - 6px); background: var(--nav); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--nav-shadow); }
+.lv-dots { display: flex; gap: 6px; padding: 2px 6px 0; }
+.lv-dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--dot); }
+.lv-brand { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+.lv-brand h1 { font-size: var(--fs-head); font-weight: 700; letter-spacing: 0.01em; }
+.lv-appicon { flex: 0 0 auto; display: block; }
+.lv-side-foot { margin-top: auto; padding: 0 6px 2px; }
+.lv-health { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--text2); }
+.lv-health i { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.lv-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.lv-toolbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px 10px 16px; }
+.lv-toolbar-title { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.lv-scope { color: var(--text2); }
+.lv-scope-select { display: none; min-height: 32px; max-width: 100%; }
+
+/* controls */
+.lv-btn { flex: 0 0 auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--control); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
+.lv-btn--strong { font-weight: 600; }
+.lv-btn--primary { padding: 0 16px; border-width: 0; background: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.lv-btn--raised { box-shadow: var(--primary-shadow); }
+.lv-btn--tint { border-color: transparent; background: var(--info-bg); color: var(--info-fg); font-weight: 600; }
+.lv-btn--icon { width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.lv-btn--row { width: 100%; text-align: left; font-weight: 400; }
+.lv-input { min-height: 36px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--field); background: var(--surface); color: var(--text); font: inherit; caret-color: var(--focus); }
+textarea.lv-input { padding: 8px 12px; resize: vertical; }
+select.lv-input { padding: 0 8px; }
+.lv-input::placeholder { color: var(--placeholder); opacity: 1; }
+.lv-field { display: flex; flex-direction: column; gap: 4px; }
+.lv-label { font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-root button, .lv-input { transition: background-color .15s ease-out, box-shadow .15s ease-out, transform .15s ease-out, filter .15s ease-out; }
+.lv-root button:focus-visible, .lv-input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lv-root button:not([aria-disabled="true"]):hover { filter: brightness(var(--hover)); }
+.lv-root button:not([aria-disabled="true"]):active { transform: translateY(1px); }
+.lv-root button[aria-disabled="true"] { opacity: .38; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .lv-root button, .lv-input { transition: none; } }
+
+/* the navigation in the side pane; the selected row is raised slightly */
+.lv-nav { display: flex; flex-direction: column; gap: 2px; }
+.lv-tab { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-control); font: inherit; font-weight: 500; text-align: left; cursor: pointer; background: transparent; color: var(--tab-fg); }
+.lv-tab svg { flex: 0 0 16px; }
+.lv-tab-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-tab[aria-current="page"] { background: var(--tab-on-bg); color: var(--tab-on-fg); border-color: var(--tab-on-edge); box-shadow: var(--tab-on-shadow); transform: translateY(-1px); font-weight: 600; }
+.lv-tab[aria-pressed="true"] { background: var(--tab-pressed); color: var(--tab-on-fg); font-weight: 600; }
+.lv-side-section { display: flex; flex-direction: column; gap: 4px; }
+.lv-side-head { padding: 0 8px; font-size: var(--fs-badge); font-weight: 600; color: var(--text2); }
+.lv-root .lv-tab:not([aria-current="page"]):hover { background: var(--tab-hover); filter: none; }
+.lv-root .lv-tab:active { transform: none; }
+.lv-root .lv-tab[aria-current="page"]:active { transform: translateY(-1px); }
+.lv-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--wait-bg); color: var(--wait-fg); font-size: var(--fs-badge); font-weight: 700; line-height: 18px; text-align: center; }
+
+/* content */
+.lv-main { padding: 0 10px 20px 16px; }
+.lv-h { font-size: var(--fs-head); font-weight: 600; }
+.lv-h--small { font-size: var(--fs-body); font-weight: 600; }
+.lv-muted { font-size: var(--fs-small); color: var(--text2); }
+.lv-lanes { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.lv-lane { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lv-lane-head { display: flex; align-items: baseline; gap: 6px; padding: 0 4px; }
+.lv-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-card h4 { font-size: var(--fs-body); font-weight: 600; line-height: 1.3; }
+.lv-chip { align-self: flex-start; padding: 2px 8px; border-radius: var(--r-chip); font-size: var(--fs-small); font-weight: 600; }
+.lv-chip--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-chip--done { background: var(--done-bg); color: var(--done-fg); }
+.lv-chip--info { background: var(--info-bg); color: var(--info-fg); }
+.lv-chip--stop { background: var(--stop-bg); color: var(--stop-fg); }
+.lv-chip--plain { background: var(--plain-bg); color: var(--plain-fg); }
+.lv-note { padding: 8px; border-radius: var(--r-control); background: var(--inset); font-size: var(--fs-small); }
+.lv-empty { padding: 12px; border-radius: var(--r-card); border: 1px dashed var(--field); font-size: var(--fs-small); color: var(--text2); }
+.lv-page { max-width: 760px; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.lv-page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 0 4px; }
+.lv-page-head--action { align-items: center; flex-wrap: nowrap; gap: 12px; }
+.lv-page-head-text { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.lv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-list > li + li { border-top: 1px solid var(--line); }
+.lv-need { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 16px; }
+.lv-need p { color: var(--text2); }
+.lv-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.lv-answer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding-top: 4px; }
+.lv-answer .lv-field { flex: 1 1 220px; min-width: 0; }
+.lv-cred { display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 12px 16px; }
+.lv-cred-top { display: flex; align-items: center; gap: 12px; }
+.lv-place { flex: 0 0 16px; font-weight: 600; color: var(--text2); }
+.lv-cred-name { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.lv-cred-name b { font-weight: 600; }
+.lv-cred-move { flex: 0 0 auto; display: flex; gap: 8px; }
+.lv-cred-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-left: 28px; }
+.lv-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 16px; }
+.lv-row-lead { flex: 0 0 76px; font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-row-lead--name { flex-basis: 132px; font-size: var(--fs-body); color: var(--text); }
+.lv-row-lead--num { flex-basis: 16px; font-size: var(--fs-body); }
+.lv-cred-state--flush { padding-left: 0; }
+.lv-row-text { flex: 1 1 240px; min-width: 0; }
+
+/* sheets: they belong to the window, so the scrim stays inside it */
+.lv-scrim { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding: 96px 16px 24px; border-radius: var(--r-window); background: var(--scrim); }
+.lv-sheet { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--r-window); background: var(--sheet); border: 1px solid var(--line); box-shadow: var(--sheet-shadow); }
+.lv-sheet--small { max-width: 440px; }
+.lv-step { display: flex; flex-direction: column; gap: 8px; }
+.lv-step--form { gap: 12px; }
+.lv-sheet-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.lv-spacer { flex: 1 1 8px; }
+
+/* narrow window: the side pane becomes a rail of icons */
+@container (max-width: 700px) {
+  .lv-side { flex-basis: 52px; padding: 10px 6px; }
+  .lv-dots, .lv-side-section--projects { display: none; }
+  .lv-brand { justify-content: center; padding: 0; }
+  .lv-brand h1, .lv-tab-label, .lv-health span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lv-tab { justify-content: center; min-height: 36px; padding: 0; }
+  .lv-tab .lv-count { position: absolute; top: 1px; right: 1px; min-width: 14px; padding: 0 3px; line-height: 14px; font-size: 10px; }
+  .lv-side-foot { display: flex; justify-content: center; padding: 0 0 4px; }
+  .lv-scope { display: none; }
+  .lv-scope-select { display: block; }
+  .lv-toolbar { padding: 6px 4px 10px 8px; }
+  .lv-main { padding: 0 4px 16px 8px; }
+}
+/* the app icon shown on its own in the All view */
+.lv-root.lv-iconboard { min-height: 0; width: 380px; display: flex; align-items: flex-end; gap: 20px; padding: 28px; border-radius: 6px; }
+.lv-iconboard figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: var(--fs-badge); color: var(--text2); }
+
+/* ===== 3. INSPECTOR (not part of the design) ===== */
+html, body { margin: 0; }
+body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+.ix-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; background: #1E2026; color: #E7E9EE; border-bottom: 1px solid #000; }
+.ix-title { font-weight: 700; }
+.ix-group { display: flex; align-items: center; gap: 6px; }
+.ix-group > span { font-size: 11px; color: #A4A9B6; }
+.ix-seg { display: inline-flex; border: 1px solid #454956; border-radius: 6px; overflow: hidden; }
+.ix-seg button, .ix-btn { min-height: 28px; padding: 0 10px; border: 0; background: #2B2E37; color: #E7E9EE; font: inherit; cursor: pointer; }
+.ix-seg button + button { border-left: 1px solid #454956; }
+.ix-seg button[aria-pressed="true"], .ix-btn[aria-pressed="true"] { background: #E7E9EE; color: #16181D; font-weight: 600; }
+.ix-btn { border: 1px solid #454956; border-radius: 6px; }
+.ix-bar select, .ix-bar input[type="range"] { font: inherit; }
+.ix-bar select { min-height: 28px; border: 1px solid #454956; border-radius: 6px; background: #2B2E37; color: #E7E9EE; padding: 0 6px; }
+.ix-bar button:focus-visible, .ix-bar select:focus-visible, .ix-bar input:focus-visible, .ix-panel button:focus-visible, .ix-panel input:focus-visible, .ix-dialog button:focus-visible, .ix-dialog textarea:focus-visible { outline: 2px solid #7FB0FF; outline-offset: 2px; }
+.ix-bar [disabled] { opacity: .4; cursor: not-allowed; }
+.ix-hint { margin: 0; padding: 6px 12px; background: #2B2E37; color: #C9CDD8; font-size: 12px; }
+.ix-body { display: flex; align-items: flex-start; }
+.ix-stage { flex: 1 1 auto; min-width: 0; overflow: auto; padding: 16px; }
+.ix-strip { display: flex; align-items: flex-start; gap: 24px; }
+.ix-art { flex: 0 0 auto; }
+.ix-art > figcaption { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #4A4F5C; }
+figure.ix-art { margin: 0; }
+.ix-frame { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.ix-frame > .lv-root { transform-origin: 0 0; }
+.ix-editing .lv-root { cursor: text; }
+.ix-editing .lv-root [data-o]:hover { outline: 1px dashed #D0338A; outline-offset: 1px; }
+.ix-editor { position: fixed; z-index: 40; min-width: 160px; padding: 6px 8px; border: 2px solid #D0338A; border-radius: 6px; background: #FFFFFF; color: #111; font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; resize: both; }
+.ix-panel { flex: 0 0 300px; max-width: 100%; position: sticky; top: 46px; max-height: calc(100vh - 46px); overflow: auto; padding: 12px; background: #F7F7F9; border-left: 1px solid #C9CCD4; }
+.ix-panel[hidden] { display: none; }
+.ix-panel h2 { margin: 0 0 4px; font-size: 13px; }
+.ix-panel h3 { margin: 14px 0 6px; font-size: 11px; text-transform: none; color: #5A5F6C; font-weight: 700; }
+.ix-panel p { margin: 0 0 8px; font-size: 12px; color: #4A4F5C; }
+.ix-token { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: center; margin-bottom: 8px; }
+.ix-token label { grid-column: 1 / -1; font-size: 12px; }
+.ix-token label code { color: #6A6F7C; font-size: 11px; }
+.ix-token-inputs { display: flex; gap: 6px; min-width: 0; }
+.ix-token input[type="text"], .ix-token input[type="number"] { flex: 1 1 auto; min-width: 0; min-height: 26px; padding: 0 6px; border: 1px solid #B6BAC4; border-radius: 5px; font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: #fff; color: #111; }
+.ix-token input[type="color"] { flex: 0 0 30px; width: 30px; height: 26px; padding: 0; border: 1px solid #B6BAC4; border-radius: 5px; background: #fff; }
+.ix-token input.ix-bad { border-color: #C6262E; background: #FFF1F1; }
+.ix-token.ix-changed label::after { content: " changed"; color: #D0338A; font-size: 11px; font-weight: 600; }
+.ix-small { min-height: 26px; padding: 0 8px; border: 1px solid #B6BAC4; border-radius: 5px; background: #fff; color: #111; font: inherit; font-size: 12px; cursor: pointer; }
+.ix-small[aria-pressed="true"] { background: #1E2026; color: #fff; border-color: #1E2026; }
+.ix-small:disabled, .ix-token input:disabled { opacity: .45; cursor: not-allowed; }
+.ix-dialog { width: min(640px, calc(100vw - 32px)); padding: 16px; border: 1px solid #9FA4B0; border-radius: 10px; color: #1B1D22; font: inherit; }
+.ix-dialog::backdrop { background: rgba(0,0,0,.4); }
+.ix-dialog h2 { margin: 0 0 6px; font-size: 15px; }
+.ix-dialog p { margin: 0 0 8px; font-size: 12px; color: #4A4F5C; }
+.ix-dialog label { display: block; margin: 10px 0 4px; font-size: 12px; font-weight: 600; }
+.ix-dialog textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #B6BAC4; border-radius: 6px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: #111; background: #fff; }
+.ix-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div class="ix-bar" role="toolbar" aria-label="Mockup inspector">
+  <span class="ix-title">leverage mockups</span>
+  <div class="ix-group"><span>View</span>
+    <div class="ix-seg" data-set="view"><button type="button" data-val="one">One screen</button><button type="button" data-val="all">All five</button></div>
+  </div>
+  <div class="ix-group"><span>Screen</span>
+    <select id="ix-screen" aria-label="Screen">
+      <option value="board">Board</option><option value="needs">Needs you</option><option value="activity">Activity</option><option value="agents">Agents</option><option value="creds">Credentials</option><option value="handoff">Handoff</option>
+    </select>
+    <select id="ix-sheet" aria-label="Sheet">
+      <option value="none">No sheet</option><option value="new">Add task sheet</option><option value="account">Add credential sheet</option>
+    </select>
+  </div>
+  <div class="ix-group"><span>Appearance</span>
+    <div class="ix-seg" data-set="appearance"><button type="button" data-val="light">Light</button><button type="button" data-val="dark">Dark</button></div>
+    <div class="ix-seg" data-set="flat"><button type="button" data-val="false">Glass</button><button type="button" data-val="true">Reduced transparency</button></div>
+  </div>
+  <div class="ix-group"><span>Width</span>
+    <div class="ix-seg" data-set="width"><button type="button" data-val="fit">Fit</button><button type="button" data-val="1280">1280</button><button type="button" data-val="390">390</button></div>
+    <label class="ix-group"><span>Zoom</span><input id="ix-zoom" type="range" min="30" max="100" step="5" aria-label="Zoom"><span id="ix-zoom-out"></span></label>
+  </div>
+  <div class="ix-group"><span>Names</span>
+    <div class="ix-seg" data-set="names"><button type="button" data-val="prd">PRD terms</button><button type="button" data-val="plain">Plain names</button></div>
+  </div>
+  <div class="ix-group">
+    <button type="button" class="ix-btn" id="ix-edit" aria-pressed="false">Edit text</button>
+    <button type="button" class="ix-btn" id="ix-tokens" aria-pressed="false">Tokens</button>
+    <button type="button" class="ix-btn" id="ix-changes">Changes</button>
+    <button type="button" class="ix-btn" id="ix-reset">Restart demo</button>
+  </div>
+</div>
+<p class="ix-hint" id="ix-hint"></p>
+
+<div class="ix-body">
+  <div class="ix-stage" id="ix-stage"></div>
+  <aside class="ix-panel" id="ix-panel" aria-label="Design tokens" hidden></aside>
+</div>
+
+<dialog class="ix-dialog" id="ix-dialog" aria-labelledby="ix-dialog-title">
+  <h2 id="ix-dialog-title">Changes you made</h2>
+  <p>Copy this summary to pass your changes on, for example in an issue or a pull request. Nothing here is sent anywhere.</p>
+  <label for="ix-notes">Notes for anything you could not change here</label>
+  <textarea id="ix-notes" rows="3" placeholder="For example: make the Blocked lane stand out more"></textarea>
+  <label for="ix-export">Summary</label>
+  <textarea id="ix-export" rows="12" readonly></textarea>
+  <div class="ix-dialog-actions">
+    <button type="button" class="ix-small" id="ix-clear">Discard all changes</button>
+    <button type="button" class="ix-small" id="ix-copy">Copy summary</button>
+    <button type="button" class="ix-small" id="ix-close">Close</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===== NAMES: the two sets of labels =====
+     "prd" follows docs/PRD.md, with three owner-facing labels in place of its names:
+     Ideas (the PRD's Imaginarium lane), Board (Kanban) and Agents (Agent roster).
+     "plain" is the earlier wording, kept so the two can be compared. The Names switch in the bar picks one. */
+  var NAMES = {
+    prd: {
+      tabs: { board: 'Board', needs: 'Needs you', activity: 'Activity', agents: 'Agents', creds: 'Credentials', handoff: 'Handoff' },
+      lanes: ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'],
+      addTask: 'Add task', saveTask: 'Save task',
+      credPage: 'Credentials', addCred: 'Add credential', aCred: 'a credential', noCred: 'No credential left',
+      handoff: 'Handoff order', handoffHint: 'When one reaches its limit, the next one down takes over.',
+      inOrder: 'in the handoff order', backlog: 'Backlog', orchestrator: 'Orchestrator'
+    },
+    plain: {
+      tabs: { board: 'Board', needs: 'Needs you', activity: 'Activity', agents: 'Agents', creds: 'Accounts', handoff: 'Handoff' },
+      lanes: ['Ideas', 'To define', 'Waiting on you', 'Ready', 'In progress', 'Done'],
+      addTask: 'New task', saveTask: 'Add task',
+      credPage: 'Accounts', addCred: 'Add account', aCred: 'an account', noCred: 'Out of accounts',
+      handoff: 'When one runs out', handoffHint: 'The next account in this list takes over, top to bottom.',
+      inOrder: 'in the list', backlog: 'To define', orchestrator: 'Coordinator'
+    }
+  };
+  var TAB_IDS = ['board', 'needs', 'activity', 'agents', 'creds', 'handoff'];
+  var PROVIDERS = ['Claude', 'Codex', 'Gemini', 'Grok'];
+  var PROJECTS = ['Billing', 'Newsletter', 'Website'];   /* sample projects */
+
+  /* ===== inspector state (saved in this browser only) ===== */
+  var STORE = 'leverage-mockups-v1';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { saved = {}; }
+  var ui = {
+    view: saved.view === 'all' ? 'all' : 'one',
+    appearance: saved.appearance === 'dark' ? 'dark' : 'light',
+    flat: saved.flat === true,
+    width: ['fit', '1280', '390'].indexOf(saved.width) >= 0 ? saved.width : 'fit',
+    zoomOne: Number(saved.zoomOne) || 100,
+    zoomAll: Number(saved.zoomAll) || 50,
+    names: saved.names === 'plain' ? 'plain' : 'prd',
+    tokens: { light: {}, dark: {}, shared: {} },
+    edits: {},
+    notes: typeof saved.notes === 'string' ? saved.notes : '',
+    editText: false,
+    tokensOpen: false
+  };
+  ui.tokenAp = ui.appearance;   /* which appearance the Tokens panel edits */
+  if (saved.tokens && typeof saved.tokens === 'object') {
+    ['light', 'dark', 'shared'].forEach(function (k) { if (saved.tokens[k] && typeof saved.tokens[k] === 'object') { ui.tokens[k] = saved.tokens[k]; } });
+  }
+  if (saved.edits && typeof saved.edits === 'object') { ui.edits = saved.edits; }
+  function persist() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({ view: ui.view, appearance: ui.appearance, flat: ui.flat, width: ui.width, zoomOne: ui.zoomOne, zoomAll: ui.zoomAll, names: ui.names, tokens: ui.tokens, edits: ui.edits, notes: ui.notes }));
+    } catch (e) { /* storage can be unavailable; the page works without it */ }
+  }
+
+  /* ===== text helpers =====
+     Every label the mockup shows goes through h() (text inside an element), ha()
+     (text inside an attribute) or ph() (a placeholder), so a change made with
+     "Edit text" survives re-rendering. An edit is stored under the original string;
+     lane headings get their own key so "Done" the lane and "Done" the status can
+     differ. While Edit text is on, each label is wrapped in a span that carries its
+     key (data-o) and its original wording (data-t). */
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function editKey(s, ctx) { return ctx ? '[' + ctx + '] ' + s : s; }
+  function tx(s, ctx) {
+    var k = editKey(s, ctx);
+    return Object.prototype.hasOwnProperty.call(ui.edits, k) ? ui.edits[k] : s;
+  }
+  function h(s, ctx) {
+    var out = esc(tx(s, ctx));
+    return ui.editText ? '<span data-o="' + esc(editKey(s, ctx)) + '" data-t="' + esc(s) + '">' + out + '</span>' : out;
+  }
+  /* one string, or a sentence built from parts; a part may be [string, context] */
+  function H(x) {
+    if (!Array.isArray(x)) { return h(x); }
+    return x.map(function (part) { return Array.isArray(part) ? h(part[0], part[1]) : h(part); }).join('');
+  }
+  function ha(s, ctx) { return esc(tx(s, ctx)); }
+  function ph(s) { return 'placeholder="' + ha(s) + '"' + (ui.editText ? ' data-o="' + esc(s) + '" data-t="' + esc(s) + '"' : ''); }
+
+  /* ===== the mockup ===== */
+  var seq = 0;
+  var ARROW_UP = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l4-4 4 4"></path></svg>';
+  var ARROW_DOWN = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l4 4 4-4"></path></svg>';
+
+  /* The app icon: a lever lifting a weight. One blue tile (it follows --primary),
+     a white beam on a fulcrum set close to the weight, the weight on the short raised
+     end, and a small mark over the long end: push here, lift there. */
+  function appIcon(size, id) {
+    return '<svg class="lv-appicon" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="leverage app icon">' +
+      '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.3"></stop><stop offset="1" stop-color="#000" stop-opacity="0.12"></stop></linearGradient></defs>' +
+      '<rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><rect width="64" height="64" rx="14.4" fill="url(#' + id + ')"></rect>' +
+      '<path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path>' +
+      '<path d="M21 38 29 53H13z" fill="#fff"></path>' +
+      '<rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect>' +
+      '<path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>';
+  }
+  /* 16 px line icons for the side pane */
+  function navIcon(d) { return '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"></path></svg>'; }
+  var NAV_ICONS = {
+    board: navIcon('M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z'),
+    needs: navIcon('M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3'),
+    activity: navIcon('M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4'),
+    agents: navIcon('M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2'),
+    handoff: navIcon('M3 5.5h9.5L10 3M13 10.5H3.5L6 13'),
+    all: navIcon('M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z'),
+    project: navIcon('M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'),
+    creds: navIcon('M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2')
+  };
+
+  function createMock(host, opts) {
+    var uid = 'm' + (++seq);
+    var root = document.createElement('div');
+    root.className = 'lv-root';
+    host.appendChild(root);
+    var view = document.createElement('div');   /* re-rendered on every change */
+    var live = document.createElement('div');   /* stays put, so screen readers hear updates */
+    live.className = 'lv-sr';
+    live.setAttribute('aria-live', 'polite');
+    root.appendChild(view);
+    root.appendChild(live);
+
+    function fresh() {
+      return {
+        tab: 'board', sheet: opts.baseSheet || 'none', title: '', done: '', added: [], resolved: {}, asking: '', answer: '',
+        provider: '', credName: '', addedCred: null, announce: '', project: 'all', taskProject: '',
+        /* sample data: the handoff order, top to bottom */
+        creds: [
+          { name: 'Claude, Personal', kind: 'Subscription login', status: 'At its limit', tone: 'stop', usage: 'Weekly limit. Resets Thursday.' },
+          { name: 'Codex, Team', kind: 'Subscription login', status: 'Working', tone: 'done', usage: 'No limit reported.' },
+          { name: 'Claude, Work', kind: 'Subscription login', status: 'At its limit', tone: 'stop', usage: 'Session limit. Resets at 6:00 PM.' }
+        ]
+      };
+    }
+    var s = fresh();
+    s.tab = opts.tab || 'board';
+    if (opts.sheet) { s.sheet = opts.sheet; }
+    var focusTry = [];   /* keys to try to focus after the next render, in order */
+    var opener = '';     /* key of the control that opened the sheet */
+
+    /* userText: the title and note were typed by the person, so they are not labels to edit */
+    function card(title, line, tone, chip, note, userText) {
+      return '<article class="lv-card"><h4>' + (userText ? esc(title) : h(title)) + '</h4><div class="lv-muted">' + h(line) + '</div>' +
+        (chip ? '<div class="lv-chip lv-chip--' + tone + '">' + h(chip) + '</div>' : '') +
+        (note ? '<div class="lv-note">' + (userText ? esc(note) : H(note)) + '</div>' : '') + '</article>';
+    }
+
+    function openNeeds() { return ['publish', 'rounding', 'credential'].filter(function (id) { return !s.resolved[id]; }).length; }
+
+    function boardHtml(n) {
+      var needsDetails = 'Say what done looks like to send it to an agent';
+      /* every card belongs to a project, so the Projects list in the side pane can filter the board */
+      var item = function (project, html) { return { project: project, html: html }; };
+      var backlog = s.added.filter(function (a) { return !a.done; }).map(function (a) { return item(a.project, card(a.title, needsDetails, 'wait', 'Needs details', '', true)); });
+      backlog.push(item('Website', card('Rename plan tiers on the pricing page', needsDetails, 'wait', 'Needs details')));
+      var ready = s.added.filter(function (a) { return !!a.done; }).map(function (a) { return item(a.project, card(a.title, 'Waiting for a free agent', 'info', 'New', 'Done when: ' + a.done, true)); });
+      ready.push(item('Newsletter', card('Update the onboarding email', 'Waiting for a free agent')));
+      var blocked = [];
+      var working = [
+        item('Billing', card('Fix rounding in invoice totals', 'Codex is building', 'info', 'Codex took over', 'Claude, Personal reached its limit at 2:14 PM. Codex, Team continued from the saved work. Nothing was lost.')),
+        item('Website', card('Tidy the settings page', 'Codex is reviewing Claude’s work', 'info', 'In review'))
+      ];
+      var publish = s.resolved.publish;
+      if (publish && publish.tone === 'done') { working.push(item('Website', card('Write release notes for 0.4', 'Publishing', 'info', 'Approved'))); }
+      else if (publish) { blocked.push(item('Website', card('Write release notes for 0.4', 'Reviewed, was In progress', 'stop', 'Publishing stopped'))); }
+      else { blocked.push(item('Website', card('Write release notes for 0.4', 'Reviewed, was In progress', 'wait', 'Needs approval'))); }
+      if (s.addedCred) { working.push(item('Billing', card('Add CSV export to reports', s.addedCred.provider + ' is building', 'info', 'Resumed', 'Continued on ' + s.addedCred.label + ' from the saved work. Nothing was lost.'))); }
+      else { blocked.push(item('Billing', card('Add CSV export to reports', 'Paused, was In progress', 'stop', n.noCred, ['Claude, Work reached its limit and nothing is below it ', n.inOrder, '. It resumes at 6:00 PM.']))); }
+      var lanes = [
+        [item('Newsletter', card('Try a weekly summary email', 'Not started yet'))], backlog, blocked, ready, working,
+        [item('Website', card('Fix the broken reset-password link', 'Reviewed by Codex, finished 11:02 AM', 'done', 'Done'))]
+      ];
+      return '<div class="lv-lanes">' + lanes.map(function (items, i) {
+        var cards = items.filter(function (it) { return s.project === 'all' || it.project === s.project; });
+        return '<section class="lv-lane" aria-label="' + ha(n.lanes[i], 'lane') + '"><div class="lv-lane-head"><h3 class="lv-h">' + h(n.lanes[i], 'lane') + '</h3><span class="lv-muted">' + cards.length + '</span></div>' +
+          (cards.length ? cards.map(function (it) { return it.html; }).join('') : '<div class="lv-empty">' + h('Nothing here') + '</div>') + '</section>';
+      }).join('') + '</div>';
+    }
+
+    function needHtml(id, title, detail, yesLabel, noLabel, yesAction) {
+      var r = s.resolved[id];
+      var asking = !r && s.asking === id;
+      var body = '';
+      if (r) {
+        body = '<div class="lv-chip lv-chip--' + r.tone + '" tabindex="-1" data-k="result-' + id + '">' + h(r.text) + '</div>';
+      } else if (asking) {
+        body = '<form class="lv-answer" data-f="answer"><div class="lv-field"><label class="lv-label" for="' + uid + '-answer">' + h('Your answer') + '</label>' +
+          '<input class="lv-input" id="' + uid + '-answer" data-k="f-answer" data-m="answer" type="text" required value="' + esc(s.answer) + '" ' + ph('Round half to even') + '></div>' +
+          '<button type="submit" class="lv-btn lv-btn--tint" data-k="answer-send">' + h('Send answer') + '</button>' +
+          '<button type="button" class="lv-btn" data-a="cancelAsk" data-k="answer-cancel">' + h('Cancel') + '</button></form>';
+      } else {
+        body = '<div class="lv-actions"><button type="button" class="lv-btn lv-btn--tint" data-a="' + yesAction + '" data-v="' + id + '" data-k="need-' + id + '-yes">' + h(yesLabel) + '</button>' +
+          '<button type="button" class="lv-btn" data-a="no" data-v="' + id + '" data-k="need-' + id + '-no">' + h(noLabel) + '</button></div>';
+      }
+      return '<li class="lv-need"><h3 class="lv-h--small">' + H(title) + '</h3><p>' + H(detail) + '</p>' + body + '</li>';
+    }
+
+    function needsHtml(n) {
+      return '<div class="lv-page">' +
+        (openNeeds() === 0 ? '<div class="lv-page-head"><div class="lv-muted">' + h('Nothing needs you right now.') + '</div></div>' : '') + '<ul class="lv-list">' +
+        needHtml('publish', 'Publish the release notes?', 'Write release notes for 0.4 is finished and reviewed. Publishing cannot be undone.', 'Approve', 'Do not publish', 'yes') +
+        needHtml('rounding', 'Which rounding rule should invoices use?', 'Codex asked while fixing invoice totals. It is assuming round half up and has kept working.', 'Keep that', 'Answer differently', 'yes') +
+        needHtml('credential', [n.noCred, ' for Add CSV export to reports'], ['Claude, Work reached its limit and nothing is below it ', n.inOrder, '. It resets at 6:00 PM. Add ', n.aCred, ' to continue now.'], n.addCred, 'Wait until 6:00 PM', 'openCred') +
+        '</ul></div>';
+    }
+
+    /* Credentials: what is connected and its state. The order they take over in is on Handoff. */
+    function credsHtml(n) {
+      return '<div class="lv-page"><div class="lv-page-head lv-page-head--action"><div class="lv-page-head-text"><div class="lv-muted">' + H(['The order they take over in is set on ', [n.tabs.handoff, 'tab'], '.']) + '</div></div>' +
+        '<button type="button" class="lv-btn lv-btn--strong" data-a="openCred" data-k="open-cred">' + h(n.addCred) + '</button></div><ul class="lv-list">' +
+        s.creds.map(function (c) {
+          return '<li class="lv-cred"><div class="lv-cred-top"><div class="lv-cred-name"><b>' + h(c.name) + '</b><span class="lv-muted">' + h(c.kind) + '</span></div></div>' +
+            '<div class="lv-cred-state lv-cred-state--flush"><span class="lv-chip lv-chip--' + c.tone + '">' + h(c.status) + '</span><span class="lv-muted">' + h(c.usage) + '</span></div></li>';
+        }).join('') + '</ul></div>';
+    }
+
+    /* Handoff: the order, and the rules the app follows. The rules are run by code, not judged by a model. */
+    var HANDOFF_RULES = [
+      'When one reaches its limit, it is marked limited until the reset time its provider gives.',
+      'The work moves to the next one down that is signed in and not limited. The ones above it are not tried.',
+      'If nothing below is available, the task waits until the earliest reset.',
+      'An agent goes back to its own credential for its next task once that limit has reset.',
+      'A new login is placed above the first API token. A new token goes last.'
+    ];
+    function handoffHtml(n) {
+      var last = s.creds.length - 1;
+      return '<div class="lv-page"><div class="lv-page-head"><h3 class="lv-h--small">' + h(n.handoff) + '</h3><div class="lv-muted">' + h(n.handoffHint) + '</div></div><ol class="lv-list">' +
+        s.creds.map(function (c, i) {
+          return '<li class="lv-cred"><div class="lv-cred-top"><span class="lv-place">' + (i + 1) + '</span>' +
+            '<div class="lv-cred-name"><b>' + h(c.name) + '</b><span class="lv-chip lv-chip--' + c.tone + '">' + h(c.status) + '</span></div><div class="lv-cred-move">' +
+            '<button type="button" class="lv-btn lv-btn--icon" data-a="move" data-v="' + i + ':-1" data-k="cred-up-' + i + '" aria-label="' + esc('Move ' + c.name + ' up') + '" aria-disabled="' + (i === 0) + '">' + ARROW_UP + '</button>' +
+            '<button type="button" class="lv-btn lv-btn--icon" data-a="move" data-v="' + i + ':1" data-k="cred-down-' + i + '" aria-label="' + esc('Move ' + c.name + ' down') + '" aria-disabled="' + (i === last) + '">' + ARROW_DOWN + '</button>' +
+            '</div></div></li>';
+        }).join('') + '</ol>' +
+        '<div class="lv-page-head"><h3 class="lv-h--small">' + h('Rules') + '</h3><div class="lv-muted">' + h('Run by code, the same way every time.') + '</div></div><ol class="lv-list">' +
+        HANDOFF_RULES.map(function (r, i) { return '<li class="lv-row"><span class="lv-row-lead lv-row-lead--num">' + (i + 1) + '</span><span class="lv-row-text">' + h(r) + '</span></li>'; }).join('') +
+        '</ol></div>';
+    }
+
+    function listHtml(n) {
+      var agents = s.tab === 'agents';
+      var rows = agents ? [
+        ['Claude, Personal', 'Builder. At its limit until Thursday.'],
+        ['Codex, Team', 'Builder. Building Fix rounding in invoice totals.'],
+        ['Claude, Work', 'Builder. At its limit until 6:00 PM.'],
+        ['Codex, Team', 'Reviewer. Reviewing Tidy the settings page.'],
+        ['Codex, Team', [n.orchestrator, '. Answers agents’ questions and asks you when it cannot.']]
+      ] : [
+        ['3:40 PM', 'Claude, Work reached its limit. Add CSV export to reports is paused until 6:00 PM.'],
+        ['2:14 PM', 'Claude, Personal reached its limit. Codex, Team continued Fix rounding in invoice totals from the saved work.'],
+        ['1:50 PM', 'Codex started reviewing Tidy the settings page.'],
+        ['11:02 AM', 'Fix the broken reset-password link finished after Codex reviewed it.']
+      ];
+      return '<div class="lv-page"><ul class="lv-list">' +
+        rows.map(function (r) {
+          return '<li class="lv-row"><span class="lv-row-lead' + (agents ? ' lv-row-lead--name' : '') + '">' + h(r[0]) + '</span><span class="lv-row-text">' + H(r[1]) + '</span></li>';
+        }).join('') + '</ul></div>';
+    }
+
+    function sheetHtml(n) {
+      if (s.sheet === 'new') {
+        return '<div class="lv-scrim"><form class="lv-sheet" data-f="addTask" role="dialog" aria-modal="true" aria-labelledby="' + uid + '-nt">' +
+          '<h2 class="lv-h" id="' + uid + '-nt" tabindex="-1" data-k="sheet-head">' + h(n.addTask) + '</h2>' +
+          '<div class="lv-field"><label class="lv-label" for="' + uid + '-title">' + h('What should get done?') + '</label>' +
+          '<input class="lv-input" id="' + uid + '-title" data-k="f-title" data-m="title" type="text" required value="' + esc(s.title) + '" ' + ph('Fix the totals on the invoice page') + '></div>' +
+          '<div class="lv-field"><label class="lv-label" for="' + uid + '-done">' + h('How will you know it is done?') + '</label>' +
+          '<textarea class="lv-input" id="' + uid + '-done" data-m="done" rows="3" ' + ph('Totals match the sum of the lines to the cent') + '>' + esc(s.done) + '</textarea>' +
+          '<div class="lv-muted">' + H(['Leave this empty and the task waits in ', [n.backlog, 'lane'], ' until you fill it in.']) + '</div></div>' +
+          '<div class="lv-field"><label class="lv-label" for="' + uid + '-proj">' + h('Project') + '</label>' +
+          '<select class="lv-input" id="' + uid + '-proj" data-m="taskProject"><option value=""' + (s.taskProject ? '' : ' selected') + '>' + ha('No project') + '</option>' + PROJECTS.map(function (p) { return '<option' + (p === s.taskProject ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') + '</select></div>' +
+          '<div class="lv-muted">' + h('An agent from another provider reviews the work before it counts as done.') + '</div>' +
+          '<div class="lv-sheet-actions"><button type="button" class="lv-btn" data-a="close" data-k="sheet-cancel">' + h('Cancel') + '</button>' +
+          '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">' + h(n.saveTask) + '</button></div></form></div>';
+      }
+      if (s.sheet === 'account') {
+        var step = s.provider
+          ? '<div class="lv-step lv-step--form"><div class="lv-label">' + h('Step 2 of 2. Name it and sign in.') + '</div>' +
+            '<div class="lv-field"><label class="lv-label" for="' + uid + '-cred">' + h('Name for this ' + s.provider + ' login') + '</label>' +
+            '<input class="lv-input" id="' + uid + '-cred" data-k="f-cred" data-m="credName" type="text" value="' + esc(s.credName) + '" ' + ph('Personal') + '></div>' +
+            '<div class="lv-muted">' + h('When you choose Sign in, we check that the ' + s.provider + ' tool is installed, signed in and answering.') + '</div></div>'
+          : '<div class="lv-step"><div class="lv-label">' + h('Step 1 of 2. Which provider?') + '</div>' +
+            PROVIDERS.map(function (p) { return '<button type="button" class="lv-btn lv-btn--row" data-a="pick" data-v="' + p + '" data-k="pick-' + p + '">' + h(p) + '</button>'; }).join('') + '</div>';
+        return '<div class="lv-scrim"><form class="lv-sheet lv-sheet--small" data-f="signIn" role="dialog" aria-modal="true" aria-labelledby="' + uid + '-ac">' +
+          '<h2 class="lv-h" id="' + uid + '-ac" tabindex="-1" data-k="sheet-head">' + h(n.addCred) + '</h2>' + step +
+          '<div class="lv-sheet-actions">' + (s.provider ? '<button type="button" class="lv-btn" data-a="back" data-k="sheet-back">' + h('Back') + '</button>' : '') +
+          '<span class="lv-spacer"></span><button type="button" class="lv-btn" data-a="close" data-k="sheet-cancel">' + h('Cancel') + '</button>' +
+          (s.provider ? '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">' + h('Sign in') + '</button>' : '') + '</div></form></div>';
+      }
+      return '';
+    }
+
+    function render() {
+      var n = NAMES[ui.names];
+      var count = openNeeds();
+      var page = s.tab === 'board' ? boardHtml(n) : s.tab === 'needs' ? needsHtml(n) : s.tab === 'creds' ? credsHtml(n) : s.tab === 'handoff' ? handoffHtml(n) : listHtml(n);
+      view.innerHTML = '<div class="lv-frame"><div class="lv-window"' + (s.sheet !== 'none' ? ' inert' : '') + '>' +
+        '<aside class="lv-side"><div class="lv-dots" aria-hidden="true"><span></span><span></span><span></span></div>' +
+        '<div class="lv-brand">' + appIcon(22, uid + '-icon') + '<h1>' + h('leverage') + '</h1></div>' +
+        '<nav class="lv-nav" aria-label="Sections">' + TAB_IDS.map(function (id) {
+          return '<button type="button" class="lv-tab" data-a="tab" data-v="' + id + '" data-k="tab-' + id + '" aria-current="' + (s.tab === id ? 'page' : 'false') + '" title="' + ha(n.tabs[id], 'tab') + '">' +
+            NAV_ICONS[id] + '<span class="lv-tab-label">' + h(n.tabs[id], 'tab') + '</span>' +
+            (id === 'needs' && count > 0 ? '<span class="lv-count">' + count + '</span>' : '') + '</button>';
+        }).join('') + '</nav>' +
+        '<div class="lv-side-section lv-side-section--projects"><div class="lv-side-head">' + h('Projects') + '</div><div class="lv-nav" role="group" aria-label="' + ha('Projects') + '">' +
+        ['all'].concat(PROJECTS).map(function (p) {
+          return '<button type="button" class="lv-tab" data-a="project" data-v="' + p + '" data-k="proj-' + p + '" aria-pressed="' + (s.project === p) + '">' +
+            NAV_ICONS[p === 'all' ? 'all' : 'project'] + '<span class="lv-tab-label">' + h(p === 'all' ? 'All projects' : p) + '</span></button>';
+        }).join('') + '</div></div>' +
+        '<div class="lv-side-foot"><div class="lv-health" title="' + ha('System is running') + '"><i aria-hidden="true"></i><span>' + h('System is running') + '</span></div></div></aside>' +
+        '<div class="lv-content"><header class="lv-toolbar"><div class="lv-toolbar-title"><h2 class="lv-h">' + h(n.tabs[s.tab], 'tab') + '</h2>' + (s.tab === 'board' ? '<div class="lv-scope">' + h(s.project === 'all' ? 'All projects' : s.project) + '</div>' +
+          '<select class="lv-input lv-scope-select" data-c="project" data-k="scope-select" aria-label="' + ha('Project') + '"><option value="all"' + (s.project === 'all' ? ' selected' : '') + '>' + ha('All projects') + '</option>' +
+          PROJECTS.map(function (p) { return '<option' + (p === s.project ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') + '</select>' : '') + '</div>' +
+        '<button type="button" class="lv-btn lv-btn--primary lv-btn--raised" data-a="openNew" data-k="open-new">' + h(n.addTask) + '</button></header>' +
+        '<main class="lv-main">' + page + '</main></div></div>' + sheetHtml(n) + '</div>';
+      var keys = focusTry; focusTry = [];
+      for (var i = 0; i < keys.length; i++) {
+        var el = keys[i] ? root.querySelector('[data-k="' + keys[i] + '"]') : null;
+        if (el) { el.focus({ preventScroll: true }); break; }
+      }
+      if (s.announce) { live.textContent = s.announce; s.announce = ''; }
+      if (opts.onChange) { opts.onChange(api); }
+    }
+
+    function resolve(id, text, tone) {
+      s.resolved[id] = { text: text, tone: tone };
+      if (s.asking === id) { s.asking = ''; s.answer = ''; }   /* an answer being typed for another item is kept */
+      focusTry = ['result-' + id];
+    }
+    function closeSheet() { s.sheet = 'none'; s.provider = ''; s.credName = ''; focusTry = [opener, 'tab-' + s.tab]; opener = ''; }
+
+    /* what each control does; returning false means "nothing changed, do not re-render" */
+    var actions = {
+      tab: function (v) { s.tab = v; focusTry = ['tab-' + v]; },
+      openNew: function (v, el) { opener = el.getAttribute('data-k'); s.sheet = 'new'; s.taskProject = s.project === 'all' ? '' : s.project; focusTry = ['f-title']; },
+      /* choosing a project always opens the board it filters */
+      project: function (v) { s.project = v; s.tab = 'board'; focusTry = ['proj-' + v]; },
+      openCred: function (v, el) { opener = el.getAttribute('data-k'); s.sheet = 'account'; s.provider = ''; s.credName = ''; focusTry = ['sheet-head']; },
+      close: function () { closeSheet(); },
+      pick: function (v) { s.provider = v; focusTry = ['f-cred']; },
+      back: function () { s.provider = ''; focusTry = ['sheet-head']; },
+      yes: function (v) {
+        if (v === 'publish') { resolve(v, 'You approved publishing', 'done'); }
+        else if (v === 'rounding') { resolve(v, 'You kept round half up', 'done'); }
+        else { return false; }
+      },
+      no: function (v) {
+        if (v === 'publish') { resolve(v, 'You stopped publishing', 'plain'); }
+        else if (v === 'rounding') { s.asking = 'rounding'; s.answer = ''; focusTry = ['f-answer']; }
+        else if (v === 'credential') { resolve(v, 'Waiting until 6:00 PM', 'plain'); }
+        else { return false; }
+      },
+      cancelAsk: function () { s.asking = ''; s.answer = ''; focusTry = ['need-rounding-no']; },
+      move: function (v) {
+        var parts = v.split(':'); var i = Number(parts[0]); var d = Number(parts[1]); var j = i + d;
+        if (j < 0 || j >= s.creds.length) { return false; }
+        var moved = s.creds[i]; s.creds[i] = s.creds[j]; s.creds[j] = moved;
+        s.announce = moved.name + ' is now ' + (j + 1) + ' of ' + s.creds.length;
+        focusTry = d < 0 ? ['cred-up-' + j, 'cred-down-' + j] : ['cred-down-' + j, 'cred-up-' + j];
+        if ((d < 0 && j === 0) || (d > 0 && j === s.creds.length - 1)) { focusTry.reverse(); }
+      }
+    };
+    var submits = {
+      addTask: function () {
+        var title = s.title.trim();
+        if (!title) { return false; }
+        s.added.unshift({ title: title, done: s.done.trim(), project: s.taskProject });
+        if (s.project !== 'all') { s.project = s.taskProject || 'all'; }
+        s.title = ''; s.done = ''; s.sheet = 'none'; s.tab = 'board';
+        focusTry = [opener, 'open-new']; opener = '';
+      },
+      answer: function () {
+        var text = s.answer.trim();
+        if (!text) { return false; }
+        resolve('rounding', 'You answered: ' + text, 'done');
+      },
+      signIn: function () {
+        if (!s.provider) { return false; }
+        var label = s.provider + ', ' + (s.credName.trim() || 'Personal');
+        var taken = function (name) { return s.creds.some(function (c) { return c.name === name; }); };
+        for (var copy = 2, baseLabel = label; taken(label); copy++) { label = baseLabel + ' ' + copy; }
+        s.creds.push({ name: label, kind: 'Subscription login', status: 'Ready', tone: 'info', usage: 'Signed in and answering.' });
+        var first = [];
+        if (!s.resolved.credential || s.resolved.credential.tone === 'plain') { s.resolved.credential = { text: 'You added ' + label, tone: 'done' }; first = ['result-credential']; }
+        if (!s.addedCred) { s.addedCred = { provider: s.provider, label: label }; }
+        s.announce = label + ' added as ' + s.creds.length + ' of ' + s.creds.length;
+        s.sheet = 'none'; s.provider = ''; s.credName = '';
+        focusTry = first.concat([opener, 'tab-' + s.tab]); opener = '';
+      }
+    };
+
+    root.addEventListener('click', function (e) {
+      if (ui.editText) {
+        /* a click made by the keyboard (Enter in a field) has detail 0: ignore it */
+        e.preventDefault(); e.stopPropagation();
+        if (e.detail !== 0) { beginEdit(e.target); }
+        return;
+      }
+      var el = e.target.closest ? e.target.closest('[data-a]') : null;
+      if (!el || !root.contains(el) || el.getAttribute('aria-disabled') === 'true') { return; }
+      var fn = actions[el.getAttribute('data-a')];
+      if (fn && fn(el.getAttribute('data-v'), el) !== false) { render(); }
+    }, true);
+    root.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (ui.editText) { return; }
+      var fn = submits[e.target.getAttribute('data-f')];
+      if (fn && fn() !== false) { render(); }
+    });
+    root.addEventListener('input', function (e) {
+      var m = e.target.getAttribute && e.target.getAttribute('data-m');
+      if (m) { s[m] = e.target.value; }
+    });
+    root.addEventListener('change', function (e) {
+      if (e.target.getAttribute && e.target.getAttribute('data-c') === 'project') { s.project = e.target.value; focusTry = ['scope-select']; render(); }
+    });
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && s.sheet !== 'none') { e.preventDefault(); closeSheet(); render(); }
+    });
+
+    var api = {
+      root: root,
+      state: function () { return s; },
+      render: render,
+      look: function (appearance, flat) { root.setAttribute('data-appearance', appearance); root.setAttribute('data-flat', flat ? 'true' : 'false'); },
+      setTab: function (tab) { s.tab = tab; render(); },
+      setSheet: function (sheet) {
+        s.sheet = sheet; s.provider = ''; s.credName = ''; opener = '';
+        focusTry = sheet === 'new' ? ['f-title'] : sheet === 'account' ? ['sheet-head'] : [];
+        render();
+      },
+      reset: function () { s = fresh(); focusTry = []; opener = ''; render(); }
+    };
+    api.look(opts.appearance || 'light', !!opts.flat);
+    render();
+    return api;
+  }
+
+  /* ===== the inspector ===== */
+  var stage = document.getElementById('ix-stage');
+  var panel = document.getElementById('ix-panel');
+  var hint = document.getElementById('ix-hint');
+  var screenSel = document.getElementById('ix-screen');
+  var sheetSel = document.getElementById('ix-sheet');
+  var zoomIn = document.getElementById('ix-zoom');
+  var zoomOut = document.getElementById('ix-zoom-out');
+  var editBtn = document.getElementById('ix-edit');
+  var tokensBtn = document.getElementById('ix-tokens');
+  var changesBtn = document.getElementById('ix-changes');
+  var dialog = document.getElementById('ix-dialog');
+  var notesBox = document.getElementById('ix-notes');
+  var exportBox = document.getElementById('ix-export');
+  var frames = [];   /* { frame, mock, width } where width is a number or 'fit' */
+  var syncing = false;
+
+  var ARTBOARDS = [
+    { title: function () { return 'Board, light'; }, width: 1280, appearance: 'light', flat: false },
+    { title: function (n) { return n.addTask + ', the main action'; }, width: 1280, appearance: 'light', flat: false, sheet: 'new' },
+    { title: function () { return 'Board, dark'; }, width: 1280, appearance: 'dark', flat: false },
+    { title: function () { return 'Board, reduced transparency'; }, width: 1280, appearance: 'light', flat: true },
+    { title: function () { return 'Board, narrow'; }, width: 390, appearance: 'light', flat: false }
+  ];
+
+  function zoom() { return (ui.view === 'all' ? ui.zoomAll : ui.zoomOne) / 100; }
+
+  function layout() {
+    var z = zoom();
+    frames.forEach(function (f) {
+      var natural = f.width === 'fit' ? Math.max(320, Math.floor((stage.clientWidth - 32) / z)) : f.width;
+      var root = f.mock.root;
+      root.style.width = natural + 'px';
+      root.style.transform = z === 1 ? 'none' : 'scale(' + z + ')';
+      f.frame.style.width = Math.round(natural * z) + 'px';
+      f.frame.style.height = Math.round(root.offsetHeight * z) + 'px';
+    });
+  }
+
+  function addFrame(parent, width, opts) {
+    var frame = document.createElement('div');
+    frame.className = 'ix-frame';
+    parent.appendChild(frame);
+    var entry = { frame: frame, width: width, mock: null };
+    entry.mock = createMock(frame, opts);
+    frames.push(entry);
+    if (window.ResizeObserver) { new ResizeObserver(function () { frame.style.height = Math.round(entry.mock.root.offsetHeight * zoom()) + 'px'; }).observe(entry.mock.root); }
+    return entry;
+  }
+
+  function buildStage() {
+    stage.innerHTML = '';
+    frames = [];
+    if (ui.view === 'all') {
+      var strip = document.createElement('div');
+      strip.className = 'ix-strip';
+      stage.appendChild(strip);
+      ARTBOARDS.forEach(function (a) {
+        var fig = document.createElement('figure');
+        fig.className = 'ix-art';
+        var cap = document.createElement('figcaption');
+        cap.textContent = a.title(NAMES[ui.names]);
+        fig.appendChild(cap);
+        strip.appendChild(fig);
+        var entry = addFrame(fig, a.width, { appearance: a.appearance, flat: a.flat, sheet: a.sheet, baseSheet: a.sheet, tab: screenSel.value });
+        entry.caption = cap; entry.art = a;
+      });
+      var iconFig = document.createElement('figure');
+      iconFig.className = 'ix-art';
+      iconFig.innerHTML = '<figcaption>App icon</figcaption>' + ['light', 'dark'].map(function (ap) {
+        return '<div class="lv-root lv-iconboard" data-appearance="' + ap + '" data-flat="false" style="margin-bottom: 12px">' + [128, 64, 32, 16].map(function (px) {
+          return '<figure>' + appIcon(px, 'ix-icon-' + ap + px) + '<span>' + px + '</span></figure>';
+        }).join('') + '</div>';
+      }).join('');
+      strip.appendChild(iconFig);
+    } else {
+      addFrame(stage, ui.width === 'fit' ? 'fit' : Number(ui.width), {
+        appearance: ui.appearance, flat: ui.flat, tab: screenSel.value, sheet: sheetSel.value,
+        onChange: function (mock) {
+          if (syncing) { return; }
+          var st = mock.state();
+          screenSel.value = st.tab; sheetSel.value = st.sheet;
+        }
+      });
+    }
+    layout();
+  }
+
+  function renderAll() {
+    syncing = true;
+    frames.forEach(function (f) { f.mock.render(); if (f.caption) { f.caption.textContent = f.art.title(NAMES[ui.names]); } });
+    syncing = false;
+    layout();
+  }
+
+  function syncBar() {
+    var all = ui.view === 'all';
+    var values = { view: ui.view, appearance: ui.appearance, flat: String(ui.flat), width: ui.width, names: ui.names };
+    Array.prototype.forEach.call(document.querySelectorAll('.ix-seg'), function (seg) {
+      var key = seg.getAttribute('data-set');
+      var off = all && (key === 'appearance' || key === 'flat' || key === 'width');
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-val') === values[key]));
+        b.disabled = off;
+      });
+    });
+    sheetSel.disabled = all;
+    zoomIn.value = all ? ui.zoomAll : ui.zoomOne;
+    zoomOut.textContent = zoomIn.value + '%';
+    editBtn.setAttribute('aria-pressed', String(ui.editText));
+    tokensBtn.setAttribute('aria-pressed', String(ui.tokensOpen));
+    panel.hidden = !ui.tokensOpen;
+    document.body.classList.toggle('ix-editing', ui.editText);
+    var count = changeCount();
+    changesBtn.textContent = count ? 'Changes (' + count + ')' : 'Changes';
+    hint.textContent = ui.editText
+      ? 'Edit text is on: click any label in the mockup to change it. The mockup’s own buttons are paused; use Screen and Sheet above to move around, and turn Edit text off to click through again.'
+      : all
+        ? 'All five artboards, each one live, and the app icon at the end. Appearance and width are fixed per artboard here; switch to One screen to change them.'
+        : 'This is a working mockup: click through it as a user would. Tokens changes colors, glass and sizes. Edit text changes any label. Changes collects what you altered as text you can copy.';
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.ix-seg'), function (seg) {
+    seg.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || b.disabled) { return; }
+      var key = seg.getAttribute('data-set'); var val = b.getAttribute('data-val');
+      if (key === 'view') { ui.view = val; buildStage(); }
+      else if (key === 'appearance') { ui.appearance = val; ui.tokenAp = val; frames.forEach(function (f) { f.mock.look(ui.appearance, ui.flat); }); }
+      else if (key === 'flat') { ui.flat = val === 'true'; frames.forEach(function (f) { f.mock.look(ui.appearance, ui.flat); }); }
+      else if (key === 'width') { ui.width = val; frames.forEach(function (f) { f.width = val === 'fit' ? 'fit' : Number(val); }); layout(); }
+      else if (key === 'names') { ui.names = val; renderAll(); }
+      persist(); syncBar(); buildPanel();
+    });
+  });
+  screenSel.addEventListener('change', function () { syncing = true; frames.forEach(function (f) { f.mock.setTab(screenSel.value); }); syncing = false; layout(); });
+  sheetSel.addEventListener('change', function () { syncing = true; frames.forEach(function (f) { f.mock.setSheet(sheetSel.value); }); syncing = false; layout(); });
+  zoomIn.addEventListener('input', function () {
+    if (ui.view === 'all') { ui.zoomAll = Number(zoomIn.value); } else { ui.zoomOne = Number(zoomIn.value); }
+    zoomOut.textContent = zoomIn.value + '%'; layout(); persist();
+  });
+  editBtn.addEventListener('click', function () { closeEditor(false); ui.editText = !ui.editText; renderAll(); syncBar(); });
+  tokensBtn.addEventListener('click', function () { ui.tokensOpen = !ui.tokensOpen; syncBar(); buildPanel(); layout(); });
+  document.getElementById('ix-reset').addEventListener('click', function () {
+    syncing = true; frames.forEach(function (f) { f.mock.reset(); }); syncing = false;
+    screenSel.value = 'board'; sheetSel.value = 'none';
+    layout();
+  });
+  window.addEventListener('resize', layout);
+
+  /* ----- Edit text: click a label, type, Enter ----- */
+  var editor = null;   /* { box, key, base } */
+  function beginEdit(target) {
+    closeEditor(true);
+    var el = target && target.closest ? target.closest('[data-o]') : null;
+    if (!el) { return; }
+    var key = el.getAttribute('data-o');
+    var base = el.getAttribute('data-t');
+    var current = Object.prototype.hasOwnProperty.call(ui.edits, key) ? ui.edits[key] : base;
+    var r = el.getBoundingClientRect();
+    var box = document.createElement('textarea');
+    box.className = 'ix-editor';
+    box.setAttribute('aria-label', 'New text');
+    box.value = current.trim();
+    box.rows = current.length > 60 ? 3 : 1;
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 240)) + 'px';
+    box.style.top = Math.max(8, Math.min(r.top, window.innerHeight - 80)) + 'px';
+    box.style.width = Math.max(200, Math.min(r.width + 24, 480)) + 'px';
+    document.body.appendChild(box);
+    editor = { box: box, key: key, base: base };
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closeEditor(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeEditor(false); }
+    });
+    box.addEventListener('blur', function () { closeEditor(true); });
+    box.focus(); box.select();
+  }
+  function closeEditor(save) {
+    if (!editor) { return; }
+    var done = editor; editor = null;
+    var value = done.box.value.replace(/\s+/g, ' ').trim();
+    if (done.box.parentNode) { done.box.parentNode.removeChild(done.box); }
+    if (!save || !value) { return; }
+    /* a string that is one part of a sentence keeps its leading and trailing space */
+    value = (/^\s/.test(done.base) ? ' ' : '') + value + (/\s$/.test(done.base) ? ' ' : '');
+    var before = Object.prototype.hasOwnProperty.call(ui.edits, done.key) ? ui.edits[done.key] : done.base;
+    if (value === before) { return; }
+    if (value === done.base) { delete ui.edits[done.key]; } else { ui.edits[done.key] = value; }
+    persist();
+    /* re-render after this event, so a click that closed the editor still reaches its label */
+    setTimeout(function () { renderAll(); syncBar(); }, 0);
+  }
+
+  /* ----- Tokens: edit the design tokens live ----- */
+  var TOKEN_GROUPS = [
+    { title: 'The one blue', items: [['--primary', 'Primary action', 'color'], ['--focus', 'Focus ring', 'color']] },
+    { title: 'Backdrop', items: [['--backdrop-base', 'Base', 'color', true], ['--tint-a', 'Blue light', 'css', true], ['--tint-b', 'Lavender light', 'css', true]] },
+    { title: 'Glass (not used with reduced transparency)', items: [['--shell', 'Window', 'css', true], ['--nav', 'Side pane', 'css', true], ['--rim', 'Bright rim', 'css', true], ['--blur', 'Blur', 'px', true]] },
+    { title: 'Content', items: [['--surface', 'Cards and lists', 'css', true], ['--text', 'Text', 'color'], ['--text2', 'Secondary text', 'color'], ['--line', 'Lines', 'color']] },
+    { title: 'State colors', items: [['--wait-bg', 'Waiting, fill', 'color'], ['--wait-fg', 'Waiting, text', 'color'], ['--stop-bg', 'Stopped, fill', 'color'], ['--stop-fg', 'Stopped, text', 'color'], ['--info-bg', 'Info, fill', 'color'], ['--info-fg', 'Info, text', 'color'], ['--done-bg', 'Done, fill', 'color'], ['--done-fg', 'Done, text', 'color']] },
+    { title: 'Shape and type (both appearances)', shared: true, items: [['--r-window', 'Window corner', 'px'], ['--r-card', 'Card corner', 'px'], ['--r-control', 'Control corner', 'px'], ['--fs-head', 'Heading size', 'px'], ['--fs-body', 'Body size', 'px'], ['--fs-small', 'Small size', 'px']] }
+  ];
+  var GLASS_ONLY = {};
+  TOKEN_GROUPS.forEach(function (g) { g.items.forEach(function (it) { if (it[3]) { GLASS_ONLY[it[0]] = true; } }); });
+  var DEFAULTS = { light: {}, dark: {} };
+  var overrideStyle = document.createElement('style');
+  overrideStyle.id = 'ix-token-overrides';
+
+  function readDefaults() {
+    ['light', 'dark'].forEach(function (ap) {
+      var probe = document.createElement('div');
+      probe.className = 'lv-root'; probe.setAttribute('data-appearance', ap); probe.setAttribute('data-flat', 'false'); probe.style.display = 'none';
+      document.body.appendChild(probe);
+      var cs = getComputedStyle(probe);
+      TOKEN_GROUPS.forEach(function (g) { g.items.forEach(function (it) { DEFAULTS[ap][it[0]] = cs.getPropertyValue(it[0]).trim(); }); });
+      document.body.removeChild(probe);
+    });
+  }
+  function cleanValue(v) { return /^[^;{}<>\\]*$/.test(v) && v.indexOf('/*') < 0 && v.indexOf('*/') < 0 ? v : ''; }
+  function applyTokens() {
+    var css = [];
+    var base = 'html .lv-root.lv-root.lv-root';
+    var decl = function (obj, glass) {
+      return Object.keys(obj).filter(function (k) { return !!GLASS_ONLY[k] === glass && cleanValue(obj[k]); }).map(function (k) { return k + ':' + obj[k]; }).join(';');
+    };
+    ['light', 'dark'].forEach(function (ap) {
+      var plain = decl(ui.tokens[ap], false); var glass = decl(ui.tokens[ap], true);
+      if (plain) { css.push(base + '[data-appearance="' + ap + '"]{' + plain + '}'); }
+      if (glass) { css.push(base + '[data-appearance="' + ap + '"]:not([data-flat="true"]){' + glass + '}'); }
+    });
+    var shared = decl(ui.tokens.shared, false);
+    if (shared) { css.push(base + '{' + shared + '}'); }
+    overrideStyle.textContent = css.join('\n');
+  }
+  function validFor(kind, v) {
+    if (!v || !cleanValue(v)) { return false; }
+    if (kind === 'px') { return /^\d+(\.\d+)?px$/.test(v); }
+    return !window.CSS || !CSS.supports || CSS.supports('color', v);
+  }
+  function setToken(scope, name, value) {
+    var def = scope === 'shared' ? DEFAULTS.light[name] : DEFAULTS[scope][name];
+    if (value === def) { delete ui.tokens[scope][name]; } else { ui.tokens[scope][name] = value; }
+    applyTokens(); persist(); syncBar(); layout();
+  }
+  function buildPanel() {
+    if (!ui.tokensOpen) { panel.innerHTML = ''; return; }
+    var ap = ui.tokenAp;
+    var lockGlass = ui.flat && ui.view === 'one';
+    var html = '<h2>Design tokens</h2><p>Changes apply at once and are kept in this browser.</p>' +
+      '<div class="ix-token-inputs" role="group" aria-label="Appearance to edit">' +
+      '<button type="button" class="ix-small" data-ap="light" aria-pressed="' + (ap === 'light') + '">Edit light</button>' +
+      '<button type="button" class="ix-small" data-ap="dark" aria-pressed="' + (ap === 'dark') + '">Edit dark</button>' +
+      '<button type="button" class="ix-small" data-reset="all">Reset every token</button></div>' +
+      (lockGlass ? '<p>Reduced transparency is on. It uses its own solid values for the backdrop, the glass and the card surface, so those fields are locked until you switch back to Glass.</p>' : '');
+    TOKEN_GROUPS.forEach(function (g) {
+      html += '<h3>' + esc(g.title) + '</h3>';
+      g.items.forEach(function (it) {
+        var name = it[0]; var kind = it[2]; var scope = g.shared ? 'shared' : ap;
+        var def = g.shared ? DEFAULTS.light[name] : DEFAULTS[ap][name];
+        var has = Object.prototype.hasOwnProperty.call(ui.tokens[scope], name);
+        var value = has ? ui.tokens[scope][name] : def;
+        var id = 'ix-t' + name;
+        var off = lockGlass && GLASS_ONLY[name] ? ' disabled' : '';
+        html += '<div class="ix-token' + (has ? ' ix-changed' : '') + '" data-token="' + name + '" data-scope="' + scope + '" data-kind="' + kind + '">' +
+          '<label for="' + id + '">' + esc(it[1]) + ' <code>' + name + '</code></label><div class="ix-token-inputs">' +
+          (kind === 'color' && /^#[0-9a-fA-F]{6}$/.test(value) ? '<input type="color" aria-label="' + esc(it[1]) + ' picker" value="' + esc(value.toLowerCase()) + '"' + off + '>' : '') +
+          (kind === 'px' ? '<input id="' + id + '" type="number" min="0" max="80" step="1" value="' + esc(String(parseFloat(value))) + '"' + off + '>' : '<input id="' + id + '" type="text" spellcheck="false" value="' + esc(value) + '"' + off + '>') +
+          '</div><button type="button" class="ix-small" data-reset="' + name + '"' + (has ? '' : ' disabled') + ' aria-label="Reset ' + esc(it[1]) + '">Reset</button></div>';
+      });
+    });
+    panel.innerHTML = html;
+  }
+  panel.addEventListener('input', function (e) {
+    var row = e.target.closest('.ix-token');
+    if (!row) { return; }
+    var kind = row.getAttribute('data-kind');
+    var value = e.target.value.trim();
+    if (kind === 'px') { value = value === '' ? '' : value + 'px'; }
+    if (e.target.type === 'color') { value = value.toUpperCase(); }
+    var ok = validFor(kind, value);
+    e.target.classList.toggle('ix-bad', !ok);
+    if (!ok) { return; }
+    setToken(row.getAttribute('data-scope'), row.getAttribute('data-token'), value);
+    Array.prototype.forEach.call(row.querySelectorAll('input'), function (other) {
+      if (other === e.target) { return; }
+      if (other.type === 'color') { if (/^#[0-9a-fA-F]{6}$/.test(value)) { other.value = value.toLowerCase(); } }
+      else { other.value = value; other.classList.remove('ix-bad'); }
+    });
+    var has = Object.prototype.hasOwnProperty.call(ui.tokens[row.getAttribute('data-scope')], row.getAttribute('data-token'));
+    row.classList.toggle('ix-changed', has);
+    row.querySelector('[data-reset]').disabled = !has;
+  });
+  panel.addEventListener('click', function (e) {
+    var pick = e.target.closest('[data-ap]');
+    if (pick) { ui.tokenAp = pick.getAttribute('data-ap'); buildPanel(); return; }
+    var b = e.target.closest('[data-reset]');
+    if (!b) { return; }
+    var which = b.getAttribute('data-reset');
+    if (which === 'all') { ui.tokens = { light: {}, dark: {}, shared: {} }; }
+    else { var row = b.closest('.ix-token'); delete ui.tokens[row.getAttribute('data-scope')][which]; }
+    applyTokens(); persist(); buildPanel(); syncBar(); layout();
+  });
+
+  /* ----- Changes: what was altered, as text to copy ----- */
+  function changeCount() {
+    return Object.keys(ui.tokens.light).length + Object.keys(ui.tokens.dark).length + Object.keys(ui.tokens.shared).length +
+      Object.keys(ui.edits).length + (ui.names !== 'prd' ? 1 : 0) + (ui.notes.trim() ? 1 : 0);
+  }
+  function changesText() {
+    var out = ['leverage mockups: requested changes', ''];
+    out.push('Names: ' + (ui.names === 'prd' ? 'PRD terms (no change)' : 'plain names (Accounts, To define, Waiting on you, New task, Coordinator)'));
+    var tokenLines = [];
+    [['light', 'Light'], ['dark', 'Dark'], ['shared', 'Both']].forEach(function (pair) {
+      Object.keys(ui.tokens[pair[0]]).forEach(function (name) {
+        var def = pair[0] === 'shared' ? DEFAULTS.light[name] : DEFAULTS[pair[0]][name];
+        tokenLines.push('  ' + pair[1] + '  ' + name + ': ' + def + ' -> ' + ui.tokens[pair[0]][name]);
+      });
+    });
+    out.push('', 'Token changes: ' + (tokenLines.length ? '' : 'none'));
+    out = out.concat(tokenLines);
+    var edits = Object.keys(ui.edits);
+    out.push('', 'Text changes: ' + (edits.length ? '' : 'none'));
+    edits.forEach(function (k) { out.push('  "' + k + '" -> "' + ui.edits[k] + '"'); });
+    out.push('', 'Notes: ' + (ui.notes.trim() || 'none'));
+    return out.join('\n');
+  }
+  changesBtn.addEventListener('click', function () {
+    notesBox.value = ui.notes; exportBox.value = changesText();
+    if (dialog.showModal) { dialog.showModal(); } else { dialog.setAttribute('open', ''); }
+  });
+  notesBox.addEventListener('input', function () { ui.notes = notesBox.value; exportBox.value = changesText(); persist(); syncBar(); });
+  document.getElementById('ix-copy').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    var fallback = function () { exportBox.focus(); exportBox.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (err) { ok = false; } btn.textContent = ok ? 'Copied' : 'Select the text and copy it'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(exportBox.value).then(function () { btn.textContent = 'Copied'; }, fallback); } else { fallback(); }
+  });
+  document.getElementById('ix-clear').addEventListener('click', function () {
+    ui.tokens = { light: {}, dark: {}, shared: {} }; ui.edits = {}; ui.notes = ''; ui.names = 'prd';
+    notesBox.value = ''; applyTokens(); persist(); renderAll(); buildPanel(); syncBar(); exportBox.value = changesText();
+  });
+  document.getElementById('ix-close').addEventListener('click', function () { if (dialog.close) { dialog.close(); } else { dialog.removeAttribute('open'); } });
+  dialog.addEventListener('close', function () { document.getElementById('ix-copy').textContent = 'Copy summary'; });
+
+  /* ----- start ----- */
+  readDefaults();
+  document.head.appendChild(overrideStyle);
+  applyTokens();
+  buildStage();
+  buildPanel();
+  syncBar();
+})();
+</script>
+</body>
+</html>

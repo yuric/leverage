@@ -16,6 +16,8 @@ once it makes its first release.
   follow).
 - Architecture and deployment document structure in `docs/`.
 - `AGENTS.md` with instructions for AI coding agents.
+- The design reference: a working mockup of the app with a left pane, a
+  project list, a Handoff tab and an app icon (`docs/design/`).
 - `MAINTENANCE.md`: what to expect from the maintainer, and the project's
   scope limits.
 - An AI-assisted contributions policy in `CONTRIBUTING.md`, a matching
