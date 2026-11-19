@@ -93,6 +93,14 @@ work. The rules are the same for everyone, including the maintainer.
 - **No unattended agents.** Do not point an autonomous agent at this
   repository to open issues or pull requests without a person reviewing each
   one before it is submitted.
+- **A delegated run is the one exception, and only the maintainer can start
+  one.** The maintainer may hand a defined piece of work to an agent the
+  maintainer directs, and let it open and merge pull requests unattended. In a
+  delegated run every pull request gets an adversarial review by a separate
+  agent before it is merged, the run is recorded in
+  [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and the maintainer reads
+  each merged pull request afterwards and ticks its AI-assistance box then.
+  The maintainer remains responsible for everything merged.
 - **Security reports have their own rule.** A model-generated vulnerability
   report that you have not reproduced yourself is not a security report. See
   [SECURITY.md](SECURITY.md#ai-assisted-reports).
