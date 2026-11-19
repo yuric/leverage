@@ -421,7 +421,8 @@ today.
   account folder: Add always starts from a new, empty one. It stops its
   runs and exits when its token answers `401` (exit 3) or when the app that
   started it is gone (`ParentWatch`, in LeverageKit). A runner watches the
-  helper the same way and stops as on SIGTERM when the helper is gone.
+  helper the same way and stops as on SIGTERM when the helper is gone,
+  also when it was gone before the runner looked (its parent is launchd).
   How long each part of a stop is given is `StopTimings`, in LeverageKit:
   the app waits 16 seconds for the helper, the helper 10 for a runner, and
   a runner 4 to give back what its seat holds.
@@ -701,9 +702,10 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   login, sign-in token, link, code or API token. A provider's tool gets no
   leverage token: its environment is the allow-list above. The helper's
   requests carry only non-secret inputs (`params`), and the landing prompt
-  never contains the seat's token. A body under `/v1/` that is not sent
-  as JSON is answered `400` before Rails reads it (`JsonBodiesOnly`), so a
-  sign-in sent as a form never reaches the request log. The end-to-end run scans the
+  never contains the seat's token. A request body that is not sent as
+  JSON is answered `400` before Rails reads it, whatever the method and
+  path (`JsonBodiesOnly`), so a sign-in sent as a form, even to a mistyped
+  path, never reaches the request log. The end-to-end run scans the
   containers' logs, the helper's and runs' logs and a dump of the database
   for every secret it used and anything shaped like a token
   (`scripts/secret_scan.py`).

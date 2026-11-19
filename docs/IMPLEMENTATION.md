@@ -56,13 +56,13 @@ ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-19 |
 | **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton and the contract (milestone 1) |
-| **Next** | The Core loop milestone (milestone 2): built on `feat/core-loop` with every check passing on the owner's Mac; its pull request is not open yet |
+| **Next** | The Core loop milestone (milestone 2): built on `feat/core-loop` with every check passing on the owner's Mac, in review as pull request [#13](https://github.com/yuric/leverage/pull/13) |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 2 core loop | `feat/core-loop` | None yet | In progress |
+| Milestone 2 core loop | `feat/core-loop` | [#13](https://github.com/yuric/leverage/pull/13) | In review |
 
 ## Milestones
 
@@ -75,7 +75,7 @@ the PRD's milestone list. How the build is run locally is in
 | --- | --- | --- | --- | --- |
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
-| 2 | Core loop | In progress | None yet | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
+| 2 | Core loop | In review | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
 | 3 | Handoff | Not started | | |
 | 4 | Rule checks | Not started | | |
 | 5 | Questions and approvals | Not started | | |
@@ -305,6 +305,10 @@ Where the build differs from the plan, or settles what it left open:
   trigger text says "at most every 30 seconds", which this meets.
 - **`helper_requests.progress`**, a third new column, holds per-check
   progress between reports.
+- **`task.contract_changed` v1 changed after the contract merged.** It
+  now carries `minimum_strength_rank` (contract DB-48), so the replay
+  rebuilds the rank; the contract's README had allowed a change in place
+  only until the type's pull request merged.
 - **The Swift copy of the contract** also holds the operations and the
   interface schema's own enums, and `HoldReason.isInBlocked`.
 - **Each package committed its own work** by explicit path, the red tests
@@ -322,17 +326,29 @@ Where the build differs from the plan, or settles what it left open:
   and another reviewer finishes it. It then replays the log and scans the
   logs and a database dump for secrets. It passed three times in a row on
   the owner's Mac on 2026-11-19 with no retry, and again in the final run.
-  It has not yet run on Linux in CI.
+  On Linux in CI (the `e2e` job, run 44625056944) the helper, the runner
+  and the end-to-end tests compiled and the containers came up healthy,
+  but both tests stopped at once because they looked for their programs
+  in an `.xctest` bundle, which SwiftPM does not make on Linux. The fix
+  passed the whole end-to-end lane in an aarch64 Linux container on the
+  owner's Mac; it has not yet been seen passing in CI, which runs x86_64.
 - **The failed review is shown with stand-in tools only.** The task in the
   end-to-end run goes through one failed review because the stand-in
   reviewer is scripted to fail round 0. Nothing can make a real provider
   fail a review on request, so no run on a real tool has shown it.
-- **No real provider has run through the product.** No agent signed in,
-  ran an installer or a sign-in command, or used a login through Add
-  credential. The developer check with real tools (`scripts/real_provider_run.sh`,
-  plan PV-6) was not written or run in this build, and neither was
-  `scripts/real_gemini_through_app.sh`, which exists. The owner's first run
-  is the first real one (see [Waiting for the owner](#waiting-for-the-owner)).
+- **No real provider has run through the product by an agent's hand.** No
+  agent signed in, ran an installer or a sign-in command, or used a login
+  through Add credential. Two developer checks exist for the tools already
+  signed in on the Mac, never run in CI: `scripts/real_provider_run.sh`
+  (plan PV-6, narrower than its text: one build prompt through the
+  runner's tool driver, with the tool's own sign-in, and no containers,
+  seats or task; it proves the driver's flags only) and
+  `scripts/real_gemini_through_app.sh` (one Gemini login through Add
+  credential, a task to Done). The managing agent's runs of them are
+  recorded in the pull request description; see the pull request. Neither
+  is the product's path, and neither marks a PRD line as met. The owner's
+  first run is the first real one through the app (see
+  [Waiting for the owner](#waiting-for-the-owner)).
 - **The app bundle starts its server.** `scripts/smoke_app.sh` opens
   `dist/Leverage.app` with a Finder-like environment and gets a healthy
   answer from the server it started, in about 5 seconds once the images are
@@ -361,39 +377,47 @@ evidence levels are those of
 ## Measurements
 
 The speed of writing events and steps, measured by `scripts/speed_run.sh`
-on the owner's Mac (Mac15,14, Apple M3 Ultra) on 2026-11-19 at 20:48 UTC:
+on the owner's Mac (Mac15,14, Apple M3 Ultra) on 2026-11-19 at 22:31 UTC:
 50 seats (25 builders and 25 reviewers that connect on their own) for 120
 seconds, `RAILS_MAX_THREADS` 64 and a pool of 32 connections, 3775
-commands sent by the seats. Milliseconds, nearest-rank percentiles.
+commands sent by the seats, each seat ticking every 2 seconds with the
+seats' ticks spread evenly over the 2 seconds. Milliseconds, nearest-rank
+percentiles.
 
 | Command | n | Lock wait p50 | p95 | p99 | Event and step writes p50 | p95 | p99 | Whole transition p50 | p95 | p99 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| acknowledge_briefing | 225 | 120.370 | 410.533 | 486.325 | 1.513 | 5.424 | 6.388 | 148.893 | 512.060 | 615.491 |
-| acknowledge_review_briefing | 200 | 118.892 | 445.442 | 513.068 | 0.682 | 2.539 | 3.118 | 150.966 | 518.823 | 671.196 |
-| claim | 225 | 143.331 | 476.780 | 653.421 | 1.233 | 4.330 | 5.207 | 158.035 | 572.075 | 718.090 |
-| claim_review | 200 | 135.247 | 460.991 | 588.393 | 1.419 | 5.044 | 14.730 | 149.231 | 496.654 | 630.321 |
-| heartbeat | 1275 | 72.352 | 132.373 | 256.385 | 0.000 | 0.000 | 0.000 | 78.235 | 159.304 | 294.215 |
-| heartbeat_review | 400 | 84.125 | 226.391 | 269.687 | 0.000 | 0.000 | 0.000 | 94.642 | 238.615 | 348.067 |
-| pass_criterion | 425 | 96.546 | 200.986 | 328.009 | 1.690 | 3.955 | 5.741 | 104.522 | 217.071 | 347.262 |
-| pass_review | 200 | 143.250 | 491.217 | 659.704 | 1.890 | 6.661 | 9.007 | 172.324 | 554.910 | 751.963 |
-| start_criterion | 425 | 107.669 | 318.891 | 676.809 | 1.249 | 3.235 | 5.483 | 121.461 | 418.371 | 734.629 |
-| submit | 200 | 93.801 | 141.536 | 163.619 | 1.164 | 1.619 | 2.047 | 97.764 | 159.098 | 171.382 |
-| All commands | 3775 | 91.326 | 230.519 | 520.088 | 1.036 | 2.810 | 5.836 | 103.744 | 250.784 | 615.491 |
-| Commands that wrote events | 2100 | 113.273 | 347.326 | 617.540 | 1.400 | 4.330 | 6.509 | 131.827 | 433.540 | 693.100 |
+| acknowledge_briefing | 225 | 0.393 | 0.902 | 34.793 | 2.040 | 4.441 | 9.971 | 5.486 | 11.212 | 53.630 |
+| acknowledge_review_briefing | 200 | 0.400 | 1.160 | 1.514 | 0.973 | 2.619 | 3.190 | 4.771 | 11.350 | 13.818 |
+| claim | 225 | 0.322 | 0.985 | 1.373 | 1.701 | 4.364 | 5.135 | 6.424 | 15.634 | 18.136 |
+| claim_review | 200 | 0.439 | 1.160 | 1.494 | 2.233 | 4.897 | 6.485 | 8.435 | 18.232 | 26.030 |
+| heartbeat | 1275 | 0.534 | 1.419 | 2.713 | 0.000 | 0.000 | 0.000 | 3.782 | 7.265 | 10.916 |
+| heartbeat_review | 400 | 0.481 | 1.224 | 27.660 | 0.000 | 0.000 | 0.000 | 3.521 | 7.442 | 35.632 |
+| pass_criterion | 425 | 0.467 | 1.026 | 1.348 | 2.640 | 6.271 | 8.325 | 7.455 | 16.096 | 19.963 |
+| pass_review | 200 | 0.382 | 0.966 | 33.332 | 2.503 | 5.331 | 12.369 | 7.404 | 19.294 | 50.452 |
+| start_criterion | 425 | 0.411 | 0.793 | 1.478 | 1.875 | 3.684 | 5.904 | 5.654 | 10.018 | 18.634 |
+| submit | 200 | 0.398 | 1.194 | 1.435 | 1.554 | 4.178 | 6.063 | 6.063 | 16.646 | 24.732 |
+| All commands | 3775 | 0.459 | 1.207 | 2.713 | 1.349 | 3.788 | 6.616 | 5.290 | 12.316 | 24.638 |
+| Commands that wrote events | 2100 | 0.406 | 1.030 | 1.855 | 2.049 | 4.709 | 7.570 | 6.560 | 15.763 | 26.030 |
 
-- **The PRD's figure.** Writing events and steps took 4.330 ms at the 95th
+- **The PRD's figure.** Writing events and steps took 4.709 ms at the 95th
   percentile over the 2100 commands that wrote events, within the 20 ms
-  target; the PRD's Speed row now says so. Heartbeats write no event, so
+  target; the PRD's Speed row now says so. Earlier runs on the same Mac
+  gave 2.2 to 4.3 ms for the same figure. Heartbeats write no event, so
   they are left out of that figure. The check that runs in the app is not
   measured: no rule exists yet.
-- **The wait for the workspace lock dominates.** It was 347 ms at the 95th
-  percentile for commands that wrote events, about 31 commands a second.
-  A second run at 21:05 UTC the same day, with the same settings, gave
-  158 ms for that wait and 2.267 ms for the event and step writes, so the
-  wait varies from run to run. Why it is this large is not known: the lock
-  may be held through the commit, the key store and the log line, or a
-  wait for a pooled connection (32 for up to 50 requests at once) may be
-  counted in it. Nothing was tuned.
+- **The wait for the workspace lock is short.** 1.03 ms at the 95th
+  percentile for commands that wrote events. The earlier runs' 158 to
+  347 ms came from the speed run itself: its 50 seats all ticked at the
+  same instant, so each tick's commands queued for the lock within about
+  300 ms and the lock stood idle for the rest of the 2 seconds
+  (PostgreSQL's own wait on the lock statement agreed). The lock is held
+  5.8 ms on average (21 per cent of the time at about 36 lock takes a
+  second), and the seats now tick on clocks spread over the 2 seconds, as
+  separate agents do. Nothing in the engine changed.
+- **The tail is not explained.** A few commands waited 27 to 35 ms for the
+  lock (the p99 of three commands above), from 12 holds of the lock over
+  30 ms out of 3582. Whether that is garbage collection, a sweep pass or
+  the Mac's other load at the time was not traced.
 
 ## Installed for the build
 
@@ -589,7 +613,7 @@ skeleton's pull request description, as rule AR-004 asks.
       - **Q-7**: a pasted API token reaches the helper over its standard
         input and goes into the Keychain, built with API tokens.
         Alternative: decide it with that milestone.
-      - **Q-8**: the Speed row carries the measured 4.3 ms. Alternative:
+      - **Q-8**: the Speed row carries the measured 4.7 ms. Alternative:
         leave the figure a guess.
       - **Q-9**: a builder may read the notes of its task's failed reviews,
         returned with the briefing outside its hash. Alternative: rework
@@ -676,8 +700,13 @@ skeleton's pull request description, as rule AR-004 asks.
         listed host, after the owner confirms; Grok Build has none.
         Alternative: no installs from the pop-up.
       - **PV-6**: a developer check with tools already signed in on the
-        Mac. It was not written or run in this build. Alternative: let the
-        owner's first run find a wrong flag, which is where it stands.
+        Mac, `scripts/real_provider_run.sh`, built narrower than PV-6's
+        text: one build prompt through the runner's tool driver, with no
+        containers, seats or task, so it proves the driver's flags only.
+        Its results: see the pull request. Alternatives: PV-6's whole loop
+        (containers, two seats, a task to Done), which would also prove
+        the marker lines and a real reviewer; or let the owner's first run
+        find a wrong flag.
       - **MA-1**: the board is built, the only way to a task, with Show
         cancelled. Alternative: a plain task list.
       - **MA-7**: the owner's session is kept in the login Keychain; a
@@ -698,8 +727,10 @@ skeleton's pull request description, as rule AR-004 asks.
         outlives the app.
       - **PK-9**: the whole loop runs in CI on Linux (the `e2e` job); if it
         cannot be built there in two attempts, the job is removed and the
-        script stays a local step. Its first run has not happened yet.
-        Alternative: a fake server on the Mac side.
+        script stays a local step. Its first run compiled everything on
+        Linux and then failed to find the test programs; the fix is not yet
+        seen passing in CI (above). Alternative: a fake server on the Mac
+        side.
       - **PK-10**: the first run on real logins is the owner's (below).
         Alternative: none; no agent can sign in.
     - **Other choices made while building:**
@@ -710,10 +741,17 @@ skeleton's pull request description, as rule AR-004 asks.
         a stand-in Codex reviewer that connects on its own, because the
         runner refuses a Gemini reviewer. Alternative: stop that check at
         submit.
-      - `task.contract_changed` carries no minimum strength rank, so the
-        replay cannot rebuild a rank set by Complete contract (the app
-        sends none; one replay test is skipped for it). Alternative: a new
-        payload version that carries it.
+      - `task.contract_changed` v1 gained `minimum_strength_rank` in place
+        (contract DB-48), so the replay rebuilds the rank Complete contract
+        sets; a payload version may change in place until leverage's first
+        release, each change recorded in `api/contract/decisions.md`.
+        Alternative: a v2 payload, with readers for both.
+      - The speed run spreads its seats' ticks evenly over one tick, as
+        separate agents' clocks are; its 50 seats used to tick at the same
+        instant, which made the lock wait of 158 to 347 ms the earlier
+        measurements showed (see [Measurements](#measurements)).
+        Alternatives: a random phase per seat, or keeping the burst as a
+        named worst case.
       - The command-key purge runs once an hour, since `commands` has no
         index on its creation time. Alternative: add the index and purge
         every pass.
@@ -731,8 +769,21 @@ skeleton's pull request description, as rule AR-004 asks.
         later.
       - From the adversarial review: in production the API answers only a
         request addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
-        (the compose name the speed run uses), and refuses a body not sent
-        as JSON. Alternative: none that keeps a rebinding web page out.
+        (the compose name the speed run uses). Alternative: none that keeps
+        a rebinding web page out.
+      - From the second review: the API refuses any request body not sent
+        as JSON, whatever its method and path, so a sign-in sent as a form
+        to a mistyped path never reaches the request log. Alternative: keep
+        the refusal to POST, PUT, PATCH and DELETE under `/v1/`, and drop
+        a form's parameters from the log instead.
+      - From the second review: a runner whose helper is already gone when
+        it starts (its parent is already launchd) stops at once, as it
+        does when the helper goes later. Alternative: the helper passes its
+        own process id to the runner, which compares it with its parent.
+      - From the second review: the end-to-end secret scan refuses a secret
+        shorter than 8 characters, the shortest whose base64 copy it can
+        find at every alignment. Alternative: look for shorter base64
+        pieces, with more matches by chance.
       - From the adversarial review: the landing prompt lists each call by
         name, method and path, without the contract's one-line summary,
         two of which use the engine word "lease". Alternative: reword the
@@ -761,4 +812,4 @@ run is also listed here until the owner has read it.
 | [ADR 0006](adr/0006-owner-sign-in-and-tokens.md) | Added in the delegated run: `bcrypt`, the tokens, the setup call and loopback HTTP. The owner has not read it |
 | [ADR 0007](adr/0007-sweep-service-and-database-login-role.md) | Added in the delegated run: the sweep service, long polls and the `leverage_api` login role. The owner has not read it |
 | The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login and a reviewer on another; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
-| The developer check with real tools | Not run: `scripts/real_provider_run.sh` (plan PV-6) was not written, and `scripts/real_gemini_through_app.sh` was not run. No result exists for any provider |
+| The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are recorded in the pull request description; see the pull request. A tool not run there waits for the owner |

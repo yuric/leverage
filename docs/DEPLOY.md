@@ -218,6 +218,26 @@ review, checks the log and scans for secrets, and removes its project.
 compose project of its own (`leverage-smoke-<pid>`), waits for the server's
 health, and removes both.
 
+A developer check with a provider's real tool, never in CI, proves the
+runner's command-line flags against a tool already installed and signed in
+on the Mac, and nothing else:
+
+```bash
+LEVERAGE_REAL_PROVIDER=claude scripts/real_provider_run.sh claude   # or codex, gemini, grok
+```
+
+It needs the tool on `PATH`, signed in, and Swift. It builds the runner's
+Swift code and sends one short build prompt through the runner's tool
+driver in a new empty folder, after the tool's version command and, where
+the provider has one, its status command; that spends a little of the
+login's quota. Nobody signs in during the check. It prints the outcome and
+exits 0 when it passed, 1 when it failed, 2 when it refused to start (`CI`
+set, or `LEVERAGE_REAL_PROVIDER` not the provider named), 3 when it was
+skipped because the tool is not installed, and 4 when it was skipped
+because the tool is not signed in. `--evidence <file>` also writes the
+result to a file, and `--timeout` limits the tool run (300 seconds by
+default).
+
 ## Stopping and rolling back
 
 Quit the app to stop the helper and the agents. To stop the server's

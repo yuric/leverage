@@ -61,8 +61,10 @@ the server depends on it (rule AR-003).
   switched off, once `LEVERAGE_API_DB_PASSWORD` is set (it is in
   `.env.example` and in the `.env` the app writes). Without it they connect
   as the owner role.
-- Under 50 active seats the wait for the workspace lock dominates a
-  transition (158 to 347 ms at the 95th percentile in two runs on
-  2026-11-19, against at most 5 ms for writing events and steps;
-  [IMPLEMENTATION.md](../IMPLEMENTATION.md#measurements)); why is not yet
-  known.
+- Under 50 active seats the wait for the workspace lock is about 1 ms at
+  the 95th percentile, and writing events and steps 4.7 ms (2026-11-19;
+  [IMPLEMENTATION.md](../IMPLEMENTATION.md#measurements)). The lock is held
+  about 6 ms per command, so one workspace takes about 160 commands a
+  second before the lock is always busy. Earlier runs showed a wait of 158
+  to 347 ms; it came from the speed run's seats all ticking at the same
+  instant, not from the server.

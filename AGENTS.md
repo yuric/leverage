@@ -165,6 +165,7 @@ python3 -I scripts/test_secret_scan.py               # self-test of the secret s
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
+python3 -I scripts/test_real_provider_run.py         # the developer check, with stand-in tools
 python3 -I mac/Tests/StandIns/test_provider_tool.py  # self-test of the stand-in tools
 ```
 
@@ -268,8 +269,18 @@ Each starts a compose project of its own and removes it, also on failure.
 (`leverage-smoke-<pid>`). No automated test calls a real provider: the
 tests find the providers' tools only through `LEVERAGE_TOOL_DIR`, on the
 stand-ins. `scripts/real_gemini_through_app.sh` runs only with
-`LEVERAGE_REAL_PROVIDER=gemini` and never in CI. How to run and operate it
-all is in [docs/DEPLOY.md](docs/DEPLOY.md).
+`LEVERAGE_REAL_PROVIDER=gemini` and never in CI.
+
+A developer check with a real tool already signed in on the Mac, never in
+CI, run only by the maintainer or the managing agent of a delegated run:
+
+```bash
+LEVERAGE_REAL_PROVIDER=claude scripts/real_provider_run.sh claude   # or codex, gemini, grok
+```
+
+It sends one build prompt through the runner's tool driver and proves the
+driver's flags only. Its self-test runs in the `e2e` job with stand-in
+tools. How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Documentation style
 
