@@ -258,6 +258,41 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_not_includes io.string, "made-up@example.test"
   end
 
+  # Whatever the method and path: a doubled slash, a path without /v1 and a
+  # GET with a body all reach a controller that logs its params (the
+  # catch-all route or the health check), so a form body there would print
+  # the password as a key too.
+  test "a form body on any path or method is 400 malformed, and its password never reaches the log" do
+    password = "made-up-secret-#{SecureRandom.hex(4)}"
+    body = { email_address: "made-up@example.test", password: password }.to_json
+    io = StringIO.new
+    capture = ActiveSupport::Logger.new(io)
+    Rails.logger.broadcast_to(capture)
+    begin
+      [ [ "POST", "//v1/owner/session" ], [ "POST", "/owner/session" ], [ "GET", "/v1/health" ],
+        [ "PUT", "/" ] ].each do |method, path|
+        env = Rack::MockRequest.env_for(path, method: method, input: body,
+          "CONTENT_TYPE" => "application/x-www-form-urlencoded", "HTTP_IDEMPOTENCY_KEY" => "key-#{SecureRandom.hex(6)}")
+        status, headers, answer = Rails.application.call(env)
+        text = +""
+        answer.each { |part| text << part }
+        answer.close if answer.respond_to?(:close)
+        assert_equal 400, status, "#{method} #{path}"
+        assert_equal "malformed", JSON.parse(text).dig("error", "code"), "#{method} #{path}"
+        assert_match %r{\Aapplication/json}, headers["content-type"]
+      end
+    ensure
+      Rails.logger.stop_broadcasting_to(capture)
+    end
+    assert_not_includes io.string, password
+    assert_not_includes io.string, "made-up@example.test"
+  end
+
+  test "a GET with no body is answered whatever its media type" do
+    get "/v1/health", headers: { "Content-Type" => "application/x-www-form-urlencoded" }
+    assert_response :ok
+  end
+
   test "an empty POST with no media type still reaches its controller" do
     own = @scenario.seat(role: "builder", provider: "codex")
     post "/v1/owner/seats/#{own.id}/stop", headers: { "Authorization" => "Bearer #{@token}", "Idempotency-Key" => "key-1" }
