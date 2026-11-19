@@ -351,3 +351,32 @@ A migration's timestamp is the moment it was generated
 (`bin/rails generate migration`), never a hand-typed one: a stamp set in
 the future would sort after migrations generated later and run after them
 on a fresh database. `api/db/structure.sql` is the schema.
+
+## What the Core loop milestone added
+
+The Core loop added to this contract and changed nothing in it that was
+not provisional, except three things named below.
+
+- Six operations, each a registry `operations` entry and an `openapi.json`
+  operation, with a derived `state_machine.json` row with `events: []` for
+  each command: `get_setup_state` and `create_owner` (the first sign-in,
+  caller `public`), `sign_out_owner`, `get_helper_request` (provisional),
+  `report_request_progress` and `get_landing_prompt`. The commands
+  `create_owner`, `sign_out` and `report_request_progress` were added to
+  `commands`.
+- `HelperRequest.params` and `HelperRequest.progress`, the shapes of the
+  provisional owner reads (each with `as_of_seq`), `Seat.wanted_running`,
+  `LandingPrompt`, and `BriefingResponse.review_notes` (the notes of the
+  task's failed reviews, outside the briefing's hash).
+- Traces 09 and 10, with no rules.
+
+The three changes to what was not provisional:
+
+- The description of `AddCredentialRequest` now says the row is inserted
+  at the Add command, so that the credential's name is kept only in its
+  own row. No shape changed.
+- The derived `issue_helper_token` row gained the conditional event
+  `review.released` (when a seat still marked running holds a review),
+  because a new helper token treats every such seat as stopped.
+- The builder's `prd_may_read` in `roles.json` gained "the notes of its
+  task's failed reviews", with the PRD's Roles table in the same change.

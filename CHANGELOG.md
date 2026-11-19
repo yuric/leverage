@@ -10,6 +10,18 @@ once it makes its first release.
 
 ### Added
 
+- Added the core loop: sign-in, logins, agents the app runs, tasks from a
+  form to Done. The PRD's Core loop milestone: `Leverage.app` starts the
+  server and its timer sweep in Docker containers on the owner's Mac,
+  creates the owner's sign-in, adds and verifies logins through the helper
+  (installing a provider's tool where leverage can), connects a builder and
+  a reviewer, which the helper runs with the reference runner on those
+  logins, and takes a task from the Add task form through review to Done,
+  with every step in the event log and on the task page. A seat that
+  connects on its own gets its token once and a landing prompt to paste
+  into it. Every change goes through one transition function with
+  idempotency keys, leases and timers. The PRD gains the changes Q-1 to
+  Q-15; the choices are recorded in ADRs 0004 to 0007.
 - The contract, the PRD's Contract milestone: `api/contract/` holds the
   fixed lists and event payload schemas, the state, step, hook, job, role,
   timer and Needs you tables, the shipped rules, the credential readers,
