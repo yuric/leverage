@@ -1,30 +1,7 @@
 import Foundation
-import LeverageKit
 
-// Prints the helper's version and the API's health. Exits 0 when the API
-// answers healthy, 1 otherwise.
+// The helper (plan §2.2): signs in with its token, does the server's
+// requests, and stops its runs on a stop signal or when the app is gone.
+// Exit codes are HelperExitCode's: 0 stopped, 2 no token, 3 token ended.
 
-let configuration = Configuration()
-let sessionConfiguration = URLSessionConfiguration.ephemeral
-sessionConfiguration.timeoutIntervalForRequest = 10
-let client = LeverageClient(
-    baseURL: configuration.apiBaseURL,
-    session: URLSession(configuration: sessionConfiguration))
-
-print("LeverageHelper \(leverageMacVersion)")
-
-let result: Result<Health, any Error>
-do {
-    result = .success(try await client.health())
-} catch {
-    result = .failure(error)
-}
-
-let line = healthLine(for: result)
-if case .success(let health) = result, health.status == "ok" {
-    print(line)
-    exit(0)
-} else {
-    FileHandle.standardError.write(Data((line + "\n").utf8))
-    exit(1)
-}
+exit(await HelperMain.run())
