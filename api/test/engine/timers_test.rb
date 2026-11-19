@@ -86,7 +86,9 @@ class TimersTest < CommittingTestCase
   test "test 7: a call after the due time is refused lease_expired, and the expiry commits at the due time" do
     task = scenario.task(state: "working", builder: @builder)
     criterion = Criterion.find_by!(task_id: task.id, kind: "build")
-    due = scenario.database_now - 10
+    # The due time comes after every event the task has (effective times
+    # never go backwards, L120) and before the command's time.
+    due = scenario.database_now
     scenario.make_due(task, at: due)
     before = last_seq
 
@@ -190,7 +192,7 @@ class TimersTest < CommittingTestCase
   test "a reviewer's call after its review lease's due time is refused lease_expired; the task stays In review" do
     task = scenario.task(state: "in_review", builder: @builder)
     review = scenario.review(task, reviewer: @reviewer)
-    due = scenario.database_now - 5
+    due = scenario.database_now
     scenario.make_due(review, at: due)
     before = last_seq
 

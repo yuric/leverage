@@ -15,10 +15,12 @@ class SweepTest < ActiveSupport::TestCase
   def runs = SweepRun.where(workspace_id: @scenario.workspace_id).order(:ran_at).to_a
 
   test "it ends an untouched builder lease and an untouched review lease and records the run" do
-    due = @scenario.database_now - 20
-    task = @scenario.make_due(@scenario.task(state: "working"), at: due)
-    review = @scenario.make_due(@scenario.review(@scenario.task(state: "in_review")), at: due)
+    task = @scenario.task(state: "working")
+    review = @scenario.review(@scenario.task(state: "in_review"))
     @scenario.task(state: "working")
+    due = @scenario.database_now
+    @scenario.make_due(task, at: due)
+    @scenario.make_due(review, at: due)
 
     S.sweep_workspace(@scenario.workspace_id)
 

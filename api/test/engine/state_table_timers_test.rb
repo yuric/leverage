@@ -41,18 +41,19 @@ class StateTableTimersTest < ActiveSupport::TestCase
   StateTableCases.define(self, T::Table::TIMERS) do |kase|
     skip "Finishing needs an outward action, which milestone 2 does not build (SC-3)" if kase.from == "finishing"
 
-    before = last_seq
     case kase.command
     when "builder_lease_expiry"
       task = due_task(kase.from)
-      outcome = timer(kase.command, "task_id" => task.id)
+      params = { "task_id" => task.id }
     when "review_lease_expiry"
       review = due_review(kase.from)
       task = Task.find(review.task_id)
-      outcome = timer(kase.command, "review_id" => review.id)
+      params = { "review_id" => review.id }
     when "command_key_retention"
-      outcome = timer(kase.command, {})
+      params = {}
     end
+    before = last_seq
+    outcome = timer(kase.command, params)
     written = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
 
     if kase.invalid_state?

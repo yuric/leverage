@@ -31,8 +31,9 @@ class ReviewLeaseExpiryTest < ActiveSupport::TestCase
   end
 
   test "a due review lease ends: the review unassigned, the task still In review, the event at the due time" do
-    due = @scenario.database_now - 15
-    review = claimed_review(due: due)
+    review = claimed_review
+    due = @scenario.database_now
+    @scenario.make_due(review, at: due)
 
     outcome = timer("review_id" => review.id)
 

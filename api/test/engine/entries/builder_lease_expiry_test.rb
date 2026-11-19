@@ -29,7 +29,7 @@ class BuilderLeaseExpiryTest < ActiveSupport::TestCase
     task.update_columns(resume_pending_since: @scenario.database_now)
     criterion = Criterion.find_by!(task_id: task.id, kind: "build")
     criterion.update_columns(state: "passed", passed_by_seat_id: @builder.id, passed_at: @scenario.database_now)
-    due = @scenario.database_now - 30
+    due = @scenario.database_now
     @scenario.make_due(task, at: due)
     commands_before = Command.count
 

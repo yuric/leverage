@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# The timer sweep (milestone 2 plan EN-22): a pass over every workspace
+# every 15 seconds, until it is stopped (TERM or INT). With --once it makes
+# one pass, prints how many workspaces it swept and exits.
+require_relative "../config/environment"
+
+if ARGV.include?("--once")
+  count = Leverage::Sweep.pass(purge: true)
+  puts "Swept #{count} #{count == 1 ? "workspace" : "workspaces"}."
+else
+  stopping = false
+  %w[TERM INT].each { |signal| Signal.trap(signal) { stopping = true } }
+  $stdout.sync = true
+  puts "Sweeping every #{Leverage::Sweep::INTERVAL} seconds."
+  Leverage::Sweep.run(stop: -> { stopping })
+  puts "Sweep stopped."
+end
