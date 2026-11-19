@@ -47,19 +47,27 @@ enum EndToEnd {
         }
         let url = URL(fileURLWithPath: String(cString: name)).resolvingSymlinksInPath()
         #else
-        let url = URL(fileURLWithPath: "/proc/self/exe").resolvingSymlinksInPath()
+        // The kernel's link to the running program: readlink, not a path
+        // resolution, which can stop at /proc/<pid>/exe.
+        guard let path = try? FileManager.default.destinationOfSymbolicLink(atPath: "/proc/self/exe") else {
+            throw EndToEndFailure("could not find the test program's own path")
+        }
+        let url = URL(fileURLWithPath: path)
         #endif
-        return try productsFolder(forTestProgram: url)
+        return productsFolder(forTestProgram: url)
     }
 
-    /// The products folder for the test program at `program`.
-    static func productsFolder(forTestProgram program: URL) throws -> URL {
+    /// The products folder for the test program at `program`: the folder
+    /// that holds its .xctest bundle (macOS, and older toolchains on Linux),
+    /// else the program's own folder (Swift 6.4 on Linux runs the tests from
+    /// `LeverageEndToEndTests-test-runner` and `LeverageEndToEndTests.so`).
+    static func productsFolder(forTestProgram program: URL) -> URL {
         var url = program
         while url.path != "/" {
             if url.pathExtension == "xctest" { return url.deletingLastPathComponent() }
             url.deleteLastPathComponent()
         }
-        throw EndToEndFailure("the test program is not inside an .xctest bundle")
+        return program.deletingLastPathComponent()
     }
 
     static func program(_ name: String) throws -> URL {

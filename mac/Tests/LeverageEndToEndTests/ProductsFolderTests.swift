@@ -15,7 +15,7 @@ struct ProductsFolderTests {
     func bundle() throws {
         let program = URL(fileURLWithPath:
             "/b/.build/arm64-apple-macosx/debug/LeveragePackageTests.xctest/Contents/MacOS/LeveragePackageTests")
-        #expect(try EndToEnd.productsFolder(forTestProgram: program).path
+        #expect(EndToEnd.productsFolder(forTestProgram: program).path
             == "/b/.build/arm64-apple-macosx/debug")
     }
 
@@ -23,7 +23,7 @@ struct ProductsFolderTests {
     func linuxRunnerProgram() throws {
         let program = URL(fileURLWithPath:
             "/b/.build/x86_64-unknown-linux-gnu/debug/LeverageEndToEndTests-test-runner")
-        #expect(try EndToEnd.productsFolder(forTestProgram: program).path
+        #expect(EndToEnd.productsFolder(forTestProgram: program).path
             == "/b/.build/x86_64-unknown-linux-gnu/debug")
     }
 
@@ -31,7 +31,7 @@ struct ProductsFolderTests {
     func linuxSharedLibrary() throws {
         let program = URL(fileURLWithPath:
             "/b/.build/x86_64-unknown-linux-gnu/debug/LeverageEndToEndTests.so")
-        #expect(try EndToEnd.productsFolder(forTestProgram: program).path
+        #expect(EndToEnd.productsFolder(forTestProgram: program).path
             == "/b/.build/x86_64-unknown-linux-gnu/debug")
     }
 
@@ -39,7 +39,7 @@ struct ProductsFolderTests {
     func linuxXCTestProgram() throws {
         let program = URL(fileURLWithPath:
             "/b/.build/x86_64-unknown-linux-gnu/debug/LeveragePackageTests.xctest")
-        #expect(try EndToEnd.productsFolder(forTestProgram: program).path
+        #expect(EndToEnd.productsFolder(forTestProgram: program).path
             == "/b/.build/x86_64-unknown-linux-gnu/debug")
     }
 
