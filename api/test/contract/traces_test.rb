@@ -605,6 +605,7 @@ class TracesTest < Minitest::Test
 
   def test_actors_and_command_ids_follow_the_event_record
     traces.each do |name, trace|
+      keys = []
       trace["commands"].each_with_index do |command, index|
         command["expect"]["events"].each do |event|
           where = "#{name} command #{index + 1} #{event["ref"]}"
@@ -620,8 +621,19 @@ class TracesTest < Minitest::Test
               assert_equal [ SYMBOL.match(command["caller"])[1] == "user" ? "owner" : "seat", command["caller"] ], event.values_at("actor_kind", "actor_id"), where
             end
             refute_nil event["command_id"], "#{where}: only events of the server's own requests carry no key" if event["actor_kind"] != "app"
+            # L241: all events of one command share its key, and events that
+            # complete a pending transition carry the original requester's.
+            # Only the server's own requests at action.requested carry none.
+            if event["command_id"].nil?
+              request = event["type"].start_with?("job.") ||
+                (event["type"].start_with?("check.") && event["payload"]["hook"] == "action.requested")
+              assert request, "#{where}: #{event["type"]} carries no key, but only the checks and jobs at action.requested may"
+            else
+              assert_includes [ command["key"] ] + keys, event["command_id"], "#{where}: an event carries another command's key"
+            end
           end
         end
+        keys << command["key"] if command["key"]
       end
     end
   end

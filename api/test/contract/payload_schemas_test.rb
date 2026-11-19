@@ -10,6 +10,8 @@ module PayloadRules
   PAYLOADS = File.join(ContractTestHelpers::CONTRACT_ROOT, "payloads")
 
   CLOSED_FORMATS = %w[uuid date-time].freeze
+  # A SHA-256 digest in lower-case hex is a code, not text.
+  DIGEST_PATTERN = "^[0-9a-f]{64}$".freeze
   NON_STRING_TYPES = %w[integer number boolean null array object].freeze
 
   # String properties allowed without an enum, const or format. Each must
@@ -38,6 +40,8 @@ module PayloadRules
     [ "check.finished", "hook" ] => [ "hooks", :equal ],
     [ "check.finished", "result" ] => [ "check_results", :equal ],
     [ "check.finished", "effect" ] => [ "policy_effects", :equal ],
+    [ "check.queued", "subject_kind" ] => [ "lists.check_subject_kinds", :equal ],
+    [ "check.finished", "subject_kind" ] => [ "lists.check_subject_kinds", :equal ],
     [ "job.queued", "kind" ] => [ "job_kinds", :equal ],
     [ "inbox.opened", "kind" ] => [ "needs_you_items", :equal ],
     [ "inbox.resolved", "choice" ] => [ "lists.inbox_choices", :equal ],
@@ -91,10 +95,14 @@ module PayloadRules
     # Replay: the holder after an approval or a delayed grant (SM-7, SM-8).
     "action.approved" => %w[lease_seat_id],
     "action.lease_granted" => %w[lease_seat_id],
-    # Replay: the provisional holder and the check step's subject (DB-43, SM-41).
-    "check.queued" => %w[hook rule_id rule_version_id attempt_number job_id blocking claimant_seat_id pending_transition_id action_id],
-    # Replay: rule_checks.result; the rule a step's cause names (DB-32).
-    "check.finished" => %w[hook rule_id rule_version_id result effect],
+    # Replay: the provisional holder and the check step's subject (DB-43,
+    # SM-41); the rule_checks row's subject and input hash, which replay into
+    # empty tables needs to insert it (L771, L782).
+    "check.queued" => %w[hook rule_id rule_version_id attempt_number job_id blocking claimant_seat_id pending_transition_id
+                         action_id subject_kind subject_id input_hash],
+    # Replay: rule_checks.result; the rule a step's cause names (DB-32); the
+    # row's identity, since an app check writes no check.queued (L771).
+    "check.finished" => %w[hook rule_id rule_version_id result effect subject_kind subject_id input_hash],
     # Replay: rules.enabled and the current version.
     "rule.created" => %w[rule_version_id version enabled],
     "rule.changed" => %w[rule_version_id version],
@@ -288,7 +296,7 @@ module PayloadRules
   end
 
   def closed?(sub)
-    sub.key?("enum") || sub.key?("const") || CLOSED_FORMATS.include?(sub["format"])
+    sub.key?("enum") || sub.key?("const") || CLOSED_FORMATS.include?(sub["format"]) || sub["pattern"] == DIGEST_PATTERN
   end
 end
 
@@ -372,6 +380,26 @@ class PayloadSchemasTest < Minitest::Test
 
         assert PayloadRules.closed?(sub), "#{type}.#{name} is a code, not text"
       end
+    end
+  end
+
+  # A rule check's input hash is a SHA-256 hex digest (Gating.input_hash),
+  # in every payload that names a check.
+  def test_check_payloads_carry_the_input_hash_as_a_digest
+    %w[check.queued check.finished].each do |type|
+      hash = schema_for(type, 1).fetch("properties").fetch("input_hash")
+      assert_equal PayloadRules::DIGEST_PATTERN, hash["pattern"], type
+      assert_equal "string", hash["type"], type
+    end
+  end
+
+  # ARCHITECTURE: payloads hold no personal data; a model name is the one
+  # open string, and it cannot hold an email address.
+  def test_a_model_name_cannot_hold_an_email_address
+    PayloadRules::OPEN_STRINGS.each_key do |type, property|
+      pattern = Regexp.new(schema_for(type, 1).fetch("properties").fetch(property).fetch("pattern"))
+      refute_match pattern, "someone@example.test", "#{type}.#{property}"
+      assert_match pattern, "claude-model-1", "#{type}.#{property}"
     end
   end
 
