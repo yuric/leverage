@@ -3,48 +3,47 @@ import SwiftUI
 
 @main
 struct LeverageApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var model = AppModel(
+        runtime: Live.runtime(),
+        makeOwnerAPI: { url, token in OwnerClient(baseURL: url, sessionToken: token) })
+
     var body: some Scene {
-        Window("leverage", id: "main") {
-            ContentView()
+        Window(ShellCopy.appName.text, id: Self.windowID) {
+            WindowRoot(model: model, delegate: delegate)
         }
-        .windowResizability(.contentSize)
-    }
-}
-
-@MainActor
-@Observable
-final class HealthModel {
-    private(set) var line = "API: not checked yet"
-    private(set) var isRefreshing = false
-    private let client = LeverageClient(baseURL: Configuration().apiBaseURL)
-
-    func refresh() async {
-        isRefreshing = true
-        defer { isRefreshing = false }
-        do {
-            line = healthLine(for: .success(try await client.health()))
-        } catch {
-            line = healthLine(for: .failure(error))
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1040, height: 700)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button(ShellCopy.addTask.text) { model.screens?.navigator.presentAddTask() }
+                    .keyboardShortcut("n")
+                    .disabled(!model.isSignedIn)
+            }
+            CommandGroup(before: .appTermination) {
+                Button(ShellCopy.signOut.text) { Task { await model.signOut() } }
+                    .disabled(!model.isSignedIn)
+                Divider()
+            }
         }
     }
+
+    static let windowID = "main"
 }
 
-struct ContentView: View {
-    @State private var model = HealthModel()
+/// The window's content, and the two things only the window can tell the
+/// delegate: how to open the window again, and what to finish before quitting.
+private struct WindowRoot: View {
+    let model: AppModel
+    let delegate: AppDelegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("leverage")
-                .font(.largeTitle)
-            Text(model.line)
-                .textSelection(.enabled)
-            Button("Refresh") {
-                Task { await model.refresh() }
+        RootView(model: model)
+            .task { await model.launch() }
+            .onAppear {
+                delegate.openMainWindow = { openWindow(id: LeverageApp.windowID) }
+                delegate.terminationWork = { await model.prepareToQuit() }
             }
-            .disabled(model.isRefreshing)
-        }
-        .padding(24)
-        .frame(minWidth: 320, alignment: .leading)
-        .task { await model.refresh() }
     }
 }

@@ -1,0 +1,76 @@
+import Foundation
+import LeverageKit
+import Observation
+
+/// Where the owner is in the window.
+@MainActor
+@Observable
+final class Navigator {
+    enum Place: Equatable, Sendable { case board, agents, credentials }
+
+    private(set) var place: Place = .board
+    /// The task whose page is open in the content area (MA-9); nil shows the
+    /// screen of `place`.
+    private(set) var openTaskID: UUID?
+    /// Whether the Add task sheet is showing. The shell presents it.
+    var isAddTaskPresented = false
+
+    /// Shows a tab's screen.
+    func show(_ place: Place) {
+        self.place = place
+        openTaskID = nil
+    }
+
+    /// Opens a task's page, with a way back to the board (MA-9).
+    func open(task id: UUID) {
+        place = .board
+        openTaskID = id
+    }
+
+    /// Back to the board from a task's page.
+    func closeTask() { openTaskID = nil }
+
+    func presentAddTask() { isAddTaskPresented = true }
+
+    /// After Add task saved: the sheet closes and the board shows.
+    func finishAddTask() {
+        isAddTaskPresented = false
+        show(.board)
+    }
+}
+
+/// What every screen of the content area needs, in the SwiftUI environment:
+///
+///     @Environment(ScreenContext.self) private var context
+///
+/// The shell builds the five screens with no arguments (`BoardView()`,
+/// `TaskPageView()`, `AddTaskSheet()`, `RosterView()`, `CredentialsView()`)
+/// and gives each its context this way, so a screen's own files never need
+/// the shell to change. A screen builds its view model from `owner` when it
+/// appears, tells `feed` where each of its reads stood (`noteRead`), reads
+/// again when `feed` reports events, and uses `navigator` to open a task or
+/// come back to the board.
+///
+/// `owner` already returns the app to the sign-in screen when any call of it
+/// answers 401 (MA-6): a view model still sees the error and shows its own
+/// signed-out state, and does nothing more about it.
+@MainActor
+@Observable
+final class ScreenContext {
+    let owner: any OwnerAPI
+    let feed: EventFeed
+    let health: HealthLineModel
+    let navigator: Navigator
+    let runtime: any AppRuntime
+
+    init(
+        owner: any OwnerAPI, feed: EventFeed, health: HealthLineModel, navigator: Navigator = Navigator(),
+        runtime: any AppRuntime
+    ) {
+        self.owner = owner
+        self.feed = feed
+        self.health = health
+        self.navigator = navigator
+        self.runtime = runtime
+    }
+}
