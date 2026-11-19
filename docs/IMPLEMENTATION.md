@@ -55,15 +55,14 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-19 |
-| **On `main`** | The rules, the PRD, the first decision record, the design reference and the provider-terms record |
-| **Next** | The contract milestone, once the PRD change and the skeleton are merged |
+| **On `main`** | The rules, the PRD with the gate settled, the first decision record, the design reference and the provider-terms record |
+| **Next** | The contract milestone, once the skeleton is merged |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| The PRD change that settles the gate before the contract | `docs/prd-gate` | #9 | In review |
-| Milestone 0 skeleton | `chore/skeleton` | None yet | Built and checked locally; not pushed |
+| Milestone 0 skeleton | `chore/skeleton` | #10 | In review |
 
 ## Milestones
 
@@ -74,7 +73,7 @@ the PRD's milestone list. How the build is run locally is in
 
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
-| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| 0 | Skeleton | In review | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Not started | | |
 | 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
 | 3 | Handoff | Not started | | |
@@ -169,5 +168,6 @@ run is also listed here until the owner has read it.
 | Item | What is waiting |
 | --- | --- |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
+| Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
 | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) | Added in the delegated run: the pinned versions, the test tools and the code units of the skeleton. The owner has not read it |
