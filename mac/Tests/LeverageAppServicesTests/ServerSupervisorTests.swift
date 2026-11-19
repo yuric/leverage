@@ -189,4 +189,37 @@ struct ServerSupervisorTests {
         try FileManager.default.copyItem(at: fake.docker, to: elsewhere.appendingPathComponent("docker"))
         #expect(await server.start() == .running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!))
     }
+
+    @Test("after running, a start whose server stopped answering goes through Docker again and opens it once")
+    func runningThenDockerQuit() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        fake.set("docker-starts-when-opened")
+        let server = supervisor(fake, healthy: { _ in fake.isSet("compose-up") })
+        let running = ServerState.running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!)
+        #expect(await server.start() == running)
+        #expect(fake.openCalls().isEmpty)
+
+        // Docker Desktop quits: the engine and the containers are gone.
+        fake.set("engine-running", false)
+        fake.set("compose-up", false)
+
+        #expect(await server.start() == running)
+        #expect(fake.openCalls().map(\.arguments) == [["-a", "Docker"]])
+        #expect(fake.dockerCalls().filter { $0.arguments.first == "compose" }.count == 2)
+    }
+
+    @Test("a start while the server still answers runs nothing")
+    func runningStillAnswers() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        let server = supervisor(fake, healthy: { _ in fake.isSet("compose-up") })
+        _ = await server.start()
+        let before = fake.calls().count
+
+        #expect(await server.start() == .running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!))
+        #expect(fake.calls().count == before)
+    }
 }

@@ -188,4 +188,37 @@ struct BuilderFlowTests {
         #expect(await runToEnd(loop) == 0)
         #expect(harness.operations == [.getNext, .claimNextTask, .getNext, .getNext])
     }
+
+    @Test("a task claimed after a failed review is built with that review's notes (PRD L127, L493)")
+    func claimAfterFailedReview() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver.agreeable()
+        let loop = harness.loop(.builder, driver: driver)
+        let reference = harness.existingWork.path
+        let taskID = self.taskID
+        let base = Fixture.claim(taskID, criteria: criteria(copy: .passed), workReference: reference, hash: "hash-round-1")
+        let claim = TaskClaim(
+            task: TaskSummary(
+                id: taskID, title: "Update the pricing page", goal: "The page shows this year's prices.",
+                state: .working, round: 1, holderSeatID: Fixture.seatID, builderSeatID: Fixture.seatID,
+                workReference: reference),
+            lease: base.lease, briefing: base.briefing, workReference: reference, credentialID: base.credentialID,
+            model: nil)
+        let withNotes = BriefingResponse(
+            briefing: base.briefing, workReference: reference,
+            reviewNotes: [ReviewNote(reviewID: UUID(), round: 0, notes: "The layout still breaks on narrow screens.")])
+        scriptCommands(harness)
+        harness.api.script {
+            $0.claimNextTask = { _ in .completed(claim, key: "k", command: .claim) }
+            $0.taskBriefing = { _ in withNotes }
+        }
+        harness.next([NextItem(kind: .task)], then: loop)
+
+        let code = await runToEnd(loop)
+
+        #expect(code == 0)
+        #expect(harness.api.calls.map(\.operation).contains(.getTaskBriefing))
+        let prompt = try #require(driver.runs.first?.prompt)
+        #expect(prompt.contains("The layout still breaks on narrow screens."))
+    }
 }

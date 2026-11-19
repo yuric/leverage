@@ -204,7 +204,7 @@ struct BoardModelTests {
         #expect(ready?.statusLine == "Paused, was Ready")
         let rounds = await card(Fixtures.boardTask(.working, holds: [.roundsExceeded]))
         #expect(rounds?.statusLine == "Paused, was In progress")
-        #expect(rounds?.chip?.text == "Sent back 3 times")
+        #expect(rounds?.chip?.text == "Sent back too many times")
     }
 
     @Test("a task waiting for a login to reset says so, and when")

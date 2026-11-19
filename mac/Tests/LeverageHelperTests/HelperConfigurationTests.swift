@@ -67,4 +67,9 @@ struct HelperConfigurationTests {
         #expect(!String(describing: configuration).contains(MadeUp.helperToken))
         #expect(!String(reflecting: configuration).contains(MadeUp.helperToken))
     }
+
+    @Test("the helper gives a stopped runner the shared stop grace")
+    func stopGraceIsShared() {
+        #expect(HelperTimings.standard.stopGrace == StopTimings.runnerStopGrace)
+    }
 }

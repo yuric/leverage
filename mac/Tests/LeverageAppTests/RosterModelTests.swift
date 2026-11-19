@@ -89,6 +89,19 @@ struct RosterModelTests {
         #expect(row(model, Fixtures.builderID)?.roleLine == "Builder. Running. Waiting for work.")
     }
 
+    @Test("a Codex or Grok agent shows the tool's default effort, whatever effort it was given")
+    func effortDefaultWhereNotTaken() async {
+        var list = Fixtures.seats().seats
+        list[1] = Fixtures.seat(
+            Fixtures.reviewerID, name: "Codex, Team", role: .reviewer, provider: .codex,
+            credential: Fixtures.secondLoginID, run: .stopped, effort: "high")
+        list[2] = Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok, effort: "high")
+        let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
+        await model.load()
+        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · Default model · Default effort · On")
+        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · Default model · Default effort · On")
+    }
+
     @Test("a row names its login, its model and effort or their defaults, and on or off")
     func rowDetails() async {
         var list = Fixtures.seats().seats

@@ -178,6 +178,58 @@ struct RequestLoopTests {
         #expect(!results(rig.api).contains(silent.id.contractString))
     }
 
+    @Test("a result the network lost is sent again with the same key until it is accepted")
+    func resultSentAgain() async throws {
+        let rig = try HelperRig()
+        let start = helperRequest(.stopSeat, seat: UUID())
+        let queue = Queue([.success(start)])
+        let failures = Locked(2)
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, key in
+                let fail = failures.update { left -> Bool in
+                    defer { left -= 1 }
+                    return left > 0
+                }
+                if fail { throw URLError(.networkConnectionLost) }
+                return .completed(.object([:]), key: key.value, command: .reportRequestResult)
+            }
+        }
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog) { _ in
+            HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
+        }
+
+        let running = Task { await loop.run() }
+        #expect(await eventually { results(rig.api).count == 3 })
+        try await Task.sleep(for: .milliseconds(200))
+        running.cancel()
+        _ = await running.value
+        let keys = rig.calls(.reportRequestResult).compactMap(\.key)
+        #expect(keys.count == 3)
+        #expect(Set(keys).count == 1, "every send of one result carries its one key")
+    }
+
+    @Test("a result the server refused is not sent again")
+    func refusedResultNotSentAgain() async throws {
+        let rig = try HelperRig()
+        let start = helperRequest(.stopSeat, seat: UUID())
+        let queue = Queue([.success(start)])
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, _ in throw TransportError(code: .invalid, message: "made up") }
+        }
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog) { _ in
+            HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
+        }
+
+        let running = Task { await loop.run() }
+        #expect(await eventually { results(rig.api).count == 1 && queue.pollCount >= 5 })
+        try await Task.sleep(for: .milliseconds(200))
+        running.cancel()
+        _ = await running.value
+        #expect(results(rig.api).count == 1)
+    }
+
     // MARK: The helper's own dispatch
 
     @Test("the helper answers the kinds this milestone does not serve with a failed result")

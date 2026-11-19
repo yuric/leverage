@@ -152,6 +152,28 @@ struct AppModelLaunchTests {
         #expect(model.phase == .cannotReachServer)
     }
 
+    @Test("Check again after the server could not be reached asks the server to start again, and goes on when it answers")
+    func checkAgainRestartsServer() async {
+        let rig = ShellRig()
+        let answering = Locked(false)
+        rig.owner.script {
+            $0.setupState = {
+                if answering.value { return SetupState(ownerExists: true) }
+                throw URLError(.cannotConnectToHost)
+            }
+        }
+        let model = rig.makeModel()
+        await model.start()
+        #expect(model.phase == .cannotReachServer)
+
+        answering.value = true
+        await model.checkAgain()
+
+        #expect(rig.runtime.fakeServer.startCount.value == 2)
+        #expect(model.phase == .signIn)
+    }
+
+
     @Test("a session store that cannot be read means Sign in, not a stop (MA-7)")
     func storeUnreadable() async {
         let rig = ShellRig()

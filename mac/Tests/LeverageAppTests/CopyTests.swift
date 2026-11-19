@@ -189,6 +189,15 @@ struct CopyTests {
         }
     }
 
+    @Test("no sentence states how many times a task was sent back: the limit is a setting and can be raised")
+    func noFixedCounts() {
+        for catalog in CopyCatalogs.all {
+            for text in catalog.allTexts {
+                #expect(text.range(of: #"\b\d+ times\b"#, options: .regularExpression) == nil, "\(catalog): \(text)")
+            }
+        }
+    }
+
     @Test("no source file passes a string literal straight to a view, a label or a field")
     func noLiteralsInViews() throws {
         let files = Self.swiftFiles()

@@ -148,6 +148,27 @@ struct ConnectAgentModelTests {
         #expect(fields["effort"] == .string("high"))
     }
 
+    @Test("Effort is offered only for a tool that takes one, and is never sent for one that does not")
+    func effortOnlyWhereTaken() async {
+        let owner = owner(token: nil)
+        let model = makeModel(owner)
+        await model.load()
+        model.name = "Builder one"
+        #expect(model.offersEffort, "the first login is Claude's")
+        model.credentialID = Fixtures.secondLoginID
+        #expect(!model.offersEffort, "Codex is given no effort")
+        model.effort = "high"
+        await model.connect()
+        #expect(body(owner)["effort"] == .null)
+
+        let own = makeModel(FakeOwnerAPI())
+        own.mode = .connectsOnItsOwn
+        own.provider = .grok
+        #expect(!own.offersEffort)
+        own.provider = .gemini
+        #expect(own.offersEffort)
+    }
+
     @Test("a seat the app runs asks for no landing prompt")
     func noPromptForLogin() async {
         let owner = owner(token: nil)

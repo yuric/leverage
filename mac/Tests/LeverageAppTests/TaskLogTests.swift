@@ -140,14 +140,14 @@ struct TaskLogTests {
             == "Reviewer One stepped away from the review. Another reviewer will take it.")
     }
 
-    @Test("the round limit reads 'Sent back 3 times. Paused.' and any other pause says the task was paused")
+    @Test("the round limit reads 'Sent back too many times. Paused.' and any other pause says the task was paused")
     func holds() {
         func opened(_ reason: HoldReason) -> String? {
             sentence(event(
                 .holdOpened, actorKind: .app,
                 payload: ["reason": .string(reason.rawValue), "rule_id": .null, "credential_id": .null]))
         }
-        #expect(opened(.roundsExceeded) == "Sent back 3 times. Paused.")
+        #expect(opened(.roundsExceeded) == "Sent back too many times. Paused.")
         #expect(opened(.ownerApproval) == "The task was paused.")
         #expect(sentence(event(
             .holdClosed, actorKind: .owner,

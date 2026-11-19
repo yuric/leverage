@@ -84,6 +84,31 @@ struct HealthLineModelTests {
         #expect(model.status == .running)
     }
 
+    @Test("when leverage does not answer, Try again asks the server to start again, then reads the line again")
+    func unreachableTryAgain() async {
+        let answering = Locked(false)
+        let owner = FakeOwnerAPI()
+        owner.script {
+            $0.systemHealth = {
+                if answering.value { return ShellFixtures.health() }
+                throw URLError(.cannotConnectToHost)
+            }
+        }
+        let server = FakeServer()
+        let model = HealthLineModel(owner: owner, helper: FakeAppRuntime().fakeHelper, server: server,
+                                    interval: .milliseconds(5))
+        await model.refresh()
+        #expect(model.status == .unreachable)
+        #expect(model.offersTryAgain)
+
+        answering.value = true
+        await model.tryAgain()
+
+        #expect(server.startCount.value == 1)
+        #expect(model.status == .running)
+    }
+
+
     @Test("not being reachable outranks a helper that gave up, which outranks a late sweep")
     func precedence() async {
         let helper = FakeAppRuntime().fakeHelper

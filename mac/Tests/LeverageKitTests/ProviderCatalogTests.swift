@@ -72,7 +72,9 @@ struct ProviderCatalogTests {
     @Test("Gemini: one sign-in for the Mac, no status or sign-in command")
     func gemini() throws {
         let gemini = try entry("gemini")
-        #expect(gemini.accountFolderVariable == Evidenced(nil, .probe))
+        // The PRD says Antigravity keeps one sign-in for the Mac, and
+        // `agy --help` lists no account variable: help, not probe.
+        #expect(gemini.accountFolderVariable == Evidenced(nil, .help))
         #expect(gemini.environment == Evidenced([], .probe))
         #expect(gemini.status == Evidenced(StatusCheck(arguments: nil, reading: .testPrompt), .help))
         #expect(gemini.signIn == Evidenced(
@@ -152,5 +154,13 @@ struct ProviderCatalogTests {
         #expect(Evidence.allCases.map(\.rawValue)
             == ["probe", "probe (full environment)", "help", "documented", "unverified"])
         #expect(Evidence.allCases.filter(\.isProven) == [.probe])
+    }
+
+    @Test("Claude and Antigravity take an effort; Codex and Grok are given none (their drivers pass none)")
+    func effort() {
+        #expect(ProviderCatalog.takesEffort(.claude))
+        #expect(ProviderCatalog.takesEffort(.gemini))
+        #expect(!ProviderCatalog.takesEffort(.codex))
+        #expect(!ProviderCatalog.takesEffort(.grok))
     }
 }

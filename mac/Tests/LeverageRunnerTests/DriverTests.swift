@@ -166,6 +166,16 @@ struct DriverTests {
         }
     }
 
+    @Test("a seat's effort reaches the tool exactly for the providers the catalog says take one", arguments: cases)
+    func effortMatchesCatalog(test: Case) async throws {
+        let setup = try Setup()
+        try setup.signIn(test)
+        _ = try await setup.driver(test, effort: "made-up-effort")
+            .run(prompt: Self.buildPrompt, in: setup.work, purpose: .build)
+        let provider = try #require(Provider(rawValue: test.provider))
+        #expect(try setup.lastCall().argv.contains("made-up-effort") == ProviderCatalog.takesEffort(provider))
+    }
+
     @Test("the tool's environment: the allow-list, the account variable, no leverage token", arguments: cases)
     func environment(test: Case) async throws {
         let setup = try Setup()
