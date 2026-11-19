@@ -7,6 +7,12 @@ require "test_helper"
 # test's own would prove nothing here, so this is a CommittingTestCase:
 # every write commits before the next look.
 #
+# Rails (7.2 on) leases a connection for the length of a query unless the
+# thread holds one for good (lease_connection, an open transaction), so the
+# busy count that matters is the one at the sleep: the test thread holds a
+# lease when the poll starts (Scenario reads the clock with lease_connection)
+# and LongPoll gives it back before the first sleep.
+#
 # The contract's wait is whole seconds, so the half second these tests wait
 # is put in by wrapping LongPoll.wait for the call. LongPoll's own timing is
 # WP1's unit test; nothing here sleeps while a writer catches up: a write
@@ -38,7 +44,7 @@ class LongPollHttpTest < CommittingTestCase
   end
 
   # Wraps Leverage::LongPoll.wait for the block: waits `seconds`, notes the
-  # pool's busy count at each look and at each sleep, calls between at every
+  # pool's busy count before each look and at each sleep, calls between at every
   # sleep and sleeps for real only when sleep is true. Returns the samples.
   def probing(seconds: 0.5, sleep: true, between: nil)
     samples = { looks: [], sleeps: [] }
@@ -80,7 +86,8 @@ class LongPollHttpTest < CommittingTestCase
     assert_operator elapsed, :>=, 0.4
     assert_operator elapsed, :<, 5
     assert_operator samples[:looks].size, :>=, 2
-    assert_operator samples[:looks].min, :>=, 1, "a look runs on a connection"
+    assert_operator samples[:looks].first, :>=, 1, "the test's own connection is leased when the poll starts"
+    assert_equal [ 0 ] * (samples[:looks].size - 1), samples[:looks].drop(1), "and not leased again before any later look"
     assert_equal [ 0 ] * samples[:sleeps].size, samples[:sleeps], "no connection is held while the poll sleeps"
     assert_operator samples[:sleeps].size, :>=, 1
   end
@@ -129,7 +136,7 @@ class LongPollHttpTest < CommittingTestCase
     assert_response_matches_contract
     assert_equal [ 0 ] * samples[:sleeps].size, samples[:sleeps]
     assert_operator samples[:sleeps].size, :>=, 1
-    assert_operator samples[:looks].min, :>=, 1
+    assert_operator samples[:looks].first, :>=, 1
   end
 
   test "GET /v1/helper/next picks up the request that a write made between two looks put in the queue" do

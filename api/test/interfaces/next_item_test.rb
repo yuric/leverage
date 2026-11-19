@@ -116,7 +116,7 @@ class NextItemTest < ActiveSupport::TestCase
 
     assert_item Item.none, item(@builder, eligibility: waiting)
     assert_item Item.none, item(@reviewer, eligibility: waiting)
-    assert_equal held.id, Task.find(held.id).holder_seat_id
+    assert_equal @builder.id, Task.find(held.id).holder_seat_id
   end
 
   test "a seat whose lease is past its due time is treated as holding nothing, and nothing is written" do
@@ -407,7 +407,7 @@ class MarkReadTest < ActiveSupport::TestCase
 
   test "command sets read_at to the database clock once and leaves everything else" do
     row = command
-    before = row.attributes.except("read_at", "updated_at")
+    before = row.reload.attributes.except("read_at", "updated_at")
 
     assert mark_read.command(row)
 
