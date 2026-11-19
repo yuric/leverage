@@ -173,7 +173,9 @@ one file for each number in the type's `schema_versions`. Every file follows
 `payloads/<type>.v<n+1>.json` and appends `n+1` to the type's
 `schema_versions`; the server writes the newest version, and every reader
 handles every listed version. Old events are never rewritten. Until the
-pull request that adds a type merges, its `v1` may still change.
+first release of leverage no log holds an event a released build wrote, so
+a version may still change in place; each such change is recorded in
+[decisions.md](decisions.md) (DB-48 is the first).
 
 ## The event record
 
@@ -355,7 +357,7 @@ on a fresh database. `api/db/structure.sql` is the schema.
 ## What the Core loop milestone added
 
 The Core loop added to this contract and changed nothing in it that was
-not provisional, except three things named below.
+not provisional, except four things named below.
 
 - Six operations, each a registry `operations` entry and an `openapi.json`
   operation, with a derived `state_machine.json` row with `events: []` for
@@ -370,7 +372,7 @@ not provisional, except three things named below.
   task's failed reviews, outside the briefing's hash).
 - Traces 09 and 10, with no rules.
 
-The three changes to what was not provisional:
+The four changes to what was not provisional:
 
 - The description of `AddCredentialRequest` now says the row is inserted
   at the Add command, so that the credential's name is kept only in its
@@ -380,3 +382,7 @@ The three changes to what was not provisional:
   because a new helper token treats every such seat as stopped.
 - The builder's `prd_may_read` in `roles.json` gained "the notes of its
   task's failed reviews", with the PRD's Roles table in the same change.
+- The `task.contract_changed` v1 payload gained `minimum_strength_rank`
+  (null for none), so that the log rebuilds the rank Complete contract
+  sets (decisions.md, DB-48); every golden trace that writes the event
+  carries it.

@@ -52,9 +52,9 @@ module Leverage
             minimum_strength_rank: @params["minimum_strength_rank"], budget_cap: @params["budget_cap"],
             contract_version: @task.contract_version + 1, state: "ready")
           ctx.emit("task.contract_changed", task: @task,
-            payload: { contract_version: @task.contract_version, added_criterion_ids: added.map(&:id),
-                       reset_criterion_ids: [], removed_criterion_ids: removed.map(&:id), added_action_ids: [],
-                       removed_action_ids: [] })
+            payload: { contract_version: @task.contract_version, minimum_strength_rank: @task.minimum_strength_rank,
+                       added_criterion_ids: added.map(&:id), reset_criterion_ids: [],
+                       removed_criterion_ids: removed.map(&:id), added_action_ids: [], removed_action_ids: [] })
           ctx.emit("task.ready", task: @task, payload: { wait_cause: nil })
           @result = nil
         end

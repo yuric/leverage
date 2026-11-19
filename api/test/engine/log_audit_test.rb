@@ -78,8 +78,9 @@ class LogAuditTest < ActiveSupport::TestCase
 
       def perform(ctx)
         @task.update!(contract_version: 1)
-        ctx.emit("task.contract_changed", task: @task, payload: { contract_version: 1, added_criterion_ids: [],
-          reset_criterion_ids: [], removed_criterion_ids: [], added_action_ids: [], removed_action_ids: [] })
+        ctx.emit("task.contract_changed", task: @task, payload: { contract_version: 1, minimum_strength_rank: nil,
+          added_criterion_ids: [], reset_criterion_ids: [], removed_criterion_ids: [], added_action_ids: [],
+          removed_action_ids: [] })
       end
     end
     scenario = Scenario.new

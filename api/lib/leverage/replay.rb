@@ -21,7 +21,9 @@ module Leverage
   # again); cleared by task.submitted, task.released, task.lease_expired,
   # task.returned, task.cancelled and task.done. The builder is set by
   # task.claimed and cleared when the task returns to Ready or Backlog or is
-  # cancelled.
+  # cancelled. The minimum strength rank and the contract version are set
+  # by task.contract_changed, which carries both (the rank is null for
+  # none); task.reassigned, escalation's, is not written yet (below).
   #
   # task_steps are rebuilt by driving the step tracker (Steps.on_event)
   # over the log in seq order, inside a transaction that is rolled back:
@@ -138,7 +140,9 @@ module Leverage
     # What an event does to its task's replay columns.
     def move(task, event, payload)
       case event.type
-      when "task.contract_changed" then task["contract_version"] = payload.fetch("contract_version")
+      when "task.contract_changed"
+        task.merge!("contract_version" => payload.fetch("contract_version"),
+          "minimum_strength_rank" => payload.fetch("minimum_strength_rank"))
       when "task.ready" then task["state"] = "ready"
       when "task.promoted" then task["state"] = "backlog"
       when "task.returned" then back(task, "backlog")

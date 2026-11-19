@@ -256,7 +256,8 @@ class Scenario
     end
     task.update!(contract_version: 1)
     append("task.contract_changed", task: task, actor_kind: "owner", actor_id: owner.id,
-      payload: { contract_version: 1, added_criterion_ids: criteria.map(&:id), reset_criterion_ids: [],
+      payload: { contract_version: 1, minimum_strength_rank: task.minimum_strength_rank,
+                 added_criterion_ids: criteria.map(&:id), reset_criterion_ids: [],
                  removed_criterion_ids: [], added_action_ids: [], removed_action_ids: [] })
     move(task, "ready", "task.ready", payload: { wait_cause: nil }, actor_kind: "owner", actor_id: owner.id)
   end

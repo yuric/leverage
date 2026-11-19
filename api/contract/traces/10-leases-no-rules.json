@@ -61,7 +61,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:2", "type": "task.contract_changed", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_complete", "payload": {"contract_version": 1, "added_criterion_ids": ["$criterion:t1_copy", "$criterion:t1_review"], "reset_criterion_ids": [], "removed_criterion_ids": [], "added_action_ids": [], "removed_action_ids": []}},
+          {"ref": "@event:2", "type": "task.contract_changed", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_complete", "payload": {"contract_version": 1, "minimum_strength_rank": null, "added_criterion_ids": ["$criterion:t1_copy", "$criterion:t1_review"], "reset_criterion_ids": [], "removed_criterion_ids": [], "added_action_ids": [], "removed_action_ids": []}},
           {"ref": "@event:3", "type": "task.ready", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_complete", "payload": {"wait_cause": null}}
         ],
         "steps_opened": [
