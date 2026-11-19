@@ -22,6 +22,7 @@ deployment, and implementation follow from them.
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Expected behavior in project spaces. |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes, release by release. |
 | [docs/research/](docs/research/open-source-practices/README.md) | Research behind the project's repository practices: advice versus what young popular repositories do. |
+| [docs/research/prd-review/](docs/research/prd-review/README.md) | The adversarial review of the PRD: 89 findings for the owner to accept or reject. |
 
 ## Getting involved
 

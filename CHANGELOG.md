@@ -35,6 +35,8 @@ once it makes its first release.
   "Rules compliance" check verifies the answers.
 - A `check-rules` skill for agents in `.agents/skills/`, linked from
   `.claude/skills/`.
+- The version 1 product requirements in `docs/PRD.md` (a draft), with the
+  record of its adversarial review in `docs/research/prd-review/`.
 
 ### Changed
 

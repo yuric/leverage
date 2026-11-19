@@ -40,6 +40,10 @@ undecided, stop and ask, or open an issue.
 
 - **Do not invent requirements.** Propose them as a change to the PRD and let a
   maintainer accept them.
+- **Use the PRD's terms.** The [Terms](docs/PRD.md#terms) table names the
+  things leverage is made of. Use those words, with those meanings, in
+  documents, issues, pull requests, and code. Do not coin a synonym or reuse a
+  term for something else; a new or changed term is a change to the PRD.
 - **Verify before you claim.** Statements about how the project works must come
   from reading the current files, not from comments, older docs, or
   expectation. If something is unverified, say so. Run the checks below before
