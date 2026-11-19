@@ -26,12 +26,12 @@ final class FakeHelperProgram: @unchecked Sendable {
             dir='\(dir)'
             n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
             echo "$n" > "$dir/count"
+            trap 'echo "fake helper run $n asked to stop" >&2; exit 0' TERM
             env | grep -v -E '^(PWD|OLDPWD|SHLVL|_)=' | sort > "$dir/env-$n"
             printf '%s\\n' "$0" "$@" > "$dir/args-$n"
             echo "fake helper run $n" >&2
             code=$(sed -n "${n}p" "$dir/codes")
             if [ -n "$code" ]; then exit "$code"; fi
-            trap 'echo "fake helper run $n asked to stop" >&2; exit 0' TERM
             while :; do sleep 0.05; done
             """)
     }
@@ -242,6 +242,24 @@ struct HelperSupervisorTests {
         await helper.stop()
     }
 
+    @Test("a start that was waiting for its token when the owner stopped and started again starts no second helper")
+    func staleLaunchStartsNothing() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        let slowFirst = SlowFirstIssuer()
+        let helper = supervisor(fake)
+
+        let first = Task { await helper.start(apiBaseURL: apiURL, issuer: slowFirst) }
+        #expect(await eventually { slowFirst.calls.value == 1 })
+        await helper.stop()
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: slowFirst) == .running)
+        _ = await first.value
+        #expect(await eventually { fake.runs == 1 && !fake.environment(ofRun: 1).isEmpty })
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(fake.runs == 1)
+        #expect(fake.environment(ofRun: 1)["LEVERAGE_HELPER_TOKEN"] == "lvh_made-up-2")
+        await helper.stop()
+    }
+
     @Test("a token that cannot be issued counts as a failed start")
     func issueFails() async throws {
         let fake = try FakeHelperProgram(exitCodes: [])
@@ -271,5 +289,19 @@ struct HelperSupervisorTests {
         let files = textOfEveryFile(under: fake.support)
         #expect(files["logs/helper.log"]?.hasPrefix("fake helper run 1") == true)
         #expect(files["logs/helper.log.1"]?.count == 2_000)
+    }
+}
+
+/// Answers its first call only after half a second, each with a new token.
+private final class SlowFirstIssuer: HelperTokenIssuing, @unchecked Sendable {
+    let calls = Locked(0)
+
+    func issueHelperToken(name: String, idempotencyKey: String) async throws -> String? {
+        let n = calls.update { value -> Int in
+            value += 1
+            return value
+        }
+        if n == 1 { try await Task.sleep(for: .milliseconds(500)) }
+        return "lvh_made-up-\(n)"
     }
 }

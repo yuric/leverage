@@ -140,23 +140,24 @@ final class TestListener {
     let port: Int
 
     init?() {
-        descriptor = socket(AF_INET, SOCK_STREAM, 0)
-        guard descriptor >= 0 else { return nil }
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return nil }
         var address = sockaddr_in()
         address.sin_family = sa_family_t(AF_INET)
         address.sin_port = 0
         address.sin_addr.s_addr = inet_addr("127.0.0.1")
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        guard bound == 0, listen(descriptor, 1) == 0 else { close(descriptor); return nil }
+        guard bound == 0, listen(fd, 1) == 0 else { close(fd); return nil }
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         let named = withUnsafeMutablePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(descriptor, $0, &length) }
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
         }
-        guard named == 0 else { close(descriptor); return nil }
+        guard named == 0 else { close(fd); return nil }
+        descriptor = fd
         port = Int(UInt16(bigEndian: address.sin_port))
     }
 

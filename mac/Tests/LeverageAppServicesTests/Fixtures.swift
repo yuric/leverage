@@ -2,6 +2,8 @@ import Foundation
 import LeverageKit
 import LeverageTestSupport
 
+@testable import LeverageAppServices
+
 #if canImport(Darwin)
 import Darwin
 #endif
