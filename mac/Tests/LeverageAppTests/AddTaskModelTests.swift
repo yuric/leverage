@@ -249,7 +249,7 @@ struct AddTaskModelTests {
         })
         let model = makeModel(owner)
         let first = Task { await model.save() }
-        #expect(await ShellFixtures.eventually { model.isBusy })
+        #expect(await ShellFixtures.eventually { model.isBusy && owner.calls.count == 1 })
         #expect(!model.canSave)
         await model.save()
         #expect(owner.calls.filter { $0.operation == .addTask }.count == 1)
@@ -303,6 +303,7 @@ struct AddTaskRenderTests {
     func formDraws() async {
         let empty = AddTaskModel(api: FakeOwnerAPI(), onSaved: {})
         #expect(draws(AddTaskForm(model: empty, cancel: {})))
+        #expect(draws(AddTaskFields(model: empty)))
         #expect(draws(AddTaskForm(model: empty, cancel: {}).environment(\.colorScheme, .dark)))
         let failing = AddTaskModel(api: FakeOwnerAPI(), onSaved: {})
         failing.title = "Fix it"

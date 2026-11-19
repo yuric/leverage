@@ -319,17 +319,17 @@ struct BoardRenderTests {
         let failing = BoardModel(api: FakeOwnerAPI(), noteRead: { _ in })
         await failing.load()
         #expect(failing.state != .loading)
-        #expect(draws(BoardContent(model: failing, open: { _ in })))
+        #expect(draws(BoardLanes(lanes: failing.lanes, open: { _ in })))
 
         let loaded = BoardModel(api: Fixtures.owner(board: Fixtures.board(
             TaskState.allCases.map { Fixtures.boardTask($0, builder: Fixtures.builderID) }
                 + [Fixtures.boardTask(.working, holds: [.roundsExceeded])], reviewer: false)), noteRead: { _ in })
         await loaded.load()
         loaded.showCancelled = true
-        #expect(draws(BoardContent(model: loaded, open: { _ in })))
-        #expect(draws(BoardContent(model: loaded, open: { _ in }).environment(\.colorScheme, .dark)))
+        #expect(draws(BoardLanes(lanes: loaded.lanes, open: { _ in })))
+        #expect(draws(BoardLanes(lanes: loaded.lanes, open: { _ in }).environment(\.colorScheme, .dark)))
         let empty = BoardModel(api: Fixtures.owner(board: Fixtures.board([])), noteRead: { _ in })
         await empty.load()
-        #expect(draws(BoardContent(model: empty, open: { _ in })))
+        #expect(draws(BoardLanes(lanes: empty.lanes, open: { _ in })))
     }
 }

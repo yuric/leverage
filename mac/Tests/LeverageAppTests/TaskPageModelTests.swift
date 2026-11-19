@@ -22,7 +22,7 @@ struct TaskPageModelTests {
         let owner = FakeOwnerAPI()
         owner.script {
             $0.task = { _ in page.value }
-            $0.cancelTask = { _, key in Fixtures.plain(.cancelTask, key: key) }
+            $0.cancelTask = { _, key in Fixtures.plain(.cancel, key: key) }
             $0.allowAnotherRound = { _, key in Fixtures.plain(.allowAnotherRound, key: key) }
             $0.completeContract = { _, _, key in Fixtures.plain(.completeContract, key: key) }
         }
@@ -318,7 +318,7 @@ struct TaskPageModelTests {
     func cancelRefused() async {
         let (model, owner, _) = await loaded(readyPage())
         let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
-        owner.script { $0.cancelTask = { _, key in .refused(refusal, key: key.value, command: .cancelTask) } }
+        owner.script { $0.cancelTask = { _, key in .refused(refusal, key: key.value, command: .cancel) } }
         model.askToCancel()
         await model.confirmCancel()
         #expect(model.actionFailure == .refusalInvalidState)
@@ -406,12 +406,12 @@ struct TaskPageRenderTests {
                 CriterionEvidence(id: UUID(), criterionID: UUID(), kind: .note, value: "Checked"),
             ])], holds: [Fixtures.hold(.roundsExceeded, taskID: id)], events: events)
         let paused = await model(working)
-        #expect(draws(TaskPageContent(model: paused)))
-        #expect(draws(TaskPageContent(model: paused).environment(\.colorScheme, .dark)))
+        #expect(draws(TaskPageBody(model: paused)))
+        #expect(draws(TaskPageBody(model: paused).environment(\.colorScheme, .dark)))
         paused.askToCancel()
-        #expect(draws(TaskPageContent(model: paused)))
+        #expect(draws(TaskPageBody(model: paused)))
         let backlog = await model(Fixtures.page(Fixtures.summary(.backlog, id: id), events: events))
-        #expect(draws(TaskPageContent(model: backlog)))
+        #expect(draws(TaskPageBody(model: backlog)))
         let missing = TaskPageModel(
             taskID: id, api: { () -> FakeOwnerAPI in
                 let owner = FakeOwnerAPI()

@@ -14,6 +14,7 @@ struct TaskLogTests {
     private let builder = Fixtures.builderID
     private let reviewer = Fixtures.reviewerID
     private let criterionID = UUID()
+    private let secondID = UUID()
 
     private var names: [LogName] {
         [
@@ -26,7 +27,7 @@ struct TaskLogTests {
     private var criteria: [Criterion] {
         [
             Fixtures.criterion("Totals match the lines", taskID: taskID, id: criterionID),
-            Fixtures.criterion("The page still loads", taskID: taskID, position: 2),
+            Fixtures.criterion("The page still loads", taskID: taskID, position: 2, id: secondID),
         ]
     }
 
