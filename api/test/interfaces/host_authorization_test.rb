@@ -11,12 +11,14 @@ require "open3"
 #
 # The setting is production's (config/environments/production.rb), so the
 # test boots the app in production in a child process and sends requests
-# straight to it, with no server and no database.
+# straight to it, with no server and no database. Each request carries its
+# Host header, as a client's does: Rack::MockRequest sets none, and host
+# authorization refuses a request without one whatever config.hosts says.
 class HostAuthorizationTest < ActiveSupport::TestCase
   SCRIPT = <<~RUBY.freeze
     statuses = ARGV.each_slice(3).map do |method, host, path|
       env = Rack::MockRequest.env_for("http://\#{host}\#{path}", method: method, input: "{}",
-        "CONTENT_TYPE" => "application/json", "HTTP_IDEMPOTENCY_KEY" => "key-host")
+        "HTTP_HOST" => host, "CONTENT_TYPE" => "application/json", "HTTP_IDEMPOTENCY_KEY" => "key-host")
       Rails.application.call(env).first
     end
     puts "STATUSES=\#{statuses.join(",")}"
@@ -33,17 +35,22 @@ class HostAuthorizationTest < ActiveSupport::TestCase
     line.delete_prefix("STATUSES=").strip.split(",").map(&:to_i)
   end
 
+  # The allowed hosts are sent to /v1/health, a path host authorization
+  # checks: /up is excluded from it, so a 200 there proves nothing about
+  # config.hosts. One /up case with a foreign host covers the exclusion.
   test "a request addressed to another host is refused 403; this Mac's loopback and /up are answered" do
     refused = [
       [ "POST", "attacker.example", "/v1/owner/setup" ],
       [ "POST", "attacker.example:3000", "/v1/owner/session" ],
-      [ "GET", "rebound.example.test", "/v1/health" ]
+      [ "GET", "rebound.example.test", "/v1/health" ],
+      [ "GET", "127.0.0.1.", "/v1/health" ],
+      [ "GET", "[0:0:0:0:0:0:0:1]:3000", "/v1/health" ]
     ]
     answered = [
-      [ "GET", "127.0.0.1:3000", "/up" ],
-      [ "GET", "localhost:3000", "/up" ],
-      [ "GET", "[::1]:3000", "/up" ],
-      [ "GET", "api:3000", "/up" ],
+      [ "GET", "127.0.0.1:3000", "/v1/health" ],
+      [ "GET", "localhost:3000", "/v1/health" ],
+      [ "GET", "[::1]:3000", "/v1/health" ],
+      [ "GET", "api:3000", "/v1/health" ],
       [ "GET", "attacker.example", "/up" ]
     ]
     got = statuses(refused + answered)
