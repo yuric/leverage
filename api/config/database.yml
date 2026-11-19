@@ -1,0 +1,25 @@
+# PostgreSQL. The host, port, user and password come from DATABASE_URL
+# (see .env.example at the repository root). DATABASE_URL names no database,
+# so each environment keeps its own database name from this file and the
+# tests never touch the development or production data.
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  url: <%= ENV["DATABASE_URL"] %>
+  # https://guides.rubyonrails.org/configuring.html#database-pooling
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: leverage_development
+
+# Warning: The database defined as "test" will be erased and
+# re-generated from your development database when you run "rake".
+# Do not set this db to the same as development or production.
+test:
+  <<: *default
+  database: leverage_test
+
+production:
+  <<: *default
+  database: leverage_production
