@@ -40,6 +40,13 @@ class CreateRules < ActiveRecord::Migration[8.1]
       t.timestamptz :created_at, null: false, default: -> { "CURRENT_TIMESTAMP" }
 
       t.index [ :rule_id, :version ], unique: true
+      # What rule_checks' composite foreign key references.
+      t.index [ :rule_id, :id ], unique: true
     end
+
+    # A rule's current version is a version of that rule. Deferred, because
+    # a rule and its first version are written in one transaction.
+    add_foreign_key :rules, :rule_versions, column: [ :id, :current_version ], primary_key: [ :rule_id, :version ],
+      deferrable: :deferred, name: "rules_current_version_fkey"
   end
 end

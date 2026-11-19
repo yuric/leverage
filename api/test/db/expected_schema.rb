@@ -182,7 +182,8 @@ module ExpectedSchema
         "removed_at" => time
       ).merge(STAMPS),
       indexes: [ idx("workspace_id", "key", unique: true) ],
-      foreign_keys: [ fk("workspace_id", "workspaces") ]
+      # The current version is a version of this rule (deferred).
+      foreign_keys: [ fk("workspace_id", "workspaces"), fk("id, current_version", "rule_versions") ]
     },
     "rule_versions" => {
       # No `enabled`: it lives on rules (PRD, Data model; P-4).
@@ -208,7 +209,7 @@ module ExpectedSchema
         "author_kind" => text,
         "author_id" => uuid(null: true)
       ).merge(CREATED),
-      indexes: [ idx("workspace_id"), idx("rule_id", "version", unique: true) ],
+      indexes: [ idx("workspace_id"), idx("rule_id", "version", unique: true), idx("rule_id", "id", unique: true) ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("rule_id", "rules") ]
     },
     "tasks" => {
@@ -293,7 +294,7 @@ module ExpectedSchema
       indexes: [
         idx("workspace_id"),
         idx("task_id", "round", unique: true),
-        idx("reviewer_seat_id", unique: true, where: "(reviewer_seat_id IS NOT NULL)"),
+        idx("reviewer_seat_id", unique: true, where: "((reviewer_seat_id IS NOT NULL) AND (verdict IS NULL))"),
         idx("failed_rule_check_id")
       ],
       foreign_keys: [
@@ -352,10 +353,11 @@ module ExpectedSchema
         "cause_id" => uuid(null: true),
         "command_id" => text(null: true),
         "payload" => jsonb
-      ).merge(CREATED),
+      ).merge(CREATED).merge("xact_id" => col("xid8", default: "pg_current_xact_id()")),
       indexes: [
         idx("workspace_id", "seq", unique: true),
         idx("workspace_id", "task_id", "seq"),
+        idx("task_id", "xact_id"),
         idx("command_id"),
         idx("task_id"),
         idx("project_id"),
@@ -440,7 +442,7 @@ module ExpectedSchema
       ],
       foreign_keys: [
         fk("workspace_id", "workspaces"), fk("task_id", "tasks"), fk("project_id", "projects"),
-        fk("rule_id", "rules"), fk("rule_version_id", "rule_versions"),
+        fk("rule_id", "rules"), fk("rule_version_id", "rule_versions"), fk("rule_id, rule_version_id", "rule_versions"),
         fk("pending_transition_id", "pending_transitions"), fk("overridden_by_user_id", "users")
       ]
     },

@@ -65,9 +65,11 @@ class CreateTasksAndContracts < ActiveRecord::Migration[8.1]
       t.references :workspace, type: :uuid, null: false, foreign_key: true
       t.references :task, type: :uuid, null: false, foreign_key: true, index: false
       t.integer :round, null: false
-      # At most one review per reviewer (C18).
+      # At most one live review per reviewer (C18, PRD L122): a review with a
+      # verdict keeps its reviewer (DB-20), so only reviews with no verdict
+      # count.
       t.references :reviewer_seat, type: :uuid, foreign_key: { to_table: :seats },
-        index: { unique: true, where: "reviewer_seat_id IS NOT NULL" }
+        index: { unique: true, where: "reviewer_seat_id IS NOT NULL AND verdict IS NULL" }
       t.timestamptz :lease_due_at
       t.interval :lease_time_left_while_paused
       t.text :verdict

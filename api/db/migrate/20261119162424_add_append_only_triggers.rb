@@ -1,8 +1,11 @@
 # events and rule_versions accept inserts only (PRD, Data model and Event
 # log; C1, C14, C22, DB-7). Triggers refuse UPDATE, DELETE and TRUNCATE for
-# every role, the superuser included, and pg_dump keeps them in
-# db/structure.sql, which grants would not survive. The leverage_app role
-# (db:grants) also lacks those privileges.
+# every role, and pg_dump keeps them in db/structure.sql, which grants
+# would not survive. A superuser or the table owner can still switch the
+# triggers off (ALTER TABLE ... DISABLE TRIGGER, or session_replication_role
+# = replica), so the guarantee holds only once the API logs in as a member
+# of leverage_app, which has neither right nor those privileges (db:grants;
+# planned for the Core loop).
 class AddAppendOnlyTriggers < ActiveRecord::Migration[8.1]
   APPEND_ONLY = %w[events rule_versions].freeze
 

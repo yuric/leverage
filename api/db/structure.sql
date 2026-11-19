@@ -11,26 +11,6 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: leverage_note_evented_task(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.leverage_note_evented_task() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.task_id IS NOT NULL THEN
-    PERFORM set_config(
-      'leverage.evented_tasks',
-      coalesce(nullif(current_setting('leverage.evented_tasks', true), ''), ',') || NEW.task_id::text || ',',
-      true
-    );
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
-
---
 -- Name: leverage_refuse_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -52,7 +32,10 @@ CREATE FUNCTION public.leverage_require_task_event() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-  IF strpos(coalesce(current_setting('leverage.evented_tasks', true), ''), ',' || NEW.id::text || ',') = 0 THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM events
+    WHERE task_id = NEW.id AND workspace_id = NEW.workspace_id AND xact_id = pg_current_xact_id()
+  ) THEN
     RAISE EXCEPTION 'tasks.state of task % changed without an event for that task in the same transaction', NEW.id
       USING ERRCODE = 'integrity_constraint_violation';
   END IF;
@@ -151,7 +134,8 @@ CREATE TABLE public.commands (
     read_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT commands_result_holds_no_token CHECK (((result IS NULL) OR ((NOT jsonb_path_exists(result, '$.**."token"'::jsonpath)) AND (NOT jsonb_path_exists(result, '$.**."seat_token"'::jsonpath)))))
+    CONSTRAINT commands_refusal_holds_no_token CHECK (((refusal IS NULL) OR (NOT jsonb_path_exists(refusal, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "(^|_)token$" flag "i")'::jsonpath)))),
+    CONSTRAINT commands_result_holds_no_token CHECK (((result IS NULL) OR (NOT jsonb_path_exists(result, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "(^|_)token$" flag "i")'::jsonpath))))
 );
 
 
@@ -240,6 +224,7 @@ CREATE TABLE public.events (
     command_id text,
     payload jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    xact_id xid8 DEFAULT pg_current_xact_id() NOT NULL,
     CONSTRAINT events_round_with_task CHECK (((task_id IS NULL) = (round IS NULL))),
     CONSTRAINT events_subject_pair CHECK (((subject_kind IS NULL) = (subject_id IS NULL)))
 );
@@ -278,7 +263,7 @@ CREATE TABLE public.helper_requests (
     result jsonb,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT helper_requests_result_holds_no_token CHECK (((result IS NULL) OR ((NOT jsonb_path_exists(result, '$.**."token"'::jsonpath)) AND (NOT jsonb_path_exists(result, '$.**."seat_token"'::jsonpath)))))
+    CONSTRAINT helper_requests_result_holds_no_token CHECK (((result IS NULL) OR (NOT jsonb_path_exists(result, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "(^|_)token$" flag "i")'::jsonpath))))
 );
 
 
@@ -1143,6 +1128,13 @@ CREATE INDEX index_events_on_task_id ON public.events USING btree (task_id);
 
 
 --
+-- Name: index_events_on_task_id_and_xact_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_events_on_task_id_and_xact_id ON public.events USING btree (task_id, xact_id);
+
+
+--
 -- Name: index_events_on_workspace_id_and_seq; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1377,7 +1369,7 @@ CREATE INDEX index_reviews_on_failed_rule_check_id ON public.reviews USING btree
 -- Name: index_reviews_on_reviewer_seat_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX index_reviews_on_reviewer_seat_id ON public.reviews USING btree (reviewer_seat_id) WHERE (reviewer_seat_id IS NOT NULL);
+CREATE UNIQUE INDEX index_reviews_on_reviewer_seat_id ON public.reviews USING btree (reviewer_seat_id) WHERE ((reviewer_seat_id IS NOT NULL) AND (verdict IS NULL));
 
 
 --
@@ -1469,6 +1461,13 @@ CREATE INDEX index_rule_checks_on_rule_version_id ON public.rule_checks USING bt
 --
 
 CREATE INDEX index_rule_checks_on_workspace_id ON public.rule_checks USING btree (workspace_id);
+
+
+--
+-- Name: index_rule_versions_on_rule_id_and_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_rule_versions_on_rule_id_and_id ON public.rule_versions USING btree (rule_id, id);
 
 
 --
@@ -1644,13 +1643,6 @@ CREATE TRIGGER events_append_only BEFORE DELETE OR UPDATE ON public.events FOR E
 --
 
 CREATE TRIGGER events_no_truncate BEFORE TRUNCATE ON public.events FOR EACH STATEMENT EXECUTE FUNCTION public.leverage_refuse_change();
-
-
---
--- Name: events events_note_evented_task; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER events_note_evented_task AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.leverage_note_evented_task();
 
 
 --
@@ -2319,6 +2311,22 @@ ALTER TABLE ONLY public.briefing_acknowledgements
 
 ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT fk_rails_fc8fe60b73 FOREIGN KEY (task_id) REFERENCES public.tasks(id);
+
+
+--
+-- Name: rule_checks rule_checks_rule_version_of_rule_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rule_checks
+    ADD CONSTRAINT rule_checks_rule_version_of_rule_fkey FOREIGN KEY (rule_id, rule_version_id) REFERENCES public.rule_versions(rule_id, id);
+
+
+--
+-- Name: rules rules_current_version_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rules
+    ADD CONSTRAINT rules_current_version_fkey FOREIGN KEY (id, current_version) REFERENCES public.rule_versions(rule_id, version) DEFERRABLE INITIALLY DEFERRED;
 
 
 --

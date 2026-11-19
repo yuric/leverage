@@ -39,11 +39,15 @@ class SchemaTest < ActiveSupport::TestCase
     [ match[2].delete('"').split(", ").freeze, !match[1].nil?, match[4], !match[3].nil? ]
   end
 
+  # A composite foreign key's columns are listed in key order, joined by
+  # ", ".
   def foreign_keys_of(table)
     sql(<<~SQL, table).rows.map { |column, target, action| [ column, target, ON_DELETE.fetch(action) ] }
-      SELECT a.attname, c.confrelid::regclass::text, c.confdeltype
+      SELECT (SELECT string_agg(a.attname, ', ' ORDER BY k.ord)
+              FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum),
+             c.confrelid::regclass::text, c.confdeltype
       FROM pg_constraint c
-      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
       WHERE c.contype = 'f' AND c.conrelid = ('public.' || $1)::regclass
     SQL
   end
@@ -144,7 +148,11 @@ class SchemaTest < ActiveSupport::TestCase
     assert_rejected { request.call({ "seat_token" => "made-up" }) }
     assert_rejected { request.call({ "seat" => { "token" => "made-up" } }) }
     assert_rejected { request.call([ { "seat_token" => "made-up" } ]) }
+    %w[helper_token session_token access_token Seat_Token].each do |name|
+      assert_rejected { request.call({ "nested" => { name => "made-up" } }) }
+    end
     assert_accepted { request.call({ "checks" => [ { "name" => "signed_in", "passed" => true } ], "tokens" => 12 }) }
+    assert_accepted { request.call({ "token_count" => 3, "tokenizer" => "made-up" }) }
     assert_accepted { request.call(nil) }
   end
 
@@ -155,6 +163,19 @@ class SchemaTest < ActiveSupport::TestCase
     }
     assert_rejected { command.call({ "seat_token" => "made-up" }) }
     assert_rejected { command.call({ "token" => "made-up" }) }
+    %w[helper_token session_token access_token].each do |name|
+      assert_rejected { command.call({ "result" => { name => "made-up" } }) }
+    end
     assert_accepted { command.call({ "seat_id" => SecureRandom.uuid }) }
+    assert_accepted { command.call({ "tokens" => 12 }) }
+  end
+
+  test "stored refusals refuse a token too (IF-15)" do
+    refused = ->(refusal) {
+      insert("commands", workspace_id: workspace, caller_kind: "owner", caller_id: SecureRandom.uuid,
+        key: SecureRandom.uuid, command: "sign_in", request_hash: "made-up", outcome: "refused", refusal: refusal)
+    }
+    assert_rejected { refused.call({ "code" => "forbidden", "session_token" => "made-up" }) }
+    assert_accepted { refused.call({ "code" => "forbidden" }) }
   end
 end

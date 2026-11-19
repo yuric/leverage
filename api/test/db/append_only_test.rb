@@ -4,7 +4,9 @@ require_relative "rows"
 # events and rule_versions accept inserts only (PRD, Data model; C1, C14,
 # C22). Triggers refuse UPDATE, DELETE and TRUNCATE for every role, the
 # connecting superuser included; the leverage_app role also lacks the
-# privilege. This runs on the test worker's own database, which is loaded
+# privilege. A superuser or the table owner can still switch the triggers
+# off, so the guarantee holds once the API logs in as leverage_app (Core
+# loop); these tests prove the triggers and the grants, not that switch. This runs on the test worker's own database, which is loaded
 # from db/structure.sql, the path CI takes.
 class AppendOnlyTest < ActiveSupport::TestCase
   include DbRows
@@ -36,6 +38,10 @@ class AppendOnlyTest < ActiveSupport::TestCase
 
     test "#{table}: the connecting role cannot update, delete or truncate" do
       id = rows.fetch(table)
+      # TRUNCATE ... CASCADE reaches rules, whose deferred current-version
+      # key is still pending from the insert; checking it now leaves the
+      # append-only trigger as the only thing that can refuse.
+      db.execute("SET CONSTRAINTS ALL IMMEDIATE")
       [
         "UPDATE #{table} SET created_at = created_at WHERE id = '#{id}'",
         "DELETE FROM #{table} WHERE id = '#{id}'",

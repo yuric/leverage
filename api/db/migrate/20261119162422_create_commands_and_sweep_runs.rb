@@ -1,6 +1,13 @@
 # Command outcomes, the one home of idempotency, and the timer sweep's
 # record (PRD, Data model; plan DB-34, DB-45).
 class CreateCommandsAndSweepRuns < ActiveRecord::Migration[8.1]
+  # No key named token or ending in _token, in any letter case, at any
+  # depth, in a stored result or refusal (IF-15). A count named tokens is
+  # allowed.
+  def self.no_token_key(column)
+    %(#{column} IS NULL OR NOT jsonb_path_exists(#{column}, '$.** ? (@.type() == "object").keyvalue() ? (@.key like_regex "(^|_)token$" flag "i")'))
+  end
+
   def change
     create_table :commands, id: :uuid do |t|
       t.references :workspace, type: :uuid, null: false, foreign_key: true
@@ -23,8 +30,8 @@ class CreateCommandsAndSweepRuns < ActiveRecord::Migration[8.1]
       # This index alone enforces idempotency (C4).
       t.index [ :caller_kind, :caller_id, :key ], unique: true
       # A token a command returns once is never stored (IF-15).
-      t.check_constraint "result IS NULL OR NOT jsonb_path_exists(result, 'lax $.**.token') " \
-        "AND NOT jsonb_path_exists(result, 'lax $.**.seat_token')", name: "commands_result_holds_no_token"
+      t.check_constraint self.class.no_token_key("result"), name: "commands_result_holds_no_token"
+      t.check_constraint self.class.no_token_key("refusal"), name: "commands_refusal_holds_no_token"
     end
 
     create_table :sweep_runs, id: :uuid do |t|

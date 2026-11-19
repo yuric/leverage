@@ -99,10 +99,49 @@ class ConstraintsTest < ActiveSupport::TestCase
     assert_rejected(ActiveRecord::RecordNotUnique) { task(holder_seat_id: seat_id, state: "working") }
     assert_accepted { task(holder_seat_id: nil, state: "ready") }
 
-    review = ->(task_id) { insert("reviews", workspace_id: workspace, task_id: task_id, round: 0, reviewer_seat_id: seat_id) }
+    review = ->(task_id, **values) { insert("reviews", { workspace_id: workspace, task_id: task_id, round: 0, reviewer_seat_id: seat_id }.merge(values)) }
     review.call(task(state: "in_review"))
     assert_rejected(ActiveRecord::RecordNotUnique) { review.call(task(state: "in_review")) }
     assert_accepted { insert("reviews", workspace_id: workspace, task_id: task(state: "in_review"), round: 0) }
+  end
+
+  # PRD L122: at most one review at a time, not one ever. A finished review
+  # keeps its reviewer (DB-20), so the same seat can review again.
+  test "C18: a seat that gave a verdict may review another task" do
+    seat_id = seat
+    review = ->(task_id, **values) { insert("reviews", { workspace_id: workspace, task_id: task_id, round: 0, reviewer_seat_id: seat_id }.merge(values)) }
+    review.call(task(state: "done"), verdict: "passed")
+    review.call(task(state: "in_review"), verdict: "failed")
+    assert_accepted { review.call(task(state: "in_review")) }
+    assert_rejected(ActiveRecord::RecordNotUnique) { review.call(task(state: "in_review")) }
+  end
+
+  test "a rule check's version belongs to its rule" do
+    other_rule = insert("rules", workspace_id: workspace, key: "another_made_up_rule", enabled: true, current_version: 1)
+    insert("rule_versions", workspace_id: workspace, rule_id: other_rule, version: 1, key: "another_made_up_rule",
+      name: "Another made-up rule", hook: "task.before_ready", scope_kind: "all_tasks", kind: "gate", checker: "app",
+      origin: "custom", author_kind: "owner")
+    check = ->(rule_id) {
+      insert("rule_checks", workspace_id: workspace, task_id: task, rule_id: rule_id, rule_version_id: rule_version,
+        hook: "task.before_ready", round: 0, input_hash: SecureRandom.hex(32))
+    }
+    assert_accepted { check.call(rule) }
+    assert_rejected(ActiveRecord::InvalidForeignKey) { check.call(other_rule) }
+  end
+
+  test "a rule's current version is a version of that rule" do
+    rule_version
+    assert_rejected(ActiveRecord::InvalidForeignKey) do
+      sql("UPDATE rules SET current_version = 2 WHERE id = $1", rule)
+      db.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    end
+    assert_accepted do
+      insert("rule_versions", workspace_id: workspace, rule_id: rule, version: 2, key: "made_up_rule",
+        name: "A made-up rule", hook: "task.before_ready", scope_kind: "all_tasks", kind: "gate", checker: "app",
+        origin: "custom", author_kind: "owner")
+      sql("UPDATE rules SET current_version = 2 WHERE id = $1", rule)
+      db.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    end
   end
 
   test "one review row per task and round" do

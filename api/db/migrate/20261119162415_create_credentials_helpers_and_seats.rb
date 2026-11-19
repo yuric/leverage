@@ -2,6 +2,10 @@
 # seats (PRD, Data model and Credentials; plan DB-36 to DB-39). No secret,
 # settings folder or keychain reference is stored; tokens only as hashes.
 class CreateCredentialsHelpersAndSeats < ActiveRecord::Migration[8.1]
+  # The keys a stored result may not have: token, or any name ending in
+  # _token, in any letter case, at any depth (IF-15).
+  TOKEN_KEY = %q(NOT jsonb_path_exists(result, '$.** ? (@.type() == "object").keyvalue() ? (@.key like_regex "(^|_)token$" flag "i")'))
+
   def change
     create_table :credentials, id: :uuid do |t|
       t.references :workspace, type: :uuid, null: false, foreign_key: true, index: false
@@ -88,9 +92,10 @@ class CreateCredentialsHelpersAndSeats < ActiveRecord::Migration[8.1]
       t.timestamptz :created_at, null: false, default: -> { "CURRENT_TIMESTAMP" }
       t.timestamptz :updated_at, null: false, default: -> { "CURRENT_TIMESTAMP" }
 
-      # A seat's token is returned once by the pickup and never stored (IF-15).
-      t.check_constraint "result IS NULL OR NOT jsonb_path_exists(result, 'lax $.**.token') " \
-        "AND NOT jsonb_path_exists(result, 'lax $.**.seat_token')", name: "helper_requests_result_holds_no_token"
+      # A seat's token is returned once by the pickup and never stored
+      # (IF-15): no key named token or ending in _token, in any letter case,
+      # at any depth. A count named tokens is allowed.
+      t.check_constraint "result IS NULL OR #{TOKEN_KEY}", name: "helper_requests_result_holds_no_token"
     end
   end
 end

@@ -23,9 +23,13 @@ class CreateEvents < ActiveRecord::Migration[8.1]
       t.text :command_id, index: true
       t.jsonb :payload, null: false
       t.timestamptz :created_at, null: false, default: -> { "CURRENT_TIMESTAMP" }
+      # The top-level transaction that wrote the row, inside savepoints too.
+      # The state trigger reads it (C7); it is not part of the event record.
+      t.column :xact_id, :xid8, null: false, default: -> { "pg_current_xact_id()" }
 
       t.index [ :workspace_id, :seq ], unique: true
       t.index [ :workspace_id, :task_id, :seq ]
+      t.index [ :task_id, :xact_id ]
       t.check_constraint "(task_id IS NULL) = (round IS NULL)", name: "events_round_with_task"
       t.check_constraint "(subject_kind IS NULL) = (subject_id IS NULL)", name: "events_subject_pair"
     end

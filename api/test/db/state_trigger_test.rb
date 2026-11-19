@@ -40,6 +40,25 @@ class StateTriggerTest < ActiveSupport::TestCase
     end
   end
 
+  # Only an event row of this transaction counts: no setting a caller can
+  # write stands in for one.
+  test "a transaction-local setting written by hand does not count" do
+    assert_rejected do
+      task_id = bare_task
+      sql("SELECT set_config('leverage.evented_tasks', $1, true)", ",#{task_id},")
+      fire
+    end
+  end
+
+  test "an event for the task in another workspace does not count" do
+    other = insert("workspaces", {})
+    assert_rejected do
+      task_id = bare_task
+      event(task_id: task_id, workspace_id: other)
+      fire
+    end
+  end
+
   test "an event inside a released savepoint counts" do
     assert_accepted do
       task_id = bare_task

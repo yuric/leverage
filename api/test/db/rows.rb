@@ -86,12 +86,19 @@ module DbRows
     id
   end
 
+  # A rule and its version 1: a rule's current version must exist by commit.
   def rule
     @rule ||= insert("rules", workspace_id: workspace, key: "made_up_rule", enabled: true, current_version: 1)
+                .tap { |id| rule_version_of(id) }
   end
 
   def rule_version
-    @rule_version ||= insert("rule_versions", workspace_id: workspace, rule_id: rule, version: 1,
+    rule
+    @rule_version
+  end
+
+  def rule_version_of(rule_id)
+    @rule_version ||= insert("rule_versions", workspace_id: workspace, rule_id: rule_id, version: 1,
       key: "made_up_rule", name: "A made-up rule", hook: "task.before_ready", scope_kind: "all_tasks",
       kind: "gate", checker: "app", origin: "custom", author_kind: "owner")
   end

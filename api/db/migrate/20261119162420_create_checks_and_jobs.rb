@@ -69,6 +69,9 @@ class CreateChecksAndJobs < ActiveRecord::Migration[8.1]
       t.index [ :task_id, :rule_version_id, :hook, :round, :subject_kind, :subject_id, :input_hash ],
         unique: true, nulls_not_distinct: true, name: "index_rule_checks_identity"
     end
+    # The check's version is a version of the check's rule.
+    add_foreign_key :rule_checks, :rule_versions, column: [ :rule_id, :rule_version_id ], primary_key: [ :rule_id, :id ],
+      name: "rule_checks_rule_version_of_rule_fkey"
 
     create_table :rule_check_attempts, id: :uuid do |t|
       t.references :workspace, type: :uuid, null: false, foreign_key: true
