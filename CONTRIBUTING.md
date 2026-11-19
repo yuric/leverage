@@ -11,7 +11,7 @@ are best effort, and the project's scope is deliberately narrow.
 ## Where the project is
 
 leverage is in its definition phase: the requirements in
-[docs/PRD.md](docs/PRD.md) are being written and there is no code yet. Right
+[docs/PRD.md](docs/PRD.md) are being written and there is no product code yet. Right
 now the most valuable contributions are:
 
 - feedback on a requirement, or a requirement that is missing;
@@ -40,11 +40,15 @@ wise: it is the best way to find out whether the change fits the project's
    `Unreleased` section of [CHANGELOG.md](CHANGELOG.md) if it is user-visible.
 4. Give the pull request a title that follows
    [Conventional Commits](https://www.conventionalcommits.org/), for example
-   `docs: clarify FR-003 acceptance criteria`. The title is checked
+   `docs: clarify the acceptance criteria`. The title is checked
    automatically.
 5. Fill in the pull request template, including the AI assistance section.
    Reference the requirement ID (`FR-…`, `NFR-…`) or issue it relates to.
-6. Add yourself to [AUTHORS](AUTHORS) in your first pull request.
+6. Answer each line of the template's "Architecture rules" section. The
+   [rules](docs/ARCHITECTURE.md#rules) are short, and
+   [How the rules are applied](docs/ARCHITECTURE.md#how-the-rules-are-applied)
+   explains the three possible answers.
+7. Add yourself to [AUTHORS](AUTHORS) in your first pull request.
 
 Every change to `main` goes through a pull request, including the
 maintainer's. A maintainer will review yours when time allows. Expect
@@ -60,7 +64,12 @@ be merged:
 | Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.yaml`. | `npx markdownlint-cli2 "**/*.md"` |
 | Internal links | Links between files in the repository resolve. | `lychee --offline --include-fragments './**/*.md'` |
 | PRD requirement IDs | IDs in `docs/PRD.md` are well formed and unique. | `python3 scripts/check_prd_ids.py` |
+| Rules compliance | The description answers every active [architecture rule](docs/ARCHITECTURE.md#rules), and the parts of the rules a script can check hold. | `python3 scripts/check_rules.py --base origin/main --body-file <file>` |
+| (same job) | The rules check still behaves as its self-test expects. | `python3 scripts/test_check_rules.py` |
 | PR title | The title follows Conventional Commits. | — |
+
+In the "Rules compliance" command, `origin/main` is this repository's `main`.
+If you work in a fork, use the name of the remote that points here.
 
 ## AI-assisted contributions
 

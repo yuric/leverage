@@ -1,6 +1,6 @@
 # leverage
 
-> **Status: definition phase.** There is no code yet and nothing to install or
+> **Status: definition phase.** There is no product code yet and nothing to install or
 > run. This repository currently holds the product requirements document (PRD)
 > and the project's ground rules.
 
@@ -13,7 +13,7 @@ deployment, and implementation follow from them.
 | File | Purpose |
 |------|---------|
 | [docs/PRD.md](docs/PRD.md) | Product requirements. The source of truth for what gets built. |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design. Filled in as requirements settle. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The architecture rules every pull request answers, and the system design, filled in as requirements settle. |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | How to deploy and operate. Filled in once there is something to deploy. |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents working in this repository. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, including the rules for AI-assisted contributions. |
@@ -21,6 +21,7 @@ deployment, and implementation follow from them.
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability. |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Expected behavior in project spaces. |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes, release by release. |
+| [docs/research/](docs/research/open-source-practices/README.md) | Research behind the project's repository practices: advice versus what young popular repositories do. |
 
 ## Getting involved
 

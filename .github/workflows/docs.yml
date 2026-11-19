@@ -57,7 +57,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: python3 scripts/check_prd_ids.py
+      # -I keeps the script's folder, which a pull request controls, off
+      # Python's import path.
+      - run: python3 -I scripts/check_prd_ids.py
+
+  rules:
+    name: Rules compliance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # On a pull request this checks out the merge commit. Its first
+          # parent (HEAD^1) is the base branch, which is where the script
+          # reads the rule list from, so two commits of history are enough.
+          fetch-depth: 2
+      # The description and author are read from the event file, not passed
+      # through the environment: a description can be longer than one
+      # environment variable may be. Each script runs with -I, which keeps
+      # its folder, which a pull request controls, off Python's import path.
+      - name: Check the pull request against the architecture rules
+        if: github.event_name == 'pull_request'
+        run: python3 -I scripts/check_rules.py --base 'HEAD^1' --event "$GITHUB_EVENT_PATH"
+      - name: Check the repository against the architecture rules
+        if: github.event_name != 'pull_request'
+        run: python3 -I scripts/check_rules.py
+      - name: Self-test of the rules check
+        run: python3 -I scripts/test_check_rules.py
 
   pr-title:
     name: PR title
@@ -74,7 +101,7 @@ jobs:
           if [[ "$TITLE" =~ $pattern ]]; then
             echo "OK: title follows Conventional Commits."
           else
-            echo "::error::The pull request title must follow Conventional Commits, for example 'docs: clarify FR-003'."
+            echo "::error::The pull request title must follow Conventional Commits, for example 'docs: fix a broken link'."
             echo "Allowed types: feat, fix, docs, chore, refactor, test, build, ci, perf, style, revert."
             echo "See https://www.conventionalcommits.org/"
             exit 1

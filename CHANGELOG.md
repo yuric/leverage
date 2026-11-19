@@ -27,6 +27,14 @@ once it makes its first release.
 - Dependabot updates for the pinned GitHub Actions.
 - A ruleset on `main`: changes land through pull requests with passing
   checks; force pushes and deletion are blocked.
+- Research report on open source repository practices, with its notes and
+  survey data, in `docs/research/open-source-practices/`.
+- Architecture rules in `docs/ARCHITECTURE.md`: four active now and three
+  that wait for code. A pull request answers the active rules in its
+  description (Dependabot is exempt from that part), and a new required
+  "Rules compliance" check verifies the answers.
+- A `check-rules` skill for agents in `.agents/skills/`, linked from
+  `.claude/skills/`.
 
 ### Changed
 

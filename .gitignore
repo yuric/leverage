@@ -24,3 +24,10 @@ Thumbs.db
 # Logs and temporary files
 *.log
 tmp/
+
+# Local research working folders (published copies live in docs/research/)
+/reports/
+/research_notes/
+
+# Python bytecode
+__pycache__/
