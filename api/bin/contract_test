@@ -1,0 +1,15 @@
+#!/usr/bin/env ruby
+# Runs the contract tests (test/contract/**/*_test.rb) with plain Minitest:
+# no Rails and no database.
+#
+#   bin/contract_test                                  every contract test
+#   bin/contract_test test/contract/registry_test.rb   the files named
+#   bin/contract_test test/contract/x_test.rb -n /y/   Minitest options pass through
+require "bundler/setup"
+
+root = File.expand_path("..", __dir__)
+files, options = ARGV.partition { |arg| arg.end_with?(".rb") }
+files = Dir.glob("test/contract/**/*_test.rb", base: root).sort if files.empty?
+ARGV.replace(options)
+
+files.each { |file| require File.expand_path(file, root) }
