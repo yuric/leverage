@@ -7,7 +7,7 @@
     "Milestone 2 plan EN-13: rounds_exceeded opens when a failure brings the round to maximum_rounds plus extra_rounds, after the normal move, with the Past the round limit item; the fresh lease is paused while it is open.",
     "Milestone 2 plan EN-31: Allow one more round closes the hold and its item, adds one to extra_rounds and restarts the lease clock; the builder resumes, and the next failure at the new limit opens the hold again.",
     "Milestone 2 plan EN-30: Cancel ends the builder's lease, closes the open step and opens none, closes every open hold and resolves its item; the holder's next call is refused with task_cancelled.",
-    "PRD Steps and timing: the wait_owner step of each hold sits between review and wait_builder, and the steps sum to the task's lifetime."
+    "PRD Steps and timing: the first hold's wait_owner step sits between review and wait_builder, the second's ends at Cancel with no step after it, and the steps sum to the task's lifetime."
   ],
   "setup": {
     "settings": {"lease_length_seconds": 600},
@@ -185,8 +185,8 @@
       }
     },
     {
-      "note": "Applied before the builder's late call, at the lease's due time (PRD test 7).",
-      "at": "@t:1300",
+      "note": "Applied before the builder's late call, at the lease's due time (PRD test 7). The call comes 10 seconds after the due time, before the sweep, which runs at least every 30 seconds (L822).",
+      "at": "@t:660",
       "caller": "app",
       "command": "builder_lease_expiry",
       "operation_id": null,
@@ -197,7 +197,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:9", "type": "task.lease_expired", "schema_version": 1, "at": "@t:1300", "effective_at": "@t:650", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": null, "payload": {"wait_cause": null}}
+          {"ref": "@event:9", "type": "task.lease_expired", "schema_version": 1, "at": "@t:660", "effective_at": "@t:650", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": null, "payload": {"wait_cause": null}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "wait_ready", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:9"}
@@ -208,7 +208,7 @@
       }
     },
     {
-      "at": "@t:1300",
+      "at": "@t:660",
       "caller": "$seat:builder",
       "command": "pass_criterion",
       "operation_id": "pass_criterion",
@@ -337,8 +337,8 @@
       }
     },
     {
-      "note": "The sweep ends the review lease at its due time; the review goes back to waiting, unassigned.",
-      "at": "@t:2000",
+      "note": "The sweep ends the review lease at its due time; the review goes back to waiting, unassigned. The sweep runs at least every 30 seconds (L822), so it comes 10 seconds after the due time.",
+      "at": "@t:1960",
       "caller": "app",
       "command": "review_lease_expiry",
       "operation_id": null,
@@ -349,7 +349,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:16", "type": "review.lease_expired", "schema_version": 1, "at": "@t:2000", "effective_at": "@t:1950", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": null, "payload": {}}
+          {"ref": "@event:16", "type": "review.lease_expired", "schema_version": 1, "at": "@t:1960", "effective_at": "@t:1950", "actor_kind": "app", "actor_id": null, "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": null, "payload": {}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "wait_review", "step_class": "waiting", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:16"}
@@ -407,7 +407,7 @@
       "operation_id": "give_verdict",
       "key": "$key:t1_verdict_2030",
       "path_params": {"id": "$review:t1_r0"},
-      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The second criterion does not hold yet.", "tokens": 1200, "spend": 0.42},
+      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The copy does not name this year's prices yet.", "tokens": 1200, "spend": 0.42},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -535,7 +535,7 @@
       "operation_id": "give_verdict",
       "key": "$key:t1_verdict_2090",
       "path_params": {"id": "$review:t1_r1"},
-      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The second criterion does not hold yet.", "tokens": 1200, "spend": 0.42},
+      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The copy does not name this year's prices yet.", "tokens": 1200, "spend": 0.42},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -663,7 +663,7 @@
       "operation_id": "give_verdict",
       "key": "$key:t1_verdict_2150",
       "path_params": {"id": "$review:t1_r2"},
-      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The second criterion does not hold yet.", "tokens": 1200, "spend": 0.42},
+      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The copy does not name this year's prices yet.", "tokens": 1200, "spend": 0.42},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -817,7 +817,7 @@
       "operation_id": "give_verdict",
       "key": "$key:t1_verdict_2260",
       "path_params": {"id": "$review:t1_r3"},
-      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The second criterion does not hold yet.", "tokens": 1200, "spend": 0.42},
+      "body": {"verdict": "failed", "failed_criteria": ["$criterion:t1_copy"], "notes": "The copy does not name this year's prices yet.", "tokens": 1200, "spend": 0.42},
       "expect": {
         "outcome": "completed",
         "refusal": null,
