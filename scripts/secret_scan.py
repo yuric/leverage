@@ -23,7 +23,8 @@ A hit is printed as "<file>:<line>: <what>", where <what> says which listed
 secret it was (by its number in its file) or which shape matched. The secret
 itself is never printed. Exit 0 when nothing is found, 1 on any hit, 2 when
 the scan could not be made: no path, a missing path, no file to scan, no
-secret to look for, or a secret shorter than 6 characters.
+secret to look for, or a secret shorter than 8 characters (a shorter one
+leaves a base64 piece too short to look for at one of the offsets).
 
 Usage:
   python3 -I scripts/secret_scan.py [--secrets FILE]... [--literal VALUE]... PATH...
@@ -43,8 +44,11 @@ SHAPES = [
     ("token shape", re.compile(rb"lv[sho]_[A-Za-z0-9_-]{16,}")),
     ("bearer value", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*", re.IGNORECASE)),
 ]
-SHORTEST = 6
-# A base64 piece shorter than this could turn up by chance in a dump.
+# A base64 piece shorter than SHORTEST_BASE64 could turn up by chance in
+# a dump. A secret of SHORTEST characters gives a piece of at least that
+# length at each of the three offsets (8, 10 and 9 characters), so every
+# secret the scan takes is looked for in base64 at all three.
+SHORTEST = 8
 SHORTEST_BASE64 = 8
 
 
