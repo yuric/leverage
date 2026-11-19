@@ -134,6 +134,10 @@ jobs:
         run: python3 -I scripts/test_e2e_core_loop.py
       - name: Self-test of the real Gemini check's refusals
         run: python3 -I scripts/test_real_gemini_through_app.py
+      # Stand-in tools only. It builds the Swift runner lane, in a build
+      # folder of its own, to run the runner's driver against them.
+      - name: Self-test of the developer check with a real tool
+        run: python3 -I scripts/test_real_provider_run.py
       - name: The end-to-end run
         run: scripts/e2e_core_loop.sh
       - name: Self-test of the speed report
