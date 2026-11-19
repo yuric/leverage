@@ -63,7 +63,8 @@ class CompleteContractTest < ActiveSupport::TestCase
 
     changed, ready = written
     assert_equal %w[task.contract_changed task.ready], written.map(&:type)
-    assert_equal({ "contract_version" => 1, "added_criterion_ids" => criteria.map(&:id), "reset_criterion_ids" => [],
+    assert_equal({ "contract_version" => 1, "minimum_strength_rank" => 2, "added_criterion_ids" => criteria.map(&:id),
+                   "reset_criterion_ids" => [],
                    "removed_criterion_ids" => [], "added_action_ids" => [], "removed_action_ids" => [] }, changed.payload)
     assert_equal({ "wait_cause" => nil }, ready.payload)
     assert_equal [ "owner", @owner.id, 0 ], [ ready.actor_kind, ready.actor_id, ready.round ]

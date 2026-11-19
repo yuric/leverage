@@ -268,13 +268,9 @@ class NextItemTest < ActiveSupport::TestCase
     assert_equal task.id, item(@builder).fetch("id")
   end
 
-  # the real Eligibility and Briefing, once WP3's are in the tree
+  # the real Eligibility and Briefing
 
-  test "with WP3's Eligibility and Briefing a builder is told task for a Ready task, and none after it holds it" do
-    unless Leverage.const_defined?(:Eligibility, false) && Leverage.const_defined?(:Briefing, false) &&
-        Leverage::Eligibility.respond_to?(:next_task) && Leverage::Briefing.respond_to?(:hash_for)
-      skip "Eligibility.next_task, Eligibility.next_review and Briefing.hash_for arrive with WP3 (see notes.md, WP8)"
-    end
+  test "with the real Eligibility and Briefing a builder is told task for a Ready task, and a reviewer none" do
     credential = @scenario.credential
     seat = @scenario.seat(role: "builder", credential: credential)
     @scenario.task(state: "ready")

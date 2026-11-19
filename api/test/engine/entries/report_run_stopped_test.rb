@@ -49,11 +49,6 @@ class ReportRunStoppedTest < ActiveSupport::TestCase
     assert_completed(report(reviewer))
     other = @scenario.seat(role: "reviewer", credential: @scenario.credential(provider: "codex"))
 
-    begin
-      T::Table.entry_for("claim_review")
-    rescue NameError
-      skip "claim_review is WP3's entry, not in this checkout yet; the review is released (asserted above the claim)"
-    end
     claim = T.apply(T::Request.new(command: "claim_review", workspace_id: @scenario.workspace_id, caller_kind: "seat",
       caller_id: other.id, key: new_key, request_hash: "e" * 64, params: {}))
 

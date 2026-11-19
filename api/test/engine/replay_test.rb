@@ -12,15 +12,17 @@ require_relative "../support/walk"
 # tables and the log disagree, so a change that went around the log is
 # found.
 class ReplayTest < ActiveSupport::TestCase
+  T = Leverage::Transitions
+
   def run_trace(name)
     TraceRunner.new(name).run.tap { |runner| assert_empty runner.failures, runner.failures.join("\n") }
   end
 
-  def diff(runner) = Leverage::Replay.diff(runner.workspace_id)
+  def log_diff(runner) = Leverage::Replay.diff(runner.workspace_id)
 
   %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
     test "the log of trace #{name} rebuilds every replay column" do
-      assert_empty diff(run_trace(name))
+      assert_empty log_diff(run_trace(name))
     end
   end
 
@@ -46,7 +48,7 @@ class ReplayTest < ActiveSupport::TestCase
     runner = run_trace("09-core-loop-no-rules")
     task = Task.find_by!(workspace_id: runner.workspace_id)
     task.update_columns(round: 7, builder_seat_id: nil)
-    found = diff(runner)
+    found = log_diff(runner)
     assert(found.any? { |line| line.include?("tasks #{task.id} round") }, found.inspect)
     assert(found.any? { |line| line.include?("tasks #{task.id} builder_seat_id") }, found.inspect)
   end
@@ -57,7 +59,7 @@ class ReplayTest < ActiveSupport::TestCase
     criterion.update_columns(state: "open")
     review = Review.where(workspace_id: runner.workspace_id).order(:round).first
     review.update_columns(verdict: "passed")
-    found = diff(runner)
+    found = log_diff(runner)
     assert(found.any? { |line| line.include?("criteria #{criterion.id} state") }, found.inspect)
     assert(found.any? { |line| line.include?("reviews #{review.id} verdict") }, found.inspect)
   end
@@ -66,20 +68,20 @@ class ReplayTest < ActiveSupport::TestCase
     runner = run_trace("10-leases-no-rules")
     hold = Hold.where(workspace_id: runner.workspace_id).order(:opened_at).last
     hold.update_columns(closed_at: nil)
-    assert(diff(runner).any? { |line| line.include?("holds #{hold.id}") }, diff(runner).inspect)
+    assert(log_diff(runner).any? { |line| line.include?("holds #{hold.id}") }, log_diff(runner).inspect)
   end
 
   test "a step row the log does not give is found" do
     runner = run_trace("09-core-loop-no-rules")
     step = TaskStep.where(workspace_id: runner.workspace_id).order(:opened_at).second
     step.update_columns(kind: "build", step_class: "working")
-    assert(diff(runner).any? { |line| line.start_with?("task_steps") }, diff(runner).inspect)
+    assert(log_diff(runner).any? { |line| line.start_with?("task_steps") }, log_diff(runner).inspect)
   end
 
   test "a missing step row is found" do
     runner = run_trace("09-core-loop-no-rules")
     TaskStep.where(workspace_id: runner.workspace_id).order(:opened_at).last.delete
-    assert(diff(runner).any? { |line| line.start_with?("task_steps") }, diff(runner).inspect)
+    assert(log_diff(runner).any? { |line| line.start_with?("task_steps") }, log_diff(runner).inspect)
   end
 
   test "a project's paused and spent are rebuilt from its events" do
@@ -98,13 +100,38 @@ class ReplayTest < ActiveSupport::TestCase
   test "the replay changes nothing: the tables are as they were after a diff" do
     runner = run_trace("10-leases-no-rules")
     before = TaskStep.where(workspace_id: runner.workspace_id).order(:id).pluck(:id, :kind, :closed_at)
-    diff(runner)
+    log_diff(runner)
     assert_equal before, TaskStep.where(workspace_id: runner.workspace_id).order(:id).pluck(:id, :kind, :closed_at)
   end
 
+  # Complete contract is the one command of this milestone that sets the
+  # rank; its task.contract_changed carries it (null for none).
+  def complete_contract(scenario, task, minimum_strength_rank)
+    params = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+               "criteria" => [ { "text" => "Made-up criterion.", "kind" => "build" },
+                               { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
+               "actions" => [], "minimum_strength_rank" => minimum_strength_rank, "budget_cap" => nil,
+               "work_reference" => nil }
+    T.apply(T::Request.new(command: "complete_contract", workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: "k-#{SecureRandom.hex(6)}", request_hash: Digest::SHA256.hexdigest(params.to_json),
+      params: params)).tap { |outcome| assert outcome.completed?, outcome.refusal&.code }
+  end
+
   test "a minimum strength rank set by Complete contract is rebuilt" do
-    skip "The log cannot rebuild it: task.contract_changed (v1) carries no minimum_strength_rank, and only " \
-         "task.reassigned (escalation, milestone 4) does. A contract gap, recorded for the managing agent " \
-         "(notes.md, WP10); the walks and traces send null."
+    scenario = Scenario.new
+    ranked = scenario.task(state: "backlog", work_reference: nil)
+    unranked = scenario.task(state: "backlog", work_reference: nil)
+    complete_contract(scenario, ranked, 2)
+    complete_contract(scenario, unranked, nil)
+
+    assert_equal [ 2, nil ], [ ranked.reload.minimum_strength_rank, unranked.reload.minimum_strength_rank ]
+    tasks = Leverage::Replay.project(scenario.workspace_id).fetch(:tasks)
+    assert_equal 2, tasks.fetch(ranked.id).fetch("minimum_strength_rank")
+    assert_nil tasks.fetch(unranked.id).fetch("minimum_strength_rank")
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+
+    ranked.update_columns(minimum_strength_rank: 3)
+    found = Leverage::Replay.diff(scenario.workspace_id)
+    assert(found.any? { |line| line.include?("tasks #{ranked.id} minimum_strength_rank") }, found.inspect)
   end
 end

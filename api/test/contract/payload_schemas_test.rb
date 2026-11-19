@@ -61,9 +61,11 @@ module PayloadRules
   REQUIRED_FIELDS = {
     # Replay: tasks.state; Add task lands in Imaginarium or Backlog.
     "task.created" => %w[state],
-    # Replay: tasks.contract_version, criteria.state, actions.state (DB-19).
+    # Replay: tasks.contract_version, tasks.minimum_strength_rank (the
+    # contract sets it; decisions.md, Changes after merge), criteria.state,
+    # actions.state (DB-19).
     "task.contract_changed" => %w[
-      contract_version added_criterion_ids reset_criterion_ids removed_criterion_ids
+      contract_version minimum_strength_rank added_criterion_ids reset_criterion_ids removed_criterion_ids
       added_action_ids removed_action_ids
     ],
     # Event types: "(priority, project, cap)" (P-8, SM-31).
