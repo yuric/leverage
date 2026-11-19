@@ -65,6 +65,7 @@ struct BoardLaneTests {
         }
         #expect(!fromRegistry.isEmpty)
         #expect(fromRegistry == BoardLane.blockingReasons)
+        #expect(Set(HoldReason.allCases.filter(\.isInBlocked)) == fromRegistry)
         #expect(rows.count == HoldReason.allCases.count)
     }
 

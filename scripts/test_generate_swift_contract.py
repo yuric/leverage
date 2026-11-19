@@ -117,6 +117,10 @@ def main():
     cases.check("a release reason says whether a seat may choose it",
                 "case .seatRemoved: return false" in swift
                 and "case .stopping: return true" in swift)
+    cases.check("a hold reason says whether it puts a task in Blocked",
+                "public var isInBlocked: Bool" in swift
+                and "case .roundsExceeded: return true" in swift
+                and "case .seatPaused: return false" in swift)
     cases.check("the null of a nullable enum is not a case",
                 "case null" not in swift and "case `null`" not in swift)
 
