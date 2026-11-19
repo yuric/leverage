@@ -208,6 +208,28 @@ public enum HoldReason: String, Codable, CaseIterable, Sendable {
     case seatPaused = "seat_paused"
     case credentialLimit = "credential_limit"
     case credentialSignedOut = "credential_signed_out"
+
+    /// Whether an open hold of this reason puts its task in Blocked (`in_blocked`).
+    public var isInBlocked: Bool {
+        switch self {
+        case .ownerQuestion: return true
+        case .ownerApproval: return true
+        case .access: return true
+        case .budget: return true
+        case .projectPaused: return true
+        case .contractIncomplete: return false
+        case .checkError: return true
+        case .roundsExceeded: return true
+        case .actionStopped: return true
+        case .actionUnconfirmed: return true
+        case .claimGateFailed: return true
+        case .rerunLimit: return true
+        case .ownerHold: return true
+        case .seatPaused: return false
+        case .credentialLimit: return false
+        case .credentialSignedOut: return true
+        }
+    }
 }
 
 /// registry.json `refusals`.

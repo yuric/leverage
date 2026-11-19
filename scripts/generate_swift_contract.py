@@ -17,8 +17,9 @@ What is written:
   * the registry's named lists in NAMED_LISTS (commands, event types, hold
     reasons, refusals, check results, release reasons, next kinds, step
     kinds, Needs you items, credential providers), with the extra facts the
-    Mac side reads: a provider's kind and group, and whether a seat may
-    choose a release reason;
+    Mac side reads: a provider's kind and group, whether a seat may
+    choose a release reason, and whether a hold reason puts its task in
+    Blocked;
   * the operations, as ContractOperation with each one's method, path,
     caller and tag, so that no path is typed in Swift (IN-1);
   * the interface schema's own enums in OPENAPI_ENUMS (transport error
@@ -231,6 +232,11 @@ def registry_enums(registry):
                 "isChosenBySeat: Bool",
                 "Whether a seat may send it with a release (`chosen_by: seat`).",
                 [(entry["reason"], "true" if entry["chosen_by"] == "seat" else "false") for entry in entries])
+        elif key == "hold_reasons":
+            extra = switch_property(
+                "isInBlocked: Bool",
+                "Whether an open hold of this reason puts its task in Blocked (`in_blocked`).",
+                [(entry["reason"], "true" if entry["in_blocked"] else "false") for entry in entries])
         elif key == "credential_providers":
             extra = switch_property(
                 "facts: (kind: CredentialKind, group: ProviderGroup)",

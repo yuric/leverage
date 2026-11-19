@@ -10,12 +10,9 @@ enum BoardLane: Equatable, Hashable, Sendable, CaseIterable {
     static let standard: [BoardLane] = [.imaginarium, .backlog, .blocked, .ready, .inProgress, .done]
 
     /// The holds that put a task in Blocked: the registry's `in_blocked` ones
-    /// (`api/contract/registry.json`, `hold_reasons`). A test reads that file
-    /// and fails when this list differs from it.
-    static let blockingReasons: Set<HoldReason> = [
-        .ownerQuestion, .ownerApproval, .access, .budget, .projectPaused, .checkError, .roundsExceeded,
-        .actionStopped, .actionUnconfirmed, .claimGateFailed, .rerunLimit, .ownerHold, .credentialSignedOut,
-    ]
+    /// (`api/contract/registry.json`, `hold_reasons`), as the generated
+    /// `HoldReason.isInBlocked` gives them.
+    static let blockingReasons: Set<HoldReason> = Set(HoldReason.allCases.filter(\.isInBlocked))
 
     /// The lane a task would be in with no hold.
     static func lane(forState state: TaskState) -> BoardLane {
