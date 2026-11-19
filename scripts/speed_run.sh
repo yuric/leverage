@@ -4,7 +4,8 @@
 # Starts a compose project of its own (compose.yaml and compose.test.yaml,
 # so Docker picks the API's port and nothing binds a fixed one), runs
 # api/script/speed/run.rb in a container of that project (fifty seats that
-# connect on their own, heartbeating every 2 seconds, on tasks put in Ready
+# connect on their own, heartbeating every 2 seconds, their ticks spread
+# evenly over the 2 seconds as separate agents' are, on tasks put in Ready
 # beforehand), reads the `leverage.command` lines from the api container's
 # log through scripts/speed_report.py, prints the table with the date and
 # the machine, and removes the project and its volume, also on failure.
@@ -92,6 +93,7 @@ echo
 echo "Speed measurement"
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "Machine: $machine"
+echo "Arrivals: each seat ticks every 2 seconds; the seats' ticks are spread evenly over the 2 seconds"
 $smoke && echo "Smoke run: it shows that the measurement works; its figures are not the measurement."
 report=0
 python3 -I scripts/speed_report.py --log "$work/api.log" --threads "$threads" --pool "$pool" \

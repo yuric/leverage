@@ -2,7 +2,8 @@
 # The speed run's driver (milestone 2 plan EN-19, 5.3): fifty seats that
 # connect on their own, half builders and half reviewers, work through
 # tasks that were put in Ready beforehand, over HTTP, for 120 seconds,
-# heartbeating every 2 seconds. scripts/speed_run.sh runs it in a
+# heartbeating every 2 seconds, their ticks spread evenly over those 2
+# seconds (Speed.seat_starts). scripts/speed_run.sh runs it in a
 # container of the compose network (the API is http://api:3000 there);
 # scripts/speed_report.py then reads the API's command lines.
 #
@@ -311,9 +312,14 @@ module Speed
     end
   end
 
-  # When each seat's first tick is, in the order the seats were connected.
+  # When each seat's first tick is, in the order the seats were connected:
+  # spread evenly over one tick. Agents are separate programs that each
+  # heartbeat on their own clock; seats that all ticked at the same instant
+  # would queue every command of a tick behind one another for the
+  # workspace lock and leave it idle for the rest of the tick, and the run
+  # would measure that queue, not the server (F2). The rate is the same.
   def self.seat_starts(start_at, seats:, tick:)
-    Array.new(seats, start_at)
+    Array.new(seats) { |index| start_at + (index * tick / seats) }
   end
 
   def self.main(argv)
