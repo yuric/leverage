@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "traces/<nn>-<name>.json",
+  "description": "A golden trace: a setup, then commands in order, each with its exact expected outcome, events and step changes. Ids are symbols ($kind:name), links to an expected event are @event:n (the n-th expected event of the trace, counted from 1 across all commands), and times are @t:<seconds from the trace start>. Leverage::Contract::TraceBinder turns them into UUIDs and instants. See api/contract/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "description", "covers", "setup", "commands"],
+  "properties": {
+    "name": {"type": "string", "pattern": "^[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$"},
+    "description": {"type": "string", "minLength": 1},
+    "covers": {
+      "description": "What the trace proves, each item citing the PRD by section or test number, or the plan decision it exercises.",
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "setup": {
+      "description": "The workspace before the first command. Rows named here exist when the trace starts; the events that created them are not part of the trace.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["settings", "users", "helpers", "credentials", "seats", "projects", "rules"],
+      "properties": {
+        "settings": {
+          "description": "Workspace settings that differ from their defaults, by workspaces column name.",
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"type": ["integer", "null"]}
+        },
+        "users": {"$ref": "#/$defs/rows"},
+        "helpers": {"$ref": "#/$defs/rows"},
+        "credentials": {"$ref": "#/$defs/rows"},
+        "seats": {"$ref": "#/$defs/rows"},
+        "projects": {"$ref": "#/$defs/rows"},
+        "rules": {
+          "description": "Every rule of the workspace: the seven shipped rules on or off, and any custom rule, with the fields of its current version.",
+          "$ref": "#/$defs/rows"
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/command"}
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+    "dotted": {"type": "string", "pattern": "^[a-z]+(_[a-z]+)*\\.[a-z]+(_[a-z]+)*$"},
+    "symbol": {"type": "string", "pattern": "^\\$[a-z][a-z_]*:[a-z0-9][a-z0-9_]*$"},
+    "event_link": {"type": "string", "pattern": "^@event:[1-9][0-9]*$"},
+    "time": {"type": "string", "pattern": "^@t:-?[0-9]+$"},
+    "symbol_or_null": {"anyOf": [{"$ref": "#/$defs/symbol"}, {"type": "null"}]},
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "propertyNames": {"$ref": "#/$defs/name"},
+        "properties": {"id": {"$ref": "#/$defs/symbol"}}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "caller", "command", "operation_id", "key", "path_params", "body", "expect"],
+      "properties": {
+        "note": {"type": "string"},
+        "at": {"$ref": "#/$defs/time"},
+        "caller": {
+          "description": "A symbol of kind user (the owner), seat or helper, or \"app\" for a timer or the server itself.",
+          "anyOf": [
+            {"type": "string", "pattern": "^\\$(user|seat|helper):[a-z0-9][a-z0-9_]*$"},
+            {"const": "app"}
+          ]
+        },
+        "command": {"$ref": "#/$defs/name"},
+        "operation_id": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "key": {
+          "description": "The Idempotency-Key the caller sends, as a symbol of kind key; null for the app.",
+          "anyOf": [{"type": "string", "pattern": "^\\$key:[a-z0-9][a-z0-9_]*$"}, {"type": "null"}]
+        },
+        "path_params": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/name"},
+          "additionalProperties": {"type": "string"}
+        },
+        "body": {"type": "object"},
+        "expect": {"$ref": "#/$defs/expect"}
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "refusal", "events", "steps_opened", "steps_closed"],
+      "properties": {
+        "outcome": {"enum": ["completed", "pending", "refused"]},
+        "refusal": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "rule_id"],
+              "properties": {
+                "code": {"$ref": "#/$defs/name"},
+                "rule_id": {"$ref": "#/$defs/symbol_or_null"}
+              }
+            }
+          ]
+        },
+        "events": {"type": "array", "items": {"$ref": "#/$defs/event"}},
+        "steps_opened": {"type": "array", "items": {"$ref": "#/$defs/step_opened"}},
+        "steps_closed": {"type": "array", "items": {"$ref": "#/$defs/step_closed"}}
+      }
+    },
+    "event": {
+      "description": "One expected row of events, every column but workspace_id and seq; seq order is the order of the list.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref", "type", "schema_version", "at", "effective_at", "actor_kind", "actor_id", "project_id",
+        "task_id", "round", "subject_kind", "subject_id", "cause_id", "command_id", "payload"
+      ],
+      "properties": {
+        "ref": {"$ref": "#/$defs/event_link"},
+        "type": {"$ref": "#/$defs/dotted"},
+        "schema_version": {"type": "integer", "minimum": 1},
+        "at": {"$ref": "#/$defs/time"},
+        "effective_at": {"$ref": "#/$defs/time"},
+        "actor_kind": {"$ref": "#/$defs/name"},
+        "actor_id": {"$ref": "#/$defs/symbol_or_null"},
+        "project_id": {"$ref": "#/$defs/symbol_or_null"},
+        "task_id": {"$ref": "#/$defs/symbol_or_null"},
+        "round": {"type": ["integer", "null"], "minimum": 0},
+        "subject_kind": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "subject_id": {"$ref": "#/$defs/symbol_or_null"},
+        "cause_id": {"anyOf": [{"$ref": "#/$defs/event_link"}, {"type": "null"}]},
+        "command_id": {
+          "anyOf": [{"type": "string", "pattern": "^\\$key:[a-z0-9][a-z0-9_]*$"}, {"type": "null"}]
+        },
+        "payload": {"type": "object"}
+      }
+    },
+    "step_opened": {
+      "description": "A task_steps row the command opens, every column the replay rebuilds.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id", "kind", "class", "round", "subject_kind", "subject_id", "seat_id", "cause_kind",
+        "cause_rule_id", "opening_event"
+      ],
+      "properties": {
+        "task_id": {"$ref": "#/$defs/symbol"},
+        "kind": {"$ref": "#/$defs/name"},
+        "class": {"$ref": "#/$defs/name"},
+        "round": {"type": "integer", "minimum": 0},
+        "subject_kind": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "subject_id": {"$ref": "#/$defs/symbol_or_null"},
+        "seat_id": {"$ref": "#/$defs/symbol_or_null"},
+        "cause_kind": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+        "cause_rule_id": {"$ref": "#/$defs/symbol_or_null"},
+        "opening_event": {"$ref": "#/$defs/event_link"}
+      }
+    },
+    "step_closed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "kind", "closing_event"],
+      "properties": {
+        "task_id": {"$ref": "#/$defs/symbol"},
+        "kind": {"$ref": "#/$defs/name"},
+        "closing_event": {"$ref": "#/$defs/event_link"}
+      }
+    }
+  }
+}

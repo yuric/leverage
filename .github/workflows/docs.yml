@@ -61,6 +61,23 @@ jobs:
       # Python's import path.
       - run: python3 -I scripts/check_prd_ids.py
 
+  registry:
+    name: Registry matches the PRD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Test 12 of the PRD: its fixed lists (event types, hold reasons,
+      # refusals, check results) equal api/contract/registry.json. -I keeps
+      # the script's folder, which a pull request controls, off Python's
+      # import path.
+      - name: Compare the PRD's fixed lists with the registry
+        run: python3 -I scripts/check_registry.py
+      - name: Self-test of the registry check
+        run: python3 -I scripts/test_check_registry.py
+
   rules:
     name: Rules compliance
     runs-on: ubuntu-24.04
