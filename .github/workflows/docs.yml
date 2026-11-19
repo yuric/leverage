@@ -77,6 +77,13 @@ jobs:
         run: python3 -I scripts/check_registry.py
       - name: Self-test of the registry check
         run: python3 -I scripts/test_check_registry.py
+      # The PRD tables the contract files copy (lifecycle, step kinds, hooks,
+      # Needs you choices, roles, agent calls) equal those files. The Ruby
+      # tests cannot read docs/PRD.md, which is outside the Docker image.
+      - name: Compare the PRD's tables with the contract files
+        run: python3 -I scripts/check_contract_tables.py
+      - name: Self-test of the tables check
+        run: python3 -I scripts/test_check_contract_tables.py
 
   rules:
     name: Rules compliance
