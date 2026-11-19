@@ -211,7 +211,7 @@ struct SignInModelTests {
         let model = makeModel(.signIn, owner: owner)
 
         let first = Task { await model.submit() }
-        #expect(await ShellFixtures.eventually { model.state == .busy })
+        #expect(await ShellFixtures.eventually { model.state == .busy && owner.calls.count == 1 })
         #expect(!model.canSubmit)
         await model.submit()
         #expect(owner.calls.count == 1)

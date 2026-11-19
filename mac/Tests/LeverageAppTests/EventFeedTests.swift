@@ -172,7 +172,8 @@ struct EventFeedTests {
         #expect(feed.connection == .idle)
 
         feed.noteRead(asOfSeq: 5)
-        #expect(await ShellFixtures.eventually { server.asked.value.last == 5 })
+        // (An answer queued before the restart may be read first; the ask itself is what counts.)
+        #expect(await ShellFixtures.eventually { server.asked.value.contains(5) })
         feed.stop()
     }
 

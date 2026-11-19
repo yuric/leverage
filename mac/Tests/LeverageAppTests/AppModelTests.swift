@@ -69,6 +69,19 @@ struct AppModelLaunchTests {
         #expect(rig.runtime.fakeHelper.starts.value.isEmpty)
     }
 
+    @Test("launch starts the app once, however often the window appears")
+    func launchOnce() async {
+        let rig = ShellRig()
+        rig.scriptSignIn(ownerExists: true)
+        let model = rig.makeModel()
+
+        await model.launch()
+        await model.launch()
+
+        #expect(rig.runtime.fakeServer.startCount.value == 1)
+        #expect(model.phase == .signIn)
+    }
+
     @Test("an installation that has an owner shows Sign in")
     func existingOwner() async {
         let rig = ShellRig()

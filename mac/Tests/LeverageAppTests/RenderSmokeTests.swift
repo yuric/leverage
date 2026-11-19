@@ -18,21 +18,21 @@ struct RenderSmokeTests {
         return renderer.nsImage
     }
 
-    /// True when the picture is not one flat colour.
+    /// True when the picture is not one flat colour: some pixel differs from the first.
     private func drawsSomething(_ image: NSImage?) -> Bool {
         guard let image, image.size.width > 0, image.size.height > 0,
-              let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
+              let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+              let data = bitmap.bitmapData
         else { return false }
-        var seen = Set<[CGFloat]>()
-        let step = max(1, bitmap.pixelsWide / 40)
-        for x in stride(from: 0, to: bitmap.pixelsWide, by: step) {
-            for y in stride(from: 0, to: bitmap.pixelsHigh, by: step) {
-                if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) {
-                    seen.insert([color.redComponent, color.greenComponent, color.blueComponent].map { ($0 * 50).rounded() })
-                }
+        let pixel = max(1, bitmap.bitsPerPixel / 8)
+        for row in 0..<bitmap.pixelsHigh {
+            let line = data + row * bitmap.bytesPerRow
+            for column in 0..<bitmap.pixelsWide {
+                let at = line + column * pixel
+                for byte in 0..<pixel where at[byte] != data[byte] { return true }
             }
         }
-        return seen.count > 1
+        return false
     }
 
     private func readyModel() async -> (AppModel, ScreenContext) {
@@ -42,6 +42,14 @@ struct RenderSmokeTests {
         let model = rig.makeModel()
         await model.start()
         return (model, model.screens!)
+    }
+
+    @Test("the check that something was drawn can tell a blank picture from a drawn one")
+    func checkerWorks() {
+        #expect(!drawsSomething(render(Color.clear)))
+        #expect(!drawsSomething(render(Color.blue)))
+        #expect(drawsSomething(render(Text(ShellCopy.appName.text).font(.largeTitle))))
+        #expect(!drawsSomething(nil))
     }
 
     @Test("the start-up screens draw, one for each state the server can be in")
