@@ -35,6 +35,18 @@ jobs:
         run: docker compose build
       - name: Run the API tests against PostgreSQL
         run: docker compose run --rm api bin/rails test
+      # An empty database migrated from zero must dump exactly the committed
+      # db/structure.sql, which the tests load: the migrations and the
+      # schema file cannot drift apart. The diff runs in the container,
+      # against the copy of the file the image was built with.
+      - name: Migrations from zero match db/structure.sql
+        run: >-
+          docker compose run --rm -e RAILS_ENV=development api
+          sh -c 'cp db/structure.sql /tmp/committed.sql
+          && bin/rails db:create db:migrate
+          && diff -u /tmp/committed.sql db/structure.sql'
+      - name: Zeitwerk loads every file
+        run: docker compose run --rm --no-deps api bin/rails zeitwerk:check
       - name: RuboCop
         run: docker compose run --rm --no-deps api bin/rubocop
       - name: Brakeman
