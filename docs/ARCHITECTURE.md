@@ -43,7 +43,8 @@ A product source file is a source file outside `docs/`, `scripts/`,
 1. **Read them before changing anything.** [AGENTS.md](../AGENTS.md) sends
    every agent here first.
 2. **Answer them in the pull request.** The description has an "Architecture
-   rules" section with one line per active rule:
+   rules" section with one line per active rule, as a bulleted or numbered
+   list:
 
    ```text
    - AR-001: Complies — implements #12
@@ -72,7 +73,9 @@ A product source file is a source file outside `docs/`, `scripts/`,
    list from the base branch as well as from the pull request, so a pull
    request cannot drop a rule to avoid answering it. A pull request that was
    already passing when a rule became active answers the rule at its next
-   push or edit; the check does not rerun on its own.
+   push or edit; the check does not rerun on its own. The check does not
+   follow symbolic links in the files that decide its result, and it fails
+   when git cannot tell it what the pull request changed.
 4. **Review judges what the check cannot.**
    - The check proves that each rule was answered in the right form, not
      that the answer is true.
@@ -87,15 +90,17 @@ A product source file is a source file outside `docs/`, `scripts/`,
      merging.
 
 Dependabot pull requests are exempt from the "Architecture rules" section,
-because Dependabot cannot fill it in. Every other check runs on them, and with
-no answers there is no `N/A` to soften one.
+because Dependabot cannot fill it in. The checks on what the change adds still
+run on them, and with no answers there is no `N/A` to soften one. A bot's
+description is upstream release notes, so the IDs in it are not resolved.
 
 To add, change, activate, or retire a rule, change this section in a pull
 request. Activating a rule adds its line to the
 [pull request template](../.github/PULL_REQUEST_TEMPLATE.md) and retiring one
 removes it; the check fails if the template and the active rules differ.
 The pull request that retires a rule still answers it, because the rule is
-active on the base branch.
+active on the base branch. A pull request that deletes a rule's row or heading
+fails the check: set the rule's status to `Retired` instead.
 
 ### AR-001 Requirement-scoped pull requests
 
@@ -180,8 +185,8 @@ registry, and its license must be compatible with the MIT License.
 - **Checked automatically:** every `uses:` in a workflow under
   `.github/workflows/` or in an action definition (`action.yml`) is written
   on one line and pinned to a full commit SHA, or to a digest for a container
-  image. A third-party action that the base branch does not already use is
-  named in the description, and the answer is then not `N/A`.
+  image. A third-party action or container image that the pull request adds
+  is named in the description, and the answer is then not `N/A`.
 - **Left to review:** the license, the justification, whether the package is
   the real one, and whether a changed SHA is the release it claims to be.
   Checking library manifests waits for the first manifest.
