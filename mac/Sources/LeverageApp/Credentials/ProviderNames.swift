@@ -1,0 +1,27 @@
+import LeverageKit
+
+/// The names of the providers and of their tools as the owner reads them.
+/// The four logins come from `ProviderCatalog`; the five API tokens, which
+/// the app cannot add yet, are named here so a list can still show one.
+enum ProviderNames {
+    /// The four providers a login can be added for, in the order the mockup lists them.
+    static let logins: [Provider] = [.claude, .codex, .gemini, .grok]
+
+    /// "Claude", "Codex", "Gemini", "Grok".
+    static func name(_ provider: Provider) -> String {
+        if let entry = ProviderCatalog.entry(for: provider.rawValue) { return entry.displayName }
+        switch provider {
+        case .claudeApi: return "Claude API"
+        case .openaiApi: return "OpenAI API"
+        case .geminiApi: return "Gemini API"
+        case .grokApi: return "Grok API"
+        case .openrouter: return "OpenRouter"
+        case .claude, .codex, .gemini, .grok: return provider.rawValue
+        }
+    }
+
+    /// The tool that runs the provider's agents: "Claude Code", "Codex", "Antigravity", "Grok Build".
+    static func tool(_ provider: Provider) -> String {
+        ProviderCatalog.entry(for: provider.rawValue)?.toolDisplayName ?? name(provider)
+    }
+}

@@ -302,7 +302,8 @@ struct RosterModelTests {
         #expect(pending?.title == "Remove Helper agent?")
         #expect(pending?.message.contains("token stops working at once") == true)
         #expect(pending?.message.contains("goes back to waiting") == true)
-        #expect(BannedTerms.found(in: pending?.message ?? "").isEmpty)
+        let banned = BannedTerms.found(in: pending?.message ?? "")
+        #expect(banned.isEmpty)
     }
 
     @Test("a confirmed removal sends remove_seat for that agent and reads again")
@@ -383,6 +384,18 @@ struct RosterModelTests {
         #expect(board.copied.value.isEmpty)
         #expect(model.failure(for: Fixtures.ownID) == ShellCopy.refusalInvalidState.text)
         #expect(model.copiedPrompt == nil)
+    }
+
+    @Test("a prompt that holds something shaped like a token is never copied")
+    func promptWithTokenShape() async {
+        let owner = Fixtures.owner()
+        owner.script { $0.landingPrompt = { _ in LandingPrompt(text: "Sign in with \(Fixtures.madeUpToken).") } }
+        let board = Fixtures.pasteboard()
+        let model = makeModel(owner, copy: board.copy)
+        await model.load()
+        await model.copyLandingPrompt(Fixtures.ownID)
+        #expect(board.copied.value.isEmpty)
+        #expect(model.failure(for: Fixtures.ownID) == ShellCopy.somethingWentWrong.text)
     }
 
     // MARK: staying current

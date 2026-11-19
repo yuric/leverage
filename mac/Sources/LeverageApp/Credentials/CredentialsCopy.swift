@@ -1,11 +1,84 @@
-/// The owner-facing sentences of this screen. A placeholder until the
-/// screen is built.
+import Foundation
+import LeverageKit
+
+/// The owner-facing sentences of the Credentials screen and of the Add
+/// credential pop-up (MA-8, MA-17, MA-26, MA-27, PV-4, PV-5, CL-19). A
+/// sentence with a `{name}` in it is filled in by `filled(_:)`. The words
+/// come from the mockup where it draws them.
 enum CredentialsCopy: OwnerFacingCopy {
-    case placeholder
+    // The list.
+    case loading, empty, header, addCredential
+    case kindLogin, kindToken
+    case chipReady, chipSignedOut, chipLimit
+    case usageReady, usageSignedOut, usageUntil
+    case verify, verifying
+
+    // The pop-up's two steps.
+    case sheetTitle, stepPick, stepName
+    case nameLabel, namePlaceholder, nameHint, nameRequired
+    case added, back, cancel, signIn, retry
+
+    // The check list and what it waits for.
+    case checkInstalled, checkSignedIn, checkAnswers
+    case stateWaiting, stateWorking, statePassed, stateFailed
+    case waitingSignIn, waitingGemini
+    case installAsk, installCant, installButton, installing, installFailed
+
+    // One line for a check that failed.
+    case failNotInstalled, failNotSignedIn, failNoAnswer, failRejected, failUnreachable, failTimedOut, failedGeneric
 
     var text: String {
         switch self {
-        case .placeholder: "The logins list is on its way."
+        case .loading: "Loading the logins…"
+        case .empty: "No logins yet. Add one so an agent can run on it."
+        case .header: "The logins agents can run on."
+        case .addCredential: "Add credential"
+        case .kindLogin: "Subscription login"
+        case .kindToken: "API token"
+        case .chipReady: "Ready"
+        case .chipSignedOut: "Signed out"
+        case .chipLimit: "At its limit"
+        case .usageReady: "Signed in and answering."
+        case .usageSignedOut: "Not signed in."
+        case .usageUntil: "Until {time}."
+        case .verify: "Verify"
+        case .verifying: "Checking…"
+
+        case .sheetTitle: "Add credential"
+        case .stepPick: "Step 1 of 2. Which provider?"
+        case .stepName: "Step 2 of 2. Name it and sign in."
+        case .nameLabel: "Name for this {provider} login"
+        case .namePlaceholder: "Personal"
+        case .nameHint: "When you choose Sign in, we check that the {provider} tool is installed, signed in and answering."
+        case .nameRequired: "Give it a name."
+        case .added: "Added"
+        case .back: "Back"
+        case .cancel: "Cancel"
+        case .signIn: "Sign in"
+        case .retry: "Retry"
+
+        case .checkInstalled: "{tool} is installed"
+        case .checkSignedIn: "You are signed in to {tool}"
+        case .checkAnswers: "{tool} answers a short test"
+        case .stateWaiting: "Waiting"
+        case .stateWorking: "In progress"
+        case .statePassed: "Done"
+        case .stateFailed: "Failed"
+        case .waitingSignIn: "Waiting for you to sign in in the window that opened"
+        case .waitingGemini: "Sign in to Antigravity on this Mac. leverage continues on its own."
+        case .installAsk: "{tool} is not installed. leverage can install {what} from {source}."
+        case .installCant: "leverage can't install {tool} yet. Install it, and leverage continues on its own."
+        case .installButton: "Install"
+        case .installing: "Installing {tool}…"
+        case .installFailed: "The install did not finish. Try again."
+
+        case .failNotInstalled: "{tool} is not installed."
+        case .failNotSignedIn: "{tool} is not signed in."
+        case .failNoAnswer: "{tool} did not answer the short test."
+        case .failRejected: "{tool} turned the short test down."
+        case .failUnreachable: "{tool} could not be reached. Check this Mac's internet connection."
+        case .failTimedOut: "{tool} took too long."
+        case .failedGeneric: "Something stopped the checks. Try again."
         }
     }
 }
