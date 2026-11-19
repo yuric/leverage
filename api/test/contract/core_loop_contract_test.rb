@@ -142,6 +142,17 @@ class CoreLoopContractTest < Minitest::Test
     assert_includes health.dig("properties", "orchestrator", "enum"), "not_set_up"
   end
 
+  # PRD Agent interface, the briefing call (Q-9): after a failed review it
+  # also returns the reviewer's notes, outside the hash.
+  def test_the_briefing_response_carries_the_notes_of_failed_reviews
+    response = schemas.fetch("BriefingResponse")
+    assert_includes response.fetch("required"), "review_notes"
+    items = response.dig("properties", "review_notes", "items", "$ref")
+    assert_equal "#/components/schemas/ReviewNote", items
+    assert_equal %w[notes review_id round], schemas.fetch("ReviewNote").fetch("required").sort
+    refute_includes schemas.fetch("Briefing").fetch("properties"), "review_notes", "the notes are outside the hash"
+  end
+
   def test_add_credential_says_the_row_is_inserted_at_the_add_command
     description = schemas.fetch("AddCredentialRequest").fetch("description")
     refute_includes description, "The row is inserted when the helper reports every check passed."
