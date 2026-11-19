@@ -25,6 +25,9 @@ once it makes its first release.
   requirement IDs, and pull request title format. External links are checked
   weekly.
 - Dependabot updates for the pinned GitHub Actions.
+- A record of what four providers' published terms say about driving their
+  subscription tools from another app and about rotating accounts
+  (`docs/research/provider-terms/`).
 - A ruleset on `main`: changes land through pull requests with passing
   checks; force pushes and deletion are blocked.
 - Research report on open source repository practices, with its notes and
