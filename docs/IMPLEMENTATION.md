@@ -56,32 +56,32 @@ ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-19 |
 | **On `main`** | The rules, the PRD, the first decision record, the design reference and the provider-terms record |
-| **Next** | The contract milestone, once the PRD change is merged |
+| **Next** | The contract milestone, once the PRD change and the skeleton are merged |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Progress file, practices and the delegated-run rule | `docs/implementation-setup` | #8 | In review |
-| The PRD change that settles the gate before the contract | `docs/prd-gate` | None yet | Uncommitted; to be rebased on `main` |
+| The PRD change that settles the gate before the contract | `docs/prd-gate` | #9 | In review |
 | Milestone 0 skeleton | `chore/skeleton` | None yet | No commits yet |
 
 ## Milestones
 
 The milestones and their content are defined in the PRD under "Build order
 and tracks". This table tracks them; it does not define them. Its rows follow
-the PRD's milestone list; see question 4. How the build is run locally is in
+the PRD's milestone list. How the build is run locally is in
 [DEPLOY.md](DEPLOY.md).
 
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
-| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 CI check, as their Pending lines say |
-| 1 | Contract | Not started | | Waits for the PRD gate change |
-| 2 | Core loop | Not started | | |
-| 3 | Rule checks | Not started | | |
-| 4 | Questions and approvals | Not started | | |
-| 5 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
-| 6 | Analytics page | Not in this build | | See question 1 |
+| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too |
+| 1 | Contract | Not started | | |
+| 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
+| 3 | Handoff | Not started | | |
+| 4 | Rule checks | Not started | | |
+| 5 | Questions and approvals | Not started | | |
+| 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
+| 7 | Analytics page | Not in this build | | See question 1 |
 
 Status is one of `Not started`, `In progress`, `In review`, `Merged`,
 `Not in this build`.
@@ -109,11 +109,17 @@ Nothing yet.
    owner's terms do not say this. *Chosen meanwhile:* the managing agent
    holds any such step and records it here, because it cannot be undone
    while the owner is away.
-4. **Where handoff comes in the milestone order.** The PRD draft's prose
-   puts handoff directly after the core loop, but its milestone list still
-   puts Credentials fifth. *Chosen meanwhile:* the PRD gate pull request
-   changes the list, putting account setup into Core loop and Handoff
-   directly after it; this table follows the PRD once that is merged.
+4. **The PRD's open decisions that the build will reach.** The PRD's "Open
+   decisions" table lists what is not settled, among them what carries out a
+   task on an API token, how a credential's model is set, how the helper
+   signs in to the server, and how the parts are installed without a
+   terminal. *Chosen meanwhile:* the managing agent settles each one when
+   the build reaches it, records the choice here and in the PRD, and
+   continues.
+5. **The choices made for the owner in the PRD gate change.** The owner
+   asked the agent to settle every review finding in the gate and to review
+   them afterwards. The pull request that made that change lists each
+   choice in one sentence with its alternative.
 
 ## Waiting for the owner
 
