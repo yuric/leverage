@@ -129,7 +129,8 @@ class StandInTestCase(unittest.TestCase):
         while True:
             table = running()
             left = sorted(pid for pid, command in table.items()
-                          if (self.tmp in command or pid in candidates) and pid != os.getpid())
+                          if (self.tmp in command or (pid in candidates and RECORDED_CHILD.search(command)))
+                          and pid != os.getpid())
             if not left or time.monotonic() > deadline:
                 return left
             time.sleep(0.1)
