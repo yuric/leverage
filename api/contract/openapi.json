@@ -1745,11 +1745,11 @@
         "security": [],
         "responses": {
           "200": {
-            "description": "The command completed.",
+            "description": "The command completed. The first answer for the key carries the token in `result` (OwnerSession); a repeat of the key answers 200 with the same envelope and OwnerSessionRepeated, without the token.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OwnerSession"
+                  "$ref": "#/components/schemas/OwnerSessionCompleted"
                 }
               }
             }
@@ -2137,11 +2137,11 @@
         ],
         "responses": {
           "200": {
-            "description": "The command completed.",
+            "description": "The command completed. The first answer for the key carries the token in `result` (SeatConnected); a repeat of the key answers 200 with the same envelope and SeatConnectedRepeated, without the token.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeatConnected"
+                  "$ref": "#/components/schemas/SeatConnectedCompleted"
                 }
               }
             }
@@ -4292,7 +4292,7 @@
       "post": {
         "operationId": "override_check",
         "summary": "Overrides one failed or errored check for one task.",
-        "description": "Stores who, when and why. At `action.requested` it approves the action.",
+        "description": "Stores who, when and why. At `action.requested` it approves the action. Overriding the check that stopped an action is the owner approving it: the same command runs approve_action, with its fresh lease rule.",
         "tags": [
           "owner"
         ],
@@ -5640,11 +5640,11 @@
         ],
         "responses": {
           "200": {
-            "description": "The command completed.",
+            "description": "The command completed. The first answer for the key carries the token in `result` (HelperTokenIssued); a repeat of the key answers 200 with the same envelope and HelperTokenIssuedRepeated, without the token.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HelperTokenIssued"
+                  "$ref": "#/components/schemas/HelperTokenIssuedCompleted"
                 }
               }
             }
@@ -6413,11 +6413,11 @@
         ],
         "responses": {
           "200": {
-            "description": "The command completed.",
+            "description": "The command completed. The first answer for the key carries the token in `result` (SeatTokenPickup); a repeat of the key answers 200 with the same envelope and SeatTokenPickupRepeated, without the token.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeatTokenPickup"
+                  "$ref": "#/components/schemas/SeatTokenPickupCompleted"
                 }
               }
             }
@@ -6623,7 +6623,7 @@
       "post": {
         "operationId": "report_limit",
         "summary": "Reports that a run hit a provider limit.",
-        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`.",
+        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_limit, which reads no task state; with no candidate the job is left to its run timeout.",
         "tags": [
           "helper"
         ],
@@ -6705,7 +6705,7 @@
       "post": {
         "operationId": "report_signed_out",
         "summary": "Reports that a login was found signed out.",
-        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`.",
+        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_signed_out, which reads no task state; with no candidate the job is left to its run timeout.",
         "tags": [
           "helper"
         ],
@@ -8299,13 +8299,33 @@
               "string",
               "null"
             ]
+          },
+          "credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The credential the claim runs on, as the claim event records it; null for a seat that connects on its own."
+          },
+          "model": {
+            "description": "The model the claim runs with, as the claim event records it; null when none is set.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$"
           }
         },
         "required": [
           "task",
           "lease",
           "briefing",
-          "work_reference"
+          "work_reference",
+          "credential_id",
+          "model"
         ],
         "examples": [
           {
@@ -8400,7 +8420,9 @@
                 ]
               }
             },
-            "work_reference": "example"
+            "work_reference": "example",
+            "credential_id": null,
+            "model": null
           }
         ]
       },
@@ -8502,13 +8524,33 @@
               "string",
               "null"
             ]
+          },
+          "credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The credential the claim runs on, as the claim event records it; null for a seat that connects on its own."
+          },
+          "model": {
+            "description": "The model the claim runs with, as the claim event records it; null when none is set.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$"
           }
         },
         "required": [
           "review",
           "lease",
           "briefing",
-          "work_reference"
+          "work_reference",
+          "credential_id",
+          "model"
         ],
         "examples": [
           {
@@ -8596,7 +8638,9 @@
                 ]
               }
             },
-            "work_reference": "example"
+            "work_reference": "example",
+            "credential_id": null,
+            "model": null
           }
         ]
       },
@@ -9473,12 +9517,32 @@
                 "$ref": "#/components/schemas/ContractDraftJobInput"
               }
             ]
+          },
+          "credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The credential the claim runs on, as the claim event records it; null for a seat that connects on its own."
+          },
+          "model": {
+            "description": "The model the claim runs with, as the claim event records it; null when none is set.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$"
           }
         },
         "required": [
           "job_id",
           "kind",
-          "input"
+          "input",
+          "credential_id",
+          "model"
         ],
         "examples": [
           {
@@ -9492,7 +9556,9 @@
               "task_id": "00000000-0000-4000-8000-000000000124",
               "project_id": "00000000-0000-4000-8000-000000000125",
               "inputs": {}
-            }
+            },
+            "credential_id": null,
+            "model": null
           }
         ]
       },
@@ -10685,7 +10751,7 @@
       "SeatTokenPickup": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The seat's fresh token for a `start_seat` request. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers the stored outcome without it.",
+        "description": "The seat's fresh token for a `start_seat` request. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers SeatTokenPickupRepeated instead.",
         "properties": {
           "helper_request_id": {
             "type": "string",
@@ -10716,7 +10782,7 @@
       "SeatConnected": {
         "type": "object",
         "additionalProperties": false,
-        "description": "`seat_token` is set for a seat that connects on its own and null for a seat the app runs. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers the stored outcome without it.",
+        "description": "`seat_token` is set for a seat that connects on its own and null for a seat the app runs. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers SeatConnectedRepeated instead.",
         "properties": {
           "seat_id": {
             "type": "string",
@@ -10744,7 +10810,7 @@
       "HelperTokenIssued": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The helper's token. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers the stored outcome without it.",
+        "description": "The helper's token. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers HelperTokenIssuedRepeated instead.",
         "properties": {
           "helper_id": {
             "type": "string",
@@ -10794,7 +10860,7 @@
       "OwnerSession": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner's bearer session. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers the stored outcome without it.",
+        "description": "The owner's bearer session. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers OwnerSessionRepeated instead.",
         "properties": {
           "user_id": {
             "type": "string",
@@ -11428,7 +11494,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when the helper reports every check passed.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when the helper reports every check passed. The masked label is made on the Mac; model, effort and strength rank are what handoff uses.",
         "properties": {
           "credential_id": {
             "type": "string",
@@ -11458,20 +11524,68 @@
           "name": {
             "type": "string",
             "minLength": 1
+          },
+          "masked_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "For an API token, the masked label the Mac app makes from it (the last characters only); null for a login."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model used when work reaches this credential from another provider; null for the provider's default."
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The effort used when work reaches this credential from another provider; null for the default."
+          },
+          "strength_rank": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "The strength rank of work run on this credential after a handoff from another provider; null when it keeps the seat's."
           }
         },
         "required": [
           "credential_id",
           "kind",
           "provider",
-          "name"
+          "name",
+          "masked_label",
+          "model",
+          "effort",
+          "strength_rank"
         ],
         "examples": [
           {
             "credential_id": "00000000-0000-4000-8000-000000000154",
             "kind": "login",
             "provider": "claude",
-            "name": "example"
+            "name": "example",
+            "masked_label": null,
+            "model": null,
+            "effort": null,
+            "strength_rank": null
+          },
+          {
+            "credential_id": "00000000-0000-4000-8000-000000000155",
+            "kind": "api_token",
+            "provider": "claude_api",
+            "name": "example",
+            "masked_label": "...wxyz",
+            "model": "claude-model-1",
+            "effort": "high",
+            "strength_rank": 2
           }
         ]
       },
@@ -11631,12 +11745,28 @@
               "string",
               "null"
             ]
+          },
+          "plan": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For run_add_checks and verify on a login: the plan the provider's tool reports; else null."
+          },
+          "account_email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For run_add_checks and verify on a login: the account email the provider's tool reports; else null. Kept on the credential row, never in an event."
           }
         },
         "required": [
           "outcome",
           "checks",
-          "tool_version"
+          "tool_version",
+          "plan",
+          "account_email"
         ],
         "examples": [
           {
@@ -11648,7 +11778,9 @@
                 "failure": "not_installed"
               }
             ],
-            "tool_version": "example"
+            "tool_version": "example",
+            "plan": null,
+            "account_email": null
           }
         ]
       },
@@ -11755,7 +11887,9 @@
                   "failure": "not_installed"
                 }
               ],
-              "tool_version": "example"
+              "tool_version": "example",
+              "plan": null,
+              "account_email": null
             }
           }
         ]
@@ -11799,7 +11933,9 @@
                     "failure": "not_installed"
                   }
                 ],
-                "tool_version": "example"
+                "tool_version": "example",
+                "plan": null,
+                "account_email": null
               }
             }
           }
@@ -11827,7 +11963,9 @@
                   "failure": "not_installed"
                 }
               ],
-              "tool_version": "example"
+              "tool_version": "example",
+              "plan": null,
+              "account_email": null
             }
           }
         ]
@@ -13200,7 +13338,9 @@
                   ]
                 }
               },
-              "work_reference": "example"
+              "work_reference": "example",
+              "credential_id": null,
+              "model": null
             },
             "refusal": null
           }
@@ -13410,7 +13550,9 @@
                   ]
                 }
               },
-              "work_reference": "example"
+              "work_reference": "example",
+              "credential_id": null,
+              "model": null
             },
             "refusal": null
           }
@@ -13504,7 +13646,9 @@
                 "task_id": "00000000-0000-4000-8000-000000000282",
                 "project_id": "00000000-0000-4000-8000-000000000283",
                 "inputs": {}
-              }
+              },
+              "credential_id": null,
+              "model": null
             },
             "refusal": null
           }
@@ -13679,6 +13823,362 @@
             "result": {
               "credential_id": "00000000-0000-4000-8000-000000000286",
               "helper_request_id": "00000000-0000-4000-8000-000000000287"
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "SeatTokenPickupRepeated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The result a repeat of the key answers in place of SeatTokenPickup: the same ids with no token, which was shown once and never stored. `repeated` tells it apart from a first answer.",
+        "properties": {
+          "helper_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repeated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "helper_request_id",
+          "seat_id",
+          "repeated"
+        ],
+        "examples": [
+          {
+            "helper_request_id": "00000000-0000-4000-8000-000000000145",
+            "seat_id": "00000000-0000-4000-8000-000000000146",
+            "repeated": true
+          }
+        ]
+      },
+      "SeatTokenPickupCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the command completed. `result` is SeatTokenPickup the first time the key is answered, with the token shown once, and SeatTokenPickupRepeated for a repeat of the key (L241, IF-4).",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SeatTokenPickup"
+              },
+              {
+                "$ref": "#/components/schemas/SeatTokenPickupRepeated"
+              }
+            ]
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "issue_seat_token",
+            "outcome": "completed",
+            "result": {
+              "helper_request_id": "00000000-0000-4000-8000-000000000145",
+              "seat_id": "00000000-0000-4000-8000-000000000146",
+              "seat_token": "example"
+            },
+            "refusal": null
+          },
+          {
+            "key": "example",
+            "command": "issue_seat_token",
+            "outcome": "completed",
+            "result": {
+              "helper_request_id": "00000000-0000-4000-8000-000000000145",
+              "seat_id": "00000000-0000-4000-8000-000000000146",
+              "repeated": true
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "SeatConnectedRepeated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The result a repeat of the key answers in place of SeatConnected: the same ids with no token, which was shown once and never stored. `repeated` tells it apart from a first answer.",
+        "properties": {
+          "seat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repeated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "seat_id",
+          "repeated"
+        ],
+        "examples": [
+          {
+            "seat_id": "00000000-0000-4000-8000-000000000147",
+            "repeated": true
+          }
+        ]
+      },
+      "SeatConnectedCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the command completed. `result` is SeatConnected the first time the key is answered, with the token shown once, and SeatConnectedRepeated for a repeat of the key (L241, IF-4).",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SeatConnected"
+              },
+              {
+                "$ref": "#/components/schemas/SeatConnectedRepeated"
+              }
+            ]
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "connect_seat",
+            "outcome": "completed",
+            "result": {
+              "seat_id": "00000000-0000-4000-8000-000000000147",
+              "seat_token": "example"
+            },
+            "refusal": null
+          },
+          {
+            "key": "example",
+            "command": "connect_seat",
+            "outcome": "completed",
+            "result": {
+              "seat_id": "00000000-0000-4000-8000-000000000147",
+              "repeated": true
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "HelperTokenIssuedRepeated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The result a repeat of the key answers in place of HelperTokenIssued: the same ids with no token, which was shown once and never stored. `repeated` tells it apart from a first answer.",
+        "properties": {
+          "helper_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repeated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "helper_id",
+          "repeated"
+        ],
+        "examples": [
+          {
+            "helper_id": "00000000-0000-4000-8000-000000000148",
+            "repeated": true
+          }
+        ]
+      },
+      "HelperTokenIssuedCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the command completed. `result` is HelperTokenIssued the first time the key is answered, with the token shown once, and HelperTokenIssuedRepeated for a repeat of the key (L241, IF-4).",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HelperTokenIssued"
+              },
+              {
+                "$ref": "#/components/schemas/HelperTokenIssuedRepeated"
+              }
+            ]
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "issue_helper_token",
+            "outcome": "completed",
+            "result": {
+              "helper_id": "00000000-0000-4000-8000-000000000148",
+              "helper_token": "example"
+            },
+            "refusal": null
+          },
+          {
+            "key": "example",
+            "command": "issue_helper_token",
+            "outcome": "completed",
+            "result": {
+              "helper_id": "00000000-0000-4000-8000-000000000148",
+              "repeated": true
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "OwnerSessionRepeated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The result a repeat of the key answers in place of OwnerSession: the same ids with no token, which was shown once and never stored. `repeated` tells it apart from a first answer.",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "repeated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "user_id",
+          "created_at",
+          "repeated"
+        ],
+        "examples": [
+          {
+            "user_id": "00000000-0000-4000-8000-000000000149",
+            "created_at": "2026-01-01T00:00:00Z",
+            "repeated": true
+          }
+        ]
+      },
+      "OwnerSessionCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the command completed. `result` is OwnerSession the first time the key is answered, with the token shown once, and OwnerSessionRepeated for a repeat of the key (L241, IF-4).",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OwnerSession"
+              },
+              {
+                "$ref": "#/components/schemas/OwnerSessionRepeated"
+              }
+            ]
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "sign_in",
+            "outcome": "completed",
+            "result": {
+              "user_id": "00000000-0000-4000-8000-000000000149",
+              "session_token": "example",
+              "created_at": "2026-01-01T00:00:00Z"
+            },
+            "refusal": null
+          },
+          {
+            "key": "example",
+            "command": "sign_in",
+            "outcome": "completed",
+            "result": {
+              "user_id": "00000000-0000-4000-8000-000000000149",
+              "created_at": "2026-01-01T00:00:00Z",
+              "repeated": true
             },
             "refusal": null
           }

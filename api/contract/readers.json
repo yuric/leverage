@@ -33,7 +33,7 @@
         "source": "cachedUsageUtilization.utilization.cedar_ember in the account's settings folder, behind a version check; 0 only when present and empty"
       },
       "capture": {
-        "usage": "recorded",
+        "usage": "none",
         "limit": "none",
         "sign_out": "none"
       },
@@ -136,7 +136,7 @@
         "source": "rateLimitResetCredits.availableCount, with each reset's expiry date"
       },
       "capture": {
-        "usage": "recorded",
+        "usage": "none",
         "limit": "none",
         "sign_out": "none"
       },

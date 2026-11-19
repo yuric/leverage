@@ -11,6 +11,11 @@ class OpenapiTest < Minitest::Test
   # The only components that may carry a secret, once, in the response that
   # issues it (IF-15, IF-16, IF-17). A stored command outcome never does.
   ONE_TIME_RESPONSES = %w[SeatTokenPickup SeatConnected HelperTokenIssued OwnerSession].freeze
+  # The operation that returns each one, and the token property it carries.
+  ONE_TIME_OPERATIONS = {
+    "issue_seat_token" => %w[SeatTokenPickup seat_token], "connect_seat" => %w[SeatConnected seat_token],
+    "issue_helper_token" => %w[HelperTokenIssued helper_token], "sign_in_owner" => %w[OwnerSession session_token]
+  }.freeze
   # The owner reads whose shapes wait for track F's queries (IF-18). The
   # events tail and the Needs you list are stable.
   PROVISIONAL_READS = %w[
@@ -315,9 +320,43 @@ class OpenapiTest < Minitest::Test
     assert_equal({ "$ref" => "#/components/schemas/CompleteContractRequest" }, request_schema("complete_contract"))
   end
 
+  # ARCHITECTURE: every changing call answers one outcome body. A one-time
+  # token is the result of the first answer for its key; a repeat of the key
+  # answers the same envelope with a *Repeated result that has no token.
+  def test_one_time_tokens_come_in_the_outcome_envelope_and_a_repeat_drops_them
+    openapi = JSONSchemer.openapi(doc)
+    ONE_TIME_OPERATIONS.each do |operation_id, (component, token)|
+      envelope = "#{component}Completed"
+      assert_equal({ "$ref" => "#/components/schemas/#{envelope}" }, response_schema(operation_id, "200"), operation_id)
+      assert_includes operation(operation_id)["responses"]["200"]["description"], "repeat", operation_id
+      body = schemas.fetch(envelope)
+      assert_equal %w[command key outcome refusal result], body.fetch("required").sort, envelope
+      assert_equal "completed", body.dig("properties", "outcome", "const"), envelope
+      assert_equal [ "#/components/schemas/#{component}", "#/components/schemas/#{component}Repeated" ],
+        body.dig("properties", "result", "oneOf").map { |branch| branch["$ref"] }, envelope
+      assert_includes schemas.fetch(component).fetch("required"), token, component
+      repeated = schemas.fetch("#{component}Repeated")
+      refute_includes repeated.fetch("properties"), token, "#{component}Repeated"
+      assert_equal true, repeated.dig("properties", "repeated", "const"), "#{component}Repeated"
+
+      validator = openapi.ref("#/components/schemas/#{envelope}")
+      first = schemas.fetch(component).fetch("examples").first
+      again = schemas.fetch("#{component}Repeated").fetch("examples").first
+      wrap = ->(result) { { "key" => "k", "command" => registry["operations"].find { |op| op["operation_id"] == operation_id }["commands"].first, "outcome" => "completed", "result" => result, "refusal" => nil } }
+      assert validator.valid?(wrap.call(first)), "#{envelope}: the first answer"
+      assert validator.valid?(wrap.call(again)), "#{envelope}: a repeat"
+      refute validator.valid?(wrap.call(first.except(token))), "#{envelope}: a first answer without its token"
+    end
+    connected = JSONSchemer.openapi(doc).ref("#/components/schemas/SeatConnectedCompleted")
+    app_run = { "key" => "k", "command" => "connect_seat", "outcome" => "completed", "refusal" => nil,
+                "result" => { "seat_id" => uuid(1), "seat_token" => nil } }
+    assert connected.valid?(app_run), "a seat the app runs gets seat_token null"
+    refute connected.valid?(app_run.merge("result" => { "seat_id" => uuid(1), "seat_token" => nil, "repeated" => true }))
+  end
+
   def test_the_seat_token_is_returned_once_and_never_stored
     pickup = operation("issue_seat_token")
-    assert_equal({ "$ref" => "#/components/schemas/SeatTokenPickup" }, json_schema(pickup["responses"].fetch("200")))
+    assert_equal({ "$ref" => "#/components/schemas/SeatTokenPickupCompleted" }, json_schema(pickup["responses"].fetch("200")))
     assert_includes schemas.fetch("SeatTokenPickup").fetch("properties"), "seat_token"
     assert_includes pickup["description"], "never stored"
     %w[HelperRequest CommandOutcome PendingOutcome RefusedOutcome CompletedOutcome TransportError Refusal].each do |name|
@@ -328,7 +367,7 @@ class OpenapiTest < Minitest::Test
       next unless method == "post"
 
       refs = [ op["responses"].fetch("200") ].map { |response| json_schema(response)["$ref"] }.compact.map { |ref| ref.split("/").last }
-      one_time = refs & ONE_TIME_RESPONSES
+      one_time = refs & ONE_TIME_RESPONSES.map { |name| "#{name}Completed" }
       allowed = %w[issue_seat_token connect_seat issue_helper_token sign_in_owner]
       assert_equal allowed.include?(op["operationId"]), !one_time.empty?, op["operationId"]
     end
@@ -385,13 +424,46 @@ class OpenapiTest < Minitest::Test
   end
 
   def test_the_owner_issues_the_helper_token_and_signs_in
-    assert_equal({ "$ref" => "#/components/schemas/HelperTokenIssued" }, response_schema("issue_helper_token", "200"))
-    assert_equal({ "$ref" => "#/components/schemas/OwnerSession" }, response_schema("sign_in_owner", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/HelperTokenIssuedCompleted" }, response_schema("issue_helper_token", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/OwnerSessionCompleted" }, response_schema("sign_in_owner", "200"))
     assert_equal %w[email_address password].sort, schemas.fetch("SignInRequest").fetch("required").sort
   end
 
   # PRD Outward actions: rework "reopens the criteria the owner names and the
   # review criterion", so the owner's call names them.
+  # PRD Data model, credentials: masked label, plan and account email, and
+  # the model, effort and strength rank used on handoff. The Mac app makes
+  # the masked label; the helper's add checks and Verify read plan and email.
+  # None of them is ever in an event payload.
+  def test_requests_carry_every_credential_field_the_server_keeps
+    add = schemas.fetch("AddCredentialRequest").fetch("properties")
+    %w[masked_label model effort].each { |name| assert_equal [ "string", "null" ], add.fetch(name)["type"], name }
+    assert_equal [ "integer", "null" ], add.fetch("strength_rank")["type"]
+    assert_includes schemas.fetch("AddCredentialRequest").fetch("required"), "strength_rank"
+    result = schemas.fetch("HelperRequestResult").fetch("properties")
+    %w[plan account_email].each { |name| assert_equal [ "string", "null" ], result.fetch(name)["type"], name }
+    registry["event_types"].each do |entry|
+      entry["schema_versions"].each do |version|
+        names = property_names(Leverage::Contract.payload_schema(entry["type"], version))
+        assert_empty names & %w[masked_label plan account_email], entry["type"]
+      end
+    end
+  end
+
+  # L588, L688: the server picks the credential a claim runs on, and the run
+  # points the tool at it; the claim result says which, and with what model.
+  def test_claim_results_name_the_credential_and_model_the_claim_runs_on
+    model = Leverage::Contract.payload_schema("task.claimed", 1).dig("properties", "model")
+    %w[ClaimTaskResult ClaimReviewResult ClaimJobResult].each do |name|
+      schema = schemas.fetch(name)
+      assert_includes schema.fetch("required"), "credential_id", name
+      assert_includes schema.fetch("required"), "model", name
+      assert_equal [ "string", "null" ], schema.dig("properties", "credential_id", "type"), name
+      assert_equal "uuid", schema.dig("properties", "credential_id", "format"), name
+      assert_equal model["pattern"], schema.dig("properties", "model", "pattern"), name
+    end
+  end
+
   def test_return_for_rework_names_the_criteria_to_reopen
     schema = deref(request_schema("return_for_rework"))
     assert_includes schema.fetch("required"), "criterion_ids"

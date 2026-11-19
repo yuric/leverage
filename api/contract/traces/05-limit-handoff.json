@@ -96,6 +96,7 @@
       "expect": {
         "outcome": "completed",
         "refusal": null,
+        "result_fields": {"credential_id": "$credential:claude_a", "model": "claude-model-1"},
         "events": [
           {"ref": "@event:5", "type": "task.claimed", "schema_version": 1, "at": "@t:20", "effective_at": "@t:20", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_builder", "payload": {"seat_id": "$seat:builder", "credential_id": "$credential:claude_a", "model": "claude-model-1"}}
         ],
@@ -314,6 +315,7 @@
       "expect": {
         "outcome": "completed",
         "refusal": null,
+        "result_fields": {"credential_id": "$credential:grok_r", "model": "grok-model-1"},
         "events": [
           {"ref": "@event:20", "type": "review.started", "schema_version": 1, "at": "@t:2520", "effective_at": "@t:2520", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:t1_review_claim_2520", "payload": {"credential_id": "$credential:grok_r", "model": "grok-model-1"}}
         ],

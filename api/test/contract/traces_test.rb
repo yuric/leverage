@@ -638,6 +638,37 @@ class TracesTest < Minitest::Test
     end
   end
 
+  # A trace may fix fields of a command's result. Each is a property of the
+  # operation's 200 result, and a claim's credential and model are the ones
+  # its claim event records (L588, L688).
+  def test_result_fields_belong_to_the_result_and_a_claim_names_its_credential
+    openapi = Leverage::Contract.openapi
+    claims = { "claim_next_task" => "task.claimed", "claim_next_review" => "review.started", "claim_next_job" => "job.claimed" }
+    seen = 0
+    traces.each do |name, trace|
+      trace["commands"].each_with_index do |command, index|
+        fields = command["expect"]["result_fields"] or next
+        where = "#{name} command #{index + 1}"
+        assert_equal "completed", command["expect"]["outcome"], where
+        result = openapi_result(openapi, command["operation_id"])
+        assert_empty fields.keys - result.fetch("properties").keys, "#{where}: not fields of the result"
+        type = claims[command["operation_id"]] or next
+        event = command["expect"]["events"].find { |candidate| candidate["type"] == type }
+        %w[credential_id model].each { |field| assert_equal event["payload"][field], fields[field], "#{where}: #{field}" }
+        seen += 1
+      end
+    end
+    assert_operator seen, :>=, 2, "trace 05 shows the credential and model of its task and review claims"
+  end
+
+  def openapi_result(openapi, operation_id)
+    schemas = openapi["components"]["schemas"]
+    deref = ->(node) { node = schemas.fetch(node["$ref"].split("/").last) while node["$ref"]; node }
+    op = openapi["paths"].values.flat_map(&:values).find { |candidate| candidate.is_a?(Hash) && candidate["operationId"] == operation_id }
+    envelope = deref.call(op["responses"]["200"]["content"]["application/json"]["schema"])
+    deref.call(envelope["properties"]["result"])
+  end
+
   # One job row per attempt (plan DB-31): a check queued again runs on a new
   # job, and job.requeued is written on the job it replaces.
   def test_each_attempt_of_a_check_runs_on_a_job_of_its_own

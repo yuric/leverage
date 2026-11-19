@@ -110,7 +110,8 @@
         },
         "events": {"type": "array", "items": {"$ref": "#/$defs/event"}},
         "steps_opened": {"type": "array", "items": {"$ref": "#/$defs/step_opened"}},
-        "steps_closed": {"type": "array", "items": {"$ref": "#/$defs/step_closed"}}
+        "steps_closed": {"type": "array", "items": {"$ref": "#/$defs/step_closed"}},
+        "result_fields": {"description": "Fields of the completed command's result that the trace fixes, with symbols bound as in events; the rest of the result is outside the trace.", "type": "object", "minProperties": 1}
       }
     },
     "event": {

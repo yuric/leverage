@@ -42,6 +42,17 @@ class ReadersTest < Minitest::Test
     assert_equal false, by_provider.fetch("gemini")["verified"], "every Gemini fact is unverified (PRD)"
   end
 
+  # PRD L624: each capture records its tool version, and each reader names
+  # the versions it was tested against. A reader that claims a recorded
+  # capture names at least one.
+  def test_a_recorded_capture_names_the_tool_versions_it_was_tested_against
+    readers.each do |reader|
+      next unless reader["capture"].value?("recorded")
+
+      refute_empty reader["tested_tool_versions"], "#{reader["provider"]} claims a recorded capture but names no tool version"
+    end
+  end
+
   def test_figures_and_resets_use_registry_vocabularies
     lists = registry.fetch("lists")
     readers.each do |reader|

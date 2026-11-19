@@ -238,7 +238,7 @@
       "operation_id": "report_request_result",
       "key": "$key:helper_sign_in_result",
       "path_params": {"id": "$helper_request:sign_in_claude_b"},
-      "body": {"result": {"outcome": "finished", "checks": [{"check": "signed_in", "passed": true, "failure": null}, {"check": "test_prompt", "passed": true, "failure": null}], "tool_version": "0.0.0-example"}},
+      "body": {"result": {"outcome": "finished", "checks": [{"check": "signed_in", "passed": true, "failure": null}, {"check": "test_prompt", "passed": true, "failure": null}], "tool_version": "0.0.0-example", "plan": null, "account_email": null}},
       "expect": {
         "outcome": "completed",
         "refusal": null,
