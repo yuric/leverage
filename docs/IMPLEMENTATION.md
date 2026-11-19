@@ -62,7 +62,7 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 1 contract | `feat/contract` | #11 | In review |
+| Milestone 1 contract | `feat/contract` | #12 | In review |
 
 ## Milestones
 
@@ -74,7 +74,7 @@ the PRD's milestone list. How the build is run locally is in
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
-| 1 | Contract | In review | #11 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
+| 1 | Contract | In review | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
 | 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
 | 3 | Handoff | Not started | | |
 | 4 | Rule checks | Not started | | |
