@@ -1,5 +1,11 @@
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
 /// A new, empty folder of a test's own under the system's temporary folder,
 /// removed when the value is released (or by `remove()`).
 ///
@@ -16,7 +22,7 @@ public final class TemporaryFolder: @unchecked Sendable {
             throw CocoaError(.fileWriteUnknown)
         }
         let path = String(cString: made)
-        url = URL(fileURLWithPath: realpath(path) ?? path, isDirectory: true)
+        url = URL(fileURLWithPath: resolvedPath(path) ?? path, isDirectory: true)
     }
 
     deinit { remove() }
@@ -39,8 +45,8 @@ public final class TemporaryFolder: @unchecked Sendable {
     }
 }
 
-private func realpath(_ path: String) -> String? {
-    guard let resolved = Foundation.realpath(path, nil) else { return nil }
+private func resolvedPath(_ path: String) -> String? {
+    guard let resolved = realpath(path, nil) else { return nil }
     defer { free(resolved) }
     return String(cString: resolved)
 }

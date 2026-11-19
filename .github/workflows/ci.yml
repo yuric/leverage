@@ -61,7 +61,7 @@ jobs:
     # macos-26 defaults to Xcode 26.6, the toolchain the package is built
     # with locally; its swift-tools-version needs Xcode 26 or later.
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: mac
@@ -71,10 +71,81 @@ jobs:
           persist-credentials: false
       - name: Show the toolchain
         run: swift --version
+      # The generated Swift lists must equal a fresh run of their generator
+      # over the contract (rule AR-002). -I keeps the script's folder off
+      # Python's import path. Steps whose script a later change adds are
+      # skipped until it exists.
+      - name: Generated contract lists are current
+        if: hashFiles('scripts/generate_swift_contract.py') != ''
+        working-directory: .
+        run: python3 -I scripts/generate_swift_contract.py --check
+      - name: Self-test of the generator
+        if: hashFiles('scripts/test_generate_swift_contract.py') != ''
+        working-directory: .
+        run: python3 -I scripts/test_generate_swift_contract.py
+      # The stand-in tools every Mac test runs instead of a provider's tool.
+      - name: Self-test of the stand-in tools
+        working-directory: .
+        run: python3 -I mac/Tests/StandIns/test_provider_tool.py
       - name: Build
         run: swift build
       - name: Test
         run: swift test
+      # The app bundle, without the API image (that needs this job's Docker,
+      # which macOS runners do not have).
+      - name: Self-test of the bundle's compose file
+        if: hashFiles('scripts/test_app_compose.py') != ''
+        working-directory: .
+        run: python3 -I scripts/test_app_compose.py
+      - name: Build the app bundle
+        if: hashFiles('scripts/build_app.sh') != ''
+        working-directory: .
+        run: scripts/build_app.sh --no-image
+      - name: Check the bundle's Info.plist and signature
+        if: hashFiles('scripts/build_app.sh') != ''
+        working-directory: .
+        run: |
+          plutil -lint dist/Leverage.app/Contents/Info.plist
+          codesign --verify --strict dist/Leverage.app
+
+  e2e:
+    name: End-to-end run with stand-in tools
+    # The whole loop: the API in its containers, and the helper and the
+    # runner built for Linux by the runner's own Swift (the package's `e2e`
+    # lane, its default on Linux). No provider is called: the tests use the
+    # stand-in tools of mac/Tests/StandIns.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the toolchain
+        run: |
+          swift --version
+          docker --version
+          docker compose version
+      - name: Use the example configuration
+        run: cp .env.example .env
+      - name: Build the helper, the runner and the end-to-end tests
+        working-directory: mac
+        env:
+          LEVERAGE_ONLY: e2e
+        run: swift build --build-tests
+      - name: Self-test of the stand-in tools
+        run: python3 -I mac/Tests/StandIns/test_provider_tool.py
+      - name: Self-test of the secret scan
+        if: hashFiles('scripts/test_secret_scan.py') != ''
+        run: python3 -I scripts/test_secret_scan.py
+      - name: The end-to-end run
+        if: hashFiles('scripts/e2e_core_loop.sh') != ''
+        run: scripts/e2e_core_loop.sh
+      - name: Self-test of the speed report
+        if: hashFiles('scripts/test_speed_report.py') != ''
+        run: python3 -I scripts/test_speed_report.py
+      - name: Speed smoke run
+        if: hashFiles('scripts/speed_run.sh') != ''
+        run: scripts/speed_run.sh --smoke
 
   imports:
     name: Import directions

@@ -1,0 +1,5 @@
+#!/bin/sh
+# The tool inside the stand-in release archive (plan PV-5).
+if [ "$1" = "--version" ]; then echo "standin-tool 0.0.1 (from an archive)"; exit 0; fi
+echo "standin-tool: unknown arguments $*" >&2
+exit 2
