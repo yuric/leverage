@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; first technology choices recorded; design not started — waiting on requirements in [PRD.md](PRD.md) |
+| **Status** | Rules in force; the skeleton's components, mechanisms and versions recorded; the product's design not started |
 | **Last updated** | 2026-11-19 |
 
 This document describes how leverage is built: its components, how they
@@ -10,9 +10,10 @@ communicate, where data lives, and why the design is the way it is. It
 describes the system **as it exists**, not as it is hoped to be. Planned work
 belongs in the PRD or in issues.
 
-The first technology choices are recorded under
-[Technology choices](#technology-choices). The other design sections below are
-not commitments until their _TBD_ markers are replaced. The [rules](#rules) are
+The technology choices are recorded under
+[Technology choices](#technology-choices), and the skeleton's components
+under [Components](#components). The other design sections below are not
+commitments until their _TBD_ markers are replaced. The [rules](#rules) are
 in force now.
 
 ## Rules
@@ -33,9 +34,9 @@ knowing them.
 | AR-002 | [One authoritative home per fact](#ar-002-one-authoritative-home-per-fact) | Active |
 | AR-003 | [Decision record for hard-to-reverse choices](#ar-003-decision-record-for-hard-to-reverse-choices) | Active |
 | AR-004 | [Declared, pinned, justified dependencies](#ar-004-declared-pinned-justified-dependencies) | Active |
-| AR-005 | [Declared dependency direction](#ar-005-declared-dependency-direction) | Pending: activated by the pull request that lists a second component under Components |
-| AR-006 | [One mechanism per cross-cutting concern](#ar-006-one-mechanism-per-cross-cutting-concern) | Pending: activated by the pull request that adds the first product source file |
-| AR-007 | [Tests that fail before the change, never silently weakened](#ar-007-tests-that-fail-before-the-change-never-silently-weakened) | Pending: activated by the pull request that adds the first product source file |
+| AR-005 | [Declared dependency direction](#ar-005-declared-dependency-direction) | Active |
+| AR-006 | [One mechanism per cross-cutting concern](#ar-006-one-mechanism-per-cross-cutting-concern) | Active |
+| AR-007 | [Tests that fail before the change, never silently weakened](#ar-007-tests-that-fail-before-the-change-never-silently-weakened) | Active |
 
 A product source file is a source file outside `docs/`, `scripts/`,
 `.github/`, and `.agents/`.
@@ -191,7 +192,10 @@ registry, and its license must be compatible with the MIT License.
   is named in the description, and the answer is then not `N/A`.
 - **Left to review:** the license, the justification, whether the package is
   the real one, and whether a changed SHA is the release it claims to be.
-  Checking library manifests waits for the first manifest.
+  The library manifests (`api/Gemfile`, `api/Gemfile.lock`,
+  `mac/Package.swift`) and the image and package lines in `api/Dockerfile`
+  and `compose.yaml` are not checked automatically: a reviewer compares them
+  with the description.
 
 ### AR-005 Declared dependency direction
 
@@ -199,8 +203,19 @@ Code imports only along the dependency directions listed under
 [Components](#components). A pull request that needs a new direction changes
 that list, with an ADR, in the same pull request.
 
-- **Pending:** the pull request that activates this rule adds the list and an
-  import check in CI.
+- **Checked automatically:** `scripts/check_imports.py`, the "Import
+  directions" job in CI, reads the
+  [allowed dependency directions](#allowed-dependency-directions) and fails
+  when a Swift file imports a code unit its own unit may not import, when a
+  Ruby file loads a file outside its unit's folder, or when a Swift or Ruby
+  file outside `docs/`, `scripts/`, `.github/`, and `.agents/` is in no listed
+  unit (`mac/Package.swift`, the package manifest, excepted). Because the
+  list is in the Components section, changing it also needs an ADR under
+  rule AR-003.
+- **Left to review:** a dependency the check cannot see: a file loaded
+  through a computed path, a target dependency in `mac/Package.swift` that
+  no source file imports, and a call between components that is not an
+  import (the Mac side reaches the API only over HTTP).
 
 ### AR-006 One mechanism per cross-cutting concern
 
@@ -209,8 +224,14 @@ shared helpers) has one designated mechanism, named in this document. A pull
 request uses it and does not add a second mechanism or a duplicate of
 something it already provides.
 
-- **Pending:** the pull request that activates this rule names the
-  mechanisms.
+The mechanisms are listed under
+[Cross-cutting mechanisms](#cross-cutting-mechanisms).
+
+- **Checked automatically:** nothing.
+- **Left to review:** whether a change uses the listed mechanism, and
+  whether it adds a second one. A change that needs a new mechanism, or a
+  first one where the list says "none yet", changes the list in the same
+  pull request.
 
 ### AR-007 Tests that fail before the change, never silently weakened
 
@@ -219,7 +240,29 @@ fails on the base branch and passes with the change. It does not delete,
 skip, or loosen an existing assertion unless its description names the
 assertion and the reason.
 
-- **Pending:** the pull request that activates this rule adds the CI check.
+- **Checked automatically:** for the API and the Mac side only. Their
+  product source is any file under `api/` or `mac/` that is not Markdown and
+  not in a test folder. A test file is a `.rb` or `.swift` file under
+  `api/test/` (for `api/`) or `mac/Tests/` (for `mac/`), and it counts only
+  for its own component and only if the lines the pull request adds to it
+  include an assertion.
+  - A pull request that adds, changes, or deletes product source in a
+    component, and adds no assertion to a test file of that component,
+    fails. Answering `N/A` with a reason turns the failure into a warning,
+    for a change with no behavior in it; a `Deviates` answer with its
+    accepted ADR passes. A bot's pull request is held to this too; a
+    maintainer answers for it by adding an AR-007 line to its description.
+  - A pull request that removes or changes an assertion line or a test
+    definition line (`test "..."`, `def test_`, `@Test`, `func test`) in an
+    existing test file, deletes a test file that has assertions, or adds a
+    skip to an existing test file gets a warning that names the file and the
+    lines. The description must name each one and the reason.
+- **Left to review:** product source outside `api/` and `mac/` (a Swift or
+  Ruby file there also fails the AR-005 check until its unit is listed),
+  whether the new test fails on the base branch, whether it tests the
+  behavior that changed, whether a warned line really weakens the test,
+  whether the description names it, and other ways to disable a test that
+  the check does not recognize.
 
 ## Engineering practices
 
@@ -254,13 +297,103 @@ must satisfy; where a practice is also a rule, the rule is the authority.
 
 ## System overview
 
-_TBD — one diagram and one paragraph: the major components and how a request
-or job flows through them._
+```mermaid
+flowchart LR
+  subgraph mac["Owner's Mac"]
+    app["LeverageApp"]
+    helper["LeverageHelper"]
+    kit["LeverageKit"]
+    subgraph docker["Docker containers (compose.yaml)"]
+      api["API (Rails)"]
+      db[("PostgreSQL")]
+    end
+  end
+  app --> kit
+  helper --> kit
+  kit -- "HTTP, 127.0.0.1" --> api
+  api --> db
+```
+
+Today the system is a skeleton: no PRD behavior is built. The API runs in a
+Docker container next to a PostgreSQL container on the owner's Mac, and
+answers only on the Mac's loopback address. The Mac app and the helper are
+built from one Swift package and reach the API only through LeverageKit,
+which sends `GET /v1/health` and decodes the answer. Nothing else crosses a
+component boundary yet.
 
 ## Components
 
-_TBD — for each component: its responsibility, what it owns, what it depends
-on, and where its code lives._
+Four components exist. The roles [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md)
+gives them are not built yet; each entry says what the code does today.
+
+### API
+
+- **Responsibility:** the server of a workspace. Today it answers
+  `GET /v1/health` with its status and version, and Rails' own `GET /up`.
+- **Owns:** the PostgreSQL database and the HTTP interface under `/v1`.
+- **Depends on:** PostgreSQL, reached through `DATABASE_URL`, and the gems in
+  `api/Gemfile`. It depends on no other component.
+- **Code:** `api/`, a Rails application in API mode; tests in `api/test/`. It
+  runs in the containers described by `compose.yaml`.
+
+### Shared Swift library (LeverageKit)
+
+- **Responsibility:** the Mac side's one client of the API
+  (`LeverageClient`), its configuration (`Configuration`), and the helpers
+  the app and the helper share.
+- **Owns:** every HTTP call from the Mac side to the API, and the decoding of
+  the answers.
+- **Depends on:** Foundation, and the API over HTTP.
+- **Code:** `mac/Sources/LeverageKit/`; tests in `mac/Tests/LeverageKitTests/`.
+
+### Mac app (LeverageApp)
+
+- **Responsibility:** the owner's window. Today it shows the app's name and
+  the API's health line, refreshed by a button.
+- **Owns:** nothing stored.
+- **Depends on:** LeverageKit and SwiftUI.
+- **Code:** `mac/Sources/LeverageApp/`.
+
+### Mac helper (LeverageHelper)
+
+- **Responsibility:** a command-line program on the owner's Mac. Today it
+  prints its version and the API's health line, and exits 0 when the API
+  answers healthy and 1 otherwise.
+- **Owns:** nothing stored.
+- **Depends on:** LeverageKit and Foundation.
+- **Code:** `mac/Sources/LeverageHelper/`.
+
+### Allowed dependency directions
+
+Code imports only along these directions (rule AR-005). Each code unit is a
+Swift target or the Rails application; "may import" lists the other code
+units it may import, and nothing else of ours. Platform modules and
+libraries are not code units: rule AR-004 covers them. Across components,
+the Mac side reaches the API only over HTTP, through LeverageKit, and the
+API calls nothing on the Mac side.
+
+| Code unit | Folder | May import |
+|---|---|---|
+| `LeverageKit` | `mac/Sources/LeverageKit/` | nothing |
+| `LeverageHelper` | `mac/Sources/LeverageHelper/` | `LeverageKit` |
+| `LeverageApp` | `mac/Sources/LeverageApp/` | `LeverageKit` |
+| `LeverageKitTests` | `mac/Tests/LeverageKitTests/` | `LeverageKit` |
+| `api` | `api/` | nothing |
+
+`python3 scripts/check_imports.py` checks the code against this table.
+
+## Cross-cutting mechanisms
+
+Each concern has one mechanism on each side (rule AR-006). "None yet" means
+the first change that needs one chooses it and adds it here.
+
+| Concern | API (`api/`) | Mac side (`mac/`) |
+|---|---|---|
+| Errors | `ApplicationController` answers every unhandled error with `{"error":{"code","message"}}` and the status Rails maps the error to: it rescues errors raised in a controller, and `ApplicationController.exceptions_app`, Rails' exceptions app, answers errors raised before one runs (in the router or a middleware). A 5xx answer hides the message, which is logged. | `LeverageClientError` in LeverageKit for the errors the client raises; a transport failure passes through as the `URLError` that `URLSession` threw. |
+| Logging | `Rails.logger`; in production to standard output, tagged with the request ID. | None yet. The helper writes its result to standard output and a failure to standard error. |
+| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`. | `Configuration` in LeverageKit, read from the process environment (`LEVERAGE_API_URL`). |
+| Persistence | Active Record on PostgreSQL. | None. |
+| Shared helpers | None yet. | LeverageKit. |
 
 ## Data
 
@@ -290,8 +423,13 @@ Each choice is recorded in the ADR named beside it.
 | Docker containers | The backend ships as a container image; the backend and PostgreSQL run in Docker containers | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Owner's interface | A native Mac app in Swift with SwiftUI, a thin client of the API, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Mac helper | Runs the providers' tools on the owner's Mac; written in Swift, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
-
-Versions are pinned by the pull request that adds the first manifest.
+| Ruby and Rails | Ruby 4.0.10 (image `ruby:4.0.10-slim`), Rails 8.1.4.1; gem versions fixed in `api/Gemfile.lock` | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| PostgreSQL version | 17.12 (image `postgres:17.12-trixie`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| API checks | Minitest, RuboCop (`rubocop-rails-omakase`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Swift | Swift tools version 6.2, macOS 14 or later, no third-party packages | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Swift tests | Swift Testing | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Continuous integration | GitHub Actions: `ubuntu-24.04` for the API and the import check, `macos-26` for Swift | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| Code units | `api`, `LeverageKit`, `LeverageApp`, `LeverageHelper`, with the directions under [Components](#allowed-dependency-directions) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 
 ## Architecture decision records
 
@@ -327,3 +465,4 @@ the same number, the second to merge takes the next one.
 Recorded so far:
 
 - [0001. Rails API with PostgreSQL, a Mac client and a Mac helper](adr/0001-rails-api-postgresql-and-a-mac-client.md)
+- [0002. Pinned versions, test tools and code units of the skeleton](adr/0002-pinned-versions-test-tools-and-code-units.md)

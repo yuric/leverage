@@ -55,15 +55,14 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-19 |
-| **On `main`** | The rules, the PRD, the first decision record, the design reference and the provider-terms record |
-| **Next** | The contract milestone, once the PRD change and the skeleton are merged |
+| **On `main`** | The rules, the PRD with the gate settled, the first decision record, the design reference and the provider-terms record |
+| **Next** | The contract milestone, once the skeleton is merged |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| The PRD change that settles the gate before the contract | `docs/prd-gate` | #9 | In review |
-| Milestone 0 skeleton | `chore/skeleton` | None yet | No commits yet |
+| Milestone 0 skeleton | `chore/skeleton` | #10 | In review |
 
 ## Milestones
 
@@ -74,7 +73,7 @@ the PRD's milestone list. How the build is run locally is in
 
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
-| 0 | Skeleton | In progress | | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too |
+| 0 | Skeleton | In review | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Not started | | |
 | 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
 | 3 | Handoff | Not started | | |
@@ -92,11 +91,38 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
-Nothing yet.
+- **`API_PORT`.** `compose.yaml` publishes the API on `127.0.0.1` at the
+  port in `API_PORT`, 3000 by default, because port 3000 on the owner's Mac
+  was already taken by another program during the skeleton's checks.
+- **TLS switches.** `RAILS_ASSUME_SSL` and `RAILS_FORCE_SSL` default to on
+  in production mode, and `.env.example` turns both off, because the API is
+  served over plain HTTP on `127.0.0.1` during the first run.
+- **The API's tests run in the production image.** compose has one `api`
+  service built from Rails' default production Dockerfile, and
+  `bin/rails test` switches to the test environment and its own database.
+- **Brakeman, `bundler-audit` and the local CI runner left out.** All
+  three are `rails new` defaults. `bin/ci` and `config/ci.rb` were never
+  run. The two gems were removed because of their licenses; see question 6.
+- **Images pinned by digest.** `api/Dockerfile` and `compose.yaml` name each
+  image by tag and digest; ADR 0002 records the digests.
 
 ## Installed for the build
 
-Nothing yet.
+Nothing was installed on the owner's Mac. Every Ruby command ran in a
+container, and Swift ran with the Xcode already installed (Xcode 26.6,
+build 17F113, Swift 6.3.3).
+
+| What | Version | Source | Used for |
+| --- | --- | --- | --- |
+| `ruby` image | `4.0.10-trixie` | Docker Hub official image | Running `rails new` once; no file refers to it |
+| `ruby` image | `4.0.10-slim` (digest in ADR 0002) | Docker Hub official image | The base of the API image |
+| `postgres` image | `17.12-trixie` (digest in ADR 0002) | Docker Hub official image | The `db` service |
+| Debian packages in `api/Dockerfile` | As Debian 13 ships them at build time | Debian 13 archive, inside the API image | `curl`, `libjemalloc2`, `postgresql-client`; and to build gems: `build-essential`, `git`, `libpq-dev`, `libyaml-dev`, `pkg-config` |
+| Gems in `api/Gemfile.lock` | As locked | RubyGems, installed inside the API image | The API, its tests and its checks |
+| `markdownlint-cli2` | 0.24.1 | npm, fetched by `npx` | Running the Markdown lint; not part of the repository |
+
+The direct gems, their licenses and why each is needed are listed in the
+skeleton's pull request description, as rule AR-004 asks.
 
 ## Questions for the owner
 
@@ -120,6 +146,18 @@ Nothing yet.
    asked the agent to settle every review finding in the gate and to review
    them afterwards. The pull request that made that change lists each
    choice in one sentence with its alternative.
+6. **Security scanners for the API, and their licenses.** `rails new` adds
+   Brakeman (a security scan of the code) and `bundler-audit` (a check of
+   the gems for known defects). Rule AR-004 asks that a tool's license be
+   compatible with the MIT License. According to RubyGems, Brakeman 8.1.0
+   is under the "Brakeman Public Use License", which is not an open source
+   license, and `bundler-audit` 0.9.3 is under GPL-3.0-or-later. Both are
+   tools that run beside the code and are not part of it. *Chosen
+   meanwhile:* both are removed, because a delegated run does not answer
+   Deviates to a rule, so the API has no security scanner in CI. The
+   alternative is to keep them and say in AR-004 that the license clause
+   covers what is built into the product, not the tools that check it.
+   Putting either back is one line in `api/Gemfile` and one CI step.
 
 ## Waiting for the owner
 
@@ -130,4 +168,6 @@ run is also listed here until the owner has read it.
 | Item | What is waiting |
 | --- | --- |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
+| Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
+| [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) | Added in the delegated run: the pinned versions, the test tools and the code units of the skeleton. The owner has not read it |

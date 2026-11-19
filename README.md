@@ -1,8 +1,8 @@
 # leverage
 
-> **Status: definition phase.** There is no product code yet and nothing to install or
-> run. This repository currently holds the product requirements document (PRD)
-> and the project's ground rules.
+> **Status: skeleton.** No product behavior is built yet. This repository
+> holds the product requirements document (PRD), the project's ground rules,
+> and a skeleton of the API and the Mac app that answers a health check.
 
 leverage is an open source project that is being specified in the open. The
 requirements are written first, in [docs/PRD.md](docs/PRD.md); architecture,
@@ -14,7 +14,11 @@ deployment, and implementation follow from them.
 |------|---------|
 | [docs/PRD.md](docs/PRD.md) | Product requirements. The source of truth for what gets built. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The architecture rules every pull request answers, and the system design, filled in as requirements settle. |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | How to deploy and operate. Filled in once there is something to deploy. |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | How to run and operate leverage: today, the skeleton on the owner's Mac. |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Where the build stands, milestone by milestone. |
+| `docs/adr/` | Architecture decision records, listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#architecture-decision-records). |
+| `api/` | The server: a Rails application in API mode, run with PostgreSQL in Docker containers (`compose.yaml`, `.env.example`). |
+| `mac/` | A Swift package with the Mac app, the helper and the library they share. |
 | [docs/design/](docs/design/README.md) | The design reference: a working mockup of the owner-facing screens. |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents working in this repository. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, including the rules for AI-assisted contributions. |

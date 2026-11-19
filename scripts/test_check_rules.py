@@ -810,6 +810,173 @@ edit("docs/ARCHITECTURE.md", "### AR-005 Direction", "### AR-006 Mechanisms\n\n#
 reset("left-before-rule")
 case("a rule the base added after the branch left it is not deleted", 0, GOOD, base="base-added-rule", absent="deletes")
 
+# --- AR-007: product source comes with a test ---------------------------------
+NO_TEST = "AR-007: this pull request changes product source"
+RUBY_TEST = "require \"test_helper\"\n\nclass HealthTest < ActiveSupport::TestCase\n  test \"ok\" do\n" \
+            "    assert_equal 200, status\n    assert_predicate body, :present?\n  end\nend\n"
+SWIFT_TEST = "import Testing\n\n@Test func health() {\n    #expect(status == 200)\n    #expect(body.isEmpty == false)\n}\n"
+
+
+def answered(a7="Complies — adds api/test/x_test.rb", **answers):
+    """A description that also answers AR-007."""
+    return body(**answers).replace("\n\n## Other", f"\n- AR-007: {a7}\n\n## Other", 1)
+
+
+def activate_tests_rule():
+    edit("docs/ARCHITECTURE.md", "| AR-005 |", "| AR-007 | Tests | Active |\n| AR-005 |")
+    edit("docs/ARCHITECTURE.md", "### AR-005 Direction", "### AR-007 Tests\n\n### AR-005 Direction")
+    edit(".github/PULL_REQUEST_TEMPLATE.md", "- AR-004:\n", "- AR-004:\n- AR-007:\n")
+
+
+reset(); write("api/app/models/thing.rb", "class Thing; end\n")
+case("AR-007 pending: product source without a test is not checked", 0, GOOD, absent="AR-007")
+reset(); activate_tests_rule(); write("api/app/models/thing.rb", "class Thing; end\n")
+case("AR-007 activated by the pull request applies to it", 1, answered(), want=NO_TEST)
+reset(); activate_tests_rule(); write("api/test/models/.keep", ""); write("api/test/README.md", "# Tests\n")
+write("docs/NOTES.md", "# Notes\n")
+case("AR-007: no product source changed, nothing to check", 0, answered(), absent="AR-007: ")
+case("AR-007: the answer is required once the rule is active", 1, GOOD,
+     want="AR-007 is an active rule and the description does not answer it")
+commit("with-tests-rule")
+write("api/test/models/thing_test.rb", RUBY_TEST); write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+commit("with-tests")
+
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n")
+case("AR-007: product source without a test", 1, answered(), base="with-tests-rule",
+     want=[NO_TEST, "api/app/models/thing.rb", "adds or changes no test file"])
+case("AR-007: errors are annotated in CI", 1, answered(), base="with-tests-rule", ci=True, want="::error::AR-007")
+write("api/test/models/thing_test.rb", RUBY_TEST)
+case("AR-007: product source with a new Ruby test", 0, answered(), base="with-tests-rule",
+     want="AR-007: the change to product source comes with 1 test file(s)")
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+case("AR-007: Swift source with a new Swift test", 0, answered(), base="with-tests-rule", want="comes with 1 test file(s)")
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+case("AR-007: Swift source without a test", 1, answered(), base="with-tests-rule", want=[NO_TEST, "mac/Sources/Kit/Health.swift"])
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n"); write("api/test/models/other.keep", "")
+write("api/test/fixtures/things.yml", "one: {}\n")
+case("AR-007: a file in a test folder that is not test code is not a test", 1, answered(), base="with-tests-rule",
+     want=NO_TEST)
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n"); write("api/thing_test.rb", RUBY_TEST)
+case("AR-007: a test outside the test folders is not a test", 1, answered(), base="with-tests-rule", want=NO_TEST)
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n")
+case("AR-007: N/A with a reason turns the failure into a warning", 0,
+     answered(a7="N/A — renames a constant, no behavior changes"), base="with-tests-rule",
+     want=f"WARNING: {NO_TEST}", absent=f"FAIL: {NO_TEST}")
+case("AR-007: N/A without a reason still fails", 1, answered(a7="N/A"), base="with-tests-rule",
+     want="AR-007: 'N/A' needs a reason")
+case("AR-007: Complies is not enough without a test", 1, answered(a7="Complies — tested by hand"),
+     base="with-tests-rule", want=NO_TEST)
+write("docs/adr/0001-use-python.md", ADR)
+case("AR-007: Deviates with an accepted ADR passes", 0, answered(a7="Deviates — docs/adr/0001-use-python.md"),
+     base="with-tests-rule", want="WARNING: AR-007 is answered 'Deviates'", absent=f"FAIL: {NO_TEST}")
+write("docs/adr/0001-use-python.md", ADR.replace("Accepted", "Proposed"))
+case("AR-007: Deviates with a proposed ADR fails", 1, answered(a7="Deviates — docs/adr/0001-use-python.md"),
+     base="with-tests-rule", want="must have status Accepted")
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n")
+case("AR-007: Dependabot is not exempt", 1, "Bumps a gem.", author="dependabot[bot]", base="with-tests-rule",
+     want=NO_TEST)
+reset("with-tests"); write("api/app/models/thing.rb", "class Thing; end\n"); commit("with-source")
+(REPO / "api/app/models/thing.rb").unlink()
+case("AR-007: deleting product source is a change to it", 1, answered(), base="with-source", want=NO_TEST)
+(REPO / "api/test/models/thing_test.rb").unlink()
+case("AR-007: deleting a test does not count as adding one", 1, answered(), base="with-source", want=NO_TEST)
+# A test file counts only if its added lines assert something, and only for
+# product source in its own component.
+reset("with-tests"); write("api/app/models/other.rb", "class Other; end\n")
+edit("api/test/models/thing_test.rb", "class HealthTest", "# The health check.\nclass HealthTest")
+case("AR-007: a comment added to a test is not a test", 1, answered(), base="with-tests",
+     want=[NO_TEST, "api/app/models/other.rb"])
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n"); write("api/test/models/empty_test.rb", "")
+case("AR-007: an empty new test file is not a test", 1, answered(), base="with-tests-rule", want=NO_TEST)
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n")
+write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+case("AR-007: a Swift test does not cover API source", 1, answered(), base="with-tests-rule",
+     want=[NO_TEST, "api/app/models/thing.rb", "api/test/"], absent="mac/Sources")
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+write("api/test/models/thing_test.rb", RUBY_TEST)
+case("AR-007: a Ruby test does not cover Swift source", 1, answered(), base="with-tests-rule",
+     want=[NO_TEST, "mac/Sources/Kit/Health.swift", "mac/Tests/"])
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+write("api/app/models/thing.rb", "class Thing; end\n"); write("api/test/models/thing_test.rb", RUBY_TEST)
+write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+case("AR-007: source in both components with a test in each", 0, answered(), base="with-tests-rule",
+     want="comes with 2 test file(s)")
+reset("with-tests"); write("api/app/models/other.rb", "class Other; end\n")
+edit("api/test/models/thing_test.rb", "  end\nend", "    assert_nil error\n  end\nend")
+case("AR-007: an assertion added to an existing test counts", 0, answered(), base="with-tests",
+     want="comes with 1 test file(s)")
+reset("with-tests-rule"); write("api/Gemfile.lock", "GEM\n  specs:\n    rails (8.1.5)\n")
+case("AR-007: Dependabot's lockfile bump with no answer fails", 1, "Bumps rails.", author="dependabot[bot]",
+     base="with-tests-rule", want=NO_TEST)
+case("AR-007: Dependabot's lockfile bump with a maintainer's N/A passes", 0,
+     "Bumps rails.\n\n## Architecture rules\n\n- AR-007: N/A — a patch release of a gem, no code changes\n",
+     author="dependabot[bot]", base="with-tests-rule", want=f"WARNING: {NO_TEST}", absent=f"FAIL: {NO_TEST}")
+case("AR-007: Dependabot's N/A still needs a reason", 1,
+     "Bumps rails.\n\n## Architecture rules\n\n- AR-007: N/A\n",
+     author="dependabot[bot]", base="with-tests-rule", want="AR-007: 'N/A' needs a reason")
+reset("with-tests-rule"); write("api/README.md", "# API\n"); write("mac/docs/notes.markdown", "x\n")
+case("AR-007: Markdown under a code folder is not product source", 0, answered(), base="with-tests-rule",
+     absent="AR-007: ")
+
+# --- AR-007: an existing assertion that is removed, loosened, or skipped -----
+WEAKER = "the description must name"
+reset("with-tests"); edit("api/test/models/thing_test.rb", "    assert_equal 200, status\n", "")
+case("AR-007: a removed Ruby assertion is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "line 5", "assert_equal 200, status", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "assert_equal 200, status", "assert status")
+case("AR-007: a loosened assertion is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "assert_equal 200, status"])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "    assert_equal", "    # assert_equal")
+case("AR-007: a commented-out assertion is pointed out", 0, answered(), base="with-tests",
+     want="assert_equal 200, status")
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  test \"ok\" do\n", "  test \"ok\" do\n    skip \"flaky\"\n")
+case("AR-007: a skip added to a Ruby test is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "skip \"flaky\"", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "@Test(.disabled(\"later\")) func")
+case("AR-007: a disabled Swift test is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", ".disabled"])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "@Test(.enabled(if: false)) func")
+case("AR-007: a Swift test enabled only if false is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", ".enabled(if: false)", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "func")
+case("AR-007: a removed @Test attribute is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", "@Test func health()", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  test \"ok\" do", "  def ok")
+case("AR-007: a Minitest test turned into a plain method is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "test \"ok\" do", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  test \"ok\" do", "  def test_ok")
+commit("def-test")
+edit("api/test/models/thing_test.rb", "  def test_ok", "  def ok")
+case("AR-007: a renamed def test_ method is pointed out", 0, answered(), base="def-test",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "def test_ok", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func health()", "func testHealth()")
+commit("xctest")
+edit("mac/Tests/KitTests/HealthTests.swift", "func testHealth()", "func health()")
+case("AR-007: a renamed func test method is pointed out", 0, answered(), base="xctest",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", "func testHealth()", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "    #expect(body.isEmpty == false)\n", "")
+case("AR-007: a removed Swift expectation is pointed out", 0, answered(), base="with-tests",
+     want=["mac/Tests/KitTests/HealthTests.swift", "line 5", "#expect(body.isEmpty == false)"])
+reset("with-tests"); (REPO / "mac/Tests/KitTests/HealthTests.swift").unlink()
+case("AR-007: a deleted test file is pointed out with its assertions", 0, answered(), base="with-tests",
+     want=["mac/Tests/KitTests/HealthTests.swift", "2 assertion(s)", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  end\nend", "    assert_nil error\n  end\nend")
+case("AR-007: an added assertion is not pointed out", 0, answered(), base="with-tests", absent="WARNING: AR-007")
+reset("with-tests"); edit("api/test/models/thing_test.rb", "class HealthTest", "# The health check.\nclass HealthTest")
+write("api/test/models/new_test.rb", RUBY_TEST.replace("test \"ok\" do\n", "test \"ok\" do\n    skip\n"))
+case("AR-007: a skip in a new test file is not an existing test weakened", 0, answered(), base="with-tests",
+     absent="WARNING: AR-007")
+reset("with-tests"); edit("api/test/models/thing_test.rb", "    assert_predicate body, :present?\n",
+                          "--- a/assert\n")
+commit("odd-line")
+edit("api/test/models/thing_test.rb", "--- a/assert\n", "")
+case("AR-007: a removed line that looks like a diff header is still read", 0, answered(), base="odd-line",
+     want=["api/test/models/thing_test.rb", "--- a/assert"])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "    assert_equal 200, status\n", "")
+case("AR-007: a weakened assertion is annotated in CI", 0, answered(), base="with-tests", ci=True,
+     want="::warning::AR-007: api/test/models/thing_test.rb")
+
 # --- A git command that fails is not an empty change --------------------------
 for command in ("merge-base", "diff", "ls-files", "ls-tree", "cat-file"):
     reset(); case(f"git {command} fails", 1, GOOD, fail_git=command, check=one_failure,
@@ -824,6 +991,9 @@ reset(); case("a base that shares no history", 1, GOOD, base="unrelated-base", c
 reset(); write("scripts/argparse.py", "import sys\nprint('All rule checks passed.')\nsys.exit(0)\n")
 case("a file next to the script cannot replace argparse", 1, "", want=NO_SECTION, isolated=False)
 case("nor can it when the script is run with -I", 1, "", want=NO_SECTION)
+os.symlink(REPO, WORK / "linked")
+case("nor when the script is named through a symbolic link", 1, "", want=NO_SECTION, isolated=False,
+     script=str(WORK / "linked" / "scripts" / "check_rules.py"))
 case("the check leaves no bytecode behind", 0, base=None)
 results.append((not (REPO / "scripts/__pycache__").exists(), "no scripts/__pycache__ after a run"))
 reset(); edit("scripts/check_prd_ids.py", "#!/usr/bin/env python3", "#!/usr/bin/env python3\n# changed")

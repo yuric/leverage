@@ -1,0 +1,35 @@
+# The API and its PostgreSQL database, for the first run on the owner's Mac.
+# Copy .env.example to .env first; every secret comes from that file.
+name: leverage
+
+services:
+  db:
+    # The digest pins the image behind the tag (docs/adr/0002).
+    image: postgres:17.12-trixie@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build: ./api
+    image: leverage-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432
+    ports:
+      # Loopback only: the API is not reachable from other machines.
+      # API_PORT in .env moves it when 3000 is taken on the Mac.
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

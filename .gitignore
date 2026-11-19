@@ -31,3 +31,10 @@ tmp/
 
 # Python bytecode
 __pycache__/
+
+# The Rails API (api/): local bundler settings, logs, keys
+/api/.bundle/
+/api/log/*
+!/api/log/.keep
+/api/config/master.key
+/api/config/credentials/*.key
