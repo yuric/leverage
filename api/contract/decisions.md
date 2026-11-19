@@ -320,9 +320,10 @@ Where two inventories chose differently, the decision names the conflict.
   value; question text, assumption, answer; action description; brief
   entry text; project name and goal; hold detail. D-G47.
 - **DB-43** `[shape]` Replay holder rules: set by `task.claimed` and by
-  `review.failed`, `action.approved`, `action.lease_granted` (P-1),
-  `task.returned_for_rework` and `hold.closed` when their payload's
-  `lease_seat_id` is not null; the
+  `review.failed`, `action.approved`, `action.waived`,
+  `action.lease_granted` (P-1), `task.returned_for_rework` and
+  `hold.closed` (Offer task again, or Mark action done with approved
+  actions left) when their payload's `lease_seat_id` is not null; the
   provisional holder is set by `check.queued` at `task.before_claim`
   (`claimant_seat_id`) and cleared by that check's `check.finished` with
   `failed`, `error` or `withdrawn`, by a `hold.opened` on the task, and by

@@ -10,7 +10,10 @@ contract file in api/contract/ copies, and fails on any difference:
     verbatim in prd_cells; the event types of the Events written cell equal
     the events and conditional events of the group's rows (side events are
     not counted); the Hook cell is every row's hook; the From cell names the
-    rows' from-states.
+    rows' from-states; the To cell names the to-states of the rows that are
+    not refused ("Unchanged": each such row ends where it starts); the Who
+    may ask cell names the callers of the rows, plus any caller the group
+    lists in who_in_other_rows.
   * "### Step kinds" with steps.json: kind; the class, normalised
     ("Rule check" is rule_check) and verbatim; the Open while and Subject
     cells verbatim; a Subject of None means no subject kind.
@@ -20,10 +23,20 @@ contract file in api/contract/ copies, and fails on any difference:
     The table under "### Check identity, re-runs and overrides" gives each
     hook's hashed inputs, verbatim, or none.
   * "#### Needs you choices" with needs_you.json: item name, about, hold
-    reason, and the choices cell verbatim.
+    reason, the choices cell verbatim, and the operations its choices name
+    equal the operations of the structured choices list.
   * "### Roles" with roles.json: role, May change and May read verbatim.
   * the agent calls table (under "## Agent interface") with the registry's
     operations tagged agent: method, path and the Seat cell's caller.
+  * the `GET /v1/next` kinds table (under "## Agent interface") with the
+    registry's next_kinds: the same kinds in the same order.
+  * "### Shipped rules" with shipped_rules.json: the same rules in the same
+    order, each with its hook, kind and checker, and the Checker and When it
+    is off cells verbatim.
+  * the commands a hold blocks: the list in the "A hold blocks" bullet under
+    "### Holds", with review claims and job claims from the Eligibility
+    bullet, against the commands state_machine.json marks blocked_by_hold.
+    A job claim may stay unblocked only with a note that cites L378.
 
 A missing section or table is reported as "section missing", and a cell that
 cannot be read as what it should hold as "unparsable cell", so a rewording
@@ -45,7 +58,7 @@ ROOT = HERE.parent
 DEFAULT_PRD = ROOT / "docs" / "PRD.md"
 DEFAULT_CONTRACT = ROOT / "api" / "contract"
 FILES = ("state_machine.json", "steps.json", "hooks.json", "needs_you.json",
-         "roles.json", "registry.json")
+         "roles.json", "registry.json", "shipped_rules.json")
 
 
 def _markdown_helpers():
@@ -73,6 +86,8 @@ HASHED_HEADER = ["Hook", "Inputs that are hashed"]
 NEEDS_YOU_HEADER = ["Item", "About", "Hold reason", "Choices, and what each does"]
 ROLES_HEADER = ["Role", "May change", "May read"]
 CALLS_HEADER = ["Call", "Seat", "What it does"]
+NEXT_KINDS_HEADER = ["Kind", "True when", "Id", "Cleared when"]
+SHIPPED_HEADER = ["Rule", "Hook", "Kind", "Checker", "When it is off"]
 
 # "Any" in a From cell means every state a task can still leave: Done and
 # Cancelled are where a task ends (Cancel is "Any except Done"; nothing moves
@@ -89,6 +104,50 @@ SEAT_CALLERS = {
     "Orchestrator, planner": "job_claimer",
     "Job holder": "job_holder",
 }
+
+
+# The Who may ask cell: the callers it names, as state_machine.json's who
+# values. A qualifier says how a caller asks and names no other caller.
+WHO_QUALIFIERS = (" acting as the app", " in the command that frees the builder", " through its approval job",
+                  " holding the review")
+WHO_ROLES = ("owner", "planner", "builder", "holder", "reviewer", "orchestrator", "helper", "app")
+WHO_FILLER = ("or", "the", "seat")
+
+# The Choices cell of the Needs you table: each phrase that offers a choice,
+# and the operation that choice runs.
+CHOICE_PHRASES = (
+    (r"\banswer\b", "answer_question"),
+    (r"\bapprove the action\b", "approve_action"),
+    (r"\bstop it\b", "stop_action"),
+    (r"\bwaive (the action|it)\b", "waive_action"),
+    (r"\breturn the task for rework\b", "return_for_rework"),
+    (r"\bcancel\b", "cancel_task"),
+    (r"\boverride (that check|the check|it) once\b", "override_check"),
+    (r"\boffer the task again\b", "offer_task_again"),
+    (r"\bmark the action done\b", "mark_action_done"),
+    (r"\ballow one more round\b", "allow_another_round"),
+    (r"\bedit the contract\b", "edit_contract"),
+    (r"\bturn the (provider )?rule off\b", "disable_rule"),
+    (r"\brun it again\b", "rerun_check"),
+    (r"\bmark the access granted\b", "grant_access"),
+    (r"\braise the cap\b", "change_task_cap"),
+    (r"\bchange the budget\b", "change_budget"),
+    (r"\bresume the project\b", "resume_project"),
+    (r"\bsign in again\b", "sign_in_again"),
+    (r"\bconnect an agent\b", "connect_seat"),
+)
+
+# The "A hold blocks" bullet under Holds: each word it lists, as commands.
+HOLD_BLOCKS_BULLET = "- A hold blocks the seat commands that move work forward: "
+HOLD_BLOCKS = {
+    "claim": ["claim"],
+    "pass": ["pass_criterion"],
+    "submit": ["submit"],
+    "verdict": ["fail_review", "pass_review"],
+    "start action": ["start_action"],
+    "report action done": ["report_action_done"],
+}
+ELIGIBILITY_BULLET = "- **Eligibility.**"
 
 
 def q(value):
@@ -188,6 +247,40 @@ def from_states(cell, states):
     return found or None
 
 
+def state_labels(states):
+    return {state: state.replace("_", " ").capitalize() for state in states}
+
+
+def to_states(cell, states, starts):
+    """The states a To cell names, "unchanged" for "Unchanged", or None when
+    it names none. A state after "from" says where the move starts, not where
+    it ends. "X, once <condition>" ends in X once the condition holds and
+    leaves the task where it started until then, so it also names starts."""
+    if cell == "Unchanged":
+        return "unchanged"
+    shown = state_labels(states)
+    ends = cell
+    for label in shown.values():
+        ends = re.sub(rf"\b[Ff]rom {re.escape(label)}\b", "", ends)
+    found = {state for state, label in shown.items() if re.search(rf"\b{re.escape(label)}\b", ends)}
+    if found and re.match(r"^[A-Z][a-z ]*, once ", cell):
+        found |= {state for state in starts if state is not None}
+    return found or None
+
+
+def who_roles(cell):
+    """The callers a Who may ask cell names, or None when it holds a word that
+    is neither a caller nor a joining word."""
+    text = cell
+    for qualifier in WHO_QUALIFIERS:
+        text = text.replace(qualifier, "")
+    words = re.findall(r"[a-z]+", text.lower())
+    if not words or any(word not in WHO_ROLES + WHO_FILLER for word in words):
+        return None
+    roles = {word for word in words if word in WHO_ROLES}
+    return roles or None
+
+
 def lifecycle_label(cells):
     return f"row \"{cells[0]}\" (from \"{cells[1]}\")"
 
@@ -267,6 +360,34 @@ def compare_lifecycle(text, contract):
             if starts != named:
                 messages.append(f"{where}: the From cell names {names(named)}, but the group's rows start"
                                 f" from {names(starts)}")
+
+        moves = [r for r in rows if not r.get("refusal")]
+        ends = to_states(cells[2], states, named or set())
+        if ends is None:
+            messages.append(f"unparsable cell: {where}: To {cells[2]!r} names no state")
+        elif ends == "unchanged":
+            for r in moves:
+                if r.get("to") != r.get("from"):
+                    messages.append(f"{where}: the To cell is Unchanged, but the row from {q(r.get('from'))}"
+                                    f" goes to {q(r.get('to'))}")
+        else:
+            reached = {r.get("to") for r in moves}
+            if reached != ends:
+                messages.append(f"{where}: the To cell names {names(ends)}, but the group's rows go to"
+                                f" {names(reached)}")
+
+        callers = who_roles(cells[3])
+        if callers is None:
+            messages.append(f"unparsable cell: {where}: Who may ask {cells[3]!r} names no caller")
+        else:
+            asked = set()
+            for r in rows:
+                asked |= set(r.get("who", []))
+            elsewhere = set(group.get("who_in_other_rows", []))
+            if asked | elsewhere != callers or not elsewhere <= callers:
+                messages.append(f"{where}: the Who may ask cell names {names(callers)}, but the group's rows are"
+                                f" asked by {names(asked)}"
+                                + (f" and who_in_other_rows names {names(elsewhere)}" if elsewhere else ""))
 
     for group in unpaired:
         cells = group.get("prd_cells") or ["?", "?"]
@@ -390,6 +511,18 @@ def compare_hooks(text, contract):
 # --- Needs you choices ------------------------------------------------------
 
 
+def choice_operations(cell):
+    """The operations a Choices cell offers, sorted; [] for "None. ..."; None
+    when a cell that is not None offers none."""
+    if cell == "None." or cell.startswith("None. "):
+        return []
+    lower = cell.lower()
+    found = []
+    for pattern, operation in CHOICE_PHRASES:
+        found += [operation] * len(re.findall(pattern, lower))
+    return sorted(found) or None
+
+
 def compare_needs_you(text, contract):
     found = read_table(text, "Needs you choices", NEEDS_YOU_HEADER, "Needs you choices table")
     messages = [f"Needs you choices: {problem}" for problem in found.problems]
@@ -413,6 +546,14 @@ def compare_needs_you(text, contract):
             messages.append(f"{where}: hold reason differs: PRD {q(reason)},"
                             f" needs_you.json {q(entry.get('hold_reason'))}")
         verbatim(messages, where, "Choices", choices, "needs_you.json", entry.get("prd_choices"))
+        offered = choice_operations(choices)
+        if offered is None:
+            messages.append(f"unparsable cell: {where}: Choices {choices!r} offers no choice and does not say None")
+        else:
+            runs = sorted(c.get("operation_id") for c in entry.get("choices", []))
+            if offered != runs:
+                messages.append(f"{where}: the Choices cell offers {', '.join(q(o) for o in offered) or 'nothing'},"
+                                f" but the structured choices run {', '.join(q(o) for o in runs) or 'nothing'}")
     one_side(messages, "Needs you choices,", items, [f"\"{k}\"" for k in entries], "needs_you.json")
     return messages
 
@@ -494,6 +635,129 @@ def compare_agent_calls(text, contract):
     return messages
 
 
+# --- GET /v1/next kinds ------------------------------------------------------
+
+
+def compare_next_kinds(text, contract):
+    found = read_table(text, "Agent interface", NEXT_KINDS_HEADER, "next kinds table")
+    messages = [f"next kinds: {problem}" for problem in found.problems]
+    kinds = []
+    for cells in found.values:
+        kind = one_code_span(cells[0], NAME)
+        if kind is None:
+            messages.append(f"unparsable cell: next kinds, Kind {cells[0]!r}")
+        else:
+            kinds.append(kind)
+    registered = contract["registry.json"].get("next_kinds", [])
+    if found.problems:
+        return messages
+    one_side(messages, "next kinds,", [f"`{k}`" for k in kinds], [f"`{k}`" for k in registered], "registry.json")
+    if sorted(kinds) == sorted(registered) and kinds != registered:
+        messages.append(f"next kinds: order differs: PRD {', '.join(q(k) for k in kinds)},"
+                        f" registry.json {', '.join(q(k) for k in registered)}")
+    return messages
+
+
+# --- Shipped rules ----------------------------------------------------------
+
+
+def compare_shipped_rules(text, contract):
+    found = read_table(text, "Shipped rules", SHIPPED_HEADER, "shipped rules table")
+    messages = [f"shipped rules: {problem}" for problem in found.problems]
+    rules = contract["shipped_rules.json"].get("rules", [])
+    entries = {r.get("name"): r for r in rules}
+    order = []
+    for name, hook_cell, kind_cell, checker_cell, off_cell in found.values:
+        order.append(name)
+        entry = entries.get(name)
+        if entry is None:
+            continue
+        where = f"shipped rules, \"{name}\""
+        hook = one_code_span(hook_cell, HOOK)
+        if hook is None:
+            messages.append(f"unparsable cell: {where}: Hook {hook_cell!r} is not one hook")
+        elif entry.get("hook") != hook:
+            messages.append(f"{where}: Hook differs: PRD {q(hook)}, shipped_rules.json {q(entry.get('hook'))}")
+        kind = kind_cell.lower()
+        if not NAME.match(kind):
+            messages.append(f"unparsable cell: {where}: Kind {kind_cell!r}")
+        elif entry.get("kind") != kind:
+            messages.append(f"{where}: Kind differs: PRD {q(kind)}, shipped_rules.json {q(entry.get('kind'))}")
+        checker = re.match(r"(App|Model)\b", checker_cell)
+        if checker is None:
+            messages.append(f"unparsable cell: {where}: Checker {checker_cell!r} names neither App nor Model")
+        elif entry.get("checker") != checker.group(1).lower():
+            messages.append(f"{where}: Checker names {q(checker.group(1).lower())},"
+                            f" shipped_rules.json checker {q(entry.get('checker'))}")
+        verbatim(messages, where, "Checker", checker_cell, "shipped_rules.json", entry.get("prd_checker"))
+        verbatim(messages, where, "When it is off", off_cell, "shipped_rules.json", entry.get("prd_when_off"))
+    listed = [r.get("name") for r in rules]
+    one_side(messages, "shipped rules,", [f"\"{n}\"" for n in order], [f"\"{n}\"" for n in listed],
+             "shipped_rules.json")
+    if sorted(order) == sorted(listed) and order != listed:
+        messages.append("shipped rules: order differs: the PRD lists " + ", ".join(f"\"{n}\"" for n in order)
+                        + "; shipped_rules.json lists " + ", ".join(f"\"{n}\"" for n in listed))
+    return messages
+
+
+# --- Commands a hold blocks -------------------------------------------------
+
+
+def bullet(body, start):
+    """The text of the one bullet in body that starts with start, joined
+    across its wrapped lines; None when there is not exactly one."""
+    found = []
+    for index, line in enumerate(body):
+        if line.startswith(start):
+            text = [line]
+            for following in body[index + 1:]:
+                if not following.strip() or following.lstrip().startswith(("- ", "|", "#")):
+                    break
+                text.append(following.strip())
+            found.append(" ".join(text))
+    return found[0] if len(found) == 1 else None
+
+
+def compare_blocked_by_hold(text, contract):
+    messages = []
+    holds = section(prose_lines(text), "Holds")
+    behaviour = section(prose_lines(text), "Behaviour every client can rely on")
+    blocks = bullet(holds or [], HOLD_BLOCKS_BULLET)
+    eligibility = bullet(behaviour or [], ELIGIBILITY_BULLET)
+    if blocks is None:
+        return [f"blocked by a hold: section missing: no \"{HOLD_BLOCKS_BULLET.strip()}\" bullet under \"Holds\""]
+    if eligibility is None:
+        return [f"blocked by a hold: section missing: no \"{ELIGIBILITY_BULLET}\" bullet under"
+                " \"Behaviour every client can rely on\""]
+    listed = blocks[len(HOLD_BLOCKS_BULLET):].split(".", 1)[0]
+    words = [w.strip() for w in re.split(r",| and ", listed) if w.strip()]
+    expected = set()
+    for word in words:
+        if word not in HOLD_BLOCKS:
+            messages.append(f"unparsable cell: blocked by a hold: {word!r} in the \"A hold blocks\" bullet"
+                            f" is not one of {', '.join(HOLD_BLOCKS)}")
+            continue
+        expected |= set(HOLD_BLOCKS[word])
+    if "no hold" not in eligibility:
+        messages.append("unparsable cell: blocked by a hold: the Eligibility bullet no longer says \"no hold\"")
+    commands = {c.get("command"): c for c in contract["state_machine.json"].get("commands", [])}
+    if "review claims" in eligibility:
+        expected.add("claim_review")
+    if "job claims" in eligibility:
+        job = commands.get("claim_job", {})
+        if not job.get("blocked_by_hold") and "L378" not in job.get("note", ""):
+            messages.append("blocked by a hold: the Eligibility bullet names job claims, but `claim_job` is not"
+                            " blocked_by_hold and has no note citing L378 (checks keep running under a hold)")
+    marked = {name for name, c in commands.items() if c.get("blocked_by_hold")} - {"claim_job"}
+    for name in sorted(expected - marked):
+        messages.append(f"blocked by a hold: the PRD names {q(name)}, but state_machine.json does not mark it"
+                        " blocked_by_hold")
+    for name in sorted(marked - expected):
+        messages.append(f"blocked by a hold: state_machine.json marks {q(name)} blocked_by_hold, but the PRD"
+                        " does not name it")
+    return messages
+
+
 # --- Main -------------------------------------------------------------------
 
 
@@ -504,7 +768,10 @@ def check(prd_text, contract):
             + compare_hooks(prd_text, contract)
             + compare_needs_you(prd_text, contract)
             + compare_roles(prd_text, contract)
-            + compare_agent_calls(prd_text, contract))
+            + compare_agent_calls(prd_text, contract)
+            + compare_next_kinds(prd_text, contract)
+            + compare_shipped_rules(prd_text, contract)
+            + compare_blocked_by_hold(prd_text, contract))
 
 
 def main(argv=None):
@@ -536,9 +803,13 @@ def main(argv=None):
         len(contract["needs_you.json"].get("items", [])),
         len(contract["roles.json"].get("roles", [])),
         len(agent_calls_from_prd(prd_text).values),
+        len(contract["registry.json"].get("next_kinds", [])),
+        len(contract["shipped_rules.json"].get("rules", [])),
+        sum(1 for c in contract["state_machine.json"].get("commands", []) if c.get("blocked_by_hold")),
     )
     print("OK: the PRD's tables and the contract agree on %d lifecycle rows, %d step kinds, %d hooks,"
-          " %d Needs you items, %d roles and %d agent calls." % counts)
+          " %d Needs you items, %d roles, %d agent calls, %d next kinds, %d shipped rules and"
+          " %d commands a hold blocks." % counts)
     return 0
 
 

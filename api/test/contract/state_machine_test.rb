@@ -217,6 +217,103 @@ class StateMachineTest < Minitest::Test
     end
   end
 
+  def written(row) = row["events"] + row["conditional_events"].map { |entry| entry["event"] }
+
+  def guard_action_states
+    (machine["guard_families"].flat_map { |family| family["guards"] } + machine["guard_conditions"])
+      .to_h { |guard| [ guard["guard"], guard["action_states"] ] }.compact
+  end
+
+  # L144: overturning an approval stops the action whether or not it has
+  # started. Every action event a row writes is a move of the action
+  # sub-machine for that command, from every action state its guards admit.
+  def test_every_action_event_a_row_writes_is_a_move_of_the_action_machine
+    family = machine["guard_families"].find { |entry| entry["family"] == "approved_action_state" }
+    family["guards"].each { |guard| refute_nil guard["action_states"], "#{guard["guard"]} names its action states" }
+    by_event = machine.fetch("action_machine").fetch("transitions").to_h { |move| [ move["event"], move ] }
+    rows.each do |row|
+      written(row).each do |event|
+        move = by_event[event] or next
+        assert_includes move["commands"], row["command"], "#{label(row)} writes #{event}"
+        row["guard"].each do |guard|
+          states = guard_action_states[guard] or next
+          assert_empty states - move["from"], "#{label(row)}: #{guard} admits #{states}, but #{event} moves only from #{move["from"]}"
+        end
+      end
+    end
+  end
+
+  # L139: when no action waits for a decision and none is stopped, the
+  # previous builder gets a fresh lease if it holds nothing. A row that
+  # settles an action and leaves the task in Finishing splits on that.
+  def test_a_row_that_settles_an_action_applies_the_lease_rule_of_l139
+    rows.each do |row|
+      next if row["refusal"] || row["to"] == "done"
+      next if (written(row) & %w[action.approved action.waived action.marked_done]).empty?
+
+      refute_empty row["guard"] & %w[approvals_pending approvals_complete], "#{label(row)} names no approvals guard"
+      next unless row["guard"].include?("approvals_complete")
+
+      refute_empty row["guard"] & %w[builder_free builder_busy], "#{label(row)} names no builder guard"
+      assert_equal "fresh", row["builder_lease"], label(row) if row["guard"].include?("builder_free")
+    end
+  end
+
+  # L162, L205, L377: cancelling a pending transition withdraws its checks,
+  # and a withdrawn check closes its check_error hold.
+  def test_a_row_that_cancels_a_pending_transition_closes_its_check_error_hold
+    cancelling = rows.select do |row|
+      row["side_events"].any? { |entry| entry["event"] == "check.finished" && entry["note"].to_s.include?("pending transition this cancels") }
+    end
+    refute_empty cancelling
+    cancelling.each do |row|
+      assert_includes row["holds_closed"], "check_error", label(row)
+      assert_includes all_events(row), "inbox.resolved", label(row)
+    end
+  end
+
+  # L399, L698: a limit or sign-out reported for a job's run reads no task
+  # state; with no candidate the job is left to its run timeout.
+  def test_a_report_about_a_jobs_run_reads_no_task_state
+    operations = registry["operations"].to_h { |op| [ op["operation_id"], op ] }
+    { "report_job_limit" => [ "credential.limit_reached", "report_limit" ],
+      "report_job_signed_out" => [ "credential.signed_out", "report_signed_out" ] }.each do |command, (event, operation)|
+      same = rows.select { |row| row["command"] == command }
+      assert_equal [ %w[candidate_available], %w[no_candidate_available] ], same.map { |row| row["guard"] }.sort, command
+      same.each do |row|
+        assert_nil row["from"], label(row)
+        assert_empty row["holds_opened"], label(row)
+        assert_equal [ "helper" ], row["who"], label(row)
+        assert_includes row["events"], event, label(row)
+      end
+      assert_includes same.find { |row| row["guard"] == %w[candidate_available] }["events"], "credential.switched"
+      assert_includes operations.fetch(operation)["commands"], command
+    end
+  end
+
+  # L146, L148: only a change that disables the seat takes its task away.
+  def test_a_seat_change_releases_and_withdraws_only_when_it_disables_the_seat
+    row = rows.find { |candidate| candidate["command"] == "change_seat" }
+    released = row["conditional_events"].find { |entry| entry["event"] == "task.released" }
+    assert_equal "disables_seat_holding_working_task", released["when"]
+    row["side_events"].each do |entry|
+      next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
+
+      assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
+    end
+  end
+
+  # L160: a task in a paused project is held with project_paused.
+  def test_a_task_added_to_or_moved_into_a_paused_project_is_held
+    rows.select { |row| %w[add_task change_task_project].include?(row["command"]) }.each do |row|
+      assert_includes row["holds_opened"], "project_paused", label(row)
+      assert row["side_events"].any? { |entry| entry["event"] == "hold.opened" && entry["when"] == "target_project_paused" }, label(row)
+    end
+    move = rows.find { |row| row["command"] == "change_task_project" }
+    assert_includes move["holds_closed"], "project_paused"
+    assert move["side_events"].any? { |entry| entry["event"] == "hold.closed" && entry["when"] == "source_project_paused" }
+  end
+
   def test_the_action_sub_machine_uses_registered_states_events_and_commands
     action = machine.fetch("action_machine")
     states = Leverage::Contract.list("action_states")

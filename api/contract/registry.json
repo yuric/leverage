@@ -149,7 +149,8 @@
     "submit", "claim_review", "release_review", "fail_review", "pass_review", "request_action",
     "approve_action", "grant_action_lease", "stop_action", "waive_action", "return_for_rework",
     "start_action", "report_action_done", "mark_action_done", "offer_task_again", "release",
-    "hold", "resume", "report_limit", "report_signed_out", "cancel", "ask_question",
+    "hold", "resume", "report_limit", "report_signed_out", "report_job_limit",
+    "report_job_signed_out", "cancel", "ask_question",
     "request_access", "answer_question", "overturn_answer", "overturn_approval", "report_cost",
     "change_task_priority", "change_task_project", "change_task_cap", "change_budget",
     "pause_project", "resume_project", "allow_another_round", "grant_access", "rerun_check",
@@ -228,7 +229,7 @@
     {"operation_id": "mark_action_done", "method": "POST", "path": "/v1/owner/actions/{id}/mark-done", "caller": "owner", "commands": ["mark_action_done"], "tag": "owner"},
     {"operation_id": "overturn_approval", "method": "POST", "path": "/v1/owner/actions/{id}/overturn", "caller": "owner", "commands": ["overturn_approval"], "tag": "owner"},
     {"operation_id": "rerun_check", "method": "POST", "path": "/v1/owner/rule-checks/{id}/rerun", "caller": "owner", "commands": ["rerun_check"], "tag": "owner"},
-    {"operation_id": "override_check", "method": "POST", "path": "/v1/owner/rule-checks/{id}/override", "caller": "owner", "commands": ["override_check"], "tag": "owner"},
+    {"operation_id": "override_check", "method": "POST", "path": "/v1/owner/rule-checks/{id}/override", "caller": "owner", "commands": ["override_check", "approve_action"], "tag": "owner"},
     {"operation_id": "add_rule", "method": "POST", "path": "/v1/owner/rules", "caller": "owner", "commands": ["add_rule"], "tag": "owner"},
     {"operation_id": "save_rule", "method": "POST", "path": "/v1/owner/rules/{id}/versions", "caller": "owner", "commands": ["save_rule"], "tag": "owner"},
     {"operation_id": "enable_rule", "method": "POST", "path": "/v1/owner/rules/{id}/enable", "caller": "owner", "commands": ["enable_rule"], "tag": "owner"},
@@ -264,8 +265,8 @@
     {"operation_id": "issue_seat_token", "method": "POST", "path": "/v1/helper/requests/{id}/seat-token", "caller": "helper", "commands": ["issue_seat_token"], "tag": "helper"},
     {"operation_id": "report_run_started", "method": "POST", "path": "/v1/helper/seats/{id}/run-started", "caller": "helper", "commands": ["report_run_started"], "tag": "helper"},
     {"operation_id": "report_run_stopped", "method": "POST", "path": "/v1/helper/seats/{id}/run-stopped", "caller": "helper", "commands": ["report_run_stopped"], "tag": "helper"},
-    {"operation_id": "report_limit", "method": "POST", "path": "/v1/helper/credentials/{id}/limit-reached", "caller": "helper", "commands": ["report_limit"], "tag": "helper"},
-    {"operation_id": "report_signed_out", "method": "POST", "path": "/v1/helper/credentials/{id}/signed-out", "caller": "helper", "commands": ["report_signed_out"], "tag": "helper"},
+    {"operation_id": "report_limit", "method": "POST", "path": "/v1/helper/credentials/{id}/limit-reached", "caller": "helper", "commands": ["report_limit", "report_job_limit"], "tag": "helper"},
+    {"operation_id": "report_signed_out", "method": "POST", "path": "/v1/helper/credentials/{id}/signed-out", "caller": "helper", "commands": ["report_signed_out", "report_job_signed_out"], "tag": "helper"},
     {"operation_id": "report_reading", "method": "POST", "path": "/v1/helper/credentials/{id}/readings", "caller": "helper", "commands": ["report_reading"], "tag": "helper"}
   ],
   "job_kinds": [
@@ -284,7 +285,9 @@
     "held_owner_hold", "not_held_owner_hold", "approved_action_open", "approved_action_done",
     "first_miss", "second_miss", "owner_must_act", "seat_holds_working_task", "seat_holds_review",
     "add_checks_passed", "verify_passed", "found_signed_out", "question_answered",
-    "project_budget_reached", "project_under_budget", "builder_seat_enabled"
+    "project_budget_reached", "project_under_budget", "builder_seat_enabled",
+    "seat_disabled_by_change", "disables_seat_holding_working_task", "target_project_paused",
+    "source_project_paused"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",

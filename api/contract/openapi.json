@@ -4298,7 +4298,8 @@
         ],
         "x-leverage-caller": "owner",
         "x-leverage-command": [
-          "override_check"
+          "override_check",
+          "approve_action"
         ],
         "parameters": [
           {
@@ -6628,7 +6629,8 @@
         ],
         "x-leverage-caller": "helper",
         "x-leverage-command": [
-          "report_limit"
+          "report_limit",
+          "report_job_limit"
         ],
         "parameters": [
           {
@@ -6709,7 +6711,8 @@
         ],
         "x-leverage-caller": "helper",
         "x-leverage-command": [
-          "report_signed_out"
+          "report_signed_out",
+          "report_job_signed_out"
         ],
         "parameters": [
           {
@@ -7034,6 +7037,8 @@
           "resume",
           "report_limit",
           "report_signed_out",
+          "report_job_limit",
+          "report_job_signed_out",
           "cancel",
           "ask_question",
           "request_access",

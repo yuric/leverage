@@ -25,7 +25,7 @@ SCRIPT = HERE / "check_contract_tables.py"
 PRD = ROOT / "docs" / "PRD.md"
 CONTRACT = ROOT / "api" / "contract"
 FILES = ("state_machine.json", "steps.json", "hooks.json", "needs_you.json",
-         "roles.json", "registry.json")
+         "roles.json", "registry.json", "shipped_rules.json")
 VERBOSE = "-v" in sys.argv[1:]
 
 
@@ -211,6 +211,56 @@ def doctored_prd_cases(prd):
         ("an agent Seat cell that names no caller",
          change_row(prd, "| `POST /v1/tasks/{id}/heartbeat` |", "| Holder |", "| Somebody |"),
          ["unparsable cell", "agent calls", "Somebody"]),
+
+        # The lifecycle To and Who may ask cells.
+        ("a lifecycle To cell changed",
+         change_row(prd, "| Promote |", "| Imaginarium | Backlog | Owner |", "| Imaginarium | Ready | Owner |"),
+         ["lifecycle", "Promote", "To", "`ready`", "`backlog`"]),
+        ("a lifecycle Who may ask cell changed",
+         change_row(prd, "| Promote |", "| Backlog | Owner |", "| Backlog | Holder |"),
+         ["lifecycle", "Promote", "Who may ask", "`holder`", "`owner`"]),
+        ("a lifecycle Who may ask cell that names no caller",
+         change_row(prd, "| Promote |", "| Backlog | Owner |", "| Backlog | Somebody |"),
+         ["unparsable cell", "Promote", "Who may ask"]),
+
+        # GET /v1/next precedence.
+        ("two next kinds swapped",
+         replace_once(prd, row(prd, "| `action` | An approved") + "\n" + row(prd, "| `rework` | A review failed") + "\n",
+                      row(prd, "| `rework` | A review failed") + "\n" + row(prd, "| `action` | An approved") + "\n"),
+         ["next kinds", "order", "`rework`", "`action`"]),
+        ("a next kind removed",
+         drop_row(prd, "| `resume` | A hold on"),
+         ["next kinds", "`resume`", "registry.json only"]),
+        ("the next kinds table's header changed",
+         replace_once(prd, "| Kind | True when | Id | Cleared when |", "| Kind | When | Id | Cleared when |"),
+         ["section missing", "next kinds"]),
+
+        # Shipped rules.
+        ("a shipped rule's hook changed",
+         change_row(prd, "| Every task needs specific details |", "`task.before_ready`", "`task.before_claim`"),
+         ["shipped rules", "Every task needs specific details", "Hook", "`task.before_claim`"]),
+        ("a shipped rule's kind changed",
+         change_row(prd, "| Projects pause when", "| Policy |", "| Gate |"),
+         ["shipped rules", "Projects pause when they reach their budget", "Kind", "`gate`"]),
+        ("a shipped rule's checker changed",
+         change_row(prd, "| Every task needs specific details |", "Model, the orchestrator", "App"),
+         ["shipped rules", "Every task needs specific details", "Checker"]),
+        ("a shipped rule's When it is off cell changed",
+         change_row(prd, "| Every task needs specific details |", "No detail check.", "No check."),
+         ["shipped rules", "Every task needs specific details", "When it is off"]),
+        ("a shipped rule removed",
+         drop_row(prd, "| Two failed reviews move"),
+         ["shipped rules", "Two failed reviews move a task to a stronger model", "shipped_rules.json only"]),
+        ("two shipped rules swapped",
+         replace_once(prd, row(prd, "| Every task needs acceptance criteria |") + "\n" + row(prd, "| Every task needs specific details |") + "\n",
+                      row(prd, "| Every task needs specific details |") + "\n" + row(prd, "| Every task needs acceptance criteria |") + "\n"),
+         ["shipped rules", "order"]),
+
+        # Commands a hold blocks.
+        ("a command dropped from the list a hold blocks",
+         replace_once(prd, "claim, pass, submit, verdict, start action and report action done.",
+                      "claim, pass, submit, verdict and start action."),
+         ["blocked by a hold", "`report_action_done`"]),
     ]
 
 
@@ -314,6 +364,72 @@ def doctored_contract_cases(contract):
         entry(c["registry.json"]["operations"], "operation_id", "claim_next_job")["caller"] = "any"
     case("an agent operation's caller changed in the registry", operation_caller,
          ["agent calls", "POST /v1/jobs/claim-next", "`job_claimer`", "`any`"])
+
+    def row_to(c):
+        for r in group(c, "fail_review")["rows"]:
+            r["to"] = "done"
+    case("a row's to-state not in the To cell", row_to,
+         ["lifecycle", "Review fails", "To", "`done`"])
+
+    def claim_to(c):
+        group(c, "claim")["rows"][0]["to"] = "in_review"
+    case("a row's to-state where the To cell names another", claim_to,
+         ["lifecycle", "Claim", "To", "`in_review`", "`working`"])
+
+    def unchanged_moves(c):
+        group(c, "acknowledge_briefing")["rows"][0]["to"] = "done"
+    case("a row that moves where the To cell says Unchanged", unchanged_moves,
+         ["lifecycle", "Acknowledge briefing", "Unchanged", "`working`", "`done`"])
+
+    def row_who(c):
+        for r in group(c, "fail_review")["rows"]:
+            r["who"] = ["owner"]
+    case("a row's caller not in the Who may ask cell", row_who,
+         ["lifecycle", "Review fails", "Who may ask", "`owner`", "`reviewer`"])
+
+    def who_dropped(c):
+        group(c, "release_review")["rows"] = [r for r in group(c, "release_review")["rows"] if r["who"] != ["app"]]
+    case("a caller of the Who may ask cell that no row has", who_dropped,
+         ["lifecycle", "Release review", "Who may ask", "`app`"])
+
+    def choice_dropped(c):
+        item = entry(c["needs_you.json"]["items"], "prd_item", "Stopped action")
+        item["choices"] = [ch for ch in item["choices"] if ch["choice"] != "cancel"]
+    case("a Needs you choice dropped from the structured list", choice_dropped,
+         ["Needs you", "Stopped action", "choices", "`cancel_task`"])
+
+    def choice_operation(c):
+        item = entry(c["needs_you.json"]["items"], "prd_item", "Task budget reached")
+        entry(item["choices"], "choice", "raise_cap")["operation_id"] = "change_budget"
+    case("a Needs you choice that runs another operation", choice_operation,
+         ["Needs you", "Task budget reached", "choices", "`change_task_cap`", "`change_budget`"])
+
+    def next_kinds(c):
+        kinds = c["registry.json"]["next_kinds"]
+        kinds[0], kinds[1] = kinds[1], kinds[0]
+    case("two next kinds swapped in the registry", next_kinds, ["next kinds", "order", "`briefing_changed`"])
+
+    def shipped_hook(c):
+        entry(c["shipped_rules.json"]["rules"], "key", "different_provider_review")["hook"] = "review.failed"
+    case("a shipped rule's hook changed in shipped_rules.json", shipped_hook,
+         ["shipped rules", "A different provider reviews every task", "Hook", "`review.failed`"])
+
+    def shipped_checker(c):
+        entry(c["shipped_rules.json"]["rules"], "key", "different_provider_review")["checker"] = "model"
+    case("a shipped rule's checker changed in shipped_rules.json", shipped_checker,
+         ["shipped rules", "A different provider reviews every task", "Checker", "`model`"])
+
+    def blocked_review(c):
+        entry(c["state_machine.json"]["commands"], "command", "claim_review")["blocked_by_hold"] = False
+    case("a review claim that a hold does not block", blocked_review, ["blocked by a hold", "`claim_review`"])
+
+    def blocked_extra(c):
+        entry(c["state_machine.json"]["commands"], "command", "heartbeat")["blocked_by_hold"] = True
+    case("a heartbeat that a hold blocks", blocked_extra, ["blocked by a hold", "`heartbeat`"])
+
+    def job_claim_unexplained(c):
+        entry(c["state_machine.json"]["commands"], "command", "claim_job").pop("note", None)
+    case("a job claim left unblocked with no note", job_claim_unexplained, ["blocked by a hold", "`claim_job`", "L378"])
 
     def role_cell(c):
         entry(c["roles.json"]["roles"], "role", "builder")["prd_may_change"] = "Any task"

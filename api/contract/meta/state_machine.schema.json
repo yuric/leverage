@@ -53,7 +53,8 @@
           "command": {"$ref": "#/$defs/name"},
           "work_call": {"type": "boolean"},
           "blocked_by_hold": {"type": "boolean"},
-          "allowed_while_pending": {"type": "boolean"}
+          "allowed_while_pending": {"type": "boolean"},
+          "note": {"type": "string", "minLength": 1}
         }
       }
     },
@@ -71,6 +72,7 @@
           "prd_lines": {"$ref": "#/$defs/lines"},
           "decision": {"type": "string", "pattern": "^[A-Z]+-[0-9]+(, [A-Z]+-[0-9]+)*$"},
           "note": {"type": "string", "minLength": 1},
+          "who_in_other_rows": {"description": "Callers the PRD's Who may ask cell names whose part of the move other rows write (the app opens and closes its own holds as part of the rows that cause them).", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}},
           "rows": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/row"}}
         },
         "if": {"properties": {"source": {"const": "prd"}}},
@@ -113,7 +115,8 @@
       "properties": {
         "guard": {"$ref": "#/$defs/name"},
         "means": {"type": "string", "minLength": 1},
-        "prd_lines": {"$ref": "#/$defs/lines"}
+        "prd_lines": {"$ref": "#/$defs/lines"},
+        "action_states": {"description": "For a guard about one action: the action states (action_machine) in which it is true.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}}
       }
     },
     "row": {
