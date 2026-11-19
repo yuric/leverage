@@ -8,6 +8,11 @@ require "test_helper"
 # gap was left to fill later.
 class SeqTailTest < CommittingTestCase
   T = Leverage::Transitions
+
+  # The commands rows the claimers committed are deleted again (events
+  # cannot be, and stay): other files' tests count commands rows of a
+  # command across the worker's database (transitions_pipeline_test.rb).
+  teardown { Command.where(workspace_id: scenario.workspace_id).delete_all }
   SEATS = 20
   PAGE = 3
 

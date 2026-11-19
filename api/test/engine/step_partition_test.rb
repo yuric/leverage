@@ -37,8 +37,13 @@ class StepPartitionTest < ActiveSupport::TestCase
       first = steps.first
       problems << "the first step does not open at task.created" unless first.opening_event_id == created.id &&
         first.opened_at == created.effective_at
+      commands = Event.where(task_id: task.id).pluck(:id, :command_id, :at).to_h { |id, *command| [ id, command ] }
       steps.each_cons(2) do |earlier, later|
-        next if earlier.closed_at == later.opened_at && earlier.closing_event_id == later.opening_event_id
+        # The same time, and an event of the same command: within one
+        # command a step changes in place (steps.json), so review may close
+        # at review.failed and wait_owner open at the hold.opened after it.
+        next if earlier.closed_at == later.opened_at && earlier.closing_event_id &&
+          commands[earlier.closing_event_id] == commands[later.opening_event_id]
 
         problems << "#{earlier.kind} (closed #{earlier.closed_at&.iso8601(6)}) does not touch #{later.kind} " \
                     "(opened #{later.opened_at.iso8601(6)})"
@@ -82,10 +87,10 @@ class StepPartitionTest < ActiveSupport::TestCase
 
   test "the partition check finds steps that do not touch" do
     walk = Walk.new(seed: 5, steps: 30).run
-    step = TaskStep.where(workspace_id: walk.workspace_id).where.not(closed_at: nil).first
+    step = TaskStep.where(workspace_id: walk.workspace_id).where("closed_at > opened_at").order(:opened_at).first
     assert step, walk.to_s
     assert_empty partition_problems(walk.workspace_id, database_now)
-    step.update_columns(closing_event_id: step.opening_event_id)
+    step.delete
     refute_empty partition_problems(walk.workspace_id, database_now)
   end
 

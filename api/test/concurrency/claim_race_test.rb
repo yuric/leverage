@@ -8,6 +8,11 @@ require "test_helper"
 # test's own cache would answer with the rows as they were before the race.
 class ClaimRaceTest < CommittingTestCase
   T = Leverage::Transitions
+
+  # The commands rows the claimers committed are deleted again (events
+  # cannot be, and stay): other files' tests count commands rows of a
+  # command across the worker's database (transitions_pipeline_test.rb).
+  teardown { Command.where(workspace_id: scenario.workspace_id).delete_all }
   SEATS = 20
   TASKS = 10
 

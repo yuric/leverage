@@ -30,9 +30,9 @@ class LogAuditTest < ActiveSupport::TestCase
     end
   end
 
-  test "the logs of traces 09 and 10 pass" do
-    %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
-      assert_empty audit(run_trace(name)), name
+  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+    test "the log of trace #{name} passes" do
+      assert_empty audit(run_trace(name))
     end
   end
 
@@ -94,8 +94,7 @@ class LogAuditTest < ActiveSupport::TestCase
 
   test "steps that do not touch end to end are found" do
     runner = run_trace("09-core-loop-no-rules")
-    step = TaskStep.where(workspace_id: runner.workspace_id).where.not(closed_at: nil).order(:opened_at).first
-    step.update_columns(closing_event_id: step.opening_event_id)
+    TaskStep.where(workspace_id: runner.workspace_id).where("closed_at > opened_at").order(:opened_at).second.delete
     found = audit(runner)
     assert(found.any? { |line| line.include?("steps") }, found.inspect)
   end

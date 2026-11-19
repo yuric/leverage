@@ -18,10 +18,9 @@ class ReplayTest < ActiveSupport::TestCase
 
   def diff(runner) = Leverage::Replay.diff(runner.workspace_id)
 
-  test "the logs of traces 09 and 10 rebuild every replay column" do
-    %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
-      runner = run_trace(name)
-      assert_empty diff(runner), name
+  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+    test "the log of trace #{name} rebuilds every replay column" do
+      assert_empty diff(run_trace(name))
     end
   end
 
