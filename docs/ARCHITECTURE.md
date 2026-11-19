@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; the skeleton's components, mechanisms and versions recorded; the product's design not started |
+| **Status** | Rules in force; the skeleton's components, mechanisms and versions recorded; the contract, the data, interfaces and trust boundaries it defines, recorded; no product behavior built |
 | **Last updated** | 2026-11-19 |
 
 This document describes how leverage is built: its components, how they
@@ -11,10 +11,10 @@ describes the system **as it exists**, not as it is hoped to be. Planned work
 belongs in the PRD or in issues.
 
 The technology choices are recorded under
-[Technology choices](#technology-choices), and the skeleton's components
-under [Components](#components). The other design sections below are not
-commitments until their _TBD_ markers are replaced. The [rules](#rules) are
-in force now.
+[Technology choices](#technology-choices), the skeleton's components under
+[Components](#components), and the contract under [Data](#data),
+[Interfaces](#interfaces) and [Trust boundaries](#trust-boundaries). The
+[rules](#rules) are in force now.
 
 ## Rules
 
@@ -334,7 +334,10 @@ gives them are not built yet; each entry says what the code does today.
 - **Depends on:** PostgreSQL, reached through `DATABASE_URL`, and the gems in
   `api/Gemfile`. It depends on no other component.
 - **Code:** `api/`, a Rails application in API mode; tests in `api/test/`. It
-  runs in the containers described by `compose.yaml`.
+  runs in the containers described by `compose.yaml`. It also holds the
+  contract, `api/contract/`, and `Leverage::Contract` and `Leverage::Gating`
+  in `api/lib/leverage/` (see [Interfaces](#interfaces)); the Docker build
+  context is `api/`, so the image holds the contract.
 
 ### Shared Swift library (LeverageKit)
 
@@ -393,23 +396,100 @@ the first change that needs one chooses it and adds it here.
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. | None yet. The helper writes its result to standard output and a failure to standard error. |
 | Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`. | `Configuration` in LeverageKit, read from the process environment (`LEVERAGE_API_URL`). |
 | Persistence | Active Record on PostgreSQL. | None. |
-| Shared helpers | None yet. | LeverageKit. |
+| Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
 
 ## Data
 
-_TBD — what is stored, where, who can read and write it, and how long it is
-kept._
+- **Where.** PostgreSQL, in the `db` container, is the only store. The PRD's
+  [Data model](PRD.md#data-model) is the requirement; `api/db/structure.sql`
+  is the schema, built by the migrations in `api/db/migrate/`. It has every
+  table the Data model names, 29, and each but `workspaces` has a
+  `workspace_id` with a foreign key. CI migrates from zero and fails when
+  the result differs from the committed `structure.sql`.
+- **Who writes.** No product code reads or writes the tables yet. The
+  schema itself refuses what the PRD forbids, whoever connects:
+  - `events` and `rule_versions` are append-only: a trigger refuses
+    `UPDATE`, `DELETE` and `TRUNCATE` for every role.
+  - A task's state changes only in a transaction that writes an event for
+    that task: two deferred constraint triggers on `tasks` check it at
+    commit.
+  - The `leverage_app` role (`NOLOGIN`, kept by the `db:grants` task after
+    every task that builds or changes the schema) has `SELECT, INSERT` on
+    `events` and `rule_versions`, `SELECT, INSERT, UPDATE, DELETE` on every
+    other table, and no `TRUNCATE`. The API still connects as the
+    database's owner role from `.env`; no login uses `leverage_app` yet.
+- **What is never stored.** No column holds a token or a password in the
+  clear: the only such names are `token_hash` (`sessions`, `helpers`,
+  `seats`) and `users.password_digest`. A check constraint refuses a
+  `token` or `seat_token` key anywhere in `commands.result` and
+  `helper_requests.result`. A credential is a row with a name, a kind and
+  a state; no login, sign-in token, settings folder or keychain reference
+  has a column.
+- **How long.** The PRD's Data model says what is kept and for how long;
+  nothing deletes a row yet.
+- **Values.** Closed values are plain `text` columns, checked by the
+  application against `api/contract/registry.json`; there is no PostgreSQL
+  enum type. Durations that are settings are integer seconds.
 
 ## Interfaces
 
-_TBD — public APIs, CLIs, file formats, and events, with their stability
-guarantees._
+`api/contract/` is the definition of every interface between two parts of
+leverage; [its README](../api/contract/README.md) says how each file is
+written and read. This section is the pointer AR-002 asks for, and states
+the stability rules.
+
+| Interface | Defined in |
+| --- | --- |
+| The agent, owner and helper HTTP interfaces | `api/contract/openapi.json` (OpenAPI 3.1, tags `agent`, `owner`, `helper`) |
+| Events: types and payloads | `api/contract/registry.json` and `api/contract/payloads/<type>.v<n>.json` |
+| The fixed lists every part uses | `api/contract/registry.json` |
+| States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
+| The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
+| Credential readers | `api/contract/readers.json` |
+| Expected behavior, end to end | `api/contract/traces/` |
+
+Only `GET /v1/health` is served today; the other operations are defined
+and not built.
+
+- **Commands.** Every call that changes something is a `POST` that carries
+  an `Idempotency-Key` header and answers one outcome body: 200 completed,
+  202 pending, 409 refused with a code from the registry's `refusals`.
+- **Events** are versioned. A released payload version is never edited: a
+  change adds a new version, the server writes the newest, every reader
+  handles every listed version, and old events are never rewritten.
+- **Lists.** A value of a list the PRD tables changes the PRD first.
+  `scripts/check_registry.py` and `scripts/check_contract_tables.py` fail
+  in CI when the PRD and the contract differ.
+- **Provisional parts** are marked: owner reads with `x-provisional: true`
+  in `openapi.json`, and readers with `provisional: true` in
+  `readers.json`. They may change without a new version until they are
+  marked final.
 
 ## Trust boundaries
 
-_TBD — where untrusted input enters, where privileges change, and what each
-boundary enforces. Security review starts here; see
-[SECURITY.md](../SECURITY.md)._
+What the contract defines at each boundary; none of it is enforced by
+running code yet, except where the database does it. Security review
+starts here; see [SECURITY.md](../SECURITY.md).
+
+- **Callers and their credentials.** Three callers reach the server, each
+  with its own bearer token: a seat (`seatBearer`), the owner's session
+  (`ownerSession`, from `POST /v1/owner/session`) and the helper
+  (`helperBearer`, issued by an owner command). Each is shown once and
+  stored hashed (`token_hash`). `x-leverage-caller` on each operation and
+  `roles.json` say which caller may run it.
+- **Untrusted input.** Everything a seat sends (contract text, notes,
+  evidence, questions, answers), every model job result and every helper
+  report is untrusted. Job results and reports have fixed shapes in
+  `openapi.json`, and an event payload holds only ids, numbers and values
+  from closed lists, never free text. A link is never fetched.
+- **Secrets.** No request or stored outcome carries a provider login,
+  sign-in token, link, code or API token; the four one-time tokens appear
+  only in the response that issues each.
+- **Privilege changes.** The owner's commands and the seats' calls are
+  separate operations with separate schemes. In the database, the
+  migrations run as the owner role and `leverage_app` cannot change the
+  event log; every table but `workspaces` is scoped by `workspace_id`.
+- **Network.** `compose.yaml` publishes the API on `127.0.0.1` only.
 
 ## Technology choices
 
@@ -430,6 +510,7 @@ Each choice is recorded in the ADR named beside it.
 | Swift tests | Swift Testing | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Continuous integration | GitHub Actions: `ubuntu-24.04` for the API and the import check, `macos-26` for Swift | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Code units | `api`, `LeverageKit`, `LeverageApp`, `LeverageHelper`, with the directions under [Components](#allowed-dependency-directions) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| The contract | JSON data files with JSON Schema 2020-12, OpenAPI 3.1, `structure.sql`, the `leverage_app` role, `json_schemer` 2.5.0 | [ADR 0003](adr/0003-contract-format.md) |
 
 ## Architecture decision records
 
