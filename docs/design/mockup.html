@@ -379,7 +379,7 @@ figure.ix-art { margin: 0; }
 
 <dialog class="ix-dialog" id="ix-dialog" aria-labelledby="ix-dialog-title">
   <h2 id="ix-dialog-title">Changes you made</h2>
-  <p>Paste this back into the conversation and the mockups and the build will follow it. Nothing here is sent anywhere.</p>
+  <p>Copy this summary to pass your changes on, for example in an issue or a pull request. Nothing here is sent anywhere.</p>
   <label for="ix-notes">Notes for anything you could not change here</label>
   <textarea id="ix-notes" rows="3" placeholder="For example: make the Blocked lane stand out more"></textarea>
   <label for="ix-export">Summary</label>
@@ -396,8 +396,9 @@ figure.ix-art { margin: 0; }
   'use strict';
 
   /* ===== NAMES: the two sets of labels =====
-     "prd" uses the names in docs/PRD.md. "plain" is the earlier wording, kept so the
-     two can be compared. The Names switch in the bar picks one. */
+     "prd" follows docs/PRD.md, with three owner-facing labels in place of its names:
+     Ideas (the PRD's Imaginarium lane), Board (Kanban) and Agents (Agent roster).
+     "plain" is the earlier wording, kept so the two can be compared. The Names switch in the bar picks one. */
   var NAMES = {
     prd: {
       tabs: { board: 'Board', needs: 'Needs you', activity: 'Activity', agents: 'Agents', creds: 'Credentials', handoff: 'Handoff' },
@@ -615,7 +616,7 @@ figure.ix-art { margin: 0; }
       'When one reaches its limit, it is marked limited until the reset time its provider gives.',
       'The work moves to the next one down that is signed in and not limited. The ones above it are not tried.',
       'If nothing below is available, the task waits until the earliest reset.',
-      'An agent goes back to its own login for its next task once that limit has reset.',
+      'An agent goes back to its own credential for its next task once that limit has reset.',
       'A new login is placed above the first API token. A new token goes last.'
     ];
     function handoffHtml(n) {
@@ -673,7 +674,7 @@ figure.ix-art { margin: 0; }
           ? '<div class="lv-step lv-step--form"><div class="lv-label">' + h('Step 2 of 2. Name it and sign in.') + '</div>' +
             '<div class="lv-field"><label class="lv-label" for="' + uid + '-cred">' + h('Name for this ' + s.provider + ' login') + '</label>' +
             '<input class="lv-input" id="' + uid + '-cred" data-k="f-cred" data-m="credName" type="text" value="' + esc(s.credName) + '" ' + ph('Personal') + '></div>' +
-            '<div class="lv-muted">' + h('After you sign in, we check that it is installed, signed in and answering.') + '</div></div>'
+            '<div class="lv-muted">' + h('When you choose Sign in, we check that the ' + s.provider + ' tool is installed, signed in and answering.') + '</div></div>'
           : '<div class="lv-step"><div class="lv-label">' + h('Step 1 of 2. Which provider?') + '</div>' +
             PROVIDERS.map(function (p) { return '<button type="button" class="lv-btn lv-btn--row" data-a="pick" data-v="' + p + '" data-k="pick-' + p + '">' + h(p) + '</button>'; }).join('') + '</div>';
         return '<div class="lv-scrim"><form class="lv-sheet lv-sheet--small" data-f="signIn" role="dialog" aria-modal="true" aria-labelledby="' + uid + '-ac">' +
@@ -950,7 +951,7 @@ figure.ix-art { margin: 0; }
       ? 'Edit text is on: click any label in the mockup to change it. The mockup’s own buttons are paused; use Screen and Sheet above to move around, and turn Edit text off to click through again.'
       : all
         ? 'All five artboards, each one live, and the app icon at the end. Appearance and width are fixed per artboard here; switch to One screen to change them.'
-        : 'This is a working mockup: click through it as a user would. Tokens changes colors, glass and sizes. Edit text changes any label. Changes collects what you altered so you can paste it back.';
+        : 'This is a working mockup: click through it as a user would. Tokens changes colors, glass and sizes. Edit text changes any label. Changes collects what you altered as text you can copy.';
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('.ix-seg'), function (seg) {
@@ -1134,7 +1135,7 @@ figure.ix-art { margin: 0; }
     applyTokens(); persist(); buildPanel(); syncBar(); layout();
   });
 
-  /* ----- Changes: what was altered, as text to paste back ----- */
+  /* ----- Changes: what was altered, as text to copy ----- */
   function changeCount() {
     return Object.keys(ui.tokens.light).length + Object.keys(ui.tokens.dark).length + Object.keys(ui.tokens.shared).length +
       Object.keys(ui.edits).length + (ui.names !== 'prd' ? 1 : 0) + (ui.notes.trim() ? 1 : 0);

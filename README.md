@@ -15,6 +15,7 @@ deployment, and implementation follow from them.
 | [docs/PRD.md](docs/PRD.md) | Product requirements. The source of truth for what gets built. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The architecture rules every pull request answers, and the system design, filled in as requirements settle. |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | How to deploy and operate. Filled in once there is something to deploy. |
+| [docs/design/](docs/design/README.md) | The design reference: a working mockup of the owner-facing screens. |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents working in this repository. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, including the rules for AI-assisted contributions. |
 | [MAINTENANCE.md](MAINTENANCE.md) | What to expect from the maintainer, and what is in and out of scope. |
