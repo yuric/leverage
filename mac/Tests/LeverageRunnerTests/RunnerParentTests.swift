@@ -40,10 +40,13 @@ struct RunnerParentTests {
         #expect(stops.current == 1)
     }
 
-    @Test("a runner whose parent is already launchd watches nothing")
-    func noParentToWatch() {
-        #expect(RunnerParent.watch(parent: 1) {} == nil)
-        #expect(RunnerParent.watch(parent: 0) {} == nil)
+    @Test("a runner whose helper was gone before it looked (its parent is already launchd) stops at once")
+    func parentAlreadyGone() {
+        for parent: pid_t in [1, 0] {
+            let stops = Count()
+            #expect(RunnerParent.watch(parent: parent) { stops.add() } == nil)
+            #expect(stops.current == 1, "parent \(parent)")
+        }
     }
 
     @Test("a stopping runner's give-back fits inside the helper's grace, and is the shared figure")
