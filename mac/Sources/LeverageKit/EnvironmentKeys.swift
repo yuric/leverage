@@ -52,6 +52,10 @@ public enum EnvironmentKeys {
 
     /// Switches the end-to-end tests on.
     public static let e2e = "LEVERAGE_E2E"
+    /// Where the end-to-end tests keep each test's folder (support folder,
+    /// logs, the secrets they used) for scripts/e2e_core_loop.sh's secret
+    /// scan; unset, each test uses a temporary folder.
+    public static let e2eFolder = "LEVERAGE_E2E_DIR"
     /// Names the provider of the developer check with real tools.
     public static let realProvider = "LEVERAGE_REAL_PROVIDER"
     /// The build lane of `mac/Package.swift`.
