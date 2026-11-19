@@ -104,11 +104,13 @@ IDs from the [PRD](PRD.md), an issue or pull request, or, when there is
 neither, the purpose itself in a few words. It changes only what that
 requires, plus the bookkeeping the project asks for (the changelog, `AUTHORS`,
 and the documents the change affects). Unrequested features, speculative
-configuration, and unrelated edits are left out. An unrelated problem is
-reported as an issue, or through [SECURITY.md](../SECURITY.md) if it is
-security-sensitive. This rule does not replace the
-[scope policy](../MAINTENANCE.md#scope): a feature still needs a requirement
-in the PRD first.
+configuration, and unrelated edits are left out. So is a layer of indirection
+(an interface, base class, wrapper, or plug-in point) that the requirement
+does not ask for and that has only one implementation behind it; a test
+stand-in counts as a second. An unrelated problem is reported as an issue, or
+through [SECURITY.md](../SECURITY.md) if it is security-sensitive. This rule
+does not replace the [scope policy](../MAINTENANCE.md#scope): a feature still
+needs a requirement in the PRD first.
 
 - **Checked automatically:** the answer is `Complies` followed by a
   requirement ID, an issue or pull request number, or a purpose of at least
