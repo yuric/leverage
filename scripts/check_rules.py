@@ -163,19 +163,30 @@ ODD_LINE_BREAKS = "\x0b\x0c\x1c\x1d\x1e\x85  "
 PINNED = re.compile(r"^[\w.-]+(?:/[\w.-]+)+@[0-9a-f]{40}$", A)
 PINNED_IMAGE = re.compile(r"^docker://[\w.:/-]+@sha256:[0-9a-f]{64}$", A)
 MIN_WORDS = 2  # a reason or a purpose is at least this many words
-# AR-007: the code folders of the components, and the folders of their tests.
-# A file under SOURCE_DIRS is product source unless it is Markdown or is in a
-# test folder; a test file is test code (TEST_SUFFIXES) in a test folder.
-SOURCE_DIRS = ("api/", "mac/")
-TEST_DIRS = ("api/test/", "mac/Tests/")
+# Folders that hold no product source: the definition in "Rules" in
+# docs/ARCHITECTURE.md. check_imports.py uses this constant too.
+NOT_PRODUCT = ("docs/", "scripts/", ".github/", ".agents/")
+# AR-007: the code folder of each component that the check covers, and the
+# folder of its tests. A file under a code folder is product source unless it
+# is Markdown or is in a test folder; a test file is test code (TEST_SUFFIXES)
+# in a test folder. Product source elsewhere is left to review.
+COMPONENT_TESTS = (("api/", "api/test/"), ("mac/", "mac/Tests/"))
+SOURCE_DIRS = tuple(code for code, _ in COMPONENT_TESTS)
+TEST_DIRS = tuple(tests for _, tests in COMPONENT_TESTS)
 TEST_SUFFIXES = (".rb", ".swift")
-# AR-007: a line that asserts something in a test, and a line that skips one.
+# AR-007: a line that asserts something in a test, a line that skips one, and
+# a line that makes a method a test (removing or renaming it can disable one).
 ASSERTION = re.compile(
     r"\b(?:assert\w*|refute\w*|flunk|must_\w+|wont_\w+|XCTAssert\w*|XCTFail|XCTUnwrap)\b"
     r"|#(?:expect|require)\b",
     A,
 )
-SKIP = re.compile(r"^\s*(?:skip|pending|omit)\b|\bXCTSkip\w*|\.disabled\b|\bwithKnownIssue\b", A)
+SKIP = re.compile(
+    r"^\s*(?:skip|pending|omit)\b|\bXCTSkip\w*|\.disabled\b|\bwithKnownIssue\b"
+    r"|\.enabled\(\s*if:\s*false\b",
+    A,
+)
+TEST_DEFINITION = re.compile(r"""^\s*(?:test\s+["']|def\s+test_|@Test\b|func\s+test)""", A)
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", A)
 REGULAR_FILE_MODES = ("100644", "100755")  # as git records them
 
@@ -1166,6 +1177,11 @@ def is_test_file(name):
     return name.startswith(TEST_DIRS) and PurePosixPath(name).suffix in TEST_SUFFIXES
 
 
+def component_of(name):
+    """The code folder of the component a path belongs to, or None."""
+    return next((code for code in SOURCE_DIRS if name.startswith(code)), None)
+
+
 def is_product_source(name):
     path = PurePosixPath(name)
     return (
@@ -1211,17 +1227,39 @@ def _quote(found):
     return f"line {number}: '{text[:80]}{'...' if len(text) > 80 else ''}'"
 
 
-def check_tests(start, deleted, touched, kinds, report):
-    """AR-007: product source comes with a test; weakened tests are pointed out."""
+def adds_assertion(start, name, added):
+    """True if the lines this pull request adds to a test file assert something."""
+    if name in added:
+        lines = (read(name) or "").splitlines()
+    else:
+        lines = [text for _, text in changed_lines(start, name)[1]]
+    return any(ASSERTION.search(line) for line in lines)
+
+
+def check_tests(start, added, deleted, touched, kinds, report):
+    """AR-007: product source comes with a test; weakened tests are pointed out.
+
+    A test file counts for the component it is in, and only if the lines the
+    pull request adds to it include an assertion.
+    """
     source = sorted(name for name in touched if is_product_source(name))
-    tests = sorted(name for name in touched - deleted if is_test_file(name))
-    if source and tests:
+    tests = sorted(
+        name for name in touched - deleted
+        if is_test_file(name) and adds_assertion(start, name, added)
+    )
+    covered = {component_of(name) for name in tests}
+    uncovered = [name for name in source if component_of(name) not in covered]
+    if source and not uncovered:
         report.ok(f"AR-007: the change to product source comes with {len(tests)} test file(s)")
-    elif source:
-        shown = ", ".join(source[:3]) + (", ..." if len(source) > 3 else "")
+    elif uncovered:
+        shown = ", ".join(uncovered[:3]) + (", ..." if len(uncovered) > 3 else "")
+        folders = " or ".join(
+            tests for code, tests in COMPONENT_TESTS if any(component_of(n) == code for n in uncovered)
+        )
         message = (
             f"AR-007: this pull request changes product source ({shown}) but "
-            f"adds or changes no test file under {' or '.join(TEST_DIRS)}"
+            f"adds or changes no test file under {folders} with an assertion in "
+            "the lines it adds"
         )
         kind = kinds.get("AR-007")
         if kind == "n/a":
@@ -1241,9 +1279,10 @@ def check_tests(start, deleted, touched, kinds, report):
     for name in sorted(touched):
         if not is_test_file(name) or name not in existing:
             continue
-        removed, added = changed_lines(start, name)
+        removed, new_lines = changed_lines(start, name)
         weaker = [found for found in removed if ASSERTION.search(found[1])]
-        skips = [found for found in added if SKIP.search(found[1])]
+        undefined = [found for found in removed if TEST_DEFINITION.search(found[1])]
+        skips = [found for found in new_lines if SKIP.search(found[1])]
         if name in deleted and weaker:
             what = f"deletes a test file with {len(weaker)} assertion(s)"
         else:
@@ -1253,10 +1292,15 @@ def check_tests(start, deleted, touched, kinds, report):
                     f"removes or changes {len(weaker)} assertion(s) "
                     f"({'; '.join(_quote(found) for found in weaker[:3])})"
                 )
+            if undefined:
+                parts.append(
+                    f"removes or changes {len(undefined)} test definition(s) "
+                    f"({'; '.join(_quote(found) for found in undefined[:3])})"
+                )
             if skips:
                 parts.append(f"skips a test ({'; '.join(_quote(found) for found in skips[:3])})")
             what = " and ".join(parts)
-        if weaker or skips:
+        if weaker or undefined or skips:
             report.warn(
                 f"AR-007: {name} {what}. If this weakens a test, the description must "
                 "name the assertion and the reason."
@@ -1334,6 +1378,11 @@ def check_pull_request(args, rules, requirements, files, report):
             "required and the IDs in the description are not checked; the "
             "checks on the change apply"
         )
+        # A maintainer may add an AR-007 answer to a bot's description, for
+        # example 'N/A' for a dependency bump that changes no code.
+        answers, duplicates = parse_answers(body)
+        if "AR-007" in required and answers and "AR-007" in answers:
+            kinds = check_answers({"AR-007"}, answers, duplicates & {"AR-007"}, report)
     else:
         answers, duplicates = parse_answers(body)
         kinds = check_answers(required, answers, duplicates, report)
@@ -1347,7 +1396,7 @@ def check_pull_request(args, rules, requirements, files, report):
     check_decision_record(start, added, deleted, touched, kinds, report)
     check_new_actions(start, body, kinds, files, report)
     if "AR-007" in required:
-        check_tests(start, deleted, touched, kinds, report)
+        check_tests(start, added, deleted, touched, kinds, report)
     warn_about_enforcement_changes(start, touched, report)
 
 

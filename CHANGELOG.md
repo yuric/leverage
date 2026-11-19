@@ -15,7 +15,7 @@ once it makes its first release.
   package in `mac/` with the library LeverageKit, the helper
   LeverageHelper and a one-window Mac app; `compose.yaml` to run the API and
   PostgreSQL in Docker containers on the owner's Mac; and a CI workflow that
-  runs both test suites, RuboCop, Brakeman and the import check. The pinned
+  runs both test suites, RuboCop and the import check. The pinned
   versions and test tools are recorded in
   `docs/adr/0002-pinned-versions-test-tools-and-code-units.md`.
 - Architecture rules AR-005, AR-006 and AR-007 are active: the components

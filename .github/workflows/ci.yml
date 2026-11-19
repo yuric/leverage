@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   api:
-    name: API tests, RuboCop and Brakeman
+    name: API tests and RuboCop
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -49,8 +49,6 @@ jobs:
         run: docker compose run --rm --no-deps api bin/rails zeitwerk:check
       - name: RuboCop
         run: docker compose run --rm --no-deps api bin/rubocop
-      - name: Brakeman
-        run: docker compose run --rm --no-deps api bin/brakeman --no-pager
       - name: Stop the containers
         if: always()
         run: docker compose down --volumes

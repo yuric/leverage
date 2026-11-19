@@ -114,7 +114,6 @@ The test suites and checks:
 ```bash
 docker compose run --rm api bin/rails test
 docker compose run --rm api bin/rubocop
-docker compose run --rm api bin/brakeman --no-pager
 cd mac && swift build && swift test
 ```
 

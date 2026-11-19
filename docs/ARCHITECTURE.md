@@ -192,7 +192,10 @@ registry, and its license must be compatible with the MIT License.
   is named in the description, and the answer is then not `N/A`.
 - **Left to review:** the license, the justification, whether the package is
   the real one, and whether a changed SHA is the release it claims to be.
-  Checking library manifests waits for the first manifest.
+  The library manifests (`api/Gemfile`, `api/Gemfile.lock`,
+  `mac/Package.swift`) and the image and package lines in `api/Dockerfile`
+  and `compose.yaml` are not checked automatically: a reviewer compares them
+  with the description.
 
 ### AR-005 Declared dependency direction
 
@@ -237,20 +240,29 @@ fails on the base branch and passes with the change. It does not delete,
 skip, or loosen an existing assertion unless its description names the
 assertion and the reason.
 
-- **Checked automatically:** product source is any file under `api/` or
-  `mac/` that is not Markdown and not in a test folder; a test file is a
-  `.rb` or `.swift` file under `api/test/` or `mac/Tests/`.
-  - A pull request that adds, changes, or deletes product source and adds or
-    changes no test file fails. Answering `N/A` with a reason turns the
-    failure into a warning, for a change with no behavior in it; a
-    `Deviates` answer with its accepted ADR passes.
-  - A pull request that removes or changes an assertion line in an existing
-    test file, deletes a test file that has assertions, or adds a skip to an
-    existing test file gets a warning that names the file and the lines. The
-    description must name each one and the reason.
-- **Left to review:** whether the new test fails on the base branch, whether
-  it tests the behavior that changed, whether a warned line really weakens
-  the test, and whether the description names it.
+- **Checked automatically:** for the API and the Mac side only. Their
+  product source is any file under `api/` or `mac/` that is not Markdown and
+  not in a test folder. A test file is a `.rb` or `.swift` file under
+  `api/test/` (for `api/`) or `mac/Tests/` (for `mac/`), and it counts only
+  for its own component and only if the lines the pull request adds to it
+  include an assertion.
+  - A pull request that adds, changes, or deletes product source in a
+    component, and adds no assertion to a test file of that component,
+    fails. Answering `N/A` with a reason turns the failure into a warning,
+    for a change with no behavior in it; a `Deviates` answer with its
+    accepted ADR passes. A bot's pull request is held to this too; a
+    maintainer answers for it by adding an AR-007 line to its description.
+  - A pull request that removes or changes an assertion line or a test
+    definition line (`test "..."`, `def test_`, `@Test`, `func test`) in an
+    existing test file, deletes a test file that has assertions, or adds a
+    skip to an existing test file gets a warning that names the file and the
+    lines. The description must name each one and the reason.
+- **Left to review:** product source outside `api/` and `mac/` (a Swift or
+  Ruby file there also fails the AR-005 check until its unit is listed),
+  whether the new test fails on the base branch, whether it tests the
+  behavior that changed, whether a warned line really weakens the test,
+  whether the description names it, and other ways to disable a test that
+  the check does not recognize.
 
 ## Engineering practices
 
@@ -377,7 +389,7 @@ the first change that needs one chooses it and adds it here.
 
 | Concern | API (`api/`) | Mac side (`mac/`) |
 |---|---|---|
-| Errors | `ApplicationController` rescues every unhandled error and answers `{"error":{"code","message"}}` with the status Rails maps the error to. A 5xx answer hides the message and logs it. | `LeverageClientError` in LeverageKit for the errors the client raises; a transport failure passes through as the `URLError` that `URLSession` threw. |
+| Errors | `ApplicationController` answers every unhandled error with `{"error":{"code","message"}}` and the status Rails maps the error to: it rescues errors raised in a controller, and `ApplicationController.exceptions_app`, Rails' exceptions app, answers errors raised before one runs (in the router or a middleware). A 5xx answer hides the message, which is logged. | `LeverageClientError` in LeverageKit for the errors the client raises; a transport failure passes through as the `URLError` that `URLSession` threw. |
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. | None yet. The helper writes its result to standard output and a failure to standard error. |
 | Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`. | `Configuration` in LeverageKit, read from the process environment (`LEVERAGE_API_URL`). |
 | Persistence | Active Record on PostgreSQL. | None. |
@@ -413,7 +425,7 @@ Each choice is recorded in the ADR named beside it.
 | Mac helper | Runs the providers' tools on the owner's Mac; written in Swift, in `mac/` | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) |
 | Ruby and Rails | Ruby 4.0.10 (image `ruby:4.0.10-slim`), Rails 8.1.4.1; gem versions fixed in `api/Gemfile.lock` | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | PostgreSQL version | 17.12 (image `postgres:17.12-trixie`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
-| API checks | Minitest, RuboCop (`rubocop-rails-omakase`), Brakeman | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
+| API checks | Minitest, RuboCop (`rubocop-rails-omakase`) | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Swift | Swift tools version 6.2, macOS 14 or later, no third-party packages | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Swift tests | Swift Testing | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | Continuous integration | GitHub Actions: `ubuntu-24.04` for the API and the import check, `macos-26` for Swift | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |

@@ -47,5 +47,9 @@ module Leverage
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Errors raised before a controller runs (in the router or a middleware)
+    # get the same JSON error shape as the rest; see ApplicationController.
+    config.exceptions_app = ->(env) { ApplicationController.exceptions_app(env) }
   end
 end
