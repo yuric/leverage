@@ -19,13 +19,19 @@ GitHub's list of runner images, not taken from memory.
 
 1. **Ruby 4.0.10**, the newest stable release on Docker Hub's official
    `ruby` image (4.1 is a preview). The API image is built from
-   `ruby:4.0.10-slim`; `api/.ruby-version` names the same version.
+   `ruby:4.0.10-slim`, pinned to the image index digest
+   `sha256:a4b3e62bfe56bd267a3aeacc1b89aea96be919faa0c7d77c6346e2ac14f6c175`
+   (Debian 13); `api/.ruby-version` names the same version. The Debian
+   packages the Dockerfile installs come from Debian 13 when the image is
+   built and are not pinned to a version.
 2. **Rails 8.1.4.1**, the newest release on RubyGems, in API mode. Action
    Mailer, Action Mailbox, Action Text, Active Storage, Action Cable,
    Kamal, Thruster, the Solid gems and Jbuilder are left out, because
    version 1 has no use for them yet. Every gem version is fixed in
    `api/Gemfile.lock`.
-3. **PostgreSQL 17.12**, from the official image `postgres:17.12-trixie`.
+3. **PostgreSQL 17.12**, from the official image `postgres:17.12-trixie`,
+   pinned to the image index digest
+   `sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`.
 4. **Minitest**, the Rails default, tests the API, with Rails' request
    tests. **RuboCop** (`rubocop-rails-omakase`) checks its style and
    **Brakeman** checks it for security problems; both are Rails defaults.
@@ -66,9 +72,13 @@ GitHub's list of runner images, not taken from memory.
   AR-004 for what it changes.
 - `macos-15`'s default Xcode, 16.4, cannot build the package; CI uses
   `macos-26`.
-- Brakeman and `bundler-audit` are development and test tools, and the
-  default Dockerfile puts them in the image. Their licenses, the "Brakeman
-  Public Use License" and GPL-3.0-or-later, are an open question against
-  rule AR-004, recorded in [IMPLEMENTATION.md](../IMPLEMENTATION.md).
+- Brakeman is a development and test tool, and the default Dockerfile puts
+  it in the image. Its license, the "Brakeman Public Use License", is an
+  open question against rule AR-004, recorded in
+  [IMPLEMENTATION.md](../IMPLEMENTATION.md). `bundler-audit`, another
+  `rails new` default, is left out: nothing ran it.
+- A new image digest arrives only through a pull request that changes the
+  digest here and in `api/Dockerfile` or `compose.yaml`. The Debian
+  packages can still change between two builds of the same commit.
 - A new code unit, or a new direction between units, needs a change to the
   list and a new ADR.

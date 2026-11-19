@@ -4,7 +4,8 @@ name: leverage
 
 services:
   db:
-    image: postgres:17.12-trixie
+    # The digest pins the image behind the tag (docs/adr/0002).
+    image: postgres:17.12-trixie@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}

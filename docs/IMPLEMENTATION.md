@@ -101,8 +101,15 @@ them.
 - **The API's tests run in the production image.** compose has one `api`
   service built from Rails' default production Dockerfile, and
   `bin/rails test` switches to the test environment and its own database.
-- **`bundler-audit` and the local CI runner kept.** Both are `rails new`
-  defaults; `bin/ci` is not used by the CI workflow. See question 6.
+- **`bundler-audit` and the local CI runner left out.** Both are
+  `rails new` defaults that nothing ran; `bin/ci`, `config/ci.rb`,
+  `bin/bundler-audit` and `config/bundler-audit.yml` were removed with the
+  gem.
+- **Brakeman upgrades only through `Gemfile.lock`.** `bin/brakeman` no
+  longer passes `--ensure-latest`, which failed CI whenever a newer Brakeman
+  was released.
+- **Images pinned by digest.** `api/Dockerfile` and `compose.yaml` name each
+  image by tag and digest; ADR 0002 records the digests.
 
 ## Installed for the build
 
@@ -113,8 +120,9 @@ build 17F113, Swift 6.3.3).
 | What | Version | Source | Used for |
 | --- | --- | --- | --- |
 | `ruby` image | `4.0.10-trixie` | Docker Hub official image | Running `rails new` once; no file refers to it |
-| `ruby` image | `4.0.10-slim` | Docker Hub official image | The base of the API image |
-| `postgres` image | `17.12-trixie` | Docker Hub official image | The `db` service |
+| `ruby` image | `4.0.10-slim` (digest in ADR 0002) | Docker Hub official image | The base of the API image |
+| `postgres` image | `17.12-trixie` (digest in ADR 0002) | Docker Hub official image | The `db` service |
+| Debian packages in `api/Dockerfile` | As Debian 13 ships them at build time | Debian 13 archive, inside the API image | `curl`, `libjemalloc2`, `postgresql-client`; and to build gems: `build-essential`, `git`, `libpq-dev`, `libyaml-dev`, `pkg-config` |
 | Gems in `api/Gemfile.lock` | As locked | RubyGems, installed inside the API image | The API, its tests and its checks |
 | `markdownlint-cli2` | 0.24.1 | npm, fetched by `npx` | Running the Markdown lint; not part of the repository |
 
@@ -143,13 +151,13 @@ skeleton's pull request description, as rule AR-004 asks.
    asked the agent to settle every review finding in the gate and to review
    them afterwards. The pull request that made that change lists each
    choice in one sentence with its alternative.
-6. **The licenses of Brakeman and `bundler-audit`.** Rule AR-004 asks for a
-   license compatible with the MIT License. According to RubyGems, Brakeman
-   8.1.0 is under the "Brakeman Public Use License" and `bundler-audit`
-   0.9.3 under GPL-3.0-or-later. Both are development and test tools, and
-   the default Dockerfile puts them in the API image. *Chosen meanwhile:*
-   both are kept as `rails new` put them, and the skeleton's pull request
-   names them under AR-004 with their licenses.
+6. **The license of Brakeman.** Rule AR-004 asks for a license compatible
+   with the MIT License. According to RubyGems, Brakeman 8.1.0 is under the
+   "Brakeman Public Use License". It is a development and test tool, and
+   the default Dockerfile puts it in the API image. *Chosen meanwhile:* it
+   is kept, because CI runs it as the API's security scan, and the skeleton's
+   pull request names it under AR-004 with its license. `bundler-audit`
+   (GPL-3.0-or-later), which raised the same question, was removed.
 
 ## Waiting for the owner
 

@@ -7,6 +7,8 @@ Rails.application.routes.draw do
     get "health", to: "health#show"
   end
 
-  # Keep last: every other path answers 404 in the JSON error shape.
+  # Keep last: every other path, the root included, answers 404 in the JSON
+  # error shape. "*path" needs at least one segment, so "/" has its own route.
+  root to: "application#route_not_found", via: :all
   match "*path", to: "application#route_not_found", via: :all
 end

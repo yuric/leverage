@@ -53,8 +53,8 @@ Stop = _rules.Stop
 
 COMPONENTS = "Components"
 DIRECTIONS = "Allowed dependency directions"
-# Folders that hold no product code (see "Rules" in docs/ARCHITECTURE.md).
-NOT_PRODUCT = ("docs/", "scripts/", ".github/", ".agents/")
+# Folders that hold no product source: one definition, in check_rules.py.
+NOT_PRODUCT = _rules.NOT_PRODUCT
 # The Swift package manifest describes the targets; it belongs to none.
 MANIFEST = "Package.swift"
 RUBY_SUFFIXES = (".rb", ".ru", ".rake", ".gemspec")

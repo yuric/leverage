@@ -138,8 +138,9 @@ python3 scripts/test_check_imports.py                # self-test of that check
 CI also runs the API's tests, RuboCop and Brakeman, and the Swift build and
 tests, listed under "Build, test, and run" below.
 
-With a base commit and a description file, the last one also checks a pull
-request: `python3 scripts/check_rules.py --base origin/main --body-file <file>`.
+With a base commit and a description file, `check_rules.py` also checks a
+pull request:
+`python3 scripts/check_rules.py --base origin/main --body-file <file>`.
 The two options only work together.
 
 If a tool is not installed, say which check you could not run instead of

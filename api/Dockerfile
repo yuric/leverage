@@ -1,15 +1,15 @@
 # syntax=docker/dockerfile:1
 # check=error=true
 
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t leverage .
-# docker run -d -p 80:3000 -e RAILS_MASTER_KEY=<value from config/master.key> --name leverage leverage
+# The API image. Build and run it with compose.yaml at the repository root,
+# which publishes the API on 127.0.0.1 only and passes the settings from
+# .env; docs/DEPLOY.md says how. Do not run it with `-p 3000:3000`, which
+# would publish it on every interface.
 
-# For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
-
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version
+# Make sure RUBY_VERSION matches the Ruby version in .ruby-version. The digest
+# pins the image behind the tag (docs/adr/0002); change both together.
 ARG RUBY_VERSION=4.0.10
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+FROM docker.io/library/ruby:$RUBY_VERSION-slim@sha256:a4b3e62bfe56bd267a3aeacc1b89aea96be919faa0c7d77c6346e2ac14f6c175 AS base
 
 # Rails app lives here
 WORKDIR /rails

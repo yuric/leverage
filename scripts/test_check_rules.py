@@ -881,6 +881,40 @@ reset("with-tests"); write("api/app/models/thing.rb", "class Thing; end\n"); com
 case("AR-007: deleting product source is a change to it", 1, answered(), base="with-source", want=NO_TEST)
 (REPO / "api/test/models/thing_test.rb").unlink()
 case("AR-007: deleting a test does not count as adding one", 1, answered(), base="with-source", want=NO_TEST)
+# A test file counts only if its added lines assert something, and only for
+# product source in its own component.
+reset("with-tests"); write("api/app/models/other.rb", "class Other; end\n")
+edit("api/test/models/thing_test.rb", "class HealthTest", "# The health check.\nclass HealthTest")
+case("AR-007: a comment added to a test is not a test", 1, answered(), base="with-tests",
+     want=[NO_TEST, "api/app/models/other.rb"])
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n"); write("api/test/models/empty_test.rb", "")
+case("AR-007: an empty new test file is not a test", 1, answered(), base="with-tests-rule", want=NO_TEST)
+reset("with-tests-rule"); write("api/app/models/thing.rb", "class Thing; end\n")
+write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+case("AR-007: a Swift test does not cover API source", 1, answered(), base="with-tests-rule",
+     want=[NO_TEST, "api/app/models/thing.rb", "api/test/"], absent="mac/Sources")
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+write("api/test/models/thing_test.rb", RUBY_TEST)
+case("AR-007: a Ruby test does not cover Swift source", 1, answered(), base="with-tests-rule",
+     want=[NO_TEST, "mac/Sources/Kit/Health.swift", "mac/Tests/"])
+reset("with-tests-rule"); write("mac/Sources/Kit/Health.swift", "public struct Health {}\n")
+write("api/app/models/thing.rb", "class Thing; end\n"); write("api/test/models/thing_test.rb", RUBY_TEST)
+write("mac/Tests/KitTests/HealthTests.swift", SWIFT_TEST)
+case("AR-007: source in both components with a test in each", 0, answered(), base="with-tests-rule",
+     want="comes with 2 test file(s)")
+reset("with-tests"); write("api/app/models/other.rb", "class Other; end\n")
+edit("api/test/models/thing_test.rb", "  end\nend", "    assert_nil error\n  end\nend")
+case("AR-007: an assertion added to an existing test counts", 0, answered(), base="with-tests",
+     want="comes with 1 test file(s)")
+reset("with-tests-rule"); write("api/Gemfile.lock", "GEM\n  specs:\n    rails (8.1.5)\n")
+case("AR-007: Dependabot's lockfile bump with no answer fails", 1, "Bumps rails.", author="dependabot[bot]",
+     base="with-tests-rule", want=NO_TEST)
+case("AR-007: Dependabot's lockfile bump with a maintainer's N/A passes", 0,
+     "Bumps rails.\n\n## Architecture rules\n\n- AR-007: N/A — a patch release of a gem, no code changes\n",
+     author="dependabot[bot]", base="with-tests-rule", want=f"WARNING: {NO_TEST}", absent=f"FAIL: {NO_TEST}")
+case("AR-007: Dependabot's N/A still needs a reason", 1,
+     "Bumps rails.\n\n## Architecture rules\n\n- AR-007: N/A\n",
+     author="dependabot[bot]", base="with-tests-rule", want="AR-007: 'N/A' needs a reason")
 reset("with-tests-rule"); write("api/README.md", "# API\n"); write("mac/docs/notes.markdown", "x\n")
 case("AR-007: Markdown under a code folder is not product source", 0, answered(), base="with-tests-rule",
      absent="AR-007: ")
@@ -902,6 +936,25 @@ case("AR-007: a skip added to a Ruby test is pointed out", 0, answered(), base="
 reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "@Test(.disabled(\"later\")) func")
 case("AR-007: a disabled Swift test is pointed out", 0, answered(), base="with-tests",
      want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", ".disabled"])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "@Test(.enabled(if: false)) func")
+case("AR-007: a Swift test enabled only if false is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", ".enabled(if: false)", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func", "func")
+case("AR-007: a removed @Test attribute is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", "@Test func health()", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  test \"ok\" do", "  def ok")
+case("AR-007: a Minitest test turned into a plain method is pointed out", 0, answered(), base="with-tests",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "test \"ok\" do", WEAKER])
+reset("with-tests"); edit("api/test/models/thing_test.rb", "  test \"ok\" do", "  def test_ok")
+commit("def-test")
+edit("api/test/models/thing_test.rb", "  def test_ok", "  def ok")
+case("AR-007: a renamed def test_ method is pointed out", 0, answered(), base="def-test",
+     want=["WARNING: AR-007: api/test/models/thing_test.rb", "def test_ok", WEAKER])
+reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "@Test func health()", "func testHealth()")
+commit("xctest")
+edit("mac/Tests/KitTests/HealthTests.swift", "func testHealth()", "func health()")
+case("AR-007: a renamed func test method is pointed out", 0, answered(), base="xctest",
+     want=["WARNING: AR-007: mac/Tests/KitTests/HealthTests.swift", "func testHealth()", WEAKER])
 reset("with-tests"); edit("mac/Tests/KitTests/HealthTests.swift", "    #expect(body.isEmpty == false)\n", "")
 case("AR-007: a removed Swift expectation is pointed out", 0, answered(), base="with-tests",
      want=["mac/Tests/KitTests/HealthTests.swift", "line 5", "#expect(body.isEmpty == false)"])
