@@ -1,5 +1,6 @@
 import Foundation
 import LeverageKit
+import LeverageTestSupport
 import Testing
 
 @testable import LeverageRunner
@@ -13,7 +14,7 @@ import Glibc
 /// A runner whose helper is gone (a crash, a SIGKILL) stops the way SIGTERM
 /// stops it, so no runner keeps working with a live seat token after the
 /// helper that started it (PK-8, CL-23).
-@Suite("The runner's parent watch", .timeLimit(.minutes(1)))
+@Suite("The runner's parent watch", .timeLimit(.minutes(Patience.minutes(1))))
 struct RunnerParentTests {
     final class Count: @unchecked Sendable {
         private let lock = NSLock()

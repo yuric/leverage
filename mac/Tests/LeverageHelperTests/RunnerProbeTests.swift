@@ -8,7 +8,7 @@ import Testing
 /// The test prompt of Add credential runs `LeverageRunner probe` (plan
 /// §2.2), so the four drivers stay in the runner. The runner here is a
 /// script the test writes, which records how it was started.
-@Suite("Runner probe", .timeLimit(.minutes(1)))
+@Suite("Runner probe", .timeLimit(.minutes(Patience.minutes(1))))
 struct RunnerProbeTests {
     private func probeScript(_ rig: HelperRig, exitCode: Int) throws -> URL {
         let script = rig.folder.path("probe-runner.sh")

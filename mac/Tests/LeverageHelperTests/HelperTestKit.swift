@@ -26,15 +26,16 @@ enum MadeUp {
 /// Timings short enough for a test; the order between them is the real one.
 /// The looks are short; the limits are only ceilings, which a passing test
 /// never reaches, and are wide because a tool's start can take seconds when
-/// the whole package's tests run at once on a busy Mac (a test that needs a
-/// wait to run out sets its own short one).
+/// the whole package's tests run at once on a busy Mac, and wider still by
+/// the run's patience (a test that needs a wait to run out sets its own
+/// short one).
 let fastTimings = HelperTimings(
     lookEvery: .milliseconds(50),
     promptEvery: .milliseconds(100),
-    waitAtMost: .seconds(45),
-    commandLimit: .seconds(45),
-    probeLimit: .seconds(60),
-    installLimit: .seconds(60),
+    waitAtMost: Patience.scaled(.seconds(45)),
+    commandLimit: Patience.scaled(.seconds(45)),
+    probeLimit: Patience.scaled(.seconds(60)),
+    installLimit: Patience.scaled(.seconds(60)),
     stopGrace: .seconds(3),
     pauseAfterError: .milliseconds(50),
     longPollSeconds: 1,
@@ -153,7 +154,7 @@ struct StandInPrompt: TestPrompting {
         guard let result = try? await Subprocess.run(SubprocessRequest(
             executable: tool.path, arguments: arguments,
             environment: locator.toolEnvironment(entry, toolPath: tool.path, accountFolder: accountFolder),
-            timeLimit: .seconds(20))) else { return false }
+            timeLimit: Patience.scaled(.seconds(20)))) else { return false }
         return result.succeeded
     }
 }
@@ -177,9 +178,9 @@ func helperRequest(
 }
 
 /// Waits until `condition` holds, looking every 20 ms, for at most
-/// `seconds`; true when it held.
+/// `seconds` times the run's patience; true when it held.
 func eventually(within seconds: Double = 45, _ condition: () throws -> Bool) async rethrows -> Bool {
-    let deadline = Date().addingTimeInterval(seconds)
+    let deadline = Date().addingTimeInterval(Patience.seconds(seconds))
     while Date() < deadline {
         if try condition() { return true }
         try? await Task.sleep(for: .milliseconds(20))

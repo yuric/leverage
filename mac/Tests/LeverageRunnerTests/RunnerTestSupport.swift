@@ -200,8 +200,9 @@ struct Harness {
 }
 
 /// Runs the loop to its end; a loop that does not end within the deadline
-/// is stopped and the test fails.
+/// (times the run's patience) is stopped and the test fails.
 func runToEnd(_ loop: RunnerLoop, deadline: Duration = .seconds(60)) async -> Int32 {
+    let deadline = Patience.scaled(deadline)
     let run = Task { await loop.run() }
     let watchdog = Task {
         try await Task.sleep(for: deadline)
@@ -213,10 +214,11 @@ func runToEnd(_ loop: RunnerLoop, deadline: Duration = .seconds(60)) async -> In
     return code
 }
 
-/// Waits, a few milliseconds at a time, until `condition` holds.
+/// Waits, a few milliseconds at a time, until `condition` holds, for at most
+/// `deadline` times the run's patience.
 func eventually(within deadline: Duration = .seconds(45), _ condition: () -> Bool) async -> Bool {
     let clock = ContinuousClock()
-    let end = clock.now.advanced(by: deadline)
+    let end = clock.now.advanced(by: Patience.scaled(deadline))
     while clock.now < end {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(5))

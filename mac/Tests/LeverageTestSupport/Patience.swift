@@ -30,7 +30,9 @@ public enum Patience {
     /// a number of at least 1, or an error, so a mistyped setting is not
     /// quietly ignored.
     public static func factor(from text: String?) throws -> Double {
-        1
+        guard let text = text?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return 1 }
+        guard let value = Double(text), value.isFinite, value >= 1 else { throw NotAFactor(text: text) }
+        return value
     }
 
     /// `duration`, as patient as this run is.

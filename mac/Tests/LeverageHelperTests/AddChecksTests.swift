@@ -7,7 +7,7 @@ import Testing
 
 /// The three login checks of Add credential and Verify (L602-L606, IN-23,
 /// PV-3, PV-4, CL-19), per provider, against the stand-ins.
-@Suite("Add checks", .timeLimit(.minutes(1)))
+@Suite("Add checks", .timeLimit(.minutes(Patience.minutes(1))))
 struct AddChecksTests {
     private func addRequest(_ provider: Provider, credential: UUID = UUID()) -> HelperRequest {
         helperRequest(.runAddChecks, credential: credential, params: .init(provider: provider, credentialKind: .login))

@@ -8,7 +8,7 @@ import Testing
 // Each driver against its stand-in tool (PV-7): arguments exactly as PV-2,
 // the account variable set, no leverage token in the tool's environment, a
 // signed-out stand-in is a failure.
-@Suite("Drivers against the stand-ins", .timeLimit(.minutes(2)))
+@Suite("Drivers against the stand-ins", .timeLimit(.minutes(Patience.minutes(2))))
 struct DriverTests {
     struct Case: Sendable, CustomTestStringConvertible {
         let tool: String
@@ -265,7 +265,7 @@ struct DriverTests {
     }
 }
 
-@Suite("Probe", .timeLimit(.minutes(1)))
+@Suite("Probe", .timeLimit(.minutes(Patience.minutes(1))))
 struct ProbeTests {
     @Test("the probe runs the test prompt once and exits 0 when the tool answers ready")
     func ready() async throws {

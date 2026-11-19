@@ -8,7 +8,7 @@ import Testing
 /// Installing a provider's tool with no terminal (L603, L715, PV-5). No test
 /// runs a real installer or downloads anything: the download is a parameter,
 /// and the tests hand over the stand-in installer and the stand-in archive.
-@Suite("Tool installer", .timeLimit(.minutes(1)))
+@Suite("Tool installer", .timeLimit(.minutes(Patience.minutes(1))))
 struct ToolInstallerTests {
     private let claude = ProviderCatalog.entry(for: "claude")!
 

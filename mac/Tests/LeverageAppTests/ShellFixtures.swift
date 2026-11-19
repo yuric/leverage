@@ -39,15 +39,18 @@ enum ShellFixtures {
         EventRecord(id: UUID(), workspaceID: UUID(), seq: seq, at: Date(), type: .taskCreated, actorKind: .owner)
     }
 
-    /// Waits, at most `timeout`, until `condition` holds; returns whether it did.
+    /// Waits, at most `timeout` times the run's patience, until `condition`
+    /// holds; returns whether it did.
     @MainActor
     static func eventually(
         timeout: Duration = .seconds(20), _ condition: @MainActor () -> Bool
     ) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
+        let deadline = ContinuousClock.now + Patience.scaled(timeout)
         while ContinuousClock.now < deadline {
             if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(2))
+            // Every app test runs on the main actor: a looser look leaves
+            // it to the code under test.
+            try? await Task.sleep(for: .milliseconds(10))
         }
         return condition()
     }

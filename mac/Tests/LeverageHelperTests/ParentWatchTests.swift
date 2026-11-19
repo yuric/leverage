@@ -14,7 +14,7 @@ import Glibc
 /// When the app that started the helper is gone (a crash, Force Quit), the
 /// helper stops its runs and exits, so no helper and no run outlives the app
 /// (PK-8).
-@Suite("Parent watch", .timeLimit(.minutes(1)))
+@Suite("Parent watch", .timeLimit(.minutes(Patience.minutes(1))))
 struct ParentWatchTests {
     final class Flag: @unchecked Sendable {
         private let lock = NSLock()

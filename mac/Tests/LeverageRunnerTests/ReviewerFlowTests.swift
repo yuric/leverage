@@ -7,7 +7,7 @@ import Testing
 
 // The reviewer against FakeAgentAPI: claim review, acknowledge, one tool
 // run, a verdict naming the failed criteria; a failed run is a release.
-@Suite("Reviewer flow", .timeLimit(.minutes(1)))
+@Suite("Reviewer flow", .timeLimit(.minutes(Patience.minutes(1))))
 struct ReviewerFlowTests {
     let taskID = UUID()
     let reviewID = UUID()

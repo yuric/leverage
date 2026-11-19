@@ -14,7 +14,7 @@ import Glibc
 /// The launcher starts and stops a seat the app runs (L62, L588, L589,
 /// PK-7, CL-23). The runner is the stand-in runner, which records its
 /// arguments and environment and runs until it is stopped.
-@Suite("Launcher", .timeLimit(.minutes(1)))
+@Suite("Launcher", .timeLimit(.minutes(Patience.minutes(1))))
 struct LauncherTests {
     private struct Seat {
         let seat = UUID()

@@ -7,7 +7,7 @@ import Testing
 
 // What refusals, the next item, a stop and failures do to a flow (CL-22,
 // CL-23, CL-31).
-@Suite("Runner loop", .timeLimit(.minutes(1)))
+@Suite("Runner loop", .timeLimit(.minutes(Patience.minutes(1))))
 struct RunnerLoopTests {
     let taskID = UUID()
     let firstID = UUID()

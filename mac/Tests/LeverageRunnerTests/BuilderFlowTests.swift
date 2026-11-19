@@ -7,7 +7,7 @@ import Testing
 
 // The builder against FakeAgentAPI: trace 09's builder calls in order, the
 // rework of the reopened criterion only, and what a tool's answer does.
-@Suite("Builder flow", .timeLimit(.minutes(1)))
+@Suite("Builder flow", .timeLimit(.minutes(Patience.minutes(1))))
 struct BuilderFlowTests {
     let taskID = UUID()
     let copyID = UUID()

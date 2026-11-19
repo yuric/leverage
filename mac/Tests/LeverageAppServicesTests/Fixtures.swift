@@ -163,11 +163,11 @@ final class RecordingProbe: @unchecked Sendable {
 }
 
 /// Asks `condition` again every 20 milliseconds until it holds or the time
-/// is up; answers whether it held.
+/// (times the run's patience) is up; answers whether it held.
 func eventually(
     within timeout: Duration = .seconds(45), _ condition: () async -> Bool
 ) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
+    let deadline = ContinuousClock.now + Patience.scaled(timeout)
     while ContinuousClock.now < deadline {
         if await condition() { return true }
         try? await Task.sleep(for: .milliseconds(20))

@@ -7,7 +7,7 @@ import Testing
 
 /// The helper's loop: `GET /v1/helper/next`, one task per request, its
 /// result reported, exit code 3 on `401` (PK-4, CL-31).
-@Suite("Request loop", .timeLimit(.minutes(1)))
+@Suite("Request loop", .timeLimit(.minutes(Patience.minutes(1))))
 struct RequestLoopTests {
     /// Hands out the requests in order, then answers nothing, as a long
     /// poll that comes back empty.
@@ -102,16 +102,29 @@ struct RequestLoopTests {
         let rig = try HelperRig()
         let request = helperRequest(.stopSeat, seat: UUID())
         let queue = Queue([.failure(URLError(.networkConnectionLost)), .success(request)])
-        rig.api.script { $0.next = { _ in try await queue.next() } }
+        let asks = Locked<[ContinuousClock.Instant]>([])
+        rig.api.script {
+            $0.next = { _ in
+                asks.update { $0.append(.now) }
+                return try await queue.next()
+            }
+        }
         let loop = RequestLoop(api: rig.api, timings: HelperTimings.standard, log: quietLog) { _ in
             HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
         }
+        // The pause is the timing's, and the timing is at most 2 seconds.
+        // Both are measured without the wall clock's load: the timing is
+        // read, and the gap between the two asks can only be longer than the
+        // pause the loop scheduled, never shorter.
         #expect(HelperTimings.standard.pauseAfterError <= .seconds(2))
 
         let running = Task { await loop.run() }
         #expect(await eventually(within: 4) { results(rig.api) == [request.id.contractString] })
         running.cancel()
         _ = await running.value
+        let times = asks.value
+        try #require(times.count >= 2)
+        #expect(times[1] - times[0] >= HelperTimings.standard.pauseAfterError, "it pauses before asking again")
     }
 
     @Test("it long-polls with the wait the timings give")

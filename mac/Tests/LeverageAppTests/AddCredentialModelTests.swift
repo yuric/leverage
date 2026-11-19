@@ -183,7 +183,7 @@ struct AddCredentialModelTests {
     }
 
     @Test("it asks again with the time of the last change it saw, so the answer waits for the next one")
-    func asksAfterLastChange() async {
+    func asksAfterLastChange() async throws {
         let owner = owner(answers: [
             Fixtures.request(requestID, progress: [Fixtures.progress(.toolInstalled, .running)], updated: 4), passing(8),
         ])
@@ -198,7 +198,9 @@ struct AddCredentialModelTests {
         let model = makeModel(owner)
         await start(model)
         await model.signIn()
-        #expect(asked.value.count == 2)
+        // A count other than 2 fails the test here rather than crashing the
+        // whole run on the index below.
+        try #require(asked.value.count == 2)
         #expect(asked.value[0] == nil)
         #expect(asked.value[1] == Date(timeIntervalSince1970: 1_780_000_004))
     }
@@ -212,16 +214,19 @@ struct AddCredentialModelTests {
         ])
         let model = makeModel(owner)
         await start(model)
+        // The note is read each time the model asks again, which is after it
+        // took in the answer before: no watcher has to catch it in time.
         let notes = Locked<[String?]>([])
-        let watching = Task { @MainActor in
-            while !Task.isCancelled {
-                if notes.value.last != model.signInNote { notes.update { $0.append(model.signInNote) } }
-                try? await Task.sleep(for: .milliseconds(1))
+        owner.script { answers in
+            let before = answers.helperRequest
+            answers.helperRequest = { id, wait, after in
+                let note = await MainActor.run { model.signInNote }
+                notes.update { $0.append(note) }
+                return try await before(id, wait, after)
             }
         }
         await model.signIn()
-        watching.cancel()
-        #expect(notes.value.contains("Waiting for you to sign in in the window that opened"))
+        #expect(notes.value == [nil, "Waiting for you to sign in in the window that opened"])
         #expect(model.signInNote == nil)
     }
 

@@ -9,9 +9,12 @@ import Testing
 private typealias Fixtures = AgentFixtures
 
 extension FollowTiming {
-    /// Short waits, so a test that follows a request does not sit still.
+    /// Short waits, so a test that follows a request does not sit still. The
+    /// give-up is only a ceiling for the fake to answer, so it follows the
+    /// run's patience.
     static let quick = FollowTiming(
-        waitSeconds: 1, idleDelay: .milliseconds(2), retryDelay: .milliseconds(2), giveUpAfter: .seconds(3))
+        waitSeconds: 1, idleDelay: .milliseconds(2), retryDelay: .milliseconds(2),
+        giveUpAfter: Patience.scaled(.seconds(3)))
 }
 
 @MainActor

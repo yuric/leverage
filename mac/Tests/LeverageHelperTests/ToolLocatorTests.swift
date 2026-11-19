@@ -7,7 +7,7 @@ import Testing
 
 /// Where the helper looks for a provider's tool (PV-3), and the status
 /// readings of PV-3, against the stand-ins.
-@Suite("Tool locator and status", .timeLimit(.minutes(1)))
+@Suite("Tool locator and status", .timeLimit(.minutes(Patience.minutes(1))))
 struct ToolLocatorTests {
     @Test("with a tool folder set, nothing outside it is looked at, not even PATH")
     func onlyTheToolFolder() async throws {
