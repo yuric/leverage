@@ -236,8 +236,8 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   test "a workspace that does not exist is not found" do
-    assert_raises(ActiveRecord::RecordNotFound) do
-      T.apply(request(workspace_id: SecureRandom.uuid))
+    with_entry(TwoEvents) do
+      assert_raises(ActiveRecord::RecordNotFound) { T.apply(request(workspace_id: SecureRandom.uuid)) }
     end
   end
 
@@ -309,6 +309,37 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_equal "invalid_state", claim.find { |kase| kase.from == "done" }.refusal
     assert_equal [ nil ], cases.select { |kase| kase.command == "allow_another_round" }.map(&:from)
     assert_equal "claim from ready to working", claim.find { |kase| kase.from == "ready" }.name
+  end
+
+  # The test support every engine package builds its state with. The
+  # deferred state trigger checks each task at the test's end (test_helper).
+  test "Scenario builds a task in each state it offers, each with an event of the task" do
+    Scenario::TASK_STATES.each do |state|
+      task = @scenario.task(state: state)
+      assert_equal state, task.state
+      assert Event.exists?(task_id: task.id, type: "task.created"), state
+    end
+    working = @scenario.task(state: "working")
+    assert_equal [ working.holder_seat_id, false ], [ working.builder_seat_id, working.lease_due_at.nil? ]
+    in_review = @scenario.task(state: "in_review")
+    assert_equal [ 1, nil ], [ Review.where(task_id: in_review.id).count, in_review.holder_seat_id ]
+    assert_raises(ArgumentError) { @scenario.task(state: "finishing") }
+  end
+
+  test "Scenario seeds a golden trace's setup with its ids, and refuses rules" do
+    binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 11, 19))
+    setup = binder.bind(Leverage::Contract.trace("10-leases-no-rules").fetch("setup"))
+    scenario = Scenario.new.seed(setup)
+
+    setup.fetch("seats").each do |row|
+      seat = Seat.find(row.fetch("id"))
+      assert_equal row.values_at("name", "role", "credential_id"), [ seat.name, seat.role, seat.credential_id ]
+      assert scenario.token_for(seat)
+    end
+    setup.fetch("credentials").each { |row| assert_equal row.fetch("position"), Credential.find(row.fetch("id")).position }
+    assert_equal setup.dig("users", 0, "id"), scenario.owner.id
+    setup.fetch("settings").each { |column, value| assert_equal value, scenario.workspace.reload[column] }
+    assert_raises(ArgumentError) { Scenario.new.seed(setup.merge("rules" => [ { "id" => SecureRandom.uuid } ])) }
   end
 
   private

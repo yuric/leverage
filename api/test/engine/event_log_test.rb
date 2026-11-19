@@ -5,8 +5,11 @@ require "test_helper"
 # checked against its schema, the subject against its type, and the step
 # tracker told in the same call.
 class EventLogTest < ActiveSupport::TestCase
+  # The seat is made before the context: a context holds the workspace row
+  # it locked, so no other writer may append while a test holds it.
   setup do
     @scenario = Scenario.new
+    @seat = @scenario.seat
     @ctx = @scenario.context
   end
 
@@ -61,7 +64,7 @@ class EventLogTest < ActiveSupport::TestCase
 
   test "a subject the type does not allow is refused" do
     task, = with_task
-    seat = @scenario.seat
+    seat = @seat
 
     assert_raises(Leverage::EventLog::InvalidEvent) { append("task.promoted", task: task, subject: seat, payload: {}) }
     assert_raises(Leverage::EventLog::InvalidEvent) { append("seat.connected", payload: {}) }

@@ -138,22 +138,26 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
   test "a completed command answers 200 with the outcome body" do
     task_id = SecureRandom.uuid
     @stand_in.script("add_task", T::Outcome.completed({ "task_id" => task_id }))
-    with_test_routes { post "/add", params: add_body, headers: headers(key: "k-200") }
+    with_test_routes do
+      post "/add", params: add_body, headers: headers(key: "k-200")
 
-    assert_response :ok
-    assert_equal({ "key" => "k-200", "command" => "add_task", "outcome" => "completed", "result" => { "task_id" => task_id },
-                   "refusal" => nil }, response.parsed_body)
-    assert_matches_component("AddTaskCompleted", response.parsed_body)
+      assert_response :ok
+      assert_equal({ "key" => "k-200", "command" => "add_task", "outcome" => "completed",
+                     "result" => { "task_id" => task_id }, "refusal" => nil }, response.parsed_body)
+      assert_matches_component("AddTaskCompleted", response.parsed_body)
+    end
   end
 
   test "a refused command answers 409 with its cause" do
     @stand_in.script("add_task", T::Outcome.refused(T::Refusal.new(code: "invalid_state")))
-    with_test_routes { post "/add", params: add_body, headers: headers(key: "k-409") }
+    with_test_routes do
+      post "/add", params: add_body, headers: headers(key: "k-409")
 
-    assert_response :conflict
-    assert_equal({ "key" => "k-409", "command" => "add_task", "outcome" => "refused", "result" => nil,
-                   "refusal" => { "code" => "invalid_state", "rule_id" => nil, "reason" => nil } }, response.parsed_body)
-    assert_matches_component("RefusedOutcome", response.parsed_body)
+      assert_response :conflict
+      assert_equal({ "key" => "k-409", "command" => "add_task", "outcome" => "refused", "result" => nil,
+                     "refusal" => { "code" => "invalid_state", "rule_id" => nil, "reason" => nil } }, response.parsed_body)
+      assert_matches_component("RefusedOutcome", response.parsed_body)
+    end
   end
 
   test "a value shown once is merged into the first answer only; a repeat says repeated" do
@@ -200,10 +204,10 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
       routes.draw { get "boom", to: "transport_errors_test/command#boom" }
       TransportErrorsTest::CommandController.define_method(:boom) { raise "made-up secret detail" }
       get "/boom", headers: headers
-    end
 
-    assert_response :internal_server_error
-    assert_no_match(/secret detail/, response.body)
+      assert_response :internal_server_error
+      assert_no_match(/secret detail/, response.body)
+    end
   ensure
     TransportErrorsTest::CommandController.remove_method(:boom) if TransportErrorsTest::CommandController.method_defined?(:boom)
   end

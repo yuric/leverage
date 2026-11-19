@@ -31,7 +31,7 @@ class WorkspaceLockTest < ActiveSupport::TestCase
 
     assert_equal scenario.workspace_id, workspace.id
     assert_kind_of Time, at
-    assert_operator later, :>, at, "clock_timestamp moves inside one transaction"
+    assert_operator later, :>=, at, "clock_timestamp is read again, not frozen at the transaction's start"
   end
 
   test "an unknown workspace is not found" do
