@@ -73,14 +73,11 @@ jobs:
         run: swift --version
       # The generated Swift lists must equal a fresh run of their generator
       # over the contract (rule AR-002). -I keeps the script's folder off
-      # Python's import path. Steps whose script a later change adds are
-      # skipped until it exists.
+      # Python's import path.
       - name: Generated contract lists are current
-        if: hashFiles('scripts/generate_swift_contract.py') != ''
         working-directory: .
         run: python3 -I scripts/generate_swift_contract.py --check
       - name: Self-test of the generator
-        if: hashFiles('scripts/test_generate_swift_contract.py') != ''
         working-directory: .
         run: python3 -I scripts/test_generate_swift_contract.py
       # The stand-in tools every Mac test runs instead of a provider's tool.
@@ -94,15 +91,12 @@ jobs:
       # The app bundle, without the API image (that needs this job's Docker,
       # which macOS runners do not have).
       - name: Self-test of the bundle's compose file
-        if: hashFiles('scripts/test_app_compose.py') != ''
         working-directory: .
         run: python3 -I scripts/test_app_compose.py
       - name: Build the app bundle
-        if: hashFiles('scripts/build_app.sh') != ''
         working-directory: .
         run: scripts/build_app.sh --no-image
       - name: Check the bundle's Info.plist and signature
-        if: hashFiles('scripts/build_app.sh') != ''
         working-directory: .
         run: |
           plutil -lint dist/Leverage.app/Contents/Info.plist
@@ -135,19 +129,16 @@ jobs:
       - name: Self-test of the stand-in tools
         run: python3 -I mac/Tests/StandIns/test_provider_tool.py
       - name: Self-test of the secret scan
-        if: hashFiles('scripts/test_secret_scan.py') != ''
         run: python3 -I scripts/test_secret_scan.py
+      - name: Self-test of the end-to-end script and of these steps
+        run: python3 -I scripts/test_e2e_core_loop.py
       - name: Self-test of the real Gemini check's refusals
-        if: hashFiles('scripts/test_real_gemini_through_app.py') != ''
         run: python3 -I scripts/test_real_gemini_through_app.py
       - name: The end-to-end run
-        if: hashFiles('scripts/e2e_core_loop.sh') != ''
         run: scripts/e2e_core_loop.sh
       - name: Self-test of the speed report
-        if: hashFiles('scripts/test_speed_report.py') != ''
         run: python3 -I scripts/test_speed_report.py
       - name: Speed smoke run
-        if: hashFiles('scripts/speed_run.sh') != ''
         run: scripts/speed_run.sh --smoke
 
   imports:

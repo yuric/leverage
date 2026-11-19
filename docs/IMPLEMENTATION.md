@@ -341,8 +341,14 @@ Where the build differs from the plan, or settles what it left open:
 Which provider's tool can be installed from the pop-up (PRD line "a
 missing tool installed from the pop-up") and which continues on its own
 after the owner signs in ("a signed-out tool caught, the flow continues"):
-neither line is marked met for a real tool. Both are proven with stand-in
-tools for all four providers. The evidence levels are those of
+neither line is marked met for a real tool. Installing from the pop-up is
+shown with a stand-in installer for Claude only (`ToolInstallerTests`);
+Codex's and Gemini's installers are in the catalog but not tested, and
+Grok has none. Continuing on its own after the owner signs in is shown
+with stand-in tools for all four: Claude, Codex and Grok through their
+status commands and Gemini through the repeated test prompt
+(`AddChecksTests`), and Claude and Codex again in the end-to-end run. The
+evidence levels are those of
 [ARCHITECTURE.md](ARCHITECTURE.md#providers-tools).
 
 | Provider | Installed from the pop-up | Continues on its own after sign-in | Evidence |

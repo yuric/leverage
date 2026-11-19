@@ -7,7 +7,8 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 leverage has its contract and the Core loop milestone: an owner can sign
 in, add logins, connect a builder and a reviewer, and take a task from a
-form to Done, on the owner's Mac. The repository holds the documentation,
+form to Done, on the owner's Mac. That is shown end to end with stand-in
+provider tools; no real provider has run through it yet. The repository holds the documentation,
 the research behind its practices, and the scripts and checks that keep
 them consistent, plus:
 
@@ -161,6 +162,7 @@ python3 -I scripts/generate_swift_contract.py --check  # Swift copy of the contr
 python3 -I scripts/test_generate_swift_contract.py   # self-test of the generator
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
+python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
 python3 -I mac/Tests/StandIns/test_provider_tool.py  # self-test of the stand-in tools

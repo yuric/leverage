@@ -41,7 +41,9 @@ pulls the PostgreSQL image `compose.yaml` pins by its digest, builds the app,
 the helper and the runner in release mode, and writes `dist/Leverage.app`,
 signed ad hoc and not notarized, so it runs on this Mac only.
 `scripts/build_app.sh --no-image` builds the bundle without the image (CI
-does this). The app can then be moved anywhere and opened from Finder.
+does this). It is meant to be moved anywhere and opened from Finder; so
+far it has been opened only by `scripts/smoke_app.sh`, with a Finder-like
+environment.
 
 ## The first run
 
@@ -51,9 +53,12 @@ does this). The app can then be moved anywhere and opened from Finder.
 2. Create the sign-in: an email address and a password of at least 8
    characters. There is no way to recover a forgotten password.
 3. In Credentials, choose Add credential, pick a provider, name the login,
-   and sign in in the provider's own window when it opens. leverage checks
-   that the tool is installed (offering to install it where it can), that
-   the login is signed in, and that it answers a test prompt.
+   and sign in to the provider's tool when leverage asks. Whether the
+   tool's own window opens by itself is not yet known for any provider;
+   for Gemini, sign in to Antigravity yourself first, since it has no
+   sign-in command. leverage checks that the tool is installed (offering to
+   install it where it can), that the login is signed in, and that it
+   answers a test prompt.
 4. In Agents, choose Connect: a builder on one login and a reviewer on
    another. A seat the app runs starts at once.
 5. Choose Add task, fill in the form and save it. The task goes to Ready,

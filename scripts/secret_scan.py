@@ -7,11 +7,17 @@ for:
 - each secret listed in a --secrets file (one per line; blank lines and
   lines starting with "#" are skipped) and each --literal value: the
   owner's password, the session and helper tokens a test used, the
-  stand-ins' made-up email and organisation;
+  stand-ins' made-up email and organisation. Each is looked for as written
+  and in the forms a log or a dump may hold it in: JSON-escaped,
+  URL-encoded (a path or a query, and a form body), and base64 at any of
+  its three alignments inside a longer encoded text; and also with the
+  file's line breaks removed, so a copy wrapped across lines is found
+  where it starts;
 - anything shaped like a leverage token: lvs_, lvh_ or lvo_ followed by 16
   or more URL-safe base64 characters (IN-18). What the redaction leaves,
   `lvs_[removed]`, is not one;
-- a bearer header's value of 16 characters or more.
+- a bearer header's value of 16 characters or more, whatever the case of
+  "Bearer".
 
 A hit is printed as "<file>:<line>: <what>", where <what> says which listed
 secret it was (by its number in its file) or which shape matched. The secret
@@ -26,15 +32,20 @@ Standard library only.
 """
 
 import argparse
+import base64
+import json
 import os
 import re
 import sys
+import urllib.parse
 
 SHAPES = [
     ("token shape", re.compile(rb"lv[sho]_[A-Za-z0-9_-]{16,}")),
-    ("bearer value", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*")),
+    ("bearer value", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*", re.IGNORECASE)),
 ]
 SHORTEST = 6
+# A base64 piece shorter than this could turn up by chance in a dump.
+SHORTEST_BASE64 = 8
 
 
 class Refused(Exception):
@@ -64,7 +75,40 @@ def read_secrets(files, literals):
     for label, value in secrets:
         if len(value) < SHORTEST:
             raise Refused(f"{label} is too short to look for (under {SHORTEST} characters)")
-    return [(label, value.encode("utf-8")) for label, value in secrets]
+    return [form for label, value in secrets for form in forms(label, value)]
+
+
+def base64_pieces(raw):
+    """The base64 text a secret's bytes always encode to, at each of the
+    three offsets it can start at inside a longer encoded text: only the
+    characters that depend on the secret's bytes alone."""
+    pieces = []
+    for offset in range(3):
+        encoded = base64.b64encode(b"\0" * offset + raw)
+        start = (offset * 4 + 2) // 3
+        end = (offset + len(raw)) // 3 * 4
+        piece = encoded[start:end]
+        if len(piece) >= SHORTEST_BASE64:
+            pieces.append(piece)
+    return pieces
+
+
+def forms(label, value):
+    """[(label, bytes)]: the secret as written, then every other form of it
+    that differs from that, each labelled with how it is written."""
+    raw = value.encode("utf-8")
+    found = [(label, raw)]
+    others = [
+        ("JSON-escaped", json.dumps(value)[1:-1].encode("utf-8")),
+        ("URL-encoded", urllib.parse.quote(value, safe="").encode("ascii")),
+        ("form-encoded", urllib.parse.quote_plus(value).encode("ascii")),
+    ] + [("base64", piece) for piece in base64_pieces(raw)]
+    seen = {raw}
+    for how, encoded in others:
+        if encoded not in seen:
+            seen.add(encoded)
+            found.append((f"{label} ({how})", encoded))
+    return found
 
 
 def files_under(paths):
@@ -86,16 +130,33 @@ def files_under(paths):
 
 
 def scan_file(path, secrets):
-    """[(line number, what)] for every hit, one per secret or shape a line holds."""
+    """[(line number, what)] for every hit, one per secret or shape a line
+    holds; then each secret found only once the line breaks are removed, at
+    the line where it starts."""
     hits = []
     with open(path, "rb") as handle:
-        for number, line in enumerate(handle, start=1):
-            for label, value in secrets:
-                if value in line:
-                    hits.append((number, label))
-            for label, shape in SHAPES:
-                if shape.search(line):
-                    hits.append((number, label))
+        lines = handle.read().splitlines()
+    for number, line in enumerate(lines, start=1):
+        for label, value in secrets:
+            if value in line:
+                hits.append((number, label))
+        for label, shape in SHAPES:
+            if shape.search(line):
+                hits.append((number, label))
+    found = {label for _number, label in hits}
+    joined = b"".join(lines)
+    starts = []
+    position = 0
+    for line in lines:
+        starts.append(position)
+        position += len(line)
+    for label, value in secrets:
+        if label in found:
+            continue
+        at = joined.find(value)
+        if at >= 0:
+            number = max(index for index, start in enumerate(starts) if start <= at) + 1
+            hits.append((number, label))
     return hits
 
 
@@ -122,7 +183,8 @@ def main(argv):
     if total:
         print(f"secret_scan: {len(files)} files, {total} hits")
         return 1
-    print(f"secret_scan: {len(files)} files, {len(secrets)} secrets and {len(SHAPES)} shapes, no secret found")
+    listed = len({label.split(" (")[0] for label, _value in secrets})
+    print(f"secret_scan: {len(files)} files, {listed} secrets and {len(SHAPES)} shapes, no secret found")
     return 0
 
 
