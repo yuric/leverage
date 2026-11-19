@@ -209,6 +209,77 @@ struct RequestLoopTests {
         #expect(Set(keys).count == 1, "every send of one result carries its one key")
     }
 
+    /// Runs a loop that is handed one request whose result `report` answers
+    /// (it throws to fail a send), lets it settle, stops it, and returns how
+    /// many times the result was sent.
+    private func runOneRequest(
+        timings: HelperTimings, waitingFor sendsNeeded: Int = 1, report: @escaping @Sendable (Int) throws -> Void
+    ) async throws -> Int {
+        let rig = try HelperRig()
+        let start = helperRequest(.stopSeat, seat: UUID())
+        let queue = Queue([.success(start)])
+        let sends = Locked(0)
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, key in
+                let number = sends.update { count -> Int in
+                    count += 1
+                    return count
+                }
+                try report(number)
+                return .completed(.object([:]), key: key.value, command: .reportRequestResult)
+            }
+        }
+        let loop = RequestLoop(api: rig.api, timings: timings, log: quietLog) { _ in
+            HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
+        }
+        let running = Task { await loop.run() }
+        #expect(await eventually { sends.value >= sendsNeeded && queue.pollCount >= 5 })
+        try await Task.sleep(for: .milliseconds(300))
+        running.cancel()
+        _ = await running.value
+        return sends.value
+    }
+
+    @Test("a server error is sent again, and any other status is final", arguments: [
+        (503, 2), (500, 2), (502, 2), (400, 1), (404, 1), (409, 1), (422, 1),
+    ])
+    func statusDecidesWhetherToSendAgain(status: Int, sends: Int) async throws {
+        let count = try await runOneRequest(
+            timings: fastTimings,
+            report: { number in if number == 1 { throw LeverageClientError.unexpectedStatus(status) } })
+        #expect(count == sends)
+    }
+
+    @Test("a result that never gets through is given up on after reportAttempts sends")
+    func resultGivenUp() async throws {
+        var timings = fastTimings
+        timings.pauseAfterError = .zero
+        let count = try await runOneRequest(
+            timings: timings, waitingFor: RequestLoop.reportAttempts,
+            report: { _ in throw URLError(.networkConnectionLost) })
+        #expect(count == RequestLoop.reportAttempts)
+    }
+
+    @Test("the pause between sends of one result grows but is never more than 2 seconds (CL-31)")
+    func resultPauseIsCapped() async throws {
+        var timings = fastTimings
+        timings.pauseAfterError = .milliseconds(1900)
+        let stamps = Locked<[ContinuousClock.Instant]>([])
+        let count = try await runOneRequest(
+            timings: timings, waitingFor: 3,
+            report: { number in
+                stamps.update { $0.append(.now) }
+                if number <= 2 { throw URLError(.networkConnectionLost) }
+            })
+        #expect(count == 3)
+        let times = stamps.value
+        let gaps = zip(times.dropFirst(), times).map { $0 - $1 }
+        #expect(gaps.count == 2)
+        #expect(gaps.allSatisfy { $0 < .milliseconds(2600) }, "no pause is longer than 2 seconds: \(gaps)")
+        #expect(gaps.allSatisfy { $0 > .milliseconds(1500) }, "the pauses are kept: \(gaps)")
+    }
+
     @Test("a result the server refused is not sent again")
     func refusedResultNotSentAgain() async throws {
         let rig = try HelperRig()

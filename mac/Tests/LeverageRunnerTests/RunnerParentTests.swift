@@ -50,5 +50,8 @@ struct RunnerParentTests {
     func giveBackIsShared() {
         #expect(RunnerLoop.giveBackLimit == StopTimings.runnerGiveBack)
         #expect(StopTimings.runnerGiveBack < StopTimings.runnerStopGrace)
+        // The tool is given its own grace first, and the give-back comes after it.
+        let toolGrace = SubprocessRequest(executable: "/bin/true", arguments: [], environment: [:]).gracePeriod
+        #expect(toolGrace + StopTimings.runnerGiveBack <= StopTimings.runnerStopGrace)
     }
 }

@@ -56,6 +56,14 @@ struct HealthLineModelTests {
         #expect(model.tone == .warning)
     }
 
+    @Test("with no server to start again, leverage not answering offers no Try again")
+    func unreachableWithoutServer() async {
+        let (model, _, _) = makeModel(health: { throw URLError(.cannotConnectToHost) })
+        await model.refresh()
+        #expect(model.status == .unreachable)
+        #expect(!model.offersTryAgain)
+    }
+
     @Test("a helper that is starting, restarting, stopped or not started does not change the line")
     func otherHelperStates() async {
         for state in [HelperState.notStarted, .starting, .running, .restarting(attempt: 2), .stopped] {

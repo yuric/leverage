@@ -265,6 +265,29 @@ struct AppModelSessionTests {
         #expect(await ShellFixtures.eventually { rig.runtime.fakeHelper.starts.value == [ShellFixtures.apiURL] })
     }
 
+    @Test("the health line is built with the server, so a server that does not answer offers Try again, which starts it")
+    func healthLineHasTheServer() async throws {
+        let (rig, model) = await signedInRig()
+        let answering = Locked(false)
+        rig.owner.script {
+            $0.systemHealth = {
+                if answering.value { return ShellFixtures.health() }
+                throw URLError(.cannotConnectToHost)
+            }
+        }
+        let health = try #require(model.screens?.health)
+        await health.refresh()
+        #expect(health.status == .unreachable)
+        #expect(health.offersTryAgain)
+
+        let before = rig.runtime.fakeServer.startCount.value
+        answering.value = true
+        await health.tryAgain()
+
+        #expect(rig.runtime.fakeServer.startCount.value == before + 1)
+        #expect(health.status == .running)
+    }
+
     @Test("a session that cannot be kept still works until the app is closed")
     func saveFails() async {
         let rig = ShellRig()
