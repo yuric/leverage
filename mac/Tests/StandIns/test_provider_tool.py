@@ -14,6 +14,7 @@ import gzip
 import io
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -74,6 +75,11 @@ def archive_problems(archive_bytes, source):
     return problems
 
 
+# The command line of a stand-in runner's recorded child and of the
+# sleeping grandchild: /bin/sleep 600 or sleep 600.
+RECORDED_CHILD = re.compile(r"(^|/)sleep 600$")
+
+
 class StandInTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="standins-test-")
@@ -98,7 +104,10 @@ class StandInTestCase(unittest.TestCase):
     def leftovers(self):
         """Ids of the processes this test started that still run: those whose
         command line names its temporary folder, the sleeping child each
-        stand-in runner recorded, and a sleeping grandchild's id file."""
+        stand-in runner recorded, and a sleeping grandchild's id file. A
+        recorded id counts only while it still runs `sleep 600`, the one
+        program those children run: an id the system reused for another
+        program is not this test's."""
         def running():
             table = subprocess.run(["ps", "-axo", "pid=,stat=,command="], capture_output=True,
                                    text=True).stdout
@@ -476,6 +485,34 @@ class RunnerInstallerAndScripts(StandInTestCase):
             os.kill(grandchild, 0)  # raises if it is not running
         finally:
             kill_group(script)
+
+
+class Leftovers(StandInTestCase):
+    def test_a_recorded_pid_now_running_another_program_is_not_a_leftover(self):
+        """A recorded child that ended may have its id reused by an unrelated
+        process before tearDown looks; tearDown must not kill that one."""
+        decoy = subprocess.Popen(["/bin/sh", "-c", "exec /bin/cat"], stdin=subprocess.PIPE,
+                                 start_new_session=True)
+        try:
+            os.makedirs(self.state("runner"), exist_ok=True)
+            with open(self.state("runner", "4242.json"), "w") as handle:
+                json.dump({"pid": 4242, "child_pid": decoy.pid}, handle)
+            with open(os.path.join(self.tmp, "grandchild.pid"), "w") as handle:
+                handle.write(str(decoy.pid))
+            self.assertNotIn(decoy.pid, self.leftovers())
+            self.assertIsNone(decoy.poll())
+        finally:
+            kill_group(decoy)
+
+    def test_a_recorded_child_still_sleeping_is_a_leftover(self):
+        child = subprocess.Popen(["/bin/sleep", "600"], stdin=subprocess.DEVNULL, start_new_session=True)
+        try:
+            os.makedirs(self.state("runner"), exist_ok=True)
+            with open(self.state("runner", "4242.json"), "w") as handle:
+                json.dump({"pid": 4242, "child_pid": child.pid}, handle)
+            self.assertIn(child.pid, self.leftovers())
+        finally:
+            kill_group(child)
 
 
 def process_alive(pid, seconds=5):
