@@ -135,7 +135,7 @@ An operation's `caller`:
 | `job_holder` | The seat that claimed the job. |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
-| `public` | No sign-in; the infrastructure health check only. |
+| `public` | No sign-in: the infrastructure health check, and setup on a new installation (whether an owner exists, and creating it, which is allowed once). |
 
 ### Adding a name
 
@@ -239,6 +239,10 @@ tables. A From cell of "Any" means every state but Done and Cancelled; a
 To cell "X, once ..." also names the state the task starts from.
 
 ## Golden traces
+
+Traces 01 to 08 run in a workspace with the shipped rules; 09 and 10 run in
+a workspace with no rule at all, as the core loop creates it, so their
+`setup.rules` is empty.
 
 Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
 (settings, users, helpers, credentials, seats, projects and rules that

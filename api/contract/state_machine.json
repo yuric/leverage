@@ -99,6 +99,8 @@
     {"command": "delete_content", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "change_workspace_settings", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "sign_in", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "create_owner", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "sign_out", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "issue_helper_token", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "connect_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "pause_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
@@ -122,6 +124,7 @@
     {"command": "issue_seat_token", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "report_run_started", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "report_run_stopped", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "report_request_progress", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "report_request_result", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "report_reading", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "builder_lease_expiry", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
@@ -667,6 +670,27 @@
         {"command": "report_run_stopped", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [{"event": "review.released", "when": "seat_holds_review"}], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Updates seats.run_state; a review the seat holds is released (plan IF-21)."},
         {"command": "report_request_result", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [{"event": "credential.added", "when": "add_checks_passed"}, {"event": "credential.verified", "when": "verify_passed"}, {"event": "credential.signed_out", "when": "found_signed_out"}], "side_events": [{"event": "hold.closed", "when": null, "note": "credential_signed_out on tasks waiting for this credential when it is verified (L697)."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Account signed out."}, {"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": ["credential_signed_out"], "note": "The outcome of the helper request: add checks, verify, install, sign-in window. Writes an event only for the credential outcomes named."},
         {"command": "report_reading", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [{"event": "hold.closed", "when": null, "note": "credential_limit with no reset time, when the reading shows capacity (L696)."}, {"event": "credential.switched", "when": "credential_differs", "note": "When the run starts on a credential other than the one last recorded for the task (L688, plan SM-7)."}, {"event": "inbox.resolved", "when": null, "note": "Limit with no reset time."}], "holds_opened": [], "holds_closed": ["credential_limit"], "note": "A reading is not an event (L642); it writes only the hold close of L696."}
+      ]
+    },
+    {
+      "id": "owner_session",
+      "source": "derived",
+      "prd_lines": [560, 870],
+      "decision": "IN-2, IN-5, IN-9",
+      "note": "Milestone 2's owner commands for the first sign-in and the sign-out (milestone 2 plan IN-2, IN-5, IN-9). Like sign_in, they change sessions and the workspace's first rows and write nothing to the log.",
+      "rows": [
+        {"command": "create_owner", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Creates the workspace with its default settings, the one owner and a session in one transaction, with no rule (milestone 2 plan IN-2, EN-4). Once an owner exists a new key is answered 404; the session token is shown once (IN-9, IN-11)."},
+        {"command": "sign_out", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Deletes the session's row, so its token answers 401 from then on (milestone 2 plan IN-5); no event."}
+      ]
+    },
+    {
+      "id": "helper_progress",
+      "source": "derived",
+      "prd_lines": [564, 602, 605],
+      "decision": "IN-23",
+      "note": "The helper's report of one check's state while a request runs, which the app follows through get_helper_request (milestone 2 plan IN-23).",
+      "rows": [
+        {"command": "report_request_progress", "from": null, "guard": [], "to": null, "refusal": null, "who": ["helper"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Updates helper_requests.progress only; a check's progress is not an event. The outcome is report_request_result's."}
       ]
     },
     {

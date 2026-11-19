@@ -7,7 +7,8 @@ default: &default
   encoding: unicode
   url: <%= ENV["DATABASE_URL"] %>
   # https://guides.rubyonrails.org/configuring.html#database-pooling
-  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # The pool size: DB_POOL, else RAILS_MAX_THREADS (milestone 2 plan EN-21).
+  max_connections: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS") { 5 } } %>
 
 development:
   <<: *default

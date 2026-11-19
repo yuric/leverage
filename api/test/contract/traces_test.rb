@@ -662,7 +662,11 @@ class TracesTest < Minitest::Test
         assert_empty fields.keys - result.fetch("properties").keys, "#{where}: not fields of the result"
         type = claims[command["operation_id"]] or next
         event = command["expect"]["events"].find { |candidate| candidate["type"] == type }
-        %w[credential_id model].each { |field| assert_equal event["payload"][field], fields[field], "#{where}: #{field}" }
+        %w[credential_id model].each do |field|
+          expected = event["payload"][field]
+          # A seat whose model is empty records null (milestone 2 plan EN-7).
+          expected.nil? ? assert_nil(fields[field], "#{where}: #{field}") : assert_equal(expected, fields[field], "#{where}: #{field}")
+        end
         seen += 1
       end
     end

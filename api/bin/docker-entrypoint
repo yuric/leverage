@@ -1,7 +1,23 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
+# The program being started decides which database role it uses (milestone
+# 2 plan EN-24). DATABASE_URL names the owner role: migrations, db:prepare,
+# db:grants, every test run and every other command keep it. The server and
+# the sweep run as the login role leverage_api when API_DATABASE_URL is set.
+
+server=false
+sweep=false
+if [[ "${@: -2:1}" == "./bin/rails" || "${@: -2:1}" == "bin/rails" ]] && [ "${@: -1:1}" == "server" ]; then
+  server=true
+fi
+if [[ "${1}" == "bin/sweep" || "${1}" == "./bin/sweep" ]]; then
+  sweep=true
+fi
+
+# Before the server: create or migrate the database as the owner role.
+# db:prepare runs db:grants after it (lib/tasks/db_grants.rake), which also
+# creates leverage_api and sets its password from LEVERAGE_API_DB_PASSWORD.
+if $server; then
   ./bin/rails db:prepare
 fi
 
@@ -9,6 +25,13 @@ fi
 # that `docker compose run --rm api bin/rails test` works on a fresh volume
 if [[ "${1}" == "bin/rails" || "${1}" == "./bin/rails" ]] && [ "${2}" == "test" ]; then
   RAILS_ENV=test ./bin/rails db:prepare
+fi
+
+# The server and the sweep connect as leverage_api, and keep neither the
+# owner role's password nor the login role's own in their environment.
+if { $server || $sweep; } && [ -n "${API_DATABASE_URL}" ]; then
+  export DATABASE_URL="${API_DATABASE_URL}"
+  unset API_DATABASE_URL POSTGRES_PASSWORD LEVERAGE_API_DB_PASSWORD
 fi
 
 exec "${@}"
