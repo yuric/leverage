@@ -22,7 +22,7 @@ class OpenapiTest < Minitest::Test
 
   def operations
     doc.fetch("paths").flat_map do |path, item|
-      item.select { |method, _| HTTP_METHODS.include?(method) }.map { |method, op| [path, method, op] }
+      item.select { |method, _| HTTP_METHODS.include?(method) }.map { |method, op| [ path, method, op ] }
     end
   end
 
@@ -41,9 +41,9 @@ class OpenapiTest < Minitest::Test
     case node
     when Hash
       yield node, trail
-      node.each { |key, value| each_node(value, trail + [key], &block) }
+      node.each { |key, value| each_node(value, trail + [ key ], &block) }
     when Array
-      node.each_with_index { |value, index| each_node(value, trail + [index], &block) }
+      node.each_with_index { |value, index| each_node(value, trail + [ index ], &block) }
     end
   end
 
@@ -103,10 +103,10 @@ class OpenapiTest < Minitest::Test
 
   def test_the_operations_are_exactly_the_registry_operations
     expected = registry.fetch("operations").map do |op|
-      [op["operation_id"], op["method"], op["path"], op["tag"], op["caller"], op["commands"]]
+      [ op["operation_id"], op["method"], op["path"], op["tag"], op["caller"], op["commands"] ]
     end
     actual = operations.map do |path, method, op|
-      [op["operationId"], method.upcase, path, op["tags"]&.first, op["x-leverage-caller"], op["x-leverage-command"]]
+      [ op["operationId"], method.upcase, path, op["tags"]&.first, op["x-leverage-caller"], op["x-leverage-command"] ]
     end
     assert_equal expected.sort, actual.sort
     assert_empty duplicates(actual.map(&:first))
@@ -139,7 +139,7 @@ class OpenapiTest < Minitest::Test
     refute_empty mutating
     mutating.each do |_, _, op|
       headers = op.fetch("parameters", []).map { |parameter| deref(parameter) }.select { |p| p["in"] == "header" }
-      assert_equal ["Idempotency-Key"], headers.map { |h| h["name"] }, op["operationId"]
+      assert_equal [ "Idempotency-Key" ], headers.map { |h| h["name"] }, op["operationId"]
       assert headers.first["required"], op["operationId"]
       %w[200 202 409].each { |status| assert op["responses"].key?(status), "#{op["operationId"]} lacks #{status}" }
     end
@@ -153,7 +153,7 @@ class OpenapiTest < Minitest::Test
     %w[202 409].each do |status|
       operations.select { |_, method, _| method == "post" }.each do |_, _, op|
         schema = json_schema(op["responses"].fetch(status))
-        assert_equal({"$ref" => status == "202" ? "#/components/schemas/PendingOutcome" : "#/components/schemas/RefusedOutcome"},
+        assert_equal({ "$ref" => status == "202" ? "#/components/schemas/PendingOutcome" : "#/components/schemas/RefusedOutcome" },
           schema, op["operationId"])
       end
     end
@@ -185,24 +185,24 @@ class OpenapiTest < Minitest::Test
     assert_equal %w[key command outcome result refusal], outcome.fetch("required")
     assert_equal registry.dig("lists", "command_outcomes"), enum_of("CommandOutcome", "outcome")
     assert_equal registry.fetch("commands"), enum_of("CommandOutcome", "command")
-    assert_equal({"$ref" => "#/components/schemas/CommandOutcome"}, response_schema("get_command", "200"))
-    assert_equal({"$ref" => "#/components/schemas/CommandOutcome"}, response_schema("get_owner_command", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/CommandOutcome" }, response_schema("get_command", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/CommandOutcome" }, response_schema("get_owner_command", "200"))
   end
 
   def test_get_next_answers_one_item_with_the_registry_kinds_in_precedence_order
     assert_equal registry.fetch("next_kinds"), enum_of("NextItem", "kind")
-    assert_equal({"$ref" => "#/components/schemas/NextItem"}, response_schema("get_next", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/NextItem" }, response_schema("get_next", "200"))
     assert_includes schemas.fetch("NextItem").fetch("properties"), "review_id"
     wait = operation("get_next").fetch("parameters").map { |p| deref(p) }.find { |p| p["name"] == "wait" }
-    assert_equal({"type" => "integer", "minimum" => 0, "maximum" => 30, "default" => 30}, wait["schema"])
+    assert_equal({ "type" => "integer", "minimum" => 0, "maximum" => 30, "default" => 30 }, wait["schema"])
   end
 
   def test_the_events_tail_and_the_inbox_are_stable_reads_with_a_cursor
-    {"list_events" => "EventsPage", "list_inbox" => "InboxPage"}.each do |operation_id, page|
-      assert_equal({"$ref" => "#/components/schemas/#{page}"}, response_schema(operation_id, "200"))
+    { "list_events" => "EventsPage", "list_inbox" => "InboxPage" }.each do |operation_id, page|
+      assert_equal({ "$ref" => "#/components/schemas/#{page}" }, response_schema(operation_id, "200"))
       refute operation(operation_id)["x-provisional"], operation_id
       assert_includes schemas.fetch(page).fetch("required"), "next_after_seq"
-      params = operation(operation_id).fetch("parameters").map { |p| deref(p) }.to_h { |p| [p["name"], p["schema"]] }
+      params = operation(operation_id).fetch("parameters").map { |p| deref(p) }.to_h { |p| [ p["name"], p["schema"] ] }
       assert_equal 0, params.fetch("after_seq")["minimum"]
       assert_equal 30, params.fetch("wait")["maximum"]
     end
@@ -217,7 +217,7 @@ class OpenapiTest < Minitest::Test
   end
 
   def test_the_other_owner_reads_are_provisional
-    owner_reads = operations.select { |_, method, op| method == "get" && op["tags"] == ["owner"] }.map { |_, _, op| op["operationId"] }
+    owner_reads = operations.select { |_, method, op| method == "get" && op["tags"] == [ "owner" ] }.map { |_, _, op| op["operationId"] }
     provisional = operations.select { |_, _, op| op["x-provisional"] }.map { |_, _, op| op["operationId"] }
     assert_equal PROVISIONAL_READS.sort, provisional.sort
     stable = owner_reads - provisional
@@ -226,7 +226,7 @@ class OpenapiTest < Minitest::Test
 
   def test_health_is_infrastructure_outside_the_agent_calls
     op = operation("get_health")
-    assert_equal ["infrastructure"], op["tags"]
+    assert_equal [ "infrastructure" ], op["tags"]
     assert_equal [], op["security"]
     assert_equal %w[status version], schemas.fetch("Health").fetch("required")
   end
@@ -234,11 +234,11 @@ class OpenapiTest < Minitest::Test
   def test_security_schemes_follow_the_caller
     schemes = doc.dig("components", "securitySchemes")
     assert_equal %w[helperBearer ownerSession seatBearer], schemes.keys.sort
-    schemes.each_value { |scheme| assert_equal({"type" => "http", "scheme" => "bearer"}, scheme.slice("type", "scheme")) }
+    schemes.each_value { |scheme| assert_equal({ "type" => "http", "scheme" => "bearer" }, scheme.slice("type", "scheme")) }
     operations.each do |_, _, op|
       expected =
         if op["operationId"] == "sign_in_owner" || op["x-leverage-caller"] == "public" then []
-        else [{{"agent" => "seatBearer", "owner" => "ownerSession", "helper" => "helperBearer"}.fetch(op["tags"].first) => []}]
+        else [ { { "agent" => "seatBearer", "owner" => "ownerSession", "helper" => "helperBearer" }.fetch(op["tags"].first) => [] } ]
         end
       assert_equal expected, op["security"], op["operationId"]
     end
@@ -248,33 +248,33 @@ class OpenapiTest < Minitest::Test
     lists = registry.fetch("lists")
     providers = registry.fetch("credential_providers").map { |p| p["provider"] }
     {
-      ["Task", "state"] => lists["task_states"], ["Task", "priority"] => lists["priorities"],
-      ["Criterion", "state"] => lists["criterion_states"], ["Criterion", "kind"] => lists["criterion_kinds"],
-      ["Action", "state"] => lists["action_states"], ["Action", "kind"] => lists["action_kinds"],
-      ["Evidence", "kind"] => lists["evidence_kinds"], ["Review", "verdict"] => lists["review_verdicts"],
-      ["GiveVerdictRequest", "verdict"] => lists["review_verdicts"],
-      ["Question", "outcome"] => lists["question_outcomes"], ["Question", "basis"] => lists["question_bases"],
-      ["BriefEntry", "kind"] => lists["brief_entry_kinds"],
-      ["Seat", "role"] => lists["seat_roles"], ["ConnectSeatRequest", "role"] => lists["seat_roles"],
-      ["Seat", "provider"] => providers, ["Seat", "run_state"] => lists["seat_run_states"],
-      ["Credential", "provider"] => providers, ["Credential", "kind"] => lists["credential_kinds"],
-      ["Credential", "state"] => lists["credential_states"],
-      ["AddCredentialRequest", "provider"] => providers, ["AddCredentialRequest", "kind"] => lists["credential_kinds"],
-      ["CredentialReading", "state"] => lists["reading_states"], ["Figure", "kind"] => lists["figure_kinds"],
-      ["Figure", "window"] => lists["limit_windows"], ["LimitReport", "window"] => lists["limit_windows"],
-      ["Reset", "kind"] => lists["reset_kinds"],
-      ["HelperRequest", "kind"] => lists["helper_request_kinds"], ["HelperRequest", "state"] => lists["helper_request_states"],
-      ["InboxItem", "state"] => lists["inbox_states"], ["InboxItem", "about_kind"] => lists["inbox_about_kinds"],
-      ["Event", "actor_kind"] => lists["actor_kinds"], ["Event", "subject_kind"] => lists["event_subject_kinds"],
-      ["RuleVersion", "hook"] => registry["hooks"], ["RuleVersion", "kind"] => lists["rule_kinds"],
-      ["RuleVersion", "checker"] => lists["checkers"], ["RuleVersion", "on_fail"] => lists["on_fail"],
-      ["RuleVersion", "route"] => lists["routes"], ["RuleVersion", "origin"] => lists["rule_origins"],
-      ["RuleScope", "kind"] => lists["scope_kinds"], ["RuleScope", "action_kinds"] => lists["action_kinds"],
-      ["ChangeTaskPriorityRequest", "priority"] => lists["priorities"],
-      ["Hold", "reason"] => registry["hold_reasons"].map { |h| h["reason"] },
-      ["BoardTask", "hold_reasons"] => registry["hold_reasons"].map { |h| h["reason"] },
-      ["ClaimJobResult", "kind"] => registry["job_kinds"].map { |k| k["kind"] },
-      ["ReleaseTaskRequest", "reason"] => registry["release_reasons"].select { |r| r["chosen_by"] == "seat" }.map { |r| r["reason"] }
+      [ "TaskSummary", "state" ] => lists["task_states"], [ "TaskSummary", "priority" ] => lists["priorities"],
+      [ "Criterion", "state" ] => lists["criterion_states"], [ "Criterion", "kind" ] => lists["criterion_kinds"],
+      [ "Action", "state" ] => lists["action_states"], [ "Action", "kind" ] => lists["action_kinds"],
+      [ "Evidence", "kind" ] => lists["evidence_kinds"], [ "Review", "verdict" ] => lists["review_verdicts"],
+      [ "GiveVerdictRequest", "verdict" ] => lists["review_verdicts"],
+      [ "Question", "outcome" ] => lists["question_outcomes"], [ "Question", "basis" ] => lists["question_bases"],
+      [ "BriefEntry", "kind" ] => lists["brief_entry_kinds"],
+      [ "Seat", "role" ] => lists["seat_roles"], [ "ConnectSeatRequest", "role" ] => lists["seat_roles"],
+      [ "Seat", "provider" ] => providers, [ "Seat", "run_state" ] => lists["seat_run_states"],
+      [ "Credential", "provider" ] => providers, [ "Credential", "kind" ] => lists["credential_kinds"],
+      [ "Credential", "state" ] => lists["credential_states"],
+      [ "AddCredentialRequest", "provider" ] => providers, [ "AddCredentialRequest", "kind" ] => lists["credential_kinds"],
+      [ "CredentialReading", "state" ] => lists["reading_states"], [ "Figure", "kind" ] => lists["figure_kinds"],
+      [ "Figure", "window" ] => lists["limit_windows"], [ "LimitReport", "window" ] => lists["limit_windows"],
+      [ "Reset", "kind" ] => lists["reset_kinds"],
+      [ "HelperRequest", "kind" ] => lists["helper_request_kinds"], [ "HelperRequest", "state" ] => lists["helper_request_states"],
+      [ "InboxItem", "state" ] => lists["inbox_states"], [ "InboxItem", "about_kind" ] => lists["inbox_about_kinds"],
+      [ "Event", "actor_kind" ] => lists["actor_kinds"], [ "Event", "subject_kind" ] => lists["event_subject_kinds"],
+      [ "RuleVersion", "hook" ] => registry["hooks"], [ "RuleVersion", "kind" ] => lists["rule_kinds"],
+      [ "RuleVersion", "checker" ] => lists["checkers"], [ "RuleVersion", "on_fail" ] => lists["on_fail"],
+      [ "RuleVersion", "route" ] => lists["routes"], [ "RuleVersion", "origin" ] => lists["rule_origins"],
+      [ "RuleScope", "kind" ] => lists["scope_kinds"], [ "RuleScope", "action_kinds" ] => lists["action_kinds"],
+      [ "ChangeTaskPriorityRequest", "priority" ] => lists["priorities"],
+      [ "Hold", "reason" ] => registry["hold_reasons"].map { |h| h["reason"] },
+      [ "BoardTask", "hold_reasons" ] => registry["hold_reasons"].map { |h| h["reason"] },
+      [ "ClaimJobResult", "kind" ] => registry["job_kinds"].map { |k| k["kind"] },
+      [ "ReleaseTaskRequest", "reason" ] => registry["release_reasons"].select { |r| r["chosen_by"] == "seat" }.map { |r| r["reason"] }
     }.each do |(component, name), expected|
       assert_equal expected, enum_of(component, name), "#{component}.#{name}"
     end
@@ -309,15 +309,15 @@ class OpenapiTest < Minitest::Test
     assert_equal %w[task_id project_id brief_version].sort, schemas.fetch("ContractDraftJobInput").fetch("required").sort
     assert_equal registry["hooks"], enum_of("RuleCheckJobInput", "hook")
     assert_equal %w[result tokens spend].sort, schemas.fetch("JobResultRequest").fetch("required").sort
-    assert_equal({"$ref" => "#/components/schemas/JobResultRequest"}, request_schema("submit_job_result"))
+    assert_equal({ "$ref" => "#/components/schemas/JobResultRequest" }, request_schema("submit_job_result"))
     assert_equal "#/components/schemas/CompleteContractRequest", schemas.fetch("ContractDraftJobResult").fetch("$ref")
-    assert_equal ["$ref"], schemas.fetch("ContractDraftJobResult").keys - %w[description]
-    assert_equal({"$ref" => "#/components/schemas/CompleteContractRequest"}, request_schema("complete_contract"))
+    assert_equal [ "$ref" ], schemas.fetch("ContractDraftJobResult").keys - %w[description]
+    assert_equal({ "$ref" => "#/components/schemas/CompleteContractRequest" }, request_schema("complete_contract"))
   end
 
   def test_the_seat_token_is_returned_once_and_never_stored
     pickup = operation("issue_seat_token")
-    assert_equal({"$ref" => "#/components/schemas/SeatTokenPickup"}, json_schema(pickup["responses"].fetch("200")))
+    assert_equal({ "$ref" => "#/components/schemas/SeatTokenPickup" }, json_schema(pickup["responses"].fetch("200")))
     assert_includes schemas.fetch("SeatTokenPickup").fetch("properties"), "seat_token"
     assert_includes pickup["description"], "never stored"
     %w[HelperRequest CommandOutcome PendingOutcome RefusedOutcome CompletedOutcome TransportError Refusal].each do |name|
@@ -327,7 +327,7 @@ class OpenapiTest < Minitest::Test
     operations.each do |_, method, op|
       next unless method == "post"
 
-      refs = [op["responses"].fetch("200")].map { |response| json_schema(response)["$ref"] }.compact.map { |ref| ref.split("/").last }
+      refs = [ op["responses"].fetch("200") ].map { |response| json_schema(response)["$ref"] }.compact.map { |ref| ref.split("/").last }
       one_time = refs & ONE_TIME_RESPONSES
       allowed = %w[issue_seat_token connect_seat issue_helper_token sign_in_owner]
       assert_equal allowed.include?(op["operationId"]), !one_time.empty?, op["operationId"]
@@ -356,16 +356,16 @@ class OpenapiTest < Minitest::Test
       schemas.fetch("LimitReport").fetch("required").sort
     assert_equal %w[credential_id seat_id task_id review_id job_id observed_at tool_version].sort,
       schemas.fetch("SignOutReport").fetch("required").sort
-    assert_equal({"$ref" => "#/components/schemas/LimitReport"}, request_schema("report_limit"))
-    assert_equal({"$ref" => "#/components/schemas/SignOutReport"}, request_schema("report_signed_out"))
-    assert_equal({"$ref" => "#/components/schemas/CredentialReading"}, request_schema("report_reading"))
-    assert_equal({"$ref" => "#/components/schemas/HelperRequestResult"}, request_schema("report_request_result").dig("properties", "result"))
+    assert_equal({ "$ref" => "#/components/schemas/LimitReport" }, request_schema("report_limit"))
+    assert_equal({ "$ref" => "#/components/schemas/SignOutReport" }, request_schema("report_signed_out"))
+    assert_equal({ "$ref" => "#/components/schemas/CredentialReading" }, request_schema("report_reading"))
+    assert_equal({ "$ref" => "#/components/schemas/HelperRequestResult" }, deref(request_schema("report_request_result")).dig("properties", "result"))
   end
 
   def test_a_limit_report_names_exactly_one_of_task_review_and_job
     report = JSONSchemer.openapi(doc).ref("#/components/schemas/LimitReport")
-    base = {"credential_id" => uuid(1), "seat_id" => uuid(2), "task_id" => nil, "review_id" => nil, "job_id" => nil,
-            "window" => "five_hour", "reset_at" => nil, "observed_at" => "2026-01-01T00:00:00Z", "tool_version" => "0.0.0"}
+    base = { "credential_id" => uuid(1), "seat_id" => uuid(2), "task_id" => nil, "review_id" => nil, "job_id" => nil,
+            "window" => "five_hour", "reset_at" => nil, "observed_at" => "2026-01-01T00:00:00Z", "tool_version" => "0.0.0" }
     assert report.valid?(base.merge("task_id" => uuid(3)))
     assert report.valid?(base.merge("job_id" => uuid(3)))
     refute report.valid?(base)
@@ -374,7 +374,7 @@ class OpenapiTest < Minitest::Test
   end
 
   def test_the_helper_calls_are_the_if_15_paths
-    helper = operations.select { |_, _, op| op["tags"] == ["helper"] }.map { |path, method, _| "#{method.upcase} #{path}" }
+    helper = operations.select { |_, _, op| op["tags"] == [ "helper" ] }.map { |path, method, _| "#{method.upcase} #{path}" }
     assert_equal [
       "GET /v1/helper/next", "POST /v1/helper/requests/{id}/result", "POST /v1/helper/requests/{id}/seat-token",
       "POST /v1/helper/seats/{id}/run-started", "POST /v1/helper/seats/{id}/run-stopped",
@@ -385,8 +385,8 @@ class OpenapiTest < Minitest::Test
   end
 
   def test_the_owner_issues_the_helper_token_and_signs_in
-    assert_equal({"$ref" => "#/components/schemas/HelperTokenIssued"}, response_schema("issue_helper_token", "200"))
-    assert_equal({"$ref" => "#/components/schemas/OwnerSession"}, response_schema("sign_in_owner", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/HelperTokenIssued" }, response_schema("issue_helper_token", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/OwnerSession" }, response_schema("sign_in_owner", "200"))
     assert_equal %w[email_address password].sort, schemas.fetch("SignInRequest").fetch("required").sort
   end
 

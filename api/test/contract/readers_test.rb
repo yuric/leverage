@@ -8,7 +8,7 @@ class ReadersTest < Minitest::Test
   include ContractTestHelpers
 
   def readers = Leverage::Contract.readers.fetch("readers")
-  def by_provider = readers.to_h { |reader| [reader["provider"], reader] }
+  def by_provider = readers.to_h { |reader| [ reader["provider"], reader ] }
   def openapi = JSONSchemer.openapi(Leverage::Contract.openapi)
 
   def test_the_file_follows_its_meta_schema
