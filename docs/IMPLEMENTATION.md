@@ -62,7 +62,7 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| The PRD change that settles the gate before the contract | `docs/prd-gate` | This one | In review |
+| The PRD change that settles the gate before the contract | `docs/prd-gate` | #9 | In review |
 | Milestone 0 skeleton | `chore/skeleton` | None yet | No commits yet |
 
 ## Milestones
