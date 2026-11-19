@@ -14,8 +14,16 @@ once it makes its first release.
   code of conduct, security policy, and issue and pull request templates.
 - Product requirements document structure in `docs/PRD.md` (requirements to
   follow).
+- The PRD settles the gate before the contract: the owner's decisions on
+  the stack, logins, handoff and notifications, 32 of the review's 89
+  findings, the interrupted run as a release criterion, and a reordered
+  build with handoff as its own milestone.
 - Architecture and deployment document structure in `docs/`.
 - `AGENTS.md` with instructions for AI coding agents.
+- A progress file for the build (`docs/IMPLEMENTATION.md`), engineering
+  practices in the architecture document with test-driven development first,
+  and a rule in `CONTRIBUTING.md` for a run the maintainer delegates to an
+  agent.
 - The design reference: a working mockup of the app with a left pane, a
   project list, a Handoff tab and an app icon (`docs/design/`).
 - `MAINTENANCE.md`: what to expect from the maintainer, and the project's

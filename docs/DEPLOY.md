@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Not applicable yet — there is nothing to deploy |
-| **Last updated** | 2026-11-18 |
+| **Last updated** | 2026-11-19 |
 
 This document will describe how to deploy and operate leverage: how to stand
 up an instance from scratch, how to ship a new version, and how to recover
@@ -31,6 +31,10 @@ placeholder values will accompany the first deployable version.
 
 _TBD — the environments that exist (for example local, staging, production)
 and how they differ._
+
+For the first run, the backend and PostgreSQL run in Docker containers on the
+owner's Mac, and the Mac app is built and run there
+([ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md), decisions 8 and 9).
 
 ## Deploying
 

@@ -11,6 +11,13 @@ consistent: there is no product source code, no build, no test suite other
 than a self-test of the rules check, and no deployment. Update this file in
 the same pull request that changes any of that.
 
+## Start here
+
+Read [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) before any work. It
+says which milestone is in flight, how the build is being run, and what is
+waiting for the owner. A pull request that starts, finishes or changes the
+plan for a milestone updates it.
+
 ## Source of truth
 
 1. [docs/PRD.md](docs/PRD.md) defines **what** is built. Product behavior
@@ -20,10 +27,22 @@ the same pull request that changes any of that.
 3. [docs/DEPLOY.md](docs/DEPLOY.md) defines how it is shipped and operated.
 4. [MAINTENANCE.md](MAINTENANCE.md) defines scope limits and what gets
    declined.
+5. [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) records progress, and
+   holds the terms of a delegated run while one is in progress. It defines
+   nothing about the product.
 
 Sections marked _TBD_ are undecided. Do not fill them in by guessing, and do
 not treat a plausible assumption as a decision. If a task depends on something
 undecided, stop and ask, or open an issue.
+
+In a delegated run (see
+[CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions)), record the
+question and what you chose under "Questions for the owner" in
+[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and continue. A delegated
+run does not supersede an accepted ADR and does not answer Deviates to a
+rule. It records the question and takes a path that needs neither. Every ADR
+it adds is listed in IMPLEMENTATION.md as waiting for the owner until the
+owner has read it.
 
 ## Architecture rules
 
@@ -38,6 +57,9 @@ undecided, stop and ask, or open an issue.
 
 ## Working rules
 
+- **Follow the engineering practices.** They are in
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#engineering-practices):
+  test-driven development first.
 - **Do not invent requirements.** Propose them as a change to the PRD and let a
   maintainer accept them.
 - **Use the PRD's terms.** The [Terms](docs/PRD.md#terms) table names the
@@ -73,7 +95,8 @@ undecided, stop and ask, or open an issue.
   boxes unticked: the person you work for ticks one after reading the change.
 - Do not open a pull request that the person you work for has not asked for
   or seen. See "No unattended agents" in
-  [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
+  [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions). The one
+  exception is a delegated run the maintainer started, described there.
 - Pull request titles and commit messages follow
   [Conventional Commits](https://www.conventionalcommits.org/)
   (`docs:`, `feat:`, `fix:`, `chore:` …), written in the imperative, explaining
