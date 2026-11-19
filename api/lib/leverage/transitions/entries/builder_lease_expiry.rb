@@ -3,9 +3,10 @@ module Leverage
     module Entries
       # The builder_lease_expiry timer (PRD L119-L123; timers.json;
       # state_machine.json): a builder's lease that has reached its due time
-      # ends. From Working the task goes back to Ready with no holder; it
-      # keeps its builder seat (L121) and every criterion that passed
-      # (L123). task.lease_expired is written by the app, with no
+      # ends. From Working the task goes back to Ready with no holder and no
+      # builder (PRD, What the replay test rebuilds: the builder is cleared
+      # when the task returns to Ready; L121's "keeps its builder seat" is
+      # about In review), and keeps every criterion that passed (L123). task.lease_expired is written by the app, with no
       # command_id, at the due time (Timers.effective_at).
       #
       # It runs in two ways, through the same code (L118):
@@ -64,7 +65,9 @@ module Leverage
           row = state_row(task.state)
           effective_at = Timers.effective_at(task, task.lease_due_at)
           Leases.end_lease(ctx, task)
-          task.update!(state: row.fetch("to") || task.state, holder_seat_id: nil, resume_pending_since: nil)
+          to = row.fetch("to") || task.state
+          builder = to == "ready" ? { builder_seat_id: nil } : {}
+          task.update!(state: to, holder_seat_id: nil, resume_pending_since: nil, **builder)
           ctx.emit("task.lease_expired", task: task, payload: { wait_cause: nil }, actor_kind: "app", actor_id: nil,
             command_id: nil, effective_at: effective_at)
         end

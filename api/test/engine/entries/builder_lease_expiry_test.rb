@@ -43,7 +43,7 @@ class BuilderLeaseExpiryTest < ActiveSupport::TestCase
     assert_nil task.lease_due_at
     assert_nil task.lease_time_left_while_paused
     assert_nil task.resume_pending_since, "no builder is left to resume"
-    assert_equal @builder.id, task.builder_seat_id
+    assert_nil task.builder_seat_id, "back in Ready, the task has no builder (PRD, What the replay test rebuilds)"
     assert_equal "passed", criterion.reload.state, "no criterion is reopened (L123)"
 
     event = expiries.sole

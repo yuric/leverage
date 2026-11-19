@@ -107,7 +107,7 @@ class TimersTest < CommittingTestCase
 
     task.reload
     assert_equal [ "ready", nil, nil ], [ task.state, task.holder_seat_id, task.lease_due_at ]
-    assert_equal @builder.id, task.builder_seat_id, "the task keeps its builder seat (L121)"
+    assert_nil task.builder_seat_id, "back in Ready, the task has no builder (PRD, What the replay test rebuilds)"
 
     row = Command.find_by!(caller_kind: "seat", caller_id: @builder.id, key: "late-pass")
     assert_equal "refused", row.outcome
