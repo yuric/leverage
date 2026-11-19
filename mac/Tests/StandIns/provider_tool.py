@@ -148,6 +148,22 @@ def sign_in(tool):
 CRITERION = re.compile(r"criterion\s+(\d+)", re.IGNORECASE)
 
 
+GATE_LIMIT_SECONDS = 600
+
+
+def wait_for_gate(gate_path):
+    """Waits until the gate file exists. A review that nobody opens must not
+    outlive its caller: the stand-in is in a process group of its own, so a
+    caller that is killed (a test run stopped half way) cannot end it, and it
+    ends itself when its parent is gone or after GATE_LIMIT_SECONDS."""
+    parent = os.getppid()
+    deadline = time.monotonic() + GATE_LIMIT_SECONDS
+    while not os.path.exists(gate_path):
+        if parent == 1 or os.getppid() != parent or time.monotonic() > deadline:
+            sys.exit(1)
+        time.sleep(0.1)
+
+
 def answer(prompt, folder):
     """The answer's text for a prompt run in `folder`."""
     plan = scenario()
@@ -155,8 +171,7 @@ def answer(prompt, folder):
         gate = plan.get("gate_file")
         if gate:
             gate_path = gate if os.path.isabs(gate) else state_path(gate)
-            while not os.path.exists(gate_path):
-                time.sleep(0.1)
+            wait_for_gate(gate_path)
         numbers = sorted({int(n) for n in CRITERION.findall(prompt)}) or [1]
         reviews = plan.get("reviews") or [{"fail": []}]
         round_number = next_review_round()
@@ -317,25 +332,38 @@ def grok(argv):
 
 def runner(argv):
     """Stand-in for LeverageRunner: records how it was started, then runs
-    until it is stopped, with a sleeping child of its own."""
+    until it is stopped, with a sleeping child of its own. The stop handler
+    is in place before the child exists and before the record is written,
+    so a stop at any moment ends the child too."""
     folder = state_path("runner")
     os.makedirs(folder, exist_ok=True)
-    child = subprocess.Popen(["/bin/sleep", "600"], stdin=subprocess.DEVNULL)
-    record = {"argv": argv, "env": dict(os.environ), "cwd": os.getcwd(),
-              "pid": os.getpid(), "child_pid": child.pid}
-    path = os.path.join(folder, f"{os.getpid()}.json")
-    with open(path + ".tmp", "w") as handle:
-        json.dump(record, handle)
-    os.replace(path + ".tmp", path)
+    held = {"child": None, "stopped": False}
 
     # A stop ends the child; the wait below then returns and the stand-in
     # exits 0, as the real runner does after releasing what it holds.
     def stop(signum, frame):
-        child.terminate()
+        held["stopped"] = True
+        if held["child"] is not None:
+            held["child"].terminate()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    child.wait()
+    child = subprocess.Popen(["/bin/sleep", "600"], stdin=subprocess.DEVNULL)
+    held["child"] = child
+    try:
+        if held["stopped"]:  # the stop came while the child was starting
+            child.terminate()
+        record = {"argv": argv, "env": dict(os.environ), "cwd": os.getcwd(),
+                  "pid": os.getpid(), "child_pid": child.pid}
+        path = os.path.join(folder, f"{os.getpid()}.json")
+        with open(path + ".tmp", "w") as handle:
+            json.dump(record, handle)
+        os.replace(path + ".tmp", path)
+        child.wait()
+    finally:
+        if child.poll() is None:  # any other way out
+            child.kill()
+            child.wait()
     return 0
 
 
