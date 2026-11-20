@@ -160,8 +160,9 @@ class StepTrackerTest < ActiveSupport::TestCase
   # commands that write their events are other packages'; here the events
   # alone drive the tracker: check opens at a pending transition's first
   # blocking check.queued and closes where the transition ends, and draft
-  # is a planner's claimed job. Trace 19 cannot be fed here: its setup has
-  # two Gemini logins, which the schema refuses (one per workspace); the
+  # is a planner's claimed job. Trace 19 is not fed here: its rules come
+  # from install_shipped_rules, whose rule rows the feed does not make. It
+  # runs whole, steps included, in golden_traces_test.rb, and the
   # wait_review cause it shows (RD-11) has a test of its own below.
   {
     "07-pending-gate-check-error-override" => "check under a pending move to Ready, wait_owner for check_error",

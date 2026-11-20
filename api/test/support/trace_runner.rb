@@ -176,6 +176,11 @@ class TraceRunner
     @times.key(instant)
   end
 
+  # The instant the engine wrote for the trace's @t:seconds (a query test
+  # works its answers out from these, milestone 4 plan RT-7). Raises
+  # KeyError for a time no event showed.
+  def instant(seconds) = @times.fetch(seconds)
+
   # Runs the first limit commands (all by default) and returns self; the
   # disagreements are in failures.
   def run(limit = trace.fetch("commands").size)
