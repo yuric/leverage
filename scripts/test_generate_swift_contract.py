@@ -200,7 +200,7 @@ def main():
         "        case .taskBeforeClaim: return true",
         "        case .reviewAssign: return false",
         "public enum ContractLists {",
-        "    public static let orchestratorTestedProviders: [Provider] = []",
+        "    public static let orchestratorTestedProviders: [Provider] = [",
         "public enum CheckVerdict: String, Codable, CaseIterable, Sendable {",
         '    case notApplicable = "not_applicable"',
         "public enum DraftState: String, Codable, CaseIterable, Sendable {",
@@ -214,7 +214,17 @@ def main():
         '    case installShippedRules = "install_shipped_rules"',
     ]:
         cases.check(f"writes {line.strip()!r}", line in swift, line)
-    cases.check("a list that names no value is no enum", "enum OrchestratorTestedProvider" not in swift)
+    cases.check("a list of providers is no enum", "enum OrchestratorTestedProvider" not in swift)
+
+    # The list's committed values are the managing agent's eval results, so
+    # what an empty list gives is asked of a doctored registry, not of the
+    # committed one.
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["orchestrator_tested_providers"] = []
+    code, out, new_swift = run(doctored, openapi)
+    cases.check("a list that names no provider is written as an empty list",
+                code == 0 and "orchestratorTestedProviders: [Provider] = []" in (new_swift or "")
+                and "enum OrchestratorTestedProvider" not in (new_swift or ""), out)
 
     doctored = copy.deepcopy(registry)
     doctored["lists"]["orchestrator_tested_providers"] = ["claude", "gemini"]
