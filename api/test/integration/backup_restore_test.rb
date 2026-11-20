@@ -30,7 +30,9 @@ class BackupRestoreTest < CommittingTestCase
 
   teardown do
     ActiveRecord::Base.establish_connection(@original)
-    Open3.capture2e(tool_env, "dropdb", *tool_args, "--maintenance-db=postgres", "--if-exists", "--force", @scratch)
+    [ @scratch, *restoring_databases ].uniq.each do |name|
+      Open3.capture2e(tool_env, "dropdb", *tool_args, "--maintenance-db=postgres", "--if-exists", "--force", name)
+    end
     BackupRun.delete_all
     FileUtils.rm_rf(@folder)
   end
@@ -228,6 +230,65 @@ class BackupRestoreTest < CommittingTestCase
       on_database(@scratch) { assert_equal "Changed after the dump", Task.find(task.id).title, bad }
       assert_equal [ @scratch ], restoring_databases, "#{bad}: no database is left behind"
     end
+  end
+
+  # The schema with one task of its own, at @scratch: the database a
+  # restore with --replace would replace.
+  def scratch_with_a_task
+    Open3.capture2e(tool_env, "createdb", *tool_args, "--maintenance-db=postgres", @scratch).then do |out, status|
+      assert status.success?, out
+    end
+    out, status = Open3.capture2e(tool_env, "psql", *tool_args, "--dbname", @scratch, "--quiet", "--set",
+      "ON_ERROR_STOP=1", "--file", Rails.root.join("db/structure.sql").to_s)
+    assert status.success?, out
+    on_database(@scratch) { Scenario.new.task(state: "backlog", title: "Changed after the dump") }
+  end
+
+  # Second review: only a Failed dropped the staging database, so an error
+  # of another kind in the steps run on it (the grants' SQL, the
+  # connection) left it behind.
+  test "a restore whose grants raise an ActiveRecord error removes the staging database and raises Failed (second review)" do
+    run = B.run!(folder: @folder, keep: 14)
+    path = File.join(@folder, run.file_name)
+    B.load_tasks
+    original = DbGrants.method(:apply)
+    DbGrants.define_singleton_method(:apply) do |*|
+      raise ActiveRecord::StatementInvalid, "made-up failure of the grants"
+    end
+    error = begin
+      assert_raises(B::Failed) { capture_io { B.restore(path, target: target(@scratch)) } }
+    ensure
+      DbGrants.define_singleton_method(:apply, original)
+    end
+    assert_match(/StatementInvalid/, error.message)
+    assert_empty restoring_databases, "no staging database is left behind"
+    assert_equal @original, ActiveRecord::Base.connection_db_config, "the restore gives the connection back"
+  end
+
+  # Second review: a failed drop of the database being replaced left the
+  # staging database behind, unnamed in the message.
+  test "a restore with --replace whose drop of the database fails keeps the database and removes the staging one (second review)" do
+    walk = Walk.new(seed: 77).run
+    run = B.run!(folder: @folder, keep: 14)
+    path = File.join(@folder, run.file_name)
+    task = scratch_with_a_task
+    scratch = @scratch
+    spawner = lambda do |env, argv, **redirects|
+      if argv.first == "dropdb" && argv.last == scratch
+        argv = [ "sh", "-c", "echo 'dropdb: made-up failure' >&2; exit 1" ]
+      end
+      B::SPAWN.call(env, argv, **redirects)
+    end
+
+    error = assert_raises(B::Failed) do
+      capture_io do
+        B.restore(path, target: target(@scratch), replace: true, workspace_id: walk.workspace_id, spawner: spawner)
+      end
+    end
+    assert_equal [ @scratch ], restoring_databases, "the staging database is removed"
+    assert_match(/made-up failure/, error.message)
+    assert_includes error.message, @scratch
+    on_database(@scratch) { assert_equal "Changed after the dump", Task.find(task.id).title }
   end
 
   test "bin/restore with no file, or a file that is not there, exits non-zero" do

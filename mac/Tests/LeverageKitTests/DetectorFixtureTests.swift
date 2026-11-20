@@ -183,6 +183,10 @@ struct DetectorFixtureTests {
         #expect(ReplyReading.statedTime(in: "Limit reached. Try again at 2026-11-18T11:06:40Z.") == base)
         #expect(ReplyReading.statedTime(in: "reset at: 2026-11-18T11:06:40Z") == base)
         #expect(ReplyReading.statedTime(in: "it resets soon\n2026-11-20T01:23:00Z next line") == nil)
+        // Second review: a bare "reset" or a "try again" with no "at" is no
+        // reset word.
+        #expect(ReplyReading.statedTime(in: "weekly limit; password reset 2026-11-18T11:06:40Z") == nil)
+        #expect(ReplyReading.statedTime(in: "weekly limit, try again later (logged 2026-11-18T11:06:40Z)") == nil)
         #expect(ReplyReading.outcome(
             errorText: "2026-11-20T01:23:00Z weekly limit reached", signedOutPhrases: [])
             == .limit(window: .weekly, resetAt: nil))
