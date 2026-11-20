@@ -85,6 +85,21 @@ class GateApplicationTest < ActiveSupport::TestCase
     assert_empty @job_calls
   end
 
+  test "beside a blocking failure, a hold planned for a model check that is not written does not open" do
+    app = app_rule("task.before_submit")
+    model = custom_rule("task.before_submit")
+    Leverage::Gating.implementation = Planned.new do |request|
+      evaluation(outcome: :pending, checks: [ check_of(app, request, result: "failed"), check_of(model, request, result: nil) ],
+        failures: [ Leverage::Gating::Failure.new(rule_id: app.id, rule_check_ref: 0, reason: nil, route: "builder") ],
+        holds: [ Leverage::Gating::PlannedHold.new(reason: "rerun_limit", rule_id: model.id, rule_check_id: 1) ])
+    end
+    task = ready_to_submit(@builder)
+
+    assert command("submit", @builder, submit_params(task)).refused?
+    assert_equal [ "check.finished" ], types
+    assert_not mine(Hold).exists?
+  end
+
   test "a warn failure is recorded on its row and lets the command through (L337)" do
     app_rule("task.before_submit", on_fail: "warn")
     Leverage::Gating.implementation = Planned.new do |request|

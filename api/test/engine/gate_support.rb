@@ -1,18 +1,16 @@
 require_relative "entries/call_spy"
 
 # What WP4's tests share (milestone 4 plan §4, WP4): the gate is tested
-# against Gating::StandIn worlds and the stub Jobs, which are all a package
-# of WP3 to WP9 has of the other packages in its worktree.
+# against Gating::StandIn worlds; Jobs is WP6's, brought into the
+# worktree before the code was finished.
 #
 # - gating(rules): sets Leverage::Gating.implementation to a RowGating
 #   with a StandIn rule list built from Rule rows (each rule's current
 #   version), so the rows the gate writes name real rules. reenter reads
 #   the pending transition's checks from their rows.
-# - with_jobs { }: Jobs.queue and Jobs.withdraw do what milestone 4 plan
-#   WP6 is asked to make them do (notes, WP4's requests): queue makes the
-#   row, gives it to its block, then writes job.queued; withdraw writes
-#   job.withdrawn. Every other Jobs call is the stub. The calls are kept
-#   in @job_calls.
+# - with_jobs { }: records the calls of Jobs.queue and Jobs.withdraw
+#   (WP6's) in @job_calls, as [name, keywords with job: the positional
+#   job], and runs them.
 # - command(...): one command through Transitions.apply.
 module GateSupport
   include CallSpy
@@ -75,20 +73,11 @@ module GateSupport
     calls = @job_calls
     jobs = Leverage::Jobs
     saved = %i[queue withdraw].to_h { |name| [ name, jobs.method(name) ] }
-    jobs.define_singleton_method(:queue) do |ctx, kind:, task:, target:, seat_role:, input:, &block|
-      calls << [ :queue, { kind: kind, task: task, target: target, seat_role: seat_role, input: input } ]
-      job = Job.create!(workspace_id: ctx.workspace.id, kind: kind, task_id: task&.id, project_id: task&.project_id,
-        target_kind: Leverage::EventLog.kind_of(target), target_id: target.id, seat_role: seat_role, state: "queued",
-        queued_at: ctx.at, input: input, attempt_number: input.fetch("attempt_number", 1))
-      block&.call(job)
-      ctx.emit("job.queued", task: task, subject: job, payload: { kind: kind })
-      job
-    end
-    jobs.define_singleton_method(:withdraw) do |ctx, job, **as|
-      calls << [ :withdraw, { job: job, as: as } ]
-      job.update!(state: "withdrawn", finished_at: ctx.at)
-      ctx.emit("job.withdrawn", task: (job.task_id && Task.find(job.task_id)), subject: job, payload: {},
-        **Leverage::RuleChecks.event_fields(as))
+    saved.each do |name, original|
+      jobs.define_singleton_method(name) do |*arguments, **keywords|
+        calls << [ name, keywords.merge(job: arguments[1]) ]
+        original.call(*arguments, **keywords)
+      end
     end
     yield
   ensure

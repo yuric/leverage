@@ -160,6 +160,19 @@ class RuleChecksTest < ActiveSupport::TestCase
     assert_equal "failed", check.result
   end
 
+  test "queue_attempt queues the next attempt on a new job: check.queued names it, then job.queued, then the attempt row" do
+    rule = custom_rule("task.before_ready")
+    check = @scenario.rule_check(@task, rule: rule, result: "error")
+    attempt, events = in_command { |ctx| [ R.queue_attempt(ctx, check), ctx.events ] }
+
+    assert_equal %w[check.queued job.queued], events.map(&:type)
+    job = Job.find(events.last.subject_id)
+    assert_equal [ 2, job.id ], [ events.first.payload["attempt_number"], events.first.payload["job_id"] ]
+    assert_equal [ 2, job.id ], attempt.values_at(:attempt_number, :job_id)
+    assert_equal [ 2, check.id ], job.values_at(:attempt_number, :target_id)
+    assert_nil check.reload.result
+  end
+
   test "new_attempt queues the next attempt of a check on a job of its own" do
     rule = custom_rule("task.before_ready")
     check = @scenario.rule_check(@task, rule: rule)

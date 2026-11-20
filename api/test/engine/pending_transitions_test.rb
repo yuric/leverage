@@ -27,8 +27,8 @@ class PendingTransitionsTest < ActiveSupport::TestCase
   # Runs block inside one transaction holding the workspace lock, as a
   # command of the app does: what WP6's job result or WP8's override do
   # before they call reenter.
-  def in_command(at: nil)
-    ActiveRecord::Base.transaction(requires_new: true) { yield @scenario.context(at: at) }
+  def in_command(**options)
+    ActiveRecord::Base.transaction(requires_new: true) { yield @scenario.context(**options) }
   end
 
   # A pending submit: the builder's submit met a blocking model gate.
@@ -52,9 +52,6 @@ class PendingTransitionsTest < ActiveSupport::TestCase
     real = Leverage::Gating.input_hash(hook: "task.before_ready",
       inputs: Leverage::HookInputs.for(hook: "task.before_ready", task: nil, params: params))
     complete.dig("expect", "events").each { |event| event["payload"]["input_hash"] = real if event["payload"].key?("input_hash") }
-    # The check step is milestone 4's WP5's (steps.rb); here no step moves.
-    complete["expect"]["steps_opened"] = []
-    complete["expect"]["steps_closed"] = []
     world = %w[acceptance_criteria specific_details].map do |key|
       { id: binder.id("$rule:#{key}"), version_id: binder.id("$rule_version:#{key}_1"), version: 1, hook: "task.before_ready",
         kind: "gate", checker: key == "specific_details" ? "model" : "app", on_fail: "block", route: "owner", enabled: true,
@@ -332,7 +329,7 @@ class PendingTransitionsTest < ActiveSupport::TestCase
   test "cancel inside a timer writes as the app, with no key and the timer's effective time" do
     with_jobs do
       _task, pending, _check, = pending_submit
-      due = @scenario.database_now - 5
+      due = @scenario.database_now # after the check step opened, before the cancel's own time
       events = in_command do |ctx|
         P.cancel(ctx, pending, "lease_expired", actor_kind: "app", actor_id: nil, command_id: nil, effective_at: due)
         ctx.events
@@ -416,6 +413,61 @@ class PendingTransitionsTest < ActiveSupport::TestCase
       assert_equal [ "app", Leverage::RuleChecks.last_finished(check).id ], [ opened.actor_kind, opened.cause_id ]
       assert_equal({ "rule_id" => check.rule_id, "rule_check_id" => check.id }, InboxItem.find_by!(hold_id: hold.id).facts)
       assert_equal "pending", pending.reload.state
+    end
+  end
+
+  test "re-entry that meets the same errored check again opens no second check_error hold" do
+    with_jobs do
+      task, pending, check, = pending_submit
+      in_command do |ctx|
+        Leverage::RuleChecks.error(ctx, check)
+        P.reenter(ctx, pending, trigger(:check_timed_out, check))
+        P.reenter(ctx, pending, trigger(:check_timed_out, check))
+      end
+
+      assert_equal 1, mine(Hold).where(task_id: task.id, reason: "check_error").count
+    end
+  end
+
+  test "a re-run's result closes its check_error hold with run_again, as the app, caused by its check.finished, then completes (trace 19, command 21)" do
+    with_jobs do
+      rule = custom_rule("task.before_ready", route: "owner")
+      gating(rule)
+      task = @scenario.task(state: "backlog")
+      command("complete_contract", @owner, contract_params(task))
+      key = @key
+      pending = P.of(task)
+      check = mine(RuleCheck).sole
+      in_command do |ctx|
+        Leverage::RuleChecks.error(ctx, check, actor_kind: "app", actor_id: nil, command_id: nil)
+        P.reenter(ctx, pending, trigger(:check_timed_out, check), actor_kind: "app", actor_id: nil, command_id: nil)
+      end
+      in_command { |ctx| Leverage::RuleChecks.queue_attempt(ctx, check) }
+
+      events = in_command(request: T::Request.new(command: "submit_job_result", workspace_id: @scenario.workspace_id,
+        caller_kind: "seat", caller_id: @scenario.orchestrator.id, key: "k-result", request_hash: nil, params: {})) do |ctx|
+        Leverage::RuleChecks.finish(ctx, check, result: "passed", reason: "Made-up reason.")
+        P.reenter(ctx, pending, trigger(:check_finished, check))
+        ctx.events
+      end
+
+      finished, closed, resolved, changed, ready = events
+      assert_equal %w[check.finished hold.closed inbox.resolved task.contract_changed task.ready], events.map(&:type)
+      assert_equal [ "app", nil, "k-result", finished.id ], [ closed.actor_kind, closed.actor_id, closed.command_id, closed.cause_id ]
+      assert_equal "run_again", resolved.payload["choice"]
+      [ changed, ready ].each { |event| assert_equal [ "owner", key, finished.id ], [ event.actor_kind, event.command_id, event.cause_id ] }
+    end
+  end
+
+  test "a task has one pending transition: the owner's second Complete contract while one waits answers pending" do
+    with_jobs do
+      gating(custom_rule("task.before_ready", route: "owner"))
+      task = @scenario.task(state: "backlog")
+      assert_equal :pending, command("complete_contract", @owner, contract_params(task)).outcome
+      second = command("complete_contract", @owner, contract_params(task, details: "Other details."))
+
+      assert_equal "pending", second.refusal&.code
+      assert_equal 1, mine(PendingTransition).where(task_id: task.id).count
     end
   end
 

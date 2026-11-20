@@ -91,6 +91,10 @@ module Leverage
       emit(ctx, "check.overridden", check, {}, **as)
     end
 
+    # The next attempt of the check on a job of its own (empty until the
+    # code that follows).
+    def queue_attempt(ctx, check, kind: "rule_check", seat_role: "orchestrator", **as) = nil
+
     # A new attempt of the check, run by job (check.queued): the first
     # attempt (write), after a miss, a re-run, or the orchestrator's
     # return. The row's result is null until the attempt finishes (DB-25).
