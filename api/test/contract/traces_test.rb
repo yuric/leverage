@@ -1118,8 +1118,10 @@ class TracesTest < Minitest::Test
     claimed = events.find { |event| event["type"] == "task.claimed" }
     claim = commands.find { |command| command["key"] == claimed["command_id"] }
     assert_equal [ "claim", "pending" ], [ claim["command"], claim["expect"]["outcome"] ], "L390: a provisional claim"
+    # Rule 11: the waiting command is cancelled first, then the task or the
+    # review is taken away.
     release = commands.find { |command| command["command"] == "release" }
-    assert_equal %w[task.released check.finished job.withdrawn], types(release), "SM-13"
+    assert_equal %w[check.finished job.withdrawn task.released], types(release), "SM-13"
     opened = events.find { |event| event["type"] == "hold.opened" && event["payload"]["reason"] == "claim_gate_failed" }
     assert opened, "L393"
     failed_seats = events.select { |event| event["type"] == "check.finished" && event["payload"]["hook"] == "task.before_claim" && event["payload"]["result"] == "failed" }.map { |event| event["payload"]["subject_id"] }
@@ -1129,8 +1131,8 @@ class TracesTest < Minitest::Test
     review_failed = events.find { |event| event["type"] == "review.failed" }
     refute_nil review_failed["payload"]["failed_rule_check_id"], "SM-6"
     { "builder_lease_expiry" => "task.lease_expired", "review_lease_expiry" => "review.lease_expired", "cancel" => "task.cancelled" }.each do |command_name, type|
-      ending = commands.find { |command| command["command"] == command_name }
-      assert_equal [ type, "check.finished", "job.withdrawn" ], types(ending), "rule 11: #{command_name}"
+      ending = commands.select { |command| command["command"] == command_name }.last
+      assert_equal [ "check.finished", "job.withdrawn", type ], types(ending), "rule 11: #{command_name}"
       assert_equal "withdrawn", payloads(ending["expect"]["events"], "check.finished").first["result"]
     end
     late = commands.select { |command| command["command"] == "submit_job_result" && command["expect"]["outcome"] == "refused" }
