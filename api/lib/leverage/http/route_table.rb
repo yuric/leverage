@@ -61,7 +61,23 @@ module Leverage
         "report_run_stopped" => "v1/helper/seats#run_stopped"
       }.freeze
 
-      PENDING = {}.freeze
+      # The eleven operations milestone 3 serves (its plan §2.3, HT-6), each
+      # to the controller and action WP7 writes. They are not in ROUTES, so
+      # serves?, routes.rb and every test that walks the served operations
+      # leave them out (they answer 404) until WP7 moves them into ROUTES.
+      PENDING = {
+        "report_limit" => "v1/helper/credentials#limit_reached",
+        "report_signed_out" => "v1/helper/credentials#signed_out",
+        "sign_in_again" => "v1/owner/credentials#sign_in",
+        "list_inbox" => "v1/owner/inbox#index",
+        "promote_task" => "v1/owner/tasks#promote",
+        "edit_contract" => "v1/owner/tasks#contract",
+        "hold_task" => "v1/owner/tasks#hold",
+        "resume_task" => "v1/owner/tasks#resume",
+        "pause_seat" => "v1/owner/seats#pause",
+        "resume_seat" => "v1/owner/seats#resume",
+        "change_seat" => "v1/owner/seats#change"
+      }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
@@ -71,8 +87,9 @@ module Leverage
 
       def serves?(operation_id) = ROUTES.key?(operation_id)
 
-      # The served operations, read from the registry. Raises KeyError for
-      # a ROUTES key that is not a registry operation.
+      # The served operations, read from the registry; or those of table
+      # (PENDING, in a test). Raises KeyError for a key that is not a
+      # registry operation.
       def routes(table = ROUTES)
         operations = Contract.registry.fetch("operations").to_h { |operation| [ operation.fetch("operation_id"), operation ] }
         table.map do |operation_id, to|

@@ -47,6 +47,9 @@ class CandidatesTest < ActiveSupport::TestCase
     [ above, own, between, below ]
   end
 
+  # This workspace's events: a committing test elsewhere may leave others.
+  def events = Event.where(workspace_id: @scenario.workspace_id)
+
   def limited(credential, reset_at: @now + 3600)
     @scenario.limit_credential(credential, reset_at: reset_at)
   end
@@ -137,11 +140,11 @@ class CandidatesTest < ActiveSupport::TestCase
 
   test "rule 2: nothing is written when a reset time passes" do
     credential = limited(@scenario.credential, reset_at: @now - 1)
-    before = [ credential.limited_since, credential.limited_until, Event.count ]
+    before = [ credential.limited_since, credential.limited_until, events.count ]
 
     assert C.available?(credential, @now)
     credential.reload
-    assert_equal before, [ credential.limited_since, credential.limited_until, Event.count ]
+    assert_equal before, [ credential.limited_since, credential.limited_until, events.count ]
   end
 
   # --- Rule 3: one piece of work ---------------------------------------------
@@ -460,13 +463,13 @@ class CandidatesTest < ActiveSupport::TestCase
     credential.reload
     assert credential.limited_since
     assert_equal (@now + 600).to_i, credential.limited_until.to_i
-    event = Event.where(type: "credential.limit_reached").sole
+    event = events.where(type: "credential.limit_reached").sole
     assert_equal [ credential.id, task.id, seat.id, "weekly" ],
       [ event.subject_id, event.task_id, event.payload["seat_id"], event.payload["window"] ]
 
     quiet = @scenario.limit_credential(@scenario.credential, reset_at: nil)
     assert quiet.limited_since
-    assert_equal 1, Event.where(type: "credential.limit_reached").count
+    assert_equal 1, events.where(type: "credential.limit_reached").count
   end
 
   test "Scenario: a credential made with limited_until alone gets limited_since too" do
@@ -481,7 +484,7 @@ class CandidatesTest < ActiveSupport::TestCase
 
     assert_equal "signed_out", credential.state
     assert_equal [ credential.id, nil ],
-      Event.where(type: "credential.signed_out").sole.then { |event| [ event.subject_id, event.payload["seat_id"] ] }
+      events.where(type: "credential.signed_out").sole.then { |event| [ event.subject_id, event.payload["seat_id"] ] }
   end
 
   test "Scenario: an open credential hold with its item, or without" do
@@ -502,7 +505,7 @@ class CandidatesTest < ActiveSupport::TestCase
     seat = @scenario.pause_seat(@scenario.seat)
 
     assert seat.paused
-    assert Event.exists?(type: "seat.paused", subject_id: seat.id)
+    assert events.exists?(type: "seat.paused", subject_id: seat.id)
   end
 
   test "Scenario: a task in the Imaginarium, and a Finishing row whose builder holds it" do

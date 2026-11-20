@@ -34,11 +34,11 @@ module Leverage
         opened_by_id: actor_id)
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id })
-      item = needs_you_item(reason)
-      if item
-        inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: item.fetch("item"), about_kind: "task",
+      needs_you = needs_you_item(reason)
+      if needs_you && item
+        inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
           about_id: task.id, hold_id: hold.id, credential_id: credential_id, facts: facts, opened_at: ctx.at,
-          choices: item.fetch("choices").map { |choice| choice.fetch("choice") })
+          choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
         ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: opened.id, actor_kind: actor_kind,
           actor_id: actor_id, payload: { kind: inbox.kind })
       end

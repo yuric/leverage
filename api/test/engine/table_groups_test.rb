@@ -119,7 +119,7 @@ class TableGroupsTest < ActiveSupport::TestCase
     finishing.each { |kase| assert kase.not_served?, kase.name }
     (cases - finishing).each { |kase| refute kase.not_served?, kase.name }
     assert_equal "invalid_state", finishing.first.expected_refusal
-    assert_equal finishing.first.refusal, cases.find { |kase| kase.row == finishing.first.row }.refusal
+    assert_nil finishing.first.refusal, "the row itself moves the task; HS-3 is what refuses it"
   end
 
   test "a served case keeps its refusal as expected_refusal" do
@@ -189,7 +189,7 @@ class TableGroupsTest < ActiveSupport::TestCase
       Leverage::SeatRuns.method(:ensure_run_on).parameters
     assert_nil Leverage::SeatRuns.ensure_run_on(scenario.context, seat, credential, nil)
     assert_equal [ [ :req, :seat ], [ :req, :reason ] ], Leverage::SeatRuns.method(:ended_by_interruption).parameters
-    assert_equal 0, HelperRequest.count
+    assert_equal 0, HelperRequest.where(workspace_id: scenario.workspace_id).count
   end
 
   test "Reads::RecoveryTimes answers an empty list, for a task or for the workspace" do
