@@ -466,7 +466,7 @@ struct RosterModelTests {
         await model.load()
         let paused = row(model, Fixtures.builderID)
         #expect(paused?.roleLine == "Builder. Paused.")
-        #expect(paused?.detailLine.hasSuffix("Off") == true)
+        #expect(paused?.detailLine.hasSuffix("Paused") == true)
         let note = paused?.pausedNote ?? ""
         #expect(note.contains("does not stop its run"))
         #expect(note.contains("goes back to waiting for any agent"))

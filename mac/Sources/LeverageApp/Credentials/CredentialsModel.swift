@@ -22,13 +22,18 @@ struct CredentialRow: Identifiable, Equatable, Sendable {
         provider = credential.provider
         providerName = ProviderNames.name(credential.provider)
         kindLine = (credential.kind == .login ? CredentialsCopy.kindLogin : .kindToken).text
-        canSignInAgain = false
+        canSignInAgain = credential.kind == .login && credential.state == .signedOut
         if credential.state == .signedOut {
             chip = CardChip(text: CredentialsCopy.chipSignedOut.text, tone: .stop)
             usage = CredentialsCopy.usageSignedOut.text
-        } else if let until = credential.limitedUntil, until > now {
+        } else if credential.isLimited(at: now) {
             chip = CardChip(text: CredentialsCopy.chipLimit.text, tone: .stop)
-            usage = CredentialsCopy.usageUntil.filled(["time": until.formatted(date: .abbreviated, time: .shortened)])
+            if let until = credential.limitedUntil {
+                let clock = ResetClock(now: { now }, calendar: calendar, locale: locale)
+                usage = CredentialsCopy.usageLimitUntil.filled(["time": ResetTime.text(for: until, clock: clock)])
+            } else {
+                usage = CredentialsCopy.usageLimitNoTime.filled(["provider": ProviderNames.name(credential.provider)])
+            }
         } else {
             chip = CardChip(text: CredentialsCopy.chipReady.text, tone: .info)
             usage = CredentialsCopy.usageReady.text
@@ -53,13 +58,17 @@ final class CredentialsModel {
     private(set) var state: State = .loading
     private(set) var rows: [CredentialRow] = []
     private(set) var verifying: Set<UUID> = []
+    private(set) var signingIn: Set<UUID> = []
     private(set) var failures: [UUID: String] = [:]
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timing: FollowTiming
+    @ObservationIgnored private let calendar: Calendar
+    @ObservationIgnored private let locale: Locale
     @ObservationIgnored private var verifyKeys: [UUID: IdempotencyKey] = [:]
+    @ObservationIgnored private var signInKeys: [UUID: IdempotencyKey] = [:]
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
 
@@ -71,13 +80,15 @@ final class CredentialsModel {
         self.noteRead = noteRead
         self.now = now
         self.timing = timing
+        self.calendar = calendar
+        self.locale = locale
     }
 
     func isVerifying(_ id: UUID) -> Bool { verifying.contains(id) }
 
-    func isSigningIn(_ id: UUID) -> Bool { false }
-
-    func signInAgain(_ id: UUID) async {}
+    /// Sign in again is running for that login: the helper opened the
+    /// provider's sign-in, and the app waits for the owner (MA-17).
+    func isSigningIn(_ id: UUID) -> Bool { signingIn.contains(id) }
 
     /// The line a failed Verify left on that row.
     func failure(for id: UUID) -> String? { failures[id] }
@@ -90,7 +101,7 @@ final class CredentialsModel {
             let list = try await api.credentials()
             guard mine == generation else { return }
             let at = now()
-            rows = list.credentials.map { CredentialRow($0, now: at) }
+            rows = list.credentials.map { CredentialRow($0, now: at, calendar: calendar, locale: locale) }
             state = .loaded
             noteRead(list.asOfSeq)
         } catch is CancellationError {
@@ -130,6 +141,37 @@ final class CredentialsModel {
             return
         } catch {
             if CommandKey.wasAnswered(error) { verifyKeys[id] = nil }
+            failures[id] = ShellCopy.sentence(for: error).text
+        }
+    }
+
+    /// Sign in again, on a signed-out login: asks the helper to open the
+    /// provider's sign-in, follows the request to its end, and reads again
+    /// (HM-47, HE-36). The key is kept until the server has answered.
+    func signInAgain(_ id: UUID) async {
+        guard let row = rows.first(where: { $0.id == id }), row.canSignInAgain, !signingIn.contains(id) else { return }
+        signingIn.insert(id)
+        failures[id] = nil
+        defer { signingIn.remove(id) }
+        let key = signInKeys[id] ?? IdempotencyKey()
+        signInKeys[id] = key
+        do {
+            let outcome = try await api.signInAgain(credentialID: id, key: key)
+            _ = try outcome.completedResult()
+            signInKeys[id] = nil
+            if let requestID = outcome.helperRequestID {
+                let follower = HelperRequestFollower(api: api, timing: timing)
+                if let request = try await follower.follow(requestID, giveUpAfter: timing.giveUpAfter),
+                   !request.succeeded {
+                    failures[id] = CredentialsCopy.failureLine(for: request, provider: row.provider)
+                }
+            }
+            signingIn.remove(id)
+            await load()
+        } catch is CancellationError {
+            return
+        } catch {
+            if CommandKey.wasAnswered(error) { signInKeys[id] = nil }
             failures[id] = ShellCopy.sentence(for: error).text
         }
     }

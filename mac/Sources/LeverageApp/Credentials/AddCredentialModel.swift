@@ -173,7 +173,11 @@ final class AddCredentialModel {
 
     private func runChecks(provider: Provider, name typed: String) async {
 
-        let request = AddCredentialRequest(credentialID: credentialID, kind: .login, provider: provider, name: typed)
+        // The model is the one the provider's tool names as its default, where it names one (Claude, Grok);
+        // the rank is the agents' default, and the effort stays empty (HE-5).
+        let request = AddCredentialRequest(
+            credentialID: credentialID, kind: .login, provider: provider, name: typed,
+            model: ProviderNames.defaultModel(provider), strengthRank: 1)
         let key = (addedRequest == request ? addKey : nil) ?? IdempotencyKey()
         addKey = key
         addedRequest = request

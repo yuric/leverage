@@ -10,7 +10,7 @@ enum CredentialsCopy: OwnerFacingCopy {
     case loading, empty, header, addCredential
     case kindLogin, kindToken
     case chipReady, chipSignedOut, chipLimit
-    case usageReady, usageSignedOut, usageUntil
+    case usageReady, usageSignedOut
     case verify, verifying
     // At its limit, and Sign in again on a signed-out login (HM-45, HM-47).
     case usageLimitUntil, usageLimitNoTime, signInAgain
@@ -42,7 +42,6 @@ enum CredentialsCopy: OwnerFacingCopy {
         case .chipLimit: "At its limit"
         case .usageReady: "Signed in and answering."
         case .usageSignedOut: "Not signed in."
-        case .usageUntil: "Until {time}."
         case .verify: "Verify"
         case .verifying: "Checking…"
         case .usageLimitUntil: "At its limit until {time}."

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Credentials tab (MA-8): a flat list of logins with Add credential and
-/// Verify per row. Built with no arguments; the shell puts its
+/// Verify per row, and Sign in again on a signed-out one (HM-47). Built with no arguments; the shell puts its
 /// `ScreenContext` in the environment. It draws its own Add credential
 /// sheet.
 struct CredentialsView: View {
@@ -74,7 +74,8 @@ struct CredentialsContent: View {
     }
 }
 
-/// One login: its name and kind, its chip and what it can do, and Verify.
+/// One login: its name and kind, its chip and what it can do, Verify, and
+/// Sign in again on a signed-out one (HM-47).
 struct CredentialRowView: View {
     let row: CredentialRow
     let model: CredentialsModel
@@ -93,7 +94,14 @@ struct CredentialRowView: View {
                     Text(CredentialsCopy.verifying.text)
                         .font(.system(size: Tokens.FontSize.small))
                         .foregroundStyle(Tokens.Palette.text2)
+                } else if model.isSigningIn(row.id) {
+                    ProgressView().controlSize(.small)
                 } else {
+                    if row.canSignInAgain {
+                        Button(CredentialsCopy.signInAgain.text) {
+                            Task { await model.signInAgain(row.id) }
+                        }
+                    }
                     Button(CredentialsCopy.verify.text) {
                         Task { await model.verify(row.id) }
                     }
@@ -102,6 +110,11 @@ struct CredentialRowView: View {
             HStack(spacing: 8) {
                 Chip(text: row.chip.text, tone: row.chip.tone)
                 Text(verbatim: row.usage)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
+            }
+            if model.isSigningIn(row.id) {
+                Text(CredentialsCopy.waitingSignIn.text)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
             }

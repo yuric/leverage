@@ -8,15 +8,15 @@ enum AgentsCopy: OwnerFacingCopy {
     // The list.
     case loading, empty, emptyNeedsLogin, connect, addLogin
     case roleBuilder, roleReviewer, rolePlanner, roleOrchestrator
-    case roleLine, stateBuilding, stateRunning, stateStopped, stateConnectsOnItsOwn, statePaused, stateOff
+    case roleLine, stateBuilding, stateRunning, stateConnectsOnItsOwn, statePaused, stateOff
     case runsOn, defaultModel, defaultEffort, effortNamed, on, off
     case lastAsked, neverAsked
-    case chipRunning, chipStopped
+    case chipRunning
     case start, stop, starting, stopping, remove, copyLandingPrompt, copied
     case startFailed, stopFailed
     // Pause, Resume and Change (HM-45, HM-51, HE-26, HE-27).
     case stateNotRunning, stateWaitingFor, chipNotRunning, pausedNote
-    case pause, resume, change, pausing, resuming, pauseFailed, resumeFailed
+    case pause, resume, change, pausing, resuming, pausedWord
     case changeTitle, changeNote, changeEnabledLabel, turnOffNote, turnOnNote, changeSave, changeSaving
     case removeTitle, removeMessage, removeConfirm, cancel
 
@@ -43,7 +43,6 @@ enum AgentsCopy: OwnerFacingCopy {
         case .roleLine: "{role}. {state}"
         case .stateBuilding: "Building {task}."
         case .stateRunning: "Running. Waiting for work."
-        case .stateStopped: "Stopped."
         case .stateConnectsOnItsOwn: "Connects on its own."
         case .statePaused: "Paused."
         case .stateOff: "Off."
@@ -56,7 +55,6 @@ enum AgentsCopy: OwnerFacingCopy {
         case .lastAsked: "Last asked for work {when}."
         case .neverAsked: "Has not asked for work yet."
         case .chipRunning: "Running"
-        case .chipStopped: "Stopped"
         case .start: "Start"
         case .stop: "Stop"
         case .starting: "Starting…"
@@ -76,8 +74,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .change: "Change"
         case .pausing: "Pausing…"
         case .resuming: "Resuming…"
-        case .pauseFailed: "{name} could not be paused. Try again."
-        case .resumeFailed: "{name} could not be resumed. Try again."
+        case .pausedWord: "Paused"
         case .changeTitle: "Change {name}"
         case .changeNote: "Changes apply the next time the agent starts a run."
         case .changeEnabledLabel: "Turned on"
