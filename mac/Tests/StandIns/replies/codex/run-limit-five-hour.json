@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "exec",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--json",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-C",
+      "<work folder>",
+      "-o",
+      "<answer file>"
+    ],
+    "shows": "a limit whose window and reset time are in a structured field",
+    "expect": "limit",
+    "expect_window": "five_hour",
+    "expect_reset": "stated",
+    "marker": "LVRG-REPLY-6abb4c490ea5"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-6abb4c490ea5\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"error\", \"message\": \"You've hit your usage limit. Try again later.\", \"limit\": {\"window\": \"five_hour\", \"resets_at\": \"@RESET_AT_EPOCH@\"}}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"You've hit your usage limit. Try again later.\"}}\n",
+  "stderr": ""
+}

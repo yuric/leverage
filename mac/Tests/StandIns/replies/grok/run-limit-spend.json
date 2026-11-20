@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "provider": "grok",
+    "tool": "grok",
+    "tool_version": "1.0.77",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--cwd",
+      "<work folder>",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a limit on the spend window, with the time it resets",
+    "expect": "limit",
+    "expect_window": "spend",
+    "expect_reset": "stated",
+    "marker": "LVRG-REPLY-8a7bd90d9486"
+  },
+  "exit_status": 1,
+  "stdout": "",
+  "stderr": "Error: you have reached your spend limit. It resets at @RESET_AT_ISO@. (LVRG-REPLY-8a7bd90d9486)\n"
+}

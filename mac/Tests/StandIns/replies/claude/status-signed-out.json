@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-19",
+    "basis": "recorded_no_login",
+    "kind": "status",
+    "command": [
+      "auth",
+      "status"
+    ],
+    "shows": "claude auth status with CLAUDE_CONFIG_DIR set to a new, empty folder: no login",
+    "expect": "signed_out",
+    "marker": "LVRG-REPLY-2c4bfa2e039c",
+    "marker_place": "in place of configDirectory",
+    "scrubbed": [
+      "configDirectory",
+      "projectsDirectory"
+    ]
+  },
+  "exit_status": 1,
+  "stdout": "{\n  \"loggedIn\": false,\n  \"authMethod\": \"none\",\n  \"apiProvider\": \"firstParty\",\n  \"analyticsDisabled\": false,\n  \"projectsDirectory\": \"<scrubbed>\",\n  \"configDirectory\": \"LVRG-REPLY-2c4bfa2e039c\",\n  \"loginExpiresAt\": null,\n  \"consoleProfileSignInOffered\": true\n}\n",
+  "stderr": ""
+}

@@ -94,6 +94,71 @@ struct DetectorFixtureTests {
         #expect(detector.outcome(of: killed, at: Self.endedAt) == .failed, "\(provider)")
     }
 
+    // MARK: Guards no reply file reaches
+
+    struct Inline: Sendable, CustomTestStringConvertible {
+        let provider: Provider
+        let why: String
+        let exit: Int32
+        let stdout: String
+        let stderr: String
+        var endedBy: SubprocessEnd? = nil
+        var testDescription: String { "\(provider.rawValue): \(why)" }
+    }
+
+    static let inline: [Inline] = [
+        Inline(
+            provider: .claude, why: "an error that names a window but no limit",
+            exit: 1, stdout: #"{"type":"result","is_error":true,"result":"API Error: 500 while saving the weekly report"}"#,
+            stderr: ""),
+        Inline(
+            provider: .claude, why: "a result that is no error, with a 429 on standard error",
+            exit: 0, stdout: #"{"type":"result","is_error":false,"result":"done"}"#,
+            stderr: "retrying after 429 Too Many Requests"),
+        Inline(
+            provider: .claude, why: "a limit reply cut off by leverage's time limit",
+            exit: 1, stdout: #"{"type":"result","is_error":true,"result":"You have reached your weekly limit."}"#,
+            stderr: "", endedBy: .timeLimit),
+        Inline(
+            provider: .codex, why: "reconnect errors in a run that then succeeded",
+            exit: 0,
+            stdout: #"{"type":"error","message":"Reconnecting... 1/5 (unexpected status 429 Too Many Requests)"}"#
+                + "\n" + #"{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}"#,
+            stderr: ""),
+        Inline(
+            provider: .gemini, why: "a successful reply with a 429 on standard error",
+            exit: 0, stdout: #"{"status":"SUCCESS","response":"done","error":"429 Too Many Requests"}"#,
+            stderr: "429 Too Many Requests"),
+        Inline(
+            provider: .grok, why: "a sign-out reply cut off by a stop",
+            exit: 1, stdout: "You are not authenticated.\n", stderr: "", endedBy: .stop),
+        Inline(
+            provider: .codex, why: "an output limit, which is no usage limit",
+            exit: 1,
+            stdout: #"{"type":"turn.failed","error":{"message":"the output limit of the model was reached"}}"#,
+            stderr: ""),
+    ]
+
+    @Test("a reply a guard keeps from being read is a plain failure", arguments: inline)
+    func guards(_ case_: Inline) throws {
+        let detector = try #require(Detectors.detector(for: case_.provider))
+        let record = ToolRunRecord(
+            termination: .exited(case_.exit), standardOutput: Data(case_.stdout.utf8),
+            standardError: Data(case_.stderr.utf8), endedBy: case_.endedBy)
+        #expect(detector.outcome(of: record, at: Self.endedAt) == .failed)
+    }
+
+    @Test("a time the reply states in another form is read; one it does not state is not estimated")
+    func statedTimes() {
+        let base = Date(timeIntervalSince1970: 1_795_000_000)
+        #expect(ReplyReading.statedTime(in: "resets at 2026-11-18T11:06:40Z.") == base)
+        #expect(ReplyReading.statedTime(in: "resets at 2026-11-18T11:06:40.000Z") == base)
+        #expect(ReplyReading.statedTime(in: "resets at 2026-11-18T12:06:40+01:00") == base)
+        #expect(ReplyReading.statedTime(in: "resets in 2 hours") == nil)
+        #expect(ReplyReading.time(fromSeconds: 1_795_000_000) == base)
+        #expect(ReplyReading.time(fromSeconds: "soon") == nil)
+    }
+
     // MARK: The stand-ins play the same files
 
     /// One tool's work prompt as its driver runs it, closely enough for the

@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "provider": "grok",
+    "tool": "grok",
+    "tool_version": "1.0.77",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--cwd",
+      "<work folder>",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a short rate limit that names no window",
+    "expect": "rate_limited",
+    "marker": "LVRG-REPLY-601be9513c13"
+  },
+  "exit_status": 1,
+  "stdout": "",
+  "stderr": "Error: 429 Too Many Requests. Rate limit reached, retry shortly. (LVRG-REPLY-601be9513c13)\n"
+}

@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "provider": "gemini",
+    "tool": "agy",
+    "tool_version": "1.5.12",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--print-timeout",
+      "600s",
+      "--mode",
+      "accept-edits"
+    ],
+    "shows": "a short rate limit that names no window",
+    "expect": "rate_limited",
+    "marker": "LVRG-REPLY-48be9dc4247e"
+  },
+  "exit_status": 1,
+  "stdout": "{\"conversation_id\": \"LVRG-REPLY-48be9dc4247e\", \"status\": \"ERROR\", \"response\": \"\", \"error\": \"RESOURCE_EXHAUSTED: rate limit exceeded, please retry shortly.\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}}\n",
+  "stderr": ""
+}

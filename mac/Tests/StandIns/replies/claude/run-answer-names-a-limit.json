@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a run that ended normally and gave no marker line, whose answer talks of a weekly limit and of not being logged in: the agent's own words, not a refusal",
+    "expect": "failed",
+    "marker": "LVRG-REPLY-5a2cfcce23c6"
+  },
+  "exit_status": 0,
+  "stdout": "{\"type\": \"result\", \"subtype\": \"success\", \"is_error\": false, \"result\": \"The project's weekly spend limit is not logged in the README; I stopped here.\", \"api_error_status\": null, \"terminal_reason\": \"completed\", \"stop_reason\": \"stop_sequence\", \"session_id\": \"LVRG-REPLY-5a2cfcce23c6\", \"num_turns\": 1, \"total_cost_usd\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}, \"modelUsage\": {}}\n",
+  "stderr": ""
+}

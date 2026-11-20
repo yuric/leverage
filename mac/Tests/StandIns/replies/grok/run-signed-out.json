@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "grok",
+    "tool": "grok",
+    "tool_version": "1.0.77",
+    "date": "2026-11-19",
+    "basis": "made_from_observed",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--cwd",
+      "<work folder>",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a prompt run while Grok is signed out",
+    "expect": "signed_out",
+    "follows": "\"You are not authenticated.\", which grok models (grok 1.0.77) printed on this Mac, where Grok is not signed in (status-signed-out.json). grok -p was never run signed out: the exit status and the line on standard error are made up",
+    "marker": "LVRG-REPLY-0f34b26ccd3c"
+  },
+  "exit_status": 1,
+  "stdout": "You are not authenticated.\n",
+  "stderr": "Error: run `grok login` to sign in (LVRG-REPLY-0f34b26ccd3c)\n"
+}

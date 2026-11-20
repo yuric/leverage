@@ -84,6 +84,15 @@ jobs:
       - name: Self-test of the stand-in tools
         working-directory: .
         run: python3 -I mac/Tests/StandIns/test_provider_tool.py
+      # The provider replies the detectors are tested against and the
+      # stand-ins play hold no account detail: no email, token, real id or
+      # unscrubbed field (plan HD-8).
+      - name: Reply files hold no account detail
+        working-directory: .
+        run: python3 -I scripts/check_reply_fixtures.py
+      - name: Self-test of the reply-file check
+        working-directory: .
+        run: python3 -I scripts/test_check_reply_fixtures.py
       - name: Build
         run: swift build
       # The runner has three cores. With every test at once, the app tests
