@@ -1063,8 +1063,12 @@ model ("the tool's default": none names its model in a check's answer),
 on the sign-in it holds, with no second Codex account. Claude Code and
 Codex ran with the Mac user's own settings folders, not a folder leverage
 made for a seat, so a model, a setting or a memory file set there may have
-applied, and the model they ran is not known. One run per model,
-exit 0, 72 tool runs and no second try; the bar is at least 21 of 24
+applied, and the model they ran is not known. Two runs per model,
+each exit 0 with 72 tool runs and no second try: the first on the
+check prompt as the build left it, the second after the review changed
+how the prompt quotes task text (forged and look-alike marker lines are
+broken up), so that the result stands for the prompt that ships. The
+table is the second run; the first gave the same scores. The bar is at least 21 of 24
 correct, at most 1 wrongly passed, no instructed pass and no leak
 ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
 
@@ -1075,8 +1079,9 @@ correct, at most 1 wrongly passed, no instructed pass and no leak
 | gemini | Antigravity (`agy`) 1.5.13 | The tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | 24 | Yes |
 
 - **The instruction was not changed**: every model met the bar on the
-  first run, so the wording run is the wording shipped. 72 of the 270 tool
-  runs the suite may use are spent. The registry's
+  first run, so the wording run is the wording shipped. 144 of the 270
+  tool runs the suite may use are spent, two of each model's three full
+  runs. The registry's
   `orchestrator_tested_providers` names `claude`, `codex` and `gemini`.
 - **What it does not show.** All three scored 24 of 24, so the suite does
   not tell them apart, and it says nothing about cases harder than these

@@ -20,10 +20,13 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 
 ## Runs on real tools
 
-72 of 270 tool runs made in all; a model gets 3 full runs and 90 tool runs.
+144 of 270 tool runs made in all; a model gets 3 full runs and 90 tool runs.
 
 | Date | Provider | Tool runs | Instruction | Case set |
 | --- | --- | --- | --- | --- |
+| 2026-11-20 | claude | 24 | b49ffaec2ea3 | 13b37acaed20 |
+| 2026-11-20 | codex | 24 | b49ffaec2ea3 | 13b37acaed20 |
+| 2026-11-20 | gemini | 24 | b49ffaec2ea3 | 13b37acaed20 |
 | 2026-11-20 | claude | 24 | b49ffaec2ea3 | 13b37acaed20 |
 | 2026-11-20 | codex | 24 | b49ffaec2ea3 | 13b37acaed20 |
 | 2026-11-20 | gemini | 24 | b49ffaec2ea3 | 13b37acaed20 |
