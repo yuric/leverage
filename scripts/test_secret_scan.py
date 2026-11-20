@@ -10,7 +10,10 @@ email and organisation) and for anything shaped like a leverage token
 finds each kind of hit, says where without ever printing the secret,
 passes what the redaction leaves (`lvs_[removed]`) and a token's SHA-256
 digest, and refuses a scan that could pass without looking: no file, an
-empty list of secrets, a secret too short to mean anything.
+empty list of secrets, a secret too short to mean anything. With
+--replies (milestone 3 plan §5.2), it finds a reply file's marker and a
+long line of its outputs, the pieces of a line around a reset placeholder,
+and never a short common line such as "ready".
 
 Usage: python3 scripts/test_secret_scan.py [-v]
 Standard library only; exits 0 when every case behaves as expected.

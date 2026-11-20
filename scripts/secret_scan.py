@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Look for secrets in logs and a database dump (milestone 2 plan §5.2, L721).
 
-Step 5 of scripts/e2e_core_loop.sh. Scans every file under the paths given
+Step 5 of scripts/e2e_core_loop.sh and of each test of
+scripts/e2e_handoff.sh (milestone 3 plan §5.2, step 3). Scans every file under the paths given
 for:
 
 - each secret listed in a --secrets file (one per line; blank lines and
