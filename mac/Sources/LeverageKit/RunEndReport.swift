@@ -31,13 +31,15 @@ public struct RunEndReport: Codable, Equatable, Sendable {
     public let taskID: UUID?
     /// The review the run was doing, if any.
     public let reviewID: UUID?
+    /// The job the run was doing, if any.
+    public let jobID: UUID?
     /// The provider tool's version, as its `--version` printed it.
     public let toolVersion: String?
     /// When the runner saw the run end.
     public let observedAt: Date
 
     public init(
-        kind: Kind, window: LimitWindow?, resetAt: Date?, taskID: UUID?, reviewID: UUID?,
+        kind: Kind, window: LimitWindow?, resetAt: Date?, taskID: UUID?, reviewID: UUID?, jobID: UUID? = nil,
         toolVersion: String?, observedAt: Date
     ) {
         self.version = Self.formatVersion
@@ -46,6 +48,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         self.resetAt = resetAt
         self.taskID = taskID
         self.reviewID = reviewID
+        self.jobID = nil
         self.toolVersion = toolVersion
         self.observedAt = observedAt
     }
@@ -82,6 +85,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         resetAt = try container.decode(Date?.self, forKey: .resetAt)
         taskID = try container.decode(UUID?.self, forKey: .taskID)
         reviewID = try container.decode(UUID?.self, forKey: .reviewID)
+        jobID = nil
         toolVersion = try container.decode(String?.self, forKey: .toolVersion)
         observedAt = try container.decode(Date.self, forKey: .observedAt)
         try validate()

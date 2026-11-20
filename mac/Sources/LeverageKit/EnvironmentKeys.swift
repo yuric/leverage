@@ -58,6 +58,11 @@ public enum EnvironmentKeys {
     /// by the smoke run and by nothing else (plan HM-27).
     public static let notifications = "LEVERAGE_NOTIFICATIONS"
 
+    // Read by `LeverageRunner eval` and `scripts/eval_rule.sh`, and by nothing else.
+
+    public static let eval = ""
+    public static let evalReal = ""
+
     // Read by tests.
 
     /// Switches the end-to-end tests on.
