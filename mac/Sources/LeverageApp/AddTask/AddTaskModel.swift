@@ -14,6 +14,9 @@ struct ContractDraft: Equatable, Sendable {
     var criteriaText = ""
     var priority: Priority = .normal
     var workReference = ""
+    /// The words of the independent review. A task that has one keeps its own
+    /// words when the owner changes the task (HM-49).
+    var reviewCriterionText = AddTaskCopy.reviewCriterion.text
 
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -33,7 +36,7 @@ struct ContractDraft: Equatable, Sendable {
         let typed = criteriaText.split(whereSeparator: \.isNewline)
             .compactMap { Self.nonEmpty(String($0)) }
             .map { CriterionInput(text: $0, kind: .build) }
-        return typed + [CriterionInput(text: AddTaskCopy.reviewCriterion.text, kind: .review)]
+        return typed + [CriterionInput(text: reviewCriterionText, kind: .review)]
     }
 
     /// Add task: into Backlog, with no criteria (they go with Complete contract).
@@ -41,6 +44,20 @@ struct ContractDraft: Equatable, Sendable {
         AddTaskRequest(
             title: trimmedTitle, goal: effectiveGoal, priority: priority,
             workReference: Self.nonEmpty(workReference), state: .backlog)
+    }
+
+    /// Save as an idea: Add task alone, into the Imaginarium. It keeps the
+    /// details too and leaves the criteria out, which are the contract's and
+    /// go with Complete contract after Move to Backlog (HM-48).
+    func ideaRequest() -> AddTaskRequest {
+        AddTaskRequest(
+            title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details), priority: priority,
+            workReference: Self.nonEmpty(workReference), state: .imaginarium)
+    }
+
+    /// Whether the owner typed criteria, which an idea does not keep.
+    var hasTypedCriteria: Bool {
+        criteriaText.split(whereSeparator: \.isNewline).contains { Self.nonEmpty(String($0)) != nil }
     }
 
     /// Complete contract: every field, the form's values sent again.
@@ -76,6 +93,7 @@ final class AddTaskModel {
             guard draft != oldValue else { return }
             addKey = nil
             completeKey = nil
+            ideaKey = nil
         }
     }
 
@@ -108,6 +126,7 @@ final class AddTaskModel {
     @ObservationIgnored private let onSaved: @MainActor () -> Void
     @ObservationIgnored private var addKey: IdempotencyKey?
     @ObservationIgnored private var completeKey: IdempotencyKey?
+    @ObservationIgnored private var ideaKey: IdempotencyKey?
     @ObservationIgnored private var createdTaskID: UUID?
 
     init(api: any OwnerAPI, onSaved: @escaping @MainActor () -> Void) {
@@ -130,6 +149,29 @@ final class AddTaskModel {
     /// The task was added to Backlog but its contract was not sent.
     var savedWithoutContract: Bool {
         if case .failed = state { createdTaskID != nil } else { false }
+    }
+
+    /// Whether Save as an idea is on: there is a title, nothing is being sent,
+    /// and Save task has not already added this task to Backlog.
+    var canSaveAsIdea: Bool { canSave && createdTaskID == nil }
+
+    /// Whether the criteria typed would be left out of an idea (HM-48).
+    var ideaDropsCriteria: Bool { draft.hasTypedCriteria }
+
+    /// Save as an idea: Add task alone, into the Imaginarium (HM-48).
+    func saveAsIdea() async {
+        guard canSaveAsIdea else { return }
+        state = .saving
+        do {
+            let key = ideaKey ?? IdempotencyKey()
+            ideaKey = key
+            let outcome = try await api.addTask(draft.ideaRequest(), key: key)
+            guard try outcome.completedResult() != nil else { throw LeverageClientError.invalidBody }
+            state = .saved
+            onSaved()
+        } catch {
+            state = .failed(ShellCopy.sentence(for: error))
+        }
     }
 
     /// Sends Add task and then Complete contract.

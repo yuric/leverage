@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "provider": "gemini",
+    "tool": "agy",
+    "tool_version": "1.5.12",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--print-timeout",
+      "600s",
+      "--mode",
+      "accept-edits"
+    ],
+    "shows": "an internal error, which is no limit and no sign-out",
+    "expect": "failed",
+    "marker": "LVRG-REPLY-6c0dba2fccec"
+  },
+  "exit_status": 1,
+  "stdout": "{\"conversation_id\": \"LVRG-REPLY-6c0dba2fccec\", \"status\": \"ERROR\", \"response\": \"\", \"error\": \"Internal error while running the agent.\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}}\n",
+  "stderr": ""
+}

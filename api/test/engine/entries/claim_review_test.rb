@@ -109,4 +109,18 @@ class ClaimReviewTest < ActiveSupport::TestCase
     assert_in_delta due.to_f, events.first.effective_at.to_f, 0.000_001
     assert_nil events.first.command_id
   end
+
+  # HD-4, HE-5: the review records the reviewer's first available
+  # candidate, on which its run must be, with the model of HE-5.
+  test "a reviewer whose own login is signed out claims on the next candidate once its run is there (HD-4)" do
+    grok = @scenario.credential(provider: "grok", model: "grok-model-1")
+    @scenario.sign_out_credential(@credential)
+    assert_equal "not_eligible", apply(@reviewer).refusal.code
+
+    @scenario.run(@reviewer, on: grok)
+    result = apply(@reviewer).result
+    assert_equal [ grok.id, "grok-model-1" ], result.values_at("credential_id", "model")
+    assert_equal({ "credential_id" => grok.id, "model" => "grok-model-1" }, written.sole.payload)
+    assert_equal grok.id, @review.reload.credential_id
+  end
 end

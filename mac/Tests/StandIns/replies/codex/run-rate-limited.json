@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "exec",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--json",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-C",
+      "<work folder>",
+      "-o",
+      "<answer file>"
+    ],
+    "shows": "a short rate limit that names no window",
+    "expect": "rate_limited",
+    "marker": "LVRG-REPLY-d925368e552a"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-d925368e552a\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"error\", \"message\": \"stream error: unexpected status 429 Too Many Requests: rate limit reached, retrying\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"stream error: unexpected status 429 Too Many Requests: rate limit reached, retrying\"}}\n",
+  "stderr": ""
+}

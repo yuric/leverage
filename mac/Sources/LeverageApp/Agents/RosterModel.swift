@@ -3,7 +3,9 @@ import LeverageKit
 import Observation
 
 /// One agent on the roster: its name, what it is, what it is doing, and what
-/// can be done to it (MA-2, MA-30). No strength rank is shown (MA-11).
+/// can be done to it (MA-2, MA-30). No strength rank is shown (MA-11). Its
+/// state is one of HM-45's words: Paused, Off, Not running, or Waiting for the
+/// account it cannot run on.
 struct RosterRow: Identifiable, Equatable, Sendable {
     let id: UUID
     let name: String
@@ -19,24 +21,34 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let canStop: Bool
     /// An agent that connects on its own has a landing prompt; one the app runs has none.
     let canCopyLandingPrompt: Bool
+    let canPause: Bool
+    let canResume: Bool
+    let canChange: Bool
+    /// What pausing does and does not do (HE-26), on a paused agent's row.
+    let pausedNote: String?
 
-    init(seat: Seat, loginName: String?, doing: String?, now: Date) {
+    init(seat: Seat, loginName: String?, doing: String?, waitingFor: String? = nil, now: Date) {
         id = seat.id
         name = seat.name
         let runsOnApp = seat.credentialID != nil
-        let state: AgentsCopy
-        let task = doing.map { AgentsCopy.stateBuilding.filled(["task": $0]) }
+        let working = seat.enabled && !seat.paused
+        let state: String
         if seat.paused {
-            state = .statePaused
+            state = AgentsCopy.statePaused.text
         } else if !seat.enabled {
-            state = .stateOff
+            state = AgentsCopy.stateOff.text
         } else if runsOnApp {
-            state = seat.runState == .running ? .stateRunning : .stateStopped
+            if seat.runState != .running {
+                state = doing.map { AgentsCopy.stateBuilding.filled(["task": $0]) } ?? AgentsCopy.stateNotRunning.text
+            } else if let account = waitingFor {
+                state = AgentsCopy.stateWaitingFor.filled(["account": account])
+            } else {
+                state = doing.map { AgentsCopy.stateBuilding.filled(["task": $0]) } ?? AgentsCopy.stateRunning.text
+            }
         } else {
-            state = .stateConnectsOnItsOwn
+            state = doing.map { AgentsCopy.stateBuilding.filled(["task": $0]) } ?? AgentsCopy.stateConnectsOnItsOwn.text
         }
-        let stateText = (seat.enabled && !seat.paused ? task : nil) ?? state.text
-        roleLine = AgentsCopy.roleLine.filled(["role": AgentsCopy.role(seat.role).text, "state": stateText])
+        roleLine = AgentsCopy.roleLine.filled(["role": AgentsCopy.role(seat.role).text, "state": state])
 
         let model = seat.model.flatMap { $0.isEmpty ? nil : $0 } ?? AgentsCopy.defaultModel.text
         // A tool that is given no effort runs on its own default, whatever
@@ -44,7 +56,7 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         let given = ProviderCatalog.takesEffort(seat.provider) ? seat.effort : nil
         let effort = given.flatMap { $0.isEmpty ? nil : AgentsCopy.effortNamed.filled(["effort": $0]) }
             ?? AgentsCopy.defaultEffort.text
-        let onOff = (seat.enabled && !seat.paused ? AgentsCopy.on : .off).text
+        let onOff = (seat.paused ? AgentsCopy.pausedWord : seat.enabled ? .on : .off).text
         detailLine = [ProviderNames.name(seat.provider), model, effort, onOff].joined(separator: " · ")
         loginLine = runsOnApp ? loginName.map { AgentsCopy.runsOn.filled(["login": $0]) } : nil
 
@@ -58,13 +70,17 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         if runsOnApp {
             runChip = seat.runState == .running
                 ? CardChip(text: AgentsCopy.chipRunning.text, tone: .done)
-                : CardChip(text: AgentsCopy.chipStopped.text, tone: .plain)
+                : CardChip(text: AgentsCopy.chipNotRunning.text, tone: .plain)
         } else {
             runChip = nil
         }
-        canStart = runsOnApp && seat.enabled && !seat.paused && seat.runState != .running
+        canStart = runsOnApp && working && seat.runState != .running
         canStop = runsOnApp && seat.runState == .running
         canCopyLandingPrompt = !runsOnApp
+        canPause = working
+        canResume = seat.paused
+        canChange = true
+        pausedNote = seat.paused ? AgentsCopy.pausedNote.text : nil
     }
 }
 
@@ -94,7 +110,7 @@ final class RosterModel {
     }
 
     private enum Action: Hashable {
-        case start(UUID), stop(UUID), remove(UUID)
+        case start(UUID), stop(UUID), remove(UUID), pause(UUID), resume(UUID)
     }
 
     private(set) var state: State = .loading
@@ -104,6 +120,8 @@ final class RosterModel {
     private(set) var copiedPrompt: UUID?
     private(set) var busy: Set<UUID> = []
     private(set) var working: [UUID: AgentsCopy] = [:]
+    /// The Change sheet, while the owner has one open.
+    private(set) var changing: ChangeAgentModel?
     private var failures: [UUID: String] = [:]
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -111,6 +129,8 @@ final class RosterModel {
     @ObservationIgnored private let copy: @MainActor (String) -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timing: FollowTiming
+    @ObservationIgnored private var seats: [UUID: Seat] = [:]
+    @ObservationIgnored private var logins: [ConnectAgentModel.LoginChoice] = []
     @ObservationIgnored private var keys: [Action: IdempotencyKey] = [:]
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
@@ -143,11 +163,13 @@ final class RosterModel {
             let seats = try await api.seats()
             var position = seats.asOfSeq
             var loginNames: [UUID: String] = [:]
+            var accounts: [Credential] = []
             var doing: [UUID: String] = [:]
             do {
                 let list = try await api.credentials()
                 loginNames = Dictionary(
                     list.credentials.map { ($0.credential.id, $0.credential.name) }, uniquingKeysWith: { first, _ in first })
+                accounts = list.credentials.map(\.credential)
                 position = min(position, list.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
                 throw error
@@ -167,9 +189,16 @@ final class RosterModel {
             } catch {}
             guard mine == generation else { return }
             let at = now()
-            rows = seats.seats.filter { $0.removedAt == nil }.map {
-                RosterRow(
-                    seat: $0, loginName: $0.credentialID.flatMap { loginNames[$0] }, doing: doing[$0.id], now: at)
+            let present = seats.seats.filter { $0.removedAt == nil }
+            self.seats = Dictionary(present.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            logins = accounts.filter { $0.kind == .login }.sorted { $0.position < $1.position }
+                .map(ConnectAgentModel.LoginChoice.init)
+            rows = present.map { seat in
+                // The row says it only for an agent that is on and running.
+                let waiting = AgentWait.account(for: seat, in: accounts, at: at).map(ProviderNames.account)
+                return RosterRow(
+                    seat: seat, loginName: seat.credentialID.flatMap { loginNames[$0] }, doing: doing[seat.id],
+                    waitingFor: waiting, now: at)
             }
             state = .loaded
             noteRead(position)
@@ -205,6 +234,34 @@ final class RosterModel {
         }
     }
 
+    // MARK: Pause, Resume and Change
+
+    /// Pause: the agent takes no new work. It stops no run (HE-26), so the row
+    /// says what that means.
+    func pause(_ id: UUID) async {
+        guard rows.first(where: { $0.id == id })?.canPause == true else { return }
+        await run(.pause(id), working: .pausing)
+    }
+
+    func resume(_ id: UUID) async {
+        guard rows.first(where: { $0.id == id })?.canResume == true else { return }
+        await run(.resume(id), working: .resuming)
+    }
+
+    /// Change: opens the sheet with this agent's values and the logins it can
+    /// move to. A saved change closes it and reads the roster again.
+    func beginChange(_ id: UUID) {
+        guard let seat = seats[id], rows.contains(where: { $0.id == id }) else { return }
+        changing = ChangeAgentModel(
+            api: api, seat: seat, logins: logins,
+            onChanged: { [weak self] in
+                self?.changing = nil
+                await self?.load()
+            })
+    }
+
+    func cancelChange() { changing = nil }
+
     // MARK: commands
 
     func start(_ id: UUID) async {
@@ -235,7 +292,7 @@ final class RosterModel {
     private func run(_ action: Action, working label: AgentsCopy?) async {
         let id: UUID
         switch action {
-        case .start(let seat), .stop(let seat), .remove(let seat): id = seat
+        case .start(let seat), .stop(let seat), .remove(let seat), .pause(let seat), .resume(let seat): id = seat
         }
         guard !busy.contains(id) else { return }
         busy.insert(id)
@@ -253,6 +310,8 @@ final class RosterModel {
             case .start: outcome = try await api.startSeat(seatID: id, key: key)
             case .stop: outcome = try await api.stopSeat(seatID: id, key: key)
             case .remove: outcome = try await api.removeSeat(seatID: id, key: key)
+            case .pause: outcome = try await api.pauseSeat(seatID: id, key: key)
+            case .resume: outcome = try await api.resumeSeat(seatID: id, key: key)
             }
             _ = try outcome.completedResult()
             keys[action] = nil

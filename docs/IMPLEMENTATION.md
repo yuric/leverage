@@ -54,15 +54,15 @@ ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-19 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton and the contract (milestone 1) |
-| **Next** | The Core loop milestone (milestone 2): built on `feat/core-loop` with every check passing on the owner's Mac, in review as pull request [#13](https://github.com/yuric/leverage/pull/13) |
+| **As of** | 2026-11-20 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1) and the Core loop (milestone 2) |
+| **Next** | The Handoff milestone (milestone 3): built on `feat/handoff` with every check passing on the owner's Mac; its pull request is [#14](https://github.com/yuric/leverage/pull/14). Once merged it is not called done until the owner has set the recovery time ceiling |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 2 core loop | `feat/core-loop` | [#13](https://github.com/yuric/leverage/pull/13) | In review |
+| Milestone 3 handoff | `feat/handoff` | [#14](https://github.com/yuric/leverage/pull/14) | In review |
 
 ## Milestones
 
@@ -75,8 +75,8 @@ the PRD's milestone list. How the build is run locally is in
 | --- | --- | --- | --- | --- |
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
-| 2 | Core loop | In review | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
-| 3 | Handoff | Not started | | |
+| 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
+| 3 | Handoff | In review | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Once merged it is not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Not started | | |
 | 5 | Questions and approvals | Not started | | |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
@@ -314,6 +314,314 @@ Where the build differs from the plan, or settles what it left open:
 - **Each package committed its own work** by explicit path, the red tests
   first; the plan had the managing agent commit.
 
+### The Handoff milestone
+
+The Handoff milestone's choices where the PRD leaves a gap were made in the
+milestone's plan under the IDs below, which the code, the tests and the
+contract cite ("milestone 3 plan HD-4"). Each line is the choice as built.
+The plan's `[owner-later]` choices are in question 12, not here.
+
+- **Scope.** HS-1: what the PRD's Handoff paragraph lists, the seven owner
+  commands Q-2 moved in, the backup of Q-14, eleven operations newly
+  served, and one workspace timer, `seat_run_placement`; no usage reader,
+  no `report_reading`, nothing of a job. HS-3: no row from Finishing is
+  served: the two reports, Hold and Resume answer `invalid_state` for a
+  task in Finishing, and the state-table tests prove it from a row
+  `Scenario` inserts. HS-4: of milestone 2 only SC-4, EN-8, CL-22 for a
+  run with a credential, IN-30 for a run ended by its account and MA-29's
+  choices are taken back.
+- **The engine.** HE-3: `credentials.limited_since` says a limit was
+  reported and `limited_until` when it ends; limited means `limited_since`
+  set and `limited_until` empty or later than now; a reset that passes
+  writes nothing. HE-8: a report answers `completed` with no result.
+  HE-10: open credential holds are looked at again when a login is
+  verified or added, when an agent changes login, and by the timer. HE-12:
+  a `credential_signed_out` hold and its item name the first signed-out
+  candidate in the seat's order. HE-13: with no reset time anywhere, the
+  `credential_limit` hold names the credential that stopped. HE-14: a
+  builder the app runs counts as free for a fresh lease only if one of its
+  candidates is available. HE-16: a Ready task no agent can start for want
+  of an account opens no item; its card and its page say which account.
+  HE-17: a recovery time starts at `credential.limit_reached`, or at a
+  `credential.signed_out` with a seat, and ends at the
+  `credential.switched` of the same command (0 seconds) or else at the
+  continuing seat's first event of that work; one that never ends is open,
+  or not recovered when the task is done or cancelled first. HE-18:
+  `leverage:recovery_times` prints them against `CEILING_SECONDS`, else
+  the workspace's ceiling, else nothing. HE-21: while a credential hold is
+  open no run exists. HE-22: a limit report changes only the work it
+  names, and keeps the later of two reset times. HE-23: a credential
+  hold's due time is the task's last effective time when a candidate is
+  available, else the earliest reset among its signed-in candidates.
+  HE-24: Add task into the Imaginarium is served again; Hold and Resume
+  from every state but Finishing. HE-25: an edited contract keeps a
+  criterion by position and kind, resets one whose text changed, and from
+  Ready, Working or In review ends the leases and returns the task to
+  Backlog; an owner hold stays open. HE-27: Change an agent applies at
+  once to the next run; turning it off releases a Working task with
+  `seat_disabled`; turning it on starts nothing. HE-28: where the mockup
+  and the PRD differ the PRD is built. HE-29: `inbox.resolved.choice` is
+  set only when the closing command is one of the item's choices. HE-32: a
+  limit is reported only with a named window; a reset time not after the
+  observed time is stored as none. HE-33: a report naming a job is `404`.
+  HE-35: a `wait_ready` step's cause is `credential_limit` when builders
+  would be eligible but for their accounts. HE-36: Sign in again is for an
+  added login only and queues one `open_sign_in` request. HE-37, HE-40:
+  `list_inbox` returns every open item; one settled between two looks is
+  announced from its event. HE-38: the providers that built a task can be
+  read back from `task.claimed`, `review.started` and
+  `credential.switched` (`provider_record_test.rb`). HE-39: positions are
+  compared, never counted.
+- **Runs and detection.** HD-1 to HD-3, HD-6, HD-9, HD-10 are
+  [ADR 0008](adr/0008-how-a-run-moves-to-another-account.md); HD-7, HD-8 and
+  HE-32 are [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md).
+  HD-11: the stand-in tools gain directives that answer the n-th work
+  prompt with a named reply file, with its reset time set to now plus some
+  seconds, or sign an account out before it; they count prompts and read
+  no clock.
+- **Mac app.** HM-17: Verify and the add checks keep milestone 2's rules.
+  HM-19: a run with no credential detects nothing. HM-21: Needs you shows
+  one row per item kind whose choices all have a route ("Account signed
+  out", "Limit with no reset time", "Past the round limit"); another kind is
+  one plain line. HM-24: the three items' words. HM-27: the real notifier
+  only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`. HM-28:
+  permission is asked once after sign-in, and a line says when
+  notifications are off. HM-30, HM-31: a notification carries the item's
+  heading and sentence, never an email, shows while the app is in front,
+  and a click opens Needs you. HM-33: the eight sentences are kept as the
+  PRD writes them. HM-34 to HM-37: the Handoff tab numbers the order, gives
+  each row's state and whom it hands off to, and offers no reordering.
+  HM-40: a Ready task whose `wait_ready` names `credential_limit` names
+  the account that resets first. HM-42: a reset time is the short time
+  today, the weekday and time within a week, else the date. HM-43: each
+  interruption, handoff, wait and continuation is one sentence in the
+  task's log, with "back at work" when it ended. HM-45: Ideas, Move to
+  Backlog, Pause this task, Continue this task, Paused, Off, Not running,
+  "Waiting for" an account. HM-46: "Allow one more try" is not renamed.
+  HM-47: Credentials gains a login's limit sentence and Sign in again,
+  nothing else. HM-48: Save as an idea. HM-49: Change the task opens the
+  form filled in, with Save and "Save and send to agents". HM-51: Change
+  agent offers name, model, effort, login and on or off. HM-53: the
+  end-to-end runs use near reset times; a lease ending first is proven in
+  the server's tests.
+- **Backup.** HB-1 and HB-3 to HB-6 are
+  [ADR 0010](adr/0010-daily-backup-and-restore.md). HB-7: after a restore
+  the owner verifies each account. HB-8: a dump holds personal data and no
+  provider secret; folder 0700, files 0600.
+- **Tests.** HT-1: five golden traces, 11 to 15, for a workspace with no
+  rules, reviewed line by line by an agent that did not write them. HT-2:
+  test 3 per group, and over the whole table of 48 commands. HT-3: test
+  2's walks gain the twelve new commands and a credential whose reset the
+  walk moves. HT-4: tests 9 and 10 are `DetectorFixtureTests` and the
+  end-to-end run. HT-5: `scripts/e2e_handoff.sh`, one compose project per
+  test. HT-6: the new entries and routes stayed out of milestone 2's walks
+  until they were built; nothing of that remains.
+
+Where the build differs from the plan, or settles what it left open:
+
+- **`seats.run_credential_id`**, not the plan's `running_on_credential_id`,
+  because a read's field is its column's name.
+- **A fourth answer from `SignInStatus`, "could not tell".** A status
+  command that does not start, runs past its 30 seconds, fails without its
+  signed-out reply or prints something that is neither reply no longer
+  answers "signed out": the runner then treats the run as milestone 2's
+  failure and sends no sign-out report, and the helper's checks still read
+  it as not signed in. The plan allowed three answers.
+- **Needs you's Change the task opens the contract editor** on the task
+  page, not the page alone.
+- **The inbox watcher reads every open item and filters by its cursor**,
+  rather than reading after the cursor, so the count and the announcements
+  come from one answer.
+- **Two labels for one command.** The Needs you item's button is "Let it
+  try once more" (HM-24), the task page's stays "Allow one more try". A
+  notification sent from an event alone says "Sent back too many times",
+  because "round" is a word the app may not show.
+- **Complete contract keeps unchanged criteria** after an edit, by the same
+  comparison Edit contract uses; milestone 2 removed and added them all.
+- **Submit reuses the round's open review** after an edit from In review,
+  which keeps the round; before, it failed on the round's unique review.
+- **The step tracker reads a task's criteria as of each event** from the
+  log, because an edit removes criteria and the replay must rebuild the
+  same steps.
+- **A sign-out may open "Account signed out" on another task's hold**
+  (HE-11), and one command may apply a task's credential timer and then
+  its lease timer; the log audit allows both. The random walks found each.
+- **No typed result for `verify_credential` and `sign_in_again`.** Seven
+  operations answer `helper_request_id` in an untyped result, milestone
+  2's convention; typing two of them is a contract change no reader needs.
+- **The task read names the account a task waits for.** `TaskPage`
+  carries the board card's `waiting_for_credential_id` and
+  `waiting_until`, computed by the same call (`Board.waiting`), so the
+  task page says the card's sentence for a Ready task or a review waiting
+  with no hold, as HE-15 asks of both.
+- **`pg_dump` keeps owners in a custom-format archive** even with
+  `--no-owner`; the restore's `--no-owner` drops them, and the archive
+  holds no `GRANT` or `REVOKE`.
+- **The restore test checks one workspace** of the dump, because the test
+  database holds other tests' workspaces; `bin/restore` checks all.
+- **Add credential keeps a strength rank the request sends**, and sets 1
+  only when it sends none.
+- **A Codex login signed out exits 1** in codex-cli 0.169.0, not 101 as an
+  older run recorded; the stand-in plays the recorded reply.
+- **The helper adds a run to its registry before watching it**, which
+  fixes a milestone-2 race when a run ends at once.
+- **`db:grants` runs one at a time across the cluster**, under an advisory
+  lock taken in the `postgres` database. Milestone 2's lock was taken in
+  each run's own database, so two runs on two databases (restores in
+  parallel test workers, or the server's start beside a test run) both
+  set `leverage_api`'s password and the second failed with "tuple
+  concurrently updated"; two runs on one database collided on its grants.
+- **The traces' setup** gives signed-out logins a verification time and
+  seats no run credential; the trace runner and eligibility fill both in.
+- **Each package committed its own work** by explicit path, the red tests
+  first; one package worked in a worktree of its own.
+
+What the adversarial review of the milestone found, and what changed (one
+failing test first for each):
+
+- **A second report on a held task is refused.** A limit or sign-out
+  report on a task that already waits on a credential hold is
+  `invalid_state`: no run is on it (HE-21), so the report is stale, and it
+  used to open a second hold and a second item.
+- **A signed-out login the task passes over is no reason to hold it.** A
+  login rule 3 passes over for the task (its minimum strength rank) makes
+  no hold `credential_signed_out`, gets no "Account signed out" item, and
+  does not stop `wait_ready`'s `credential_limit` cause; a hold left with
+  no item and no due time after Sign in again gets the item for what
+  still blocks it.
+- **A lease restarts from the hold's effective close**, the due time a
+  timer closes it at, not the sweep's later time (PRD L118).
+- **A reset time further off than its window can last is none**: more than
+  6 hours after the report for the five-hour window, 8 days for the weekly
+  and per-model windows, 32 days for spend or no window. Only a time after
+  "resets", "reset at" or "try again at" on the same line of a reply is a
+  reset time, never a log line's own timestamp, nor a time after a bare
+  "reset" or a "try again" with no "at".
+- **A sign-out is reported only on the tool's own word.** A status command
+  that fails, crashes or prints neither its signed-in nor its signed-out
+  reply is "could not tell". Codex's status is read by its recorded "Not
+  logged in", not by its exit code. Grok's standard output, the agent's
+  answer, is never read for a limit or a sign-out, and no detector reads a
+  run that a signal killed.
+- **No dump of a database with no workspace.** After the volume is lost
+  the backup does not dump the new, empty database; it says so once and
+  looks again every 30 seconds, so the first dump follows the owner's
+  sign-up. The smoke run signs up a made-up owner for it, and the drill
+  starts every service on an emptied cluster and checks that no dump was
+  made.
+- **A restore goes through a staging database**, renamed over the old one
+  only after the replay test passes there; `bin/restore` also reads the
+  dump's list first. A failed step of any kind, or a database that cannot
+  be dropped, removes the staging database and leaves the old one as it
+  was.
+- **The backup service has no login-role password or URL**, and the
+  scripts' backup folders are sticky (mode 1777).
+- **The reply-file check reads every decoded string** of a file and of the
+  JSON its outputs hold, and any field named for an email, plan,
+  organisation, account or tier; Claude's recorded sign-out reply has its
+  `service_tier` scrubbed.
+- **The inbox cursor is checked against the log** when the app starts, and
+  started again from 0 when it is of another log.
+- **Smaller ones:** Sign in again for Gemini says to sign in to
+  Antigravity, not to a window; editing a Ready task, or an In review task
+  no reviewer holds, and its log line say nothing of an agent stopping; a
+  signed-out account's card never shows a reset time; a released review's
+  log line says it waits for a reviewer with an available account;
+  `report_request_progress` takes Sign in again's checks; a seat change
+  that changes nothing writes no event; DEPLOY.md gives a dump on demand.
+
+A second review, of those fixes, found five more (all minor), each fixed
+with a test that failed first or with its sentence made true: the
+end-to-end wait test fails, rather than passing over the card's check,
+when the hold closed before the board was read, and its reset is 30
+seconds ahead so that the board is read while the hold is open; a restore
+drops its staging database on a failed step of any kind and when the
+database it would replace cannot be dropped; a reset time is read only
+after "resets", "reset at" or "try again at"; and ADR 0010, the health
+read's comment and the Grok row of the detection table say what the code
+and the reply file say.
+
+After that review, a crashed test run left a fake helper running, which
+led to three fixes in the app's helper supervisor, each with a test that
+failed first. A stop waits for every helper an earlier stop asked to stop,
+so a quit that follows a Sign out does not leave first. A start while a
+stop still waits for the helper waits for it too and then starts a new
+one, so Sign out then Sign in at once leaves a helper running. The state
+reads stopped from the moment a stop begins. The fake helper ends with
+the test process that started it. A third review then found the
+following, each fixed with a test that failed first:
+
+- **A stop during a waiting start starts nothing.** No test covered it
+  before; a start whose wait a stop overtakes returns stopped and issues
+  no token.
+- **A helper whose app was gone before it looked stops at once.** The
+  helper watched the app only when its parent was not launchd, so an app
+  that died between starting the helper and the helper's first lines left
+  a helper running with its token. It now stops as when the app goes
+  later, as a runner does when its helper was gone first.
+- **The contract README lists the task page's two waiting fields** among
+  the milestone's additions.
+
+## What the Handoff milestone proves, and how far
+
+- **Every interruption is played by stand-in tools.** No agent signed in,
+  signed an account out or spent quota to reach a limit, and a limit
+  cannot be caused on request. **No interruption has been shown on a real
+  provider.** `scripts/e2e_handoff.sh` runs six tests, each in a compose
+  project of its own with the real API, sweep, backup, helper and runner:
+  a limit after work is saved, handed to another login of the same
+  provider and of another provider; a limit that waits for its reset; a
+  login found signed out, handed off and held until Sign in again; and one
+  account at its limit while the next is signed out. Each reaches Done
+  with the criterion passed before the interruption kept, one claim and
+  the same builder; then the replay and the audit pass, each recovery time
+  is within the working bar, and the secret scan finds nothing. It passed
+  three times in a row on the owner's Mac, last after the second review's
+  fixes.
+- **The detection rules for a real limit are unproven** until a real limit
+  reply is captured. No tool's limit reply is documented or observed, so
+  every limit reply the detectors are written to is made, with an invented
+  shape. On a real tool a real limit will most likely not match them: the
+  run then fails as in milestone 2, with no handoff, and after three
+  failures the agent stops. PRD test 9 and the release line on recorded
+  limit replies are not met as written.
+- **The recorded sign-outs are of a tool that never held a login**, for
+  Claude and Codex. Nobody has seen the reply of a login that expired or
+  was revoked during a run; the status question is the guard for it.
+- **The recovery time is checked against a working bar, not the
+  ceiling.** The owner has not set the ceiling, so 900 seconds was given to
+  the check of the scripted runs and to nothing else
+  ([Measurements](#measurements)).
+- **The notification is proven up to its protocol.** The inbox watcher is
+  tested with a fake notifier; no test touches macOS's notification
+  center, and the smoke run turns notifications off.
+- **On Linux,** the `e2e` job runs the handoff run and the restore drill;
+  it has not run yet. One test passed in an aarch64 Linux container on the
+  owner's Mac. That the image's user, uid 1000, can write the bind-mounted
+  backup folder on a Linux host, and that the detectors build on x86_64, is
+  for that job to show.
+- **Until the Rule checks milestone** a reviewer's handoff may land on an
+  account of a provider that built the task (HE-41), and a handoff that
+  ends on a Codex or Gemini login records no model (HE-5).
+
+Which reply each detector is written to, per tool. "Recorded" is a reply
+captured on 2026-11-19 from the tool with no login (a new, empty settings
+folder for Claude and Codex; this Mac, signed out, for Grok); "made" is
+written by hand, "invented" where its shape is a guess and "from observed"
+where it follows text seen elsewhere. The files are in
+`mac/Tests/StandIns/replies/`.
+
+| Tool (version) | Limit | Short rate limit | Sign-out, in a run | Sign-out, by status |
+| --- | --- | --- | --- | --- |
+| Claude (`claude` 2.1.325) | Made, invented: five-hour with a reset time, weekly without | Made, invented | Recorded | Recorded (`claude auth status`) |
+| Codex (`codex-cli` 0.169.0) | Made, invented: five-hour in a structured field, weekly in words | Made, invented | Recorded | Recorded (`codex login status`) |
+| Gemini (`agy` 1.5.12) | Made, invented: per-model | Made, invented | Made from observed (the shape of a signed-in reply) | None: no status command |
+| Grok (`grok` 1.0.77) | Made, invented: spend, on standard error | Made, invented | Made from observed: the words from `grok models`, which printed them on standard output; the stream (standard error), the exit status and the second line are invented, so on the real tool a sign-out is expected to show only through `grok models` (standard output, the agent's answer, is never read) | Recorded (`grok models`) |
+
+Unverified for all four: a real limit reply, and the reply of a login that
+expired or was revoked during a run. The contract's `readers.json` keeps
+every login reader's captures at `none`.
+
 ## What the Core loop proves, and how far
 
 - **The whole loop runs with stand-in tools.** `scripts/e2e_core_loop.sh`
@@ -331,7 +639,8 @@ Where the build differs from the plan, or settles what it left open:
   but both tests stopped at once because they looked for their programs
   in an `.xctest` bundle, which SwiftPM does not make on Linux. The fix
   passed the whole end-to-end lane in an aarch64 Linux container on the
-  owner's Mac; it has not yet been seen passing in CI, which runs x86_64.
+  owner's Mac, and then in CI on `main` after the merge (run 44649146670,
+  all four jobs passed).
 - **The Mac tests run one at a time on the macOS runner.** On GitHub's
   three-core macOS runner (run 44634551151) the whole package's tests at
   once took over two minutes and about a dozen failed: the app tests'
@@ -340,8 +649,8 @@ Where the build differs from the plan, or settles what it left open:
   the owner's Mac under CPU load. CI now runs `swift test --no-parallel`
   with `LEVERAGE_TEST_PATIENCE=4`, which lengthens only the waits for what
   must happen and the ceilings for a stand-in to answer; this passed five
-  times in a row on the loaded Mac. It has not yet been seen passing on
-  the runner.
+  times in a row on the loaded Mac, and on the runner in run 44649146670
+  on `main`.
 - **The failed review is shown with stand-in tools only.** The task in the
   end-to-end run goes through one failed review because the stand-in
   reviewer is scripted to fail round 0. Nothing can make a real provider
@@ -354,9 +663,13 @@ Where the build differs from the plan, or settles what it left open:
   runner's tool driver, with the tool's own sign-in, and no containers,
   seats or task; it proves the driver's flags only) and
   `scripts/real_gemini_through_app.sh` (one Gemini login through Add
-  credential, a task to Done). The managing agent's runs of them are
-  recorded in the pull request description; see the pull request. Neither
-  is the product's path, and neither marks a PRD line as met. The owner's
+  credential, a task to Done). The managing agent ran each once on
+  2026-11-19, on the tools already signed in on the owner's Mac (pull
+  request 13): Claude (2.1.325), Codex (0.169.0) and Gemini (`agy` 1.5.12)
+  passed the developer check, Grok (1.0.77) is installed and not signed in,
+  so its flags are unproven, and the Gemini check through the app took a
+  task to Done. Neither is the product's path, and neither marks a PRD line
+  as met. The owner's
   first run is the first real one through the app (see
   [Waiting for the owner](#waiting-for-the-owner)).
 - **The app bundle starts its server.** `scripts/smoke_app.sh` opens
@@ -429,6 +742,37 @@ percentiles.
   30 ms out of 3582. Whether that is garbage collection, a sweep pass or
   the Mac's other load at the time was not traced.
 
+### Recovery times in the Handoff milestone's runs
+
+How long each interrupted run of `scripts/e2e_handoff.sh` took to get back
+to work, in seconds, as `bin/rails leverage:recovery_times` reads it from
+each test's log (plan HE-17). Runs 1 to 3 were in a row at commit f3e4330,
+after the second review's fixes, on 2026-11-20 between 06:34 and 06:48
+UTC. "Handoff" means another account took over in
+the command that recorded the interruption; "the seat's next event" means
+the work waited and the time ends at the continuing agent's first event.
+
+| Test | Form | Ended by | Run 1 | Run 2 | Run 3 |
+| --- | --- | --- | ---: | ---: | ---: |
+| `LimitHandoffEndToEndTests.testSameProvider` | A limit, another login of the same provider | Handoff | 0 | 0 | 0 |
+| `LimitHandoffEndToEndTests.testOtherProvider` | A limit, a login of another provider | Handoff | 0 | 0 | 0 |
+| `LimitWaitEndToEndTests.testWaitsForTheReset` | A limit with no other login, reset 30 seconds ahead | The seat's next event | 37 | 36 | 36 |
+| `SignedOutEndToEndTests.testHandsOff` | A login found signed out, another login takes over | Handoff | 0 | 0 | 0 |
+| `SignedOutEndToEndTests.testHeldUntilSignIn` | A login found signed out, no other; Sign in again | The seat's next event | 4 | 4 | 4 |
+| `LimitThenSignedOutEndToEndTests.testHeldUntilTheNextSignsIn` | A limit while the next login is signed out; Sign in again | The seat's next event | 4 | 4 | 4 |
+
+- **Against what.** The recovery time ceiling is not set: it is the
+  owner's to set before the milestone is called done
+  ([Waiting for the owner](#waiting-for-the-owner)). Each interval was
+  checked against a working bar of 900 seconds, which this run chose (the
+  helper's 10-minute wait for a sign-in plus five minutes) and gave to
+  that check alone; every one is within it, and none was open.
+- **What they say.** The runs are scripted: a stand-in signs in at once
+  and a reset is 30 seconds ahead, so these are seconds where a real wait
+  for a reset or for the owner is minutes or hours. They prove that the
+  time is recorded and read from the log, not how long the owner will
+  wait.
+
 ## Installed for the build
 
 Nothing was installed on the owner's Mac. Every Ruby command ran in a
@@ -447,9 +791,10 @@ build 17F113, Swift 6.3.3).
 | `hana` gem | 1.3.7 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (JSON Pointer) |
 | `simpleidn` gem | 0.3.0 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (internationalized host names) |
 | `bcrypt` gem | 3.1.22 (MIT) | RubyGems, inside the API image | The owner's password (`has_secure_password`), from the Core loop milestone |
-| `leverage-api` images | `m2`, `m2-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestone's tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
+| `leverage-api` images | `m2`, `m2-rc`, `m3`, `m3-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestones' tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
+| `swift` image | `6.4.2-noble` (by digest, the one milestone 2 recorded) | Docker Hub official image | Building and running the `e2e` lane on Linux on the Mac; no file refers to it |
 
-The Core loop milestone installed nothing on the Mac. `lychee`, the link
+The Core loop and Handoff milestones installed nothing on the Mac. `lychee`, the link
 check, is not installed on the Mac, so it runs only in CI.
 
 The direct gems, their licenses and why each is needed are listed in the
@@ -590,7 +935,9 @@ skeleton's pull request description, as rule AR-004 asks.
     chooses them, they reach the server in that request. No owner command
     changes them later; the PRD's Credentials commands name none.
     *Proposed:* answer it with that open decision, and add a "Change
-    credential" owner command if the owner chooses them.
+    credential" owner command if the owner chooses them. The Handoff
+    milestone took the open decision's first option as a working
+    assumption (R-4, question 12): the app fills them in at Add.
 
 11. **The choices made for the owner in the Core loop.** The owner's
     standing instruction for this run is to decide, record and continue,
@@ -738,9 +1085,8 @@ skeleton's pull request description, as rule AR-004 asks.
       - **PK-9**: the whole loop runs in CI on Linux (the `e2e` job); if it
         cannot be built there in two attempts, the job is removed and the
         script stays a local step. Its first run compiled everything on
-        Linux and then failed to find the test programs; the fix is not yet
-        seen passing in CI (above). Alternative: a fake server on the Mac
-        side.
+        Linux and then failed to find the test programs; the fix passed in
+        CI on `main` (above). Alternative: a fake server on the Mac side.
       - **PK-10**: the first run on real logins is the owner's (below).
         Alternative: none; no agent can sign in.
     - **Other choices made while building:**
@@ -799,9 +1145,179 @@ skeleton's pull request description, as rule AR-004 asks.
         two of which use the engine word "lease". Alternative: reword the
         contract's summaries and the PRD's agent-call table.
     - **Also for the owner to know:** the API still has no security scanner
-      (question 6); nothing backs up the log yet (Q-14); Grok Build cannot
+      (question 6); nothing backed up the log until the Handoff milestone
+      (Q-14); Grok Build cannot
       be installed from the pop-up, and whether each tool's sign-in needs a
       terminal is unknown until the owner's first run.
+
+12. **The choices made for the owner in the Handoff milestone.** The
+    owner's standing instruction for this run is to decide, record and
+    continue, so each was taken and the milestone was built on it. Each
+    line says what was chosen and the alternative. The plan's IDs are
+    listed under [The Handoff milestone](#the-handoff-milestone).
+    - **Three of the PRD's open decisions, as working assumptions:**
+      - **HE-2** (R-2): a limit with no reset time ends when a Verify of
+        that account passes; the owner runs Verify. Alternative: a minimal
+        usage read for Claude and Codex, or the app running Verify itself
+        every 10 minutes.
+      - **HE-4** (R-3): after a limit on a lower account, once the seat's
+        own account has reset the work goes back to it at once; when that
+        is not available either the task is held, and an available account
+        between the two is taken by the timer at its next look.
+        Alternatives: hold and resume on the seat's own account; take any
+        available account at the report.
+      - **HE-5** (R-4): Add credential sets the model the tool names as its
+        default (Claude and Grok; none for Codex and Gemini), an empty
+        effort and strength rank 1. Alternatives: leave every model empty,
+        which records no model for any handoff to another provider; ask for
+        them in Add credential.
+      - The fourth, the recovery time ceiling, is not answered: it is the
+        owner's, under [Waiting for the owner](#waiting-for-the-owner).
+    - **The plan's other choices for the owner:**
+      - **HE-1**: the ceiling stays empty, and the scripted runs were
+        checked against a working bar of 900 seconds, which nothing else
+        reads. Alternatives: seed 900 into the setting; serve the settings
+        command now for this one field.
+      - **HS-2**: every interruption is played with stand-in tools; the
+        forms on real logins wait for the owner. Alternative: none an agent
+        can carry out.
+      - **HE-9**: a limit or sign-out report about work the seat no longer
+        holds is refused and records nothing; the next claim meets the
+        limit again. Alternative: a new row that records the credential
+        event with no task.
+      - **HE-11**: a limit hold keeps its reason when its account is later
+        found signed out; when that leaves it with no due time, "Account
+        signed out" opens beside it. Alternative: close it and open a
+        sign-out hold, which moves the task to Blocked.
+      - **HE-15**: a review no reviewer can take for want of an account
+        waits with no item; the card and the task page say which account.
+        Alternative: open "Account signed out" with no hold, a contract
+        change.
+      - **HE-25 (ii)**: an edited contract keeps the review count, so the
+        next failed review at the limit opens the item again. Alternative:
+        an edit gives one more try.
+      - **HE-26**: pausing an agent stops no run; a task it holds waits
+        and goes back to waiting for any agent when its time on it runs
+        out. Alternative: the helper stops the run.
+      - **HE-41**: until the Rule checks milestone a reviewer's handoff may
+        land on an account of a provider that built the task. Alternative:
+        keep a review's handoff off every such provider now, with no rule to
+        turn it off.
+      - **HD-4**: an agent claims only on its first available account, and
+        the sweep moves an idle agent's run there within 15 seconds.
+        Alternative: claim anywhere and move the run afterwards.
+      - **HD-5**: the runner detects and the helper reports. Alternative:
+        the helper runs the tool itself.
+      - **HD-7**: a limit is a refused run naming one of the four windows;
+        a rate limit with no window is retried after 5, 15 and 45 seconds.
+        A real limit will most likely not match, and then stops the agent
+        as in milestone 2. Alternative: read any refusal that mentions a
+        limit as one, with a guessed reset time.
+      - **HD-8**: every limit reply is made; sign-outs are recorded from a
+        tool with no login where that is safe; `grok -p` and `agy` were not
+        run signed out. Alternative: none that keeps the owner's accounts
+        untouched.
+      - **HM-25**: Sign in again for Gemini and Grok is milestone 2's
+        sign-in path, as unverified as it is there. Alternative: none until
+        a real sign-in is seen.
+      - **HM-29**: each Needs you item is announced once, also one that
+        opened while the app was closed; one that opened and was settled
+        while the app was closed is not announced. Alternative: a cursor in
+        memory, silent about everything while the app was closed.
+      - **HM-32**: the Handoff tab shows the PRD's eight sentences, not the
+        mockup's five, and no reordering. Alternative: the mockup's words.
+      - **HM-55**: a handoff between two logins of one provider is
+        automatic by the owner's decision; the provider-terms record says
+        Anthropic's policy and Google's documents do not clearly allow it.
+        Alternative: none to choose; listed so the owner's own run of it is
+        made knowingly.
+      - **HB-2**: the dumps go to a folder on the Mac outside Docker, and
+        no copy leaves the Mac. Alternative: a second Docker volume, lost
+        with the first.
+    - **PRD changes R-1 to R-10**, written into the PRD in this milestone:
+      - **R-1**: the Terms definition and the questions table say recovery
+        time as the Handoff paragraph does: to the handoff when another
+        account takes over at once, else to the continuing seat's first
+        event. Alternative: leave the three statements differing.
+      - **R-2**: until the usage readers arrive, a passed Verify counts as
+        the reading that shows capacity (HE-2). Alternative: as HE-2.
+      - **R-3**: the go-back rule of HE-4 in step 2 and in the open
+        decision's row. Alternative: as HE-4.
+      - **R-4**: Add credential's defaults (HE-5). Alternative: as HE-5.
+      - **R-5**: the runner reads the tool's output and the helper sends
+        the report. Alternative: keep "the helper detects", which makes the
+        helper run the tool.
+      - **R-6**: the server asks for the new run through the helper
+        interface, a run stays on one account, and the sweep moves an idle
+        agent. Alternative: as HD-4.
+      - **R-7**: five more golden traces with no rules. Alternative:
+        replace five of the existing ones.
+      - **R-8**: the daily backup, 14 kept, and a tested restore; the
+        health line says when it is late; a `backup_runs` table.
+        Alternative: a backup inside Docker, lost with the database.
+      - **R-9**: a refusal is reported as a limit only when it names a
+        window. Accepted knowing what it costs today: no tool's limit reply
+        has been seen, so a real limit will most likely stop the agent as in
+        milestone 2, with no handoff, until one reply is captured.
+        Alternative: report any refusal that mentions a limit.
+      - **R-10**: Sign in again and a login's limit sentence are on the
+        Credentials list now; the rest of that screen comes later.
+        Alternative: all of it in the Credentials milestone, which leaves
+        the Needs you item's Sign in again with no twin on the list.
+    - **Where the mockup and the PRD differ**, for the owner of the design
+      reference (HE-28, HM-32): the Handoff tab's five rules against eight;
+      an item for a limit with a known reset time, which the PRD does not
+      have; a Blocked card for a task waiting on a limit, which the PRD
+      keeps in progress; "Nothing was lost", which the app does not say.
+      Two of the eight sentences (2 and 8) do not say that work goes back
+      to an agent's own account when none below is free (HE-4). The mockup
+      is not edited.
+    - **Other choices made while building:**
+      - A status command that does not answer in 30 seconds, or fails
+        without its signed-out reply, is "could not tell", and the run is a
+        plain failure, not a sign-out. Alternative: read it as signed out,
+        which marks the account signed out and opens an item for nothing.
+      - Set by the adversarial review: a reset time more than 6 hours (five
+        hours), 8 days (weekly, per model) or 32 days (spend, or no window)
+        after the report is stored as none, which the next Verify clears.
+        Alternative: keep any reset time, which one wrong reply could make
+        park a login for months.
+      - Set by the adversarial review: the backup makes no dump while the
+        database holds no workspace, and looks again every 30 seconds.
+        Alternative: dump the empty database, whose dump would then be the
+        newest after a lost volume.
+      - Set by the adversarial review: a stored Needs you cursor the log
+        has no event at or after, or whose position holds another kind of
+        event, starts again from 0, so every open item is announced again
+        once. Alternative: keep it, and miss every new item until the log
+        passes it.
+      - Sign in again looks at the status first: an account its tool calls
+        signed in opens no sign-in window and goes straight to the test
+        prompt. A login revoked at the provider while its tool still says
+        signed in would then fail with no window; nobody has seen that
+        reply. Alternative: always open the window.
+      - `verify_credential` and `sign_in_again` keep an untyped result.
+        Alternative: a typed `helper_request_id` result for all seven
+        operations that answer one.
+      - The Needs you button "Let it try once more" and the task page's
+        "Allow one more try" are two labels for one command. Alternative:
+        one label.
+      - The app's helper supervisor: a start while a stop still waits for
+        the helper waits for it to end and then starts a new one, and a
+        stop waits for every helper an earlier stop asked to stop.
+        Alternative: refuse a start until the stop has ended, which leaves
+        no helper after Sign out then Sign in at once.
+      - A helper whose parent is already launchd when it starts (the app
+        died before the helper looked) stops at once, as a runner does.
+        Alternative: the app passes its own process id to the helper,
+        which watches that process.
+    - **Also for the owner to know:** an account limited with no reset
+      time needs a Verify; a review that waits only for an account has no
+      Needs you item until the Rule checks milestone; a handoff that ends
+      on a Codex or Gemini login records no model, and the default named for
+      Claude and Grok goes stale when the provider retires it; a paused
+      agent loses its task when its time on it runs out; the API still has
+      no security scanner (question 6).
 
 ## Waiting for the owner
 
@@ -811,6 +1327,7 @@ run is also listed here until the owner has read it.
 
 | Item | What is waiting |
 | --- | --- |
+| The recovery time ceiling | The owner sets it before the Handoff milestone is called done (PRD, Handoff and Open decisions). The setting is empty. The six scripted runs were checked against a working bar of 900 seconds, which the run chose; their intervals are seconds, because the runs are scripted ([Measurements](#measurements)). Until the Questions and approvals milestone brings the command that changes workspace settings, the owner's number is written by a migration |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
 | Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
@@ -821,5 +1338,14 @@ run is also listed here until the owner has read it.
 | [ADR 0005](adr/0005-code-units-of-the-core-loop.md) | Added in the delegated run: the runner, the app services, the test units, the build lanes and the Linux build. The owner has not read it |
 | [ADR 0006](adr/0006-owner-sign-in-and-tokens.md) | Added in the delegated run: `bcrypt`, the tokens, the setup call and loopback HTTP. The owner has not read it |
 | [ADR 0007](adr/0007-sweep-service-and-database-login-role.md) | Added in the delegated run: the sweep service, long polls and the `leverage_api` login role. The owner has not read it |
+| Pull request 13 | The Core loop (milestone 2), merged in the delegated run after an adversarial review; its AI-assistance boxes are unticked |
+| [ADR 0008](adr/0008-how-a-run-moves-to-another-account.md) | Added in the delegated run: how a run moves to another account. The owner has not read it |
+| [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md) | Added in the delegated run: the detectors and the recorded and made replies. The owner has not read it |
+| [ADR 0010](adr/0010-daily-backup-and-restore.md) | Added in the delegated run: the daily backup and the restore. The owner has not read it |
 | The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login and a reviewer on another; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
-| The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are recorded in the pull request description; see the pull request. A tool not run there waits for the owner |
+| The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are in pull request 13: Claude, Codex and Gemini passed; Grok is installed and not signed in, so its run waits for the owner |
+| The three interrupted forms on real logins | A real limit cannot be caused on request, so the first one a real run meets is also the first test of a detector against a real reply. When it happens, the tool's reply is to be captured, scrubbed and committed as a recorded reply file. Until then PRD test 9 and the release line on recorded limit replies are not met as written, and a real limit will most likely stop the agent with no handoff |
+| A sign-out on a real login | Sign one account out in its provider's own tool while an agent works on it, and follow the notification. The reply of a login that expires during a run is to be captured the same way; the recorded ones are of a tool that never held a login |
+| The notification on the real bundle | That macOS asks once, that a notification shows while the app is in front and a click opens Needs you, and that a rebuilt, ad-hoc-signed app keeps its permission. No test touches the notification center |
+| A handoff between two real logins of one provider | The release line on continuing on another login of the same provider, which the provider-terms record says Anthropic's policy and Google's documents do not clearly allow (question 12, HM-55) |
+| A restore from inside the app, and a copy of the backups off the Mac | Neither is built. A restore is the maintainer's terminal command ([DEPLOY.md](DEPLOY.md#restoring)) |

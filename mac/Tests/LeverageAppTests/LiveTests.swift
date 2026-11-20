@@ -69,6 +69,73 @@ struct LiveTests {
         }
     }
 
+    @Test("the settings name the bundle the app runs from, which the notifier is decided on (HM-27)")
+    func settingsNameTheBundle() {
+        let settings = LiveSettings(
+            info: [:], resources: resources, executable: executable, bundleURL: bundle)
+        #expect(settings.bundleURL == bundle)
+        // Outside a bundle (swift run, a test) the folder of the program is not an app.
+        let loose = URL(fileURLWithPath: "/tmp/made-up/.build/debug/LeverageApp")
+        let unbundled = LiveSettings(
+            info: [:], resources: loose.deletingLastPathComponent(), executable: loose)
+        #expect(unbundled.bundleURL.pathExtension != "app")
+    }
+
+    @Test("the running bundle's own folder is the bundle the settings name")
+    func bundledNamesItsFolder() throws {
+        let folder = try TemporaryFolder(prefix: "leverage-live")
+        defer { folder.remove() }
+        let app = folder.path("Made Up.app")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let bundle = try #require(Bundle(url: app))
+        #expect(LiveSettings.bundled(bundle).bundleURL.standardizedFileURL.path == app.standardizedFileURL.path)
+    }
+
+    @Test("the runtime notifies only from an app bundle with notifications not turned off (HM-27)")
+    func notifierFollowsTheBundle() throws {
+        guard Live.servicesAreBuilt else { return }
+        func notifier(bundleURL: URL, notifications: String?) throws -> any Notifying {
+            let folder = try TemporaryFolder(prefix: "leverage-live")
+            defer { folder.remove() }
+            var environment = [EnvironmentKeys.supportDir: folder.url.path, EnvironmentKeys.sessionStore: "memory"]
+            environment[EnvironmentKeys.notifications] = notifications
+            let settings = LiveSettings(
+                info: [:], resources: resources, executable: executable, bundleURL: bundleURL)
+            // Making the real notifier touches no notification center (HM-27).
+            return try Live.make(settings: settings, environment: environment, home: folder.url).notifier
+        }
+        #expect(!(try notifier(bundleURL: bundle, notifications: nil) is SilentNotifier))
+        #expect(try notifier(bundleURL: bundle, notifications: "off") is SilentNotifier)
+        let loose = URL(fileURLWithPath: "/tmp/made-up/.build/debug", isDirectory: true)
+        #expect(try notifier(bundleURL: loose, notifications: nil) is SilentNotifier)
+    }
+
+    @Test("the inbox cursor is kept in the support folder and outlives the runtime (HM-29)")
+    func cursorOutlivesTheRuntime() throws {
+        guard Live.servicesAreBuilt else { return }
+        let folder = try TemporaryFolder(prefix: "leverage-live")
+        defer { folder.remove() }
+        let environment = [
+            EnvironmentKeys.supportDir: folder.url.path, EnvironmentKeys.sessionStore: "memory",
+        ]
+        let settings = LiveSettings(info: [:], resources: resources, executable: executable)
+
+        var first: (any AppRuntime)? = try Live.make(settings: settings, environment: environment, home: folder.url)
+        #expect(first?.inboxCursor !== InMemoryInboxCursor.shared)
+        #expect(first?.inboxCursor.load() == 0)
+        try first?.inboxCursor.save(42)
+        first = nil
+        #expect(first == nil)
+
+        let file = folder.path("inbox-cursor")
+        #expect(FileManager.default.fileExists(atPath: file.path))
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+        #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+
+        let second = try Live.make(settings: settings, environment: environment, home: folder.url)
+        #expect(second.inboxCursor.load() == 42)
+    }
+
     @Test("a second copy on the same support folder is told which copy holds it, until that one is gone")
     func oneCopyPerSupportFolder() throws {
         guard Live.servicesAreBuilt else { return }

@@ -32,6 +32,21 @@ module V1
       def allow_another_round
         run_command("allow_another_round", params: checked_body("allow_another_round").merge("id" => uuid_param!(:id)))
       end
+
+      # The owner's controls of milestone 3 (plan HE-24, HE-25): Add task
+      # into the Backlog from the Imaginarium, Edit contract (the Complete
+      # contract body), and hold and resume.
+      def promote = control("promote_task", "promote")
+      def contract = control("edit_contract", "edit_contract")
+      def hold = control("hold_task", "hold")
+      def resume = control("resume_task", "resume")
+
+      private
+
+      # operation_id names the body to check, command the entry to run.
+      def control(operation_id, command)
+        run_command(command, params: checked_body(operation_id).merge("id" => uuid_param!(:id)))
+      end
     end
   end
 end

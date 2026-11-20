@@ -8,17 +8,19 @@ module Leverage
       # (L123). task.released carries the reason. Allowed under a hold, and
       # the hold stays open; a hold bound to the seat (seat_paused,
       # credential_limit, credential_signed_out) closes when the seat loses
-      # the task (SM-15), after task.released. None of those can open in
-      # milestone 2. Release from Finishing, and of a provisional claim from
-      # Ready, cannot be reached in milestone 2 (SC-3; no model check).
+      # the task (SM-15), after task.released (Holds.close_seat_bound).
+      # The wait_ready step that opens has the cause of HE-35
+      # (Candidates.wait_cause, asked once the seat holds nothing): on
+      # task.released when the task had no hold, else on the hold.closed
+      # that leaves it with none (milestone 3 plan §2.1, changed entries).
+      # Release from Finishing, and of a provisional claim from Ready,
+      # cannot be reached yet (SC-3, HS-3; no model check).
       #
       # 422 invalid for a reason only the app chooses (seat_disabled,
       # seat_removed).
       #
       # Params: id (the task), reason.
       class Release < Entry
-        SEAT_BOUND = %w[seat_paused credential_limit credential_signed_out].freeze
-
         def load(ctx)
           @seat = Seat.find_by(id: ctx.request.caller_id, workspace_id: ctx.workspace.id) || raise(NotFound, "No such seat")
           @task = Task.find_by(id: ctx.request.params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such task")
@@ -32,13 +34,14 @@ module Leverage
         end
 
         def perform(ctx)
+          held = Holds.held?(@task)
           Leases.end_lease(ctx, @task)
           @task.update!(state: @row.fetch("to") || @task.state, holder_seat_id: nil, builder_seat_id: nil,
             resume_pending_since: nil)
-          ctx.emit("task.released", task: @task, payload: { reason: @reason, wait_cause: nil })
-          Holds.open_holds(@task).select { |hold| SEAT_BOUND.include?(hold.reason) }.each do |hold|
-            Holds.close(ctx, hold: hold, task: @task)
-          end
+          wait_cause = Candidates.wait_cause(@task, ctx.at) if @task.state == "ready"
+          released = ctx.emit("task.released", task: @task,
+            payload: { reason: @reason, wait_cause: (wait_cause unless held) })
+          Holds.close_seat_bound(ctx, @task, cause: released, wait_cause: wait_cause)
           @result = nil
         end
       end

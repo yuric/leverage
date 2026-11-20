@@ -172,21 +172,32 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let names: [LogName]
     public let reviewerSeatExists: Bool
     public let asOfSeq: Int
+    /// The task's recovery times, oldest start first (HE-17, HE-18).
+    public let recoveryTimes: [RecoveryTime]
+    /// The account the task waits for, as its board card names it, from
+    /// the same reading (HM-40, HE-15, HE-16).
+    public let waitingForCredentialID: UUID?
+    /// When that account resets, as its board card says.
+    public let waitingUntil: Date?
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
-        holds: [Hold] = [], reviews: [Review] = [], inboxItems: [InboxItem] = [], events: [EventRecord] = [],
-        names: [LogName] = [], reviewerSeatExists: Bool, asOfSeq: Int
+        holds: [Hold] = [], waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, reviews: [Review] = [],
+        inboxItems: [InboxItem] = [], events: [EventRecord] = [], names: [LogName] = [],
+        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int
     ) {
         self.task = task
         self.criteria = criteria
         self.actions = actions
         self.questions = questions
         self.holds = holds
+        self.waitingForCredentialID = waitingForCredentialID
+        self.waitingUntil = waitingUntil
         self.reviews = reviews
         self.inboxItems = inboxItems
         self.events = events
         self.names = names
+        self.recoveryTimes = recoveryTimes
         self.reviewerSeatExists = reviewerSeatExists
         self.asOfSeq = asOfSeq
     }
@@ -194,6 +205,9 @@ public struct TaskPage: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case task, criteria, actions, questions, holds, reviews, events, names
         case inboxItems = "inbox_items"
+        case waitingForCredentialID = "waiting_for_credential_id"
+        case waitingUntil = "waiting_until"
+        case recoveryTimes = "recovery_times"
         case reviewerSeatExists = "reviewer_seat_exists"
         case asOfSeq = "as_of_seq"
     }
@@ -216,11 +230,17 @@ public struct Seat: Codable, Equatable, Sendable {
     public let runState: SeatRunState?
     public let removedAt: Date?
     public let wantedRunning: Bool
+    /// The login the seat's current run is on: the one its seat token was
+    /// issued for. Nil when the seat has no run (HD-3).
+    public let runCredentialID: UUID?
+    /// Why the seat's last run ended; nil when no run has ended (HD-3).
+    public let runStopReason: RunStopReason?
 
     public init(
         id: UUID, name: String, provider: Provider, model: String? = nil, effort: String? = nil, role: SeatRole,
         strengthRank: Int? = nil, credentialID: UUID? = nil, enabled: Bool = true, paused: Bool = false,
-        lastPolledAt: Date? = nil, runState: SeatRunState? = nil, removedAt: Date? = nil, wantedRunning: Bool = false
+        lastPolledAt: Date? = nil, runState: SeatRunState? = nil, removedAt: Date? = nil, wantedRunning: Bool = false,
+        runCredentialID: UUID? = nil, runStopReason: RunStopReason? = nil
     ) {
         self.id = id
         self.name = name
@@ -236,6 +256,8 @@ public struct Seat: Codable, Equatable, Sendable {
         self.runState = runState
         self.removedAt = removedAt
         self.wantedRunning = wantedRunning
+        self.runCredentialID = runCredentialID
+        self.runStopReason = runStopReason
     }
 
     enum CodingKeys: String, CodingKey {
@@ -246,6 +268,8 @@ public struct Seat: Codable, Equatable, Sendable {
         case runState = "run_state"
         case removedAt = "removed_at"
         case wantedRunning = "wanted_running"
+        case runCredentialID = "run_credential_id"
+        case runStopReason = "run_stop_reason"
     }
 }
 
@@ -275,10 +299,16 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     public let readyTasks: Int
     public let waitingReviews: Int
     public let orchestrator: OrchestratorState
+    /// When the newest backup was made; nil when none was (HB-4).
+    public let backupLastRanAt: Date?
+    /// True when the newest backup is more than 26 hours old, or when there
+    /// is none and the workspace is more than an hour old (HB-4).
+    public let backupLate: Bool
 
     public init(
         sweepLastRanAt: Date?, sweepLate: Bool, helperLastReportedAt: Date?, queuedHelperRequests: Int,
-        readyTasks: Int, waitingReviews: Int, orchestrator: OrchestratorState = .notSetUp
+        readyTasks: Int, waitingReviews: Int, orchestrator: OrchestratorState = .notSetUp,
+        backupLastRanAt: Date? = nil, backupLate: Bool = false
     ) {
         self.sweepLastRanAt = sweepLastRanAt
         self.sweepLate = sweepLate
@@ -287,6 +317,8 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         self.readyTasks = readyTasks
         self.waitingReviews = waitingReviews
         self.orchestrator = orchestrator
+        self.backupLastRanAt = backupLastRanAt
+        self.backupLate = backupLate
     }
 
     enum CodingKeys: String, CodingKey {
@@ -297,6 +329,8 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         case queuedHelperRequests = "queued_helper_requests"
         case readyTasks = "ready_tasks"
         case waitingReviews = "waiting_reviews"
+        case backupLastRanAt = "backup_last_ran_at"
+        case backupLate = "backup_late"
     }
 }
 

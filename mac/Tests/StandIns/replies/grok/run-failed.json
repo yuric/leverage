@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "provider": "grok",
+    "tool": "grok",
+    "tool_version": "1.0.77",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--cwd",
+      "<work folder>",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a run that ended normally and gave no marker line, whose answer talks of a weekly limit and of not being authenticated: the agent's own words, not a refusal",
+    "expect": "failed",
+    "marker": "LVRG-REPLY-332b4d1d287a"
+  },
+  "exit_status": 0,
+  "stdout": "I checked the weekly limit settings; the API says you are not authenticated there. (LVRG-REPLY-332b4d1d287a)\n",
+  "stderr": ""
+}

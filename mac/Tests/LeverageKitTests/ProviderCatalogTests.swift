@@ -54,13 +54,13 @@ struct ProviderCatalogTests {
             .documented))
     }
 
-    @Test("Codex: its folder variable, status by exit code, OpenAI's script")
+    @Test("Codex: its folder variable, status by its recorded \"Not logged in\", OpenAI's script")
     func codex() throws {
         let codex = try entry("codex")
         #expect(codex.accountFolderVariable == Evidenced("CODEX_HOME", .probe))
         #expect(codex.environment == Evidenced([], .probe))
         #expect(codex.status == Evidenced(
-            StatusCheck(arguments: ["login", "status"], reading: .exitCode), .probe))
+            StatusCheck(arguments: ["login", "status"], reading: .signedOutText("Not logged in")), .probe))
         #expect(codex.signIn.value.arguments == ["login"])
         #expect(codex.signIn.evidence == .help)
         #expect(codex.installer == Evidenced(
@@ -154,6 +154,18 @@ struct ProviderCatalogTests {
         #expect(Evidence.allCases.map(\.rawValue)
             == ["probe", "probe (full environment)", "help", "documented", "unverified"])
         #expect(Evidence.allCases.filter(\.isProven) == [.probe])
+    }
+
+    @Test("the default model each tool itself named, with how it is known; none for Codex and Antigravity")
+    func defaultModel() throws {
+        // Claude's is the one key of `modelUsage` in the reply to the
+        // inventory's "ready" prompt, run with no --model; Grok's is the
+        // "Default model" line of `grok models`. Both ran on this Mac on
+        // 2026-11-19 with the agent's whole environment (plan HE-5, §0 fact 30).
+        #expect(try entry("claude").defaultModel == Evidenced("claude-opus-5-5", .probeFullEnvironment))
+        #expect(try entry("grok").defaultModel == Evidenced("grok-4.6", .probeFullEnvironment))
+        #expect(try entry("codex").defaultModel == nil)
+        #expect(try entry("gemini").defaultModel == nil)
     }
 
     @Test("Claude and Antigravity take an effort; Codex and Grok are given none (their drivers pass none)")

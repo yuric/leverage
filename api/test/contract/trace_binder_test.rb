@@ -27,6 +27,15 @@ class TraceBinderTest < Minitest::Test
     assert_equal first, Leverage::Contract::TraceBinder.new(start: START + 3600).id("$task:1")
   end
 
+  def test_another_namespace_gives_other_ids_the_same_in_every_run
+    other = "0f4e2a6c-1b3d-4e5f-8a7b-9c0d1e2f3a4b"
+    with_other = Leverage::Contract::TraceBinder.new(start: START, namespace: other)
+    assert_match UUID, with_other.id("$task:1")
+    refute_equal binder.id("$task:1"), with_other.id("$task:1")
+    refute_equal binder.event_id(1), with_other.event_id(1)
+    assert_equal with_other.id("$task:1"), Leverage::Contract::TraceBinder.new(start: START, namespace: other).id("$task:1")
+  end
+
   def test_two_symbols_never_collide
     symbols = %w[$task:1 $task:2 $seat:builder $seat:reviewer $credential:claude_main $key:claim $key:claim_2 $rule:acceptance_criteria]
     ids = symbols.map { |symbol| binder.id(symbol) }

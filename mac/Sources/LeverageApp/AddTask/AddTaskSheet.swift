@@ -89,6 +89,12 @@ struct AddTaskForm: View {
                 .font(.system(size: Tokens.FontSize.small))
                 .foregroundStyle(Tokens.Palette.text2)
                 .padding(.top, 12)
+            if model.ideaDropsCriteria {
+                Text(AddTaskCopy.ideaKeepsNoCriteria.text)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
+                    .padding(.top, 4)
+            }
             if let failure = model.failure {
                 VStack(alignment: .leading, spacing: 4) {
                     if model.savedWithoutContract {
@@ -110,6 +116,10 @@ struct AddTaskForm: View {
                 }
                 Button(AddTaskCopy.cancel.text, action: cancel)
                     .keyboardShortcut(.cancelAction)
+                Button(AddTaskCopy.saveAsIdea.text) {
+                    Task { await model.saveAsIdea() }
+                }
+                .disabled(!model.canSaveAsIdea)
                 Button(AddTaskCopy.save.text) {
                     Task { await model.save() }
                 }

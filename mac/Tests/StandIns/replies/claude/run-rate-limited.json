@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a short rate limit that names no window",
+    "expect": "rate_limited",
+    "marker": "LVRG-REPLY-024d79d9666b"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"result\", \"subtype\": \"success\", \"is_error\": true, \"result\": \"API Error: 429 Too Many Requests. Rate limited, try again shortly.\", \"api_error_status\": 429, \"terminal_reason\": \"api_error\", \"stop_reason\": \"stop_sequence\", \"session_id\": \"LVRG-REPLY-024d79d9666b\", \"num_turns\": 1, \"total_cost_usd\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}, \"modelUsage\": {}}\n",
+  "stderr": ""
+}

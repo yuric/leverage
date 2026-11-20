@@ -12,6 +12,11 @@
 #   scenario.make_due(task)                    # the lease is past its due time
 #   scenario.token_for(builder)                # the seat's bearer token
 #
+# Milestone 3 adds (its plan, WP1): limit_credential, sign_out_credential,
+# hold (a credential hold with its item, or item: false), pause_seat,
+# run (where a seat's run is), finishing_task (HS-3), and a seat's run on
+# its own credential by default.
+#
 # Every value is made up. Each method returns the row it made.
 class Scenario
   PASSWORD = "made-up-password-1".freeze
@@ -67,11 +72,17 @@ class Scenario
   # A credential. added: true (the default) is a credential whose checks
   # have passed, with its credential.added event; added: false is one whose
   # Add credential is still running (IN-24): signed out and no event.
+  # limited_until: alone also sets limited_since (milestone 3 plan HE-3: a
+  # reset time is only stored for a limit that was reported), to the
+  # earlier of the database's now and the reset time.
   def credential(provider: "claude", kind: "login", name: nil, added: true, id: nil, **columns)
     @positions += 1
     values = { id: id || SecureRandom.uuid, workspace_id: workspace_id, kind: kind, provider: provider,
                name: name || "Made-up account #{@positions}", position: @positions,
                state: added ? "active" : "signed_out", last_verified_at: (Time.current if added) }
+    if columns[:limited_until] && !columns.key?(:limited_since)
+      columns[:limited_since] = [ database_now, columns[:limited_until] ].min
+    end
     transaction do
       credential = Credential.create!(**values, **columns)
       append("credential.added", subject: credential) if added
@@ -81,15 +92,19 @@ class Scenario
 
   # A seat, with seat.connected. A seat the app runs has a credential; the
   # provider comes from it. token: false leaves the seat without one (a seat
-  # the app runs before the helper picks its token up).
+  # the app runs before the helper picks its token up). A seat with a token
+  # has its run on its own credential (milestone 3 plan HD-3:
+  # run_credential_id is the credential its token was issued for) unless
+  # the test names run_credential_id; run(seat, on:) moves it.
   def seat(role: "builder", credential: nil, provider: nil, name: nil, model: "made-up-model", effort: "",
            strength_rank: 1, token: true, id: nil, **columns)
     token_value, digest = issue(:seat) if token
     values = { id: id || SecureRandom.uuid, workspace_id: workspace_id, role: role, credential_id: credential&.id,
                provider: credential&.provider || provider || "claude", name: name || "Made-up #{role} #{SecureRandom.hex(3)}",
-               model: model, effort: effort, strength_rank: strength_rank, token_hash: digest }
+               model: model, effort: effort, strength_rank: strength_rank, token_hash: digest,
+               run_credential_id: (credential&.id if token) }
     transaction do
-      seat = Seat.create!(**values, **columns)
+      seat = Seat.create!(**values.merge(columns))
       remember(seat, token_value) if token
       append("seat.connected", subject: seat, actor_kind: "owner", actor_id: owner.id)
       seat
@@ -151,6 +166,81 @@ class Scenario
       append("review.started", task: task, subject: review, actor_kind: "seat", actor_id: reviewer.id,
         payload: { credential_id: reviewer.credential_id, model: reviewer.model.presence })
       review
+    end
+  end
+
+  # Marks a credential limited (milestone 3 plan HE-3): limited_since
+  # (default the database's now) and limited_until, the reset time (nil
+  # for a limit with no reset time). With seat:, the run that met the
+  # limit, it also appends credential.limit_reached, on the task or the
+  # review's task it names. Returns the Credential, reloaded.
+  def limit_credential(credential, reset_at: nil, since: nil, seat: nil, task: nil, review: nil, window: "five_hour")
+    transaction do
+      credential.update!(limited_since: since || database_now, limited_until: reset_at)
+      if seat
+        append("credential.limit_reached", task: task || (review && Task.find(review.task_id)), subject: credential,
+          payload: { seat_id: seat.id, review_id: review&.id, job_id: nil, window: window,
+                     reset_at: reset_at&.utc&.iso8601 })
+      end
+      credential.reload
+    end
+  end
+
+  # Marks a credential signed out, with credential.signed_out: found by a
+  # run of seat on task or review, or by Verify when no seat is named.
+  # Returns the Credential, reloaded.
+  def sign_out_credential(credential, seat: nil, task: nil, review: nil)
+    transaction do
+      credential.update!(state: "signed_out")
+      append("credential.signed_out", task: task || (review && Task.find(review.task_id)), subject: credential,
+        payload: { seat_id: seat&.id, review_id: review&.id, job_id: nil })
+      credential.reload
+    end
+  end
+
+  # Opens a hold on a task through Leverage::Holds, as the app: its
+  # hold.opened, the Needs you item the registry names for the reason
+  # unless item: false, and the lease clocks paused when the reason
+  # pauses them. A credential hold names its credential. Returns the Hold.
+  def hold(task, reason:, credential: nil, item: true, facts: {})
+    transaction do
+      Leverage::Holds.open(context, task: task, reason: reason, credential_id: credential&.id, item: item, facts: facts)
+    end
+  end
+
+  # Pauses a seat, with seat.paused by the owner. A task it holds is not
+  # held here: hold(task, reason: "seat_paused") does that. Returns the
+  # Seat, reloaded.
+  def pause_seat(seat)
+    transaction do
+      seat.update!(paused: true)
+      append("seat.paused", subject: seat, actor_kind: "owner", actor_id: owner.id)
+      seat.reload
+    end
+  end
+
+  # Puts the seat's run on a credential (default its own), in run state
+  # state (milestone 3 plan HD-3: run_credential_id is the credential the
+  # seat's current token was issued for). on: nil leaves it on none.
+  # Returns the Seat, reloaded.
+  def run(seat, on: :own, state: "running")
+    credential_id = on == :own ? seat.credential_id : on&.id
+    seat.update!(run_credential_id: credential_id, run_state: state)
+    seat.reload
+  end
+
+  # A task in Finishing, which no command can reach until milestone 5
+  # (milestone 3 plan HS-3), for the tests that prove a row from Finishing
+  # is refused invalid_state. It is built to Working (builder holds it,
+  # with its lease) and moved to Finishing with task.changed, an event no
+  # step reads; no outward action row is made (SC-3). Returns the Task.
+  def finishing_task(builder: nil)
+    transaction do
+      row = task(state: "working", builder: builder)
+      row.update!(state: "finishing")
+      append("task.changed", task: row, actor_kind: "owner", actor_id: owner.id,
+        payload: { priority: row.priority, project_id: row.project_id, budget_cap: row.budget_cap })
+      row.reload
     end
   end
 

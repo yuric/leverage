@@ -22,18 +22,154 @@ class LogAuditTest < ActiveSupport::TestCase
   def key_of(runner, symbol) = Leverage::Contract::TraceBinder.new(start: Time.current).id(symbol)
 
   # Appends one event as if the command with this key wrote it later.
-  def append_under(runner, key, type, task:, payload: {}, caller: nil)
+  def append_under(runner, key, type, task:, payload: {}, caller: nil, subject: nil)
     request = T::Request.new(command: "audit_test", workspace_id: runner.workspace_id, caller_kind: caller && "seat",
       caller_id: caller, key: key, request_hash: nil, params: {})
     ActiveRecord::Base.transaction(requires_new: true) do
-      runner.scenario.context(request: request).emit(type, task: task, payload: payload)
+      runner.scenario.context(request: request).emit(type, task: task, subject: subject, payload: payload)
     end
   end
 
-  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+  # Milestone 3's traces (its plan HT-1): the reports' rows, the credential
+  # timer's events with no key, the side events of report_request_result
+  # and change_seat (plan §2.3), and the owner's controls.
+  %w[
+    09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
+    13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules 15-owner-controls-no-rules
+  ].each do |name|
     test "the log of trace #{name} passes" do
       assert_empty audit(run_trace(name))
     end
+  end
+
+  # credential.switched is a side event in the registry, but only the rows
+  # that name it may write it (milestone 3 plan §2.3 and WP9): the trace's
+  # last command (pass_review, which ends the task) with a switch appended
+  # in its own group, at its time and under its key, is found; trace 11's
+  # reports and its timer, whose rows name the switch, pass.
+  test "a credential.switched the command's row does not allow is found" do
+    runner = run_trace("11-limit-handoff-no-rules")
+    assert_empty audit(runner)
+    last = Event.where(workspace_id: runner.workspace_id).order(:seq).last
+    task = Task.find(last.task_id)
+    seat = Seat.find_by!(workspace_id: runner.workspace_id, role: "reviewer")
+    request = T::Request.new(command: "audit_test", workspace_id: runner.workspace_id, caller_kind: "seat",
+      caller_id: seat.id, key: last.command_id, request_hash: nil, params: {})
+    ActiveRecord::Base.transaction(requires_new: true) do
+      runner.scenario.context(request: request, at: last.at).emit("credential.switched", task: task,
+        subject: Credential.find(seat.credential_id), actor_kind: "app", actor_id: nil,
+        payload: { from_credential_id: seat.credential_id, model: nil, seat_id: seat.id, review_id: nil, job_id: nil })
+    end
+    found = audit(runner)
+    assert(found.any? { |line| line.include?(last.command_id) && line.include?("credential.switched") }, found.inspect)
+  end
+
+  # A command whose rows have no state may touch several tasks: a passed
+  # Verify of a login closes the credential holds of every task it was
+  # waiting for (report_request_result, plan §2.3).
+  test "a Verify that closes the credential holds of two tasks in one command passes" do
+    scenario = Scenario.new
+    login = scenario.credential
+    tasks = Array.new(2) { scenario.task(state: "working", builder: scenario.seat(credential: login)) }
+    helper = scenario.helper
+    call = lambda do |command, kind, caller, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: kind, caller_id: caller,
+        key: "audit-#{SecureRandom.hex(6)}", request_hash: "c" * 64, params: params)).tap { |outcome| assert outcome.completed? }
+    end
+    after = scenario.workspace.reload.last_seq
+    tasks.each do |task|
+      call.call("report_signed_out", "helper", helper.id, "id" => login.id, "credential_id" => login.id,
+        "seat_id" => task.holder_seat_id, "task_id" => task.id, "review_id" => nil, "job_id" => nil,
+        "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "tool_version" => "0.0.0-made-up")
+    end
+    assert_equal 2, Hold.where(workspace_id: scenario.workspace_id, reason: "credential_signed_out", closed_at: nil).count
+    request = call.call("verify_credential", "owner", scenario.owner.id, "id" => login.id).result.fetch("helper_request_id")
+    call.call("report_request_result", "helper", helper.id, "id" => request, "result" => {
+      "outcome" => "finished", "checks" => [ { "check" => "signed_in", "passed" => true, "failure" => nil } ],
+      "tool_version" => "0.0.0-made-up", "plan" => nil, "account_email" => nil })
+    closed = Event.where(workspace_id: scenario.workspace_id, type: "hold.closed").where("seq > ?", after)
+    assert_equal 2, closed.distinct.count(:task_id)
+    assert_equal 1, closed.distinct.count(:command_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
+  # Found by the walks (seed 460 of SEED=1): a sign-out a run reports may
+  # leave another task's credential_limit hold with no due time and no
+  # item, and opens "Account signed out" there (HE-11, plan §2.3): the
+  # row's side event, on a task other than the report's own.
+  test "a sign-out that opens Account signed out on another task's hold passes" do
+    scenario = Scenario.new
+    first = scenario.credential
+    second = scenario.credential(provider: "codex")
+    held = scenario.task(state: "working", builder: scenario.seat(credential: first))
+    reporting = scenario.task(state: "working", builder: scenario.seat(credential: first))
+    scenario.limit_credential(second)
+    helper = scenario.helper
+    report = lambda do |command, task, fields|
+      params = { "id" => first.id, "credential_id" => first.id, "seat_id" => task.holder_seat_id, "task_id" => task.id,
+                 "review_id" => nil, "job_id" => nil, "observed_at" => (scenario.database_now - 1).utc.iso8601(6),
+                 "tool_version" => "0.0.0-made-up" }.merge(fields)
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "helper",
+        caller_id: helper.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "d" * 64, params: params))
+        .tap { |outcome| assert outcome.completed?, outcome.refusal&.code }
+    end
+    after = scenario.workspace.reload.last_seq
+    report.call("report_limit", held, "window" => "five_hour",
+      "reset_at" => (scenario.database_now + 3600).utc.iso8601(6))
+    assert Hold.find_by(task_id: held.id, reason: "credential_limit", closed_at: nil)
+    report.call("report_signed_out", reporting, {})
+
+    signed_out = Event.find_by!(workspace_id: scenario.workspace_id, type: "credential.signed_out")
+    written = Event.where(workspace_id: scenario.workspace_id, command_id: signed_out.command_id)
+    assert_equal [ reporting.id, held.id ].sort, written.distinct.pluck(:task_id).sort
+    assert written.exists?(task_id: held.id, type: "inbox.opened")
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
+  # One command may apply both timers of one task (Timers.apply_task_timers):
+  # the credential hold, due first, closes and switches the account, then
+  # the lease, past its due time too, ends. Both are timers' events with no
+  # key, in one group: the release's and the lease end's are each matched to
+  # their own timer (WP9's choice 4, met by walk seed 883 of SEED=1).
+  test "a credential release and a lease end applied for one task in one command pass" do
+    scenario = Scenario.new
+    own = scenario.credential
+    below = scenario.credential(provider: "codex")
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(below, reset_at: scenario.database_now + 7200)
+    after = scenario.workspace.reload.last_seq
+    params = { "id" => own.id, "credential_id" => own.id, "seat_id" => builder.id, "task_id" => task.id,
+               "review_id" => nil, "job_id" => nil, "window" => "five_hour",
+               "reset_at" => (scenario.database_now + 3600).utc.iso8601(6),
+               "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "tool_version" => "0.0.0-made-up" }
+    outcome = T.apply(T::Request.new(command: "report_limit", workspace_id: scenario.workspace_id, caller_kind: "helper",
+      caller_id: scenario.helper.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "e" * 64, params: params))
+    assert outcome.completed?, outcome.refusal&.code
+    assert Hold.find_by(task_id: task.id, reason: "credential_limit", closed_at: nil), "the hold waits for the reset"
+
+    below.update_columns(limited_until: scenario.database_now - 2) # its reset passed: due at once, on that login
+    scenario.make_due(task, at: scenario.database_now)
+    assert_operator Leverage::Timers.credential_hold_due_at(task.reload), :<=, task.lease_due_at, "the hold is due first"
+    T.apply(T::Request.new(command: "heartbeat", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: builder.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "f" * 64, params: { "id" => task.id }))
+
+    timers = Event.where(workspace_id: scenario.workspace_id, command_id: nil).where("seq > ?", after).order(:seq)
+    assert_equal %w[hold.closed credential.switched task.lease_expired], timers.pluck(:type).first(3)
+    assert_equal 1, timers.pluck(:at).uniq.size, "one command applied both timers"
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
+  # A timer's events have no key: the credential hold release (hold.closed,
+  # credential.switched) is read as credential_hold_release, and the same
+  # events as no timer writes them when no credential hold closes.
+  test "events with no key that close a hold no timer closes are found" do
+    runner = run_trace("15-owner-controls-no-rules")
+    hold = Hold.find_by!(workspace_id: runner.workspace_id, reason: "owner_hold")
+    append_under(runner, nil, "hold.closed", task: Task.find(hold.task_id), subject: hold,
+      payload: { reason: "owner_hold", rule_id: nil, credential_id: nil, lease_seat_id: nil, wait_cause: nil })
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("no command") || line.include?("no timer") }, found.inspect)
   end
 
   test "the log of a walk, every event of it written by a command, passes from its first event" do

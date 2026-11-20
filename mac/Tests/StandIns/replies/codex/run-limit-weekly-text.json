@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "exec",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--json",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-C",
+      "<work folder>",
+      "-o",
+      "<answer file>"
+    ],
+    "shows": "a limit named in the message's words only, with no reset time",
+    "expect": "limit",
+    "expect_window": "weekly",
+    "expect_reset": "none",
+    "marker": "LVRG-REPLY-a320cce7c4c3"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-a320cce7c4c3\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"error\", \"message\": \"You've hit your weekly usage limit.\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"You've hit your weekly usage limit.\"}}\n",
+  "stderr": ""
+}

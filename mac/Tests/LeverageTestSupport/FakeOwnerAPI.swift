@@ -94,6 +94,9 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         public var landingPrompt: @Sendable (UUID) async throws -> LandingPrompt = { _ in
             throw FakeAPIError.notScripted(.getLandingPrompt)
         }
+        public var listInbox: @Sendable (Int?, Int?) async throws -> InboxPage = { _, _ in
+            throw FakeAPIError.notScripted(.listInbox)
+        }
         public var addTask: Command<AddTaskRequest, TaskCreatedResult> = { _, _ in
             throw FakeAPIError.notScripted(.addTask)
         }
@@ -101,12 +104,21 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
             -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.completeContract) }
         public var cancelTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.cancelTask) }
         public var allowAnotherRound: IDCommand = { _, _ in throw FakeAPIError.notScripted(.allowAnotherRound) }
+        public var promoteTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.promoteTask) }
+        public var editContract: @Sendable (UUID, CompleteContractRequest, IdempotencyKey) async throws
+            -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.editContract) }
+        public var holdTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.holdTask) }
+        public var resumeTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.resumeTask) }
         public var connectSeat: Command<ConnectSeatRequest, SeatConnectedAnswer> = { _, _ in
             throw FakeAPIError.notScripted(.connectSeat)
         }
         public var startSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.startSeat) }
         public var stopSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.stopSeat) }
         public var removeSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.removeSeat) }
+        public var pauseSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.pauseSeat) }
+        public var resumeSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.resumeSeat) }
+        public var changeSeat: @Sendable (UUID, ChangeSeatRequest, IdempotencyKey) async throws
+            -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.changeSeat) }
         public var issueHelperToken: Command<String, HelperTokenAnswer> = { _, _ in
             throw FakeAPIError.notScripted(.issueHelperToken)
         }
@@ -114,6 +126,7 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
             throw FakeAPIError.notScripted(.addCredential)
         }
         public var verifyCredential: IDCommand = { _, _ in throw FakeAPIError.notScripted(.verifyCredential) }
+        public var signInAgain: IDCommand = { _, _ in throw FakeAPIError.notScripted(.signInAgain) }
         public var installTool: @Sendable (Provider, IdempotencyKey) async throws -> PlainOutcome = { _, _ in
             throw FakeAPIError.notScripted(.installTool)
         }
@@ -194,6 +207,10 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         try await record(.getLandingPrompt, Self.id(seatID)).landingPrompt(seatID)
     }
 
+    public func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage {
+        try await record(.listInbox).listInbox(afterSeq, wait)
+    }
+
     public func addTask(_ request: AddTaskRequest, key: IdempotencyKey) async throws
         -> CommandOutcome<TaskCreatedResult> {
         try await record(.addTask, key: key, body: request).addTask(request, key)
@@ -213,6 +230,24 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         try await record(.allowAnotherRound, Self.id(taskID), key: key).allowAnotherRound(taskID, key)
     }
 
+    public func promoteTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.promoteTask, Self.id(taskID), key: key).promoteTask(taskID, key)
+    }
+
+    public func editContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        try await record(.editContract, Self.id(taskID), key: key, body: request)
+            .editContract(taskID, request, key)
+    }
+
+    public func holdTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.holdTask, Self.id(taskID), key: key).holdTask(taskID, key)
+    }
+
+    public func resumeTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.resumeTask, Self.id(taskID), key: key).resumeTask(taskID, key)
+    }
+
     public func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
         -> CommandOutcome<SeatConnectedAnswer> {
         try await record(.connectSeat, key: key, body: request).connectSeat(request, key)
@@ -230,6 +265,19 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         try await record(.removeSeat, Self.id(seatID), key: key).removeSeat(seatID, key)
     }
 
+    public func pauseSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.pauseSeat, Self.id(seatID), key: key).pauseSeat(seatID, key)
+    }
+
+    public func resumeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.resumeSeat, Self.id(seatID), key: key).resumeSeat(seatID, key)
+    }
+
+    public func changeSeat(seatID: UUID, _ request: ChangeSeatRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.changeSeat, Self.id(seatID), key: key, body: request).changeSeat(seatID, request, key)
+    }
+
     public func issueHelperToken(name: String, key: IdempotencyKey) async throws -> CommandOutcome<HelperTokenAnswer> {
         try await record(.issueHelperToken, key: key, body: IssueHelperTokenRequest(name: name))
             .issueHelperToken(name, key)
@@ -242,6 +290,10 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     public func verifyCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await record(.verifyCredential, Self.id(credentialID), key: key).verifyCredential(credentialID, key)
+    }
+
+    public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.signInAgain, Self.id(credentialID), key: key).signInAgain(credentialID, key)
     }
 
     public func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome {

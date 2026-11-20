@@ -25,8 +25,9 @@ public struct ServerSettings: Equatable, Sendable {
 
 /// Writes `<support folder>/server/` (plan PK-2): the bundled compose file
 /// and a `.env` with generated database passwords, a generated
-/// `SECRET_KEY_BASE`, the image tag and the first free port from 47130 to
-/// 47139. The folder is mode 0700 and both files 0600.
+/// `SECRET_KEY_BASE`, the image tag, the first free port from 47130 to
+/// 47139 and `LEVERAGE_BACKUP_DIR`, the `backups` folder beside it (mode
+/// 0700, HB-2). The server folder is mode 0700 and both files 0600.
 ///
 /// The generated values and the port are made once and kept: a later start
 /// reads them back (the port is by then the server's own, so it is not
@@ -40,11 +41,15 @@ public struct ServerFiles: Sendable {
 
     public init(supportFolder: URL) {
         folder = supportFolder.appendingPathComponent("server", isDirectory: true)
+        backupsFolder = supportFolder.appendingPathComponent("backups", isDirectory: true)
     }
 
     public init(supportFolder: SupportFolder) {
         self.init(supportFolder: supportFolder.url)
     }
+
+    /// `<support folder>/backups`: where the daily dump is written (HB-2).
+    public let backupsFolder: URL
 
     var composeFile: URL { folder.appendingPathComponent("compose.yaml") }
     var envFile: URL { folder.appendingPathComponent(".env") }
@@ -79,8 +84,11 @@ public struct ServerFiles: Sendable {
         values["RAILS_FORCE_SSL"] = values["RAILS_FORCE_SSL"] ?? "false"
         values["API_PORT"] = String(port)
         values["API_IMAGE_TAG"] = imageTag
+        // Follows the support folder, like the image tag follows the bundle.
+        values["LEVERAGE_BACKUP_DIR"] = backupsFolder.path
 
         try makeFolder()
+        try makeBackupsFolder()
         if FileManager.default.contents(atPath: composeFile.path) != compose {
             try writePrivately(compose, to: composeFile)
         }
@@ -118,7 +126,7 @@ public struct ServerFiles: Sendable {
     /// kept after these.
     private static let order = [
         "POSTGRES_USER", "POSTGRES_PASSWORD", "LEVERAGE_API_DB_PASSWORD", "SECRET_KEY_BASE",
-        "RAILS_ASSUME_SSL", "RAILS_FORCE_SSL", "API_PORT", "API_IMAGE_TAG",
+        "RAILS_ASSUME_SSL", "RAILS_FORCE_SSL", "API_PORT", "API_IMAGE_TAG", "LEVERAGE_BACKUP_DIR",
     ]
 
     private static func envText(_ values: [String: String]) -> String {
@@ -146,6 +154,17 @@ public struct ServerFiles: Sendable {
             at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         guard chmod(folder.path, 0o700) == 0 else {
             throw ServerFilesError.writeFailed(path: folder.path, errno: errno)
+        }
+    }
+
+    /// The folder the `backup` service writes its dumps into (HB-2), outside
+    /// Docker so a reset of Docker does not take them. Mode 0700; a folder
+    /// that exists is closed to 0700 and what is in it is left alone.
+    private func makeBackupsFolder() throws {
+        try FileManager.default.createDirectory(
+            at: backupsFolder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        guard chmod(backupsFolder.path, 0o700) == 0 else {
+            throw ServerFilesError.writeFailed(path: backupsFolder.path, errno: errno)
         }
     }
 

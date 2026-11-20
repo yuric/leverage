@@ -266,6 +266,137 @@ struct AddTaskModelTests {
         #expect(model.state == .failed(.transportUnauthenticated))
     }
 
+    // MARK: Save as an idea (HM-48)
+
+    @Test("Save as an idea sends Add task alone, with the Imaginarium as its target, and no contract")
+    func saveAsIdea() async throws {
+        let owner = scripted()
+        let saved = Locked(0)
+        let model = makeModel(owner, saved: saved)
+        model.goal = "Owners get a summary on Monday."
+        model.details = "Plain text, no pictures."
+        model.priority = .low
+        model.workReference = "~/work/mail"
+
+        await model.saveAsIdea()
+
+        #expect(owner.calls.map(\.operation) == [.addTask])
+        #expect((try owner.call(at: 0)).body == .object([
+            "title": .string("Fix the totals on the invoice page"),
+            "goal": .string("Owners get a summary on Monday."),
+            "details": .string("Plain text, no pictures."),
+            "priority": .string("low"),
+            "work_reference": .string("~/work/mail"),
+            "state": .string("imaginarium"),
+        ]))
+        #expect((try owner.call(at: 0)).key != nil)
+        #expect(model.state == .saved)
+        #expect(saved.value == 1)
+    }
+
+    @Test("an idea with only a title is added with the title as its goal")
+    func ideaWithOnlyATitle() async {
+        let owner = scripted()
+        let model = AddTaskModel(api: owner, onSaved: {})
+        model.title = "  Try a weekly summary email "
+        #expect(model.canSaveAsIdea)
+        await model.saveAsIdea()
+        let body = owner.calls.first?.body
+        #expect(body?["title"] == .string("Try a weekly summary email"))
+        #expect(body?["goal"] == .string("Try a weekly summary email"))
+        #expect(body?["details"] == nil)
+        #expect(body?["work_reference"] == nil)
+        #expect(body?["state"] == .string("imaginarium"))
+    }
+
+    @Test("Save as an idea needs a title, and sends nothing without one")
+    func ideaNeedsTitle() async {
+        let owner = scripted()
+        let model = AddTaskModel(api: owner, onSaved: {})
+        #expect(!model.canSaveAsIdea)
+        model.title = "  "
+        await model.saveAsIdea()
+        #expect(owner.calls.isEmpty)
+    }
+
+    @Test("the criteria typed are not sent with an idea, and the form says so only when some are typed")
+    func ideaDropsCriteria() async throws {
+        let owner = scripted()
+        let model = makeModel(owner)
+        #expect(model.ideaDropsCriteria)
+        await model.saveAsIdea()
+        #expect((try owner.call(at: 0)).body?["criteria"] == nil)
+        let bare = AddTaskModel(api: owner, onSaved: {})
+        bare.title = "Only a title"
+        #expect(!bare.ideaDropsCriteria)
+    }
+
+    @Test("an idea that failed is sent again with the same key, and an edited one under a new key")
+    func ideaKeys() async throws {
+        let attempts = Locked(0)
+        let id = newTaskID
+        let owner = scripted(add: { _, key in
+            if attempts.update({ $0 += 1; return $0 }) <= 2 { throw URLError(.timedOut) }
+            return .completed(TaskCreatedResult(taskID: id), key: key.value, command: .addTask)
+        })
+        let model = makeModel(owner)
+        await model.saveAsIdea()
+        #expect(model.state == .failed(.cannotReach))
+        #expect(!model.savedWithoutContract)
+        await model.saveAsIdea()
+        model.title = "A different idea"
+        await model.saveAsIdea()
+        let keys = owner.calls.map(\.key)
+        try #require(keys.count == 3)
+        #expect(keys[0] == keys[1])
+        #expect(keys[1] != keys[2])
+        #expect(model.state == .saved)
+    }
+
+    @Test("an idea does not share a key with Save task, because the server refuses one key with two bodies")
+    func ideaKeyIsItsOwn() async throws {
+        let owner = scripted(add: { _, _ in throw URLError(.timedOut) })
+        let model = makeModel(owner)
+        await model.saveAsIdea()
+        await model.save()
+        let keys = owner.calls.map(\.key)
+        try #require(keys.count == 2)
+        #expect(keys[0] != keys[1])
+    }
+
+    @Test("an idea refused is a plain line, and the form stays open")
+    func ideaRefused() async {
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: "never shown")
+        let owner = scripted(add: { _, key in .refused(refusal, key: key.value, command: .addTask) })
+        let saved = Locked(0)
+        let model = makeModel(owner, saved: saved)
+        await model.saveAsIdea()
+        #expect(model.state == .failed(.refusalInvalidState))
+        #expect(saved.value == 0)
+        #expect(model.canSaveAsIdea)
+    }
+
+    @Test("once Save task has added the task, Save as an idea is off, so no second task is made")
+    func ideaOffAfterTaskAdded() async {
+        let owner = scripted(complete: { _, _, _ in throw URLError(.networkConnectionLost) })
+        let model = makeModel(owner)
+        await model.save()
+        #expect(model.savedWithoutContract)
+        #expect(!model.canSaveAsIdea)
+        await model.saveAsIdea()
+        #expect(owner.calls.filter { $0.operation == .addTask }.count == 1)
+    }
+
+    @Test("the form's two buttons and its note read as the plain words")
+    func ideaWords() {
+        #expect(AddTaskCopy.saveAsIdea.text == "Save as an idea")
+        #expect(AddTaskCopy.save.text == "Save task")
+        #expect(AddTaskCopy.ideaKeepsNoCriteria.text == "An idea keeps the title, the goal and the details. Say what done looks like when you move it to Backlog.")
+        for copy in [AddTaskCopy.saveAsIdea, .ideaKeepsNoCriteria] {
+            #expect(BannedTerms.found(in: copy.text).isEmpty)
+        }
+    }
+
     // MARK: the contract draft, shared with the task page
 
     @Test("the draft turns its text into criteria, with the independent review last")
@@ -310,5 +441,11 @@ struct AddTaskRenderTests {
         await failing.save()
         #expect(failing.state != .editing)
         #expect(draws(AddTaskForm(model: failing, cancel: {})))
+        let idea = AddTaskModel(api: FakeOwnerAPI(), onSaved: {})
+        idea.title = "Fix it"
+        idea.criteriaText = "One thing"
+        #expect(idea.ideaDropsCriteria)
+        #expect(draws(AddTaskForm(model: idea, cancel: {})))
+        #expect(draws(AddTaskForm(model: idea, cancel: {}).environment(\.colorScheme, .dark)))
     }
 }

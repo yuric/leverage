@@ -17,6 +17,7 @@ final class HelperRuntime: Sendable {
     let log: Log
     let launcher: Launcher
     let checks: AddChecks
+    let signInAgain: SignInAgain
     let installer: ToolInstaller
     private let loopTask = LoopTask()
 
@@ -29,8 +30,9 @@ final class HelperRuntime: Sendable {
         self.timings = timings
         self.log = log
         launcher = Launcher(api: api, settings: settings, timings: timings, log: log)
-        checks = AddChecks(
-            api: api, settings: settings, timings: timings, prober: prober ?? RunnerProbe(timings: timings), log: log)
+        let prober = prober ?? RunnerProbe(timings: timings)
+        checks = AddChecks(api: api, settings: settings, timings: timings, prober: prober, log: log)
+        signInAgain = SignInAgain(api: api, settings: settings, timings: timings, prober: prober, log: log)
         installer = ToolInstaller(settings: settings, timings: timings, fetch: fetch)
     }
 
@@ -43,8 +45,9 @@ final class HelperRuntime: Sendable {
         case .runAddChecks: result = await checks.add(request)
         case .verify: result = await checks.verify(request)
         case .installTool: result = await installer.handle(request)
-        case .openSignIn, .readUsage:
-            // Not used in this milestone (IN-26; usage readers are milestone 6).
+        case .openSignIn: result = await signInAgain.run(request)
+        case .readUsage:
+            // Usage readers are milestone 6's.
             log.warning("\(request.kind.rawValue) is not done by this helper")
             result = HelperRequestResult(outcome: .failed, checks: [], toolVersion: nil)
         }
@@ -130,14 +133,9 @@ enum HelperMain {
             source.resume()
             signals.append(source)
         }
-        var watch: ParentWatch?
-        let parent = getppid()
-        if parent > 1 {
-            watch = ParentWatch(watching: parent) {
-                log.warning("the app that started the helper is gone; stopping")
-                stopping.begin()
-            }
-            watch?.start()
+        let watch = HelperParent.watch {
+            log.warning("the app that started the helper is gone; stopping")
+            stopping.begin()
         }
 
         log.info("started, version \(leverageMacVersion)")
@@ -147,6 +145,27 @@ enum HelperMain {
         for source in signals { source.cancel() }
         log.info("stopped")
         return code
+    }
+}
+
+/// The helper's watch on the app that started it (PK-8), as a runner's on
+/// its helper (`RunnerParent`).
+enum HelperParent {
+    /// Watches `parent`. When there is no parent to watch (it is already
+    /// launchd, pid 1: the app died between starting the helper and the
+    /// helper's first lines, since the app starts the helper itself), `onGone`
+    /// is called at once and the answer is nil, so no helper runs on with
+    /// its token unwatched.
+    static func watch(
+        parent: pid_t = getppid(), interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void
+    ) -> ParentWatch? {
+        guard parent > 1 else {
+            onGone()
+            return nil
+        }
+        let watch = ParentWatch(watching: parent, interval: interval, onGone: onGone)
+        watch.start()
+        return watch
     }
 }
 

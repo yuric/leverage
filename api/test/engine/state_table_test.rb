@@ -28,14 +28,15 @@ class StateTableTest < ActiveSupport::TestCase
 
   StateTableCases.define(self, T::Table::TASK_LOOP) do |kase|
     reason = not_served(kase)
-    skip "not reachable in milestone 2: #{reason}" if reason
+    skip "not reachable before a later milestone: #{reason}" if reason
 
     kase.invalid_state? ? assert_invalid_state(kase) : assert_row(kase)
   end
 
   private
 
-  # Why a case cannot be reached in milestone 2, or nil.
+  # Why a case cannot be reached before a later milestone (milestone 3 serves
+  # no row from Finishing either, its plan HS-3), or nil.
   def not_served(kase)
     return "Finishing needs an outward action (SC-3)" if kase.from == "finishing"
     return "no rule escalates (EN-5)" if kase.guard.include?("escalates")
@@ -46,12 +47,6 @@ class StateTableTest < ActiveSupport::TestCase
   end
 
   def assert_row(kase)
-    if kase.guard.include?("adds_to_imaginarium")
-      error = assert_raises(T::Invalid) { apply("add_task", @owner, add_task_params("imaginarium")) }
-      assert_match(/Imaginarium/i, error.message, "SC-4: only Promote takes a task out of the Imaginarium")
-      return
-    end
-
     caller, params, task = prepare(kase.command, kase.from, valid: true, guard: kase.guard)
     outcome = apply(kase.command, caller, params)
     assert outcome.completed?, "#{kase.name}: #{outcome.refusal&.code}"
@@ -94,7 +89,7 @@ class StateTableTest < ActiveSupport::TestCase
   # acknowledged briefing, every criterion passed).
   def prepare(command, from, valid:, guard: [])
     case command
-    when "add_task" then [ @owner, add_task_params("backlog"), nil ]
+    when "add_task" then [ @owner, add_task_params(guard.include?("adds_to_imaginarium") ? "imaginarium" : "backlog"), nil ]
     when "complete_contract" then [ @owner, contract_params(task_in(from)), task_in(from) ]
     when "cancel" then [ @owner, { "id" => task_in(from).id }, task_in(from) ]
     when "allow_another_round"

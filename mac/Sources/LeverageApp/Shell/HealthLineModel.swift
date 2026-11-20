@@ -16,6 +16,8 @@ final class HealthLineModel {
         case late
         /// The helper failed to start three times in a minute (PK-4).
         case agentsStopped
+        /// The daily backup is more than 26 hours old (HB-4).
+        case backupLate
         /// The server does not answer.
         case unreachable
     }
@@ -45,6 +47,7 @@ final class HealthLineModel {
         case .running: .healthRunning
         case .late: .healthLate
         case .agentsStopped: .healthAgentsStopped
+        case .backupLate: .healthBackupLate
         case .unreachable: .healthUnreachable
         }
     }
@@ -53,7 +56,7 @@ final class HealthLineModel {
         switch status {
         case .checking: .neutral
         case .running: .good
-        case .late, .agentsStopped: .warning
+        case .late, .agentsStopped, .backupLate: .warning
         case .unreachable: .bad
         }
     }
@@ -71,6 +74,8 @@ final class HealthLineModel {
                 status = .agentsStopped
             } else if health.sweepLate {
                 status = .late
+            } else if health.backupLate {
+                status = .backupLate
             } else {
                 status = .running
             }

@@ -22,7 +22,7 @@ enum BoardCopy: OwnerFacingCopy {
     case chipNoLoginLeft, chipLoginSignedOut
 
     // A card's note.
-    case noteNoReviewer, noteWaitingForLogin, noteWaitingForLoginAt
+    case noteNoReviewer, noteWaitingForAccount, noteWaitingForAccountNoTime, noteAccountSignedOut, anAccount
 
     var text: String {
         switch self {
@@ -69,8 +69,10 @@ enum BoardCopy: OwnerFacingCopy {
         case .chipLoginSignedOut: "Login signed out"
 
         case .noteNoReviewer: "No reviewer agent is connected. Connect one in Agents."
-        case .noteWaitingForLogin: "Waiting for a login to reset."
-        case .noteWaitingForLoginAt: "Waiting for a login to reset, around {time}."
+        case .noteWaitingForAccount: "Waiting for {account}, which resets at {time}."
+        case .noteWaitingForAccountNoTime: "Waiting for {account}. It did not say when it is available again."
+        case .noteAccountSignedOut: "{account} is signed out. Sign in again to continue."
+        case .anAccount: "an account"
         }
     }
 

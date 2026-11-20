@@ -119,4 +119,45 @@ class ClaimTest < ActiveSupport::TestCase
     types = Event.where(workspace_id: @scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
     assert_equal %w[task.lease_expired task.claimed], types
   end
+
+  # HD-4, HE-5 (milestone 3 plan §2.1 rules 1 to 3): the claim records the
+  # seat's first available candidate, on which its run must be, and the
+  # model a run on it uses: the seat's within its provider group, the
+  # credential's in another; null when that one is empty.
+
+  test "a seat whose run is not on its first available candidate is not_eligible (HD-4)" do
+    @scenario.task(state: "ready")
+    below = @scenario.credential(provider: "codex")
+    @scenario.run(@builder, on: below)
+
+    assert_equal "not_eligible", apply(@builder).refusal.code
+    assert_empty written
+  end
+
+  test "with its own login limited, a seat whose run is on the next candidate claims on it, with that login's model" do
+    task = @scenario.task(state: "ready")
+    grok = @scenario.credential(provider: "grok", model: "grok-model-1")
+    @scenario.limit_credential(@credential, reset_at: @scenario.database_now + 3600)
+    @scenario.run(@builder, on: grok)
+    result = apply(@builder).result
+
+    assert_equal [ grok.id, "grok-model-1" ], result.values_at("credential_id", "model")
+    assert_equal({ "seat_id" => @builder.id, "credential_id" => grok.id, "model" => "grok-model-1" }, written.sole.payload)
+    assert_equal grok.id, task.reload.credential_id
+  end
+
+  test "on another login of the seat's provider group the seat's own model is used; on one with no model, null" do
+    @scenario.task(state: "ready")
+    @scenario.task(state: "ready")
+    second = @scenario.credential(provider: "claude", model: "claude-model-2")
+    codex = @scenario.credential(provider: "codex")
+    @scenario.limit_credential(@credential, reset_at: @scenario.database_now + 3600)
+    @scenario.run(@builder, on: second)
+    assert_equal [ second.id, "claude-model-1" ], apply(@builder).result.values_at("credential_id", "model")
+
+    other = @scenario.seat(role: "builder", credential: second, model: "claude-model-1")
+    @scenario.limit_credential(second, reset_at: @scenario.database_now + 3600)
+    @scenario.run(other, on: codex)
+    assert_equal [ codex.id, nil ], apply(other).result.values_at("credential_id", "model")
+  end
 end

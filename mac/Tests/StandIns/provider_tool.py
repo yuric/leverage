@@ -8,7 +8,8 @@ and talks to the stand-in only through files beside it, in `state/`:
 
   state/scenario.json        written by the test (below)
   state/calls.jsonl          one line per run: tool, argv, cwd, env
-  state/counters.json        how many review prompts have been answered
+  state/counters.json        how many review prompts have been answered,
+                             and each account's work prompts
   state/signed-in-<tool>     the sign-in of a tool with one sign-in for the
                              Mac (agy, grok) or with no account folder set
   <account folder>/.standin-signed-in
@@ -40,6 +41,33 @@ scenario.json, every key optional:
 Review round r (0 first) follows reviews[r], and the last entry once the
 list is used up; with no list every review passes.
 
+Directives (plan HD-11), in the same file, each for one account:
+
+  {"directives": [
+     {"tool": "claude", "account": "<CLAUDE_CONFIG_DIR>", "on_prompt": 2,
+      "reply": "claude/run-limit-five-hour.json", "reset_in_seconds": 60},
+     {"tool": "codex", "account": "<CODEX_HOME>", "on_prompt": 1,
+      "reply": "codex/run-rate-limited.json", "times": 3},
+     {"tool": "claude", "account": "<CLAUDE_CONFIG_DIR>", "on_prompt": 3,
+      "sign_out": true},
+     {"tool": "grok", "account": null, "on_prompt": 1, "reply": "..."}]}
+
+`account` is the account folder the run's variable names, or null for agy
+and grok (one sign-in for the Mac) and for a run with no folder. A directive
+counts the account's work prompts, the build and review prompts; the "ready"
+prompt of the answering check is not one. The on_prompt-th work prompt, and
+the times - 1 after it, are answered with the reply file (under replies/),
+whatever the account's sign-in; a sign_out directive removes the account's
+sign-in just before its on_prompt-th work prompt. Each fires at those counts
+and never again, and none reads a clock: the reset time a reply states is
+the moment it is played plus reset_in_seconds, written where the file has
+@RESET_AT_ISO@ (an ISO 8601 time) or "@RESET_AT_EPOCH@" (seconds since
+1970, the quotes included), and it decides nothing here.
+
+Signed out, every tool answers with its recorded or made reply file:
+replies/<provider>/status-signed-out.json for a status command and
+replies/<provider>/run-signed-out.json for a prompt.
+
 Standard library only.
 """
 
@@ -66,6 +94,9 @@ MARK = ".standin-signed-in"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(ROOT, "state")
+REPLIES = os.path.join(ROOT, "replies")
+# The folder of replies/ each tool's files are in: the provider's id.
+PROVIDER_FOLDERS = {"claude": "claude", "codex": "codex", "agy": "gemini", "grok": "grok"}
 
 
 # --- State beside the stand-in ------------------------------------------------
@@ -104,7 +135,9 @@ def scenario():
         return {}
 
 
-def next_review_round():
+def bump_counter(update):
+    """Reads counters.json, lets `update` change it and return a value, and
+    writes it back, under the lock."""
     with Locked():
         path = state_path("counters.json")
         try:
@@ -112,11 +145,18 @@ def next_review_round():
                 counters = json.load(handle)
         except FileNotFoundError:
             counters = {}
-        round_number = counters.get("reviews", 0)
-        counters["reviews"] = round_number + 1
+        value = update(counters)
         with open(path, "w") as handle:
             json.dump(counters, handle)
-    return round_number
+    return value
+
+
+def next_review_round():
+    def update(counters):
+        round_number = counters.get("reviews", 0)
+        counters["reviews"] = round_number + 1
+        return round_number
+    return bump_counter(update)
 
 
 # --- Sign-in ------------------------------------------------------------------
@@ -134,6 +174,13 @@ def signed_in(tool):
     return os.path.exists(mark_file(tool))
 
 
+def sign_out(tool):
+    try:
+        os.remove(mark_file(tool))
+    except FileNotFoundError:
+        pass
+
+
 def sign_in(tool):
     """Plays the owner signing in in the provider's window: one second."""
     time.sleep(SIGN_IN_SECONDS)
@@ -141,6 +188,85 @@ def sign_in(tool):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as handle:
         handle.write("signed in\n")
+
+
+# --- Reply files and directives --------------------------------------------
+
+
+def play(tool, name, reset_in_seconds=None):
+    """Answers with replies/<provider>/<name>: its standard output, its
+    standard error and its exit status, with the reset time filled in."""
+    return play_file(f"{PROVIDER_FOLDERS[tool]}/{name}", reset_in_seconds)
+
+
+def play_file(relative, reset_in_seconds=None):
+    with open(os.path.join(REPLIES, relative), encoding="utf-8") as handle:
+        reply = json.load(handle)
+    stdout, stderr = reply["stdout"], reply["stderr"]
+    if "@RESET_AT_" in stdout + stderr:
+        if reset_in_seconds is None:
+            print(f"stand-in: {relative} states a reset time; its directive needs reset_in_seconds",
+                  file=sys.stderr)
+            return 2
+        reset = int(time.time()) + int(reset_in_seconds)
+        iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(reset))
+        stdout, stderr = (text.replace("@RESET_AT_ISO@", iso).replace('"@RESET_AT_EPOCH@"', str(reset))
+                          for text in (stdout, stderr))
+    sys.stdout.write(stdout)
+    sys.stdout.flush()
+    sys.stderr.write(stderr)
+    sys.stderr.flush()
+    return reply["exit_status"]
+
+
+def account_of(tool):
+    """The account folder a run of `tool` is for, or None (one sign-in for
+    the Mac, or no folder set)."""
+    variable = ACCOUNT_VARIABLES.get(tool)
+    folder = os.environ.get(variable) if variable else None
+    return os.path.realpath(folder) if folder else None
+
+
+def same_account(directive_account, account):
+    if not directive_account:
+        return account is None
+    return account is not None and os.path.realpath(directive_account) == account
+
+
+def is_work_prompt(prompt):
+    return "LEVERAGE-EVIDENCE" in prompt or "LEVERAGE-CRITERION" in prompt
+
+
+def directive_for(tool, prompt):
+    """Counts a work prompt of the run's account and applies the directives
+    for that count: a sign-out is done here, and the reply directive that
+    answers this prompt, if any, is returned. Any other prompt counts for
+    nothing and has no directive."""
+    if not is_work_prompt(prompt):
+        return None
+    account = account_of(tool)
+    key = f"{tool}|{account or ''}"
+
+    def update(counters):
+        prompts = counters.setdefault("prompts", {})
+        prompts[key] = prompts.get(key, 0) + 1
+        return prompts[key]
+    count = bump_counter(update)
+    answer = None
+    for directive in scenario().get("directives") or []:
+        if directive.get("tool") != tool or not same_account(directive.get("account"), account):
+            continue
+        first = int(directive["on_prompt"])
+        if directive.get("sign_out"):
+            if count == first:
+                sign_out(tool)
+        elif first <= count < first + int(directive.get("times") or 1) and answer is None:
+            answer = directive
+    return answer
+
+
+def play_directive(directive):
+    return play_file(directive["reply"], directive.get("reset_in_seconds"))
 
 
 # --- Prompts ------------------------------------------------------------------
@@ -222,19 +348,18 @@ def claude(argv):
             print(json.dumps({"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty",
                               "email": STATUS_EMAIL, "orgName": STATUS_ORG}, indent=2))
             return 0
-        print(json.dumps({"loggedIn": False, "authMethod": "none", "apiProvider": "firstParty"}, indent=2))
-        return 1
+        return play("claude", "status-signed-out.json")
     if argv[:2] == ["auth", "login"]:
         sign_in("claude")
         print("Login successful.")
         return 0
     prompt = prompt_of(argv, "-p", "--print")
     if prompt is not None:
+        directive = directive_for("claude", prompt)
         if not signed_in("claude"):
-            print(json.dumps({"type": "result", "subtype": "success", "is_error": True,
-                              "result": "Not logged in · Please run /login",
-                              "usage": {"input_tokens": 0, "output_tokens": 0}}))
-            return 1
+            return play("claude", "run-signed-out.json")
+        if directive:
+            return play_directive(directive)
         text = answer(prompt, os.getcwd())
         print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": text,
                           "usage": {"input_tokens": 120, "output_tokens": 30}}))
@@ -252,8 +377,7 @@ def codex(argv):
         if signed_in("codex"):
             print(f"Logged in using ChatGPT ({STATUS_EMAIL}, {STATUS_ORG})", file=sys.stderr)
             return 0
-        print("Not logged in", file=sys.stderr)
-        return 1
+        return play("codex", "status-signed-out.json")
     if argv == ["login"]:
         sign_in("codex")
         print("Successfully logged in", file=sys.stderr)
@@ -262,11 +386,13 @@ def codex(argv):
         prompt = argv[1]
         folder = option(argv, "-C", "--cd") or os.getcwd()
         last = option(argv, "-o", "--output-last-message")
+        directive = directive_for("codex", prompt)
+        if not signed_in("codex"):
+            return play("codex", "run-signed-out.json")
+        if directive:
+            return play_directive(directive)
         print(json.dumps({"type": "thread.started", "thread_id": "standin-thread"}))
         print(json.dumps({"type": "turn.started"}))
-        if not signed_in("codex"):
-            print(json.dumps({"type": "error", "message": "unexpected status 401 Unauthorized"}))
-            return 101
         text = answer(prompt, folder)
         print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": text}}))
         print(json.dumps({"type": "turn.completed", "usage": {"input_tokens": 200, "output_tokens": 40}}))
@@ -284,12 +410,13 @@ def agy(argv):
         return 0
     prompt = prompt_of(argv, "-p", "--print", "--prompt")
     if prompt is not None:
-        # What a signed-out agy does is not known (plan PV-4): this answer
-        # is made up.
+        directive = directive_for("agy", prompt)
+        # What a signed-out agy does is not known (plan PV-4): its reply
+        # file is made up.
         if not signed_in("agy"):
-            print(json.dumps({"status": "ERROR", "response": "",
-                              "error": "You are not signed in to Antigravity."}))
-            return 1
+            return play("agy", "run-signed-out.json")
+        if directive:
+            return play_directive(directive)
         text = answer(prompt, os.getcwd())
         print(json.dumps({"conversation_id": "standin-conversation", "status": "SUCCESS",
                           "response": text + "\n", "num_turns": 1,
@@ -304,10 +431,9 @@ def grok(argv):
         print(VERSIONS["grok"])
         return 0
     if argv == ["models"]:
-        if signed_in("grok"):
-            print(f"Signed in as {STATUS_EMAIL} ({STATUS_ORG})")
-        else:
-            print("You are not authenticated.")
+        if not signed_in("grok"):
+            return play("grok", "status-signed-out.json")
+        print(f"Signed in as {STATUS_EMAIL} ({STATUS_ORG})")
         print("Default model: grok-standin")
         return 0
     if argv[:1] == ["login"]:
@@ -316,10 +442,13 @@ def grok(argv):
         return 0
     prompt = prompt_of(argv, "-p", "--single")
     if prompt is not None:
-        # What a signed-out `grok -p` does is not known: this is made up.
+        directive = directive_for("grok", prompt)
+        # What a signed-out `grok -p` does is not known: its reply file is
+        # made up.
         if not signed_in("grok"):
-            print("You are not authenticated.")
-            return 1
+            return play("grok", "run-signed-out.json")
+        if directive:
+            return play_directive(directive)
         text = answer(prompt, option(argv, "--cwd") or os.getcwd())
         print(text)
         return 0

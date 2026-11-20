@@ -70,11 +70,86 @@ public protocol HelperTokenIssuing: Sendable {
     func issueHelperToken(name: String, idempotencyKey: String) async throws -> String?
 }
 
+/// One macOS notification about a Needs you item (HM-30): the item's
+/// heading and its sentence, with the task's title and the account's name
+/// and never an email.
+public struct OwnerNotification: Equatable, Sendable {
+    /// The Needs you item it is about; a click reports it.
+    public let itemID: UUID
+    public let title: String
+    public let body: String
+
+    public init(itemID: UUID, title: String, body: String) {
+        self.itemID = itemID
+        self.title = title
+        self.body = body
+    }
+}
+
+/// Tells the owner a Needs you item opened (HM-27 to HM-31). The real one
+/// is `UserNotifier`; where none is made (tests, `swift run`, Linux) the app
+/// gets `SilentNotifier`.
+public protocol Notifying: AnyObject, Sendable {
+    /// Asks the system for permission, once the app is signed in (HM-28);
+    /// whether it was given.
+    func requestPermission() async -> Bool
+    /// Whether permission is given now. Asks nothing.
+    func isPermitted() async -> Bool
+    /// Shows one notification, also while the app is in front (HM-31).
+    func post(_ notification: OwnerNotification) async
+    /// What a click on a notification does: it is handed the item's id, and
+    /// the app opens the Needs you tab. nil removes it.
+    func onClick(_ handler: (@Sendable (UUID) -> Void)?)
+}
+
+/// Keeps the one number the inbox watcher needs to outlive the app: the
+/// highest `inbox.opened` `seq` it announced (HM-29). No secret.
+public protocol InboxCursorStoring: AnyObject, Sendable {
+    /// The stored number; 0 when none was stored or it cannot be read.
+    func load() -> Int
+    func save(_ seq: Int) throws
+}
+
 /// The services the app runs with.
 public protocol AppRuntime: Sendable {
     var server: any ServerSupervising { get }
     var helper: any HelperSupervising { get }
     var sessions: any SessionStoring { get }
+    var notifier: any Notifying { get }
+    var inboxCursor: any InboxCursorStoring { get }
+}
+
+extension AppRuntime {
+    /// A runtime that names no notifier posts nothing.
+    public var notifier: any Notifying { SilentNotifier.shared }
+    /// A runtime that names no cursor store keeps the cursor in memory.
+    public var inboxCursor: any InboxCursorStoring { InMemoryInboxCursor.shared }
+}
+
+/// The notifier that posts nothing. Permission is never given, so the app's
+/// own line says notifications are off (HM-28).
+public final class SilentNotifier: Notifying {
+    public static let shared = SilentNotifier()
+
+    public init() {}
+
+    public func requestPermission() async -> Bool { false }
+    public func isPermitted() async -> Bool { false }
+    public func post(_ notification: OwnerNotification) async {}
+    public func onClick(_ handler: (@Sendable (UUID) -> Void)?) {}
+}
+
+/// A cursor kept in memory: gone when the app quits.
+public final class InMemoryInboxCursor: InboxCursorStoring, @unchecked Sendable {
+    public static let shared = InMemoryInboxCursor()
+
+    private let lock = NSLock()
+    private var stored = 0
+
+    public init() {}
+
+    public func load() -> Int { lock.withLock { stored } }
+    public func save(_ seq: Int) throws { lock.withLock { stored = seq } }
 }
 
 /// The runtime where the services are not built: every service reports
@@ -85,6 +160,8 @@ public struct UnavailableRuntime: AppRuntime {
     public let server: any ServerSupervising = UnavailableServer()
     public let helper: any HelperSupervising = UnavailableHelper()
     public let sessions: any SessionStoring = NoSessionStore()
+    public let notifier: any Notifying = SilentNotifier()
+    public let inboxCursor: any InboxCursorStoring = InMemoryInboxCursor()
 }
 
 private final class UnavailableServer: ServerSupervising {

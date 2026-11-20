@@ -1,12 +1,22 @@
 require "test_helper"
 
 # Test 3 (PRD L836) for the timers (milestone 2 plan WP5): for each of
-# Transitions::Table::TIMERS and every task state, the state_machine.json
+# milestone 2's three timers and every task state, the state_machine.json
 # row's move and events, or invalid_state where no row starts. A timer is
 # run here as its own command, by the app, on the one task or review it
-# names, with its lease past the due time.
+# names, with its lease past the due time. Milestone 3's two timers are in
+# Transitions::Table::TIMERS too; their cases are in
+# state_table_handoff_test.rb (credential_hold_release) and
+# state_table_accounts_test.rb (seat_run_placement) (milestone 3 plan
+# HT-2), and state_table_all_test.rb proves each is walked once.
 class StateTableTimersTest < ActiveSupport::TestCase
   T = Leverage::Transitions
+
+  COMMANDS = %w[builder_lease_expiry review_lease_expiry command_key_retention].freeze
+
+  test "the three are Table::TIMERS but milestone 3's two" do
+    assert_equal COMMANDS, T::Table::TIMERS - %w[credential_hold_release seat_run_placement]
+  end
 
   setup { @scenario = Scenario.new(lease_length_seconds: 600) }
 
@@ -38,7 +48,7 @@ class StateTableTimersTest < ActiveSupport::TestCase
     @scenario.make_due(review)
   end
 
-  StateTableCases.define(self, T::Table::TIMERS) do |kase|
+  StateTableCases.define(self, COMMANDS) do |kase|
     skip "Finishing needs an outward action, which milestone 2 does not build (SC-3)" if kase.from == "finishing"
 
     case kase.command

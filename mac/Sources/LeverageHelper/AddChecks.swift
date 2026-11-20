@@ -14,7 +14,23 @@ import LeverageKit
 ///
 /// Verify is the same checks with no waiting: a missing tool or a signed-out
 /// account fails at once, no sign-in is opened, and the folder is kept.
+///
+/// Sign in again (plan HE-36) is milestone 2's sign-in wait followed by the
+/// verify checks: a missing tool fails at once, a signed-out account opens
+/// the provider's own sign-in and waits for it as Add does, and the
+/// account's folder is kept whatever the result. A login whose folder is
+/// gone gets a new, empty one to sign in to.
 struct AddChecks: Sendable {
+    /// Which of the three requests runs the checks.
+    enum Mode: Sendable {
+        case add, verify, signInAgain
+
+        /// Waits for the owner to install a missing tool.
+        var waitsForInstall: Bool { self == .add }
+        /// Opens the provider's sign-in and waits for the owner.
+        var waitsForSignIn: Bool { self != .verify }
+    }
+
     let api: any HelperAPI
     let settings: HelperSettings
     let timings: HelperTimings
@@ -25,16 +41,20 @@ struct AddChecks: Sendable {
     var folders: AccountFolders { AccountFolders(supportFolder: settings.supportFolder) }
 
     func add(_ request: HelperRequest) async -> HelperRequestResult {
-        await run(request, verifying: false)
+        await run(request, mode: .add)
     }
 
     func verify(_ request: HelperRequest) async -> HelperRequestResult {
-        await run(request, verifying: true)
+        await run(request, mode: .verify)
+    }
+
+    func signInAgain(_ request: HelperRequest) async -> HelperRequestResult {
+        await run(request, mode: .signInAgain)
     }
 
     private static let loginChecks: [HelperCheck] = [.toolInstalled, .signedIn, .testPrompt]
 
-    private func run(_ request: HelperRequest, verifying: Bool) async -> HelperRequestResult {
+    private func run(_ request: HelperRequest, mode: Mode) async -> HelperRequestResult {
         var run = CheckRun(request: request, api: api, log: log)
         guard let credential = request.credentialID, request.params.credentialKind != .apiToken,
               let provider = request.params.provider,
@@ -50,10 +70,9 @@ struct AddChecks: Sendable {
         // The account's own folder, for a provider that keeps one.
         var folder: URL?
         if entry.accountFolderVariable.value != nil {
-            if verifying {
-                folder = folders.existing(for: credential)
-                if folder == nil { return await run.fail(.signedIn, .notSignedIn) }
-            } else {
+            folder = folders.existing(for: credential)
+            if mode == .verify, folder == nil { return await run.fail(.signedIn, .notSignedIn) }
+            if mode == .add || folder == nil {
                 do {
                     folder = try folders.createFresh(for: credential)
                 } catch {
@@ -62,22 +81,22 @@ struct AddChecks: Sendable {
                 }
             }
         }
-        let result = await checks(entry, folder: folder, verifying: verifying, run: &run)
-        if result.outcome == .failed, !verifying {
+        let result = await checks(entry, folder: folder, mode: mode, run: &run)
+        if result.outcome == .failed, mode == .add {
             folders.remove(for: credential)
         }
         return result
     }
 
     private func checks(
-        _ entry: ProviderEntry, folder: URL?, verifying: Bool, run: inout CheckRun
+        _ entry: ProviderEntry, folder: URL?, mode: Mode, run: inout CheckRun
     ) async -> HelperRequestResult {
         // 1. Installed.
         await run.report(HelperCheckProgress(check: .toolInstalled, state: .running))
         var found = await locator.locate(entry)
         if found == nil {
             let offer = Self.offer(for: entry)
-            if verifying { return await run.fail(.toolInstalled, .notInstalled, install: offer) }
+            if !mode.waitsForInstall { return await run.fail(.toolInstalled, .notInstalled, install: offer) }
             await run.report(HelperCheckProgress(check: .toolInstalled, state: .waitingForInstall, install: offer))
             let locator = self.locator
             let appeared = await Waiting.until(every: timings.lookEvery, atMost: timings.waitAtMost) {
@@ -95,7 +114,7 @@ struct AddChecks: Sendable {
         let status = ToolStatus(locator: locator, prober: prober, settings: settings)
         let look: @Sendable () async -> Bool = { await status.isSignedIn(entry, tool: tool, accountFolder: folder) }
         if await !look() {
-            if verifying { return await run.fail(.signedIn, .notSignedIn) }
+            if !mode.waitsForSignIn { return await run.fail(.signedIn, .notSignedIn) }
             await run.report(HelperCheckProgress(check: .signedIn, state: .waitingForSignIn))
             let window = SignInWindow(locator: locator, timings: timings)
             guard await window.waitForSignIn(entry, tool: tool, accountFolder: folder, look: look) else {

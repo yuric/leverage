@@ -8,6 +8,27 @@ struct CardChip: Equatable, Sendable {
     let tone: Tokens.Tone
 }
 
+/// What a card knows about an account the task waits for: its name as the
+/// owner reads it, whether it is signed out, and when its limit ends.
+struct CardAccount: Equatable, Sendable {
+    let name: String
+    let isSignedOut: Bool
+    let limitedUntil: Date?
+
+    init(name: String, isSignedOut: Bool = false, limitedUntil: Date? = nil) {
+        self.name = name
+        self.isSignedOut = isSignedOut
+        self.limitedUntil = limitedUntil
+    }
+
+    /// "Claude, Personal": the provider and the name, never the email.
+    init(of credential: Credential) {
+        self.init(
+            name: "\(ProviderNames.name(credential.provider)), \(credential.name)",
+            isSignedOut: credential.state == .signedOut, limitedUntil: credential.limitedUntil)
+    }
+}
+
 /// What a card (and the top of a task page) says about a task, in plain words.
 struct CardContent: Equatable, Sendable {
     let statusLine: String
@@ -18,7 +39,42 @@ struct CardContent: Equatable, Sendable {
 /// The words of a card, from the task's state, its holds and the names of the
 /// agents (MA-1, MA-28, MA-29). One home, used by the board and the task page.
 enum CardWording {
-    static func content(for task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool) -> CardContent {
+    /// What a task waits for from an account: the sentence, and whether the
+    /// account is signed out (a sign-in) rather than at a limit (a reset).
+    private struct AccountWait {
+        let note: String
+        let signedOut: Bool
+    }
+
+    /// A task waits for an account when a hold of that kind is open, or the
+    /// read names one (HM-40, HE-15, HE-16). The words are HM-45's.
+    private static func accountWait(
+        _ task: BoardTask, _ waits: [HoldReason], _ accounts: [UUID: CardAccount], _ clock: ResetClock
+    ) -> AccountWait? {
+        let limitHold = waits.contains(.credentialLimit)
+        let signedOutHold = waits.contains(.credentialSignedOut)
+        guard limitHold || signedOutHold || task.waitingForCredentialID != nil else { return nil }
+        let account = task.waitingForCredentialID.flatMap { accounts[$0] }
+        let name = account?.name ?? BoardCopy.anAccount.text
+        // A signed-out account is waited for by a sign-in whatever the hold:
+        // its reset alone would not make it available, and the read leaves
+        // its reset time out (HE-11).
+        if signedOutHold || account?.isSignedOut == true {
+            let sentence = BoardCopy.noteAccountSignedOut.filled(["account": name])
+            return AccountWait(note: sentence.prefix(1).uppercased() + sentence.dropFirst(), signedOut: true)
+        }
+        guard let until = task.waitingUntil ?? account?.limitedUntil else {
+            return AccountWait(note: BoardCopy.noteWaitingForAccountNoTime.filled(["account": name]), signedOut: false)
+        }
+        let time = ResetTime.text(for: until, clock: clock)
+        return AccountWait(
+            note: BoardCopy.noteWaitingForAccount.filled(["account": name, "time": time]), signedOut: false)
+    }
+
+    static func content(
+        for task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool,
+        accounts: [UUID: CardAccount] = [:], clock: ResetClock = .system
+    ) -> CardContent {
         let state = task.task.state
         let lane = BoardLane.lane(for: task)
         let agent = (task.task.holderSeatID ?? task.task.builderSeatID).flatMap { seatNames[$0] }
@@ -65,12 +121,14 @@ enum CardWording {
         }
 
         var note: String?
-        if waits.contains(.credentialLimit) || (task.waitingForCredentialID != nil && state != .done) {
-            if let until = task.waitingUntil {
-                let time = until.formatted(date: .abbreviated, time: .shortened)
-                note = BoardCopy.noteWaitingForLoginAt.filled(["time": time])
-            } else {
-                note = BoardCopy.noteWaitingForLogin.text
+        let accountWait = state == .done || state == .cancelled ? nil : accountWait(task, waits, accounts, clock)
+        if let accountWait {
+            note = accountWait.note
+            // A Ready task no agent can start has no hold to give it a chip.
+            if waitReason == nil, state == .ready {
+                chip = CardChip(
+                    text: (accountWait.signedOut ? BoardCopy.chipLoginSignedOut : BoardCopy.chipNoLoginLeft).text,
+                    tone: accountWait.signedOut ? .stop : .wait)
             }
         } else if state == .inReview, !reviewerSeatExists {
             note = BoardCopy.noteNoReviewer.text
@@ -88,8 +146,12 @@ struct BoardCard: Identifiable, Equatable, Sendable {
     let chip: CardChip?
     let note: String?
 
-    init(task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool) {
-        let content = CardWording.content(for: task, seatNames: seatNames, reviewerSeatExists: reviewerSeatExists)
+    init(
+        task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool, accounts: [UUID: CardAccount] = [:],
+        clock: ResetClock = .system
+    ) {
+        let content = CardWording.content(
+            for: task, seatNames: seatNames, reviewerSeatExists: reviewerSeatExists, accounts: accounts, clock: clock)
         id = task.task.id
         title = task.task.title
         lane = BoardLane.lane(for: task)
@@ -121,12 +183,16 @@ final class BoardModel {
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private var seatNames: [UUID: String] = [:]
+    @ObservationIgnored private var accounts: [UUID: CardAccount] = [:]
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
 
-    init(api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void) {
+    @ObservationIgnored private let clock: ResetClock
+
+    init(api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system) {
         self.api = api
         self.noteRead = noteRead
+        self.clock = clock
     }
 
     /// The lanes as drawn: the six, and the cancelled lane while the switch is on.
@@ -154,10 +220,28 @@ final class BoardModel {
             } catch {
                 // The names are a nicety: the board still shows without them.
             }
+            var known = accounts
+            if board.tasks.contains(where: { $0.waitingForCredentialID != nil }) {
+                // The accounts are a nicety too: a card that waits for one still says so without its name.
+                do {
+                    let list = try await api.credentials()
+                    known = Dictionary(
+                        list.credentials.map { ($0.credential.id, CardAccount(of: $0.credential)) },
+                        uniquingKeysWith: { first, _ in first })
+                    position = min(position, list.asOfSeq)
+                } catch let error as TransportError where error.code == .unauthenticated {
+                    throw error
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {}
+            }
             guard mine == generation else { return }
             seatNames = names
+            accounts = known
             cards = board.tasks.map {
-                BoardCard(task: $0, seatNames: names, reviewerSeatExists: board.reviewerSeatExists)
+                BoardCard(
+                    task: $0, seatNames: names, reviewerSeatExists: board.reviewerSeatExists, accounts: known,
+                    clock: clock)
             }
             state = .loaded
             noteRead(position)

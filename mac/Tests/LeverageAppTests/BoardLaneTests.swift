@@ -50,6 +50,31 @@ struct BoardLaneTests {
         #expect(lane(.working, holds: [.contractIncomplete, .ownerQuestion]) == .blocked)
     }
 
+    @Test("a task waiting on a provider limit stays in its own lane, In progress when an agent is on it (L697)")
+    func waitingOnALimitIsNotBlocked() {
+        #expect(lane(.working, holds: [.credentialLimit]) == .inProgress)
+        #expect(lane(.inReview, holds: [.credentialLimit]) == .inProgress)
+        #expect(lane(.ready, holds: [.credentialLimit]) == .ready)
+        #expect(!BoardLane.blockingReasons.contains(.credentialLimit))
+        #expect(lane(.working, holds: [.seatPaused]) == .inProgress)
+    }
+
+    @Test("a task waiting on a sign-in, or paused by the owner, is in Blocked from every lane it can come from")
+    func signedOutAndPausedAreBlocked() {
+        for state in [TaskState.backlog, .ready, .working, .inReview] {
+            #expect(lane(state, holds: [.credentialSignedOut]) == .blocked, "\(state)")
+            #expect(lane(state, holds: [.ownerHold]) == .blocked, "\(state)")
+        }
+        #expect(lane(.working, holds: [.credentialLimit, .ownerHold]) == .blocked)
+    }
+
+    @Test("an idea is in the Ideas lane, and Move to Backlog puts it in Backlog")
+    func ideasLane() {
+        #expect(lane(.imaginarium) == .imaginarium)
+        #expect(lane(.backlog) == .backlog)
+        #expect(BoardLane.standard.first == .imaginarium)
+    }
+
     @Test("the holds that block are the registry's in_blocked ones, read from the contract file")
     func matchesTheRegistry() throws {
         let root = URL(fileURLWithPath: #filePath)

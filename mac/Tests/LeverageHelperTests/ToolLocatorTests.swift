@@ -61,6 +61,18 @@ struct ToolLocatorTests {
         #expect(await status.isSignedIn(entry, tool: tool, accountFolder: folder))
     }
 
+    @Test("a status command that cannot start is not signed in, for the add and verify checks as before")
+    func statusCouldNotTell() async throws {
+        let rig = try HelperRig()
+        let entry = ProviderCatalog.entry(for: "claude")!
+        let locator = ToolLocator(settings: rig.settings, timings: fastTimings)
+        let missing = LocatedTool(path: rig.toolDir.appendingPathComponent("no-such-tool").path, version: "0.0.0")
+        let folder = try rig.folders.createFresh(for: UUID())
+
+        #expect(await !ToolStatus(locator: locator, prober: FixedPrompt(answer: true), settings: rig.settings)
+            .isSignedIn(entry, tool: missing, accountFolder: folder))
+    }
+
     @Test("Gemini's sign-in is read by the test prompt")
     func geminiStatus() async throws {
         let rig = try HelperRig()

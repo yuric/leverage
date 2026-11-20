@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "provider": "grok",
+    "tool": "grok",
+    "tool_version": "1.0.77",
+    "date": "2026-11-19",
+    "basis": "recorded_no_login",
+    "kind": "status",
+    "command": [
+      "models"
+    ],
+    "shows": "grok models on this Mac, where Grok is not signed in",
+    "expect": "signed_out",
+    "marker": "LVRG-REPLY-4f10a4b67af8",
+    "marker_place": "added on standard error, which the tool left empty; nothing in the reply needed scrubbing",
+    "scrubbed": []
+  },
+  "exit_status": 0,
+  "stdout": "You are not authenticated.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n  - grok-4.5\n",
+  "stderr": "LVRG-REPLY-4f10a4b67af8\n"
+}

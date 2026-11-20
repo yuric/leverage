@@ -286,11 +286,17 @@ func eventually(
 extension OwnerClient {
     /// Add credential for a login, then the helper's checks: the stand-in
     /// starts signed out, the helper opens its sign-in and goes on by
-    /// itself (L714, L716). Returns the credential's id.
-    func addLogin(_ provider: Provider, name: String, deadline: Double = 120) async throws -> UUID {
-        let id = UUID()
+    /// itself (L714, L716). Returns the credential's id. `id` lets a test
+    /// know the login's account folder before it is added; `model` and
+    /// `strengthRank` are what the app sends (milestone 3 plan HE-5).
+    func addLogin(
+        _ provider: Provider, name: String, id: UUID = UUID(), model: String? = nil, strengthRank: Int? = nil,
+        deadline: Double = 120
+    ) async throws -> UUID {
         let outcome = try await addCredential(
-            AddCredentialRequest(credentialID: id, provider: provider, name: name), key: IdempotencyKey())
+            AddCredentialRequest(
+                credentialID: id, provider: provider, name: name, model: model, strengthRank: strengthRank),
+            key: IdempotencyKey())
         guard let added = try outcome.completedResult() else {
             throw EndToEndFailure("add_credential answered no request")
         }
@@ -299,6 +305,23 @@ extension OwnerClient {
             throw EndToEndFailure("the checks of \(name) did not pass: \(String(describing: request.result))")
         }
         return id
+    }
+
+    /// Verify (`verify_credential`) or Sign in again (`sign_in_again`) for
+    /// one login, followed to the helper's end. Returns the ended request;
+    /// throws when it did not end as `expected` (a Verify that finds the
+    /// login signed out fails, and that failure is what writes
+    /// `credential.signed_out`).
+    func followed(
+        _ what: String, _ outcome: PlainOutcome, expected: HelperRequestState = .finished, deadline: Double = 120
+    ) async throws -> HelperRequest {
+        _ = try outcome.completedResult()
+        guard let id = outcome.helperRequestID else { throw EndToEndFailure("\(what) answered no helper request") }
+        let request = try await finishedRequest(id, owner: self, deadline: deadline)
+        guard request.state == expected else {
+            throw EndToEndFailure("\(what) ended \(request.state.rawValue): \(String(describing: request.result))")
+        }
+        return request
     }
 
     func connect(_ name: String, role: SeatRole, login: UUID) async throws -> UUID {

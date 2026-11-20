@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "exec",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--json",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-C",
+      "<work folder>",
+      "-o",
+      "<answer file>"
+    ],
+    "shows": "a failed run whose agent message talks of a 5-hour limit and of a 401: the agent's own words, not a refusal, so it is a plain failure",
+    "expect": "failed",
+    "marker": "LVRG-REPLY-fd2389b37da5"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-fd2389b37da5\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"item.completed\", \"item\": {\"id\": \"item_0\", \"type\": \"agent_message\", \"text\": \"The 5-hour limit test returns 401 Unauthorized.\"}}\n{\"type\": \"error\", \"message\": \"stream disconnected before completion\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"stream disconnected before completion\"}}\n",
+  "stderr": ""
+}

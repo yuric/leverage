@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "provider": "gemini",
+    "tool": "agy",
+    "tool_version": "1.5.12",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--print-timeout",
+      "600s",
+      "--mode",
+      "accept-edits"
+    ],
+    "shows": "a limit on the per-model window, with the time it resets",
+    "expect": "limit",
+    "expect_window": "per_model",
+    "expect_reset": "stated",
+    "marker": "LVRG-REPLY-a09bded9ecbf"
+  },
+  "exit_status": 1,
+  "stdout": "{\"conversation_id\": \"LVRG-REPLY-a09bded9ecbf\", \"status\": \"ERROR\", \"response\": \"\", \"error\": \"Quota exceeded: you have reached the per-model limit for this model. It resets at @RESET_AT_ISO@.\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}}\n",
+  "stderr": ""
+}

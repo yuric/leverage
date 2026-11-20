@@ -137,8 +137,10 @@ class CoreLoopContractTest < Minitest::Test
     assert_includes schemas.fetch("TaskPage").fetch("required"), "inbox_items"
     assert_includes schemas.fetch("TaskPage").fetch("required"), "events"
     health = schemas.fetch("SystemHealth")
-    assert_equal %w[helper_last_reported_at orchestrator queued_helper_requests ready_tasks sweep_last_ran_at sweep_late
-      waiting_reviews], health.fetch("required").sort
+    # The Handoff milestone adds the backup's two fields (milestone 3 plan
+    # HB-4).
+    assert_equal %w[backup_last_ran_at backup_late helper_last_reported_at orchestrator queued_helper_requests ready_tasks
+      sweep_last_ran_at sweep_late waiting_reviews], health.fetch("required").sort
     assert_includes health.dig("properties", "orchestrator", "enum"), "not_set_up"
   end
 

@@ -15,7 +15,7 @@
       "format": "uuid"
     },
     "credential_id": {
-      "description": "The credential that caused the hold, where one applies. For credential_limit, the candidate that resets first (the wait_limit step's subject).",
+      "description": "The credential that caused the hold, where one applies. For credential_limit, the candidate that resets first (the wait_limit step's subject), or the credential that stopped when no candidate has a reset time (milestone 3 plan HE-13). For credential_signed_out, the first signed-out candidate in the seat's order (milestone 3 plan HE-12).",
       "type": ["string", "null"],
       "format": "uuid"
     }

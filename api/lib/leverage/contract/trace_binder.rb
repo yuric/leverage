@@ -28,22 +28,26 @@ module Leverage
         [ hex[0, 8], hex[8, 4], hex[12, 4], hex[16, 4], hex[20, 12] ].join("-")
       end
 
-      attr_reader :start
+      attr_reader :start, :namespace
 
-      def initialize(start:)
+      # namespace: another UUID gives every symbol other ids, the same for
+      # that namespace in every run: for a run whose rows stay in a
+      # database (a committing test) beside other runs of a trace.
+      def initialize(start:, namespace: NAMESPACE)
         @start = start
+        @namespace = namespace
       end
 
       def id(symbol)
         raise ArgumentError, "not a trace symbol: #{symbol.inspect}" unless SYMBOL.match?(symbol)
 
-        self.class.uuid_v5(NAMESPACE, symbol)
+        self.class.uuid_v5(namespace, symbol)
       end
 
       def event_id(number)
         raise ArgumentError, "events are counted from 1: #{number.inspect}" unless number.is_a?(Integer) && number >= 1
 
-        self.class.uuid_v5(NAMESPACE, "@event:#{number}")
+        self.class.uuid_v5(namespace, "@event:#{number}")
       end
 
       def time(seconds)

@@ -9,7 +9,8 @@ import LeverageKit
 /// when its token ended), a new token is issued with a new key and the
 /// helper is started again, at most three times in a minute; after that it
 /// stops trying until `tryAgain()`. `stop()` asks the helper to stop and
-/// waits for it.
+/// waits for it; a start meanwhile waits for it too, so two helpers never
+/// run at once and none is lost track of.
 ///
 /// The helper's standard output and standard error go to
 /// `<support folder>/logs/helper.log`, which is replaced by a new file at a
@@ -62,6 +63,8 @@ public actor HelperSupervisor: HelperSupervising {
     private var apiBaseURL: URL?
     private var issuer: (any HelperTokenIssuing)?
     private var child: RunningSubprocess?
+    /// Helpers asked to stop that have not ended yet.
+    private var ending: [RunningSubprocess] = []
     /// Changes whenever a child is replaced or stopped, so that the end of
     /// an old child is not taken for the end of the current one.
     private var generation = 0
@@ -94,6 +97,12 @@ public actor HelperSupervisor: HelperSupervising {
         stopping = false
         restarts = []
         epoch += 1
+        let mineEpoch = epoch
+        current = .starting
+        // A helper an earlier stop asked to stop ends first: two never run
+        // at once.
+        await endingHelpersEnded()
+        guard !stopping, epoch == mineEpoch else { return current }
         return await launch(restart: nil)
     }
 
@@ -102,17 +111,34 @@ public actor HelperSupervisor: HelperSupervising {
         return await start(apiBaseURL: apiBaseURL, issuer: issuer)
     }
 
+    /// Returns once no helper this supervisor started runs: one an earlier
+    /// stop is still waiting for included, so a quit that follows a Sign
+    /// out does not leave before the helper has ended.
     public func stop() async {
         stopping = true
         epoch += 1
         generation += 1
+        // Set before the wait: a start meanwhile waits for this helper to
+        // end and then starts a new one, and owns the state from then on.
+        current = .stopped
         if let running = child {
             child = nil
+            ending.append(running)
             running.stop()
-            _ = await running.wait()
-            log.info("the helper stopped")
         }
-        current = .stopped
+        await endingHelpersEnded()
+    }
+
+    /// Waits for every helper asked to stop, by this call's stop or an
+    /// earlier one, to end.
+    private func endingHelpersEnded() async {
+        while let next = ending.first {
+            _ = await next.wait()
+            if ending.contains(where: { $0 === next }) {
+                ending.removeAll { $0 === next }
+                log.info("the helper stopped")
+            }
+        }
     }
 
     // MARK: - Starting

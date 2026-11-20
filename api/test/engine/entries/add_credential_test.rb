@@ -109,4 +109,13 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal id, retry_outcome.result.fetch("credential_id")
     assert Credential.exists?(id)
   end
+
+  # Milestone 3 plan HE-5: Add credential sets strength rank 1 when the
+  # request names none, and keeps the model the request carries.
+  test "a request with no strength rank adds the login with rank 1 and the model it names" do
+    id = SecureRandom.uuid
+    assert_completed(owner_command("add_credential", body(id: id, model: "tool-default-model")))
+
+    assert_equal [ 1, "tool-default-model", nil ], Credential.find(id).attributes.values_at("strength_rank", "model", "effort")
+  end
 end

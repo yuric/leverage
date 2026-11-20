@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+# The maintainer's restore (milestone 3 plan §2.5, HB-5): makes the
+# database this program is configured for again from one dump, then gives
+# the roles their rights (db:grants) and runs the replay test
+# (leverage:verify_log). Run it in the backup service, with the API, the
+# sweep and the backup stopped (docs/DEPLOY.md):
+#
+#   docker compose stop api sweep backup
+#   docker compose run --rm --no-deps backup bin/restore /backups/<file> [--replace]
+#   docker compose up -d
+#
+# Over a database whose events table holds a row it changes nothing unless
+# --replace is given. It exits non-zero if any step fails.
+require_relative "../config/environment"
+
+USAGE = "Usage: bin/restore <dump file> [--replace]".freeze
+args = ARGV.dup
+replace = !args.delete("--replace").nil?
+if args.size != 1 || args.first.start_with?("-")
+  warn USAGE
+  exit 2
+end
+
+begin
+  target = Leverage::Backup.restore(args.first, replace: replace)
+  puts "Restored #{target.database} from #{args.first}; the log passes the replay test."
+rescue Leverage::Backup::Failed => error
+  warn "The restore did not finish: #{error.message}"
+  exit 1
+end

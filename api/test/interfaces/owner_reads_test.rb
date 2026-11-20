@@ -13,6 +13,9 @@ class OwnerReadsTest < CommittingTestCase
 
   setup do
     @owner_token = scenario.owner_token
+    # backup_runs belongs to the database, not to a workspace (HB-4), and a
+    # committing test leaves its rows behind: start from none.
+    BackupRun.delete_all
   end
 
   def owner_get(path, token: @owner_token)
@@ -147,7 +150,7 @@ class OwnerReadsTest < CommittingTestCase
   test "a task waiting on a credential names it and when it resets" do
     credential = scenario.credential
     reset = Time.current.change(usec: 0) + 3600
-    credential.update_columns(limited_until: reset)
+    credential.update_columns(limited_since: Time.current.change(usec: 0), limited_until: reset)
     task = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
     ActiveRecord::Base.transaction do
       Leverage::Holds.open(scenario.context, task: task, reason: "credential_limit", credential_id: credential.id)
@@ -158,6 +161,148 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal [ "credential_limit" ], card["hold_reasons"]
     assert_equal credential.id, card["waiting_for_credential_id"]
     assert_equal reset.iso8601, Time.iso8601(card["waiting_until"]).iso8601
+  end
+
+  test "a task held for a signed-out account names it and has no time (HE-12)" do
+    credential = scenario.credential(limited_until: Time.current + 3600)
+    scenario.sign_out_credential(credential)
+    task = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    scenario.hold(task, reason: "credential_signed_out", credential: credential)
+
+    card = assert_read("/v1/owner/board")["tasks"].sole
+
+    assert_equal [ "credential_signed_out" ], card["hold_reasons"]
+    assert_equal credential.id, card["waiting_for_credential_id"]
+    assert_nil card["waiting_until"], "a signed-out account has no reset time (rule 8)"
+  end
+
+  # A Ready task whose wait_ready step names credential_limit (HE-35): the
+  # event that opens that step is task.released with the cause.
+  def waiting_ready_task(cause: "credential_limit")
+    task = scenario.task(state: "ready")
+    scenario.append("task.released", task: task, payload: { reason: "unable_to_continue", wait_cause: cause })
+    task
+  end
+
+  def ready_card(task) = assert_read("/v1/owner/board")["tasks"].find { |card| card.dig("task", "id") == task.id }
+
+  test "a Ready task waiting on a provider limit names the account that resets first and the time (HM-40)" do
+    first = scenario.credential(name: "First account")
+    second = scenario.credential(name: "Second account")
+    scenario.seat(role: "builder", credential: first)
+    soon = Time.current.change(usec: 0) + 1800
+    scenario.limit_credential(first, reset_at: soon + 3600)
+    scenario.limit_credential(second, reset_at: soon)
+    task = waiting_ready_task
+
+    card = ready_card(task)
+
+    assert_equal "ready", card.dig("task", "state")
+    assert_equal false, card["blocked"]
+    assert_equal second.id, card["waiting_for_credential_id"]
+    assert_equal soon.iso8601, Time.iso8601(card["waiting_until"]).iso8601
+    assert_nil card["inbox_item"]
+  end
+
+  test "a Ready task waiting on a limit with no reset time names the limited account and no time" do
+    credential = scenario.credential
+    scenario.seat(role: "builder", credential: credential)
+    scenario.limit_credential(credential)
+    task = waiting_ready_task
+
+    card = ready_card(task)
+
+    assert_equal credential.id, card["waiting_for_credential_id"]
+    assert_nil card["waiting_until"]
+  end
+
+  test "a Ready task whose step names no limit says nothing about accounts, and neither does one an account can take" do
+    credential = scenario.credential
+    scenario.seat(role: "builder", credential: credential)
+    plain = scenario.task(state: "ready")
+    assert_nil ready_card(plain)["waiting_for_credential_id"]
+
+    scenario.limit_credential(credential, reset_at: Time.current + 600)
+    assert_nil ready_card(plain)["waiting_for_credential_id"], "the step names no limit, so the card does not claim one"
+
+    scenario.limit_credential(credential, reset_at: Time.current - 5)
+    named = waiting_ready_task
+    assert_nil ready_card(named)["waiting_for_credential_id"], "its reset passed: an account is available"
+  end
+
+  test "a Ready task is not waiting on a limit while another seat's account is available" do
+    limited = scenario.credential
+    scenario.seat(role: "builder", credential: limited)
+    scenario.seat(role: "builder", credential: scenario.credential)
+    scenario.limit_credential(limited, reset_at: Time.current + 600)
+    task = waiting_ready_task
+
+    assert_nil ready_card(task)["waiting_for_credential_id"]
+  end
+
+  test "a Ready task no agent can start because every account is signed out names the account and opens no item (HE-16)" do
+    credential = scenario.credential(name: "Signed-out account")
+    scenario.seat(role: "builder", credential: credential)
+    scenario.sign_out_credential(credential)
+    task = scenario.task(state: "ready")
+
+    card = ready_card(task)
+
+    assert_equal credential.id, card["waiting_for_credential_id"]
+    assert_nil card["waiting_until"]
+    assert_nil card["inbox_item"]
+    assert_equal false, card["blocked"]
+    assert_equal 0, InboxItem.where(workspace_id: scenario.workspace_id).count
+  end
+
+  test "a task In review that no reviewer can take names the limited reviewer account and when it resets (HE-15)" do
+    credential = scenario.credential(name: "Reviewer account")
+    scenario.seat(role: "reviewer", credential: credential)
+    scenario.seat(role: "builder")
+    reset = Time.current.change(usec: 0) + 900
+    scenario.limit_credential(credential, reset_at: reset)
+    task = scenario.task(state: "in_review")
+
+    card = ready_card(task)
+
+    assert_equal "in_review", card.dig("task", "state")
+    assert_equal credential.id, card["waiting_for_credential_id"]
+    assert_equal reset.iso8601, Time.iso8601(card["waiting_until"]).iso8601
+    assert_nil card["inbox_item"], "no item opens for it in this milestone"
+    assert_equal false, card["blocked"]
+  end
+
+  test "a task In review that no reviewer can take because the account is signed out names it, with no time (HE-15)" do
+    credential = scenario.credential
+    scenario.seat(role: "reviewer", credential: credential)
+    scenario.sign_out_credential(credential)
+    task = scenario.task(state: "in_review")
+
+    card = ready_card(task)
+
+    assert_equal credential.id, card["waiting_for_credential_id"]
+    assert_nil card["waiting_until"]
+  end
+
+  test "a task In review says nothing about accounts when a reviewer can take it, when one has begun, or when there is none" do
+    taken = scenario.task(state: "in_review")
+    assert_nil ready_card(taken)["waiting_for_credential_id"], "no reviewer seat exists"
+
+    free = scenario.credential
+    scenario.seat(role: "reviewer", credential: free)
+    scenario.seat(role: "reviewer")
+    assert_nil ready_card(taken)["waiting_for_credential_id"], "a reviewer with an available account and one that connects on its own"
+
+    limited = scenario.credential
+    scenario.limit_credential(limited, reset_at: Time.current + 600)
+    scenario.limit_credential(free, reset_at: Time.current + 600)
+    own = scenario.seat(role: "reviewer", credential: limited)
+    assert_nil ready_card(taken)["waiting_for_credential_id"], "a reviewer that connects on its own can always begin"
+
+    scenario.remove(Seat.where(workspace_id: scenario.workspace_id, role: "reviewer", credential_id: nil).sole)
+    begun = scenario.task(state: "in_review")
+    scenario.review(begun, reviewer: own)
+    assert_nil ready_card(begun)["waiting_for_credential_id"], "its review has begun"
   end
 
   test "another workspace's tasks never appear" do
@@ -207,6 +352,126 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal "Made-up builder", names[[ "seat", builder.id ]]
     assert_equal "Made-up reviewer", names[[ "seat", reviewer.id ]]
     assert_equal "Made-up Claude account", names[[ "credential", credential.id ]]
+  end
+
+  # HE-15, HE-16: the task page names the account a task waits for exactly
+  # as its board card does, from the same reading.
+  WAITING = %w[waiting_for_credential_id waiting_until].freeze
+
+  def page_and_card(task)
+    page = assert_read("/v1/owner/tasks/#{task.id}")
+    [ page.slice(*WAITING), ready_card(task).slice(*WAITING) ]
+  end
+
+  test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do
+    credential = scenario.credential(name: "Signed-out account")
+    scenario.seat(role: "builder", credential: credential)
+    scenario.sign_out_credential(credential)
+    task = scenario.task(state: "ready")
+
+    page, card = page_and_card(task)
+
+    assert_equal({ "waiting_for_credential_id" => credential.id, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
+  test "the task page names the limited account a task In review waits for and when it resets, as its card does (HE-15)" do
+    credential = scenario.credential(name: "Reviewer account")
+    scenario.seat(role: "reviewer", credential: credential)
+    reset = Time.current.change(usec: 0) + 900
+    scenario.limit_credential(credential, reset_at: reset)
+    task = scenario.task(state: "in_review")
+
+    page, card = page_and_card(task)
+
+    assert_equal credential.id, page["waiting_for_credential_id"]
+    assert_equal reset.iso8601, Time.iso8601(page["waiting_until"]).iso8601
+    assert_equal card, page
+  end
+
+  test "the task page names a credential hold's account, with its reset time only while it is active, as its card does" do
+    limited = scenario.credential(name: "Limited account")
+    reset = Time.current.change(usec: 0) + 3600
+    scenario.limit_credential(limited, reset_at: reset)
+    working = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: limited))
+    scenario.hold(working, reason: "credential_limit", credential: limited)
+    signed_out = scenario.credential(name: "Signed-out account", limited_until: Time.current + 3600)
+    scenario.sign_out_credential(signed_out)
+    stopped = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: signed_out))
+    scenario.hold(stopped, reason: "credential_signed_out", credential: signed_out)
+
+    page, card = page_and_card(working)
+    assert_equal limited.id, page["waiting_for_credential_id"]
+    assert_equal reset.iso8601, Time.iso8601(page["waiting_until"]).iso8601
+    assert_equal card, page
+
+    page, card = page_and_card(stopped)
+    assert_equal({ "waiting_for_credential_id" => signed_out.id, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
+  test "the task page names no account for a task that waits for none, nor for a credential hold that closed" do
+    task = scenario.task(state: "ready")
+
+    page, card = page_and_card(task)
+
+    assert_equal({ "waiting_for_credential_id" => nil, "waiting_until" => nil }, page)
+    assert_equal card, page
+
+    credential = scenario.credential
+    scenario.limit_credential(credential, reset_at: Time.current.change(usec: 0) + 3600)
+    working = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    scenario.hold(working, reason: "credential_limit", credential: credential).update_columns(closed_at: Time.current)
+
+    page, card = page_and_card(working)
+
+    assert_equal({ "waiting_for_credential_id" => nil, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
+  test "the task page carries the task's recovery times, oldest start first (HE-17)" do
+    credential = scenario.credential(name: "Made-up Claude account")
+    task = scenario.task(state: "ready")
+    times = [ { kind: "limit", credential_id: credential.id, review_id: nil, started_at: "2026-01-01T00:10:00.000000Z",
+                ended_at: "2026-01-01T00:10:00.000000Z", seconds: 0, ended_by: "handoff" },
+              { kind: "signed_out", credential_id: credential.id, review_id: nil, started_at: "2026-01-01T01:00:00.000000Z",
+                ended_at: nil, seconds: 300, ended_by: nil } ]
+    seen = nil
+    fake = lambda do |workspace_id, task_id: nil, now: nil|
+      seen = [ workspace_id, task_id ]
+      times
+    end
+
+    original = Leverage::Reads::RecoveryTimes.method(:call)
+    begin
+      Leverage::Reads::RecoveryTimes.define_singleton_method(:call, &fake)
+      assert_read("/v1/owner/tasks/#{task.id}")
+    ensure
+      Leverage::Reads::RecoveryTimes.define_singleton_method(:call, original)
+    end
+
+    assert_equal [ scenario.workspace_id, task.id ], seen
+    assert_equal times.map(&:deep_stringify_keys), response.parsed_body["recovery_times"]
+  end
+
+  test "the task page has no recovery times while the task has none" do
+    task = scenario.task(state: "ready")
+
+    assert_equal [], assert_read("/v1/owner/tasks/#{task.id}")["recovery_times"]
+  end
+
+  test "the task page names the credentials its handoff events carry (HE-17)" do
+    from = scenario.credential(name: "Account the work left")
+    to = scenario.credential(name: "Account the work went to")
+    seat = scenario.seat(role: "builder", credential: from)
+    task = scenario.task(state: "working", builder: seat)
+    scenario.append("credential.switched", task: task, subject: to, payload: { seat_id: seat.id, from_credential_id: from.id,
+      model: nil, review_id: nil, job_id: nil })
+
+    names = assert_read("/v1/owner/tasks/#{task.id}")["names"].to_h { |name| [ [ name["kind"], name["id"] ], name["name"] ] }
+
+    assert_equal "Account the work left", names[[ "credential", from.id ]]
+    assert_equal "Account the work went to", names[[ "credential", to.id ]]
   end
 
   test "an event in the task's log has no hidden column and keeps its payload" do
@@ -274,6 +539,22 @@ class OwnerReadsTest < CommittingTestCase
       two.slice("provider", "model", "effort", "credential_id", "run_state", "last_polled_at", "wanted_running"))
   end
 
+  test "the roster says which credential each run is on and why its last run ended (HD-3, HD-10)" do
+    own = scenario.credential
+    other = scenario.credential
+    running = scenario.seat(role: "builder", credential: own)
+    stopped = scenario.seat(role: "builder", credential: own)
+    waiting = scenario.seat(role: "builder")
+    scenario.run(running, on: other)
+    stopped.update_columns(run_credential_id: nil, run_state: "stopped", run_stop_reason: "limit")
+
+    seats = assert_read("/v1/owner/seats")["seats"].to_h { |seat| [ seat["id"], seat ] }
+
+    assert_equal [ other.id, nil ], seats.fetch(running.id).values_at("run_credential_id", "run_stop_reason")
+    assert_equal [ nil, "limit" ], seats.fetch(stopped.id).values_at("run_credential_id", "run_stop_reason")
+    assert_equal [ nil, nil ], seats.fetch(waiting.id).values_at("run_credential_id", "run_stop_reason")
+  end
+
   test "the roster carries no token or digest" do
     scenario.seat(role: "builder")
     owner_get("/v1/owner/seats")
@@ -303,6 +584,31 @@ class OwnerReadsTest < CommittingTestCase
     assert one["last_verified_at"]
     assert_equal "signed_out", body["credentials"].last.dig("credential", "state")
     assert_equal "Made-up plan", body["credentials"].last.dig("credential", "plan")
+  end
+
+  test "the credentials list carries limited_since with limited_until, and a reset that passed writes nothing (HE-3)" do
+    since = Time.current.change(usec: 0) - 60
+    reset = Time.current.change(usec: 0) + 3600
+    scenario.credential(name: "Plain")
+    limited = scenario.credential(name: "Limited")
+    open_ended = scenario.credential(name: "No reset time")
+    scenario.limit_credential(limited, since: since, reset_at: reset)
+    scenario.limit_credential(open_ended, since: since)
+
+    by_name = assert_read("/v1/owner/credentials")["credentials"].to_h { |row| [ row.dig("credential", "name"), row.fetch("credential") ] }
+
+    assert_equal [ nil, nil ], by_name.fetch("Plain").values_at("limited_since", "limited_until")
+    assert_equal [ since.iso8601, reset.iso8601 ],
+      by_name.fetch("Limited").values_at("limited_since", "limited_until").map { |value| Time.iso8601(value).iso8601 }
+    assert_equal [ since.iso8601, nil ], [ Time.iso8601(by_name.fetch("No reset time")["limited_since"]).iso8601, by_name.fetch("No reset time")["limited_until"] ]
+  end
+
+  test "the credentials list still leaves out a row whose add is running, limited or not (IN-24)" do
+    running = scenario.credential(name: "Still adding", added: false)
+    running.update_columns(limited_since: Time.current)
+    shown = scenario.credential(name: "Added")
+
+    assert_equal [ shown.id ], assert_read("/v1/owner/credentials")["credentials"].map { |row| row.dig("credential", "id") }
   end
 
   # --- get_system_health ----------------------------------------------------------------------------------------------
@@ -347,6 +653,53 @@ class OwnerReadsTest < CommittingTestCase
     SweepRun.create!(workspace_id: scenario.workspace_id, ran_at: scenario.database_now - 121, tasks_touched: 0,
       workspace_timers_fired: 0)
     assert_equal true, assert_read("/v1/owner/health")["sweep_late"]
+  end
+
+  def backup(ran_at, name: "made-up-#{SecureRandom.hex(3)}.dump")
+    BackupRun.create!(ran_at: ran_at, file_name: name, bytes: 1234)
+  end
+
+  test "the health line carries the newest backup's time and is not late within 26 hours (HB-4)" do
+    backup(scenario.database_now - 30 * 3600)
+    newest = scenario.database_now - 26 * 3600 + 60
+    backup(newest)
+
+    body = assert_read("/v1/owner/health")
+
+    assert_in_delta newest.to_f, Time.iso8601(body["backup_last_ran_at"]).to_f, 0.01
+    assert_equal false, body["backup_late"]
+  end
+
+  test "the backup is late when the newest is older than 26 hours (HB-4)" do
+    backup(scenario.database_now - 26 * 3600 - 60)
+
+    body = assert_read("/v1/owner/health")
+
+    assert body["backup_last_ran_at"]
+    assert_equal true, body["backup_late"]
+  end
+
+  test "with no backup, the backup is late only once the workspace is more than an hour old (HB-4)" do
+    body = assert_read("/v1/owner/health")
+    assert_nil body["backup_last_ran_at"]
+    assert_equal false, body["backup_late"]
+
+    Workspace.where(id: scenario.workspace_id).update_all(created_at: scenario.database_now - 59 * 60)
+    assert_equal false, assert_read("/v1/owner/health")["backup_late"]
+
+    Workspace.where(id: scenario.workspace_id).update_all(created_at: scenario.database_now - 61 * 60)
+    assert_equal true, assert_read("/v1/owner/health")["backup_late"]
+  end
+
+  test "a backup is the database's, not a workspace's: another workspace's health sees the same newest dump (HB-4)" do
+    newest = scenario.database_now - 3600
+    backup(newest)
+    other = Scenario.new
+
+    owner_get("/v1/owner/health", token: other.owner_token)
+
+    assert_response :ok
+    assert_in_delta newest.to_f, Time.iso8601(response.parsed_body["backup_last_ran_at"]).to_f, 0.01
   end
 
   # --- get_helper_request -----------------------------------------------------------------------------------------

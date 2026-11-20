@@ -72,6 +72,16 @@ class ReportRequestProgressTest < ActiveSupport::TestCase
     assert_equal 1, verify.reload.progress.size
   end
 
+  # Review: the helper reports each check of Sign in again (MA-17).
+  test "an open_sign_in request takes progress too (review)" do
+    login = @scenario.sign_out_credential(@scenario.credential(provider: "codex"))
+    sign_in = queue_request("open_sign_in", credential: login, state: "picked_up")
+
+    assert_completed(progress("signed_in", "waiting_for_sign_in", request: sign_in))
+    assert_equal [ { "check" => "signed_in", "state" => "waiting_for_sign_in", "failure" => nil, "install" => nil } ],
+      sign_in.reload.progress
+  end
+
   test "a request with no checks is invalid_state" do
     seat = @scenario.seat(credential: @scenario.credential(provider: "codex"))
     start = queue_request("start_seat", seat: seat, state: "picked_up")

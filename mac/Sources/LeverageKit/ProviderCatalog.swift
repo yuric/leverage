@@ -41,10 +41,8 @@ public struct StatusCheck: Equatable, Sendable {
         /// The output is JSON; this Boolean field says signed in. Nothing
         /// else of the output is kept or logged.
         case jsonField(String)
-        /// Exit code 0 means signed in.
-        case exitCode
-        /// Signed out when the output contains this text (the exit code is
-        /// 0 either way).
+        /// Signed out when the output (either stream) contains this text,
+        /// whatever the exit code; signed in when it exits 0 without it.
         case signedOutText(String)
         /// There is no status command: the answering check (a test prompt)
         /// is the sign-in check.
@@ -134,6 +132,11 @@ public struct ProviderEntry: Equatable, Sendable {
     /// The variables the tool gets besides `ProviderCatalog.baseEnvironment`
     /// and its account folder variable, each without a secret (CL-10).
     public let environment: Evidenced<[String]>
+    /// The model the tool itself named as its default on this Mac, with how
+    /// that is known; nil where it names none (plan HE-5). Add credential
+    /// sends it as the credential's model. It goes stale when the provider
+    /// retires the model.
+    public let defaultModel: Evidenced<String>?
 }
 
 /// Per login provider: names, commands, installer and environment, each
@@ -164,12 +167,19 @@ public enum ProviderCatalog {
                 .documented),
             // Without USER, `claude auth status` answers signed out on this
             // Mac: the tool finds its login by the user's name.
-            environment: Evidenced([EnvironmentKeys.user], .probe)),
+            environment: Evidenced([EnvironmentKeys.user], .probe),
+            // The one key of `modelUsage` in the reply to the inventory's
+            // "ready" prompt, run with no --model (inventory-providers.md §6).
+            defaultModel: Evidenced("claude-opus-5-5", .probeFullEnvironment)),
         ProviderEntry(
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
             version: Evidenced(["--version"], .probe),
-            status: Evidenced(StatusCheck(arguments: ["login", "status"], reading: .exitCode), .probe),
+            // Signed out, `codex login status` exits 1 and says "Not logged
+            // in" on standard error (replies/codex/status-signed-out.json);
+            // any other failure says nothing either way.
+            status: Evidenced(
+                StatusCheck(arguments: ["login", "status"], reading: .signedOutText("Not logged in")), .probe),
             // `codex login --help` lists --device-auth, and --with-api-key and
             // --with-access-token, which read standard input; not what the
             // plain command does.
@@ -183,7 +193,9 @@ public enum ProviderCatalog {
                     kind: .script(shell: "/bin/sh"), url: URL(string: "https://chatgpt.com/codex/install.sh")!,
                     allowedHosts: ["chatgpt.com"]),
                 .documented),
-            environment: Evidenced([], .probe)),
+            environment: Evidenced([], .probe),
+            // No reply Codex gave on this Mac names its default model.
+            defaultModel: nil),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
             // One sign-in for the Mac: the PRD states it, and `agy --help`
@@ -200,7 +212,9 @@ public enum ProviderCatalog {
                     url: URL(string: "https://antigravity.google/cli/install.sh")!,
                     allowedHosts: ["antigravity.google"]),
                 .documented),
-            environment: Evidenced([], .probe)),
+            environment: Evidenced([], .probe),
+            // No reply Antigravity gave on this Mac names its default model.
+            defaultModel: nil),
         ProviderEntry(
             id: "grok", displayName: "Grok", toolDisplayName: "Grok Build", toolName: "grok",
             // How Grok Build keeps an account is not known; it is treated as
@@ -218,7 +232,10 @@ public enum ProviderCatalog {
             // The vendor's pages answered 403 and 404 again on 2026-11-19.
             installer: Evidenced(nil, .unverified),
             // Grok is not signed in on this Mac, so no prompt has run.
-            environment: Evidenced([], .unverified)),
+            environment: Evidenced([], .unverified),
+            // `grok models` printed "Default model: grok-4.6", signed out
+            // (inventory-providers.md §4 and §5).
+            defaultModel: Evidenced("grok-4.6", .probeFullEnvironment)),
     ]
 
     public static func entry(for id: String) -> ProviderEntry? {

@@ -2702,7 +2702,7 @@
       "get": {
         "operationId": "get_helper_request",
         "summary": "Reads one helper request with each check's progress.",
-        "description": "What the Mac app follows after Add credential, Verify, Install, Start or Stop, which complete at once with `helper_request_id` in their result (milestone 2 plan IN-23).",
+        "description": "What the Mac app follows after Add credential, Verify, Sign in again, Install, Start or Stop, which complete at once with `helper_request_id` in their result (milestone 2 plan IN-23).",
         "tags": [
           "owner"
         ],
@@ -6124,6 +6124,7 @@
       "post": {
         "operationId": "sign_in_again",
         "summary": "Opens the provider's own sign-in window through the helper.",
+        "description": "Queues one `open_sign_in` helper request for an added login, or answers the unfinished one for that account; its result is `{helper_request_id}`, which the Mac app follows with get_helper_request. Anything but an added login is 422 (milestone 3 plan HE-36).",
         "tags": [
           "owner"
         ],
@@ -7009,7 +7010,7 @@
       "post": {
         "operationId": "report_limit",
         "summary": "Reports that a run hit a provider limit.",
-        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_limit, which reads no task state; with no candidate the job is left to its run timeout.",
+        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_limit, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8). Until jobs arrive, a report that names a job answers 404 (milestone 3 plan HE-33).",
         "tags": [
           "helper"
         ],
@@ -7091,7 +7092,7 @@
       "post": {
         "operationId": "report_signed_out",
         "summary": "Reports that a login was found signed out.",
-        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_signed_out, which reads no task state; with no candidate the job is left to its run timeout.",
+        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_signed_out, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8). Until jobs arrive, a report that names a job answers 404 (milestone 3 plan HE-33).",
         "tags": [
           "helper"
         ],
@@ -7492,7 +7493,8 @@
           "credential_hold_release",
           "orchestrator_offline",
           "reviewer_eligibility",
-          "command_key_retention"
+          "command_key_retention",
+          "seat_run_placement"
         ]
       },
       "Refusal": {
@@ -11049,6 +11051,29 @@
           "wanted_running": {
             "type": "boolean",
             "description": "Set by Start (and by Connect for a seat the app runs), cleared by Stop and Remove; the helper's token issue starts every seat that is wanted running (milestone 2 plan IN-30)."
+          },
+          "run_credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The credential the seat's current run is on: the one its seat token was issued for. Null when the seat has no run (milestone 3 plan HD-3)."
+          },
+          "run_stop_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "finished",
+              "limit",
+              "signed_out",
+              "error",
+              "stopped",
+              null
+            ],
+            "description": "Why the seat's last run ended, as the helper reported it or as a limit or sign-out report recorded it; null when no run has ended (milestone 3 plan HD-3, HD-10)."
           }
         },
         "required": [
@@ -11065,7 +11090,9 @@
           "last_polled_at",
           "run_state",
           "removed_at",
-          "wanted_running"
+          "wanted_running",
+          "run_credential_id",
+          "run_stop_reason"
         ],
         "examples": [
           {
@@ -11082,7 +11109,9 @@
             "last_polled_at": "2026-01-01T00:00:00Z",
             "run_state": "stopped",
             "removed_at": "2026-01-01T00:00:00Z",
-            "wanted_running": false
+            "wanted_running": false,
+            "run_credential_id": "00000000-0000-4000-8000-000000000144",
+            "run_stop_reason": null
           }
         ]
       },
@@ -11435,6 +11464,14 @@
             ],
             "format": "date-time"
           },
+          "limited_since": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When a limit was reported for the credential; null when it is not limited. limited_until is when that limit ends, or null when the provider gave no reset time. Limited means limited_since is set and limited_until is null or later than now (milestone 3 plan HE-3)."
+          },
           "position": {
             "type": "integer",
             "minimum": 1
@@ -11476,6 +11513,7 @@
           "account_email",
           "state",
           "limited_until",
+          "limited_since",
           "position",
           "model",
           "effort",
@@ -11493,6 +11531,7 @@
             "account_email": "example",
             "state": "active",
             "limited_until": "2026-01-01T00:00:00Z",
+            "limited_since": "2026-01-01T00:00:00Z",
             "position": 1,
             "model": "example",
             "effort": "example",
@@ -11941,6 +11980,7 @@
               "account_email": "example",
               "state": "active",
               "limited_until": "2026-01-01T00:00:00Z",
+              "limited_since": "2026-01-01T00:00:00Z",
               "position": 1,
               "model": "example",
               "effort": "example",
@@ -13373,6 +13413,22 @@
               "$ref": "#/components/schemas/Hold"
             }
           },
+          "waiting_for_credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The account the task waits for, or null: the board card's waiting_for_credential_id for the same task, from the same reading (milestone 3 plan HM-40, HE-15, HE-16)."
+          },
+          "waiting_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When that account resets, or null: the board card's waiting_until for the same task."
+          },
           "reviews": {
             "type": "array",
             "items": {
@@ -13398,7 +13454,14 @@
             "items": {
               "$ref": "#/components/schemas/LogName"
             },
-            "description": "The names of the seats and credentials its events carry."
+            "description": "The names of the seats and credentials its events and its recovery times carry."
+          },
+          "recovery_times": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecoveryTime"
+            },
+            "description": "The task's recovery times, oldest start first, computed from its events (milestone 3 plan HE-17, HE-18)."
           },
           "reviewer_seat_exists": {
             "type": "boolean",
@@ -13416,10 +13479,13 @@
           "actions",
           "questions",
           "holds",
+          "waiting_for_credential_id",
+          "waiting_until",
           "reviews",
           "inbox_items",
           "events",
           "names",
+          "recovery_times",
           "reviewer_seat_exists",
           "as_of_seq"
         ],
@@ -13502,6 +13568,8 @@
                 "closed_at": "2026-01-01T00:00:00Z"
               }
             ],
+            "waiting_for_credential_id": "00000000-0000-4000-8000-000000000314",
+            "waiting_until": "2026-01-01T00:00:00Z",
             "reviews": [
               {
                 "id": "00000000-0000-4000-8000-000000000079",
@@ -13564,8 +13632,100 @@
                 "name": "example"
               }
             ],
+            "recovery_times": [],
             "reviewer_seat_exists": false,
             "as_of_seq": 12
+          }
+        ]
+      },
+      "RecoveryTime": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One recovery time of the task (PRD L703; milestone 3 plan HE-17): from a credential.limit_reached, or a credential.signed_out with a seat, to the moment work on the same piece of work went on. It ends at the credential.switched the starting command wrote (0 seconds), or else at the first later event of that work whose actor is a seat. Computed from events only.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "limit",
+              "signed_out"
+            ],
+            "description": "limit for a credential.limit_reached start, signed_out for a credential.signed_out start."
+          },
+          "credential_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The credential that stopped: the start event's subject."
+          },
+          "review_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The review the start event names, or null for the task's build work."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The start event's effective_at."
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "The end event's effective_at; null while it is open, or when the task was cancelled or done first."
+          },
+          "seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "ended_at minus started_at; for an open one, measured to the moment of the read (L322); null when it was not recovered."
+          },
+          "ended_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "handoff",
+              "seat_event",
+              "not_recovered",
+              null
+            ],
+            "description": "handoff when another credential took over in the command that wrote the start, seat_event when the continuing seat's first event of that work ended it, not_recovered when the task was cancelled or done first, null while it is open."
+          }
+        },
+        "required": [
+          "kind",
+          "credential_id",
+          "review_id",
+          "started_at",
+          "ended_at",
+          "seconds",
+          "ended_by"
+        ],
+        "examples": [
+          {
+            "kind": "limit",
+            "credential_id": "00000000-0000-4000-8000-000000000312",
+            "review_id": null,
+            "started_at": "2026-01-01T00:10:00Z",
+            "ended_at": "2026-01-01T00:10:00Z",
+            "seconds": 0,
+            "ended_by": "handoff"
+          },
+          {
+            "kind": "signed_out",
+            "credential_id": "00000000-0000-4000-8000-000000000313",
+            "review_id": null,
+            "started_at": "2026-01-01T00:10:00Z",
+            "ended_at": null,
+            "seconds": 300,
+            "ended_by": null
           }
         ]
       },
@@ -13676,7 +13836,9 @@
                 "last_polled_at": "2026-01-01T00:00:00Z",
                 "run_state": "stopped",
                 "removed_at": "2026-01-01T00:00:00Z",
-                "wanted_running": false
+                "wanted_running": false,
+                "run_credential_id": "00000000-0000-4000-8000-000000000231",
+                "run_stop_reason": null
               }
             ],
             "as_of_seq": 12
@@ -13808,6 +13970,7 @@
                   "account_email": "example",
                   "state": "active",
                   "limited_until": "2026-01-01T00:00:00Z",
+                  "limited_since": "2026-01-01T00:00:00Z",
                   "position": 1,
                   "model": "example",
                   "effort": "example",
@@ -13886,6 +14049,18 @@
               "offline"
             ],
             "description": "Always not_set_up until the orchestrator seat exists (milestone 4)."
+          },
+          "backup_last_ran_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the newest backup_runs row's dump was made; null when none was (milestone 3 plan HB-4)."
+          },
+          "backup_late": {
+            "type": "boolean",
+            "description": "True when the newest backup is more than 26 hours old, or when there is none and the workspace is more than one hour old (milestone 3 plan HB-4)."
           }
         },
         "required": [
@@ -13895,7 +14070,9 @@
           "queued_helper_requests",
           "ready_tasks",
           "waiting_reviews",
-          "orchestrator"
+          "orchestrator",
+          "backup_last_ran_at",
+          "backup_late"
         ],
         "examples": [
           {
@@ -13905,7 +14082,9 @@
             "queued_helper_requests": 0,
             "ready_tasks": 1,
             "waiting_reviews": 0,
-            "orchestrator": "not_set_up"
+            "orchestrator": "not_set_up",
+            "backup_last_ran_at": "2026-01-01T00:00:00Z",
+            "backup_late": false
           }
         ]
       },
@@ -14955,7 +15134,7 @@
       "HelperRequestParams": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The non-secret inputs of a helper request that the helper has no other way to learn (milestone 2 plan IN-22): the provider and kind of a credential request, the role, provider, model and effort of a seat request, the provider of an install. The credential and the seat are named by the request's own ids. It never holds a credential's name or a token: the database refuses a `name` key and any key ending in `token`.",
+        "description": "The non-secret inputs of a helper request that the helper has no other way to learn (milestone 2 plan IN-22): the provider and kind of a credential request, the role, provider, model and effort of a seat request, and for a start request the task or review its run continues (milestone 3 plan HD-1), the provider of an install. The credential and the seat are named by the request's own ids. It never holds a credential's name or a token: the database refuses a `name` key and any key ending in `token`.",
         "properties": {
           "provider": {
             "type": "string",
@@ -15000,6 +15179,22 @@
               "null"
             ],
             "description": "The seat's effort; null for the tool's default."
+          },
+          "task_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "A start request's task to continue: the run reads its briefing and goes on from its first criterion that has not passed (milestone 3 plan HD-1, HD-9). At most one of task_id and review_id is set."
+          },
+          "review_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "A start request's review to continue (milestone 3 plan HD-1, HD-9). At most one of task_id and review_id is set."
           }
         },
         "examples": [
@@ -15012,6 +15207,14 @@
             "provider": "codex",
             "model": null,
             "effort": null
+          },
+          {
+            "role": "builder",
+            "provider": "claude",
+            "model": "example",
+            "effort": null,
+            "task_id": "00000000-0000-4000-8000-000000000311",
+            "review_id": null
           }
         ]
       },

@@ -60,11 +60,13 @@ module Leverage
     end
 
     # Starts a paused lease's clock again: due the time it had left after
-    # ctx.at. A lease that is not paused is left as it is.
-    def restart(ctx, subject)
+    # at, the command's time unless the caller gives the effective time of
+    # what restarts it (a hold a timer closes at its due time, PRD L118). A
+    # lease that is not paused is left as it is.
+    def restart(ctx, subject, at: ctx.at)
       return unless paused?(subject)
 
-      subject.update!(lease_due_at: ctx.at + subject.lease_time_left_while_paused.to_f,
+      subject.update!(lease_due_at: at + subject.lease_time_left_while_paused.to_f,
         lease_time_left_while_paused: nil)
     end
 

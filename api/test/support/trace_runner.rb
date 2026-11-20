@@ -28,6 +28,26 @@ require "time"
 #               timer's events carry the due time, and nothing runs
 #               backwards.
 #
+# Times a request sends (milestone 3: a report's reset_at and observed_at)
+# are compared by the engine with its clock, so they are resolved before
+# the command runs, not matched after it. A bound @t is its instant. An
+# unbound one before the command's own @t is placed strictly between the
+# instants of the nearest bound times around it (the database's now
+# standing for the command's own @t), keeping the trace's order. An
+# unbound one after the command's own @t is a future time, FUTURE + s
+# seconds (an hour on), so future times keep their order and the clock
+# never reaches one. The trace then reaches a future time without a clock
+# stub, as a lease reaches its due time (EN-18): before a command at @t:s, every
+# future @t:n with n <= s is moved to the database's now, each
+# credential whose limited_until is that time with it, and @t:n is bound
+# again to the new instant (pass_times). So a reset passes between two
+# commands, and a timer due at a reset carries it as its effective time.
+#
+# Helper requests ($helper_request:name). A command that queues one
+# (verify_credential, sign_in_again) shows no event with its id, so a
+# symbol of that kind first sent in a request is bound to the newest
+# unfinished request of the workspace that no symbol names yet.
+#
 # Timers. A timer command (caller app) cannot wait for a due time, so its
 # lease is put at its due time first with Scenario#make_due (EN-18). Before
 # that, the lease's arithmetic is checked (L116-L120): the lease is running,
@@ -35,9 +55,11 @@ require "time"
 # the @t of the lease's last grant (task.claimed, review.started, an event
 # naming lease_seat_id, or a heartbeat that completed); and in the engine,
 # the row's lease_due_at is one lease length after that grant's own time.
-# A hold on the task between the grant and the timer would pause the
-# clock, which this runner does not model: it fails the trace instead of
-# passing it unchecked. When
+# A hold on the task between the grant and the timer whose reason pauses
+# the lease clock (the registry's lease_clock "pauses") would pause it,
+# which this runner does not model: it fails the trace instead of passing
+# it unchecked. A hold whose clock runs (seat_paused, credential_limit:
+# L116, trace 14) leaves the lease as it was. When
 # the next command comes at the same time (a late call, L913), the timer is
 # what that command applies first (Timers.apply_due), and the two are
 # compared together; otherwise it is run as the sweep runs it, as a command
@@ -63,23 +85,44 @@ class TraceRunner
   EVENT_IDS = %w[actor_id project_id task_id subject_id].freeze
   STEP_FIELDS = %w[step_class round subject_kind cause_kind].freeze
   STEP_IDS = %w[task_id subject_id seat_id cause_rule_id].freeze
+  HELPER_REQUEST = "helper_request".freeze
+  UNFINISHED_REQUESTS = %w[queued picked_up].freeze
+  # An hour: later than any trace's run, and well within the shortest
+  # bound on a reported reset time (Leverage::Handoff::RESET_BOUNDS, six
+  # hours for the five-hour window), so a trace's reset times are kept.
+  FUTURE = 3600
+  LEASE_ENDS = %w[task.lease_expired review.lease_expired].freeze
+  # The hold reasons that pause a lease clock (the registry's lease_clock).
+  PAUSING = Leverage::Contract.registry.fetch("hold_reasons")
+    .select { |reason| reason.fetch("lease_clock") == "pauses" }.map { |reason| reason.fetch("reason") }.freeze
 
   attr_reader :name, :trace, :scenario, :failures, :setup_seq
 
   # trace: the trace itself, when a test runs a changed copy of one.
-  def initialize(name, trace: nil)
+  # namespace: TraceBinder's, for a run whose rows are committed and stay
+  # in the worker's database, so that its ids meet no later run's.
+  def initialize(name, trace: nil, namespace: Leverage::Contract::TraceBinder::NAMESPACE)
     @name = name
     @trace = trace || Leverage::Contract.trace(name)
-    @binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 1, 1))
+    @binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 1, 1), namespace: namespace)
     @ids = {}
     @symbols = {}
     @events = {}
     @times = {}
     @leases = {}
+    @future = Set.new
     @failures = []
   end
 
   def workspace_id = scenario.workspace_id
+
+  # The trace's @t seconds bound to an instant the engine wrote, or nil: a
+  # length the engine measured in its own clock is read back in the
+  # trace's (recovery_time_test.rb).
+  def trace_seconds(instant)
+    instant = Time.iso8601(instant) if instant.is_a?(String)
+    @times.key(instant)
+  end
 
   # Runs the first limit commands (all by default) and returns self; the
   # disagreements are in failures.
@@ -90,6 +133,7 @@ class TraceRunner
     while index < commands.size
       command = commands[index]
       following = commands[index + 1]
+      pass_times(command, index)
       if command.fetch("caller") == "app"
         make_due(command, index)
         if following && following.fetch("caller") != "app" && following.fetch("at") == command.fetch("at")
@@ -118,7 +162,20 @@ class TraceRunner
     end
     @scenario = Scenario.new
     scenario.seed(@binder.bind(setup))
+    added_but_signed_out(setup)
     @setup_seq = scenario.workspace.reload.last_seq
+  end
+
+  # A setup login that is signed out was added before the trace starts and
+  # signed out since (traces 12 and 13: Sign in again is for an added login,
+  # HE-36). Scenario#seed makes a signed-out setup credential one whose add
+  # is still running (no last_verified_at), so it is given the setup's
+  # start as the time its checks passed. A credential row is not a replay
+  # column and the setup's events are not audited.
+  def added_but_signed_out(setup)
+    ids = Array(setup["credentials"]).select { |row| row.fetch("state") == "signed_out" }
+      .map { |row| @binder.id(row.fetch("id")) }
+    Credential.where(workspace_id: workspace_id, id: ids).update_all(last_verified_at: @binder.start)
   end
 
   # --- running -----------------------------------------------------------
@@ -161,10 +218,15 @@ class TraceRunner
   # A timer's subject is put at its due time: the task of each
   # task.lease_expired and the review of each review.lease_expired it
   # expects.
+  # A credential hold's release is due at a reset that pass_times has
+  # already moved, or at once: nothing more to move for it.
   def make_due(command, index)
     command.fetch("expect").fetch("events").each do |event|
+      type = event.fetch("type")
+      next unless LEASE_ENDS.include?(type)
+
       record =
-        case event.fetch("type")
+        case type
         when "task.lease_expired" then Task.find_by(id: @ids[event.fetch("task_id")])
         when "review.lease_expired" then Review.find_by(id: @ids[event.fetch("subject_id")])
         end
@@ -185,6 +247,7 @@ class TraceRunner
   end
 
   def request_params(command, caller_id)
+    @command_seconds = seconds(command.fetch("at"))
     params = resolve(command.fetch("path_params")).merge(resolve(command.fetch("body")))
     subject_class = ACKNOWLEDGEMENTS[command.fetch("command")]
     if subject_class && params.key?("briefing_hash")
@@ -202,7 +265,8 @@ class TraceRunner
     case value
     when Hash then value.to_h { |key, item| [ key, resolve(item) ] }
     when Array then value.map { |item| resolve(item) }
-    when String then value.match?(SYMBOL) ? bound(value) : value
+    when SYMBOL then bound(value)
+    when TIME then sent_time(seconds(value)).utc.iso8601(6)
     else value
     end
   end
@@ -210,7 +274,59 @@ class TraceRunner
   def bound(symbol)
     return key_id(symbol) if symbol.start_with?("$key:")
 
+    bind_helper_request(symbol) if SYMBOL.match(symbol)[1] == HELPER_REQUEST && !@ids.key?(symbol)
     @ids.fetch(symbol) { raise ArgumentError, "#{name}: #{symbol} is sent before the trace shows its id" }
+  end
+
+  def bind_helper_request(symbol)
+    request = HelperRequest.where(workspace_id: workspace_id, state: UNFINISHED_REQUESTS)
+      .where.not(id: @symbols.keys).order(created_at: :desc, id: :desc).first
+    bind_symbol(symbol, request.id, "#{symbol}, the newest unfinished helper request") if request
+  end
+
+  # --- times a request sends ---------------------------------------------
+
+  def seconds(link) = Integer(TIME.match(link)[1], 10)
+
+  # The instant a request sends for @t:n (see the class comment).
+  def sent_time(number)
+    return @times.fetch(number) if @times.key?(number)
+
+    instant = if number > @command_seconds
+      @future_base ||= Time.at(scenario.database_now.to_i + FUTURE).utc
+      @future << number
+      @future_base + number
+    else
+      between(number)
+    end
+    @times[number] = instant
+  end
+
+  # An instant for an unbound @t:n before the command's own @t, strictly
+  # between the nearest bound times around it, at its share of the gap;
+  # the database's now stands for the command's own @t.
+  def between(number)
+    now = scenario.database_now
+    present = @times.reject { |key, _| @future.include?(key) }
+    below = present.select { |key, _| key < number }.max_by(&:first)
+    above = present.select { |key, _| key > number && key < @command_seconds }.min_by(&:first) || [ @command_seconds, now ]
+    below ||= [ number - 1, above.last - (above.first - number + 1) ]
+    share = Rational(number - below.first, above.first - below.first)
+    (below.last + (above.last - below.last) * share).round(6)
+  end
+
+  # Before a command at @t:s, every future time at or before s passes: the
+  # credentials whose reset it is are put at the database's now, and the
+  # time is bound again to that instant (see the class comment).
+  def pass_times(command, index)
+    reached = seconds(command.fetch("at"))
+    @future.select { |number| number <= reached }.sort.each do |number|
+      now = scenario.database_now
+      Credential.where(workspace_id: workspace_id, limited_until: @times.fetch(number)).update_all(limited_until: now)
+      @future.delete(number)
+      @times.delete(number)
+      match_time("@t:#{number}", now, label(command, index), "a reset passing")
+    end
   end
 
   def key_id(symbol) = @binder.id(symbol)
@@ -318,7 +434,9 @@ class TraceRunner
     when Leverage::Leases::BUILDER_GRANT then grant_lease(row.task_id, row.task_id, seconds, row.effective_at)
     when "review.started" then grant_lease(row.subject_id, row.task_id, seconds, row.effective_at)
     when "hold.opened", "hold.closed"
-      @leases.each_value { |lease| lease[:interrupted] = true if lease[:task_id] == row.task_id }
+      if PAUSING.include?(row.payload["reason"])
+        @leases.each_value { |lease| lease[:interrupted] = true if lease[:task_id] == row.task_id }
+      end
     end
     return unless row.payload.is_a?(Hash) && row.payload["lease_seat_id"]
 
@@ -349,7 +467,7 @@ class TraceRunner
     grant = @leases[record.id]
     return fail_at(where, "#{type}: no lease grant comes before it") unless grant
     if grant[:interrupted]
-      return fail_at(where, "#{type}: a hold opened or closed on the task since the lease's grant at " \
+      return fail_at(where, "#{type}: a hold that pauses the lease opened or closed on the task since its grant at " \
                             "@t:#{grant[:seconds]}; the runner does not model a paused lease")
     end
 

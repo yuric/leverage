@@ -43,6 +43,17 @@ final class ConnectAgentModel {
         let provider: Provider
         /// "Claude, Personal"
         let label: String
+
+        init(id: UUID, provider: Provider, label: String) {
+            self.id = id
+            self.provider = provider
+            self.label = label
+        }
+
+        /// A login of the Credentials list, labelled by its provider and name, never its email.
+        init(_ credential: Credential) {
+            self.init(id: credential.id, provider: credential.provider, label: ProviderNames.account(credential))
+        }
     }
 
     /// The roles Connect offers (MA-10). The planner and the orchestrator arrive with the jobs they take.
@@ -137,13 +148,7 @@ final class ConnectAgentModel {
     func load() async {
         do {
             let list = try await api.credentials()
-            allLogins = list.credentials
-                .filter { $0.credential.kind == .login }
-                .map {
-                    LoginChoice(
-                        id: $0.credential.id, provider: $0.credential.provider,
-                        label: "\(ProviderNames.name($0.credential.provider)), \($0.credential.name)")
-                }
+            allLogins = list.credentials.map(\.credential).filter { $0.kind == .login }.map(LoginChoice.init)
             keepALoginPicked()
         } catch is CancellationError {
             return

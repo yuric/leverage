@@ -20,6 +20,13 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     /// The provider is not run in this role: agy's plan mode did not answer a
     /// plain prompt in WP11's step 0, so it cannot review (CL-8).
     case reviewerNotOffered(Provider)
+    /// The variable does not hold an id.
+    case notAnIdentifier(String)
+    /// Both a task and a review to continue.
+    case twoWorksToContinue
+    /// Work the seat's role does not do: a task for a reviewer, a review
+    /// for a builder.
+    case workNotForRole(String)
 
     var description: String {
         switch self {
@@ -32,6 +39,10 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
         case .accountFolderMissing(let path): "the account folder \(path) does not exist"
         case .invalidTimeout(let value): "\(EnvironmentKeys.toolTimeoutSeconds) is not a positive number: \(value)"
         case .reviewerNotOffered(let provider): "\(provider.rawValue) is not offered as a reviewer yet"
+        case .notAnIdentifier(let name): "\(name) is not an id"
+        case .twoWorksToContinue:
+            "\(EnvironmentKeys.continueTaskID) and \(EnvironmentKeys.continueReviewID) are both set"
+        case .workNotForRole(let name): "\(name) is not work for this seat's role"
         }
     }
 }
@@ -129,6 +140,11 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
     let tool: ToolConfiguration
     /// Where a task with no work reference gets its folder (CL-7).
     let workRoot: URL
+    /// The credential the run is on; nil for a seat that connects on its
+    /// own, whose runs detect nothing (HM-19).
+    let credentialID: UUID?
+    /// The work the run is started to continue (HD-9).
+    let continuing: WorkToContinue?
 
     init(environment: [String: String]) throws {
         guard let token = environment[EnvironmentKeys.seatToken], !token.isEmpty else {
@@ -155,6 +171,30 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
             workRoot = URL(fileURLWithPath: tool.supportFolder, isDirectory: true)
                 .appendingPathComponent("work", isDirectory: true)
         }
+        credentialID = try Self.identifier(EnvironmentKeys.credentialID, in: environment)
+        let task = try Self.identifier(EnvironmentKeys.continueTaskID, in: environment)
+        let review = try Self.identifier(EnvironmentKeys.continueReviewID, in: environment)
+        switch (task, review) {
+        case (nil, nil):
+            continuing = nil
+        case (let task?, nil):
+            guard role == .builder else { throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueTaskID) }
+            continuing = .task(task)
+        case (nil, let review?):
+            guard role == .reviewer else {
+                throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueReviewID)
+            }
+            continuing = .review(review)
+        case (_?, _?):
+            throw RunnerConfigurationError.twoWorksToContinue
+        }
+    }
+
+    /// The id a variable holds; nil when it is absent or empty.
+    private static func identifier(_ name: String, in environment: [String: String]) throws -> UUID? {
+        guard let text = environment[name]?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        guard let id = UUID(uuidString: text) else { throw RunnerConfigurationError.notAnIdentifier(name) }
+        return id
     }
 
     /// Whether a provider's read-only mode answers a plain prompt, so that it
@@ -167,7 +207,15 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
 
     var description: String {
         "RunnerConfiguration(api: \(apiBaseURL.absoluteString), role: \(role.rawValue), "
-            + "provider: \(tool.provider.rawValue), seat token: [removed])"
+            + "provider: \(tool.provider.rawValue), credential: \(credentialID?.contractString ?? "none"), "
+            + "continuing: \(continuing.map(Self.describe) ?? "nothing"), seat token: [removed])"
+    }
+
+    private static func describe(_ work: WorkToContinue) -> String {
+        switch work {
+        case .task(let id): "task \(id.contractString)"
+        case .review(let id): "review \(id.contractString)"
+        }
     }
 
     var debugDescription: String { description }

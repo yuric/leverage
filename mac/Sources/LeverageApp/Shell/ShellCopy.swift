@@ -7,11 +7,12 @@ import LeverageKit
 enum ShellCopy: OwnerFacingCopy {
     // The app and its window.
     case appName
-    case tabBoard, tabAgents, tabCredentials
+    case tabBoard, tabNeedsYou, tabAgents, tabCredentials, tabHandoff
     case addTask, backToBoard, signOut
 
     // The health line at the foot of the pane (MA-23).
     case healthChecking, healthRunning, healthLate, healthAgentsStopped, healthUnreachable
+    case healthBackupLate
     case tryAgain
 
     // The screens before the app is ready (PK-3).
@@ -39,8 +40,10 @@ enum ShellCopy: OwnerFacingCopy {
         switch self {
         case .appName: "leverage"
         case .tabBoard: "Board"
+        case .tabNeedsYou: "Needs you"
         case .tabAgents: "Agents"
         case .tabCredentials: "Credentials"
+        case .tabHandoff: "Handoff"
         case .addTask: "Add task"
         case .backToBoard: "Back to the board"
         case .signOut: "Sign out"
@@ -50,6 +53,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .healthLate: "Background work is late"
         case .healthAgentsStopped: "Agents are not running on this Mac"
         case .healthUnreachable: "Can't reach leverage on this Mac"
+        case .healthBackupLate: "The daily backup is late"
         case .tryAgain: "Try again"
 
         case .startingTitle: "Starting leverage"

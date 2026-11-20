@@ -164,4 +164,47 @@ struct HealthLineModelTests {
         try? await Task.sleep(for: .milliseconds(40))
         #expect(owner.calls.count == settled)
     }
+
+    // MARK: the daily backup (HB-4)
+
+    @Test("a backup more than 26 hours old reads The daily backup is late, with the warning tone")
+    func backupLate() async {
+        let (model, _, _) = makeModel(health: { ShellFixtures.health(backupLate: true) })
+        await model.refresh()
+        #expect(model.status == .backupLate)
+        #expect(model.sentence.text == "The daily backup is late")
+        #expect(model.tone == .warning)
+        #expect(!model.offersTryAgain)
+    }
+
+    @Test("a backup that is on time leaves the line at System is running")
+    func backupOnTime() async {
+        let (model, _, _) = makeModel(health: { ShellFixtures.health(backupLate: false) })
+        await model.refresh()
+        #expect(model.status == .running)
+    }
+
+    @Test("a late sweep, a helper that gave up and an unreachable server outrank a late backup")
+    func backupPrecedence() async {
+        let (sweep, _, _) = makeModel(health: { ShellFixtures.health(sweepLate: true, backupLate: true) })
+        await sweep.refresh()
+        #expect(sweep.status == .late)
+
+        let helper = FakeAppRuntime().fakeHelper
+        helper.current.value = .stoppedTrying
+        let (gaveUp, _, _) = makeModel(health: { ShellFixtures.health(backupLate: true) }, helper: helper)
+        await gaveUp.refresh()
+        #expect(gaveUp.status == .agentsStopped)
+    }
+
+    @Test("a backup that was made again clears the line")
+    func backupRecovers() async {
+        let late = Locked(true)
+        let (model, _, _) = makeModel(health: { ShellFixtures.health(backupLate: late.value) })
+        await model.refresh()
+        #expect(model.status == .backupLate)
+        late.value = false
+        await model.refresh()
+        #expect(model.status == .running)
+    }
 }

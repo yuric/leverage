@@ -123,7 +123,10 @@ module Leverage
         end
 
         # Whether Eligibility has a review (a reviewer) or a task (a
-        # builder) waiting for a seat that holds nothing.
+        # builder) waiting for a seat that holds nothing. The claims ask
+        # Eligibility the same, so this never offers what a claim refuses:
+        # for a seat the app runs, only work its run is placed for
+        # (milestone 3 plan HD-4).
         def waiting(seat)
           case seat.role
           when "builder" then item("task") if eligibility.next_task(seat)

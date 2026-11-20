@@ -129,6 +129,8 @@ extension FakeHelperAPI {
             $0.reportRequestResult = { _, _, key in .completed(.object([:]), key: key.value, command: .reportRequestResult) }
             $0.reportRunStarted = { _, _, key in .completed(.object([:]), key: key.value, command: .reportRunStarted) }
             $0.reportRunStopped = { _, _, key in .completed(.object([:]), key: key.value, command: .reportRunStopped) }
+            $0.reportLimit = { _, _, key in .completed(.object([:]), key: key.value, command: .reportLimit) }
+            $0.reportSignedOut = { _, _, key in .completed(.object([:]), key: key.value, command: .reportSignedOut) }
             $0.issueSeatToken = { request, key in
                 .completed(
                     .shown(SeatTokenPickup(helperRequestID: request, seatID: UUID(), seatToken: MadeUp.seatToken)),

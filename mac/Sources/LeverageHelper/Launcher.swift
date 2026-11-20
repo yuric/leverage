@@ -9,11 +9,21 @@ import Glibc
 
 /// Starts and stops the seats the app runs (L62, L588, L589, PK-7, CL-23).
 ///
-/// A start finds the tool and the account's folder, picks up a fresh seat
-/// token, and puts it only into the environment of the `LeverageRunner`
-/// process it starts: never into an argument, a file, a log or a report.
-/// The helper's own token is never passed on. When the run ends, by a stop
-/// or by itself, `report_run_stopped` says so.
+/// A start finds the tool and the folder of the request's credential, picks
+/// up a fresh seat token, and puts it only into the environment of the
+/// `LeverageRunner` process it starts: never into an argument, a file, a log
+/// or a report. The helper's own token is never passed on. The run is given
+/// the credential, the model and effort of the request's `params`, and the
+/// task or review to continue (plan HD-1, HD-9).
+///
+/// A start for a seat whose run is alive hands over (HD-2): the new token
+/// first, which ends the old run's, then the old run is stopped as any run
+/// is, then the new one starts; the old run's end is not reported (HD-10).
+///
+/// When a run ends by a stop or by itself, `report_run_stopped` says so;
+/// when it ends with code 5 and its report line, the account stopped and
+/// `InterruptionReporter` sends `report_limit` or `report_signed_out`
+/// instead (HD-6, HD-10).
 final class Launcher: Sendable {
     let api: any HelperAPI
     let settings: HelperSettings
@@ -64,25 +74,33 @@ final class Launcher: Sendable {
             }
         }
 
-        // A start of a seat that is running replaces its run.
+        // The token first (HD-2): when it is not given, a run of the seat
+        // that is alive goes on as it was.
+        guard let token = await pickUpSeatToken(request) else { return failed(version: tool.version) }
+        // A start of a seat that is running hands its run over: the old
+        // run's token has just ended, so its release is refused and it
+        // gives nothing back (HD-2).
         if let earlier = await registry.run(for: seat) {
-            await earlier.stop()
+            await earlier.handOver()
             await registry.remove(earlier)
+            log.info("handed the run of seat \(seat.contractString) over to a new run")
         }
 
-        guard let token = await pickUpSeatToken(request) else { return failed(version: tool.version) }
         let process: RunningSubprocess
         do {
             try FileManager.default.createDirectory(at: settings.logsFolder, withIntermediateDirectories: true)
             process = try Subprocess.start(runnerRequest(
-                seatID: seat, seatToken: token, params: request.params, tool: tool, accountFolder: accountFolder))
+                seatID: seat, seatToken: token, params: request.params, tool: tool, accountFolder: accountFolder,
+                credentialID: credential))
         } catch {
             log.error("could not start the run of seat \(seat.contractString)")
             return failed(version: tool.version)
         }
-        let run = SeatRun(seatID: seat, credentialID: credential, process: process)
-        run.watch(with: Task { await self.watchUntilEnd(run) })
+        let run = SeatRun(seatID: seat, credentialID: credential, toolVersion: tool.version, process: process)
+        // In the registry before it is watched, so a run that ends at once
+        // is not left in it.
         await registry.add(run)
+        run.watch(with: Task { await self.watchUntilEnd(run) })
         log.info("started the run of seat \(seat.contractString)")
 
         await send(.reportRunStarted, seat: seat) { key in
@@ -114,28 +132,42 @@ final class Launcher: Sendable {
     }
 
     /// The runner's process: its program behind `/bin/sh`, which only sends
-    /// its output to the seat's log file and then becomes the runner. The
-    /// seat token is in the environment and nowhere else.
+    /// its standard error, its log, to the seat's log file and then becomes
+    /// the runner. Its standard output stays on the pipe the helper reads,
+    /// where the runner prints its one report line (HD-6). The seat token is
+    /// in the environment and nowhere else.
     func runnerRequest(
-        seatID: UUID, seatToken: String, params: HelperRequestParams, tool: LocatedTool, accountFolder: URL?
+        seatID: UUID, seatToken: String, params: HelperRequestParams, tool: LocatedTool, accountFolder: URL?,
+        credentialID: UUID? = nil
     ) -> SubprocessRequest {
         var values = [
             EnvironmentKeys.apiURL: settings.apiBaseURL.absoluteString,
             EnvironmentKeys.seatToken: seatToken,
         ]
+        if let credentialID { values[EnvironmentKeys.credentialID] = credentialID.contractString }
         if let role = params.role { values[EnvironmentKeys.seatRole] = role.rawValue }
         if let model = params.model, !model.isEmpty { values[EnvironmentKeys.model] = model }
         if let effort = params.effort, !effort.isEmpty { values[EnvironmentKeys.effort] = effort }
+        if let task = params.taskID {
+            values[EnvironmentKeys.continueTaskID] = task.contractString
+        } else if let review = params.reviewID {
+            values[EnvironmentKeys.continueReviewID] = review.contractString
+        }
         let environment = RunnerEnvironment.build(
             settings: settings, provider: params.provider?.rawValue ?? "", tool: tool,
             accountFolder: accountFolder, setting: values)
         return SubprocessRequest(
             executable: "/bin/sh",
-            arguments: ["-c", #"log=$1; shift; exec "$@" >>"$log" 2>&1"#, "sh", logFile(for: seatID).path,
+            arguments: ["-c", #"log=$1; shift; exec "$@" 2>>"$log""#, "sh", logFile(for: seatID).path,
                         settings.runnerPath],
             environment: environment,
-            gracePeriod: timings.stopGrace)
+            gracePeriod: timings.stopGrace,
+            maximumOutputBytes: Self.runnerOutputLimit)
     }
+
+    /// The most of the runner's standard output kept in memory. It prints
+    /// one short line, and only when its account stops.
+    static let runnerOutputLimit = 1 << 20
 
     func logFile(for seat: UUID) -> URL {
         settings.logsFolder.appendingPathComponent("seat-\(seat.contractString).log")
@@ -172,6 +204,21 @@ final class Launcher: Sendable {
         defer { logWatch.cancel() }
         let result = await run.process.wait()
         await registry.remove(run)
+        if run.wasHandedOver {
+            // The new run's report_run_started follows (HD-10).
+            log.info("the run of seat \(run.seatID.contractString) ended: handed over")
+            return
+        }
+        if result.termination == .exited(Self.accountStoppedCode) {
+            if let end = try? RunEndReport(lastLineOf: result.standardOutput) {
+                log.info("the run of seat \(run.seatID.contractString) ended: \(end.kind.rawValue)")
+                _ = await InterruptionReporter(api: api, timings: timings, log: log)
+                    .report(end, seatID: run.seatID, credentialID: run.credentialID, toolVersion: run.toolVersion)
+                return
+            }
+            // HD-6: a code 5 with no readable line is code 4.
+            log.warning("the run of seat \(run.seatID.contractString) gave code 5 with no readable report line")
+        }
         let reason = Self.stopReason(result, stopAsked: run.stopWasAsked)
         log.info("the run of seat \(run.seatID.contractString) ended: \(reason.rawValue)")
         await send(.reportRunStopped, seat: run.seatID) { key in
@@ -182,9 +229,13 @@ final class Launcher: Sendable {
         }
     }
 
+    /// The runner's exit code when its account stopped, a limit or a
+    /// sign-out, with its report line on standard output (HD-6).
+    static let accountStoppedCode: Int32 = 5
+
     /// `stopped` when the helper stopped it, `finished` when the runner
     /// exited 0 by itself, `error` otherwise (three failed tool runs, CL-22,
-    /// or a crash).
+    /// a code 5 with no readable report line, HD-6, or a crash).
     static func stopReason(_ result: SubprocessResult, stopAsked: Bool) -> RunStopReason {
         if stopAsked || result.endedBy == .stop { return .stopped }
         if result.termination == .exited(0) { return .finished }

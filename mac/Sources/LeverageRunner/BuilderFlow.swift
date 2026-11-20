@@ -13,6 +13,33 @@ enum FlowEnd: Equatable, Sendable {
     /// The lease or the task is gone (`lease_expired`, `task_cancelled`,
     /// `not_holder`): nothing to release.
     case ended
+    /// The account stopped (a limit or a sign-out): nothing is released,
+    /// and the run ends with this report (HD-6).
+    case accountStopped(RunEndReport)
+}
+
+extension FlowEnd {
+    /// The end's kind alone, for a log line.
+    var name: String {
+        switch self {
+        case .finished: "finished"
+        case .released: "released"
+        case .paused: "paused"
+        case .ended: "ended"
+        case .accountStopped(let report): "the account stopped (\(report.kind.rawValue))"
+        }
+    }
+}
+
+/// When a flow acknowledges the briefing.
+enum Acknowledgement: Sendable {
+    /// Before the first criterion, as milestone 2 does after a claim, a
+    /// rework, a resume and a changed briefing.
+    case always
+    /// Only once a call is refused `briefing_not_acknowledged` or
+    /// `briefing_changed`: a run started to continue work whose lease did
+    /// not change (HD-9).
+    case whenAsked
 }
 
 /// A builder's work on one task: claim (or a rework, a resume, a changed
@@ -43,31 +70,39 @@ struct BuilderFlow: Sendable {
         return try await work(claim.task.id, start: start, leaseDue: claim.lease.leaseDueAt)
     }
 
-    /// Goes on with a task this seat holds (`rework`, `resume`,
-    /// `briefing_changed`), from its briefing.
-    func continueTask(_ taskID: UUID) async throws -> FlowEnd {
-        try await work(taskID, start: nil, leaseDue: nil)
+    /// Goes on with a task this seat holds, from its briefing: on `rework`,
+    /// `resume` and `briefing_changed` acknowledging it first, and at the
+    /// start of a run that continues the task only when asked (HD-9).
+    func continueTask(_ taskID: UUID, acknowledgement: Acknowledgement = .always) async throws -> FlowEnd {
+        try await work(taskID, start: nil, leaseDue: nil, acknowledgement: acknowledgement)
     }
 
-    private func work(_ taskID: UUID, start: BriefingResponse?, leaseDue: Date?) async throws -> FlowEnd {
+    private func work(
+        _ taskID: UUID, start: BriefingResponse?, leaseDue: Date?, acknowledgement: Acknowledgement = .always
+    ) async throws -> FlowEnd {
         context.state.hold(.task(taskID))
         let end = try await Heartbeat.around(.task(taskID), leaseDue: leaseDue, context: context) {
-            try await steps(taskID, start: start)
+            try await steps(taskID, start: start, acknowledgement: acknowledgement)
         }
         if end != .paused { context.state.hold(.nothing) }
-        context.log.info("task \(taskID.contractString): \(end)")
+        if case .accountStopped(let report) = end { context.state.accountStopped(report) }
+        context.log.info("task \(taskID.contractString): \(end.name)")
         return end
     }
 
     private enum Step {
         case end(FlowEnd)
-        case restart
+        /// Read the briefing again; `acknowledge` when the refusal asked for
+        /// an acknowledgement.
+        case restart(acknowledge: Bool)
     }
 
-    private func steps(_ taskID: UUID, start: BriefingResponse?) async throws -> FlowEnd {
+    private func steps(_ taskID: UUID, start: BriefingResponse?, acknowledgement: Acknowledgement) async throws
+        -> FlowEnd {
         let api = context.api
         var briefing = start
         var restarts = 0
+        var acknowledge = acknowledgement == .always
         while true {
             let current: BriefingResponse
             if let briefing {
@@ -78,19 +113,22 @@ struct BuilderFlow: Sendable {
                 case .refused(let code):
                     switch try await answer(code, taskID) {
                     case .end(let end): return end
-                    case .restart:
+                    case .restart(let asked):
+                        acknowledge = acknowledge || asked
                         restarts += 1
                         if restarts > Self.maximumRestarts { return try await release(taskID) }
                         try await Task.sleep(for: context.timing.errorPause)
                         continue
                     }
+                case .gone: return .ended
                 case .failed: return try await release(taskID)
                 }
             }
-            switch try await attempt(taskID, current) {
+            switch try await attempt(taskID, current, acknowledge: acknowledge) {
             case .end(let end):
                 return end
-            case .restart:
+            case .restart(let asked):
+                acknowledge = acknowledge || asked
                 restarts += 1
                 if restarts > Self.maximumRestarts { return try await release(taskID) }
                 briefing = nil
@@ -98,7 +136,7 @@ struct BuilderFlow: Sendable {
         }
     }
 
-    private func attempt(_ taskID: UUID, _ response: BriefingResponse) async throws -> Step {
+    private func attempt(_ taskID: UUID, _ response: BriefingResponse, acknowledge: Bool) async throws -> Step {
         let api = context.api
         let resolution = WorkFolder.builder(
             reference: response.workReference, taskID: taskID, workRoot: context.workRoot, home: context.home)
@@ -107,7 +145,7 @@ struct BuilderFlow: Sendable {
             return .end(try await release(taskID))
         }
         let hash = response.briefing.hash
-        if let step = try await check(context.command("acknowledge_task_briefing", {
+        if acknowledge, let step = try await check(context.command("acknowledge_task_briefing", {
             try await api.acknowledgeTaskBriefing(taskID: taskID, briefingHash: hash, key: $0)
         }), taskID) { return step }
 
@@ -122,12 +160,20 @@ struct BuilderFlow: Sendable {
                 number: item.number, criterion: item.criterion, briefing: response.briefing,
                 reviewNotes: response.reviewNotes, folder: folder)
             let answer: ToolAnswer
-            do {
-                answer = try await context.driver.run(prompt: prompt, in: folder, purpose: .build)
-            } catch let failure as ToolFailure {
+            let driver = context.driver
+            switch try await context.interruption.run(for: .task(taskID), {
+                try await driver.execute(prompt: prompt, in: folder, purpose: .build)
+            }) {
+            case .answered(let answered):
+                answer = answered
+            case .failed(let failure):
                 context.state.toolFailed()
                 context.log.warning("task \(taskID.contractString), criterion \(item.number): \(failure)")
                 return .end(try await release(taskID))
+            case .accountStopped(let report):
+                context.log.warning(
+                    "task \(taskID.contractString), criterion \(item.number): the account stopped (\(report.kind.rawValue))")
+                return .end(.accountStopped(report))
             }
             switch AnswerParser.builder(answer.text) {
             case .evidence(let value):
@@ -165,7 +211,7 @@ struct BuilderFlow: Sendable {
 
     private func answer(_ code: RefusalCode, _ taskID: UUID) async throws -> Step {
         switch RefusalAction(code) {
-        case .restart: return .restart
+        case .restart: return .restart(acknowledge: RefusalAction.asksForAcknowledgement(code))
         case .pause: return .end(.paused)
         case .end: return .end(.ended)
         case .release: return .end(try await release(taskID))

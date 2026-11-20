@@ -28,8 +28,7 @@ module Leverage
         end
 
         def perform(_ctx)
-          token = Tokens.issue(:seat)
-          @seat.update!(token_hash: Tokens.digest(token))
+          token = SeatRuns.issue_token(@seat, @helper_request)
           @result = { "helper_request_id" => @helper_request.id, "seat_id" => @seat.id }
           @once = { "seat_token" => token }
         end

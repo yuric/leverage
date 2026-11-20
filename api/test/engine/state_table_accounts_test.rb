@@ -10,6 +10,10 @@ require_relative "entries/accounts_support"
 # events. Each conditional event is proven in the entry's own test
 # (test/engine/entries/); side events that need rules or later milestones
 # are not written (SC-11).
+#
+# Milestone 3 (plan HT-2) adds the rows of sign_in_again (Table::HANDOFF)
+# and of the seat_run_placement timer (Table::TIMERS): neither reads or
+# changes a task state, and neither writes an event.
 class StateTableAccountsTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -59,6 +63,51 @@ class StateTableAccountsTest < ActiveSupport::TestCase
     else
       flunk "no request for #{command}"
     end
+  end
+
+  # The two milestone 3 commands of plan HT-2 and the case each runs.
+  HANDOFF_ACCOUNTS = %w[sign_in_again seat_run_placement].freeze
+
+  def milestone_3_request(command)
+    case command
+    when "sign_in_again" then owner_request(command, { "id" => scenario.credential(state: "signed_out").id })
+    when "seat_run_placement"
+      seat = scenario.seat(credential: scenario.credential, wanted_running: true)
+      seat.update!(run_state: "stopped", run_credential_id: nil, run_stop_reason: "limit", token_hash: nil)
+      T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: nil, caller_id: nil, key: nil,
+        request_hash: nil, params: {})
+    else
+      flunk "no request for #{command}"
+    end
+  end
+
+  test "sign_in_again is in Table::HANDOFF and seat_run_placement in Table::TIMERS" do
+    assert_equal %w[sign_in_again], T::Table::HANDOFF & HANDOFF_ACCOUNTS
+    assert_equal %w[seat_run_placement], T::Table::TIMERS & HANDOFF_ACCOUNTS
+    HANDOFF_ACCOUNTS.each { |command| assert T::Table.include?(command), command }
+  end
+
+  StateTableCases.define(self, HANDOFF_ACCOUNTS) do |kase|
+    assert_nil kase.from, "#{kase.command} reads no task state"
+    assert_nil kase.to
+    assert_nil kase.refusal
+    assert_nil kase.hook
+    assert_empty kase.conditional_events
+
+    request = milestone_3_request(kase.command)
+    if kase.who.first == "app"
+      assert_nil request.caller_kind, "a timer is the app's own command"
+    else
+      assert_equal kase.who.first, request.caller_kind
+    end
+    queued = HelperRequest.where(workspace_id: scenario.workspace_id).count
+    written = events_written { @outcome = T.apply(request) }
+
+    assert_completed(@outcome)
+    assert_equal kase.events, written.map(&:type), "#{kase.command} writes exactly the row's events: none"
+    assert_equal queued + 1, HelperRequest.where(workspace_id: scenario.workspace_id).count,
+      "#{kase.command} queues one helper request"
+    assert Command.exists?(key: request.key, command: kase.command) if request.key
   end
 
   test "the accounts group is the twelve commands of plan section 2.1" do

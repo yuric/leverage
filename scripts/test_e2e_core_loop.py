@@ -142,6 +142,44 @@ class EndToEndScriptTests(unittest.TestCase):
         self.assertNotIn(SECRET, output)
 
 
+# A docker that notes the mode of the backup folder it is handed, then
+# fails, so the script under test stops at its first container.
+FAKE_DOCKER_MODE = """#!/bin/sh
+if [ -n "${LEVERAGE_BACKUP_DIR:-}" ] && [ -d "$LEVERAGE_BACKUP_DIR" ] && [ ! -f "$FAKE_MODE" ]; then
+  python3 -I -c 'import os, sys; print(oct(os.stat(sys.argv[1]).st_mode & 0o7777))' "$LEVERAGE_BACKUP_DIR" >"$FAKE_MODE"
+fi
+exit 1
+"""
+
+
+class BackupFolderTests(unittest.TestCase):
+    """Review: the backup folder the drill and the handoff run make for the
+    containers is writable by every user (the container's uid differs from
+    the caller's on Linux), and sticky, so that no other local user can
+    rename or remove a dump in it before the restore reads it."""
+
+    def mode_of_backup_folder(self, script):
+        run = Run()
+        self.addCleanup(run.close)
+        docker = run.bin / "docker"
+        docker.write_text(FAKE_DOCKER_MODE, encoding="utf-8")
+        mode = run.root / "mode.txt"
+        environment = {
+            "PATH": f"{run.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(run.root),
+            "TMPDIR": str(run.tmp), "FAKE_MODE": str(mode), "API_IMAGE_TAG": "made-up-tag",
+        }
+        subprocess.run(["bash", str(HERE / script)], cwd=ROOT, env=environment, capture_output=True, text=True,
+                       check=False, timeout=120)
+        self.assertTrue(mode.exists(), f"{script} handed docker no backup folder")
+        return mode.read_text(encoding="utf-8").strip()
+
+    def test_the_restore_drills_folder_is_sticky(self):
+        self.assertEqual(self.mode_of_backup_folder("restore_drill.sh"), "0o1777")
+
+    def test_the_handoff_runs_folders_are_sticky(self):
+        self.assertEqual(self.mode_of_backup_folder("e2e_handoff.sh"), "0o1777")
+
+
 class ContinuousIntegrationTests(unittest.TestCase):
     def test_no_step_is_skipped_because_its_script_is_missing(self):
         guards = CI.read_text(encoding="utf-8").count("hashFiles(")

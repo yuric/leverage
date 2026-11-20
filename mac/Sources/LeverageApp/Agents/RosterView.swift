@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The Agents tab (MA-2): a list of the agents with Connect agent above it.
 /// Built with no arguments; the shell puts its `ScreenContext` in the
-/// environment. It draws its own Connect sheet and the confirmation before
-/// Remove.
+/// environment. It draws its own Connect sheet, the Change sheet of an agent
+/// and the confirmation before Remove.
 struct RosterView: View {
     @Environment(ScreenContext.self) private var context
     @State private var box = ScreenModelBox<RosterModel>()
@@ -23,6 +23,11 @@ struct RosterView: View {
             await model.keepCurrent()
         }
         .onDisappear { model.detach() }
+        .sheet(isPresented: changing(model)) {
+            if let change = model.changing {
+                ChangeAgentForm(model: change, cancel: { model.cancelChange() })
+            }
+        }
         .sheet(isPresented: $isConnecting) {
             ConnectAgentSheet(
                 connected: { Task { await model.load() } },
@@ -37,6 +42,14 @@ struct RosterView: View {
             )
             .environment(context)
         }
+    }
+}
+
+extension RosterView {
+    /// The Change sheet shows while the roster model has one open.
+    @MainActor
+    fileprivate func changing(_ model: RosterModel) -> Binding<Bool> {
+        Binding(get: { model.changing != nil }, set: { if !$0 { model.cancelChange() } })
     }
 }
 
@@ -132,6 +145,11 @@ struct RosterRowView: View {
                 Text(verbatim: row.lastPolledLine)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
+                if let note = row.pausedNote {
+                    Text(verbatim: note)
+                        .font(.system(size: Tokens.FontSize.small))
+                        .foregroundStyle(Tokens.Palette.text2)
+                }
                 if let line = model.failure(for: row.id) {
                     Text(verbatim: line)
                         .font(.system(size: Tokens.FontSize.small, weight: .medium))
@@ -173,6 +191,15 @@ struct RosterRowView: View {
                 }
                 if row.canStop {
                     Button(AgentsCopy.stop.text) { Task { await model.stop(row.id) } }
+                }
+                if row.canPause {
+                    Button(AgentsCopy.pause.text) { Task { await model.pause(row.id) } }
+                }
+                if row.canResume {
+                    Button(AgentsCopy.resume.text) { Task { await model.resume(row.id) } }
+                }
+                if row.canChange {
+                    Button(AgentsCopy.change.text) { model.beginChange(row.id) }
                 }
                 if row.canCopyLandingPrompt {
                     Button(model.copiedPrompt == row.id ? AgentsCopy.copied.text : AgentsCopy.copyLandingPrompt.text) {

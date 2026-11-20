@@ -5,8 +5,45 @@ require "test_helper"
 # through the same entries a command applies first, purges old command
 # keys, and records one sweep_runs row per workspace per run. It is not a
 # timer and writes no event of its own.
+#
+# Milestone 3 (its plan, WP4, HD-4, HE-23): the sweep also releases the
+# credential holds that are due on tasks no command has touched, and fires
+# the workspace timer seat_run_placement once on every run. Their entries
+# are WP3's and WP5's; the tests here stand in for them with entries of
+# their own, called the way the sweep calls the real ones.
+module SweepTestEntries
+  # Closes a due credential hold, as WP3's credential_hold_release does
+  # when the sweep runs it with params limit.
+  class HoldRelease < Leverage::Transitions::Entry
+    def load(ctx)
+      @tasks = Leverage::Timers.due_credential_holds(ctx.workspace.id, ctx.at, %w[working],
+        limit: Integer(ctx.request.params.fetch("limit", 100)))
+    end
+
+    def perform(ctx)
+      released = @tasks.select { |task| Leverage::Timers.credential_hold_due?(task, ctx.at) }
+      released.each do |task|
+        Leverage::Holds.close(ctx, hold: Leverage::Timers.credential_hold(task), task: task,
+          effective_at: Leverage::Timers.credential_hold_effective_at(task), command_id: nil, actor_kind: "app", actor_id: nil)
+      end
+      @result = { "released_task_ids" => released.map(&:id) }
+    end
+  end
+
+  # Counts the runs of seat_run_placement, by workspace.
+  class Placement < Leverage::Transitions::Entry
+    RUNS = Hash.new(0)
+
+    def perform(ctx)
+      RUNS[ctx.workspace.id] += 1
+      @result = nil
+    end
+  end
+end
+
 class SweepTest < ActiveSupport::TestCase
   S = Leverage::Sweep
+  E = SweepTestEntries
 
   setup do
     @scenario = Scenario.new(lease_length_seconds: 600)
@@ -32,7 +69,7 @@ class SweepTest < ActiveSupport::TestCase
 
     run = runs.sole
     assert_equal 2, run.tasks_touched
-    assert_equal 0, run.workspace_timers_fired, "no purge was asked for"
+    assert_equal 1, run.workspace_timers_fired, "seat_run_placement only: no purge was asked for (HD-4)"
     assert_operator run.ran_at, :>=, due
   end
 
@@ -42,7 +79,8 @@ class SweepTest < ActiveSupport::TestCase
 
     S.sweep_workspace(@scenario.workspace_id)
 
-    assert_equal [ 0, 0 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ]
+    assert_equal [ 0, 1 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ],
+      "seat_run_placement runs on every sweep (HD-4)"
     assert_equal seq, Workspace.find(@scenario.workspace_id).last_seq
   end
 
@@ -78,7 +116,7 @@ class SweepTest < ActiveSupport::TestCase
 
     refute Command.exists?(old.id)
     refute SweepRun.exists?(old_run.id)
-    assert_equal 1, runs.sole.workspace_timers_fired
+    assert_equal 2, runs.sole.workspace_timers_fired, "command_key_retention and seat_run_placement"
   end
 
   test "pass sweeps every workspace and says how many" do
@@ -147,5 +185,86 @@ class SweepTest < ActiveSupport::TestCase
     assert_match(/\ASELECT .*FROM "workspaces" WHERE "workspaces"\."id" = .* FOR UPDATE\z/m, inside.first.to_s,
       "the transaction's first statement locks the workspace")
     assert_equal "SELECT clock_timestamp()", inside.second
+  end
+
+  # --- Milestone 3 ---------------------------------------------------------
+
+  def with_handoff_timers(&block)
+    Leverage::Transitions::Table.with_entries("credential_hold_release" => E::HoldRelease,
+      "seat_run_placement" => E::Placement, &block)
+  end
+
+  # A Working task whose builder's own credential stopped, held with
+  # credential_limit, the hold due at the reset (returned).
+  def held_task(reset_at: :now)
+    own = @scenario.limit_credential(@scenario.credential, reset_at: nil)
+    task = @scenario.task(state: "working", builder: @scenario.seat(role: "builder", credential: own))
+    hold = @scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+    reset = reset_at == :now ? @scenario.database_now : reset_at
+    own.update!(limited_until: reset)
+    [ task, hold, reset ]
+  end
+
+  test "it releases an untouched credential hold at its due time and counts the task" do
+    task, hold, reset = held_task
+    _, waiting, = held_task(reset_at: @scenario.database_now + 3600)
+
+    with_handoff_timers { S.sweep_workspace(@scenario.workspace_id) }
+
+    closed = Event.where(workspace_id: @scenario.workspace_id, type: "hold.closed").sole
+    assert_equal [ hold.id, task.id, reset, "app", nil ],
+      [ closed.subject_id, closed.task_id, closed.effective_at, closed.actor_kind, closed.command_id ]
+    assert_nil waiting.reload.closed_at, "a hold not yet due stays open"
+    assert_equal 1, runs.sole.tasks_touched
+  end
+
+  test "it works through more due credential holds than one batch holds" do
+    held = 3.times.map { held_task }
+
+    with_handoff_timers { S.sweep_workspace(@scenario.workspace_id, batch: 2) }
+
+    assert(held.all? { |_task, hold, _reset| hold.reload.closed_at })
+    assert_equal 3, runs.sole.tasks_touched
+  end
+
+  test "a credential hold due before its task's lease closes first; the lease ends after it" do
+    task, hold, reset = held_task
+    lease_due = @scenario.database_now
+    @scenario.make_due(task, at: lease_due)
+
+    with_handoff_timers { S.sweep_workspace(@scenario.workspace_id) }
+
+    events = Event.where(task_id: task.id, type: %w[hold.closed task.lease_expired]).order(:seq)
+    assert_equal [ [ "hold.closed", reset ], [ "task.lease_expired", lease_due ] ], events.map { |e| [ e.type, e.effective_at ] }
+    assert hold.reload.closed_at
+  end
+
+  test "a credential hold whose task's lease is due first is left to the lease, which closes it" do
+    task, hold, = held_task(reset_at: @scenario.database_now + 3600)
+    lease_due = @scenario.database_now
+    @scenario.make_due(task, at: lease_due)
+    Credential.find(hold.credential_id).update!(limited_until: @scenario.database_now)
+
+    with_handoff_timers { S.sweep_workspace(@scenario.workspace_id) }
+
+    events = Event.where(task_id: task.id, type: %w[hold.closed task.lease_expired]).order(:seq)
+    assert_equal %w[task.lease_expired hold.closed], events.map(&:type)
+    assert_equal [ lease_due ], events.map(&:effective_at).uniq
+    assert hold.reload.closed_at
+  end
+
+  test "it fires seat_run_placement once on every run of every workspace" do
+    other = Scenario.new
+    E::Placement::RUNS.clear
+
+    with_handoff_timers do
+      S.sweep_workspace(@scenario.workspace_id)
+      S.sweep_workspace(@scenario.workspace_id)
+      S.sweep_workspace(other.workspace_id)
+    end
+
+    assert_equal 2, E::Placement::RUNS[@scenario.workspace_id]
+    assert_equal 1, E::Placement::RUNS[other.workspace_id]
+    assert_equal [ 1, 1 ], runs.map(&:workspace_timers_fired)
   end
 end

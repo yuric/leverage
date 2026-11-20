@@ -16,8 +16,10 @@ struct SidePane: View {
 
             VStack(spacing: 2) {
                 tab(.board, ShellCopy.tabBoard, symbol: "square.grid.3x1.below.line.grid.1x2")
+                tab(.needsYou, ShellCopy.tabNeedsYou, symbol: "bell", badge: Self.badge(for: context.inbox.openCount))
                 tab(.agents, ShellCopy.tabAgents, symbol: "person.2")
                 tab(.credentials, ShellCopy.tabCredentials, symbol: "key")
+                tab(.handoff, ShellCopy.tabHandoff, symbol: "arrow.triangle.swap")
             }
 
             Spacer(minLength: 0)
@@ -34,7 +36,12 @@ struct SidePane: View {
         .task { await context.health.run() }
     }
 
-    private func tab(_ place: Navigator.Place, _ copy: ShellCopy, symbol: String) -> some View {
+    /// The count on the Needs you tab; nil when nothing is open.
+    static func badge(for count: Int) -> String? { count > 0 ? String(count) : nil }
+
+    private func tab(
+        _ place: Navigator.Place, _ copy: ShellCopy, symbol: String, badge: String? = nil
+    ) -> some View {
         let selected = context.navigator.place == place
         return Button {
             context.navigator.show(place)
@@ -45,6 +52,14 @@ struct SidePane: View {
                 Text(copy.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                if let badge {
+                    Text(verbatim: badge)
+                        .font(.system(size: Tokens.FontSize.badge, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .foregroundStyle(Tokens.Tone.wait.foreground)
+                        .background(Tokens.Tone.wait.background, in: Capsule())
+                }
             }
             .font(.system(size: Tokens.FontSize.body, weight: selected ? .semibold : .medium))
             .padding(.horizontal, 8)

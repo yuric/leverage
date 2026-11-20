@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-19",
+    "basis": "recorded_no_login",
+    "kind": "status",
+    "command": [
+      "login",
+      "status"
+    ],
+    "shows": "codex login status with CODEX_HOME set to a new, empty folder: no login",
+    "expect": "signed_out",
+    "marker": "LVRG-REPLY-3d941970a8b4",
+    "marker_place": "added on standard output, which the tool left empty; nothing in the reply needed scrubbing",
+    "scrubbed": []
+  },
+  "exit_status": 1,
+  "stdout": "LVRG-REPLY-3d941970a8b4\n",
+  "stderr": "Not logged in\n"
+}

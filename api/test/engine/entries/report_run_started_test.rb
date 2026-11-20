@@ -3,7 +3,8 @@ require_relative "accounts_support"
 
 # report_run_started (milestone 2 plan IN-23; RunStartedReport): a run
 # started on a seat the app runs. It updates seats.run_state only and writes
-# no event.
+# no event. The run must be on the credential its token was issued for
+# (milestone 3 plan HD-3).
 class ReportRunStartedTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -24,11 +25,25 @@ class ReportRunStartedTest < ActiveSupport::TestCase
     assert_equal [ "running", true, digest ], [ seat.run_state, seat.wanted_running, seat.token_hash ]
   end
 
-  test "a run on a credential other than the seat's is invalid in this milestone" do
+  # Milestone 2 refused any credential but the seat's own; from milestone 3
+  # a run is on the credential its token was issued for (HD-3), which a
+  # handoff may have made another one.
+  test "a run on a credential other than the one its token was issued for is invalid" do
     seat = @scenario.seat(credential: @scenario.credential, run_state: "stopped")
 
     assert_raises(T::Invalid) { report(seat, credential_id: @scenario.credential(provider: "codex").id) }
     assert_equal "stopped", seat.reload.run_state
+  end
+
+  test "a run on the credential its token was issued for is running, also when that is not the seat's own" do
+    seat = @scenario.seat(credential: @scenario.credential, run_state: "stopped")
+    other = @scenario.credential(provider: "codex")
+    @scenario.run(seat, on: other, state: "stopped")
+
+    assert_completed(report(seat, credential_id: other.id))
+
+    assert_equal [ "running", other.id ], [ seat.reload.run_state, seat.run_credential_id ]
+    assert_raises(T::Invalid) { report(seat, credential_id: seat.credential_id) }
   end
 
   test "a seat that connects on its own has no run the app starts" do

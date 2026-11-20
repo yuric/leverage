@@ -230,9 +230,11 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
+  # add_rule is milestone 4's. promote was the example until milestone 3
+  # gave it an entry (milestone 3 plan HT-6).
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "promote")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "promote").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "add_rule")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "add_rule").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -275,9 +277,12 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { T::Precedence.first(%w[made_up_code]) }
   end
 
-  test "the table lists the milestone-2 commands in four groups, each a registry command with state-table rows" do
-    groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS ]
-    assert_equal [ 17, 3, 4, 12 ], groups.map(&:size)
+  # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
+  # OWNER_CONTROLS, and two timers.
+  test "the table lists its commands in six groups, each a registry command with state-table rows" do
+    groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
+               T::Table::OWNER_CONTROLS ]
+    assert_equal [ 17, 5, 4, 12, 3, 7 ], groups.map(&:size)
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
@@ -287,7 +292,8 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
     assert_equal "Leverage::Transitions::Entries::AllowAnotherRound", T::Table.class_name("allow_another_round")
     assert T::Table.include?("claim")
-    refute T::Table.include?("promote")
+    assert T::Table.include?("promote")
+    refute T::Table.include?("add_rule")
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

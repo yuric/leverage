@@ -46,9 +46,8 @@ module DatabaseTestHooks
   module_function
 
   # Applies db:grants (lib/tasks/db_grants.rake) on the current
-  # connection, without setting leverage_api's password: the parallel
-  # workers would all update the role's one row at once, and no test logs
-  # in as leverage_api.
+  # connection, without setting leverage_api's password: no test logs in as
+  # leverage_api, and a test's own transaction may be open.
   def grant_app_role
     Rails.application.load_tasks unless Rake::Task.task_defined?("db:grants")
     DbGrants.apply(ActiveRecord::Base.lease_connection, password: false)

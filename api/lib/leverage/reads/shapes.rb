@@ -92,13 +92,15 @@ module Leverage
         { id: seat.id, name: seat.name, provider: seat.provider, model: seat.model.presence, effort: seat.effort.presence,
           role: seat.role, strength_rank: seat.strength_rank, credential_id: seat.credential_id, enabled: seat.enabled,
           paused: seat.paused, last_polled_at: time(seat.last_polled_at), run_state: seat.run_state,
-          removed_at: time(seat.removed_at), wanted_running: seat.wanted_running }
+          removed_at: time(seat.removed_at), wanted_running: seat.wanted_running,
+          run_credential_id: seat.run_credential_id, run_stop_reason: seat.run_stop_reason }
       end
 
       def credential(credential)
         { id: credential.id, kind: credential.kind, provider: credential.provider, name: credential.name,
           masked_label: credential.masked_label, plan: credential.plan, account_email: credential.account_email,
-          state: credential.state, limited_until: time(credential.limited_until), position: credential.position,
+          state: credential.state, limited_until: time(credential.limited_until), limited_since: time(credential.limited_since),
+          position: credential.position,
           model: credential.model, effort: credential.effort, strength_rank: credential.strength_rank,
           last_verified_at: time(credential.last_verified_at) }
       end

@@ -84,6 +84,15 @@ jobs:
       - name: Self-test of the stand-in tools
         working-directory: .
         run: python3 -I mac/Tests/StandIns/test_provider_tool.py
+      # The provider replies the detectors are tested against and the
+      # stand-ins play hold no account detail: no email, token, real id or
+      # unscrubbed field (plan HD-8).
+      - name: Reply files hold no account detail
+        working-directory: .
+        run: python3 -I scripts/check_reply_fixtures.py
+      - name: Self-test of the reply-file check
+        working-directory: .
+        run: python3 -I scripts/test_check_reply_fixtures.py
       - name: Build
         run: swift build
       # The runner has three cores. With every test at once, the app tests
@@ -115,7 +124,7 @@ jobs:
     # lane, its default on Linux). No provider is called: the tests use the
     # stand-in tools of mac/Tests/StandIns.
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -146,6 +155,16 @@ jobs:
         run: python3 -I scripts/test_real_provider_run.py
       - name: The end-to-end run
         run: scripts/e2e_core_loop.sh
+      # The Handoff milestone's acceptance run: six tests, each on a compose
+      # project of its own, each with a run interrupted by a limit or a
+      # sign-out that the stand-ins play; the last also runs the restore
+      # drill on its own log.
+      - name: The handoff's end-to-end run
+        run: scripts/e2e_handoff.sh
+      # A backup restored into a cluster whose volume was removed, from a
+      # seeded log (milestone 3 plan §5.3).
+      - name: The restore drill
+        run: scripts/restore_drill.sh
       - name: Self-test of the speed report
         run: python3 -I scripts/test_speed_report.py
       - name: Speed smoke run

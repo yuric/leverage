@@ -9,6 +9,11 @@ module Leverage
       # about that review and records only whether the reference changed. A
       # work call, blocked by a hold (L174).
       #
+      # After an edit from In review (milestone 3 plan HE-25 (ii)) the round
+      # and its review row are kept, with no verdict and no reviewer; the
+      # next submit in that round takes that row again, with the new note,
+      # rather than making a second one for the round.
+      #
       # A null work_reference keeps the task's reference: the field is
       # required but may be null, and the server never opens it, so null
       # does not erase it.
@@ -46,7 +51,9 @@ module Leverage
 
         def perform(ctx)
           changed = !@reference.nil? && @reference != @task.work_reference
-          review = Review.create!(workspace_id: @task.workspace_id, task_id: @task.id, round: @task.round,
+          review = Review.find_by(task_id: @task.id, round: @task.round, verdict: nil)
+          review&.update!(handoff_note: @handoff_note)
+          review ||= Review.create!(workspace_id: @task.workspace_id, task_id: @task.id, round: @task.round,
             handoff_note: @handoff_note)
           Leases.end_lease(ctx, @task)
           @task.update!(state: "in_review", holder_seat_id: nil, resume_pending_since: nil,

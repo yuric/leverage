@@ -99,6 +99,8 @@ final class ScriptedDriver: ToolDriver, @unchecked Sendable {
     enum Step: Sendable {
         case answer(String, tokens: Int)
         case fail(ToolFailure)
+        /// A failed run whose outputs a detector reads.
+        case failRun(ToolFailure, ToolRunRecord)
         /// Runs until it is cancelled, as a long tool run does.
         case block
     }
@@ -132,13 +134,15 @@ final class ScriptedDriver: ToolDriver, @unchecked Sendable {
     var runs: [Run] { lock.withLock { recorded } }
     var cancelledRuns: Int { lock.withLock { cancelled } }
 
-    func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer {
+    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
         lock.withLock { recorded.append(Run(prompt: prompt, folder: folder, purpose: purpose)) }
         switch respond(prompt, purpose) {
         case .answer(let text, let tokens):
-            return ToolAnswer(text: text, tokens: tokens)
+            return .answered(ToolAnswer(text: text, tokens: tokens))
         case .fail(let failure):
-            throw failure
+            return .failed(failure, nil)
+        case .failRun(let failure, let record):
+            return .failed(failure, record)
         case .block:
             do {
                 try await Task.sleep(for: .seconds(600))
@@ -146,7 +150,7 @@ final class ScriptedDriver: ToolDriver, @unchecked Sendable {
                 lock.withLock { cancelled += 1 }
                 throw error
             }
-            throw ToolFailure.timedOut
+            return .failed(.timedOut, nil)
         }
     }
 }
@@ -176,10 +180,13 @@ struct Harness {
         existingWork = try folder.folder("pricing-page")
     }
 
-    func loop(_ role: SeatRole, driver: any ToolDriver, timing: RunnerTiming = .fast()) -> RunnerLoop {
+    func loop(
+        _ role: SeatRole, driver: any ToolDriver, timing: RunnerTiming = .fast(), interruption: Interruption? = nil,
+        continuing: WorkToContinue? = nil, log: Log = Log(component: "runner-test", write: { _ in })
+    ) -> RunnerLoop {
         RunnerLoop(
             role: role, api: api, driver: driver, workRoot: workRoot, home: folder.url.path, timing: timing,
-            log: Log(component: "runner-test", write: { _ in }))
+            interruption: interruption, continuing: continuing, log: log)
     }
 
     /// `GET /v1/next` answers `items` in order and then stops the loop.

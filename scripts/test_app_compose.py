@@ -3,7 +3,8 @@
 
 app_compose.py makes the compose file the app bundle carries from the
 repository's compose.yaml (milestone 2 plan PK-1): the `build:` line is
-removed and `pull_policy: never` is set on the `api` and `sweep` services,
+removed and `pull_policy: never` is set on the `api`, `sweep` and `backup`
+services (milestone 3 plan WP13),
 so a missing image gives the app's "not built on this Mac" sentence and
 not a registry error. These cases prove that on the real compose.yaml
 exactly that changes and every other line is kept, in order, and that a
@@ -26,6 +27,7 @@ SCRIPT = HERE / "app_compose.py"
 COMPOSE = ROOT / "compose.yaml"
 VERBOSE = "-v" in sys.argv[1:]
 PULL = "pull_policy: never"
+SERVICES = ("api", "sweep", "backup")
 
 
 def run(text, *arguments, to_file=True):
@@ -107,13 +109,13 @@ def main():
     build_lines = [line for line in before if line.strip().startswith("build:")]
     cases.check("the repository's compose.yaml has exactly one build line", len(build_lines) == 1, build_lines)
     cases.check("only the build line is removed", removed == build_lines, removed)
-    cases.check("only two pull_policy lines are added",
-                [line.strip() for line in added] == [PULL, PULL], added)
+    cases.check("only one pull_policy line per service of the API image is added",
+                [line.strip() for line in added] == [PULL] * len(SERVICES), added)
     cases.check("every other line is kept, in order",
                 [line for line in after if line.strip() != PULL] == [line for line in before if line not in build_lines])
     cases.check("no build line is left", not any(line.strip().startswith("build:") for line in after))
 
-    for name in ("api", "sweep"):
+    for name in SERVICES:
         block = service_block(made, name)
         first = first_setting(block)
         cases.check(f"{name} starts with pull_policy: never at the service's indentation",
@@ -144,6 +146,26 @@ def main():
     code, messages, output = run(no_sweep)
     cases.check("a compose file without a sweep service fails and names it",
                 code != 0 and output is None and '"sweep"' in messages, messages)
+
+    no_backup = original.replace("\n  backup:\n", "\n  dumps:\n", 1)
+    code, messages, output = run(no_backup)
+    cases.check("a compose file without a backup service fails and names it",
+                code != 0 and output is None and '"backup"' in messages, messages)
+
+    preset_backup = original.replace("\n  backup:\n", "\n  backup:\n    pull_policy: missing\n", 1)
+    code, messages, output = run(preset_backup)
+    cases.check("a backup service that already sets pull_policy fails and names it",
+                code != 0 and output is None and '"backup"' in messages and "pull_policy" in messages, messages)
+
+    backup = service_block(made, "backup")
+    cases.check("backup keeps its bind mount of the host's backup folder",
+                any("${LEVERAGE_BACKUP_DIR" in line and ":/backups" in line for line in backup), backup)
+
+    # Review: the backup runs as the owner role and never as the login
+    # role, so it is given neither that role's URL nor its password, which
+    # .env (env_file) would otherwise give every service of the image.
+    cases.check("backup overrides the login role's URL and password with nothing",
+                '      API_DATABASE_URL: ""' in backup and '      LEVERAGE_API_DB_PASSWORD: ""' in backup, backup)
 
     no_api = original.replace("\n  api:\n", "\n  web:\n", 1)
     code, messages, output = run(no_api)

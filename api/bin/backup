@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+# The daily backup (milestone 3 plan §2.5, HB-1 to HB-4): the backup
+# service's program, a loop like bin/sweep. It looks when it starts and
+# then every 15 minutes, and when no backup_runs row is newer than
+# BACKUP_EVERY_HOURS (24) it dumps the database into BACKUP_DIR (/backups)
+# and keeps the newest BACKUP_KEEP (14), until it is stopped (TERM or INT).
+# While the database holds no workspace (a new one, as after the volume was
+# lost) it makes no dump, says so once, and looks again every 30 seconds.
+# With --once it makes one backup, prints its file name and exits non-zero
+# if it fails. It runs as the owner role (bin/docker-entrypoint switches
+# roles only for the server and the sweep).
+require_relative "../config/environment"
+
+folder = ENV.fetch("BACKUP_DIR", Leverage::Backup::FOLDER)
+keep = Integer(ENV.fetch("BACKUP_KEEP", Leverage::Backup::KEEP.to_s))
+every_hours = Float(ENV.fetch("BACKUP_EVERY_HOURS", Leverage::Backup::EVERY_HOURS.to_s))
+$stdout.sync = true
+
+if ARGV.include?("--once")
+  begin
+    run = Leverage::Backup.run!(folder: folder, keep: keep)
+    puts "Backed up to #{File.join(folder, run.file_name)} (#{run.bytes} bytes)."
+  rescue StandardError => error
+    warn "The backup into #{folder} failed: #{error.message}"
+    exit 1
+  end
+else
+  stopping = false
+  %w[TERM INT].each { |signal| Signal.trap(signal) { stopping = true } }
+  log = lambda do |line|
+    Rails.logger.error(line)
+    warn line
+  end
+  puts "Backing up into #{folder} every #{format("%g", every_hours)} hours, looking every " \
+       "#{Leverage::Backup::LOOK_EVERY / 60} minutes; keeping #{keep}."
+  Leverage::Backup.run_loop(folder: folder, keep: keep, every_hours: every_hours, stop: -> { stopping }, log: log,
+    say: ->(line) { puts line })
+  puts "Backup stopped."
+end

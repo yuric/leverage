@@ -184,6 +184,26 @@ class ConstraintsTest < ActiveSupport::TestCase
     end
   end
 
+  # Milestone 3 plan HE-3: limited_until says when a reported limit ends,
+  # so it is set only on a credential whose limit was reported.
+  test "HE-3: a credential's limited_until needs limited_since" do
+    now = Time.current
+    assert_accepted { credential }
+    assert_accepted { credential(limited_since: now) }
+    assert_accepted { credential(limited_since: now, limited_until: now + 3600) }
+    assert_rejected { credential(limited_until: now + 3600) }
+    limited = credential(limited_since: now, limited_until: now + 3600)
+    assert_rejected { sql("UPDATE credentials SET limited_since = NULL WHERE id = $1", limited) }
+    assert_accepted { sql("UPDATE credentials SET limited_since = NULL, limited_until = NULL WHERE id = $1", limited) }
+  end
+
+  # Milestone 3 plan HD-3: the credential a seat's run is on has no foreign
+  # key (as DB-10), so a removed credential leaves the record readable.
+  test "HD-3: a seat's run credential and stop reason are plain columns" do
+    assert_accepted { seat(run_credential_id: SecureRandom.uuid, run_stop_reason: "limit") }
+    assert_accepted { seat(run_credential_id: nil, run_stop_reason: nil) }
+  end
+
   test "credential positions are unique per workspace and two can swap in one transaction" do
     first = credential(position: 1)
     second = credential(position: 2)

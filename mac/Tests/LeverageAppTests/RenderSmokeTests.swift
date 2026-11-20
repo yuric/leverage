@@ -98,7 +98,7 @@ struct RenderSmokeTests {
     @Test("the side pane and the toolbar draw for each place the owner can be")
     func paneAndToolbar() async {
         let (_, context) = await readyModel()
-        for place in [Navigator.Place.board, .agents, .credentials] {
+        for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff] {
             context.navigator.show(place)
             #expect(drawsSomething(render(SidePane(context: context))), "\(place)")
             #expect(drawsSomething(render(Toolbar(context: context), height: 80)), "\(place)")
@@ -115,6 +115,36 @@ struct RenderSmokeTests {
         #expect(drawsSomething(render(AddTaskSheet().environment(context))))
         #expect(drawsSomething(render(RosterView().environment(context))))
         #expect(drawsSomething(render(CredentialsView().environment(context))))
+        #expect(drawsSomething(render(NeedsYouView().environment(context))))
+    }
+
+    @Test("the Needs you screen draws empty, with each kind of item, and with the notifications line, in both appearances")
+    func needsYouScreen() async {
+        let open = Locked([
+            NeedsYouFixtures.signedOut(seq: 1), NeedsYouFixtures.limit(seq: 2), NeedsYouFixtures.pastRound(seq: 3),
+            NeedsYouFixtures.item(.approval, seq: 4),
+        ])
+        let owner = NeedsYouFixtures.owner(open: open)
+        let model = NeedsYouModel(api: owner, noteRead: { _ in }, openTask: { _ in })
+        await model.load()
+        #expect(model.rows.count == 4)
+        #expect(drawsSomething(render(NeedsYouContent(model: model, notificationsAreOff: true))))
+        // Without a ground, dark-mode default text can match the card in this renderer, so the
+        // dark picture carries the line in its own colour, which is what separates it.
+        #expect(AgentFixtures.draws(NeedsYouContent(model: model, notificationsAreOff: true).environment(\.colorScheme, .dark)))
+        open.value = []
+        await model.load()
+        #expect(model.rows.isEmpty)
+        #expect(drawsSomething(render(NeedsYouContent(model: model, notificationsAreOff: false))))
+    }
+
+    @Test("the Needs you tab shows a count when items are open, and none when nothing is")
+    func needsYouBadge() async {
+        let (_, context) = await readyModel()
+        #expect(context.inbox.openCount == 0)
+        #expect(SidePane.badge(for: 0) == nil)
+        #expect(SidePane.badge(for: 3) == "3")
+        #expect(drawsSomething(render(SidePane(context: context))))
     }
 
     @Test("the design tokens carry the mockup's numbers")

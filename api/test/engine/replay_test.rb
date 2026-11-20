@@ -20,9 +20,30 @@ class ReplayTest < ActiveSupport::TestCase
 
   def log_diff(runner) = Leverage::Replay.diff(runner.workspace_id)
 
-  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+  # Milestone 3 adds traces 11 to 15 (its plan HT-1): handoffs, credential
+  # holds, their timer, Sign in again, and the owner's controls.
+  %w[
+    09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
+    13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules 15-owner-controls-no-rules
+  ].each do |name|
     test "the log of trace #{name} rebuilds every replay column" do
       assert_empty log_diff(run_trace(name))
+    end
+  end
+
+  # The open set of holds with its reasons, mid-trace: trace 11 after its
+  # second limit (a credential_limit hold waits for the reset), trace 12
+  # after its sign-out (credential_signed_out), trace 15 while an agent is
+  # paused (seat_paused).
+  { "11-limit-handoff-no-rules" => [ 9, "credential_limit" ], "12-signed-out-hold-verify-no-rules" => [ 8, "credential_signed_out" ],
+    "15-owner-controls-no-rules" => [ 10, "seat_paused" ] }.each do |name, (commands, reason)|
+    test "the open #{reason} hold of trace #{name} is rebuilt from the log, and so is every step" do
+      runner = TraceRunner.new(name).run(commands)
+      assert_empty runner.failures, runner.failures.join("\n")
+      holds = Leverage::Replay.project(runner.workspace_id).fetch(:holds)
+      assert_equal [ reason ], holds.values.map { |hold| hold.fetch("reason") }
+      assert_equal Hold.where(workspace_id: runner.workspace_id, closed_at: nil).pluck(:id), holds.keys
+      assert_empty log_diff(runner)
     end
   end
 
@@ -133,5 +154,49 @@ class ReplayTest < ActiveSupport::TestCase
     ranked.update_columns(minimum_strength_rank: 3)
     found = Leverage::Replay.diff(scenario.workspace_id)
     assert(found.any? { |line| line.include?("tasks #{ranked.id} minimum_strength_rank") }, found.inspect)
+  end
+
+  # Found by the walks of milestone 3 (seed 36 of SEED=1): an edit removes
+  # a builder criterion the tracker counted when another passed, so the
+  # criteria a step decision read must be those of the log as of the event
+  # (task.contract_changed's added and removed ids), not the rows as they
+  # are at the replay.
+  test "an edit that removes a criterion does not change the steps the replay rebuilds before it" do
+    scenario = Scenario.new
+    builder = scenario.seat(role: "builder")
+    task = scenario.task(state: "working", builder: builder, criteria: %w[build build review])
+    first, = Criterion.where(task_id: task.id, kind: "build").order(:position).to_a
+    seat_call = lambda do |command, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "seat",
+        caller_id: builder.id, key: "k-#{SecureRandom.hex(6)}", request_hash: "a" * 64, params: params))
+    end
+    assert seat_call.call("acknowledge_briefing", "id" => task.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(task.reload, builder)).completed?
+    assert seat_call.call("pass_criterion", "id" => task.id, "cid" => first.id,
+      "evidence" => { "kind" => "link", "value" => "https://example.test/work/1" }).completed?
+    edit = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+             "criteria" => [ { "text" => first.text, "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ],
+             "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
+    owner_call = lambda do |command, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+        caller_id: scenario.owner.id, key: "k-#{SecureRandom.hex(6)}", request_hash: "b" * 64, params: params))
+    end
+    assert owner_call.call("edit_contract", edit).completed?
+    assert_empty log_diff(Struct.new(:workspace_id).new(scenario.workspace_id))
+
+    # Then the other way: an edit that changes the first criterion (reset)
+    # and leaves the second removed; its next pass is the last builder
+    # criterion's, and finish opens, which the removed one must not stop.
+    changed = edit.merge("criteria" => [ { "text" => "#{first.text} Changed.", "kind" => "build" },
+                                         { "text" => "A reviewer agrees.", "kind" => "review" } ])
+    assert owner_call.call("edit_contract", changed).completed?
+    assert owner_call.call("complete_contract", changed).completed?
+    assert seat_call.call("claim", {}).completed?
+    assert seat_call.call("acknowledge_briefing", "id" => task.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(task.reload, builder)).completed?
+    assert seat_call.call("pass_criterion", "id" => task.id, "cid" => first.id,
+      "evidence" => { "kind" => "link", "value" => "https://example.test/work/2" }).completed?
+    assert_equal "finish", TaskStep.where(task_id: task.id, closed_at: nil).sole.kind
+    assert_empty log_diff(Struct.new(:workspace_id).new(scenario.workspace_id))
   end
 end

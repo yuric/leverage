@@ -134,4 +134,44 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         try await transport.command(
             .installTool, path: ["provider": provider.rawValue], body: InstallToolRequest(), key: key)
     }
+
+    public func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage {
+        var query: [URLQueryItem] = []
+        if let afterSeq { query.append(URLQueryItem(name: "after_seq", value: String(afterSeq))) }
+        return try await transport.read(.listInbox, query: query, waitSeconds: wait)
+    }
+
+    public func promoteTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.promoteTask, path: ["id": taskID.contractString], key: key)
+    }
+
+    public func editContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.editContract, path: ["id": taskID.contractString], body: request, key: key)
+    }
+
+    public func holdTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.holdTask, path: ["id": taskID.contractString], key: key)
+    }
+
+    public func resumeTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.resumeTask, path: ["id": taskID.contractString], key: key)
+    }
+
+    public func pauseSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.pauseSeat, path: ["id": seatID.contractString], key: key)
+    }
+
+    public func resumeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.resumeSeat, path: ["id": seatID.contractString], key: key)
+    }
+
+    public func changeSeat(seatID: UUID, _ request: ChangeSeatRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.changeSeat, path: ["id": seatID.contractString], body: request, key: key)
+    }
+
+    public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.signInAgain, path: ["id": credentialID.contractString], key: key)
+    }
 }

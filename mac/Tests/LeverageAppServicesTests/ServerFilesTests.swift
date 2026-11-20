@@ -124,6 +124,87 @@ struct ServerFilesTests {
         }
     }
 
+    // MARK: - The backups folder (HB-2)
+
+    @Test("makes <support folder>/backups with mode 0700 and names it in the .env as LEVERAGE_BACKUP_DIR")
+    func backupsFolder() throws {
+        let fake = try FakeDocker()
+        let files = ServerFiles(supportFolder: fake.supportFolder)
+        try files.prepare(composeSource: fake.composeSource, imageTag: "t", isPortFree: { _ in true })
+
+        let backups = fake.supportFolder.appendingPathComponent("backups")
+        var isFolder: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: backups.path, isDirectory: &isFolder) && isFolder.boolValue)
+        #expect(mode(of: backups) == 0o700)
+        #expect(files.backupsFolder.path == backups.path)
+        let env = try values(in: fake.supportFolder.appendingPathComponent("server/.env"))
+        #expect(env["LEVERAGE_BACKUP_DIR"] == backups.path)
+    }
+
+    @Test("an existing server folder gains the backups folder and the line, and keeps its generated values")
+    func existingServerFolderGainsBoth() throws {
+        let fake = try FakeDocker()
+        let files = ServerFiles(supportFolder: fake.supportFolder)
+        try files.prepare(composeSource: fake.composeSource, imageTag: "0.1.0", isPortFree: { $0 == 47133 })
+        let envFile = fake.supportFolder.appendingPathComponent("server/.env")
+        let before = try values(in: envFile)
+
+        // The state milestone 2 left: no backups folder, no such line.
+        try FileManager.default.removeItem(at: fake.supportFolder.appendingPathComponent("backups"))
+        let old = try String(contentsOf: envFile, encoding: .utf8).split(separator: "\n")
+            .filter { !$0.hasPrefix("LEVERAGE_BACKUP_DIR") }.joined(separator: "\n") + "\n"
+        try Data(old.utf8).write(to: envFile)
+        #expect(try values(in: envFile)["LEVERAGE_BACKUP_DIR"] == nil)
+
+        let settings = try files.prepare(
+            composeSource: fake.composeSource, imageTag: "0.1.0", isPortFree: { _ in false })
+        let after = try values(in: envFile)
+        #expect(settings.port == 47133)
+        #expect(after["LEVERAGE_BACKUP_DIR"] == fake.supportFolder.appendingPathComponent("backups").path)
+        #expect(mode(of: fake.supportFolder.appendingPathComponent("backups")) == 0o700)
+        for name in ["POSTGRES_PASSWORD", "LEVERAGE_API_DB_PASSWORD", "SECRET_KEY_BASE", "API_PORT"] {
+            #expect(after[name] == before[name], "\(name) changed")
+        }
+        #expect(mode(of: envFile) == 0o600)
+    }
+
+    @Test("a backups folder that is too open is closed to 0700, and the dumps in it are left alone")
+    func existingBackupsFolderIsClosed() throws {
+        let fake = try FakeDocker()
+        let backups = fake.supportFolder.appendingPathComponent("backups")
+        try FileManager.default.createDirectory(
+            at: backups, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
+        let dump = backups.appendingPathComponent("leverage-made-up.dump")
+        try Data("made-up dump".utf8).write(to: dump)
+
+        try ServerFiles(supportFolder: fake.supportFolder)
+            .prepare(composeSource: fake.composeSource, imageTag: "t", isPortFree: { _ in true })
+
+        #expect(mode(of: backups) == 0o700)
+        #expect(try String(contentsOf: dump, encoding: .utf8) == "made-up dump")
+    }
+
+    @Test("a support folder with a space in its name is written into the .env whole")
+    func backupsPathWithSpace() throws {
+        let fake = try FakeDocker()
+        let support = fake.root.appendingPathComponent("Application Support/leverage")
+        try ServerFiles(supportFolder: support)
+            .prepare(composeSource: fake.composeSource, imageTag: "t", isPortFree: { _ in true })
+        let env = try values(in: support.appendingPathComponent("server/.env"))
+        #expect(env["LEVERAGE_BACKUP_DIR"] == support.appendingPathComponent("backups").path)
+    }
+
+    @Test("no backups folder is made when no port is free")
+    func noBackupsFolderOnFailure() throws {
+        let fake = try FakeDocker()
+        #expect(throws: ServerFilesError.noFreePort) {
+            try ServerFiles(supportFolder: fake.supportFolder)
+                .prepare(composeSource: fake.composeSource, imageTag: "t", isPortFree: { _ in false })
+        }
+        #expect(!FileManager.default.fileExists(
+            atPath: fake.supportFolder.appendingPathComponent("backups").path))
+    }
+
     @Test("a port this Mac is listening on is not free")
     func portProbe() throws {
         let listener = try #require(TestListener())

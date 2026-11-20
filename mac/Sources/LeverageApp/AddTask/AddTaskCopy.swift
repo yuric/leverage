@@ -1,5 +1,6 @@
-/// The owner-facing sentences of the Add task form (MA-13, MA-15, MA-16) and of
-/// the same form on a Backlog task's page. The words come from the mockup.
+/// The owner-facing sentences of the Add task form (MA-13, MA-15, MA-16, HM-48)
+/// and of the same form on a task's page, where it changes the contract
+/// (HM-49). The words come from the mockup.
 enum AddTaskCopy: OwnerFacingCopy {
     case sheetTitle
     case titleLabel, titlePlaceholder
@@ -9,7 +10,8 @@ enum AddTaskCopy: OwnerFacingCopy {
     case priorityLabel, priorityLow, priorityNormal, priorityHigh
     case workLabel, workPlaceholder, workHint
     case footnote
-    case cancel, save, saving
+    case cancel, save, saving, saveAsIdea, ideaKeepsNoCriteria
+    case changeTaskTitle, saveChanges, saveAndSend, editWarning, editWarningNoAgent
     case savedNotSent
 
     /// The last criterion of every task: the independent review (PRD Terms).
@@ -39,6 +41,16 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .cancel: "Cancel"
         case .save: "Save task"
         case .saving: "Saving…"
+        case .saveAsIdea: "Save as an idea"
+        case .ideaKeepsNoCriteria:
+            "An idea keeps the title, the goal and the details. Say what done looks like when you move it to Backlog."
+        case .changeTaskTitle: "Change the task"
+        case .saveChanges: "Save"
+        case .saveAndSend: "Save and send to agents"
+        case .editWarning:
+            "The agent stops and the task goes back to Backlog. What has passed stays passed if you leave it as it is."
+        case .editWarningNoAgent:
+            "The task goes back to Backlog. What has passed stays passed if you leave it as it is."
         case .savedNotSent:
             "The task is saved in Backlog but was not sent to agents yet. Press Save task to send it again."
         case .reviewCriterion: "An independent reviewer agrees."

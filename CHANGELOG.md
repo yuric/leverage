@@ -10,6 +10,29 @@ once it makes its first release.
 
 ### Added
 
+- Added handoff: work continues on the next account when one reaches its
+  limit or is signed out, Needs you with notifications, the Handoff tab,
+  pausing and editing tasks and agents, and a daily backup. The PRD's
+  Handoff milestone: the reference runner recognises a limit or a sign-out
+  in a provider tool's failed run, the helper reports it, and the server
+  continues the task or review on the next account in the Handoff order,
+  or holds the task until an account is available or the owner signs in
+  again; the record names the account of every claim, review and switch,
+  and each interruption's recovery time is in the task's log. Needs you
+  lists what waits for the owner, with Sign in again, and the Mac app
+  announces each item once in a macOS notification. The Handoff tab shows
+  the order and its eight fixed rules. The owner can save a task as an
+  idea and move it to Backlog, change a task's contract, pause and continue
+  a task, and pause, resume and change an agent. A `backup` container dumps
+  the database once a day to a folder on the Mac and keeps 14 (none while
+  the database holds no workspace), and `bin/restore` makes the database
+  again beside the old one and replaces it only once the restored log
+  passes the replay test. The task page names the account a task waits
+  for, as its card does. Signing out of the app and quickly back in starts
+  the helper again, and a helper whose app is gone stops. Every
+  interruption is shown with stand-in tools only, and the limit replies
+  they play are made, not observed. The PRD gains the changes R-1 to R-10;
+  the choices are recorded in ADRs 0008 to 0010.
 - Added the core loop: sign-in, logins, agents the app runs, tasks from a
   form to Done. The PRD's Core loop milestone: `Leverage.app` starts the
   server and its timer sweep in Docker containers on the owner's Mac,

@@ -17,6 +17,8 @@ enum Sent<Result: Sendable>: Sendable {
 enum Read<Value: Sendable>: Sendable {
     case value(Value)
     case refused(RefusalCode)
+    /// `404`: the work is gone, or was never the seat's (HD-9).
+    case gone
     case failed
 }
 
@@ -44,6 +46,11 @@ enum RefusalAction: Equatable {
         case .leaseExpired, .taskCancelled, .notHolder: self = .end
         default: self = .release
         }
+    }
+
+    /// Whether the refusal asks for the briefing to be acknowledged (HD-9).
+    static func asksForAcknowledgement(_ code: RefusalCode) -> Bool {
+        code == .briefingNotAcknowledged || code == .briefingChanged
     }
 }
 
@@ -80,6 +87,8 @@ struct FlowContext: Sendable {
     let state: RunnerState
     let workRoot: URL
     let home: String
+    /// What a failed tool run means for the account (HD-5).
+    let interruption: Interruption
 
     /// Sends one command with a key of its own. A network failure sends it
     /// again with the same key, after a pause of at most 2 seconds, for as
@@ -133,6 +142,7 @@ struct FlowContext: Sendable {
                 case .retry: try await Task.sleep(for: timing.errorPause)
                 case .fatal:
                     log.error("\(name) failed: \(Self.describe(error))")
+                    if let transport = error as? TransportError, transport.code == .notFound { return .gone }
                     return .failed
                 }
             }
@@ -170,6 +180,7 @@ final class RunnerState: @unchecked Sendable {
     private let lock = NSLock()
     private var heldNow: Held = .nothing
     private var failures = 0
+    private var stoppedAccount: RunEndReport?
 
     var held: Held { lock.withLock { heldNow } }
     func hold(_ held: Held) { lock.withLock { heldNow = held } }
@@ -178,4 +189,8 @@ final class RunnerState: @unchecked Sendable {
     var consecutiveToolFailures: Int { lock.withLock { failures } }
     func toolAnswered() { lock.withLock { failures = 0 } }
     func toolFailed() { lock.withLock { failures += 1 } }
+
+    /// The report of the account that stopped, once a flow found it (HD-6).
+    var accountStop: RunEndReport? { lock.withLock { stoppedAccount } }
+    func accountStopped(_ report: RunEndReport) { lock.withLock { stoppedAccount = report } }
 }

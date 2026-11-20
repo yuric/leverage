@@ -56,6 +56,38 @@ module TimerTestEntries
   class Untargeted < Leverage::Transitions::Entry
     def perform(_ctx) = @result = {}
   end
+
+  # Stands in for the credential_hold_release entry (WP3's), the way
+  # Timers and the sweep call it (milestone 3 plan WP4): targets: inside a
+  # command; params task_id or limit as the sweep's own command. It closes
+  # the task's oldest credential hold when Timers says it is due, at its
+  # due time, as the app, with no key.
+  class HoldRelease < Leverage::Transitions::Entry
+    def initialize(command = "credential_hold_release", targets: nil)
+      super(command)
+      @tasks = targets
+    end
+
+    def load(ctx)
+      return if @tasks
+
+      params = ctx.request.params
+      @tasks = if params.key?("task_id")
+        [ Task.find_by!(id: params["task_id"], workspace_id: ctx.workspace.id) ]
+      else
+        Leverage::Timers.due_credential_holds(ctx.workspace.id, ctx.at, %w[working], limit: Integer(params.fetch("limit", 100)))
+      end
+    end
+
+    def perform(ctx)
+      released = @tasks.select { |task| Leverage::Timers.credential_hold_due?(task, ctx.at) }
+      released.each do |task|
+        Leverage::Holds.close(ctx, hold: Leverage::Timers.credential_hold(task), task: task,
+          effective_at: Leverage::Timers.credential_hold_effective_at(task), command_id: nil, actor_kind: "app", actor_id: nil)
+      end
+      @result = { "released_task_ids" => released.map(&:id) }
+    end
+  end
 end
 
 class TimersDueTest < CommittingTestCase
@@ -279,5 +311,176 @@ class TimersDueTest < CommittingTestCase
       Leverage::Timers.apply_due(scenario.context(request: timer_request))
     end
     assert_empty none, "the timer command applies itself; apply_due adds nothing"
+  end
+end
+
+# The credential timer (milestone 3 plan §2.1 rule 8, HE-23, WP4): the due
+# time of a task's credential hold, and test 7 for it. The timer's entry is
+# HoldRelease above, standing in for WP3's.
+class CredentialHoldTimerTest < CommittingTestCase
+  T = Leverage::Transitions
+  E = TimerTestEntries
+  TM = Leverage::Timers
+
+  setup do
+    @own = scenario.limit_credential(scenario.credential, reset_at: nil)
+    @builder = scenario.seat(role: "builder", credential: @own)
+    @task = scenario.task(state: "working", builder: @builder)
+    @hold = scenario.hold(@task, reason: "credential_limit", credential: @own, item: false)
+  end
+
+  def last_effective(task = @task) = Event.where(task_id: task.id).maximum(:effective_at)
+
+  def last_seq = Workspace.find(scenario.workspace_id).last_seq
+
+  def events_after(seq)
+    Event.where(workspace_id: scenario.workspace_id).where("seq > ?", seq).order(:seq).to_a
+  end
+
+  def apply(caller_kind, caller_id, command, params, entry: E::Untargeted)
+    request = T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: caller_kind,
+      caller_id: caller_id, key: "key-#{SecureRandom.hex(4)}", request_hash: "made-up-hash", params: params)
+    T::Table.with_entries(command => entry, TM::CREDENTIAL_HOLD => E::HoldRelease) { T.apply(request) }
+  end
+
+  # Puts the stopped credential's reset after every event of the task and
+  # before any later command's clock: the hold is due at the reset.
+  def reset_now
+    reset = scenario.database_now
+    @own.update!(limited_until: reset)
+    reset
+  end
+
+  test "the credential hold is the task's oldest open credential hold" do
+    assert_equal @hold.id, TM.credential_hold(@task).id
+    other = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    assert_nil TM.credential_hold(other)
+  end
+
+  test "no reset time among the candidates: no due time (the hold has an item instead)" do
+    assert_nil TM.credential_hold_due_at(@task)
+    refute TM.credential_hold_due?(@task, scenario.database_now + 3600)
+  end
+
+  test "due at the earliest reset among the seat's signed-in candidates" do
+    reset = scenario.database_now + 3600
+    @own.update!(limited_until: reset)
+    later = scenario.limit_credential(scenario.credential, reset_at: reset + 600)
+
+    assert_equal reset, TM.credential_hold_due_at(@task)
+    refute TM.credential_hold_due?(@task, reset - 1)
+    assert TM.credential_hold_due?(@task, reset)
+
+    @own.update!(state: "signed_out")
+    assert_equal later.limited_until, TM.credential_hold_due_at(@task), "a signed-out candidate's reset is not one"
+  end
+
+  test "never before the task's last effective time" do
+    @own.update!(limited_until: last_effective - 60)
+
+    assert_equal last_effective, TM.credential_hold_due_at(@task)
+  end
+
+  test "at once, the task's last effective time, when a candidate is already available" do
+    scenario.credential
+    assert_equal last_effective, TM.credential_hold_due_at(@task)
+  end
+
+  test "the due time is read as of the task's last effective time, not the time of the look" do
+    reset = reset_now
+
+    assert_equal reset, TM.credential_hold_due_at(@task), "by the time of a later look the reset has passed"
+    assert_operator reset, :>, last_effective
+  end
+
+  test "a task with no credential hold open has no due time" do
+    ActiveRecord::Base.transaction(requires_new: true) { Leverage::Holds.close(scenario.context, hold: @hold, task: @task) }
+    reset_now
+    assert_nil TM.credential_hold_due_at(@task.reload)
+  end
+
+  test "due_credential_holds finds the due holds of a workspace, in bounded batches" do
+    reset_now
+    other_own = scenario.limit_credential(scenario.credential, reset_at: scenario.database_now + 3600)
+    other = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: other_own))
+    scenario.hold(other, reason: "credential_limit", credential: other_own, item: false)
+    now = scenario.database_now
+
+    assert_equal [ @task.id ], TM.due_credential_holds(scenario.workspace_id, now, %w[working], limit: 10).map(&:id)
+    assert_empty TM.due_credential_holds(scenario.workspace_id, now, %w[ready], limit: 10)
+    assert_equal 1, TM.due_credential_holds(scenario.workspace_id, now + 7200, %w[working], limit: 1).size
+    assert_equal 2, TM.due_credential_holds(scenario.workspace_id, now + 7200, %w[working], limit: 5).size
+  end
+
+  # Test 7 (L842) for the credential timer: whoever calls, a command on a
+  # task whose credential hold was due commits hold.closed at the due time
+  # first, by the app, with no key, before the command's own events.
+  {
+    "a seat" => ->(test) { [ "seat", test.instance_variable_get(:@builder).id, "heartbeat", "id" ] },
+    "the owner" => ->(test) { [ "owner", test.scenario.owner.id, "cancel", "id" ] },
+    "the helper" => ->(test) { [ "helper", test.scenario.helper.id, "report_run_started", "task_id" ] }
+  }.each do |who, call|
+    test "test 7: a command by #{who} on a task whose credential hold was due closes it first, at the due time" do
+      reset = reset_now
+      caller_kind, caller_id, command, param = call.call(self)
+      before = last_seq
+
+      outcome = apply(caller_kind, caller_id, command, { param => @task.id })
+
+      assert outcome.completed?, outcome.refusal&.code.to_s
+      closed = events_after(before).first
+      assert_equal [ "hold.closed", @hold.id, before + 1 ], [ closed.type, closed.subject_id, closed.seq ]
+      assert_equal [ reset, "app", nil, nil ], [ closed.effective_at, closed.actor_kind, closed.actor_id, closed.command_id ]
+      assert_operator closed.at, :>, closed.effective_at
+      assert @hold.reload.closed_at
+    end
+  end
+
+  test "a hold not yet due is left alone" do
+    @own.update!(limited_until: scenario.database_now + 3600)
+    before = last_seq
+
+    apply("seat", @builder.id, "heartbeat", { "id" => @task.id })
+
+    assert_empty events_after(before)
+    assert_nil @hold.reload.closed_at
+  end
+
+  test "a hold due before the lease closes first; the lease's expiry follows at its own due time" do
+    reset = reset_now
+    lease_due = scenario.database_now
+    scenario.make_due(@task, at: lease_due)
+    before = last_seq
+
+    apply("seat", @builder.id, "heartbeat", { "id" => @task.id })
+
+    events = events_after(before)
+    assert_equal %w[hold.closed task.lease_expired], events.first(2).map(&:type)
+    assert_equal [ reset, lease_due ], events.first(2).map(&:effective_at)
+  end
+
+  test "a lease due before the hold ends first and its expiry closes the hold, at the lease's due time" do
+    lease_due = scenario.database_now
+    scenario.make_due(@task, at: lease_due)
+    @own.update!(limited_until: scenario.database_now)
+    before = last_seq
+
+    apply("seat", @builder.id, "heartbeat", { "id" => @task.id })
+
+    events = events_after(before)
+    assert_equal %w[task.lease_expired hold.closed], events.map(&:type)
+    assert_equal [ lease_due, lease_due ], events.map(&:effective_at)
+  end
+
+  test "apply_due leaves the two new timers' own commands alone while they are pending (HT-6)" do
+    reset_now
+    %w[credential_hold_release seat_run_placement].each do |command|
+      request = T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: nil, caller_id: nil,
+        key: nil, request_hash: nil, params: { "task_id" => @task.id })
+      written = T::Table.with_entries(TM::CREDENTIAL_HOLD => E::HoldRelease) do
+        ActiveRecord::Base.transaction(requires_new: true) { TM.apply_due(scenario.context(request: request)) }
+      end
+      assert_empty written, command
+    end
   end
 end

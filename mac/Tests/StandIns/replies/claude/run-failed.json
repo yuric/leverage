@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-19",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a server error, which is no limit and no sign-out",
+    "expect": "failed",
+    "marker": "LVRG-REPLY-116ec5efbc31"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"result\", \"subtype\": \"success\", \"is_error\": true, \"result\": \"API Error: 500 Internal server error\", \"api_error_status\": 500, \"terminal_reason\": \"api_error\", \"stop_reason\": \"stop_sequence\", \"session_id\": \"LVRG-REPLY-116ec5efbc31\", \"num_turns\": 1, \"total_cost_usd\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}, \"modelUsage\": {}}\n",
+  "stderr": ""
+}

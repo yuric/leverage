@@ -9,6 +9,7 @@ environment of its own, never the caller's, so no real tool and no real
 account folder can be reached. Standard library only.
 """
 
+import calendar
 import glob
 import gzip
 import io
@@ -158,6 +159,11 @@ class StandInTestCase(unittest.TestCase):
         folder = os.path.join(self.tmp, "accounts", name)
         os.makedirs(folder, exist_ok=True)
         return folder
+
+    def reply(self, provider, name):
+        """A reply file of the copy, as the detector tests read it."""
+        with open(os.path.join(self.root, "replies", provider, name + ".json")) as handle:
+            return json.load(handle)
 
 
 class VersionsAndStatus(StandInTestCase):
@@ -337,10 +343,15 @@ class Prompts(StandInTestCase):
         with open(last) as handle:
             self.assertTrue(handle.read().startswith("LEVERAGE-EVIDENCE:"))
 
-    def test_codex_signed_out_exits_101_with_an_error_line(self):
+    def test_codex_signed_out_plays_the_recorded_reply(self):
+        """codex-cli 0.169.0 signed out exits 1 and ends with turn.failed
+        (replies/codex/run-signed-out.json, recorded by milestone 3's step
+        0); milestone 2's stand-in exited 101 with an error line, which an
+        older capture showed."""
         out = self.run_tool("codex", "exec", "hello", "--json", env=self.env(CODEX_HOME=self.account("x")))
-        self.assertEqual(out.returncode, 101)
-        self.assertEqual(json.loads(out.stdout.splitlines()[-1])["type"], "error")
+        recorded = self.reply("codex", "run-signed-out")
+        self.assertEqual((out.returncode, out.stdout), (recorded["exit_status"], recorded["stdout"]))
+        self.assertEqual(json.loads(out.stdout.splitlines()[-1])["type"], "turn.failed")
 
     def test_grok_answers_plain_text_in_its_cwd(self):
         self.run_tool("grok", "login", "--oauth")
@@ -358,6 +369,184 @@ class Prompts(StandInTestCase):
         self.assertEqual(calls[-1]["tool"], "claude")
         self.assertEqual(calls[-1]["argv"], ["--version"])
         self.assertEqual(calls[-1]["env"]["MARKER"], "made-up-value")
+
+
+WORK_PROMPT = "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>."
+ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
+def stated_reset(text):
+    """The one reset time a played reply states, in seconds since 1970."""
+    found = ISO_TIME.findall(text)
+    if len(found) != 1:
+        raise AssertionError(f"expected one reset time in the reply, found {len(found)}")
+    return calendar.timegm(time.strptime(found[0], "%Y-%m-%dT%H:%M:%SZ"))
+
+
+class Directives(StandInTestCase):
+    """Plan HD-11: an account's directives count work prompts and read no
+    clock. The reset time a limit reply states is data in the reply."""
+
+    def claude(self, account, prompt=WORK_PROMPT):
+        env = self.env(CLAUDE_CONFIG_DIR=account)
+        return self.run_tool("claude", "-p", prompt, "--output-format", "json", env=env)
+
+    def signed_in_claude(self, name):
+        folder = self.account(name)
+        self.assertEqual(self.run_tool("claude", "auth", "login",
+                                       env=self.env(CLAUDE_CONFIG_DIR=folder)).returncode, 0)
+        return folder
+
+    def assert_answered(self, out):
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertTrue(json.loads(out.stdout)["result"].startswith("LEVERAGE-EVIDENCE:"), out.stdout)
+
+    def test_the_limit_reply_is_given_on_the_nth_work_prompt_once_and_never_again(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": folder, "on_prompt": 2,
+             "reply": "claude/run-limit-five-hour.json", "reset_in_seconds": 120}]})
+        self.assert_answered(self.claude(folder))
+        before = time.time()
+        limited = self.claude(folder)
+        after = time.time()
+        recorded = self.reply("claude", "run-limit-five-hour")
+        self.assertEqual(limited.returncode, recorded["exit_status"])
+        self.assertTrue(json.loads(limited.stdout)["is_error"])
+        self.assertIn(recorded["meta"]["marker"], limited.stdout)
+        self.assertNotIn("@RESET_AT", limited.stdout, "the reset time is filled in")
+        reset = stated_reset(limited.stdout)
+        self.assertGreaterEqual(reset, int(before) + 120)
+        self.assertLessEqual(reset, int(after) + 121)
+        # The reset time has not come, and the account answers all the same.
+        for _ in range(3):
+            self.assert_answered(self.claude(folder))
+
+    def test_a_reset_time_already_past_still_gives_the_limit_once(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": folder, "on_prompt": 1,
+             "reply": "claude/run-limit-five-hour.json", "reset_in_seconds": -3600}]})
+        limited = self.claude(folder)
+        self.assertEqual(limited.returncode, 1)
+        self.assertLess(stated_reset(limited.stdout), time.time() - 3000)
+        self.assert_answered(self.claude(folder))
+
+    def test_a_directive_applies_to_its_own_account_folder_only(self):
+        one, two = self.signed_in_claude("one"), self.signed_in_claude("two")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": one, "on_prompt": 2,
+             "reply": "claude/run-limit-weekly-no-reset.json"}]})
+        self.assert_answered(self.claude(two))
+        self.assert_answered(self.claude(two))
+        self.assert_answered(self.claude(one))
+        self.assertEqual(self.claude(one).returncode, 1, "the second work prompt of account one")
+        self.assert_answered(self.claude(two))
+
+    def test_only_work_prompts_are_counted(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": folder, "on_prompt": 1,
+             "reply": "claude/run-limit-weekly-no-reset.json"}]})
+        ready = self.claude(folder, "Reply with the single word ready.")
+        self.assertEqual((ready.returncode, json.loads(ready.stdout)["result"]), (0, "ready"))
+        self.assertEqual(self.claude(folder).returncode, 1, "the first work prompt")
+
+    def test_a_review_prompt_is_a_work_prompt(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": folder, "on_prompt": 1,
+             "reply": "claude/run-limit-weekly-no-reset.json"}]})
+        self.assertEqual(self.claude(folder, "Review criterion 1. LEVERAGE-CRITERION").returncode, 1)
+
+    def test_the_account_is_signed_out_before_the_nth_work_prompt(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "claude", "account": folder, "on_prompt": 2, "sign_out": True}]})
+        self.assert_answered(self.claude(folder))
+        out = self.claude(folder)
+        recorded = self.reply("claude", "run-signed-out")
+        self.assertEqual((out.returncode, out.stdout), (recorded["exit_status"], recorded["stdout"]))
+        status = self.run_tool("claude", "auth", "status", env=self.env(CLAUDE_CONFIG_DIR=folder))
+        self.assertEqual(status.returncode, 1, "the account stays signed out")
+        # Signed in again, the account answers: the directive is spent.
+        self.run_tool("claude", "auth", "login", env=self.env(CLAUDE_CONFIG_DIR=folder))
+        self.assert_answered(self.claude(folder))
+        self.assert_answered(self.claude(folder))
+
+    def test_the_short_rate_limit_is_given_a_number_of_times(self):
+        folder = self.account("codex")
+        env = self.env(CODEX_HOME=folder)
+        self.run_tool("codex", "login", env=env)
+        self.write_scenario({"directives": [
+            {"tool": "codex", "account": folder, "on_prompt": 2, "reply": "codex/run-rate-limited.json",
+             "times": 2}]})
+        recorded = self.reply("codex", "run-rate-limited")
+        codes = []
+        for _ in range(5):
+            out = self.run_tool("codex", "exec", WORK_PROMPT, "--json", env=env)
+            codes.append(out.returncode)
+            if out.returncode != 0:
+                self.assertEqual(out.stdout, recorded["stdout"])
+        self.assertEqual(codes, [0, recorded["exit_status"], recorded["exit_status"], 0, 0])
+
+    def test_a_codex_limit_reply_states_its_reset_as_seconds(self):
+        folder = self.account("codex")
+        env = self.env(CODEX_HOME=folder)
+        self.run_tool("codex", "login", env=env)
+        last = os.path.join(self.tmp, "last.txt")
+        self.write_scenario({"directives": [
+            {"tool": "codex", "account": folder, "on_prompt": 1,
+             "reply": "codex/run-limit-five-hour.json", "reset_in_seconds": 600}]})
+        before = int(time.time())
+        out = self.run_tool("codex", "exec", WORK_PROMPT, "--json", "-o", last, env=env)
+        self.assertEqual(out.returncode, 1)
+        limits = [json.loads(line)["limit"] for line in out.stdout.splitlines() if '"limit"' in line]
+        self.assertEqual(len(limits), 1)
+        self.assertGreaterEqual(limits[0]["resets_at"], before + 600)
+        self.assertLessEqual(limits[0]["resets_at"], int(time.time()) + 601)
+        self.assertFalse(os.path.exists(last), "a refused run writes no answer file")
+
+    def test_a_tool_with_one_sign_in_for_the_mac_takes_a_directive_with_no_account(self):
+        self.run_tool("grok", "login", "--oauth")
+        self.write_scenario({"directives": [
+            {"tool": "grok", "account": None, "on_prompt": 1, "reply": "grok/run-limit-spend.json",
+             "reset_in_seconds": 60}]})
+        out = self.run_tool("grok", "-p", WORK_PROMPT, "--cwd", self.work)
+        self.assertEqual(out.returncode, 1)
+        self.assertGreaterEqual(stated_reset(out.stderr), int(time.time()) + 50)
+        again = self.run_tool("grok", "-p", WORK_PROMPT, "--cwd", self.work)
+        self.assertEqual(again.returncode, 0)
+
+    def test_a_directive_for_another_tool_changes_nothing(self):
+        folder = self.signed_in_claude("one")
+        self.write_scenario({"directives": [
+            {"tool": "codex", "account": folder, "on_prompt": 1, "reply": "codex/run-rate-limited.json"}]})
+        self.assert_answered(self.claude(folder))
+
+
+class RecordedReplies(StandInTestCase):
+    """The stand-ins answer signed out with the reply files the detector
+    tests read (plan HD-11)."""
+
+    def assert_plays(self, out, provider, name):
+        recorded = self.reply(provider, name)
+        self.assertEqual((out.returncode, out.stdout, out.stderr),
+                         (recorded["exit_status"], recorded["stdout"], recorded["stderr"]), name)
+
+    def test_every_signed_out_answer_is_its_reply_file(self):
+        empty = self.env(CLAUDE_CONFIG_DIR=self.account("c"), CODEX_HOME=self.account("x"))
+        self.assert_plays(self.run_tool("claude", "auth", "status", env=empty), "claude", "status-signed-out")
+        self.assert_plays(self.run_tool("claude", "-p", WORK_PROMPT, "--output-format", "json", env=empty),
+                          "claude", "run-signed-out")
+        self.assert_plays(self.run_tool("codex", "login", "status", env=empty), "codex", "status-signed-out")
+        self.assert_plays(self.run_tool("codex", "exec", WORK_PROMPT, "--json", env=empty),
+                          "codex", "run-signed-out")
+        self.assert_plays(self.run_tool("agy", "-p", WORK_PROMPT, "--output-format", "json", env=empty),
+                          "gemini", "run-signed-out")
+        self.assert_plays(self.run_tool("grok", "models", env=empty), "grok", "status-signed-out")
+        self.assert_plays(self.run_tool("grok", "-p", WORK_PROMPT, "--cwd", self.work, env=empty),
+                          "grok", "run-signed-out")
 
 
 class RunnerInstallerAndScripts(StandInTestCase):

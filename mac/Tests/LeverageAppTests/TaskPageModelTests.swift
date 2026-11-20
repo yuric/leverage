@@ -25,6 +25,10 @@ struct TaskPageModelTests {
             $0.cancelTask = { _, key in Fixtures.plain(.cancel, key: key) }
             $0.allowAnotherRound = { _, key in Fixtures.plain(.allowAnotherRound, key: key) }
             $0.completeContract = { _, _, key in Fixtures.plain(.completeContract, key: key) }
+            $0.promoteTask = { _, key in Fixtures.plain(.promote, key: key) }
+            $0.holdTask = { _, key in Fixtures.plain(.hold, key: key) }
+            $0.resumeTask = { _, key in Fixtures.plain(.resume, key: key) }
+            $0.editContract = { _, _, key in Fixtures.plain(.editContract, key: key) }
         }
         return owner
     }
@@ -328,6 +332,297 @@ struct TaskPageModelTests {
         #expect(keys.count == 2 && keys[0] == keys[1])
     }
 
+    // MARK: Move to Backlog, Pause this task and Continue this task (HM-45)
+
+    private func page(_ state: TaskState, holds: [Hold] = []) -> TaskPage {
+        Fixtures.page(Fixtures.summary(state, id: taskID, title: "Try a weekly summary"), holds: holds, names: names)
+    }
+
+    @Test("only an idea offers Move to Backlog, and nothing else of the page does")
+    func moveToBacklogOffered() async {
+        for state in TaskState.allCases {
+            let (model, _, _) = await loaded(page(state))
+            #expect(model.canMoveToBacklog == (state == .imaginarium), "\(state)")
+        }
+    }
+
+    @Test("Move to Backlog sends Promote for this task with no body, reads again, and an idea that moved no longer offers it")
+    func moveToBacklog() async throws {
+        let (model, owner, shared) = await loaded(page(.imaginarium))
+        shared.value = page(.backlog)
+        await model.moveToBacklog()
+        #expect(owner.calls.map(\.operation) == [.getTask, .promoteTask, .getTask])
+        #expect((try owner.call(at: 1)).path == ["id": taskID.contractString])
+        #expect((try owner.call(at: 1)).body == nil)
+        #expect(model.state == .loaded)
+        #expect(!model.canMoveToBacklog)
+        #expect(model.showsContractForm)
+        #expect(model.actionFailure == nil)
+    }
+
+    @Test("Move to Backlog that failed is sent again with the same key, and a refusal is a plain line")
+    func moveToBacklogRetry() async {
+        let (model, owner, _) = await loaded(page(.imaginarium))
+        owner.script { $0.promoteTask = { _, _ in throw URLError(.timedOut) } }
+        await model.moveToBacklog()
+        #expect(model.actionFailure == .cannotReach)
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        owner.script { $0.promoteTask = { _, key in .refused(refusal, key: key.value, command: .promote) } }
+        await model.moveToBacklog()
+        #expect(model.actionFailure == .refusalInvalidState)
+        let keys = owner.calls.filter { $0.operation == .promoteTask }.map(\.key)
+        #expect(keys.count == 2 && keys[0] == keys[1])
+    }
+
+    @Test("Pause this task is offered in every state a task can be paused from, and not while it is already paused by the owner")
+    func pauseOffered() async {
+        for state in TaskState.allCases {
+            let (model, _, _) = await loaded(page(state))
+            let expected: Bool = [.backlog, .ready, .working, .inReview].contains(state)
+            #expect(model.canPause == expected, "\(state)")
+        }
+        let (paused, _, _) = await loaded(page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID)]))
+        #expect(!paused.canPause)
+        let (released, _, _) = await loaded(page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID, open: false)]))
+        #expect(released.canPause)
+        let (waiting, _, _) = await loaded(page(.working, holds: [Fixtures.hold(.credentialLimit, taskID: taskID)]))
+        #expect(waiting.canPause)
+    }
+
+    @Test("Pause this task sends Hold for this task, reads again, and the page then offers Continue this task instead")
+    func pauseTask() async throws {
+        let (model, owner, shared) = await loaded(page(.working))
+        shared.value = page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID)])
+        await model.pauseTask()
+        #expect(owner.calls.map(\.operation) == [.getTask, .holdTask, .getTask])
+        #expect((try owner.call(at: 1)).path == ["id": taskID.contractString])
+        #expect((try owner.call(at: 1)).body == nil)
+        #expect(!model.canPause)
+        #expect(model.canContinue)
+        #expect(model.status?.chip?.text == "Paused by you")
+        #expect(model.status?.statusLine == "Paused, was In progress")
+    }
+
+    @Test("Continue this task is offered only while the owner's pause is open, and sends Resume")
+    func continueTask() async throws {
+        for state in TaskState.allCases {
+            let (model, _, _) = await loaded(page(state, holds: [Fixtures.hold(.ownerHold, taskID: taskID)]))
+            #expect(model.canContinue == (state != .done && state != .cancelled), "\(state)")
+        }
+        let (other, _, _) = await loaded(page(.working, holds: [Fixtures.hold(.ownerApproval, taskID: taskID)]))
+        #expect(!other.canContinue)
+
+        let (model, owner, shared) = await loaded(page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID)]))
+        shared.value = page(.working)
+        await model.continueTask()
+        #expect(owner.calls.map(\.operation) == [.getTask, .resumeTask, .getTask])
+        #expect((try owner.call(at: 1)).path == ["id": taskID.contractString])
+        #expect(!model.canContinue)
+        #expect(model.canPause)
+    }
+
+    @Test("a pause or a resume that failed is sent again with the same key, and a new one after it worked uses a new key")
+    func pauseKeys() async throws {
+        let (model, owner, shared) = await loaded(page(.working))
+        owner.script { $0.holdTask = { _, _ in throw URLError(.networkConnectionLost) } }
+        await model.pauseTask()
+        #expect(model.actionFailure == .cannotReach)
+        owner.script { $0.holdTask = { _, key in Fixtures.plain(.hold, key: key) } }
+        shared.value = page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID)])
+        await model.pauseTask()
+        // The pause worked; the owner continues the task by hand elsewhere, and pauses it again.
+        shared.value = page(.working)
+        await model.load()
+        await model.pauseTask()
+        let keys = owner.calls.filter { $0.operation == .holdTask }.map(\.key)
+        try #require(keys.count == 3)
+        #expect(keys[0] == keys[1])
+        #expect(keys[1] != keys[2])
+    }
+
+    // MARK: a task waiting for an account, on its page (HM-40, HM-45)
+
+    @Test("a task waiting on a limit says on its page which account and when it resets, with the account's own name")
+    func waitingOnALimit() async {
+        let until = Fixtures.date(19, 18)
+        let hold = Hold(
+            id: UUID(), taskID: taskID, reason: .credentialLimit, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(.working, id: taskID, holder: Fixtures.builderID, builder: Fixtures.builderID),
+            holds: [hold], waitingFor: Fixtures.personalID, waitingUntil: until,
+            names: names + [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { Fixtures.credentials([Fixtures.credential(Fixtures.personalID, limitedUntil: until)]) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(owner.calls.map(\.operation) == [.getTask, .listCredentials])
+        #expect(model.status?.chip?.text == "No login left")
+        #expect(model.status?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM.")
+        #expect(model.status?.statusLine == "Builder One is building")
+    }
+
+    @Test("when the accounts cannot be read the page still names the account from the names of the read")
+    func waitingNamesFromTheRead() async {
+        let hold = Hold(
+            id: UUID(), taskID: taskID, reason: .credentialSignedOut, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(.working, id: taskID), holds: [hold], waitingFor: Fixtures.personalID,
+            names: [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { throw URLError(.timedOut) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(model.state == .loaded)
+        #expect(model.status?.note == "Personal is signed out. Sign in again to continue.")
+        #expect(model.status?.statusLine == "Paused, was In progress")
+    }
+
+    // HE-15, HE-16: the read names the account a task waits for when no
+    // hold does, and the page says it in the card's own words.
+
+    private func waitingPage(
+        _ state: TaskState, waitingUntil: Date? = nil, credential: Credential
+    ) async -> (TaskPageModel, FakeOwnerAPI) {
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(state, id: taskID, builder: Fixtures.builderID), waitingFor: Fixtures.personalID,
+            waitingUntil: waitingUntil, names: names))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { Fixtures.credentials([credential]) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        return (model, owner)
+    }
+
+    /// What the board card says for the same read.
+    private func cardContent(_ page: TaskPage?, credential: Credential) throws -> CardContent {
+        let page = try #require(page)
+        let card = BoardTask(
+            task: page.task, blocked: false, holdReasons: [], waitingForCredentialID: page.waitingForCredentialID,
+            waitingUntil: page.waitingUntil)
+        return CardWording.content(
+            for: card, seatNames: [Fixtures.builderID: "Builder One", Fixtures.reviewerID: "Reviewer One"],
+            reviewerSeatExists: page.reviewerSeatExists, accounts: [credential.id: CardAccount(of: credential)],
+            clock: Fixtures.clock())
+    }
+
+    @Test("a Ready task no agent can start because its account is signed out names the account on its page, as its card does")
+    func readyWaitingOnASignedOutAccount() async throws {
+        let credential = Fixtures.credential(Fixtures.personalID, state: .signedOut)
+        let (model, owner) = await waitingPage(.ready, credential: credential)
+        #expect(owner.calls.map(\.operation) == [.getTask, .listCredentials])
+        #expect(model.status?.chip?.text == "Login signed out")
+        #expect(model.status?.note == "Claude, Personal is signed out. Sign in again to continue.")
+        #expect(model.status?.statusLine == "Waiting for a free agent")
+        #expect(model.status == (try cardContent(model.page, credential: credential)))
+    }
+
+    @Test("a task In review no reviewer can start names the limited account and when it resets on its page, as its card does")
+    func inReviewWaitingOnALimit() async throws {
+        let until = Fixtures.date(19, 18)
+        let credential = Fixtures.credential(Fixtures.personalID, limitedUntil: until)
+        let (model, owner) = await waitingPage(.inReview, waitingUntil: until, credential: credential)
+        #expect(owner.calls.map(\.operation) == [.getTask, .listCredentials])
+        #expect(model.status?.chip?.text == "In review")
+        #expect(model.status?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM.")
+        #expect(model.status?.statusLine == "Builder One's work is being reviewed")
+        #expect(model.status == (try cardContent(model.page, credential: credential)))
+    }
+
+    @Test("a hold's reset time comes from the read, so the page says it even when the accounts cannot be read")
+    func holdResetFromTheRead() async {
+        let hold = Hold(
+            id: UUID(), taskID: taskID, reason: .credentialLimit, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(.working, id: taskID, holder: Fixtures.builderID, builder: Fixtures.builderID),
+            holds: [hold], waitingFor: Fixtures.personalID, waitingUntil: Fixtures.date(19, 18),
+            names: names + [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { throw URLError(.timedOut) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(model.status?.chip?.text == "No login left")
+        #expect(model.status?.note.map(Fixtures.flat) == "Waiting for Personal, which resets at 6:00 PM.")
+    }
+
+    @Test("a page with no account in it reads no accounts")
+    func noAccountsRead() async {
+        let (_, owner, _) = await loaded(readyPage())
+        #expect(owner.calls.map(\.operation) == [.getTask])
+    }
+
+    // MARK: Change the task (HM-49)
+
+    @Test("Change the task is offered for a task that is ready, working or in review, and not for the rest")
+    func changeOffered() async {
+        for state in TaskState.allCases {
+            let (model, _, _) = await loaded(page(state))
+            #expect(model.canChangeTask == [.ready, .working, .inReview].contains(state), "\(state)")
+        }
+    }
+
+    @Test("a task sent back too many times offers Change the task beside the two choices it already had")
+    func changeFromTheRoundDecision() async {
+        let (model, _, _) = await loaded(readyPage(.working, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID)]))
+        #expect(model.needsRoundDecision)
+        #expect(model.canChangeTask)
+    }
+
+    @Test("Change the task opens the editor filled in with the task's contract, and closing it leaves the page as it was")
+    func editorOpens() async {
+        let (model, owner, _) = await loaded(readyPage(.working))
+        #expect(model.editor == nil)
+        model.beginEditing()
+        let editor = model.editor
+        #expect(editor?.draft.title == "Fix the totals")
+        #expect(editor?.draft.criteriaText == "Totals match the lines\nThe page still loads")
+        #expect(editor?.warning == .editWarning)
+        model.endEditing()
+        #expect(model.editor == nil)
+        #expect(owner.calls.map(\.operation) == [.getTask])
+        model.beginEditing()
+        model.endEditing()
+        let (idle, _, _) = await loaded(page(.imaginarium))
+        idle.beginEditing()
+        #expect(idle.editor == nil)
+    }
+
+    @Test("opened from Needs you's Change the task, the page opens the editor once it has read the task (HM-24, HM-49)")
+    func editorOpensFromNeedsYou() async {
+        let shared = Locked(readyPage(.inReview, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID)]))
+        let owner = ownerShowing(shared)
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, editOnOpen: true)
+        #expect(model.editor == nil)
+        await model.load()
+        #expect(model.editor?.draft.title == "Fix the totals")
+        model.endEditing()
+        await model.load()
+        #expect(model.editor == nil, "only the first read opens it")
+
+        let idea = Locked(page(.imaginarium))
+        let ideaModel = TaskPageModel(taskID: taskID, api: ownerShowing(idea), noteRead: { _ in }, editOnOpen: true)
+        await ideaModel.load()
+        #expect(ideaModel.editor == nil, "a task the editor is not for shows its page")
+
+        let plain = TaskPageModel(taskID: taskID, api: ownerShowing(Locked(readyPage(.working))), noteRead: { _ in })
+        await plain.load()
+        #expect(plain.editor == nil)
+    }
+
+    @Test("when the editor saves, the page reads again and closes it")
+    func editorSaved() async {
+        let (model, owner, shared) = await loaded(readyPage(.working))
+        model.beginEditing()
+        model.editor?.draft.title = "Fix the totals, all of them"
+        shared.value = page(.backlog)
+        await model.editor?.save()
+        #expect(await ShellFixtures.eventually { model.editor == nil })
+        #expect(await ShellFixtures.eventually { owner.calls.filter { $0.operation == .getTask }.count == 2 })
+        #expect(owner.calls.map(\.operation).prefix(2) == [.getTask, .editContract])
+    }
+
     @Test("the lines of the page are in plain words")
     func plainWords() async {
         let page = readyPage(.working, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID)])
@@ -424,5 +719,48 @@ struct TaskPageRenderTests {
         let failed = TaskPageModel(taskID: id, api: FakeOwnerAPI(), noteRead: { _ in })
         await failed.load()
         #expect(draws(TaskPageContent(model: failed)))
+    }
+
+    @Test("the page draws with its new actions, the editor and a log with a handoff in it, light and dark")
+    func handoffDraws() async {
+        let id = UUID()
+        let hold = Hold(
+            id: UUID(), taskID: id, reason: .credentialLimit, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let events = [
+            Fixtures.event(.taskCreated, seq: 1, taskID: id, actorKind: .owner),
+            Fixtures.event(
+                .credentialLimitReached, seq: 2, taskID: id, actorKind: .app, subjectKind: .credential,
+                subjectID: Fixtures.personalID, payload: ["window": .string("weekly")]),
+        ]
+        let page = Fixtures.page(
+            Fixtures.summary(.working, id: id, details: "For finance."),
+            criteria: [Fixtures.criterion("Totals match", taskID: id)], holds: [hold], events: events,
+            names: [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")])
+        let owner = FakeOwnerAPI()
+        owner.script {
+            $0.task = { _ in page }
+            $0.credentials = { Fixtures.credentials([Fixtures.credential(Fixtures.personalID, limitedUntil: Fixtures.date(19, 18))]) }
+        }
+        let model = TaskPageModel(taskID: id, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(model.canPause && model.canChangeTask)
+        #expect(draws(TaskPageBody(model: model)))
+        #expect(draws(TaskPageBody(model: model).environment(\.colorScheme, .dark)))
+        model.beginEditing()
+        let editor = try? #require(model.editor)
+        if let editor {
+            #expect(draws(EditContractSheet(model: editor, cancel: {})))
+            #expect(draws(EditContractSheet(model: editor, cancel: {}).environment(\.colorScheme, .dark)))
+        }
+        let idea = TaskPageModel(
+            taskID: id, api: { () -> FakeOwnerAPI in
+                let owner = FakeOwnerAPI()
+                owner.script { $0.task = { _ in Fixtures.page(Fixtures.summary(.imaginarium, id: id)) } }
+                return owner
+            }(), noteRead: { _ in })
+        await idea.load()
+        #expect(idea.canMoveToBacklog)
+        #expect(draws(TaskPageBody(model: idea)))
     }
 }

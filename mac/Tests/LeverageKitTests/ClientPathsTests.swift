@@ -192,6 +192,45 @@ struct ClientPathsTests {
         "install_tool": ClientCall(path: ["provider": "codex"]) {
             _ = try await $0.owner.installTool(provider: .codex, key: F.key("install_tool"))
         },
+        // Owner, Handoff milestone
+        "list_inbox": ClientCall(query: ["after_seq": "7", "wait": "30"]) {
+            _ = try await $0.owner.listInbox(afterSeq: 7, wait: 30)
+        },
+        "sign_in_again": ClientCall(path: ["id": F.id(F.credential)]) {
+            _ = try await $0.owner.signInAgain(credentialID: F.credential, key: F.key("sign_in_again"))
+        },
+        "promote_task": ClientCall(path: ["id": F.id(F.task)]) {
+            _ = try await $0.owner.promoteTask(taskID: F.task, key: F.key("promote_task"))
+        },
+        "edit_contract": ClientCall(path: ["id": F.id(F.task)]) {
+            _ = try await $0.owner.editContract(
+                taskID: F.task,
+                CompleteContractRequest(
+                    title: "Made-up task", goal: "A made-up goal", details: nil,
+                    criteria: [CriterionInput(text: "It works", kind: .build)], actions: [],
+                    minimumStrengthRank: nil, budgetCap: nil, workReference: nil),
+                key: F.key("edit_contract"))
+        },
+        "hold_task": ClientCall(path: ["id": F.id(F.task)]) {
+            _ = try await $0.owner.holdTask(taskID: F.task, key: F.key("hold_task"))
+        },
+        "resume_task": ClientCall(path: ["id": F.id(F.task)]) {
+            _ = try await $0.owner.resumeTask(taskID: F.task, key: F.key("resume_task"))
+        },
+        "pause_seat": ClientCall(path: ["id": F.id(F.seat)]) {
+            _ = try await $0.owner.pauseSeat(seatID: F.seat, key: F.key("pause_seat"))
+        },
+        "resume_seat": ClientCall(path: ["id": F.id(F.seat)]) {
+            _ = try await $0.owner.resumeSeat(seatID: F.seat, key: F.key("resume_seat"))
+        },
+        "change_seat": ClientCall(path: ["id": F.id(F.seat)]) {
+            _ = try await $0.owner.changeSeat(
+                seatID: F.seat,
+                ChangeSeatRequest(
+                    name: "Made-up builder", role: .reviewer, model: .set("made-up-model"), effort: .clear,
+                    strengthRank: .set(2), credentialID: .set(F.credential), enabled: true),
+                key: F.key("change_seat"))
+        },
         // Helper
         "get_helper_next": ClientCall(query: ["wait": "30"]) { _ = try await $0.helper.next(wait: 30) },
         "report_request_progress": ClientCall(path: ["id": F.id(F.request)]) {
@@ -217,6 +256,22 @@ struct ClientPathsTests {
                 seatID: F.seat,
                 RunStartedReport(credentialID: F.credential, observedAt: F.observed, toolVersion: "1.0.0"),
                 key: F.key("report_run_started"))
+        },
+        "report_limit": ClientCall(path: ["id": F.id(F.credential)]) {
+            _ = try await $0.helper.reportLimit(
+                credentialID: F.credential,
+                LimitReport(
+                    credentialID: F.credential, seatID: F.seat, work: .task(F.task), window: .fiveHour,
+                    resetAt: F.observed, observedAt: F.observed, toolVersion: "1.0.0"),
+                key: F.key("report_limit"))
+        },
+        "report_signed_out": ClientCall(path: ["id": F.id(F.credential)]) {
+            _ = try await $0.helper.reportSignedOut(
+                credentialID: F.credential,
+                SignOutReport(
+                    credentialID: F.credential, seatID: F.seat, work: .review(F.review), observedAt: F.observed,
+                    toolVersion: "1.0.0"),
+                key: F.key("report_signed_out"))
         },
         "report_run_stopped": ClientCall(path: ["id": F.id(F.seat)]) {
             _ = try await $0.helper.reportRunStopped(
@@ -470,5 +525,162 @@ struct FakeAPITests {
         var dumped = ""
         dump(pickup, to: &dumped)
         #expect(!dumped.contains("secret-made-up"))
+    }
+}
+
+@Suite("Handoff request bodies")
+struct HandoffBodyTests {
+    private static let credential = UUID(uuidString: "00000000-0000-4000-8000-0000000000A5")!
+    private static let seat = UUID(uuidString: "00000000-0000-4000-8000-0000000000A4")!
+    private static let task = UUID(uuidString: "00000000-0000-4000-8000-0000000000A1")!
+    private static let review = UUID(uuidString: "00000000-0000-4000-8000-0000000000A3")!
+    private static let job = UUID(uuidString: "00000000-0000-4000-8000-0000000000A7")!
+    private static let observed = Date(timeIntervalSince1970: 1_767_225_600)
+    private static let reset = Date(timeIntervalSince1970: 1_767_243_600)
+
+    private func json(_ body: some Encodable) throws -> JSONValue {
+        try #require(FakeCall.json(body))
+    }
+
+    @Test("a limit report names its work, its window and its reset time, and nothing the tool said")
+    func limitReport() throws {
+        let report = LimitReport(
+            credentialID: Self.credential, seatID: Self.seat, work: .task(Self.task), window: .weekly,
+            resetAt: Self.reset, observedAt: Self.observed, toolVersion: "1.2.3")
+        #expect(try json(report) == .object([
+            "credential_id": .string("00000000-0000-4000-8000-0000000000a5"),
+            "seat_id": .string("00000000-0000-4000-8000-0000000000a4"),
+            "task_id": .string("00000000-0000-4000-8000-0000000000a1"),
+            "review_id": .null, "job_id": .null,
+            "window": .string("weekly"), "reset_at": .string("2026-01-01T05:00:00Z"),
+            "observed_at": .string("2026-01-01T00:00:00Z"), "tool_version": .string("1.2.3"),
+        ]))
+    }
+
+    @Test("a limit with no reset time sends null, a review and a job each go in their own field")
+    func limitReportWork() throws {
+        func fields(_ work: InterruptedWork) throws -> [String: JSONValue] {
+            let report = LimitReport(
+                credentialID: Self.credential, seatID: Self.seat, work: work, window: .spend, resetAt: nil,
+                observedAt: Self.observed, toolVersion: "1.2.3")
+            return try #require(json(report).objectValue)
+        }
+        let review = try fields(.review(Self.review))
+        #expect(review["reset_at"] == .null && review["window"] == .string("spend"))
+        #expect(review["review_id"] == .string("00000000-0000-4000-8000-0000000000a3"))
+        #expect(review["task_id"] == .null && review["job_id"] == .null)
+        let job = try fields(.job(Self.job))
+        #expect(job["job_id"] == .string("00000000-0000-4000-8000-0000000000a7"))
+        #expect(job["task_id"] == .null && job["review_id"] == .null)
+    }
+
+    @Test("a sign-out report has no window and no reset time")
+    func signOutReport() throws {
+        let report = SignOutReport(
+            credentialID: Self.credential, seatID: Self.seat, work: .review(Self.review),
+            observedAt: Self.observed, toolVersion: "1.2.3")
+        #expect(try json(report) == .object([
+            "credential_id": .string("00000000-0000-4000-8000-0000000000a5"),
+            "seat_id": .string("00000000-0000-4000-8000-0000000000a4"),
+            "task_id": .null, "review_id": .string("00000000-0000-4000-8000-0000000000a3"), "job_id": .null,
+            "observed_at": .string("2026-01-01T00:00:00Z"), "tool_version": .string("1.2.3"),
+        ]))
+    }
+
+    @Test("a seat change sends only what the owner changed")
+    func changeSeatSendsWhatChanged() throws {
+        #expect(try json(ChangeSeatRequest()) == .object([:]))
+        #expect(try json(ChangeSeatRequest(name: "Renamed")) == .object(["name": .string("Renamed")]))
+        #expect(try json(ChangeSeatRequest(enabled: false)) == .object(["enabled": .bool(false)]))
+        #expect(try json(ChangeSeatRequest(role: .planner)) == .object(["role": .string("planner")]))
+    }
+
+    @Test("a seat change can set a field, and clear one that may be null")
+    func changeSeatSetsAndClears() throws {
+        let request = ChangeSeatRequest(
+            model: .clear, effort: .set("high"), strengthRank: .set(0), credentialID: .set(Self.credential))
+        #expect(try json(request) == .object([
+            "model": .null, "effort": .string("high"), "strength_rank": .number(0),
+            "credential_id": .string("00000000-0000-4000-8000-0000000000a5"),
+        ]))
+        #expect(try json(ChangeSeatRequest(credentialID: .clear)) == .object(["credential_id": .null]))
+        #expect(try json(ChangeSeatRequest(strengthRank: .clear)) == .object(["strength_rank": .null]))
+    }
+
+    @Test("a fake records the body the HTTP client sends for a seat change and a limit report")
+    func fakesMatchTheClients() async throws {
+        let seatKey = IdempotencyKey(), limitKey = IdempotencyKey()
+        let change = ChangeSeatRequest(name: "Renamed", model: .clear, credentialID: .set(Self.credential))
+        let limit = LimitReport(
+            credentialID: Self.credential, seatID: Self.seat, work: .task(Self.task), window: .fiveHour,
+            resetAt: nil, observedAt: Self.observed, toolVersion: "1.2.3")
+
+        let owner = FakeOwnerAPI()
+        owner.script { $0.changeSeat = { _, _, key in .completed(.object([:]), key: key.value, command: .changeSeat) } }
+        _ = try await owner.changeSeat(seatID: Self.seat, change, key: seatKey)
+        let helper = FakeHelperAPI()
+        helper.script { $0.reportLimit = { _, _, key in .completed(nil, key: key.value, command: .reportLimit) } }
+        _ = try await helper.reportLimit(credentialID: Self.credential, limit, key: limitKey)
+
+        let outcome = #"{"key":"k","command":"change_seat","outcome":"completed","result":null,"refusal":null}"#
+        let ownerSession = StubURLProtocol.session(host: "handoff-fake-owner.test", answer: .init(status: 200, json: outcome))
+        let helperSession = StubURLProtocol.session(host: "handoff-fake-helper.test", answer: .init(status: 200, json: outcome))
+        _ = try await OwnerClient(
+            baseURL: URL(string: "http://handoff-fake-owner.test")!, sessionToken: "lvo_x", session: ownerSession)
+            .changeSeat(seatID: Self.seat, change, key: seatKey)
+        _ = try await HelperClient(
+            baseURL: URL(string: "http://handoff-fake-helper.test")!, helperToken: "lvh_x", session: helperSession)
+            .reportLimit(credentialID: Self.credential, limit, key: limitKey)
+
+        let sentToOwner = try #require(StubURLProtocol.requests(host: "handoff-fake-owner.test").first?.body)
+        let sentToHelper = try #require(StubURLProtocol.requests(host: "handoff-fake-helper.test").first?.body)
+        #expect(owner.calls.first?.body == (try JSONDecoder().decode(JSONValue.self, from: sentToOwner)))
+        #expect(helper.calls.first?.body == (try JSONDecoder().decode(JSONValue.self, from: sentToHelper)))
+        #expect(owner.calls.first == FakeCall(
+            .changeSeat, path: ["id": "00000000-0000-4000-8000-0000000000a4"], key: seatKey, body: owner.calls.first?.body))
+        #expect(helper.calls.first?.path == ["id": "00000000-0000-4000-8000-0000000000a5"])
+    }
+
+    @Test("the owner fake records each new command with its path and key")
+    func ownerFakeRecords() async throws {
+        let fake = FakeOwnerAPI()
+        let key = IdempotencyKey()
+        let done: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = { _, key in
+            .completed(.object([:]), key: key.value, command: .cancel)
+        }
+        fake.script {
+            $0.promoteTask = done; $0.holdTask = done; $0.resumeTask = done; $0.pauseSeat = done
+            $0.resumeSeat = done; $0.signInAgain = done
+            $0.listInbox = { _, _ in InboxPage(items: [], nextAfterSeq: 4) }
+        }
+        _ = try await fake.promoteTask(taskID: Self.task, key: key)
+        _ = try await fake.holdTask(taskID: Self.task, key: key)
+        _ = try await fake.resumeTask(taskID: Self.task, key: key)
+        _ = try await fake.pauseSeat(seatID: Self.seat, key: key)
+        _ = try await fake.resumeSeat(seatID: Self.seat, key: key)
+        _ = try await fake.signInAgain(credentialID: Self.credential, key: key)
+        #expect(try await fake.listInbox(afterSeq: 3, wait: nil).nextAfterSeq == 4)
+        #expect(fake.calls.map(\.operation) == [
+            .promoteTask, .holdTask, .resumeTask, .pauseSeat, .resumeSeat, .signInAgain, .listInbox,
+        ])
+        #expect(fake.calls.dropLast().map(\.key) == Array(repeating: key, count: 6))
+        await #expect(throws: FakeAPIError.notScripted(.editContract)) {
+            _ = try await fake.editContract(
+                taskID: Self.task,
+                CompleteContractRequest(title: "t", goal: "g", details: nil, criteria: [], workReference: nil),
+                key: key)
+        }
+        await #expect(throws: FakeAPIError.notScripted(.changeSeat)) {
+            _ = try await fake.changeSeat(seatID: Self.seat, ChangeSeatRequest(), key: key)
+        }
+        let helper = FakeHelperAPI()
+        await #expect(throws: FakeAPIError.notScripted(.reportSignedOut)) {
+            _ = try await helper.reportSignedOut(
+                credentialID: Self.credential,
+                SignOutReport(
+                    credentialID: Self.credential, seatID: Self.seat, work: .task(Self.task),
+                    observedAt: Self.observed, toolVersion: "1"),
+                key: key)
+        }
     }
 }

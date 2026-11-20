@@ -189,6 +189,69 @@ class EligibilityTest < ActiveSupport::TestCase
     assert_equal %w[not_holder], E.review_refusals(review, @reviewer)
   end
 
+  # HD-4 (milestone 3 plan §2.1 rules 1 to 3): a seat the app runs may
+  # claim only when one of its candidates is available for the work and its
+  # run is on the first of them, so the claim records the account that does
+  # the work. A seat that connects on its own has no candidates and no run
+  # the app places.
+
+  test "a seat whose run is not on its first available candidate may not claim (HD-4)" do
+    task = ready
+    below = Credential.find(@reviewer.credential_id)
+    @scenario.run(@builder, on: below)
+    refute E.may_claim?(@builder.reload, :task)
+    assert_nil E.next_task(@builder)
+
+    @scenario.run(@builder, on: nil)
+    assert_equal task.id, E.next_task(@builder.reload).id, "a token issued before its run was recorded is on its own login"
+
+    @scenario.run(@builder)
+    assert_equal task.id, E.next_task(@builder.reload).id
+  end
+
+  test "a seat whose own login is limited claims on the next available candidate once its run is there (HD-4)" do
+    task = ready
+    below = Credential.find(@reviewer.credential_id)
+    @scenario.limit_credential(@credential, reset_at: @scenario.database_now + 3600)
+    assert_nil E.next_task(@builder.reload), "its run is still on its own login"
+
+    @scenario.run(@builder, on: below)
+    assert E.may_claim?(@builder.reload, :task)
+    assert_equal task.id, E.next_task(@builder).id
+    assert_equal task.id, E.next_task(@builder, at: @scenario.database_now).id
+  end
+
+  test "a reviewer is placed the same way (HD-4)" do
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id)
+    @scenario.sign_out_credential(Credential.find(@reviewer.credential_id))
+    assert_nil E.next_review(@reviewer.reload)
+
+    later = @scenario.credential(provider: "grok")
+    @scenario.run(@reviewer, on: later)
+    assert_equal review.id, E.next_review(@reviewer.reload).id
+  end
+
+  test "a limit that has reset counts as available at the time asked (HE-3)" do
+    task = ready
+    @scenario.limit_credential(@credential, reset_at: @scenario.database_now + 60)
+    assert_nil E.next_task(@builder.reload)
+    assert_equal task.id, E.next_task(@builder, at: @scenario.database_now + 61).id
+  end
+
+  test "a builder the app runs is free for a fresh lease only if one of its candidates is available (HE-14)" do
+    task = @scenario.task(state: "in_review", builder: @builder)
+    assert E.builder_free?(@builder, task)
+
+    @scenario.limit_credential(Credential.find(@reviewer.credential_id))
+    @scenario.limit_credential(@credential, reset_at: @scenario.database_now + 3600)
+    refute E.builder_free?(@builder.reload, task)
+    assert E.builder_free?(@builder, task, at: @scenario.database_now + 3601)
+
+    @scenario.credential(provider: "codex")
+    assert E.builder_free?(@builder, task), "a candidate below is available; its run need not be on it"
+  end
+
   test "a task is on hold while any hold is open" do
     task = @scenario.task(state: "ready")
     refute E.on_hold?(task)

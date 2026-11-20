@@ -1,16 +1,30 @@
 require "digest"
 require "json"
 
-# A seeded random walk over the milestone-2 commands and timers (PRD test 2;
-# milestone 2 plan EN-25): owners add, contract and cancel tasks and allow
-# another round; builders claim, acknowledge, start and pass criteria,
-# submit, release and heartbeat; reviewers claim reviews, acknowledge,
-# pass, fail, release and heartbeat; leases are put at their due time
-# (EN-18) and expire through the next command or the sweep; and a request
-# is sometimes sent again with its key. Every command goes through
-# Transitions.apply, so the whole log of the walk's workspace is made by
-# the engine: the seats connect on their own through connect_seat, and only
-# the workspace and its owner are inserted (they write no event).
+# A seeded random walk over the commands and timers of milestones 2 and 3
+# (PRD test 2; milestone 2 plan EN-25, milestone 3 plan HT-3): owners add,
+# contract and cancel tasks and allow another round; builders claim,
+# acknowledge, start and pass criteria, submit, release and heartbeat;
+# reviewers claim reviews, acknowledge, pass, fail, release and heartbeat;
+# leases are put at their due time (EN-18) and expire through the next
+# command or the sweep; and a request is sometimes sent again with its key.
+#
+# Milestone 3 adds the handoff and the owner's controls: the helper reports
+# limits and sign-outs of the runs it starts, picks up start requests and
+# answers Verify and Sign in again; the owner adds ideas and promotes them,
+# edits contracts, holds and resumes tasks, and pauses, resumes and changes
+# agents; the sweep also runs the credential hold release and the seats'
+# placement; and a reset time is passed (pass_reset: the credential's
+# limited_until is put at the database's now, as make_due puts a lease,
+# EN-18).
+#
+# Every command goes through Transitions.apply, so the whole log of the
+# walk's workspace is made by the engine: the helper is made by
+# issue_helper_token, the logins by add_credential and the helper's passed
+# checks, and the seats by connect_seat (two builders and a reviewer on
+# logins, run by the app; one builder and one reviewer that connect on
+# their own); only the workspace and its owner are inserted (they write no
+# event).
 #
 # Most steps move a seat forward (progress: the call its state calls for
 # next, so walks reach review, rework, the round limit and Done); the rest
@@ -30,11 +44,24 @@ class Walk
     progress: 40, add_task: 4, complete_contract: 4, cancel: 1, allow_another_round: 2,
     claim: 5, acknowledge: 6, start_criterion: 4, pass_criterion: 6, submit: 5, release: 1, heartbeat: 2,
     claim_review: 5, acknowledge_review: 5, verdict: 6, release_review: 1, heartbeat_review: 1,
-    expire_builder: 2, expire_review: 2, sweep: 2, repeat: 2
+    expire_builder: 2, expire_review: 2, sweep: 3, repeat: 2,
+    report_limit: 6, report_signed_out: 3, pass_reset: 3, verify: 2, sign_in_again: 2, answer_request: 5,
+    promote: 2, edit_contract: 3, hold: 2, resume: 2, pause_seat: 2, resume_seat: 2, change_seat: 2
   }.freeze
   RELEASE_REASONS = %w[unable_to_continue not_suited_to_this_seat stopping].freeze
   MAXIMUM_TASKS = 8
   LIVE_TASKS = 3
+  # The logins the helper adds, in order (their positions): the builders on
+  # logins run on the first two, the reviewer on a login on the third. So
+  # the first builder has three candidates, the second two and the
+  # reviewer one: reports reach a handoff, a hold and a released review.
+  LOGINS = %w[claude codex grok].freeze
+  TIMERS = %w[builder_lease_expiry review_lease_expiry credential_hold_release seat_run_placement].freeze
+  PASSED = { "outcome" => "finished", "checks" => [ { "check" => "signed_in", "passed" => true, "failure" => nil },
+                                                    { "check" => "test_prompt", "passed" => true, "failure" => nil } ],
+             "tool_version" => "0.0.0-walk", "plan" => nil, "account_email" => nil }.freeze
+  SIGNED_OUT = { "outcome" => "failed", "checks" => [ { "check" => "signed_in", "passed" => false, "failure" => "not_signed_in" } ],
+                 "tool_version" => "0.0.0-walk", "plan" => nil, "account_email" => nil }.freeze
 
   Step = Data.define(:index, :action, :command, :caller, :params, :answer)
 
@@ -54,8 +81,10 @@ class Walk
   def run
     @scenario = Scenario.new(lease_length_seconds: 600, maximum_rounds: 1 + @random.rand(2))
     @owner = scenario.owner
-    @builders = Array.new(2) { |index| connect("builder", index) }
-    @reviewers = Array.new(2) { |index| connect("reviewer", index) }
+    @helper = make_helper
+    @logins = LOGINS.each_with_index.map { |provider, index| add_login(provider, index) }
+    @builders = [ connect("builder", 0, @logins[0]), connect("builder", 1, @logins[1]), connect("builder", 2) ]
+    @reviewers = [ connect("reviewer", 0, @logins[2]), connect("reviewer", 1) ]
     @steps.times { |index| send(pick, index) }
     self
   rescue StandardError => error
@@ -120,22 +149,30 @@ class Walk
 
   # --- the owner -----------------------------------------------------------
 
+  # A task in the Backlog, or now and then an idea in the Imaginarium.
   def add_task(index)
     return sweep(index) if tasks.size >= MAXIMUM_TASKS
 
     command(index, :add_task, "add_task", @owner, "title" => "Made-up task #{index}", "goal" => "A made-up goal.",
-      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => "backlog")
+      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "imaginarium" : "backlog")
   end
 
   def complete_contract(index)
     task = one(tasks.select { |candidate| candidate.state == "backlog" }) || one(tasks)
     return progress(index) unless task
 
-    builds = Array.new(1 + @random.rand(2)) { |number| { "text" => "Made-up criterion #{number + 1}.", "kind" => "build" } }
-    command(index, :complete_contract, "complete_contract", @owner,
-      "id" => task.id, "title" => task.title || "Made-up task", "goal" => task.goal || "A made-up goal.",
+    command(index, :complete_contract, "complete_contract", @owner, contract(task))
+  end
+
+  # A contract of one or two build criteria and the review; the first
+  # criterion's text changes now and then, so an edit resets it.
+  def contract(task)
+    builds = Array.new(1 + @random.rand(2)) do |number|
+      { "text" => "Made-up criterion #{number + 1}#{" (changed)" if chance(0.3)}.", "kind" => "build" }
+    end
+    { "id" => task.id, "title" => task.title || "Made-up task", "goal" => task.goal || "A made-up goal.",
       "details" => "Made-up details.", "criteria" => builds + [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
-      "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil)
+      "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
   end
 
   def cancel(index)
@@ -310,6 +347,139 @@ class Walk
     command(index, :heartbeat_review, "heartbeat_review", seat, "id" => review.id)
   end
 
+  # --- the owner's controls (milestone 3) -------------------------------------
+
+  def promote(index)
+    task = one(tasks.select { |candidate| candidate.state == "imaginarium" }) || one(tasks)
+    return add_task(index) unless task
+
+    command(index, :promote, "promote", @owner, "id" => task.id)
+  end
+
+  def edit_contract(index)
+    task = one(live_tasks) || one(tasks)
+    return progress(index) unless task
+
+    command(index, :edit_contract, "edit_contract", @owner, contract(task))
+  end
+
+  def hold(index)
+    task = one(live_tasks) || one(tasks)
+    return progress(index) unless task
+
+    command(index, :hold, "hold", @owner, "id" => task.id)
+  end
+
+  def resume(index)
+    held = Hold.where(workspace_id: workspace_id, reason: "owner_hold", closed_at: nil).pluck(:task_id)
+    task = Task.find_by(id: one(held)) || one(tasks)
+    return progress(index) unless task
+
+    command(index, :resume, "resume", @owner, "id" => task.id)
+  end
+
+  def seats = @builders + @reviewers
+
+  def pause_seat(index)
+    command(index, :pause_seat, "pause_seat", @owner, "id" => one(seats).id)
+  end
+
+  def resume_seat(index)
+    seat = one(Seat.where(workspace_id: workspace_id, paused: true).to_a) || one(seats)
+    command(index, :resume_seat, "resume_seat", @owner, "id" => seat.id)
+  end
+
+  # Turns an agent back on, or now and then off; moves an agent the app
+  # runs to another login; or changes its model.
+  def change_seat(index)
+    seat = one(seats).reload
+    params = { "id" => seat.id }
+    if !seat.enabled
+      params["enabled"] = true
+    elsif chance(0.2)
+      params["enabled"] = false
+    elsif seat.credential_id && chance(0.6)
+      params["credential_id"] = one(@logins).id
+    else
+      params["model"] = one([ "made-up-model", "another-made-up-model", nil ])
+    end
+    command(index, :change_seat, "change_seat", @owner, params)
+  end
+
+  # --- the helper (milestone 3) -------------------------------------------------
+
+  # The run on a login meets a limit (with a reset time, or now and then
+  # none) or is found signed out, while it holds work: its task's or its
+  # review's credential. Now and then any seat and task, for the refusals.
+  def report_limit(index)
+    reset = chance(0.25) ? nil : (scenario.database_now + (1 + @random.rand(3)) * 600).utc.iso8601(6)
+    report(index, :report_limit, "report_limit", "window" => one(%w[five_hour weekly]), "reset_at" => reset)
+  end
+
+  def report_signed_out(index)
+    report(index, :report_signed_out, "report_signed_out", {})
+  end
+
+  def report(index, action, name, fields)
+    seat, task, review = running_work
+    return progress(index) unless seat
+
+    credential_id = (review || task).credential_id || seat.credential_id
+    params = { "id" => credential_id, "credential_id" => credential_id, "seat_id" => seat.id,
+               "task_id" => review ? nil : task.id, "review_id" => review&.id, "job_id" => nil,
+               "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "tool_version" => "0.0.0-walk" }
+    command(index, action, name, @helper, params.merge(fields))
+  end
+
+  # A seat on a login and the work it holds: a task (Working) or an open
+  # review; now and then any task, for the refusals.
+  def running_work
+    on_logins = seats.select(&:credential_id)
+    busy = on_logins.select { |candidate| held_by(candidate) || review_of(candidate) }
+    seat = one(busy.empty? || chance(0.1) ? on_logins : busy)
+    task = held_by(seat)
+    review = review_of(seat)
+    return [ seat, task, nil ] if task && !chance(0.1)
+    return [ seat, Task.find(review.task_id), review ] if review && !chance(0.1)
+
+    task = one(tasks)
+    task ? [ seat, task, nil ] : []
+  end
+
+  # A reset time passes: a login limited until a later time is put at the
+  # database's now, as make_due puts a lease (EN-18).
+  def pass_reset(index)
+    credential = one(Credential.where(workspace_id: workspace_id).where("limited_until > clock_timestamp()").to_a)
+    return sweep(index) unless credential
+
+    credential.update_columns(limited_until: scenario.database_now)
+    @log << Step.new(index, :pass_reset, "make_due", "test", { "credential" => credential.id }, "reset now")
+  end
+
+  def verify(index)
+    command(index, :verify, "verify_credential", @owner, "id" => one(@logins).id)
+  end
+
+  def sign_in_again(index)
+    credential = one(Credential.where(workspace_id: workspace_id, state: "signed_out").to_a) || one(@logins)
+    command(index, :sign_in_again, "sign_in_again", @owner, "id" => credential.id)
+  end
+
+  # The helper picks up and answers its oldest unfinished request: a start
+  # issues the seat's token first; Verify and Sign in again pass, or find
+  # the login signed out; anything else finishes.
+  def answer_request(index)
+    request = HelperRequest.where(workspace_id: workspace_id, state: %w[queued picked_up]).order(:created_at, :id).first
+    return sweep(index) unless request
+
+    if request.kind == "start_seat"
+      command(index, :answer_request, "issue_seat_token", @helper, "id" => request.id)
+    end
+    result = %w[verify open_sign_in].include?(request.kind) && chance(0.3) ? SIGNED_OUT : PASSED
+    result = result.merge("checks" => []) unless %w[verify open_sign_in run_add_checks].include?(request.kind)
+    command(index, :answer_request, "report_request_result", @helper, "id" => request.id, "result" => result)
+  end
+
   # --- timers ----------------------------------------------------------------
 
   # A running builder lease reaches its due time: the next command on the
@@ -330,9 +500,9 @@ class Walk
     @log << Step.new(index, :expire_review, "make_due", "test", { "review" => review.id }, "due now")
   end
 
-  # The sweep's pass: both lease timers as commands of the app.
+  # The sweep's pass: the timers as commands of the app.
   def sweep(index)
-    %w[builder_lease_expiry review_lease_expiry].each do |timer|
+    TIMERS.each do |timer|
       request = T::Request.new(command: timer, workspace_id: workspace_id, caller_kind: nil, caller_id: nil, key: nil,
         request_hash: nil, params: {})
       @log << Step.new(index, :sweep, timer, "app", {}, answer(request))
@@ -348,13 +518,32 @@ class Walk
 
   # --- applying ---------------------------------------------------------------
 
-  def connect(role, index)
-    request = request("connect_seat", @owner, "name" => "Made-up #{role} #{index}", "role" => role,
-      "provider" => "claude", "model" => "made-up-model", "effort" => nil)
-    outcome = T.apply(request)
-    raise "connect_seat was #{outcome.outcome}" unless outcome.completed?
+  # A seat on a login (run by the app), or one that connects on its own.
+  def connect(role, index, login = nil)
+    params = { "name" => "Made-up #{role} #{index}", "role" => role, "provider" => login&.provider || "claude",
+               "model" => "made-up-model", "effort" => nil }
+    params["credential_id"] = login.id if login
+    Seat.find(setup("connect_seat", @owner, params).fetch("seat_id"))
+  end
 
-    Seat.find(outcome.result.fetch("seat_id"))
+  def make_helper
+    Helper.find(setup("issue_helper_token", @owner, "name" => "Made-up Mac").fetch("helper_id"))
+  end
+
+  # A login the helper adds: add_credential, then its passed checks.
+  def add_login(provider, index)
+    id = SecureRandom.uuid
+    added = setup("add_credential", @owner, "credential_id" => id, "kind" => "login", "provider" => provider,
+      "name" => "Made-up #{provider} #{index}", "masked_label" => nil, "model" => nil, "effort" => nil, "strength_rank" => nil)
+    setup("report_request_result", @helper, "id" => added.fetch("helper_request_id"), "result" => PASSED)
+    Credential.find(id)
+  end
+
+  def setup(name, caller, params)
+    outcome = T.apply(request(name, caller, params))
+    raise "#{name} was #{outcome.outcome}" unless outcome.completed?
+
+    outcome.result
   end
 
   def command(index, action, name, caller, params)
@@ -365,7 +554,7 @@ class Walk
 
   def request(name, caller, params)
     @count += 1
-    kind = caller.is_a?(User) ? "owner" : "seat"
+    kind = { User => "owner", Helper => "helper" }.fetch(caller.class, "seat")
     T::Request.new(command: name, workspace_id: workspace_id, caller_kind: kind, caller_id: caller.id,
       key: "walk-#{seed}-#{@count}", request_hash: Digest::SHA256.hexdigest(JSON.generate(params)), params: params)
   end
@@ -380,6 +569,10 @@ class Walk
   end
 
   def caller_label(caller)
-    caller.is_a?(User) ? "owner" : "#{caller.role} #{caller.name}"
+    case caller
+    when User then "owner"
+    when Helper then "helper"
+    else "#{caller.role} #{caller.name}"
+    end
   end
 end

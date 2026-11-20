@@ -17,6 +17,11 @@ public enum StandIns {
         .deletingLastPathComponent()  // Tests
         .appendingPathComponent("StandIns", isDirectory: true)
 
+    /// `mac/Tests/StandIns/replies/`: one folder per login provider, one
+    /// reply file per reply a detector rule follows (plan HD-8). The detector
+    /// tests read them here; the stand-ins play the copy's.
+    public static let replies = sourceFolder.appendingPathComponent("replies", isDirectory: true)
+
     /// The four providers' tools, by the name of their program.
     public static let toolNames = ["claude", "codex", "agy", "grok"]
 
@@ -66,6 +71,8 @@ public struct StandInTools: Sendable {
     public var runner: URL { file("stand_in_runner.sh") }
     public var installer: URL { file("installer.sh") }
     public var archive: URL { file("standin-tool.tar.gz") }
+    /// The copy's reply files, which the stand-ins play.
+    public var replies: URL { root.appendingPathComponent("replies", isDirectory: true) }
 
     /// Writes the scenario the stand-ins follow (see `provider_tool.py`).
     public func write(scenario: StandInScenario) throws {
@@ -147,16 +154,65 @@ public struct StandInScenario: Encodable, Sendable {
         case silent
     }
 
+    /// What one account does at one of its work prompts (plan HD-11). A
+    /// work prompt is a build or a review prompt; the answering check's
+    /// "ready" prompt is not one. Every directive counts the account's work
+    /// prompts and none reads a clock.
+    public struct Directive: Encodable, Sendable {
+        /// The tool's program: `claude`, `codex`, `agy` or `grok`.
+        public var tool: String
+        /// The account folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) the
+        /// directive applies to; nil for `agy` and `grok`, which have one
+        /// sign-in for the Mac, or for a run with no folder.
+        public var account: String?
+        /// The first work prompt of the account it applies to, 1 first.
+        public var onPrompt: Int
+        /// The reply file to answer with, under `replies/`, such as
+        /// `claude/run-limit-five-hour.json`.
+        public var reply: String?
+        /// The reset time the reply states is the moment it is played plus
+        /// this many seconds.
+        public var resetInSeconds: Int?
+        /// How many work prompts in a row, from `onPrompt`, get the reply.
+        public var times: Int?
+        /// Sign the account out before its `onPrompt`-th work prompt.
+        public var signOut: Bool?
+
+        /// Answer the account's `onPrompt`-th work prompt with `reply`, and
+        /// the `times - 1` after it too; never again.
+        public static func reply(
+            _ reply: String, tool: String, account: URL?, onPrompt: Int, resetInSeconds: Int? = nil,
+            times: Int? = nil
+        ) -> Directive {
+            Directive(
+                tool: tool, account: account?.path, onPrompt: onPrompt, reply: reply,
+                resetInSeconds: resetInSeconds, times: times, signOut: nil)
+        }
+
+        /// Sign the account out just before its `beforePrompt`-th work prompt.
+        public static func signOut(tool: String, account: URL?, beforePrompt: Int) -> Directive {
+            Directive(
+                tool: tool, account: account?.path, onPrompt: beforePrompt, reply: nil,
+                resetInSeconds: nil, times: nil, signOut: true)
+        }
+    }
+
     /// Round r of review follows `reviews[r]`, then the last entry.
     public var reviews: [Review]
     /// A review does not answer until `state/<gateFile>` exists.
     public var gateFile: String?
     public var builder: Builder
+    /// Every account's directives.
+    public var directives: [Directive]
 
-    public init(reviews: [Review] = [], gateFile: String? = nil, builder: Builder = .evidence) {
+    public init(
+        reviews: [Review] = [], gateFile: String? = nil, builder: Builder = .evidence,
+        directives: [Directive] = []
+    ) {
         self.reviews = reviews
         self.gateFile = gateFile
         self.builder = builder
+        self.directives = directives
     }
 }
 

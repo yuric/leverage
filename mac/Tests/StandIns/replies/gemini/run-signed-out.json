@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "provider": "gemini",
+    "tool": "agy",
+    "tool_version": "1.5.12",
+    "date": "2026-11-19",
+    "basis": "made_from_observed",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--print-timeout",
+      "600s",
+      "--mode",
+      "accept-edits"
+    ],
+    "shows": "a prompt run while Antigravity is signed out",
+    "expect": "signed_out",
+    "follows": "the one JSON object agy 1.5.12 printed for a prompt on this Mac (conversation_id, status, response, num_turns, usage; inventory-providers.md section 6). No signed-out reply of agy was ever seen: the status ERROR, the error field, its wording and the exit status are made up",
+    "marker": "LVRG-REPLY-fcc62044f5fb"
+  },
+  "exit_status": 1,
+  "stdout": "{\"conversation_id\": \"LVRG-REPLY-fcc62044f5fb\", \"status\": \"ERROR\", \"response\": \"\", \"error\": \"You are not signed in. Sign in to Antigravity and try again.\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}}\n",
+  "stderr": ""
+}
