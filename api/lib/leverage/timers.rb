@@ -26,15 +26,81 @@ module Leverage
     TARGET_PARAMS = %w[id task_id review_id].freeze
     UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
-    # Empty symbol for the red run (milestone 4 plan WP1).
-    WORKSPACE_COMMANDS = [].freeze
+    # Every timer of timers.json, task and workspace, those of later
+    # milestones among them: a timer's own command applies no timer first.
+    TIMER_COMMANDS = Contract.timers.fetch("timers").map { |timer| timer.fetch("timer") }.freeze
+
+    # What Timers.apply_workspace runs (milestone 4 plan §0.1 fact 6,
+    # RD-2): the workspace timers of timers.json, and the commands the app
+    # runs on a workspace with no state (every state_machine.json row of
+    # the command is the app's and reads no state: install_shipped_rules).
+    WORKSPACE_COMMANDS = begin
+      timers = Contract.timers.fetch("timers").select { |timer| timer.fetch("scope") == "workspace" }
+      rows = Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }.group_by { |row| row.fetch("command") }
+      app_commands = rows.select do |command, command_rows|
+        !TIMER_COMMANDS.include?(command) && command_rows.all? { |row| row.fetch("who") == [ "app" ] && row.fetch("from").nil? }
+      end
+      (timers.map { |timer| timer.fetch("timer") } + app_commands.keys).freeze
+    end
+
+    # The param Timers.apply_workspace hands the time in by; Context reads
+    # it as the command's effective_at.
+    EFFECTIVE_AT = "effective_at".freeze
+
+    # The workspace's timeout of each due time kind (timers.json).
+    WORKSPACE_TIMEOUTS = { queue: :check_queue_timeout_seconds, run: :check_run_timeout_seconds }.freeze
+    # A rule version's own timeout of each, which wins when it is set.
+    VERSION_TIMEOUTS = { queue: :queue_timeout_seconds, run: :run_timeout_seconds }.freeze
 
     module_function
 
-    # Empty symbols for the red run (milestone 4 plan WP1).
-    def apply_workspace(workspace, name, at:) = nil
+    # Runs a workspace timer, or a command the app runs on a workspace
+    # (WORKSPACE_COMMANDS), as the sweep does (Sweep.timer: as the app,
+    # with no key and no commands row), with at as the effective time of
+    # what it writes: Context#effective_at, which emit gives every event
+    # that names none. at is never later than the command's own clock,
+    # read under the lock, and the events' at is that clock (milestone 4
+    # plan §0.1 fact 6; WP1's choice, in its notes). The sweep's timers
+    # (WP7), the reviewer_eligibility timer (WP9) and the install task
+    # (WP8, RD-2) run through it.
+    #
+    # workspace - a Workspace or its id.
+    # name      - a WORKSPACE_COMMANDS name.
+    # at:       - a Time.
+    #
+    # Returns the command's Outcome. Raises ArgumentError for any other
+    # name.
+    def apply_workspace(workspace, name, at:)
+      raise ArgumentError, "#{name.inspect} is not a workspace timer or an app command" unless WORKSPACE_COMMANDS.include?(name.to_s)
 
-    def job_due_at(job, kind) = nil
+      workspace_id = workspace.respond_to?(:id) ? workspace.id : workspace
+      Sweep.timer(workspace_id, name.to_s, EFFECTIVE_AT => at.utc.iso8601(6))
+    end
+
+    # A job's due time (timers.json): kind :queue is when it must have
+    # been claimed, :run when its result must have arrived. A job that
+    # runs a rule check's attempt is due from the attempt's queued or
+    # started time plus the rule version's own timeout, or the workspace's
+    # when the version has none; any other job (a contract draft, a
+    # question) from its own queued or claimed time plus the workspace's
+    # (DB-31). nil for :run while the job has not started.
+    #
+    # Raises ArgumentError for another kind.
+    def job_due_at(job, kind)
+      raise ArgumentError, "kind is :queue or :run, not #{kind.inspect}" unless WORKSPACE_TIMEOUTS.key?(kind)
+
+      workspace = Workspace.find(job.workspace_id)
+      attempt = RuleCheckAttempt.find_by(job_id: job.id)
+      if attempt
+        from = kind == :queue ? attempt.queued_at : attempt.started_at
+        version = RuleVersion.joins("JOIN rule_checks ON rule_checks.rule_version_id = rule_versions.id")
+          .find_by("rule_checks.id = ?", attempt.rule_check_id)
+        seconds = version&.public_send(VERSION_TIMEOUTS.fetch(kind))
+      else
+        from = kind == :queue ? job.queued_at : job.claimed_at
+      end
+      from && from + (seconds || workspace.public_send(WORKSPACE_TIMEOUTS.fetch(kind)))
+    end
 
     # Applies every timer due on the request's target task (or the task of
     # its target review) and on every task or review the calling seat
@@ -53,8 +119,10 @@ module Leverage
       apply_task_timers(ctx, due_candidates(ctx))
     end
 
-    # Whether the command is a timer's own (Table::TIMERS).
-    def timer_command?(command) = Transitions::Table::TIMERS.include?(command)
+    # Whether the command is a timer's own: any timer of timers.json, the
+    # pending ones of milestone 4 among them (Table::TIMERS and the timers
+    # in Table::PENDING).
+    def timer_command?(command) = TIMER_COMMANDS.include?(command.to_s)
 
     # Applies the due lease timers on every task and review a seat holds,
     # as apply_due does for the caller: for a command that decides by what

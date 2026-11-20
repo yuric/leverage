@@ -13,7 +13,9 @@ module Leverage
   #      command's own events.
   #   4. The entry's refusals; Precedence picks the first by the registry.
   #   5. At a row with a hook, Gate asks Gating (EN-5).
-  #   6. entry.perform changes rows and writes events through EventLog.
+  #   6. entry.perform changes rows and writes events through EventLog;
+  #      then ReviewerEligibility.after_command looks at what it changed
+  #      (milestone 4 plan SM-42).
   #   7. Idempotency.store writes the commands row, for a refusal too, so
   #      the timer events of step 3 commit with it (test 7).
   #   8. Commit; CommandLog writes one line.
@@ -42,8 +44,18 @@ module Leverage
         run(request)
       end
 
-      # Empty symbol for the red run (milestone 4 plan WP1).
-      def run_as(ctx, command, requester:, key:, params:) = nil
+      # Runs another command's entry inside ctx's transaction, as requester
+      # (a Seat, or the owner's User), with that requester's key and params:
+      # how a planner's job result runs Complete contract as the planner,
+      # with the result call's key (milestone 4 plan RE-6, §4 hand-over
+      # table). It answers the command's outcome: :completed, :pending or
+      # :refused.
+      #
+      # First version: does nothing and answers :completed. WP4 writes it:
+      # the entry's refusals, its gate and perform, as the requester.
+      def run_as(ctx, command, requester:, key:, params:)
+        :completed
+      end
 
       # Tests only: answers apply from the stand-in inside the block.
       def with_stand_in(stand_in)
@@ -74,6 +86,7 @@ module Leverage
           else
             Gate.call(ctx, entry)
             entry.perform(ctx)
+            ReviewerEligibility.after_command(ctx, entry)
             Outcome.completed(entry.result, once: entry.once)
           end
           Idempotency.store(ctx, request, outcome) unless request.by_app?

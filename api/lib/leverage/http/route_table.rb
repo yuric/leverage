@@ -73,8 +73,25 @@ module Leverage
         "change_seat" => "v1/owner/seats#change"
       }.freeze
 
-      # Empty symbol for the red run (milestone 4 plan WP1).
-      PENDING = {}.freeze
+      # The twelve operations milestone 4 serves (its plan §2.3, RT-6), each
+      # to the controller and action WP10 writes. They are not in ROUTES, so
+      # serves?, routes.rb and every test that walks the served operations
+      # leave them out (they answer 404) until WP10 moves them into ROUTES
+      # and leaves this list empty; WP13 deletes it.
+      PENDING = {
+        "claim_next_job" => "v1/agent/jobs#claim_next",
+        "submit_job_result" => "v1/agent/jobs#result",
+        "list_rules" => "v1/owner/rules#index",
+        "add_rule" => "v1/owner/rules#create",
+        "save_rule" => "v1/owner/rules#versions",
+        "enable_rule" => "v1/owner/rules#enable",
+        "disable_rule" => "v1/owner/rules#disable",
+        "revert_rule" => "v1/owner/rules#revert",
+        "remove_rule" => "v1/owner/rules#remove",
+        "rerun_check" => "v1/owner/rule_checks#rerun",
+        "override_check" => "v1/owner/rule_checks#override",
+        "draft_contract" => "v1/owner/tasks#draft_contract"
+      }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.

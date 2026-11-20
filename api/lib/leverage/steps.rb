@@ -57,10 +57,15 @@ module Leverage
 
     # The events milestone 2 writes that steps.json names, with what each
     # does in advance. Every other event steps.json names is Unsupported.
+    # Milestone 4's first version (its plan §4, the hand-over table; §0.1
+    # fact 7) adds the five check and job events the rule-check packages
+    # write on a task before WP5 teaches the tracker their steps: each is
+    # handled and changes no step yet (advance keeps the work).
     HANDLED = %w[
       task.created task.promoted task.returned task.ready task.claimed task.briefing_acknowledged criterion.started
       criterion.passed task.submitted review.started review.released review.lease_expired review.failed review.passed
       task.released task.lease_expired task.done task.cancelled hold.opened hold.closed
+      check.queued check.finished job.claimed job.timed_out job.withdrawn
     ].freeze
 
     # Which seat a working step names (L278): the builder's steps name the
@@ -129,7 +134,9 @@ module Leverage
       when "review.failed"
         failed(event, payload, [ round, event.round + 1 ].max)
       else
-        work # review.passed (task.done follows in milestone 2), hold.opened, hold.closed
+        # review.passed (task.done follows in milestone 2), hold.opened,
+        # hold.closed; and, until WP5, the five check and job events.
+        work
       end
     end
 

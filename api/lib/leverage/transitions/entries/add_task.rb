@@ -6,15 +6,20 @@ module Leverage
       # Imaginarium as an idea, now that Promote takes it out (SC-4 ends);
       # task.created names the state.
       #
-      # 422 invalid in this milestone: another state, a project (tasks have
-      # none until milestone 5), outward actions (milestone 5), criteria
-      # (they are the contract's: Complete contract writes them with
-      # task.contract_changed; the app sends them there, L108), and a work
-      # reference with sign-in details (L533). With no project, no
-      # project_paused hold can open.
+      # A project_id names a project of the workspace, and the task is that
+      # project's (milestone 4 plan RD-52: the golden traces' tasks name the
+      # project their setup holds); no command makes a project until
+      # milestone 5, and no project_paused hold opens before then.
       #
-      # Params: title, goal, details, priority, work_reference, state, and
-      # project_id, criteria and actions only when empty. Result: task_id.
+      # 422 invalid in this milestone: another state, a project_id that
+      # names no project of the workspace, outward actions (milestone 5),
+      # criteria (they are the contract's: Complete contract writes them
+      # with task.contract_changed; the app sends them there, L108), and a
+      # work reference with sign-in details (L533).
+      #
+      # Params: title, goal, details, priority, work_reference, state,
+      # project_id, and criteria and actions only when empty. Result:
+      # task_id.
       class AddTask < Entry
         # The state-table guard of each state a task may be added in.
         GUARDS = { "imaginarium" => "adds_to_imaginarium", "backlog" => "adds_to_backlog" }.freeze
@@ -23,7 +28,8 @@ module Leverage
           @params = ctx.request.params
           @state = @params.fetch("state", "backlog")
           raise Invalid, "A task is added to the Imaginarium or the Backlog." unless GUARDS.key?(@state)
-          raise Invalid, "Tasks have no project in this milestone." if @params["project_id"]
+          @project = @params["project_id"] && Project.find_by(id: @params["project_id"], workspace_id: ctx.workspace.id)
+          raise Invalid, "No such project in this workspace." if @params["project_id"] && @project.nil?
           raise Invalid, "Criteria are part of the contract: send them with Complete contract." if @params["criteria"].present?
           raise Invalid, "Outward actions are not built yet." if @params["actions"].present?
 
@@ -34,7 +40,7 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(nil, [ GUARDS.fetch(@state) ]) ].compact
 
         def perform(ctx)
-          task = Task.create!(workspace_id: ctx.workspace.id, title: @params["title"], goal: @params["goal"],
+          task = Task.create!(workspace_id: ctx.workspace.id, project_id: @project&.id, title: @params["title"], goal: @params["goal"],
             details: @params["details"], work_reference: @params["work_reference"].presence,
             priority: @params["priority"] || "normal", state: @state)
           ctx.emit("task.created", task: task, payload: { state: @state })

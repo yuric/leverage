@@ -297,6 +297,7 @@ class Scenario
   # owner's (SM-33). A shipped rule's version fields are Rules::Shipped's;
   # a custom rule's are on its row (seed_rule).
   def seed(setup)
+    Array(setup["rules"]).each { |row| seed_rule_fields(row) } # refuses a rule it cannot build before writing anything
     workspace.update!(setup.fetch("settings", {}))
     Array(setup["users"]).each { |user| owner(id: user.fetch("id")) }
     Array(setup["helpers"]).each { |row| helper(id: row.fetch("id"), name: row.fetch("name")) }
@@ -462,7 +463,17 @@ class Scenario
   # checker, scope {kind, values}, instruction, checker_function,
   # parameters, checker_role, on_fail, route, the two timeouts).
   def seed_rule(row)
+    rule(key: row.fetch("key"), origin: row.fetch("origin"), enabled: row.fetch("enabled"),
+      versions: row.fetch("current_version"), id: row.fetch("id"), version_id: row.fetch("current_version_id"),
+      **seed_rule_fields(row))
+  end
+
+  # The version fields a setup's rule row gives. Raises ArgumentError for
+  # a custom rule that names none (name and hook at least), or a shipped
+  # key Rules::Shipped does not know.
+  def seed_rule_fields(row)
     shipped = row.fetch("origin") == "shipped"
+    Leverage::Rules::Shipped.find(row.fetch("key")) if shipped
     fields = row.except("id", "key", "origin", "enabled", "current_version", "current_version_id", "scope")
       .transform_keys(&:to_sym)
     if (scope = row["scope"])
@@ -472,8 +483,10 @@ class Scenario
     unless shipped || (fields[:name] && fields[:hook])
       raise ArgumentError, "the setup's custom rule #{row.fetch("key")} names no version fields (name, hook, ...)"
     end
-    rule(key: row.fetch("key"), origin: row.fetch("origin"), enabled: row.fetch("enabled"),
-      versions: row.fetch("current_version"), id: row.fetch("id"), version_id: row.fetch("current_version_id"), **fields)
+
+    fields
+  rescue KeyError => error
+    raise ArgumentError, error.message
   end
 
   def app_attempt(task, check)
