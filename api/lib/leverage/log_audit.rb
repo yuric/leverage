@@ -17,8 +17,11 @@ module Leverage
   # builder_lease_expiry, review.lease_expired review_lease_expiry, and a
   # hold.closed of a credential hold (credential_limit or
   # credential_signed_out) with neither is credential_hold_release
-  # (milestone 3 plan §2.1 rule 8), one group per task. Any other event
-  # with no key is a finding.
+  # (milestone 3 plan §2.1 rule 8), one group per task. One command may
+  # apply several timers of one task (Timers.apply_task_timers: the
+  # credential hold when it is due first, then the lease), so a task's
+  # events are cut before each lease end, and each run is matched to its
+  # own timer. Any other event with no key is a finding.
   #
   # For each group, the task's state before it is folded from the log, and
   # the command's state_machine.json rows from that state are matched as
@@ -113,14 +116,22 @@ module Leverage
     end
 
     def timer_groups(group, states)
-      group.events.group_by(&:task_id).flat_map do |task_id, events|
-        types = events.map(&:type)
-        name = types.filter_map { |type| TIMER_EVENTS[type] }.first || credential_release(events)
-        label = "events with no command (seq #{events.first.seq}, #{types.uniq.join(", ")})"
-        problems = name ? match(name, events, states) : [ "no timer writes them" ]
-        advance(events, states) if task_id
-        problems.empty? ? [] : [ "#{label}: #{name || "no command"} #{problems.join("; ")}" ]
+      group.events.group_by(&:task_id).flat_map do |task_id, task_events|
+        timer_runs(task_events).flat_map { |events| timer_run(task_id, events, states) }
       end
+    end
+
+    # A task's events with no key, cut before each lease end: what each
+    # timer a command applied wrote, in the order it applied them.
+    def timer_runs(events) = events.slice_before { |event| TIMER_EVENTS.key?(event.type) }.to_a
+
+    def timer_run(task_id, events, states)
+      types = events.map(&:type)
+      name = types.filter_map { |type| TIMER_EVENTS[type] }.first || credential_release(events)
+      label = "events with no command (seq #{events.first.seq}, #{types.uniq.join(", ")})"
+      problems = name ? match(name, events, states) : [ "no timer writes them" ]
+      advance(events, states) if task_id
+      problems.empty? ? [] : [ "#{label}: #{name || "no command"} #{problems.join("; ")}" ]
     end
 
     # credential_hold_release when the events close a credential hold.
