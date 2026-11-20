@@ -19,9 +19,15 @@ module Leverage
       # with the choice edit_contract where the item offers it (HE-29); then
       # the seat-bound holds, through Holds.close_seat_bound, caused by
       # task.returned. An owner_hold stays open: only Resume closes it
-      # (L176). check_error closes only with a check the edit withdraws, and
-      # nothing pending, no check, job or action exists to withdraw before
-      # milestone 4 (EN-5), so none of those events is written.
+      # (L176).
+      #
+      # A pending transition, in any state, is cancelled first, with
+      # invalid_state (L377; milestone 4 plan §2.1 rule 11): its checks and
+      # jobs are withdrawn, and the check_error or rerun_limit hold one of
+      # them opened is closed, by PendingTransitions.cancel, before the
+      # holds this edit answers are read. A check_error hold closes only
+      # with the check it is about, which is why the edit does not close it
+      # itself. No outward action exists before milestone 5.
       #
       # Imaginarium, Finishing, Done and Cancelled have no row: invalid_state
       # (HE-25 (v)). 422 invalid as for Complete contract: an outward action
@@ -33,8 +39,8 @@ module Leverage
         CHOICE = "edit_contract".freeze
 
         # The holds a task loses with its seat (plan SM-15), closed by
-        # Holds.close_seat_bound; and check_error, which closes only with a
-        # check the edit withdraws (none before milestone 4).
+        # Holds.close_seat_bound; and check_error, which closes only with
+        # the check the edit withdraws (PendingTransitions.cancel).
         SEAT_BOUND = %w[seat_paused credential_limit credential_signed_out].freeze
         WITH_A_CHECK = %w[check_error].freeze
 
@@ -55,6 +61,8 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(@task.state) ].compact
 
         def perform(ctx)
+          pending = PendingTransitions.of(@task)
+          PendingTransitions.cancel(ctx, pending, "invalid_state") if pending
           active = @task.state != "backlog"
           answered = answered_holds
           free_seats(ctx) if active

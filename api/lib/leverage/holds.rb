@@ -13,6 +13,22 @@ module Leverage
   #
   # The step a hold opens is the step tracker's (Steps.on_event, from
   # hold.opened and hold.closed).
+  #
+  # Milestone 4 (its plan, WP5; PRD L161-L167, L374-L380, L392): the four
+  # rule holds (contract_incomplete, check_error, claim_gate_failed,
+  # rerun_limit) open and close here like any other, from the registry's
+  # columns, and the caller says whether check_error's task item opens
+  # (item:, only while the orchestrator is online, SM-39). A hold and a
+  # waiting command (a pending transition, PendingTransitions):
+  #
+  # - a hold opened on a Ready task with a provisional claim cancels the
+  #   claim first, with invalid_state, whatever opens the hold (RD-13,
+  #   rule 11); any other pending transition keeps waiting under the hold,
+  #   its checks running (L378);
+  # - when the last hold on a task lifts, its pending transition is gated
+  #   again (PendingTransitions.reenter, trigger hold_lifted, rule 9),
+  #   unless the task has ended or the hold is closed by the waiting
+  #   command itself while it is performed.
   module Holds
     PAUSES = "pauses".freeze
     # The reasons bound to the seat that holds the task: they close when it
@@ -32,6 +48,7 @@ module Leverage
     # Returns the Hold.
     def open(ctx, task:, reason:, cause_id: nil, facts: {}, rule_id: nil, credential_id: nil, actor_kind: "app",
              actor_id: nil, round: task.round, item: true)
+      lapse_provisional_claim(ctx, task)
       hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id, reason: reason,
         rule_id: rule_id, credential_id: credential_id, opened_at: ctx.at, opened_by_kind: actor_kind,
         opened_by_id: actor_id)
@@ -86,7 +103,10 @@ module Leverage
       if remaining.none? { |open| pauses?(open.reason) }
         leases_of(task).each { |subject| Leases.restart(ctx, subject, at: effective_at) }
       end
-      mark_resume(ctx, task) if remaining.empty?
+      if remaining.empty?
+        mark_resume(ctx, task)
+        reenter_pending(ctx, task)
+      end
       hold
     end
 
@@ -174,11 +194,37 @@ module Leverage
       [ Task.find(task.id) ] + Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: nil).to_a
     end
 
+    # A provisional claim's reservation lapses when a hold opens (L378,
+    # RD-13): its pending claim is cancelled with invalid_state before the
+    # hold is written (rule 11).
+    def lapse_provisional_claim(ctx, task)
+      pending = PendingTransitions.of(task)
+      PendingTransitions.cancel(ctx, pending, "invalid_state") if pending&.command == "claim"
+    end
+
+    # The last hold lifted: the task's pending transition, if any, is gated
+    # again (L378, rule 9). Not on a task that has ended (Cancel closes its
+    # holds after withdrawing what waited, EN-30), and not inside the
+    # waiting command itself while it is performed (its key is the
+    # request's, Context#as_requester).
+    def reenter_pending(ctx, task)
+      return if ended?(ctx, Task.find(task.id))
+
+      pending = PendingTransitions.of(task)
+      return if pending.nil? || pending.command_key == ctx.request.key
+
+      PendingTransitions.reenter(ctx, pending, Gating::Trigger.new(kind: :hold_lifted, rule_check_id: nil))
+    end
+
+    def ended?(ctx, task)
+      %w[done cancelled].include?(task.state) ||
+        ctx.events.any? { |event| event.task_id == task.id && Steps::TERMINAL.include?(event.type) }
+    end
+
     def mark_resume(ctx, task)
       task = Task.find(task.id)
       return unless task.holder_seat_id
-      return if %w[done cancelled].include?(task.state)
-      return if ctx.events.any? { |event| event.task_id == task.id && Steps::TERMINAL.include?(event.type) }
+      return if ended?(ctx, task)
 
       task.update!(resume_pending_since: ctx.at)
     end

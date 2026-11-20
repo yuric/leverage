@@ -26,10 +26,13 @@ module Leverage
       # has the cause of HE-35 (Candidates.wait_cause, asked at the due time
       # once the seat holds nothing): on task.lease_expired when the task
       # had no hold, else on the hold.closed that leaves it with none
-      # (milestone 3 plan §2.1, changed entries; trace 14). The row's other
-      # side events cannot occur yet: nothing pending (rules, milestone 4),
-      # no Finishing task (milestone 5). Finishing has its row and no way to
-      # reach it.
+      # (milestone 3 plan §2.1, changed entries; trace 14).
+      #
+      # A pending submit is cancelled first, with lease_expired (L376;
+      # milestone 4 plan §2.1 rule 11): its withdrawals are the timer's, at
+      # the due time, by the app, with no key (trace 18, command 36), also
+      # when the timer runs inside another command. No Finishing task exists
+      # before milestone 5: Finishing has its row and no way to reach it.
       class BuilderLeaseExpiry < Entry
         BATCH = 100
 
@@ -71,6 +74,11 @@ module Leverage
         def expire(ctx, task)
           row = state_row(task.state)
           effective_at = Timers.effective_at(task, task.lease_due_at)
+          pending = PendingTransitions.of(task)
+          if pending
+            PendingTransitions.cancel(ctx, pending, "lease_expired", effective_at: effective_at, actor_kind: "app",
+              actor_id: nil, command_id: nil)
+          end
           held = Holds.held?(task)
           Leases.end_lease(ctx, task)
           to = row.fetch("to") || task.state

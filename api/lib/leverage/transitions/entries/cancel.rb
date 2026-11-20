@@ -9,9 +9,13 @@ module Leverage
       # builder's lease and any review lease end; the task has no holder and
       # no builder (PRD Terms, Builder), and an open review loses its
       # reviewer, so both seats are free at once. The holder's next call on
-      # the task is refused task_cancelled (Eligibility). Nothing pending,
-      # no check, job or outward action exists to withdraw or revoke in
-      # milestone 2 (SC-3, EN-5), so none of those events is written.
+      # the task is refused task_cancelled (Eligibility).
+      #
+      # A pending transition is cancelled first, with task_cancelled
+      # (milestone 4 plan §2.1 rule 11, L919): PendingTransitions.cancel
+      # withdraws its checks and jobs and closes the holds they opened,
+      # before task.cancelled. No outward action exists to revoke before
+      # milestone 5 (SC-3).
       #
       # Params: id (the task).
       class Cancel < Entry
@@ -22,6 +26,8 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(@task.state) ].compact
 
         def perform(ctx)
+          pending = PendingTransitions.of(@task)
+          PendingTransitions.cancel(ctx, pending, "task_cancelled") if pending
           Leases.end_lease(ctx, @task)
           Review.where(workspace_id: @task.workspace_id, task_id: @task.id, verdict: nil).find_each do |review|
             Leases.end_lease(ctx, review)

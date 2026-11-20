@@ -5,6 +5,10 @@ module Leverage
       # HS-3): the owner holds a task with owner_hold, in any state but
       # Finishing, Done and Cancelled. hold.opened is the owner's; the
       # reason has no Needs you item and pauses the lease clocks (Holds).
+      # From Ready, a provisional claim's reservation lapses: Holds.open
+      # cancels the pending claim with invalid_state before hold.opened
+      # (milestone 4 plan RD-13, rule 11). A pending transition in any other
+      # state keeps waiting under the hold (L378).
       # The row from Finishing is not served until milestone 5 brings that
       # state: invalid_state. A task the owner already holds is
       # invalid_state too: one owner_hold at a time, which Resume closes.
