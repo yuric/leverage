@@ -16,10 +16,11 @@ an agent; the database is backed up every day, with a tested restore; and
 the seven shipped rules and the owner's own rules gate a task's moves,
 checked in the server or by the orchestrator agent, with Settings, a
 Timing section and a rule checklist in the app. That is shown end to end
-with stand-in provider tools. A real provider has run through the server
-only as an orchestrator checking two contracts, in the maintainer's real
-checks; no real builder, reviewer or planner has, and no interruption has
-been shown on a real provider. The repository holds the documentation,
+with stand-in provider tools. Real providers have run through it only in
+the maintainer's developer checks: one Gemini build to Done through the
+app, and an orchestrator on each of Claude Code, Codex and Antigravity
+checking two contracts; no real reviewer or planner has, and no
+interruption has been shown on a real provider. The repository holds the documentation,
 the research behind its practices, and the scripts and checks that keep
 them consistent, plus:
 
