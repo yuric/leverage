@@ -359,6 +359,19 @@ def runner(argv):
         with open(path + ".tmp", "w") as handle:
             json.dump(record, handle)
         os.replace(path + ".tmp", path)
+        # Python runs a signal's handler between two steps of the program,
+        # not inside a system call: a stop that lands just before a wait
+        # with no limit begins would be seen only when that wait ends, which
+        # is never. So the wait is short and repeated, and the stop is read
+        # from the flag the handler sets.
+        while not held["stopped"]:
+            try:
+                child.wait(timeout=0.05)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+        if child.poll() is None:
+            child.terminate()
         child.wait()
     finally:
         if child.poll() is None:  # any other way out
