@@ -16,17 +16,25 @@ import Darwin
 /// (`holdOnStop(run:)`): it then ends only once the test lets it go
 /// (`letGo(run:)`), as a helper that waits for its runners does.
 ///
+/// Like the real helper (PK-8), a run ends by itself once the process that
+/// started it is gone, so a test run that crashes leaves no fake behind.
+///
 /// A test ends with `expectNothingLeft()`: every run has ended, and the
-/// folder is removed.
+/// folder is removed. The folders a crashed test run could not remove are
+/// removed by the next run (`removeFoldersOfEndedTestRuns()`).
 final class FakeHelperProgram: @unchecked Sendable {
+    static let folderPrefix = "leverage-helper-supervisor"
+
     let folder: TemporaryFolder
     var program: URL { folder.url.appendingPathComponent("bin/LeverageHelper") }
     var state: URL { folder.url.appendingPathComponent("state") }
     var support: URL { folder.url.appendingPathComponent("support") }
 
     init(exitCodes: [Int32]) throws {
-        folder = try TemporaryFolder(prefix: "leverage-helper-supervisor")
+        _ = Self.foldersOfEndedTestRunsRemoved
+        folder = try TemporaryFolder(prefix: Self.folderPrefix)
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        try Data("\(getpid())\n".utf8).write(to: state.appendingPathComponent("test-process"))
         try Data(exitCodes.map { "\($0)\n" }.joined().utf8).write(to: state.appendingPathComponent("codes"))
         let dir = state.path
         try writeScript(program, """
@@ -36,7 +44,7 @@ final class FakeHelperProgram: @unchecked Sendable {
             # The trap is set before the run is counted: a test that stops the
             # helper as soon as it sees the count still finds the run's line.
             trap 'echo "fake helper run $n asked to stop" >&2
-                while [ -e "$dir/hold-$n" ]; do sleep 0.05; done
+                while [ -e "$dir/hold-$n" ] && kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
                 exit 0' TERM
             echo $$ > "$dir/pid-$n"
             echo "$n" > "$dir/count"
@@ -45,7 +53,11 @@ final class FakeHelperProgram: @unchecked Sendable {
             echo "fake helper run $n" >&2
             code=$(sed -n "${n}p" "$dir/codes")
             if [ -n "$code" ]; then exit "$code"; fi
-            while :; do sleep 0.05; done
+            # The parent's process id stops answering once it is gone. A run
+            # whose parent was gone before it began has 1 (launchd) as its
+            # PPID, which refuses kill -0, so it ends at once too.
+            while kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
+            echo "fake helper run $n: the process that started it is gone" >&2
             """)
     }
 
@@ -106,20 +118,21 @@ final class FakeHelperProgram: @unchecked Sendable {
         return isThisFake(pid)
     }
 
-    /// The runs whose process is still alive.
-    var runsStillRunning: [Int] {
-        guard runs > 0 else { return [] }
-        return (1...runs).filter(isRunning(run:))
+    /// Every process alive that runs this fake, found by its command line,
+    /// so that a run which has not recorded itself yet is found too.
+    var processesStillRunning: [pid_t] {
+        allProcessIDs().filter(isThisFake)
     }
 
     /// Every run has ended (waiting as patiently as the run asks), and the
-    /// folder is removed. A run still alive is recorded as an issue and then
-    /// ended, so a failing test leaves nothing behind either.
+    /// folder is removed. A process of the fake still alive is recorded as
+    /// an issue and then ended, so a failing test leaves nothing behind
+    /// either.
     func expectNothingLeft(sourceLocation: SourceLocation = #_sourceLocation) async {
-        let ended = await eventually(within: .seconds(10)) { self.runsStillRunning.isEmpty }
+        let ended = await eventually(within: .seconds(10)) { self.processesStillRunning.isEmpty }
         if !ended {
             Issue.record(
-                "fake helper runs \(runsStillRunning) outlived the test (\(folder.url.lastPathComponent))",
+                "fake helper processes \(processesStillRunning) outlived the test (\(folder.url.lastPathComponent))",
                 sourceLocation: sourceLocation)
             endWhatStillRuns()
         }
@@ -127,13 +140,13 @@ final class FakeHelperProgram: @unchecked Sendable {
         #expect(!FileManager.default.fileExists(atPath: folder.url.path), sourceLocation: sourceLocation)
     }
 
-    /// Kills every run still alive, after checking that the process id is
-    /// still this fake's.
+    /// Kills every process of the fake still alive; each was found by its
+    /// command line, and is looked at once more just before.
     private func endWhatStillRuns() {
-        guard runs > 0 else { return }
-        for n in 1...runs {
-            letGo(run: n)
-            guard let pid = processID(ofRun: n), isThisFake(pid) else { continue }
+        if runs > 0 {
+            for n in 1...runs { letGo(run: n) }
+        }
+        for pid in processesStillRunning where isThisFake(pid) {
             // A run the supervisor started leads a process group of its own
             // (its sleep is in it); one started otherwise does not.
             if getpgid(pid) == pid { _ = killpg(pid, SIGKILL) } else { _ = kill(pid, SIGKILL) }
@@ -143,6 +156,51 @@ final class FakeHelperProgram: @unchecked Sendable {
     private func isThisFake(_ pid: pid_t) -> Bool {
         commandLine(of: pid)?.contains(program.path) == true
     }
+}
+
+extension FakeHelperProgram {
+    /// Done once by each test run, before its first fake.
+    private static let foldersOfEndedTestRunsRemoved: Void = removeFoldersOfEndedTestRuns()
+
+    /// Removes the folder of every fake whose test process has ended and
+    /// none of whose runs is alive: what a test run that crashed (as the
+    /// services run of 18:42 on the 19th did) left behind. A folder whose
+    /// test process is not recorded yet, or is alive, is another run's.
+    static func removeFoldersOfEndedTestRuns(in parent: URL = FileManager.default.temporaryDirectory) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: parent.path) else { return }
+        let processes = allProcessIDs()
+        for name in names where name.hasPrefix(folderPrefix + "-") {
+            let folder = parent.appendingPathComponent(name, isDirectory: true)
+            guard let text = try? String(
+                    contentsOf: folder.appendingPathComponent("state/test-process"), encoding: .utf8),
+                  let owner = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  !processExists(owner)
+            else { continue }
+            // The fake runs by the folder's path with its links resolved:
+            // the folder's own name, unique to it, is what is compared.
+            let program = "/\(name)/bin/LeverageHelper"
+            let alive = processes.contains { pid in
+                commandLine(of: pid)?.contains { $0.hasSuffix(program) } ?? false
+            }
+            if !alive { try? manager.removeItem(at: folder) }
+        }
+    }
+}
+
+/// True while a process with this id exists (one of another user's too).
+func processExists(_ pid: pid_t) -> Bool {
+    kill(pid, 0) == 0 || errno == EPERM
+}
+
+/// The process id of every process on the Mac.
+func allProcessIDs() -> [pid_t] {
+    let count = proc_listallpids(nil, 0)
+    guard count > 0 else { return [] }
+    // Room for processes started between the two calls.
+    var pids = [pid_t](repeating: 0, count: Int(count) + 64)
+    let found = pids.withUnsafeMutableBytes { proc_listallpids($0.baseAddress, Int32($0.count)) }
+    return found > 0 ? Array(pids.prefix(Int(found))).filter { $0 > 0 } : []
 }
 
 /// The arguments a process was started with, or nil once it is gone (a

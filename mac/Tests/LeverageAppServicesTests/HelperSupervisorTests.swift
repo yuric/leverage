@@ -302,9 +302,9 @@ struct HelperSupervisorTests {
 
         // The stop that ended before the start does not hide the new helper.
         #expect(await helper.state() == .running)
-        #expect(fake.runs == 2)
-        #expect(await eventually(within: .seconds(5)) { fake.isRunning(run: 2) })
+        #expect(await eventually(within: .seconds(5)) { fake.runs == 2 && fake.isRunning(run: 2) })
         #expect(await helper.start(apiBaseURL: apiURL, issuer: owner) == .running)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(fake.runs == 2)
         await helper.stop()
         #expect(!fake.isRunning(run: 2))
@@ -326,6 +326,53 @@ struct HelperSupervisorTests {
         #expect(await eventually { fake.processID(ofRun: 1) != nil })
         #expect(await eventually(within: .seconds(10)) { !fake.isRunning(run: 1) })
         await fake.expectNothingLeft()
+    }
+
+    @Test("the folders a crashed test run left are removed by the next run, and no other run's")
+    func foldersOfCrashedRunsAreRemoved() async throws {
+        let parent = try TemporaryFolder(prefix: "leverage-helper-supervisor-sweep")
+        func fakeFolder(_ name: String, testProcess: pid_t?) throws -> URL {
+            let folder = try parent.folder(name)
+            try FileManager.default.createDirectory(
+                at: folder.appendingPathComponent("state"), withIntermediateDirectories: true)
+            if let testProcess {
+                try Data("\(testProcess)\n".utf8).write(to: folder.appendingPathComponent("state/test-process"))
+            }
+            return folder
+        }
+        // A process that has ended, as the crashed test run has.
+        let ended = Process()
+        ended.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try ended.run()
+        ended.waitUntilExit()
+
+        let crashed = try fakeFolder("leverage-helper-supervisor-crashed", testProcess: ended.processIdentifier)
+        let otherRun = try fakeFolder("leverage-helper-supervisor-other", testProcess: getppid())
+        let thisRun = try fakeFolder("leverage-helper-supervisor-this", testProcess: getpid())
+        let notRecordedYet = try fakeFolder("leverage-helper-supervisor-new", testProcess: nil)
+        let notAFake = try fakeFolder("leverage-something-else", testProcess: ended.processIdentifier)
+        // A fake still runs from this folder though its test run has ended.
+        let stillRuns = try fakeFolder("leverage-helper-supervisor-runs", testProcess: ended.processIdentifier)
+        // The shell waits in `read`, a builtin, so it has no child to leave
+        // behind when it is ended.
+        let input = Pipe()
+        let running = Process()
+        running.executableURL = URL(fileURLWithPath: "/bin/sh")
+        running.arguments = ["-c", "read line", stillRuns.appendingPathComponent("bin/LeverageHelper").path]
+        running.standardInput = input
+        try running.run()
+        defer {
+            running.terminate()
+            running.waitUntilExit()
+        }
+
+        FakeHelperProgram.removeFoldersOfEndedTestRuns(in: parent.url)
+
+        let manager = FileManager.default
+        #expect(!manager.fileExists(atPath: crashed.path))
+        for kept in [otherRun, thisRun, notRecordedYet, notAFake, stillRuns] {
+            #expect(manager.fileExists(atPath: kept.path), "\(kept.lastPathComponent) was removed")
+        }
     }
 }
 
