@@ -2,6 +2,7 @@ require "test_helper"
 require "open3"
 require "tmpdir"
 require_relative "../support/trace_runner"
+require_relative "../support/walk"
 
 # The restore (milestone 3 plan §2.5, HB-5, HB-6; PRD L921 "a restore
 # passes the replay test"). Trace 09's log (milestone 2's commands) is
@@ -11,6 +12,12 @@ require_relative "../support/trace_runner"
 # audit pass, the events are the same rows, and the application's role has
 # its rights again. The dump carries no grant and no owner. A restore over
 # a database that holds a log changes nothing without --replace.
+#
+# The restore's own check is leverage:verify_log, whose audit finds every
+# event no command wrote: a trace's setup events are such events (the
+# golden test audits a trace after its setup, after_seq). So the restore
+# here checks a walk's workspace, whose whole log the engine wrote, and
+# the test checks trace 09's after its setup itself.
 class BackupRestoreTest < CommittingTestCase
   B = Leverage::Backup
 
@@ -74,18 +81,21 @@ class BackupRestoreTest < CommittingTestCase
     workspace_id = runner.workspace_id
     before = events_of(workspace_id)
     assert_operator before.size, :>, runner.setup_seq
+    walk = Walk.new(seed: 909).run
+    walked = events_of(walk.workspace_id)
 
     run = B.run!(folder: @folder, keep: 14)
     path = File.join(@folder, run.file_name)
     refute database_exists?(@scratch), "the scratch database does not exist beforehand"
 
-    out, = capture_io { B.restore(path, target: target(@scratch), workspace_id: workspace_id) }
+    out, = capture_io { B.restore(path, target: target(@scratch), workspace_id: walk.workspace_id) }
 
-    assert_match(/workspace #{workspace_id}: #{before.size} events, replay ok, audit ok/, out)
+    assert_match(/workspace #{walk.workspace_id}: #{walked.size} events, replay ok, audit ok/, out)
     assert database_exists?(@scratch)
     assert_equal @original, ActiveRecord::Base.connection_db_config, "the restore gives the connection back"
     on_database(@scratch) do
       assert_equal before, events_of(workspace_id)
+      assert_equal walked, events_of(walk.workspace_id)
       assert_empty Leverage::Replay.diff(workspace_id)
       assert_empty Leverage::LogAudit.call(workspace_id, after_seq: runner.setup_seq)
       assert privilege?("events", "SELECT")
@@ -96,12 +106,19 @@ class BackupRestoreTest < CommittingTestCase
       refute privilege?("backup_runs", "INSERT")
     end
 
+    # The archive holds no grant at all. It does keep each object's owner
+    # (pg_dump ignores --no-owner for an archive format), so the restore
+    # drops it: what the restore's own flags write has no OWNER TO either.
     sql, status = Open3.capture2e(tool_env, "pg_restore", "--file=-", path)
     assert status.success?, sql
     assert_includes sql, "CREATE TABLE public.events"
     refute_match(/\bGRANT\b/, sql)
     refute_match(/\bREVOKE\b/, sql)
-    refute_match(/OWNER TO/, sql)
+    restored, status = Open3.capture2e(tool_env, "pg_restore", *B::RESTORE_FLAGS, "--file=-", path)
+    assert status.success?, restored
+    assert_includes restored, "CREATE TABLE public.events"
+    refute_match(/OWNER TO/, restored)
+    refute_match(/\bGRANT\b/, restored)
   end
 
   test "bin/restore over a database that holds events exits non-zero without --replace and changes nothing" do
@@ -123,18 +140,20 @@ class BackupRestoreTest < CommittingTestCase
   end
 
   test "a restore over a restored log needs --replace, and with it replaces the log" do
-    task = scenario.task(state: "backlog")
+    walk = Walk.new(seed: 32).run
+    task = Task.where(workspace_id: walk.workspace_id).first
+    assert task, walk.to_s
     run = B.run!(folder: @folder, keep: 14)
     path = File.join(@folder, run.file_name)
-    capture_io { B.restore(path, target: target(@scratch), workspace_id: scenario.workspace_id) }
+    capture_io { B.restore(path, target: target(@scratch), workspace_id: walk.workspace_id) }
 
     _out, err, status = bin_restore(@scratch, path)
     refute status.success?
     assert_match(/--replace/, err)
-    assert_raises(B::Refused) { B.restore(path, target: target(@scratch), workspace_id: scenario.workspace_id) }
+    assert_raises(B::Refused) { B.restore(path, target: target(@scratch), workspace_id: walk.workspace_id) }
 
     on_database(@scratch) { Task.where(id: task.id).update_all(title: "Changed after the dump") }
-    capture_io { B.restore(path, target: target(@scratch), replace: true, workspace_id: scenario.workspace_id) }
+    capture_io { B.restore(path, target: target(@scratch), replace: true, workspace_id: walk.workspace_id) }
     on_database(@scratch) { assert_equal task.title, Task.find(task.id).title }
   end
 
