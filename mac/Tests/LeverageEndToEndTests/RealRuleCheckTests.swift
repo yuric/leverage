@@ -133,6 +133,12 @@ struct RealRuleCheckTests {
             let inherited = ProcessInfo.processInfo.environment
             environment[EnvironmentKeys.path] = inherited[EnvironmentKeys.path] ?? "/usr/bin:/bin"
             environment[EnvironmentKeys.home] = inherited[EnvironmentKeys.home] ?? NSHomeDirectory()
+            // As the helper hands them to a runner (RunnerEnvironment): Claude
+            // Code finds its sign-in in the Keychain only with USER set, and
+            // without it answers "Not logged in".
+            for key in [EnvironmentKeys.user, EnvironmentKeys.tmpdir] {
+                if let value = inherited[key] { environment[key] = value }
+            }
             environment[EnvironmentKeys.devToolLogin] = "1"
         }
         try FileManager.default.createDirectory(at: folder.logs, withIntermediateDirectories: true)
