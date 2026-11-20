@@ -33,8 +33,50 @@ namespace :leverage do
     puts "verify_log: #{ids.size} workspaces pass"
   end
 
-  # Recovery times (milestone 3 plan HE-18): written by WP9.
+  # Recovery times (PRD L703, test 11; milestone 3 plan HE-17, HE-18): prints
+  # every recovery time of every workspace, or of the one WORKSPACE_ID
+  # names, as Leverage::Reads::RecoveryTimes computes it from the log. The
+  # bar is CEILING_SECONDS when that is set, else the workspace's recovery
+  # time ceiling, else none. With a bar, each interval is printed beside it
+  # and the task exits 1 when a closed one is longer; with none, it says so
+  # and compares nothing. OPEN=fail also exits 1 when one is still open. A
+  # start whose task was done or cancelled first is "not recovered" and has
+  # no length to compare. Ids and times only: no content, no secret.
+  #
+  #   bin/rails leverage:recovery_times
+  #   CEILING_SECONDS=900 OPEN=fail bin/rails leverage:recovery_times
   desc "Print every recovery time, against the ceiling when one is set"
   task recovery_times: :environment do
+    id = ENV["WORKSPACE_ID"].presence
+    abort "recovery_times: no such workspace #{id}" if id && !Workspace.exists?(id: id)
+    given = ENV["CEILING_SECONDS"].presence
+    given = Integer(given, 10) if given
+    open_fails = ENV["OPEN"] == "fail"
+
+    failed = false
+    scope = id ? Workspace.where(id: id) : Workspace.order(:created_at, :id)
+    scope.pluck(:id, :recovery_time_ceiling_seconds).each do |workspace_id, ceiling|
+      bar = given || ceiling
+      list = Leverage::Reads::RecoveryTimes.call(workspace_id)
+      against = bar ? "bar #{bar} s#{" (CEILING_SECONDS)" if given}" : "no recovery time ceiling is set, so nothing is compared"
+      puts "recovery_times: workspace #{workspace_id}: #{list.size} recovery times; #{against}"
+      list.each do |item|
+        seconds = item.fetch("seconds")
+        status = case item.fetch("ended_by")
+        when nil then "open, #{seconds} s so far"
+        when "not_recovered" then "not recovered (the task was done or cancelled first)"
+        else "#{seconds} s, ended by #{item.fetch("ended_by")}"
+        end
+        longer = bar && item.fetch("ended_at") && seconds > bar
+        verdict = bar && item.fetch("ended_at") ? ", bar #{bar} s: #{longer ? "longer" : "within"}" : ""
+        puts "  #{item.fetch("kind")} of credential #{item.fetch("credential_id")} " \
+             "#{item.fetch("review_id") ? "on review #{item.fetch("review_id")}" : "on build work"} " \
+             "at #{item.fetch("started_at")}: #{status}#{verdict}"
+        failed ||= longer
+        failed ||= open_fails && item.fetch("ended_by").nil?
+      end
+    end
+    abort "recovery_times: a recovery time is longer than the bar, or open with OPEN=fail" if failed
+    puts "recovery_times: pass"
   end
 end

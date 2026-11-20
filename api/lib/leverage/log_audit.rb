@@ -14,8 +14,11 @@ module Leverage
   # names when several callers used one key; when the row is gone, purged
   # after 7 days, every command whose rows write the group's first event is
   # tried). A group with no key is a timer's: task.lease_expired is
-  # builder_lease_expiry, review.lease_expired review_lease_expiry, one
-  # group per task. Any other event with no key is a finding.
+  # builder_lease_expiry, review.lease_expired review_lease_expiry, and a
+  # hold.closed of a credential hold (credential_limit or
+  # credential_signed_out) with neither is credential_hold_release
+  # (milestone 3 plan §2.1 rule 8), one group per task. Any other event
+  # with no key is a finding.
   #
   # For each group, the task's state before it is folded from the log, and
   # the command's state_machine.json rows from that state are matched as
@@ -28,6 +31,14 @@ module Leverage
   # command writes no event of its own: only rule check, hold and Needs you
   # events.
   #
+  # credential.switched is marked written_as_side_event, but the PRD (L896)
+  # allows it only beside the rows that name it (milestone 3 plan §2.3): a
+  # report that hands over at once, a credential hold's close, a fresh
+  # lease on another account. So it must belong to a fitting row.
+  # A command whose rows have no state (report_request_result, change_seat:
+  # a verified login may close the credential holds of several tasks) may
+  # touch several tasks; any other touches one.
+  #
   # Steps. Each task's rows, in the order they opened: the first opens at
   # task.created, each closes where the next opens (the same time, in the
   # same command), at most one is open,
@@ -36,6 +47,9 @@ module Leverage
   # times never go backwards (L120).
   module LogAudit
     TIMER_EVENTS = { "task.lease_expired" => "builder_lease_expiry", "review.lease_expired" => "review_lease_expiry" }.freeze
+    CREDENTIAL_HOLD_RELEASE = "credential_hold_release".freeze
+    CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
+    ROW_ONLY = %w[credential.switched].freeze
     TERMINAL = %w[task.done task.cancelled].freeze
     REFUSED_MAY_WRITE = /\A(check|hold|inbox)\./
     LEASE_FIELD = "lease_seat_id".freeze
@@ -97,12 +111,20 @@ module Leverage
     def timer_groups(group, states)
       group.events.group_by(&:task_id).flat_map do |task_id, events|
         types = events.map(&:type)
-        name = types.filter_map { |type| TIMER_EVENTS[type] }.first
+        name = types.filter_map { |type| TIMER_EVENTS[type] }.first || credential_release(events)
         label = "events with no command (seq #{events.first.seq}, #{types.uniq.join(", ")})"
         problems = name ? match(name, events, states) : [ "no timer writes them" ]
         advance(events, states) if task_id
         problems.empty? ? [] : [ "#{label}: #{name || "no command"} #{problems.join("; ")}" ]
       end
+    end
+
+    # credential_hold_release when the events close a credential hold.
+    def credential_release(events)
+      closes = events.select { |event| event.type == "hold.closed" }
+      return unless closes.any? && closes.all? { |event| CREDENTIAL_HOLDS.include?((event.payload || {})["reason"]) }
+
+      CREDENTIAL_HOLD_RELEASE
     end
 
     # The commands row a group of events belongs to.
@@ -128,15 +150,16 @@ module Leverage
     # state their task was in; empty when a row fits.
     def match(name, events, states)
       tasks = events.filter_map(&:task_id).uniq
-      return [ "touches #{tasks.size} tasks" ] if tasks.size > 1
+      named = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
+      stateless = named.any? && named.none? { |row| row.fetch("from") || row.fetch("to") }
+      return [ "touches #{tasks.size} tasks" ] if tasks.size > 1 && !stateless
 
-      task = tasks.first
+      task = tasks.first unless tasks.size > 1
       state = task && states[task]
       types = events.map(&:type)
       fresh = events.any? { |event| (event.payload || {})[LEASE_FIELD] }
       observed = task ? observe(state, events) : nil
-      rows = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
-        .select { |row| row.fetch("from").nil? || row.fetch("from") == state }
+      rows = named.select { |row| row.fetch("from").nil? || row.fetch("from") == state }
       kept = pick(rows, types, fresh, observed)
       return [ "has no row from #{state.inspect} that writes #{types.join(", ")}" ] if kept.empty?
 
@@ -205,7 +228,7 @@ module Leverage
         marked = Contract.registry.fetch("event_types").select { |entry| entry["written_as_side_event"] }
           .map { |entry| entry.fetch("type") }
         exceptions = Contract.state_machine.fetch("side_event_exceptions").map { |entry| entry.fetch("event") }
-        (marked + exceptions).to_set
+        (marked + exceptions - ROW_ONLY).to_set
       end
     end
 

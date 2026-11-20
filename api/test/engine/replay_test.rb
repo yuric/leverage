@@ -177,9 +177,26 @@ class ReplayTest < ActiveSupport::TestCase
     edit = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
              "criteria" => [ { "text" => first.text, "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ],
              "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
-    assert T.apply(T::Request.new(command: "edit_contract", workspace_id: scenario.workspace_id, caller_kind: "owner",
-      caller_id: scenario.owner.id, key: "k-edit", request_hash: "b" * 64, params: edit)).completed?
+    owner_call = lambda do |command, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+        caller_id: scenario.owner.id, key: "k-#{SecureRandom.hex(6)}", request_hash: "b" * 64, params: params))
+    end
+    assert owner_call.call("edit_contract", edit).completed?
+    assert_empty log_diff(Struct.new(:workspace_id).new(scenario.workspace_id))
 
+    # Then the other way: an edit that changes the first criterion (reset)
+    # and leaves the second removed; its next pass is the last builder
+    # criterion's, and finish opens, which the removed one must not stop.
+    changed = edit.merge("criteria" => [ { "text" => "#{first.text} Changed.", "kind" => "build" },
+                                         { "text" => "A reviewer agrees.", "kind" => "review" } ])
+    assert owner_call.call("edit_contract", changed).completed?
+    assert owner_call.call("complete_contract", changed).completed?
+    assert seat_call.call("claim", {}).completed?
+    assert seat_call.call("acknowledge_briefing", "id" => task.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(task.reload, builder)).completed?
+    assert seat_call.call("pass_criterion", "id" => task.id, "cid" => first.id,
+      "evidence" => { "kind" => "link", "value" => "https://example.test/work/2" }).completed?
+    assert_equal "finish", TaskStep.where(task_id: task.id, closed_at: nil).sole.kind
     assert_empty log_diff(Struct.new(:workspace_id).new(scenario.workspace_id))
   end
 end

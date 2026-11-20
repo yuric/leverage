@@ -64,6 +64,35 @@ class LogAuditTest < ActiveSupport::TestCase
     assert(found.any? { |line| line.include?(last.command_id) && line.include?("credential.switched") }, found.inspect)
   end
 
+  # A command whose rows have no state may touch several tasks: a passed
+  # Verify of a login closes the credential holds of every task it was
+  # waiting for (report_request_result, plan §2.3).
+  test "a Verify that closes the credential holds of two tasks in one command passes" do
+    scenario = Scenario.new
+    login = scenario.credential
+    tasks = Array.new(2) { scenario.task(state: "working", builder: scenario.seat(credential: login)) }
+    helper = scenario.helper
+    call = lambda do |command, kind, caller, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: kind, caller_id: caller,
+        key: "audit-#{SecureRandom.hex(6)}", request_hash: "c" * 64, params: params)).tap { |outcome| assert outcome.completed? }
+    end
+    after = scenario.workspace.reload.last_seq
+    tasks.each do |task|
+      call.call("report_signed_out", "helper", helper.id, "id" => login.id, "credential_id" => login.id,
+        "seat_id" => task.holder_seat_id, "task_id" => task.id, "review_id" => nil, "job_id" => nil,
+        "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "tool_version" => "0.0.0-made-up")
+    end
+    assert_equal 2, Hold.where(workspace_id: scenario.workspace_id, reason: "credential_signed_out", closed_at: nil).count
+    request = call.call("verify_credential", "owner", scenario.owner.id, "id" => login.id).result.fetch("helper_request_id")
+    call.call("report_request_result", "helper", helper.id, "id" => request, "result" => {
+      "outcome" => "finished", "checks" => [ { "check" => "signed_in", "passed" => true, "failure" => nil } ],
+      "tool_version" => "0.0.0-made-up", "plan" => nil, "account_email" => nil })
+    closed = Event.where(workspace_id: scenario.workspace_id, type: "hold.closed").where("seq > ?", after)
+    assert_equal 2, closed.distinct.count(:task_id)
+    assert_equal 1, closed.distinct.count(:command_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   # A timer's events have no key: the credential hold release (hold.closed,
   # credential.switched) is read as credential_hold_release, and the same
   # events as no timer writes them when no credential hold closes.
