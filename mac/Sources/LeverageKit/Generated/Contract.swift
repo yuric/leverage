@@ -61,6 +61,7 @@ public enum CommandName: String, Codable, CaseIterable, Sendable {
     case disableRule = "disable_rule"
     case revertRule = "revert_rule"
     case removeRule = "remove_rule"
+    case installShippedRules = "install_shipped_rules"
     case createProject = "create_project"
     case editBrief = "edit_brief"
     case deleteContent = "delete_content"
@@ -724,6 +725,55 @@ public enum WaitCause: String, Codable, CaseIterable, Sendable {
     case credentialLimit = "credential_limit"
 }
 
+/// registry.json `hooks`.
+public enum RuleHook: String, Codable, CaseIterable, Sendable {
+    case taskBeforeReady = "task.before_ready"
+    case taskBeforeClaim = "task.before_claim"
+    case taskBeforeSubmit = "task.before_submit"
+    case taskBeforeDone = "task.before_done"
+    case actionRequested = "action.requested"
+    case reviewAssign = "review.assign"
+    case reviewFailed = "review.failed"
+    case questionAsked = "question.asked"
+    case costReported = "cost.reported"
+
+    /// When the hook runs, in the owner's words (hooks.json `moment_name`).
+    public var momentName: String {
+        switch self {
+        case .taskBeforeReady: return "when a task is ready to start"
+        case .taskBeforeClaim: return "before an agent starts it"
+        case .taskBeforeSubmit: return "before work is submitted"
+        case .taskBeforeDone: return "when the review has passed"
+        case .actionRequested: return "before anything goes out"
+        case .reviewAssign: return "when a reviewer claims a review"
+        case .reviewFailed: return "when a review fails"
+        case .questionAsked: return "when a worker asks a question"
+        case .costReported: return "when spending is reported"
+        }
+    }
+
+    /// Whether an owner's own rule may use the hook (registry `custom_rule_hooks`).
+    public var isCustomAllowed: Bool {
+        switch self {
+        case .taskBeforeReady: return true
+        case .taskBeforeClaim: return true
+        case .taskBeforeSubmit: return true
+        case .taskBeforeDone: return true
+        case .actionRequested: return true
+        case .reviewAssign: return false
+        case .reviewFailed: return false
+        case .questionAsked: return false
+        case .costReported: return false
+        }
+    }
+}
+
+/// registry.json `lists` that name values of another list.
+public enum ContractLists {
+    /// registry.json `lists.orchestrator_tested_providers`. The login providers whose tool's default model passed the eval suite (RV-5). It refuses nothing: the app says "Not tested for checking tasks." beside every other choice.
+    public static let orchestratorTestedProviders: [Provider] = []
+}
+
 /// The methods the contract allows.
 public enum HTTPMethod: String, CaseIterable, Sendable {
     case get = "GET"
@@ -1022,4 +1072,50 @@ public enum OrchestratorState: String, Codable, CaseIterable, Sendable {
 public enum LogNameKind: String, Codable, CaseIterable, Sendable {
     case seat
     case credential
+}
+
+/// What a checker may answer (RV-3). (openapi.json RuleCheckJobResult.result)
+public enum CheckVerdict: String, Codable, CaseIterable, Sendable {
+    case passed
+    case failed
+    case notApplicable = "not_applicable"
+}
+
+/// Where a contract draft stands on the task page (RD-37). (openapi.json TaskPage.draft)
+public enum DraftState: String, Codable, CaseIterable, Sendable {
+    case none
+    case queued
+    case writing
+    case notWritten = "not_written"
+}
+
+/// What a job asks of the seat that claims it. (openapi.json ClaimJobResult.kind)
+public enum JobKind: String, Codable, CaseIterable, Sendable {
+    case ruleCheck = "rule_check"
+    case question
+    case approval
+    case contractDraft = "contract_draft"
+}
+
+/// The label of a piece of task text a checker is given (RD-31). (openapi.json QuotedText.label)
+public enum QuotedLabel: String, Codable, CaseIterable, Sendable {
+    case handoffNote = "handoff_note"
+    case evidence
+    case reviewNotes = "review_notes"
+    case agent
+}
+
+/// What an applied rule did (RD-28). (openapi.json TaskRuleCheck.effect)
+public enum RuleEffect: String, Codable, CaseIterable, Sendable {
+    case refused
+    case sameBuilder = "same_builder"
+    case toReady = "to_ready"
+    case escalated
+    case toOrchestrator = "to_orchestrator"
+    case toOwner = "to_owner"
+    case projectPaused = "project_paused"
+    case taskHeld = "task_held"
+    case approved
+    case stopped
+    case passedToOwner = "passed_to_owner"
 }
