@@ -311,6 +311,37 @@ struct HelperSupervisorTests {
         await fake.expectNothingLeft()
     }
 
+    @Test("a stop while a start still waits for an earlier stop's helper starts nothing, and leaves the state stopped")
+    func stopDuringWaitingStartStartsNothing() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        try fake.holdOnStop(run: 1)
+        let owner = issuer([])
+        let helper = supervisor(fake)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: owner) == .running)
+        #expect(await eventually { fake.isRunning(run: 1) })
+        let firstStop = Task { await helper.stop() }
+        #expect(await eventually { fake.log.contains("fake helper run 1 asked to stop") })
+
+        // As when the owner signs out, signs in again at once, and quits
+        // while the first helper still ends.
+        let starting = Task { await helper.start(apiBaseURL: apiURL, issuer: owner) }
+        #expect(await eventually { await helper.state() == .starting })
+        let secondStop = Task { await helper.stop() }
+        #expect(await eventually { await helper.state() == .stopped })
+        fake.letGo(run: 1)
+
+        #expect(await starting.value == .stopped)
+        await firstStop.value
+        await secondStop.value
+        #expect(await helper.state() == .stopped)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fake.runs == 1)
+        #expect(owner.calls.count == 1)
+        #expect(await helper.state() == .stopped)
+        await fake.expectNothingLeft()
+    }
+
     @Test("a fake helper whose parent is gone ends by itself, as the real one does, so a crashed test run leaves none")
     func fakeEndsWithItsParent() async throws {
         let fake = try FakeHelperProgram(exitCodes: [])
