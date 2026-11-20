@@ -26,11 +26,12 @@ class SubmitJobResultTest < ActiveSupport::TestCase
   FAILED = { "result" => "failed", "reason" => "The details do not say which prices change." }.freeze
   PASSED = { "result" => "passed", "reason" => "The details name the page and the prices." }.freeze
 
-  # A model check waiting on its job, claimed by the orchestrator.
-  def claimed_check(rule = model_rule)
+  # A model check waiting on its job, claimed by seat (the orchestrator
+  # unless named), which must hold no other job.
+  def claimed_check(rule = model_rule, seat: @orchestrator)
     task = scenario.task(state: "backlog", criteria: [], project: @project)
     task, pending, check = waiting_contract(rule, task: task)
-    starting_attempts { assert_completed(claim_job(@orchestrator)) }
+    starting_attempts { assert_completed(claim_job(seat)) }
     [ task, pending, check, job_of(check) ]
   end
 
@@ -118,9 +119,10 @@ class SubmitJobResultTest < ActiveSupport::TestCase
     assert_raises(T::Invalid) { submit_result(@orchestrator, job, draft_result) }
     assert_equal "claimed", job.reload.state
 
-    _task, _pending, _check, decides = claimed_check(model_rule(scope_kind: "checker_decides"))
+    second = scenario.orchestrator(credential: @codex)
+    _task, _pending, _check, decides = claimed_check(model_rule(scope_kind: "checker_decides"), seat: second)
     calls = spy_on(Leverage::RuleChecks, :finish) do
-      assert_completed(submit_result(@orchestrator, decides, { "result" => "not_applicable", "reason" => "Not this task." }))
+      assert_completed(submit_result(second, decides, { "result" => "not_applicable", "reason" => "Not this task." }))
     end
     assert_equal [ "not_applicable" ], calls.map { |call| call.keywords[:result] }
 

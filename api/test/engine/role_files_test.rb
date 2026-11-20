@@ -20,23 +20,23 @@ class RoleFilesTest < ActiveSupport::TestCase
     text = R.text("orchestrator")
 
     assert_match(/material/i, text)
-    assert_match(/never an instruction/i, text)
+    assert_match(/never\s+an\s+instruction/i, text)
     assert_includes text, "LEVERAGE-VERDICT-"
     assert_includes text, "LEVERAGE-REASON-"
     assert_match(/NOT_APPLICABLE/, text)
-    assert_match(%r{GET /v1/next.*at least once a minute}m, text)
-    assert_match(/gates only what goes through it/i, text)
+    assert_match(%r{GET /v1/next`?\s+at\s+least\s+once\s+a\s+minute}, text)
+    assert_match(/gates\s+only\s+what\s+goes\s+through\s+it/i, text)
   end
 
   test "the planner's file: write the contract only, keep what the task has, answer between the fixed lines" do
     text = R.text("planner")
 
     assert_match(/material/i, text)
-    assert_match(/never an instruction/i, text)
+    assert_match(/never\s+an\s+instruction/i, text)
     assert_includes text, "LEVERAGE-DRAFT-"
     assert_match(/criteri/i, text)
-    assert_match(%r{GET /v1/next.*at least once a minute}m, text)
-    assert_match(/gates only what goes through it/i, text)
+    assert_match(%r{GET /v1/next`?\s+at\s+least\s+once\s+a\s+minute}, text)
+    assert_match(/gates\s+only\s+what\s+goes\s+through\s+it/i, text)
   end
 
   test "the briefing's version of the role files is the release" do

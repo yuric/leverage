@@ -319,6 +319,19 @@ class ReportLimitTest < ActiveSupport::TestCase
       end
     end
     assert_empty cancelled, "the owner's waiting command is not the reviewer's"
+
+    other_seat = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "codex"))
+    third_login = scenario.credential(provider: "grok")
+    third = scenario.seat(role: "reviewer", credential: third_login)
+    third_task = scenario.task(state: "in_review")
+    third_review = scenario.review(third_task, reviewer: third)
+    someone_elses = scenario.pending_transition(third_task, command: "pass_review", requester: other_seat)
+    answering(Leverage::PendingTransitions, :of, ->(_) { someone_elses }) do
+      answering(Leverage::PendingTransitions, :cancel, ->(*args) { cancelled << args }) do
+        assert_completed(report_limit(third_login, third, review: third_review, reset_at: from_now(900)))
+      end
+    end
+    assert_empty cancelled, "another seat's waiting pass is not this reviewer's"
   end
 
   test "a credential, seat, task or review that is not in the workspace is 404" do

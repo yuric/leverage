@@ -65,7 +65,8 @@ class ClaimJobTest < ActiveSupport::TestCase
 
   test "a seat that holds a job gets that job again and nothing is written (RD-40)" do
     _task, _pending, check = waiting_contract(model_rule)
-    first = starting_attempts { assert_completed(claim_job(@orchestrator)) }
+    first = nil
+    starting_attempts { first = assert_completed(claim_job(@orchestrator)) }
     waiting_contract(model_rule)
 
     again = nil
@@ -81,7 +82,8 @@ class ClaimJobTest < ActiveSupport::TestCase
     _t2, _p2, newer = waiting_contract(model_rule)
     Job.where(id: job_of(newer).id).update_all(queued_at: job_of(older).queued_at + 1)
 
-    outcome = starting_attempts { assert_completed(claim_job(@orchestrator)) }
+    outcome = nil
+    starting_attempts { outcome = assert_completed(claim_job(@orchestrator)) }
 
     assert_equal job_of(older).id, outcome.result.fetch("job_id")
   end

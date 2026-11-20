@@ -38,27 +38,33 @@ class StateTableJobsTest < ActiveSupport::TestCase
     assert_empty written, kase.name
   end
 
+  # The case's setup is built first; only the command runs inside
+  # events_written.
   def assert_row(kase)
-    written = events_written { assert_completed(run_case(kase)) }
+    command = prepare(kase)
+    written = events_written { assert_completed(command.call) }
 
     assert_equal kase.events, types(written) - SIDE, kase.name
     assert_equal kase.events.first, written.first.type, kase.name
   end
 
-  def run_case(kase)
+  # Builds what the case starts from and answers a lambda that runs it.
+  def prepare(kase)
     case kase.command
-    when "draft_contract" then owner_command("draft_contract", { "id" => scenario.task(state: kase.from).id })
+    when "draft_contract"
+      task = task_in(kase.from)
+      -> { owner_command("draft_contract", { "id" => task.id }) }
     when "claim_job"
       waiting_contract(model_rule)
-      claim_job(@orchestrator)
+      -> { claim_job(@orchestrator) }
     when "submit_job_result"
       job = claimed_job
-      submit_result(@orchestrator, job, { "result" => "passed", "reason" => "Made-up reason." })
-    else report_case(kase)
+      -> { submit_result(@orchestrator, job, { "result" => "passed", "reason" => "Made-up reason." }) }
+    else prepare_report(kase)
     end
   end
 
-  def report_case(kase)
+  def prepare_report(kase)
     job = claimed_job
     scenario.limit_credential(@grok, reset_at: from_now(900)) if kase.guard.include?("no_candidate_available")
     params = if kase.command == "report_job_limit"
@@ -66,7 +72,7 @@ class StateTableJobsTest < ActiveSupport::TestCase
     else
       signed_out_params(@codex, @orchestrator, job_id: job.id)
     end
-    helper_command(kase.command, params)
+    -> { helper_command(kase.command, params) }
   end
 
   def task_in(from) = from == "finishing" ? scenario.finishing_task : scenario.task(state: from)

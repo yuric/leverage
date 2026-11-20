@@ -82,16 +82,16 @@ class JobQueueTest < ActiveSupport::TestCase
   # --- next_for: who may claim and what (L545, RD-35, RD-36, RC-49) -----------
 
   test "jobs are given out oldest first, by queued time and then id, each to the role that claims its kind (IF-13)" do
-    first = check_job
-    second = check_job
-    Job.where(id: second.id).update_all(queued_at: first.reload.queued_at - 1)
+    jobs = Array.new(3) { check_job }.sort_by(&:id)
+    base = jobs.first.reload.queued_at
+    jobs.reverse.each_with_index { |job, index| Job.where(id: job.id).update_all(queued_at: base - 10 + index) }
     planner = scenario.planner(credential: scenario.credential(provider: "claude"))
     draft = draft_job
 
-    assert_equal second.id, J.next_for(@orchestrator)&.id
+    assert_equal jobs.last.id, J.next_for(@orchestrator)&.id, "the oldest, whose id is the highest"
     assert_equal draft.id, J.next_for(planner)&.id
-    Job.where(id: [ first.id, second.id ]).update_all(queued_at: first.queued_at)
-    assert_equal [ first.id, second.id ].min, J.next_for(@orchestrator)&.id
+    Job.where(id: jobs.map(&:id)).update_all(queued_at: base)
+    assert_equal jobs.first.id, J.next_for(@orchestrator)&.id, "the same time: the lowest id"
   end
 
   test "a seat that holds a job gets that job again, whatever is queued (RD-35, RD-40)" do
