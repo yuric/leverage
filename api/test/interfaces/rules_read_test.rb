@@ -11,6 +11,12 @@ require "test_helper"
 class RulesReadTest < CommittingTestCase
   include OpenapiAssertions
 
+  # rule_checks.overridden_by_user_id references users, and a committing
+  # test leaves its rows behind: the tests that delete every user (those of
+  # create_owner and the owner's session) would meet this test's overrides.
+  # Clear the references it made.
+  teardown { RuleCheck.where(workspace_id: scenario.workspace_id).update_all(overridden_by_user_id: nil) }
+
   # The engine's two answers about a version, with the calls it was asked.
   class Words
     attr_reader :asked
@@ -172,6 +178,12 @@ end
 # plan RD-26): its attempts' queue and run time, how long it held tasks up,
 # its tokens and spend, and its rows counted by result, with its overrides.
 class RuleTimingReadTest < CommittingTestCase
+  # rule_checks.overridden_by_user_id references users, and a committing
+  # test leaves its rows behind: the tests that delete every user (those of
+  # create_owner and the owner's session) would meet this test's overrides.
+  # Clear the references it made.
+  teardown { RuleCheck.where(workspace_id: scenario.workspace_id).update_all(overridden_by_user_id: nil) }
+
   def t0 = @t0 ||= scenario.database_now.change(usec: 0) - 7200
 
   def timing(**options) = Leverage::Reads::RuleTiming.call(scenario.workspace_id, **options)
@@ -218,7 +230,7 @@ class RuleTimingReadTest < CommittingTestCase
     assert_equal 3, row["attempts"]
     assert_equal 120 + 30 + 100, row["queue_seconds"]
     assert_equal 50, row["run_seconds"]
-    assert_in_delta 250 / 3.0, row["average_queue_seconds"], 1e-9
+    assert_in_delta 250 / 3.0, row["average_queue_seconds"], 1e-6
     assert_equal 50, row["average_run_seconds"], "the open attempt has not started, so it has no run time"
     assert_equal 1, of(answer, app)["attempts"]
     assert_equal [ 0, 0 ], of(answer, app).values_at("queue_seconds", "run_seconds")

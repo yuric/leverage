@@ -15,7 +15,16 @@ module Leverage
     #
     # With wait it long-polls (LongPoll) until at least one item is there
     # or wait runs out; it holds no database connection between looks.
+    #
+    # The open "Orchestrator offline" item says how many checks wait now,
+    # not how many waited when it opened (milestone 4 plan RD-18): its
+    # facts.waiting_checks is SystemHealth.waiting_checks, the count the
+    # health line shows, read when the items are answered. The row keeps
+    # the count it opened with; nothing is written.
     module Inbox
+      # The item whose count is read again each time.
+      COUNTED = "orchestrator_offline".freeze
+
       module_function
 
       def call(workspace_id, after_seq: 0, wait: 0)
@@ -25,7 +34,18 @@ module Leverage
           page = ActiveRecord::Base.uncached { open_after(workspace_id, after_seq) }
           page if page.any?
         end || []
-        { items: items.map { |item, seq| Shapes.inbox_item(item, seq) }, next_after_seq: items.last&.last || after_seq }
+        { items: shapes(workspace_id, items), next_after_seq: items.last&.last || after_seq }
+      end
+
+      # The items as the contract has them, the count of an open
+      # Orchestrator offline item read now.
+      def shapes(workspace_id, items)
+        counted = items.any? { |item, _| item.kind == COUNTED }
+        count = (ActiveRecord::Base.uncached { SystemHealth.waiting_checks(workspace_id) } if counted)
+        items.map do |item, seq|
+          shape = Shapes.inbox_item(item, seq)
+          item.kind == COUNTED ? shape.merge(facts: item.facts.merge("waiting_checks" => count)) : shape
+        end
       end
 
       # [item, opened_seq] pairs in seq order.

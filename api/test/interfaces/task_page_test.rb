@@ -10,6 +10,12 @@ require "test_helper"
 class TaskPageReadTest < CommittingTestCase
   include OpenapiAssertions
 
+  # rule_checks.overridden_by_user_id references users, and a committing
+  # test leaves its rows behind: the tests that delete every user (those of
+  # create_owner and the owner's session) would meet this test's overrides.
+  # Clear the references it made.
+  teardown { RuleCheck.where(workspace_id: scenario.workspace_id).update_all(overridden_by_user_id: nil) }
+
   def page(task)
     body = Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id)
     json = JSON.parse(JSON.generate(body))
