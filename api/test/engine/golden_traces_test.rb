@@ -32,8 +32,10 @@ class GoldenTracesTest < ActiveSupport::TestCase
     # The rule checks milestone's four (milestone 4 plan RT-1, RT-6). They
     # run whole in milestone 4, when the engine and the twenty new commands
     # are in. 16 runs its add_task, which names a project; its Complete
-    # contract meets a model gate that NoRules does not plan.
-    "16-model-gate-and-draft" => [ 4, 1 ]
+    # contract meets a model gate that NoRules does not plan. 17 starts
+    # with add_rule.
+    "16-model-gate-and-draft" => [ 4, 1 ],
+    "17-submit-rule-rerun-and-override" => [ 4, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
