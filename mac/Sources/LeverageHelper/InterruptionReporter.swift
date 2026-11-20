@@ -3,8 +3,10 @@ import LeverageKit
 
 /// Turns what a runner reported when its account stopped into the helper's
 /// report to the server (plan §2.2, HD-10): `report_limit` for a limit,
-/// `report_signed_out` for a sign-out, and nothing else. The report keeps
-/// one key, which every send repeats while the network or the server fails.
+/// `report_signed_out` for a sign-out, and nothing else. The report names
+/// the task, the review or the job the line names, and the server runs the
+/// job's command when it is a job (`job_id`). The report keeps one key,
+/// which every send repeats while the network or the server fails.
 /// A refusal, or any other answer the server gave, is logged with its code
 /// and followed by one `report_run_stopped` with the reason `limit` or
 /// `signed_out`, so the server still records the run as ended.
@@ -18,9 +20,10 @@ struct InterruptionReporter: Sendable {
         case reported
         /// The server refused it; the run's end was reported as stopped.
         case refusedThenStopped
-        /// The line cannot be made into a report: it names no task and no
-        /// review (the report needs exactly one), or it is a limit with no
-        /// window (HE-32). The run's end was reported as stopped.
+        /// The line cannot be made into a report: it names no task, no
+        /// review and no job (the report needs exactly one), or it is a
+        /// limit with no window (HE-32). The run's end was reported as
+        /// stopped.
         case unreportableThenStopped
         /// Nothing was accepted: every send failed, or the helper stopped.
         case notSent
@@ -46,6 +49,8 @@ struct InterruptionReporter: Sendable {
             work = .task(task)
         } else if let review = end.reviewID {
             work = .review(review)
+        } else if let job = end.jobID {
+            work = .job(job)
         } else {
             log.warning("the run of seat \(seatID.contractString) ended (\(reason.rawValue)) holding no work")
             return await runStopped(seatID: seatID, credentialID: credentialID, reason: reason)
