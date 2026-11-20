@@ -51,18 +51,7 @@ class GatingEngineTest < ActiveSupport::TestCase
     overridden ? override(row) : row
   end
 
-  # The suite builds its first scenario inside writes_during, which a
-  # stand-in's in-memory world allows; rows in a database are writes, so
-  # this one scenario is built first, and the suite's own call gets the
-  # same rows back. What is measured is still only evaluate's statements.
-  def test_conformance_evaluation_and_reads_write_nothing
-    @prebuilt = { blocking_model_gate: build_scenario(:blocking_model_gate) }
-    super
-  end
-
   def build_scenario(name)
-    return @prebuilt.delete(name) if @prebuilt&.key?(name)
-
     use_engine
     case name
     when :blocking_model_gate
