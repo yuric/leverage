@@ -98,9 +98,6 @@ require "time"
 #   Job timers. As a lease, a job's queue or run timeout is put at its due
 #   time first: its attempt's and its job's queued (or started and claimed)
 #   times move back so that the due time is the database's now.
-#   A $rule_check sent before any event shows its id (trace 17's override
-#   of the row held at the re-run limit, RD-45) is bound to the check the
-#   open rerun_limit hold names.
 #
 # Steps are compared as they are just after the command that opens them:
 # the criterion back-fill (PRD rule 5) later gives an open build row its
@@ -433,7 +430,6 @@ class TraceRunner
     return key_id(symbol) if symbol.start_with?("$key:")
 
     bind_helper_request(symbol) if SYMBOL.match(symbol)[1] == HELPER_REQUEST && !@ids.key?(symbol)
-    bind_held_check(symbol) if SYMBOL.match(symbol)[1] == "rule_check" && !@ids.key?(symbol)
     @ids.fetch(symbol) { raise Unbound, "#{name}: #{symbol} is sent before the trace shows its id" }
   end
 
@@ -441,14 +437,6 @@ class TraceRunner
     request = HelperRequest.where(workspace_id: workspace_id, state: UNFINISHED_REQUESTS)
       .where.not(id: @symbols.keys).order(created_at: :desc, id: :desc).first
     bind_symbol(symbol, request.id, "#{symbol}, the newest unfinished helper request") if request
-  end
-
-  # The row held at the re-run limit writes no event (RD-45; WP0T's
-  # request 1a): its symbol is the check the open rerun_limit hold names.
-  def bind_held_check(symbol)
-    check_id = Hold.where(workspace_id: workspace_id, reason: "rerun_limit", closed_at: nil).where.not(rule_check_id: nil)
-      .order(:opened_at, :id).pluck(:rule_check_id).find { |id| !@symbols.key?(id) }
-    bind_symbol(symbol, check_id, "#{symbol}, the check the open rerun_limit hold names") if check_id
   end
 
   # --- times a request sends ---------------------------------------------

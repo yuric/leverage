@@ -68,7 +68,8 @@ class ReportLimitTest < ActiveSupport::TestCase
     hold = open_hold(@task)
     assert_equal [ "hold", hold.id, limit2.id, "app", scenario.helper.id ],
       [ opened.subject_kind, opened.subject_id, opened.cause_id, opened.actor_kind, opened.actor_id ]
-    assert_equal({ "reason" => "credential_limit", "rule_id" => nil, "credential_id" => @claude_a.id }, opened.payload,
+    assert_equal({ "reason" => "credential_limit", "rule_id" => nil, "credential_id" => @claude_a.id, "rule_check_id" => nil },
+      opened.payload,
       "HE-13: the candidate that resets first")
     assert_equal [ "credential_limit", @claude_a.id ], [ hold.reason, hold.credential_id ]
     assert_empty InboxItem.where(hold_id: hold.id), "a reset time is known: no item (L697)"
@@ -162,7 +163,8 @@ class ReportLimitTest < ActiveSupport::TestCase
     assert_equal %w[credential.limit_reached hold.opened inbox.opened], written.map(&:type)
     hold = open_hold(task)
     assert_equal [ "credential_signed_out", codex_b.id ], [ hold.reason, hold.credential_id ]
-    assert_equal({ "reason" => "credential_signed_out", "rule_id" => nil, "credential_id" => codex_b.id }, written[1].payload)
+    assert_equal({ "reason" => "credential_signed_out", "rule_id" => nil, "credential_id" => codex_b.id, "rule_check_id" => nil },
+      written[1].payload)
     item = InboxItem.find_by!(hold_id: hold.id)
     assert_equal [ "account_signed_out", codex_b.id, { "credential_id" => codex_b.id }, [ "sign_in_again" ] ],
       [ item.kind, item.credential_id, item.facts, item.choices ]

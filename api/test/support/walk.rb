@@ -18,6 +18,19 @@ require "json"
 # limited_until is put at the database's now, as make_due puts a lease,
 # EN-18).
 #
+# Milestone 4 (its plan RT-3) adds the rules: the shipped rules come from
+# the one-time write (install_shipped_rules), some of them are turned off,
+# and up to two custom rules are added at drawn moments, blocking or only
+# noting; an orchestrator claims check jobs and answers drawn verdicts, or
+# none (its job then times out), and a planner drafts contracts. The owner
+# lets checks through once, runs them again, asks for drafts, and adds,
+# saves, switches, reverts and removes rules; the helper reports a job's
+# limits and sign-outs and stopped runs, a new helper token is issued and
+# a spare agent removed (each a row of rule 11's table: what ends a
+# waiting command from outside); the orchestrator polls or stops polling;
+# and the sweep also runs the check and draft timers and the two
+# workspace timers.
+#
 # Every command goes through Transitions.apply, so the whole log of the
 # walk's workspace is made by the engine: the helper is made by
 # issue_helper_token, the logins by add_credential and the helper's passed
@@ -41,13 +54,31 @@ class Walk
 
   # What the walk can do, with how often (out of the sum).
   ACTIONS = {
-    progress: 40, add_task: 4, complete_contract: 4, cancel: 1, allow_another_round: 2,
+    progress: 50, add_task: 4, complete_contract: 4, cancel: 1, allow_another_round: 2,
     claim: 5, acknowledge: 6, start_criterion: 4, pass_criterion: 6, submit: 5, release: 1, heartbeat: 2,
     claim_review: 5, acknowledge_review: 5, verdict: 6, release_review: 1, heartbeat_review: 1,
     expire_builder: 2, expire_review: 2, sweep: 3, repeat: 2,
     report_limit: 6, report_signed_out: 3, pass_reset: 3, verify: 2, sign_in_again: 2, answer_request: 5,
-    promote: 2, edit_contract: 3, hold: 2, resume: 2, pause_seat: 2, resume_seat: 2, change_seat: 2
+    promote: 2, edit_contract: 3, hold: 2, resume: 2, pause_seat: 2, resume_seat: 2, change_seat: 2,
+    claim_job: 5, job_result: 6, expire_job: 4, override_check: 2, rerun_check: 2, draft_contract: 2,
+    add_rule: 1, save_rule: 1, switch_rule: 2, revert_rule: 1, remove_rule: 1, report_job_limit: 3,
+    report_job_signed_out: 2, poll: 3, stop_polling: 1, report_run_stopped: 1, start_seat: 1,
+    new_helper_token: 1, remove_seat: 1, end_waiting: 6
   }.freeze
+  # The moments a custom rule is added at (RD-21), and the verdicts an
+  # orchestrator draws (nil: it answers none, and the job times out).
+  # Submit and the pass are drawn twice as often: a task reaches them less
+  # often than Ready or a claim, and rule 11's ends of a builder's and a
+  # reviewer's waiting command need them. "Every task needs specific
+  # details" gates every contract, so it is off in more walks than the
+  # other shipped rules, for the walks to reach the later moments.
+  MOMENTS = %w[task.before_ready task.before_claim task.before_submit task.before_submit task.before_done
+               task.before_done].freeze
+  OFF = { "specific_details" => 0.6 }.freeze
+  VERDICTS = [ "passed", "passed", "failed", nil ].freeze
+  # The job timers and the workspace timers the sweep runs (milestone 4).
+  JOB_TIMERS = %w[check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout].freeze
+  WORKSPACE_TIMERS = %w[orchestrator_offline reviewer_eligibility].freeze
   RELEASE_REASONS = %w[unable_to_continue not_suited_to_this_seat stopping].freeze
   MAXIMUM_TASKS = 8
   LIVE_TASKS = 3
@@ -56,7 +87,8 @@ class Walk
   # the first builder has three candidates, the second two and the
   # reviewer one: reports reach a handoff, a hold and a released review.
   LOGINS = %w[claude codex grok].freeze
-  TIMERS = %w[builder_lease_expiry review_lease_expiry credential_hold_release seat_run_placement].freeze
+  TIMERS = %w[builder_lease_expiry review_lease_expiry credential_hold_release seat_run_placement].freeze +
+    JOB_TIMERS + WORKSPACE_TIMERS
   PASSED = { "outcome" => "finished", "checks" => [ { "check" => "signed_in", "passed" => true, "failure" => nil },
                                                     { "check" => "test_prompt", "passed" => true, "failure" => nil } ],
              "tool_version" => "0.0.0-walk", "plan" => nil, "account_email" => nil }.freeze
@@ -84,7 +116,15 @@ class Walk
     @helper = make_helper
     @logins = LOGINS.each_with_index.map { |provider, index| add_login(provider, index) }
     @builders = [ connect("builder", 0, @logins[0]), connect("builder", 1, @logins[1]), connect("builder", 2) ]
-    @reviewers = [ connect("reviewer", 0, @logins[2]), connect("reviewer", 1) ]
+    # The reviewer that connects on its own is on a provider no builder
+    # uses, so the provider rule (RD-50) leaves it the reviews it refuses
+    # the others.
+    @reviewers = [ connect("reviewer", 0, @logins[2]), connect("reviewer", 1, provider: "gemini") ]
+    @orchestrator = connect("orchestrator", 0, chance(0.5) ? @logins[1] : nil)
+    @planner = connect("planner", 0)
+    @spare = connect("builder", 3)
+    @builders << @spare
+    draw_rules
     @steps.times { |index| send(pick, index) }
     self
   rescue StandardError => error
@@ -208,6 +248,10 @@ class Walk
     @reviewers.each do |seat|
       useful << -> { review(index, seat) } if unclaimed || review_of(seat)
     end
+    job_seats.each do |seat|
+      useful << -> { work_job(index, seat) } if job_of(seat) || queued_jobs(seat.role).any?
+    end
+    useful << -> { answer_hold(index) } if rule_holds.any?
     useful.empty? ? sweep(index) : one(useful).call
   end
 
@@ -347,6 +391,344 @@ class Walk
     command(index, :heartbeat_review, "heartbeat_review", seat, "id" => review.id)
   end
 
+  # --- rules, checks and jobs (milestone 4) -------------------------------------
+
+  # The shipped rules from the one-time write, some of them turned off, and
+  # up to two custom rules at drawn moments, blocking or only noting.
+  def draw_rules
+    outcome = T.apply(T::Request.new(command: "install_shipped_rules", workspace_id: workspace_id, caller_kind: nil,
+      caller_id: nil, key: nil, request_hash: nil, params: {}))
+    raise "install_shipped_rules was #{outcome.outcome}" unless outcome.completed?
+
+    Rule.where(workspace_id: workspace_id).order(:created_at, :key).each do |rule|
+      setup("disable_rule", @owner, "id" => rule.id) if chance(OFF.fetch(rule.key, 0.3))
+    end
+    @random.rand(3).times do |number|
+      setup("add_rule", @owner, rule_body(one(MOMENTS), number))
+      rule = Rule.where(workspace_id: workspace_id).where("key LIKE 'custom_%'").order(:created_at, :key).last
+      setup("save_rule", @owner, save_body(rule, "on_fail" => "warn").merge("id" => rule.id)) if chance(0.4)
+    end
+  end
+
+  def rule_body(hook, number)
+    { "name" => "Made-up rule #{number + 1}", "instruction" => "Made-up instruction: the work says what it changed.",
+      "hook" => hook, "scope" => { "kind" => "all_tasks", "project_ids" => nil, "action_kinds" => nil } }
+  end
+
+  # A SaveRuleRequest with every field as the current version has it, and
+  # overrides.
+  def save_body(rule, overrides = {})
+    version = RuleVersion.find_by!(rule_id: rule.id, version: rule.reload.current_version)
+    { "name" => version.name, "instruction" => version.instruction, "parameters" => version.parameters,
+      "scope" => { "kind" => version.scope_kind, "project_ids" => nil, "action_kinds" => nil },
+      "on_fail" => version.on_fail, "route" => version.route, "queue_timeout_seconds" => version.queue_timeout_seconds,
+      "run_timeout_seconds" => version.run_timeout_seconds }.merge(overrides)
+  end
+
+  def job_seats = [ @orchestrator, @planner ]
+
+  def job_of(seat) = Job.find_by(workspace_id: workspace_id, claimed_by_seat_id: seat.id, state: "claimed")
+
+  def queued_jobs(role) = in_log_order(Job.where(workspace_id: workspace_id, state: "queued", seat_role: role).to_a)
+
+  def rule_holds
+    in_log_order(Hold.where(workspace_id: workspace_id, closed_at: nil,
+      reason: %w[check_error rerun_limit claim_gate_failed contract_incomplete]).to_a)
+  end
+
+  # Rows in the order of the log, so a walk is the same walk for its seed:
+  # rows made in one command share their created_at, and their ids are
+  # random. A row's order is the seq of the first event about it (a
+  # requeued job's is its check.queued), then its created_at.
+  def in_log_order(rows)
+    ids = rows.map(&:id)
+    seqs = Event.where(workspace_id: workspace_id, subject_id: ids).group(:subject_id).minimum(:seq)
+    Event.where(workspace_id: workspace_id, type: "check.queued").where("payload->>'job_id' IN (?)", ids.presence || [ "" ])
+      .pluck(Arel.sql("payload->>'job_id'"), :seq).each { |id, seq| seqs[id] = [ seqs[id], seq ].compact.min }
+    rows.sort_by { |row| [ seqs.fetch(row.id, Float::INFINITY), row.created_at ] }
+  end
+
+  def rules = Rule.where(workspace_id: workspace_id, removed_at: nil).order(:created_at, :key).to_a
+
+  # A job seat claims a job, or answers the one it holds.
+  def work_job(index, seat)
+    job_of(seat) ? answer_job(index, seat) : command(index, :progress, "claim_job", seat, {})
+  end
+
+  def claim_job(index)
+    command(index, :claim_job, "claim_job", one(job_seats), {})
+  end
+
+  def job_result(index)
+    seat = one(job_seats)
+    job_of(seat) ? answer_job(index, seat) : claim_job(index)
+  end
+
+  # A drawn verdict for a check (none now and then: the job will time
+  # out), or a contract for a draft.
+  def answer_job(index, seat)
+    job = job_of(seat)
+    if job.kind == "contract_draft"
+      task = Task.find(job.task_id)
+      result = contract(task).except("id", "work_reference", "minimum_strength_rank", "budget_cap")
+    else
+      verdict = one(VERDICTS)
+      return @log << Step.new(index, :job_result, "none", seat.role, { "job" => job.id }, "no answer") unless verdict
+
+      result = { "result" => verdict, "reason" => "A made-up reason." }
+    end
+    command(index, :job_result, "submit_job_result", seat, "id" => job.id, "result" => result, "tokens" => 10,
+      "spend" => 0.01)
+  end
+
+  # A queued or claimed job reaches its queue or run due time (EN-18): its
+  # attempt's and its own times move back by what is left.
+  def expire_job(index)
+    job = one(in_log_order(Job.where(workspace_id: workspace_id, state: %w[queued claimed]).to_a))
+    return progress(index) unless job
+
+    kind = job.state == "queued" ? :queue : :run
+    due = Leverage::Timers.job_due_at(job, kind)
+    return progress(index) unless due
+
+    shift = scenario.database_now - due
+    attempt = RuleCheckAttempt.find_by(job_id: job.id)
+    if kind == :queue
+      job.update_columns(queued_at: job.queued_at + shift)
+      attempt&.update_columns(queued_at: attempt.queued_at + shift)
+    else
+      job.update_columns(claimed_at: job.claimed_at + shift)
+      attempt&.update_columns(started_at: attempt.started_at + shift) if attempt&.started_at
+    end
+    @log << Step.new(index, :expire_job, "make_due", "test", { "job" => job.id, "kind" => kind }, "due now")
+  end
+
+  # The owner answers a rule's hold: lets the check through once, or runs
+  # it again.
+  def answer_hold(index)
+    hold = one(rule_holds)
+    check = hold.rule_check_id && RuleCheck.find_by(id: hold.rule_check_id)
+    check ||= checks_of(%w[failed error]).reverse.find { |row| row.task_id == hold.task_id && row.rule_id == hold.rule_id }
+    return override_check(index) unless check
+
+    name = hold.reason == "check_error" && chance(0.5) ? "rerun_check" : "override_check"
+    params = { "id" => check.id }
+    params["reason"] = "A made-up reason." if name == "override_check"
+    command(index, :progress, name, @owner, params)
+  end
+
+  def checks_of(results) = in_log_order(RuleCheck.where(workspace_id: workspace_id, result: results).to_a)
+
+  def all_checks = in_log_order(RuleCheck.where(workspace_id: workspace_id).to_a)
+
+  def override_check(index)
+    check = one(checks_of(%w[failed error])) || one(all_checks)
+    return progress(index) unless check
+
+    command(index, :override_check, "override_check", @owner, "id" => check.id, "reason" => "A made-up reason.")
+  end
+
+  def rerun_check(index)
+    check = one(checks_of(%w[error])) || one(all_checks)
+    return progress(index) unless check
+
+    command(index, :rerun_check, "rerun_check", @owner, "id" => check.id)
+  end
+
+  def draft_contract(index)
+    task = one(tasks.select { |candidate| candidate.state == "backlog" }) || one(tasks)
+    return add_task(index) unless task
+
+    command(index, :draft_contract, "draft_contract", @owner, "id" => task.id)
+  end
+
+  def add_rule(index)
+    command(index, :add_rule, "add_rule", @owner, rule_body(one(MOMENTS), index))
+  end
+
+  # A new version: a model rule's instruction reworded, an app rule's
+  # parameter changed, or a custom gate between blocking and noting.
+  def save_rule(index)
+    rule = one(rules)
+    return add_rule(index) unless rule
+
+    version = RuleVersion.find_by!(rule_id: rule.id, version: rule.current_version)
+    changes = if version.checker == "model" && version.instruction
+      { "instruction" => "#{version.instruction} Reworded #{index}." }
+    elsif version.parameters.present?
+      { "parameters" => version.parameters.transform_values { 1 + @random.rand(2) } }
+    else
+      {}
+    end
+    changes["on_fail"] = version.on_fail == "block" ? "warn" : "block" if rule.key.start_with?("custom_") && chance(0.3)
+    command(index, :save_rule, "save_rule", @owner, save_body(rule, changes).merge("id" => rule.id))
+  end
+
+  def switch_rule(index)
+    rule = one(rules)
+    return add_rule(index) unless rule
+
+    command(index, :switch_rule, rule.reload.enabled ? "disable_rule" : "enable_rule", @owner, "id" => rule.id)
+  end
+
+  def revert_rule(index)
+    rule = one(rules.reject { |candidate| candidate.key.start_with?("custom_") })
+    return save_rule(index) unless rule
+
+    command(index, :revert_rule, "revert_rule", @owner, "id" => rule.id)
+  end
+
+  def remove_rule(index)
+    rule = one(rules.select { |candidate| candidate.key.start_with?("custom_") })
+    return add_rule(index) unless rule
+
+    command(index, :remove_rule, "remove_rule", @owner, "id" => rule.id)
+  end
+
+  # The run of a job seat on a login meets a limit or is found signed
+  # out while it holds its job.
+  def report_job_limit(index)
+    reset = chance(0.25) ? nil : (scenario.database_now + (1 + @random.rand(3)) * 600).utc.iso8601(6)
+    job_report(index, :report_job_limit, "report_job_limit", "window" => one(%w[five_hour weekly]), "reset_at" => reset)
+  end
+
+  def report_job_signed_out(index)
+    job_report(index, :report_job_signed_out, "report_job_signed_out", {})
+  end
+
+  def job_report(index, action, name, fields)
+    seat = one(job_seats.select { |candidate| candidate.reload.credential_id && job_of(candidate) })
+    return progress(index) unless seat
+
+    job = job_of(seat)
+    credential_id = job.credential_id || seat.credential_id
+    params = { "id" => credential_id, "credential_id" => credential_id, "seat_id" => seat.id, "task_id" => nil,
+               "review_id" => nil, "job_id" => job.id, "observed_at" => (scenario.database_now - 1).utc.iso8601(6),
+               "tool_version" => "0.0.0-walk" }
+    command(index, action, name, @helper, params.merge(fields))
+  end
+
+  # One of the ends rule 11's table gives a waiting command, drawn for the
+  # command that waits (milestone 4 plan §2.1, rule 11; WP12's walk step
+  # for each row): the owner cancels the task, edits its contract, holds
+  # it, pauses or turns off its seat, or the spare seat is removed; the
+  # builder releases, or its lease ends; the reviewer releases, its lease
+  # ends, its run stops, its account meets a limit or a sign-out, or a new
+  # helper token is issued.
+  def end_waiting(index)
+    waiting = PendingTransition.where(workspace_id: workspace_id, state: "pending").order(:created_at, :id).to_a
+    seats_waiting = waiting.select { |candidate| candidate.requester_kind == "seat" }
+    pending = one(seats_waiting.any? && chance(0.8) ? seats_waiting : waiting)
+    return progress(index) unless pending
+
+    task = Task.find(pending.task_id)
+    seat = pending.requester_kind == "seat" ? Seat.find(pending.requester_id) : nil
+    review = Review.find_by(workspace_id: workspace_id, task_id: task.id, verdict: nil, reviewer_seat_id: seat&.id) if seat
+    owner = [ -> { command(index, :end_waiting, "cancel", @owner, "id" => task.id) },
+              -> { command(index, :end_waiting, "edit_contract", @owner, contract(task)) } ]
+    held = if seat && review
+      reviewer_ends(index, seat, review)
+    elsif seat
+      builder_ends(index, seat, task)
+    else
+      []
+    end
+    one(held.empty? || chance(0.2) ? owner : held).call
+  end
+
+  def builder_ends(index, seat, task)
+    ends = [ -> { command(index, :end_waiting, "release", seat, "id" => task.id, "reason" => one(RELEASE_REASONS)) },
+             -> { command(index, :end_waiting, "change_seat", @owner, "id" => seat.id, "enabled" => false) },
+             -> { command(index, :end_waiting, "hold", @owner, "id" => task.id) },
+             -> { command(index, :end_waiting, "pause_seat", @owner, "id" => seat.id) } ]
+    ends << -> { command(index, :end_waiting, "remove_seat", @owner, "id" => seat.id) } if seat.id == @spare.id
+    if task.lease_due_at
+      ends << lambda do
+        scenario.make_due(task, at: scenario.database_now)
+        timer(index, "builder_lease_expiry")
+      end
+    end
+    ends
+  end
+
+  def reviewer_ends(index, seat, review)
+    ends = [ -> { command(index, :end_waiting, "release_review", seat, "id" => review.id) },
+             -> { new_helper_token(index) } ]
+    if review.lease_due_at
+      ends << lambda do
+        scenario.make_due(review, at: scenario.database_now)
+        timer(index, "review_lease_expiry")
+      end
+    end
+    if seat.credential_id
+      ends << lambda do
+        command(index, :end_waiting, "report_run_stopped", @helper, "id" => seat.id, "credential_id" => seat.credential_id,
+          "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "stop_reason" => "stopped")
+      end
+      credential_id = review.credential_id || seat.credential_id
+      %w[report_limit report_signed_out].each do |name|
+        ends << lambda do
+          params = { "id" => credential_id, "credential_id" => credential_id, "seat_id" => seat.id, "task_id" => nil,
+                     "review_id" => review.id, "job_id" => nil, "observed_at" => (scenario.database_now - 1).utc.iso8601(6),
+                     "tool_version" => "0.0.0-walk" }
+          params.merge!("window" => "five_hour", "reset_at" => nil) if name == "report_limit"
+          command(index, :end_waiting, name, @helper, params)
+        end
+      end
+    end
+    ends
+  end
+
+  # One timer, as the sweep runs it.
+  def timer(index, name)
+    request = T::Request.new(command: name, workspace_id: workspace_id, caller_kind: nil, caller_id: nil, key: nil,
+      request_hash: nil, params: {})
+    @log << Step.new(index, :end_waiting, name, "app", {}, answer(request))
+  end
+
+  # The orchestrator polls GET /v1/next (RD-15), or has not for over 90
+  # seconds (its last poll is put back, as make_due puts a lease).
+  def poll(index)
+    seat = one(job_seats)
+    seat.update_columns(last_polled_at: scenario.database_now)
+    @log << Step.new(index, :poll, "poll", seat.role, {}, "polled now")
+  end
+
+  def stop_polling(index)
+    seat = one(job_seats)
+    seat.update_columns(last_polled_at: scenario.database_now - 100)
+    @log << Step.new(index, :stop_polling, "poll", seat.role, {}, "last polled 100 s ago")
+  end
+
+  # The helper reports a seat's run stopped (a held review is released,
+  # rule 11), and the owner starts a seat again.
+  def report_run_stopped(index)
+    seat = one(seats.select(&:credential_id))
+    command(index, :report_run_stopped, "report_run_stopped", @helper, "id" => seat.id,
+      "credential_id" => seat.credential_id, "observed_at" => (scenario.database_now - 1).utc.iso8601(6),
+      "stop_reason" => "stopped")
+  end
+
+  def start_seat(index)
+    seat = one(seats.select(&:credential_id))
+    command(index, :start_seat, "start_seat", @owner, "id" => seat.id)
+  end
+
+  # A new helper token: every running seat's run counts as stopped
+  # (SeatRuns.reconcile), and the new helper reports from then on.
+  def new_helper_token(index)
+    answer = setup_answer(index, :new_helper_token, "issue_helper_token", @owner, "name" => "Made-up Mac #{index}")
+    @helper = Helper.find(answer.fetch("helper_id")) if answer
+  end
+
+  # The spare builder is removed, once: a waiting command it held ends
+  # (rule 11).
+  def remove_seat(index)
+    return pause_seat(index) if @spare.reload.removed_at
+
+    command(index, :remove_seat, "remove_seat", @owner, "id" => @spare.id)
+  end
+
   # --- the owner's controls (milestone 3) -------------------------------------
 
   def promote(index)
@@ -378,7 +760,7 @@ class Walk
     command(index, :resume, "resume", @owner, "id" => task.id)
   end
 
-  def seats = @builders + @reviewers
+  def seats = @builders + @reviewers + job_seats
 
   def pause_seat(index)
     command(index, :pause_seat, "pause_seat", @owner, "id" => one(seats).id)
@@ -500,12 +882,26 @@ class Walk
     @log << Step.new(index, :expire_review, "make_due", "test", { "review" => review.id }, "due now")
   end
 
+  # A command whose result the walk keeps: its log line, and its result
+  # when it completed.
+  def setup_answer(index, action, name, caller, params)
+    built = request(name, caller, params)
+    outcome = T.apply(built)
+    @log << Step.new(index, action, name, caller_label(caller), params, outcome.outcome.to_s)
+    outcome.completed? ? outcome.result : nil
+  end
+
   # The sweep's pass: the timers as commands of the app.
+  # Each timer's answer says how many events it wrote, so a test can see
+  # that a timer acted, not only that it ran.
   def sweep(index)
     TIMERS.each do |timer|
       request = T::Request.new(command: timer, workspace_id: workspace_id, caller_kind: nil, caller_id: nil, key: nil,
         request_hash: nil, params: {})
-      @log << Step.new(index, :sweep, timer, "app", {}, answer(request))
+      before = scenario.workspace.reload.last_seq
+      said = answer(request)
+      wrote = scenario.workspace.reload.last_seq - before
+      @log << Step.new(index, :sweep, timer, "app", {}, wrote.positive? ? "#{said}, wrote #{wrote}" : said)
     end
   end
 
@@ -519,8 +915,8 @@ class Walk
   # --- applying ---------------------------------------------------------------
 
   # A seat on a login (run by the app), or one that connects on its own.
-  def connect(role, index, login = nil)
-    params = { "name" => "Made-up #{role} #{index}", "role" => role, "provider" => login&.provider || "claude",
+  def connect(role, index, login = nil, provider: "claude")
+    params = { "name" => "Made-up #{role} #{index}", "role" => role, "provider" => login&.provider || provider,
                "model" => "made-up-model", "effort" => nil }
     params["credential_id"] = login.id if login
     Seat.find(setup("connect_seat", @owner, params).fetch("seat_id"))

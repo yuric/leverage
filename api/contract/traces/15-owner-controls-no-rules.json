@@ -422,7 +422,8 @@
             "payload": {
               "reason": "owner_hold",
               "rule_id": null,
-              "credential_id": null
+              "credential_id": null,
+              "rule_check_id": null
             }
           }
         ],
@@ -733,7 +734,8 @@
             "payload": {
               "reason": "seat_paused",
               "rule_id": null,
-              "credential_id": null
+              "credential_id": null,
+              "rule_check_id": null
             }
           }
         ],
@@ -2446,7 +2448,8 @@
             "payload": {
               "reason": "rounds_exceeded",
               "rule_id": null,
-              "credential_id": null
+              "credential_id": null,
+              "rule_check_id": null
             }
           },
           {

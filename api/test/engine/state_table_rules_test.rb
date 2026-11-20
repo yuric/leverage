@@ -18,9 +18,11 @@ class StateTableRulesTest < ActiveSupport::TestCase
   GROUPS = %w[rules install_shipped_rules rule_checks].freeze
 
   # The events whose writer is a seam of another package, and that seam.
-  STUBBED = { "check.queued" => "RuleChecks.new_attempt", "job.queued" => "Jobs.queue",
+  # Run it again queues through RuleChecks.queue_attempt (check.queued,
+  # then Jobs.queue: trace 19 command 20; WP4's request 1, settled by WP12).
+  STUBBED = { "check.queued" => "RuleChecks.queue_attempt", "job.queued" => "Jobs.queue",
               "check.overridden" => "RuleChecks.override" }.freeze
-  SEAMS = { Leverage::RuleChecks => %i[new_attempt override], Leverage::Jobs => %i[queue] }.freeze
+  SEAMS = { Leverage::RuleChecks => %i[queue_attempt override], Leverage::Jobs => %i[queue] }.freeze
 
   def self.commands
     Leverage::Contract.state_machine.fetch("groups").select { |group| GROUPS.include?(group.fetch("id")) }

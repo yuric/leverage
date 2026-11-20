@@ -43,7 +43,7 @@ class PauseSeatTest < ActiveSupport::TestCase
     paused, opened = events
     assert_equal %w[seat.paused hold.opened], events.map(&:type)
     assert_equal [ "app", nil, paused.id, task.id ], [ opened.actor_kind, opened.actor_id, opened.cause_id, opened.task_id ]
-    assert_equal({ "reason" => "seat_paused", "rule_id" => nil, "credential_id" => nil }, opened.payload)
+    assert_equal({ "reason" => "seat_paused", "rule_id" => nil, "credential_id" => nil, "rule_check_id" => nil }, opened.payload)
     assert_empty InboxItem.where(hold_id: opened.subject_id)
     task.reload
     assert_equal [ "working", @builder.id, due ], task.attributes.values_at("state", "holder_seat_id", "lease_due_at")

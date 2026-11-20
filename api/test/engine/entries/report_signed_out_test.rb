@@ -41,7 +41,7 @@ class ReportSignedOutTest < ActiveSupport::TestCase
                                   [ "app", scenario.helper.id, key, @task.id ] })
     hold = open_hold(@task)
     assert_equal [ hold.id, signed_out.id, { "reason" => "credential_signed_out", "rule_id" => nil,
-                                             "credential_id" => @claude_a.id } ],
+                                             "credential_id" => @claude_a.id, "rule_check_id" => nil } ],
       [ opened.subject_id, opened.cause_id, opened.payload ]
     item = InboxItem.find_by!(hold_id: hold.id)
     assert_equal [ "account_signed_out", @claude_a.id, opened.id ], [ item.kind, item.credential_id, inbox_opened.cause_id ]

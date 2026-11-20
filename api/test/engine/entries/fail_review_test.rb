@@ -98,7 +98,8 @@ class FailReviewTest < ActiveSupport::TestCase
     assert_equal %w[review.failed criterion.reopened cost.reported hold.opened inbox.opened], types
     failed = written.first
     opened, inbox = written.last(2)
-    assert_equal [ "app", nil, failed.id, 2, { "reason" => "rounds_exceeded", "rule_id" => nil, "credential_id" => nil } ],
+    assert_equal [ "app", nil, failed.id, 2, { "reason" => "rounds_exceeded", "rule_id" => nil, "credential_id" => nil,
+                                                  "rule_check_id" => nil } ],
       [ opened.actor_kind, opened.actor_id, opened.cause_id, opened.round, opened.payload ]
     assert_equal [ opened.id, { "kind" => "past_round_limit" } ], [ inbox.cause_id, inbox.payload ]
     hold = Hold.find_by!(task_id: @task.id, reason: "rounds_exceeded", closed_at: nil)

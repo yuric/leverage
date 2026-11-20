@@ -24,7 +24,7 @@ class HoldTest < ActiveSupport::TestCase
     hold = ::Hold.find(event.subject_id)
     assert_equal [ "hold.opened", "owner", scenario.owner.id, nil, task.id ],
       [ event.type, event.actor_kind, event.actor_id, event.cause_id, event.task_id ]
-    assert_equal({ "reason" => "owner_hold", "rule_id" => nil, "credential_id" => nil }, event.payload)
+    assert_equal({ "reason" => "owner_hold", "rule_id" => nil, "credential_id" => nil, "rule_check_id" => nil }, event.payload)
     assert_equal [ "owner_hold", "owner", scenario.owner.id ], hold.attributes.values_at("reason", "opened_by_kind", "opened_by_id")
     assert_empty InboxItem.where(hold_id: hold.id)
     task.reload

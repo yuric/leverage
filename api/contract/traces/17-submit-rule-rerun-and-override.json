@@ -632,7 +632,7 @@
         "outcome": "pending",
         "refusal": null,
         "events": [
-          {"ref": "@event:50", "type": "hold.opened", "schema_version": 1, "at": "@t:530", "effective_at": "@t:530", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "hold", "subject_id": "$hold:t1_rerun_limit", "cause_id": null, "command_id": "$key:t1_submit_530", "payload": {"reason": "rerun_limit", "rule_id": "$rule:tests_named", "credential_id": null}},
+          {"ref": "@event:50", "type": "hold.opened", "schema_version": 1, "at": "@t:530", "effective_at": "@t:530", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "hold", "subject_id": "$hold:t1_rerun_limit", "cause_id": null, "command_id": "$key:t1_submit_530", "payload": {"reason": "rerun_limit", "rule_id": "$rule:tests_named", "credential_id": null, "rule_check_id": "$rule_check:t1_tests_5"}},
           {"ref": "@event:51", "type": "inbox.opened", "schema_version": 1, "at": "@t:530", "effective_at": "@t:530", "actor_kind": "app", "actor_id": null, "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "inbox_item", "subject_id": "$inbox:t1_rerun_limit", "cause_id": "@event:50", "command_id": "$key:t1_submit_530", "payload": {"kind": "check_past_rerun_limit"}}
         ],
         "steps_opened": [

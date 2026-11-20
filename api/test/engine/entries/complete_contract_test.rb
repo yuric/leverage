@@ -207,7 +207,8 @@ class CompleteContractGatedTest < ActiveSupport::TestCase
     assert_equal [ "backlog", 1 ], task.reload.values_at(:state, :contract_version)
     assert_equal 2, Criterion.where(task_id: task.id).count
     assert_equal [ "owner", @owner.id, finished.id ], [ opened.actor_kind, opened.actor_id, opened.cause_id ]
-    assert_equal({ "reason" => "contract_incomplete", "rule_id" => rule.id, "credential_id" => nil }, opened.payload)
+    assert_equal({ "reason" => "contract_incomplete", "rule_id" => rule.id, "credential_id" => nil, "rule_check_id" => nil },
+      opened.payload)
     assert_equal mine(RuleCheck).sole.id, mine(Hold).sole.rule_check_id
     assert_nil changed.cause_id
   end

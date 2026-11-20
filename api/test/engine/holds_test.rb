@@ -357,12 +357,17 @@ class HoldsTest < ActiveSupport::TestCase
     test "#{reason}: its rule on hold.opened, #{pauses ? "a paused" : "no"} lease clock, step #{step}, item #{item.inspect}" do
       rule = @scenario.rule
       task = state == "working" ? working_task : @scenario.task(state: state)
+      check = @scenario.rule_check(task, rule: rule, result: "failed")
       ctx = context
       task.update_columns(lease_due_at: ctx.at + 250) if state == "working"
-      hold = H.open(ctx, task: task, reason: reason, rule_id: rule.id, facts: {})
+      hold = H.open(ctx, task: task, reason: reason, rule_id: rule.id, facts: {}, rule_check_id: check.id)
 
       opened = ctx.events.find { |event| event.type == "hold.opened" }
-      assert_equal({ "reason" => reason, "rule_id" => rule.id, "credential_id" => nil }, opened.payload)
+      # The rule check a rule's hold is about, for the three reasons that
+      # name one (DB-49), on the row and in the event.
+      named = H::NAMES_CHECK.include?(reason) ? check.id : nil
+      assert_equal({ "reason" => reason, "rule_id" => rule.id, "credential_id" => nil, "rule_check_id" => named }, opened.payload)
+      assert_equal check.id, hold.rule_check_id
       assert_equal pauses, H.pausing?(task)
       assert_equal 250, left(task) if pauses
       open = TaskStep.find_by!(task_id: task.id, closed_at: nil)

@@ -45,6 +45,18 @@ class ReplayTest < ActiveSupport::TestCase
     end
   end
 
+  # RD-45, DB-49: the check held at the re-run limit has no attempt, no
+  # job and no check event; its rerun_limit hold's hold.opened names it, so
+  # the log makes its row while the owner has not answered.
+  test "the log of trace 17 at the re-run limit, before the owner answers, rebuilds the held check's row" do
+    runner = TraceRunner.new("17-submit-rule-rerun-and-override").run(28)
+    assert_empty runner.failures, runner.failures.join("\n")
+    held = Hold.find_by!(workspace_id: runner.workspace_id, reason: "rerun_limit", closed_at: nil)
+    assert_equal({ "result" => nil, "overridden_by_user_id" => nil, "overridden_at" => nil },
+      Leverage::Replay.project(runner.workspace_id).fetch(:rule_checks).fetch(held.rule_check_id))
+    assert_empty log_diff(runner)
+  end
+
   test "a rule's switch and current version changed without an event are found" do
     runner = run_trace("17-submit-rule-rerun-and-override")
     rules = Leverage::Replay.project(runner.workspace_id).fetch(:rules)

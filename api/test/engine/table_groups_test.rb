@@ -117,19 +117,20 @@ class TableGroupsTest < ActiveSupport::TestCase
     assert_equal "Leverage::Transitions::Entries::AddRule", Table.entry_for("add_rule").name
   end
 
-  # The first versions (plan §4, the hand-over table). WP6 to WP9 write
-  # them; WP13 rewrites this case once none is left a stub.
-  test "a pending timer's entry does nothing; a pending command's entry is not built yet" do
+  # The first versions (plan §4, the hand-over table) are all finished
+  # (WP1's request 2, settled by WP12): no pending entry is a stub, and a
+  # pending timer run in a workspace with nothing due writes nothing. WP13
+  # rewrites this file when it moves the twenty into their groups.
+  test "every pending entry is built: none is a stub, and a timer with nothing due writes nothing" do
     ctx = Scenario.new.context
     pending.each do |command|
+      source = Rails.root.join("lib/leverage/transitions/entries/#{command}.rb").read
+      refute_match(/not built yet/, source, command)
+      next unless NEW_TIMERS.include?(command)
+
       entry = Table.entry_for(command).new
-      if NEW_TIMERS.include?(command)
-        entry.perform(ctx)
-        assert_nil entry.result, command
-      else
-        error = assert_raises(NotImplementedError, command) { entry.perform(ctx) }
-        assert_match(/not built yet/, error.message)
-      end
+      entry.load(ctx)
+      entry.perform(ctx)
     end
     assert_empty ctx.events
   end
@@ -281,24 +282,25 @@ class TableGroupsTest < ActiveSupport::TestCase
     end
   end
 
-  # The do-nothing answers WP4 to WP11 build against until each finishes
-  # its file (plan §4, WP1's Produces).
-  test "the first versions answer as the plan says: online, nothing pending, no job, empty reads" do
+  # The seams WP4 to WP11 finished (WP1's request 2, settled by WP12): in
+  # a workspace with no rule, job or poll they answer that nothing waits:
+  # an orchestrator that never polled is not online (L401), no transition
+  # is pending and a cancel of one that is not ends nothing, no job is
+  # offered, and the reads have no rule.
+  test "the finished seams answer that nothing waits in a workspace with no rule, job or poll" do
     scenario = Scenario.new
     task = scenario.task(state: "ready")
-    seat = scenario.seat(role: "orchestrator")
+    seat = scenario.seat(role: "orchestrator", token: false)
     ctx = scenario.context
 
-    assert Leverage::RolePresence.online?(scenario.workspace, "orchestrator", ctx.at)
-    pending = scenario.pending_transition(scenario.task(state: "ready"), command: "claim",
-      requester: scenario.seat(role: "builder"))
+    refute Leverage::RolePresence.online?(scenario.workspace, "orchestrator", ctx.at)
+    done = scenario.pending_transition(scenario.task(state: "ready"), command: "claim",
+      requester: scenario.seat(role: "builder"), state: "completed")
     assert_nil Leverage::PendingTransitions.of(task)
-    assert_nil Leverage::PendingTransitions.cancel(ctx, pending, "invalid_state")
-    assert_equal :completed, T.run_as(ctx, "claim", requester: seat, key: "made-up-key", params: {})
+    assert_nil Leverage::PendingTransitions.cancel(ctx, done, "invalid_state")
     assert_nil Leverage::Jobs.next_for(seat)
-    assert_equal({ "rules" => [] }, Leverage::Reads::Rules.call(scenario.workspace_id))
+    assert_equal({ rules: [] }, Leverage::Reads::Rules.call(scenario.workspace_id))
     assert_equal [], Leverage::Reads::RuleTiming.call(scenario.workspace_id)
-    assert_equal [], Leverage::Reads::TaskTimeline.call(scenario.workspace_id, task.id)
     assert_empty ctx.events
   end
 

@@ -268,7 +268,7 @@ class StepTrackerTest < ActiveSupport::TestCase
     hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, reason: "owner_hold", opened_at: Time.current,
       opened_by_kind: "owner")
     in_context(key: "k-late") do |ctx|
-      ctx.emit("hold.opened", task: task, subject: hold, payload: { reason: "owner_hold", rule_id: nil, credential_id: nil })
+      ctx.emit("hold.opened", task: task, subject: hold, payload: { reason: "owner_hold", rule_id: nil, credential_id: nil, rule_check_id: nil })
     end
 
     assert_equal count, TaskStep.where(task_id: task.id).count
@@ -428,7 +428,7 @@ class StepTrackerTest < ActiveSupport::TestCase
       [ ctx.emit("review.failed", task: task, subject: review,
           payload: { failed_criterion_ids: [], failed_rule_check_id: nil, lease_seat_id: builder.id, wait_cause: nil }),
         ctx.emit("hold.opened", task: task, subject: hold, actor_kind: "app", actor_id: nil,
-          payload: { reason: "rounds_exceeded", rule_id: nil, credential_id: nil }) ]
+          payload: { reason: "rounds_exceeded", rule_id: nil, credential_id: nil, rule_check_id: nil }) ]
     end
 
     assert_equal before + 1, TaskStep.where(task_id: task.id).count, "one row closes and one opens"
@@ -632,7 +632,7 @@ class StepTrackerTest < ActiveSupport::TestCase
   def open_hold(task, reason)
     hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, reason: reason, opened_at: Time.current,
       opened_by_kind: "app")
-    @scenario.append("hold.opened", task: task, subject: hold, payload: { reason: reason, rule_id: nil, credential_id: nil })
+    @scenario.append("hold.opened", task: task, subject: hold, payload: { reason: reason, rule_id: nil, credential_id: nil, rule_check_id: nil })
     hold
   end
 
