@@ -3618,7 +3618,7 @@
             "round": 0,
             "subject_kind": null,
             "subject_id": null,
-            "cause_id": null,
+            "cause_id": "@event:76",
             "command_id": "$key:builder_two_off",
             "payload": {
               "reason": "seat_disabled",
