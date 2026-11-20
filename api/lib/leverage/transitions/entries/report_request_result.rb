@@ -15,7 +15,19 @@ module Leverage
       #                   credential.verified. The signed_in check failed:
       #                   signed_out and credential.signed_out. Any other
       #                   failure: nothing.
+      #   open_sign_in    Sign in again (milestone 3 plan HE-36): as verify.
       #   others          nothing but the request's own row.
+      #
+      # Milestone 3 (plan HE-2, HE-10, HE-11, HE-29): a passed verify or
+      # sign-in of a credential limited with no reset time clears the limit
+      # (limited_since), which until the usage readers exist is the reading
+      # that shows capacity; a limit with a reset time is left until then
+      # (L661). After credential.verified or credential.added the open
+      # credential holds are looked at again (Handoff.reevaluate with the
+      # credential as verified:, the choice sign_in_again for a sign-in's
+      # result), and after credential.signed_out too (signed_out:), for the
+      # item of HE-11. What reevaluate closes, switches, opens or resolves
+      # is Handoff's.
       #
       # A non-null plan or account email of a passed add or verify goes to
       # the credential's row only (IN-25): the stored result holds both as
@@ -46,7 +58,7 @@ module Leverage
             result: @report.merge("plan" => nil, "account_email" => nil), updated_at: ctx.at)
           case @request.kind
           when "run_add_checks" then add_checks(ctx)
-          when "verify" then verify(ctx)
+          when "verify", "open_sign_in" then verify(ctx)
           end
           @result = {}
         end
@@ -72,7 +84,8 @@ module Leverage
 
           if all_passed?
             confirm(ctx)
-            ctx.emit("credential.added", subject: credential, payload: {})
+            added = ctx.emit("credential.added", subject: credential, payload: {})
+            Handoff.reevaluate(ctx, cause: added, verified: credential)
           else
             credential.delete
           end
@@ -83,16 +96,30 @@ module Leverage
 
           if all_passed?
             confirm(ctx)
-            ctx.emit("credential.verified", subject: credential, payload: {})
+            clear_limit_with_no_reset_time
+            verified = ctx.emit("credential.verified", subject: credential, payload: {})
+            choice = { choice: "sign_in_again" } if @request.kind == "open_sign_in"
+            Handoff.reevaluate(ctx, cause: verified, verified: credential, **choice.to_h)
           elsif signed_in_failed?
             credential.update!(state: "signed_out")
-            ctx.emit("credential.signed_out", subject: credential, payload: { seat_id: nil, review_id: nil, job_id: nil })
+            signed_out = ctx.emit("credential.signed_out", subject: credential,
+              payload: { seat_id: nil, review_id: nil, job_id: nil })
+            Handoff.reevaluate(ctx, cause: signed_out, signed_out: credential)
           end
         end
 
         def confirm(ctx)
           kept = { "plan" => @report["plan"], "account_email" => @report["account_email"] }.compact
           credential.update!(state: "active", last_verified_at: ctx.at, **kept.symbolize_keys)
+        end
+
+        # HE-2: a passed verify or sign-in is the reading that shows
+        # capacity for a limit with no reset time; one with a reset time
+        # rests until then.
+        def clear_limit_with_no_reset_time
+          return unless credential.limited_since && credential.limited_until.nil?
+
+          credential.update!(limited_since: nil)
         end
       end
     end

@@ -11,6 +11,10 @@ module Leverage
       # provider and kind and never the name, and writes no event:
       # credential.added is written by report_request_result.
       #
+      # A request with no strength rank adds the credential with rank 1, the
+      # seats' default (milestone 3 plan HE-5); the model is the one the
+      # request carries (the provider's default the app fills in).
+      #
       # Only logins of the four login providers in this milestone: an API
       # token (SC-5), a login of an API provider, a second Gemini login
       # (CL-20) and an id that is already a credential are 422 invalid. A
@@ -42,7 +46,7 @@ module Leverage
           params = ctx.request.params
           credential = Credential.create!(id: @id, workspace_id: ctx.workspace.id, kind: @kind, provider: @provider,
             name: @name, masked_label: params["masked_label"], model: params["model"], effort: params["effort"],
-            strength_rank: params["strength_rank"], position: next_position(ctx), state: "signed_out",
+            strength_rank: params["strength_rank"] || 1, position: next_position(ctx), state: "signed_out",
             last_verified_at: nil)
           request = SeatRuns.queue(ctx, "run_add_checks", credential_id: credential.id,
             params: { "provider" => @provider, "credential_kind" => @kind })

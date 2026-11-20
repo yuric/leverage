@@ -11,6 +11,12 @@ module Leverage
       # review it kept is released (IN-40). An unknown seat is 404; a seat
       # that connects on its own has no run the app stops: invalid_state.
       #
+      # Milestone 3 (plan HD-3, HD-10): the seat keeps the stop reason and its
+      # run is on no credential. A report about an earlier run, on another
+      # credential than the one the seat's current token was issued for (a
+      # run a handoff replaced), changes nothing, so a handed-over review is
+      # never released by the old run's stop.
+      #
       # Params: "id" (the seat), "credential_id", "observed_at",
       # "stop_reason" (limit and signed_out reasons act from milestone 3).
       class ReportRunStopped < Entry
@@ -26,7 +32,9 @@ module Leverage
         end
 
         def perform(ctx)
-          SeatRuns.run_stopped(ctx, @seat)
+          if @seat.run_credential_id.nil? || ctx.request.params["credential_id"] == @seat.run_credential_id
+            SeatRuns.run_stopped(ctx, @seat, reason: ctx.request.params["stop_reason"])
+          end
           @result = {}
         end
       end

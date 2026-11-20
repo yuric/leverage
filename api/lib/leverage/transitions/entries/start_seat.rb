@@ -1,10 +1,14 @@
 module Leverage
   module Transitions
     module Entries
-      # start_seat (PRD L590-L591; milestone 2 plan IN-23, IN-30): marks a
-      # seat the app runs wanted running and queues start_seat with the
-      # seat's role, provider, model and effort; no event. The seat's token
-      # is issued when the helper picks the request up (issue_seat_token).
+      # start_seat (PRD L590-L591; milestone 2 plan IN-23, IN-30; milestone 3
+      # plan HD-1): marks a seat the app runs wanted running and queues
+      # start_seat where SeatRuns.placement puts its run, with the role, the
+      # provider, model and effort of that credential and the work to
+      # continue; no event. The seat's token is issued when the helper picks
+      # the request up (issue_seat_token). A seat whose task waits under a
+      # credential hold gets no request until the hold closes (HE-21): the
+      # answer's helper_request_id is then null.
       # While a start of the seat is still unfinished and the seat is still
       # wanted running, no second one is queued: the answer names that
       # request, so one seat never has two runs racing for its token. A
@@ -31,17 +35,8 @@ module Leverage
         end
 
         def perform(ctx)
-          unfinished = HelperRequest.where(seat_id: @seat.id, kind: "start_seat",
-            state: IssueHelperToken::UNFINISHED).order(:requested_at).to_a
-          request = unfinished.first if @seat.wanted_running
-          unless request
-            unfinished.each do |stale|
-              stale.update!(state: "failed", finished_at: ctx.at, result: IssueHelperToken::FAILED_RESULT, updated_at: ctx.at)
-            end
-            request = SeatRuns.queue(ctx, "start_seat", seat: @seat, params: SeatRuns.start_params(@seat))
-          end
-          @seat.update!(wanted_running: true)
-          @result = { "helper_request_id" => request.id }
+          request = SeatRuns.owner_start(ctx, @seat)
+          @result = { "helper_request_id" => request&.id }
         end
       end
     end

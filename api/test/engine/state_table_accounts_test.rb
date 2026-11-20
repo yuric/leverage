@@ -96,8 +96,11 @@ class StateTableAccountsTest < ActiveSupport::TestCase
     assert_empty kase.conditional_events
 
     request = milestone_3_request(kase.command)
-    expected_caller = kase.who.first == "app" ? nil : kase.who.first
-    assert_equal expected_caller, request.caller_kind
+    if kase.who.first == "app"
+      assert_nil request.caller_kind, "a timer is the app's own command"
+    else
+      assert_equal kase.who.first, request.caller_kind
+    end
     queued = HelperRequest.where(workspace_id: scenario.workspace_id).count
     written = events_written { @outcome = T.apply(request) }
 
