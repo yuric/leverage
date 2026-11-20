@@ -29,7 +29,7 @@ module Leverage
         end
 
         def perform(_ctx)
-          @seat.update!(run_state: "running")
+          SeatRuns.run_started(@seat)
           @result = {}
         end
       end

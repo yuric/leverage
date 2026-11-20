@@ -42,10 +42,9 @@ module Leverage
           seat = Seat.create!(workspace_id: ctx.workspace.id, name: @name, role: @role, provider: @provider,
             model: ctx.request.params["model"].to_s, effort: ctx.request.params["effort"].to_s,
             strength_rank: ctx.request.params["strength_rank"] || 1, credential_id: @credential&.id,
-            token_hash: token && Tokens.digest(token), run_state: (@credential ? "stopped" : nil),
-            wanted_running: !@credential.nil?)
+            token_hash: token && Tokens.digest(token))
           ctx.emit("seat.connected", subject: seat, payload: {})
-          SeatRuns.queue(ctx, "start_seat", seat: seat, params: SeatRuns.start_params(seat)) if @credential
+          SeatRuns.connected(ctx, seat)
           @result = { "seat_id" => seat.id }
           @once = { "seat_token" => token }
         end

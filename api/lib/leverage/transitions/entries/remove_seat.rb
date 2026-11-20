@@ -27,11 +27,9 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(nil) ].compact
 
         def perform(ctx)
-          @seat.update!(removed_at: ctx.at, token_hash: nil, wanted_running: false)
+          @seat.update!(removed_at: ctx.at)
           removed = ctx.emit("seat.removed", subject: @seat, payload: {})
-          SeatRuns.release_working_task(ctx, @seat, reason: "seat_removed", cause: removed)
-          SeatRuns.held_reviews(ctx, @seat).each { |review| SeatRuns.release_review(ctx, review) }
-          stop = @seat.credential_id && SeatRuns.queue(ctx, "stop_seat", seat: @seat)
+          stop = SeatRuns.removed(ctx, @seat, cause: removed)
           @result = { "helper_request_id" => stop&.id }
         end
       end

@@ -36,8 +36,7 @@ module Leverage
           token = Tokens.issue(:helper)
           helper = issue(ctx, token)
           fail_unfinished_requests(ctx)
-          stop_running_seats(ctx)
-          start_wanted_seats(ctx)
+          SeatRuns.reconcile(ctx)
           @result = { "helper_id" => helper.id }
           @once = { "helper_token" => token }
         end
@@ -61,19 +60,6 @@ module Leverage
 
             # Only a row that never passed its checks is deleted (IN-24).
             Credential.where(id: request.credential_id, workspace_id: ctx.workspace.id, last_verified_at: nil).delete_all
-          end
-        end
-
-        def stop_running_seats(ctx)
-          Seat.where(workspace_id: ctx.workspace.id, run_state: "running").order(:created_at).each do |seat|
-            SeatRuns.run_stopped(ctx, seat, actor_kind: "app", actor_id: nil)
-          end
-        end
-
-        def start_wanted_seats(ctx)
-          Seat.where(workspace_id: ctx.workspace.id, wanted_running: true, removed_at: nil).where.not(credential_id: nil)
-            .order(:created_at).each do |seat|
-            SeatRuns.queue(ctx, "start_seat", seat: seat, params: SeatRuns.start_params(seat))
           end
         end
       end

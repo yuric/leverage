@@ -1,10 +1,12 @@
 module Leverage
-  # What a stopped run and a removed seat change (PRD L121, L148, L590-L591,
-  # L823, L914; milestone 2 plan §2.1, IN-17, IN-30, IN-40, IF-21): the run
-  # state, the seat's token, a review the seat held, a Working task it held,
-  # and the inputs of a start_seat request. Called inside a command's
-  # transaction by report_run_stopped, issue_helper_token, remove_seat,
-  # connect_seat and start_seat; every event goes through ctx.emit.
+  # A seat's run (PRD L121, L148, L590-L591, L823, L914; milestone 2 plan
+  # §2.1, IN-17, IN-30, IN-40, IF-21; milestone 3 plan §0.1 fact 10): the
+  # one place that changes seats.run_state and ends or issues a seat's
+  # token. What a started, stopped or removed run changes, a review the
+  # seat held, a Working task it held, and the start_seat requests. Called
+  # inside a command's transaction by connect_seat, start_seat,
+  # issue_seat_token, issue_helper_token, report_run_started,
+  # report_run_stopped and remove_seat; every event goes through ctx.emit.
   #
   # A lease already past its due time is left to its timer
   # (builder_lease_expiry, review_lease_expiry), which writes the
@@ -47,6 +49,60 @@ module Leverage
     # reason - a RunStoppedReport.stop_reason value.
     def ended_by_interruption(seat, reason)
       nil
+    end
+
+    # A seat the app runs has just been connected (IN-30): no run yet,
+    # wanted running, and its start queued. A seat that connects on its
+    # own has no run the app starts, and nothing changes.
+    #
+    # Returns the start_seat HelperRequest, or nil.
+    def connected(ctx, seat)
+      return nil unless seat.credential_id
+
+      seat.update!(run_state: "stopped", wanted_running: true)
+      queue(ctx, "start_seat", seat: seat, params: start_params(seat))
+    end
+
+    # The seat's fresh token for the start_seat request the helper holds
+    # (IN-11, IN-17, PK-7): its digest replaces the seat's, which ends the
+    # previous token. Returns the token, which is shown once and never
+    # stored.
+    def issue_token(seat, _start)
+      token = Tokens.issue(:seat)
+      seat.update!(token_hash: Tokens.digest(token))
+      token
+    end
+
+    # The helper reported the seat's run started.
+    def run_started(seat)
+      seat.update!(run_state: "running")
+    end
+
+    # A new helper token brings the server and the Mac back in step
+    # (IN-30): every seat still marked running is treated as stopped, as
+    # the app, and every seat wanted running gets a start_seat request.
+    def reconcile(ctx)
+      Seat.where(workspace_id: ctx.workspace.id, run_state: "running").order(:created_at).each do |seat|
+        run_stopped(ctx, seat, actor_kind: "app", actor_id: nil)
+      end
+      Seat.where(workspace_id: ctx.workspace.id, wanted_running: true, removed_at: nil).where.not(credential_id: nil)
+        .order(:created_at).each do |seat|
+        queue(ctx, "start_seat", seat: seat, params: start_params(seat))
+      end
+    end
+
+    # A seat removed (IN-17, IN-40): its token answers no more from this
+    # moment, it is no longer wanted running, a Working task it holds is
+    # released with seat_removed (caused by removed, the seat.removed
+    # Event), a review it holds is released, and a seat the app runs gets
+    # a stop_seat request.
+    #
+    # Returns the stop_seat HelperRequest, or nil.
+    def removed(ctx, seat, cause:)
+      seat.update!(token_hash: nil, wanted_running: false)
+      release_working_task(ctx, seat, reason: "seat_removed", cause: cause)
+      held_reviews(ctx, seat).each { |review| release_review(ctx, review) }
+      seat.credential_id && queue(ctx, "stop_seat", seat: seat)
     end
 
     # A seat's run has stopped, or is treated as stopped (IN-30): run state
