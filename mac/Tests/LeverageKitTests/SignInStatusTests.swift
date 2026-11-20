@@ -6,7 +6,7 @@ import Testing
 
 /// `SignInStatus`: "is this account signed in", from the catalog's status
 /// command (plan PV-3, HD-5, §2.2). A status command prints the account's
-/// email, organisation and plan, so only one of three answers may leave the
+/// email, organisation and plan, so only one of four answers may leave the
 /// function, and nothing of the output may reach the answer or a log line.
 /// These tests run the stand-in tools, whose status replies print a made-up
 /// email and organisation, and small tools of their own for the replies the

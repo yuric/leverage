@@ -24,8 +24,10 @@ public enum SignInAnswer: String, CaseIterable, Sendable {
 public enum SignInStatus {
     /// Runs the entry's status command with exactly `environment` (built by
     /// `ProviderCatalog.toolEnvironment`) and reads it the catalog's way. A
-    /// command that cannot start, or that passes `timeLimit`, is signed out,
-    /// as milestone 2's helper reads it. `log` is told the answer and how
+    /// command that cannot start, or that passes `timeLimit`, could not
+    /// tell: the runner then keeps milestone 2's failure count (CL-22)
+    /// rather than report a sign-out, and the helper's checks read it as
+    /// not signed in, as milestone 2 did. `log` is told the answer and how
     /// the command ended, and nothing it printed.
     public static func check(
         _ entry: ProviderEntry, toolPath: String, environment: [String: String],
@@ -43,7 +45,7 @@ public enum SignInStatus {
                 executable: toolPath, arguments: arguments, environment: environment,
                 timeLimit: timeLimit, gracePeriod: .seconds(2)))
             if let endedBy = result.endedBy {
-                answer = .signedOut
+                answer = .couldNotTell
                 ending = "ended by \(endedBy)"
             } else {
                 answer = reads(check.reading, result) ? .signedIn : .signedOut
@@ -52,7 +54,7 @@ public enum SignInStatus {
         } catch {
             // A SubprocessError names the program and a system call, never
             // anything the tool printed.
-            answer = .signedOut
+            answer = .couldNotTell
             ending = "could not start: \(error)"
         }
         log?.info("sign-in status of \(entry.id): \(answer.rawValue) (status command \(ending))")

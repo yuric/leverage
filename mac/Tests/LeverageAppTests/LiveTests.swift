@@ -81,6 +81,16 @@ struct LiveTests {
         #expect(unbundled.bundleURL.pathExtension != "app")
     }
 
+    @Test("the running bundle's own folder is the bundle the settings name")
+    func bundledNamesItsFolder() throws {
+        let folder = try TemporaryFolder(prefix: "leverage-live")
+        defer { folder.remove() }
+        let app = folder.path("Made Up.app")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let bundle = try #require(Bundle(url: app))
+        #expect(LiveSettings.bundled(bundle).bundleURL.standardizedFileURL.path == app.standardizedFileURL.path)
+    }
+
     @Test("the runtime notifies only from an app bundle with notifications not turned off (HM-27)")
     func notifierFollowsTheBundle() throws {
         guard Live.servicesAreBuilt else { return }

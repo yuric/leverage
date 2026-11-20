@@ -1,22 +1,27 @@
 #!/bin/bash
 # Starts the bundled app once and checks that it brings its server up
-# (milestone 2 plan WP18, PK-1, PK-2):
+# (milestone 2 plan WP18, PK-1, PK-2) and that its daily backup runs
+# (milestone 3 plan HB-2, HB-3):
 #
 #   scripts/build_app.sh && scripts/smoke_app.sh
 #
 # It runs dist/Leverage.app/Contents/MacOS/LeverageApp with the environment
 # an app opened from Finder has (HOME, USER, LOGNAME, TMPDIR, LANG and a
 # PATH of /usr/bin:/bin:/usr/sbin:/sbin), plus a support folder and a
-# compose project of its own and the memory session store, so the owner's
-# folder, project and Keychain are never touched. Within 60 seconds the
-# process must be alive and GET /v1/health must answer "ok" on the port the
-# app wrote to <support>/server/.env. Then it stops the app, removes the
-# compose project with its volume, and deletes the support folder, whether
-# the check passed or not.
+# compose project of its own, the memory session store and
+# LEVERAGE_NOTIFICATIONS=off (so no permission prompt is raised, HM-27), so
+# the owner's folder, project, Keychain and notifications are never
+# touched. Within 60 seconds the process must be alive and GET /v1/health
+# must answer "ok" on the port the app wrote to <support>/server/.env.
+# Within the same time again the first dump must be in <support>/backups
+# (mode 0700), with mode 0600. Then it stops the app, removes the compose
+# project with its volume, and deletes the support folder, whether the
+# check passed or not.
 #
 # Options:
 #   --app PATH       the bundle to start (default: dist/Leverage.app)
-#   --timeout SECS   how long the server may take (default: 60)
+#   --timeout SECS   how long the server, and then the first dump, may take
+#                    (default: 60 each)
 #   --keep           keep the support folder (its logs) after the run
 set -euo pipefail
 
@@ -34,7 +39,7 @@ while [ $# -gt 0 ]; do
       case "$2" in ''|*[!0-9]*) echo "smoke_app: --timeout takes whole seconds" >&2; exit 2 ;; esac
       timeout=$2; shift ;;
     --keep) keep=1 ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "smoke_app: unknown argument: $1 (see --help)" >&2; exit 2 ;;
   esac
   shift
@@ -54,6 +59,7 @@ support=$(cd "$support" && pwd -P)
 # A project name of its own: lower-case letters, digits and dashes.
 project="leverage-smoke-$$"
 server="$support/server"
+backups="$support/backups"
 output="$support/app-output.log"
 pid=""
 
@@ -126,6 +132,7 @@ env -i \
   LEVERAGE_SUPPORT_DIR="$support" \
   LEVERAGE_COMPOSE_PROJECT="$project" \
   LEVERAGE_SESSION_STORE=memory \
+  LEVERAGE_NOTIFICATIONS=off \
   "$program" >"$output" 2>&1 &
 pid=$!
 
@@ -154,6 +161,28 @@ done
 elapsed=$(( $(date +%s) - started ))
 kill -0 "$pid" 2>/dev/null || fail "the app is not running after its server answered"
 say "after ${elapsed} s the app (pid $pid) is running and GET /v1/health on 127.0.0.1:$port answers $answer"
+
+# The backup service starts with the others (the app runs `compose up` with
+# no service named) and makes its first dump when it first looks (HB-3).
+grep -qx "LEVERAGE_BACKUP_DIR=$backups" "$server/.env" \
+  || fail "the app did not write LEVERAGE_BACKUP_DIR=$backups to $server/.env"
+dump_started=$(date +%s)
+deadline=$((dump_started + timeout))
+dump=""
+while :; do
+  kill -0 "$pid" 2>/dev/null || fail "the app exited before the first backup"
+  for file in "$backups"/leverage-*.dump; do
+    [ -f "$file" ] && { dump=$file; break; }
+  done
+  [ -n "$dump" ] && break
+  [ "$(date +%s)" -lt "$deadline" ] || fail "no dump in $backups within ${timeout} s"
+  sleep 1
+done
+mode() { stat -f '%Lp' "$1"; }
+[ "$(mode "$backups")" = 700 ] || fail "$backups has mode $(mode "$backups"), not 700"
+[ "$(mode "$dump")" = 600 ] || fail "${dump#"$support"/} has mode $(mode "$dump"), not 600"
+[ -s "$dump" ] || fail "${dump#"$support"/} is empty"
+say "after $(( $(date +%s) - dump_started )) s more the first backup is ${dump#"$support"/} ($(wc -c <"$dump" | tr -d ' ') bytes, mode 600)"
 
 say "stopping the app and removing $project"
 stop_app

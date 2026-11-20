@@ -73,6 +73,9 @@ final class TaskPageModel {
     @ObservationIgnored private var accountNames: [UUID: String] = [:]
 
     @ObservationIgnored private let clock: ResetClock
+    /// Opened from Needs you's Change the task: the first read opens the
+    /// editor (HM-24, HM-49).
+    @ObservationIgnored private var editOnOpen: Bool
 
     init(
         taskID: UUID, api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system,
@@ -82,6 +85,7 @@ final class TaskPageModel {
         self.api = api
         self.noteRead = noteRead
         self.clock = clock
+        self.editOnOpen = editOnOpen
     }
 
     // MARK: what the page shows
@@ -286,6 +290,10 @@ final class TaskPageModel {
             prefillIfUntouched(from: read)
             state = .loaded
             noteRead(position)
+            if editOnOpen {
+                editOnOpen = false
+                beginEditing()
+            }
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {

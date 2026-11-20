@@ -6,7 +6,8 @@ The app starts the server from a copy of the repository's compose.yaml
 
 * the `build:` line is removed, because the app never builds the API
   image: scripts/build_app.sh builds it in this Mac's Docker beforehand;
-* `pull_policy: never` is set on the `api` and `sweep` services, so a
+* `pull_policy: never` is set on the `api`, `sweep` and `backup` services
+  (the three that run the API image; milestone 3 plan WP13), so a
   missing image is reported as missing (the app says "This copy of
   leverage was not built on this Mac.") instead of Docker asking a
   registry for an image that is not there.
@@ -27,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SERVICES = ("api", "sweep")
+SERVICES = ("api", "sweep", "backup")
 BUILD = re.compile(r"^\s*build:")
 SERVICE_KEY = re.compile(r"^  ([A-Za-z0-9][A-Za-z0-9_.-]*):\s*$")
 PULL_POLICY = "pull_policy: never"

@@ -25,7 +25,8 @@ private struct TaskPageHost: View {
     var body: some View {
         let model = box.model {
             TaskPageModel(
-                taskID: taskID, api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) })
+                taskID: taskID, api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
+                editOnOpen: context.navigator.takeEditRequest(for: taskID))
         }
         TaskPageContent(model: model)
             .task {

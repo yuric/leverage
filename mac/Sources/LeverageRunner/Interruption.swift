@@ -82,8 +82,10 @@ struct Interruption: Sendable {
             return .retryInPlace
         case .failed:
             switch await signInStatus() {
-            case .signedOut, .couldNotTell: return .accountStopped(.signedOut)
-            case .signedIn, .noStatusCommand: return .goOnAsBefore
+            case .signedOut: return .accountStopped(.signedOut)
+            // A status command that said nothing is no sign-out: the run
+            // counts as a failure, as in milestone 2 (CL-22).
+            case .signedIn, .noStatusCommand, .couldNotTell: return .goOnAsBefore
             }
         }
     }

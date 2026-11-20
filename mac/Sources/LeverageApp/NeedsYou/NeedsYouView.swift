@@ -11,7 +11,7 @@ struct NeedsYouView: View {
         let model = box.model {
             NeedsYouModel(
                 api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
-                openTask: { [navigator = context.navigator] in navigator.open(task: $0) })
+                openTask: { [navigator = context.navigator] in navigator.open(task: $0, editing: true) })
         }
         NeedsYouContent(model: model, notificationsAreOff: context.inbox.notificationsAreOff)
             .task {

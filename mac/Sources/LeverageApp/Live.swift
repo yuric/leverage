@@ -122,7 +122,9 @@ enum Live {
         let helper = HelperSupervisor(configuration: .init(
             helperProgram: settings.helperProgram, supportFolder: support, environment: environment))
         return LiveRuntime(
-            server: server, helper: helper, sessions: SessionStores.make(environment: environment), lock: lock)
+            server: server, helper: helper, sessions: SessionStores.make(environment: environment),
+            notifier: UserNotifier.make(bundleURL: settings.bundleURL, environment: environment),
+            inboxCursor: InboxCursorStore(folder: support), lock: lock)
         #else
         return UnavailableRuntime()
         #endif
@@ -131,11 +133,15 @@ enum Live {
 
 #if canImport(LeverageAppServices)
 /// The real services, and the support folder's lock, which is released when
-/// the runtime is gone (the app keeps it for its whole life).
+/// the runtime is gone (the app keeps it for its whole life). The notifier
+/// is the real one only in an app bundle (HM-27); the inbox cursor is a file
+/// in the support folder, so it outlives the app (HM-29).
 private struct LiveRuntime: AppRuntime {
     let server: any ServerSupervising
     let helper: any HelperSupervising
     let sessions: any SessionStoring
+    let notifier: any Notifying
+    let inboxCursor: any InboxCursorStoring
     let lock: AppLock
 }
 #endif
