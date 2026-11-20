@@ -133,28 +133,74 @@ struct SignInStatusTests {
         }
     }
 
-    @Test("a signed-in field that is not the Boolean true is not signed in")
-    func jsonFieldMustBeTrue() async throws {
+    // Review: a sign-out is reported only on what the tool itself says;
+    // a status command that fails, crashes or prints something else said
+    // nothing either way, so it cannot tell (and the runner then goes on as
+    // milestone 2 does instead of reporting a sign-out).
+
+    @Test("a signed-in field that is not a Boolean, or output that is not JSON, cannot tell")
+    func jsonFieldMustBeABoolean() async throws {
         let folder = try TemporaryFolder(prefix: "sign-in-status")
-        for value in [#""true""#, "1", "null"] {
+        let scripts = [
+            #"echo '{"loggedIn": "true", "email": "\#(email)"}'"#, #"echo '{"loggedIn": 1}'"#,
+            #"echo '{"loggedIn": null}'"#, #"echo '{"other": false}'"#, "echo 'not json at all'; exit 1",
+            "echo 'Segmentation fault' >&2; exit 139",
+        ]
+        for script in scripts {
             let log = CapturedLog()
             let answer = await check(
-                try entry(.jsonField("loggedIn")),
-                tool: try ownTool(folder, #"echo '{"loggedIn": \#(value), "email": "\#(email)"}'"#),
-                environment: [:], log: log)
-            #expect(answer == .signedOut, "loggedIn: \(value)")
+                try entry(.jsonField("loggedIn")), tool: try ownTool(folder, script), environment: [:], log: log)
+            #expect(answer == .couldNotTell, "\(script)")
+            expectNothingLeaks(answer, log)
+        }
+        let log = CapturedLog()
+        let out = await check(
+            try entry(.jsonField("loggedIn")), tool: try ownTool(folder, #"echo '{"loggedIn": false}'; exit 1"#),
+            environment: [:], log: log)
+        #expect(out == .signedOut, "the Boolean false is a sign-out")
+    }
+
+    @Test("signed-in text with a non-zero exit cannot tell; the signed-out text is a sign-out whatever the exit")
+    func signedOutTextNeedsTheText() async throws {
+        let folder = try TemporaryFolder(prefix: "sign-in-status")
+        let log = CapturedLog()
+        let reading = StatusCheck.Reading.signedOutText("You are not authenticated.")
+        let answer = await check(
+            try entry(reading), tool: try ownTool(folder, #"echo "Signed in as \#(email)"; exit 3"#), environment: [:],
+            log: log)
+        #expect(answer == .couldNotTell)
+        expectNothingLeaks(answer, log)
+        let out = await check(
+            try entry(reading), tool: try ownTool(folder, #"echo "You are not authenticated." >&2; exit 2"#),
+            environment: [:], log: CapturedLog())
+        #expect(out == .signedOut)
+    }
+
+    @Test("each provider's own status command that fails without its signed-out reply cannot tell",
+          arguments: ["claude", "codex", "grok"])
+    func failedStatusCannotTell(provider: String) async throws {
+        let folder = try TemporaryFolder(prefix: "sign-in-status")
+        let base = try #require(ProviderCatalog.entry(for: provider))
+        let entry = try entry(base.status.value.reading, from: provider)
+        for script in ["echo 'error: could not reach the server' >&2; exit 1", "kill -9 $$"] {
+            let log = CapturedLog()
+            let answer = await check(entry, tool: try ownTool(folder, script), environment: [:], log: log)
+            #expect(answer == .couldNotTell, "\(provider): \(script)")
         }
     }
 
-    @Test("signed-in text with a non-zero exit is not signed in")
-    func signedOutTextNeedsExitZero() async throws {
+    @Test("Codex's status command is a sign-out only with its recorded \"Not logged in\"")
+    func codexNeedsItsText() async throws {
         let folder = try TemporaryFolder(prefix: "sign-in-status")
-        let log = CapturedLog()
-        let answer = await check(
-            try entry(.signedOutText("You are not authenticated.")),
-            tool: try ownTool(folder, #"echo "Signed in as \#(email)"; exit 3"#), environment: [:], log: log)
-        #expect(answer == .signedOut)
-        expectNothingLeaks(answer, log)
+        let base = try #require(ProviderCatalog.entry(for: "codex"))
+        let entry = try entry(base.status.value.reading, from: "codex")
+        let out = await check(
+            entry, tool: try ownTool(folder, #"echo "Not logged in" >&2; exit 1"#), environment: [:], log: CapturedLog())
+        #expect(out == .signedOut)
+        let signedIn = await check(
+            entry, tool: try ownTool(folder, #"echo "Logged in using ChatGPT" >&2"#), environment: [:],
+            log: CapturedLog())
+        #expect(signedIn == .signedIn)
     }
 
     @Test("a status command that passes its time limit cannot tell, and its output is not kept")

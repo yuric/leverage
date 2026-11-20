@@ -62,6 +62,11 @@ public enum SignInStatus {
     }
 
     /// What a status command's result says, by the catalog's reading.
+    static func answer(_ reading: StatusCheck.Reading, _ result: SubprocessResult) -> SignInAnswer {
+        reads(reading, result) ? .signedIn : .signedOut
+    }
+
+    /// What a status command's result says, by the catalog's reading.
     static func reads(_ reading: StatusCheck.Reading, _ result: SubprocessResult) -> Bool {
         switch reading {
         case .jsonField(let field):

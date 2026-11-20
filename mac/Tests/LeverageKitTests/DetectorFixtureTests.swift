@@ -30,9 +30,9 @@ struct DetectorFixtureTests {
             let result = SubprocessResult(
                 termination: record.termination, standardOutput: record.standardOutput,
                 standardError: record.standardError, endedBy: nil, outputTruncated: false)
-            let signedIn = SignInStatus.reads(entry.status.value.reading, result)
+            let answer = SignInStatus.answer(entry.status.value.reading, result)
             #expect(reply.meta.expect == "signed_out", "\(path): a status reply is recorded signed out")
-            #expect(signedIn == (reply.meta.expect == "signed_in"), "\(path)")
+            #expect(answer == (reply.meta.expect == "signed_in" ? .signedIn : .signedOut), "\(path)")
         default:
             Issue.record("\(path): unknown kind \(reply.meta.kind)")
         }
@@ -132,6 +132,13 @@ struct DetectorFixtureTests {
         Inline(
             provider: .grok, why: "a sign-out reply cut off by a stop",
             exit: 1, stdout: "You are not authenticated.\n", stderr: "", endedBy: .stop),
+        // Review: Grok's standard output is the agent's answer; text in it
+        // never reads as a limit or a sign-out, whatever the exit status.
+        Inline(
+            provider: .grok, why: "an answer that says it is not authenticated and names a limit, on standard output",
+            exit: 1,
+            stdout: "You are not authenticated. Your weekly limit was reached; it resets at 2027-01-01T00:00:00Z.\n",
+            stderr: ""),
         Inline(
             provider: .codex, why: "an output limit, which is no usage limit",
             exit: 1,
@@ -146,6 +153,39 @@ struct DetectorFixtureTests {
             termination: .exited(case_.exit), standardOutput: Data(case_.stdout.utf8),
             standardError: Data(case_.stderr.utf8), endedBy: case_.endedBy)
         #expect(detector.outcome(of: record, at: Self.endedAt) == .failed)
+    }
+
+    // Review: a run killed by a signal leverage did not send (a crash, an
+    // outside kill) ended before it finished its reply: never read.
+    @Test("a run killed by a signal is never read, whatever it printed", arguments: try ReplyFile.all().filter {
+        $0.meta.kind == "run" && ["limit", "signed_out"].contains($0.meta.expect)
+    }.map(\.path))
+    func signaled(path: String) throws {
+        let reply = try ReplyFile(path: path)
+        let record = reply.record(resetAt: Self.resetAt)
+        let detector = try #require(Detectors.detector(for: reply.provider))
+        for signal: Int32 in [9, 15] {
+            let killed = ToolRunRecord(
+                termination: .signaled(signal), standardOutput: record.standardOutput,
+                standardError: record.standardError)
+            #expect(detector.outcome(of: killed, at: Self.endedAt) == .failed, "\(path) \(signal)")
+        }
+    }
+
+    // Review: a stated time is a reset time only after a reset word, never a
+    // log line's own leading timestamp.
+    @Test("a time is a reset time only after resets, reset at or try again at, on the same line")
+    func resetWords() {
+        let base = Date(timeIntervalSince1970: 1_795_000_000)
+        #expect(ReplyReading.statedTime(in: "2026-11-20T01:23:00Z ERROR you hit your weekly limit") == nil)
+        #expect(ReplyReading.statedTime(
+            in: "2026-11-20T01:23:00Z ERROR weekly limit; it resets at 2026-11-18T11:06:40Z") == base)
+        #expect(ReplyReading.statedTime(in: "Limit reached. Try again at 2026-11-18T11:06:40Z.") == base)
+        #expect(ReplyReading.statedTime(in: "reset at: 2026-11-18T11:06:40Z") == base)
+        #expect(ReplyReading.statedTime(in: "it resets soon\n2026-11-20T01:23:00Z next line") == nil)
+        #expect(ReplyReading.outcome(
+            errorText: "2026-11-20T01:23:00Z weekly limit reached", signedOutPhrases: [])
+            == .limit(window: .weekly, resetAt: nil))
     }
 
     @Test("a time the reply states in another form is read; one it does not state is not estimated")
