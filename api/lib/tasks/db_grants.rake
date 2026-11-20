@@ -16,11 +16,22 @@
 # right of its own. Its password is LEVERAGE_API_DB_PASSWORD; without that
 # variable the role is created unable to log in, and an existing role is
 # left as it is. The statement that sets the password is sent with
-# statement logging turned off and never through the Rails logger, under a
-# transaction-level advisory lock, so two runs at once (two containers, or
-# parallel test workers) never update the role's row together ("tuple
-# concurrently updated"). The test hook skips it (password: false): no test
-# logs in as leverage_api.
+# statement logging turned off and never through the Rails logger. The test
+# hook skips it (password: false): no test logs in as leverage_api.
+#
+# Two runs at once, on one database or on two of the same cluster (the
+# server's db:prepare and a test run's, a db:migrate beside the server's
+# start, or restores in parallel test workers), would update the same
+# catalog rows together: the role's pg_authid row, which belongs to the
+# cluster, when both set the password, and in one database the schema's
+# and the tables' grants. PostgreSQL fails the second with
+# "tuple concurrently updated" once the first commits. So each run holds a
+# session advisory lock from before its transaction begins until after it
+# ends, taken on a connection of its own to the maintenance database
+# "postgres": an advisory lock belongs to the database it is taken in, so
+# one fixed database makes it one lock for the whole cluster. A run that
+# sets the password needs its transaction to be its own, or the lock would
+# end before the commit.
 #
 # Methods, not constants: `bin/rails test` loads the tasks into a Rake
 # application of its own, and test_helper loads them again into the default
@@ -35,12 +46,22 @@ module DbGrants
   # writes backup_runs (milestone 3 plan HB-4).
   def read_only = %w[backup_runs]
 
-  # The advisory lock key that serializes setting leverage_api's password:
-  # "lvpw" in ASCII.
-  def password_lock_key = 0x6c767077
+  # The advisory lock that serializes every run, in the maintenance
+  # database: "lvpw" in ASCII.
+  def lock_key = 0x6c767077
+  def lock_database = "postgres"
 
   # password: false leaves leverage_api's password as it is.
   def apply(connection, password: true)
+    secret = password ? ENV["LEVERAGE_API_DB_PASSWORD"].to_s : ""
+    if !secret.empty? && connection.transaction_open?
+      raise ArgumentError, "db:grants sets leverage_api's password only in a transaction of its own"
+    end
+
+    one_at_a_time(connection) { grant(connection, secret) }
+  end
+
+  def grant(connection, secret)
     connection.transaction do
       create_role(connection)
       connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
@@ -52,8 +73,21 @@ module DbGrants
       end
       connection.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO #{role}")
       create_api_role(connection)
-      set_api_password(connection, ENV["LEVERAGE_API_DB_PASSWORD"].to_s) if password
+      set_api_password(connection, secret) unless secret.empty?
     end
+  end
+
+  # Runs the block holding the cluster-wide lock, on a connection of its
+  # own to lock_database with the same server, user and password as
+  # connection's. Closing that connection gives the lock back, also when
+  # the block raises.
+  def one_at_a_time(connection)
+    settings = connection.raw_connection.conninfo_hash.compact.merge(dbname: lock_database)
+    lock = PG.connect(settings)
+    lock.exec("SELECT pg_advisory_lock(#{lock_key})")
+    yield
+  ensure
+    lock&.close
   end
 
   def rights_on(table)
@@ -63,8 +97,8 @@ module DbGrants
     end
   end
 
-  # Like create_role, safe when parallel test workers race: a worker that
-  # loses either step finds the role, or the membership, already there.
+  # Like create_role, safe even without the lock: a run that loses either
+  # step finds the role, or the membership, already there.
   def create_api_role(connection)
     connection.execute(<<~SQL)
       DO $$
@@ -101,12 +135,11 @@ module DbGrants
     raw = connection.raw_connection
     superuser = raw.exec("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").getvalue(0, 0)
     raw.exec("SET LOCAL log_statement = 'none'") if superuser == "t" || superuser == true
-    raw.exec("SELECT pg_advisory_xact_lock(#{password_lock_key})")
     raw.exec("ALTER ROLE #{api_role} LOGIN PASSWORD #{raw.escape_literal(password)}")
   end
 
-  # Roles belong to the cluster, so parallel test workers may race to create
-  # it; the loser's error is caught inside the block.
+  # Roles belong to the cluster, so two runs may race to create it; the
+  # loser's error is caught inside the block.
   def create_role(connection)
     connection.execute(<<~SQL)
       DO $$

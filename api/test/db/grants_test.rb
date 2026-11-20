@@ -124,10 +124,8 @@ class GrantsTest < ActiveSupport::TestCase
     assert_empty fixtures & APPEND_ONLY
   end
 
-  # The parallel test workers each run the hook at once, and ALTER ROLE on
-  # one pg_authid row from several transactions fails with "tuple
-  # concurrently updated". No test logs in as leverage_api, so the hook
-  # leaves its password to db:grants.
+  # No test logs in as leverage_api, and the hook may run inside a test's
+  # transaction, so it leaves the role's password to db:grants.
   test "the test hook grants the rights but never sets leverage_api's password, even when one is configured" do
     saved = ENV["LEVERAGE_API_DB_PASSWORD"]
     ENV["LEVERAGE_API_DB_PASSWORD"] = "made-up-test-password"
@@ -137,6 +135,24 @@ class GrantsTest < ActiveSupport::TestCase
     run_grants
     assert_empty calls, "the test hook set leverage_api's password"
     assert_equal expected_grants(tables), grants
+  ensure
+    DbGrants.define_singleton_method(:set_api_password, original) if original
+    ENV["LEVERAGE_API_DB_PASSWORD"] = saved
+  end
+
+  # The lock that serializes runs ends when apply returns, so a run that
+  # sets the password inside a transaction someone else commits later would
+  # update the role's row outside it.
+  test "db:grants refuses to set leverage_api's password inside a transaction it does not own" do
+    saved = ENV["LEVERAGE_API_DB_PASSWORD"]
+    ENV["LEVERAGE_API_DB_PASSWORD"] = "made-up-test-password"
+    original = DbGrants.method(:set_api_password)
+    calls = []
+    DbGrants.define_singleton_method(:set_api_password) { |*arguments| calls << arguments.last }
+    assert db.transaction_open?
+    error = assert_raises(ArgumentError) { DbGrants.apply(db) }
+    assert_match(/transaction of its own/, error.message)
+    assert_empty calls
   ensure
     DbGrants.define_singleton_method(:set_api_password, original) if original
     ENV["LEVERAGE_API_DB_PASSWORD"] = saved
