@@ -257,7 +257,7 @@ class HandoffContractTest < Minitest::Test
     section = readme.split(/^## /).find { |part| part.start_with?("What the Handoff milestone added") }
     refute_nil section, "README.md has no section for the Handoff milestone"
     %w[seat_run_placement candidate_available owner_must_act builder_free limited_since run_credential_id
-       RecoveryTime backup_late task_id backup_runs].each do |name|
+       RecoveryTime waiting_for_credential_id waiting_until backup_late task_id backup_runs].each do |name|
       assert_includes section, name
     end
   end
