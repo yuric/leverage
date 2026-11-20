@@ -50,8 +50,8 @@ milestone's plan HB-1 to HB-8.
    newer than the log's. `bin/backup --once` makes one dump and exits
    non-zero if it fails (HB-3).
 5. **`backup_runs` is the record.** One row per dump (ran at, file name,
-   size), with no workspace, because a dump is of the whole database and
-   the first one is made before an owner exists. The application's role
+   size), with no workspace, because a dump is of the whole database,
+   which no workspace scopes. The application's role
    may only read it. `get_system_health` reports the last dump's time and
    `backup_late`, true when the newest row is older than 26 hours or when
    there is none and the workspace is older than an hour (HB-4).
@@ -63,10 +63,10 @@ milestone's plan HB-1 to HB-8.
    --no-privileges --exit-on-error` into it; gives the roles their rights
    again (`db:grants`) and runs `leverage:verify_log` there; and only then
    drops the database and renames the staging one to its name, so a dump
-   that cannot be restored leaves the database as it was. It exits 0 only
-   when every step passed, the
-   replay test included; 1 on a refusal or a failed step; 2 on wrong use
-   (HB-5).
+   that cannot be restored, or a database that cannot be dropped, leaves
+   the database as it was; either way the staging database is dropped. It
+   exits 0 only when every step passed, the replay test included; 1 on a
+   refusal or a failed step; 2 on wrong use (HB-5).
 7. **The restore is tested three times.** `backup_restore_test.rb` in the
    `api` job restores a committed log into a database that does not exist
    yet; `scripts/restore_drill.sh` restores a seeded log into a cluster

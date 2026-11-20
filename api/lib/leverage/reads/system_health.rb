@@ -29,8 +29,8 @@ module Leverage
       # HB-4). A dump is of the whole database, so backup_runs has no
       # workspace: the newest row is this workspace's too. It is late when
       # the newest is older than 26 hours, or when there is none and the
-      # workspace is older than one hour (the first dump is made within a
-      # minute of the first start).
+      # workspace is older than one hour (the first dump follows the
+      # owner's sign-up within a minute).
       def backup(workspace_id)
         last = BackupRun.maximum(:ran_at)
         now = database_now

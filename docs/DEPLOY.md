@@ -168,7 +168,10 @@ beside the one it replaces (`<name>_restoring_<hex>`), gives the database
 roles their rights again (`db:grants`) and runs the replay test
 (`leverage:verify_log`) there, and only then drops the database and gives
 the new one its name. A dump that cannot be restored, or whose log fails
-the replay test, leaves the database as it was. It exits 0 only when every
+the replay test, or a database that cannot be dropped, leaves the database
+as it was and removes the new one. If the database was dropped and the
+new one could not take its name, the message names the new one, to rename
+by hand. It exits 0 only when every
 step passed, 1 when it refused or a step failed (its message says which),
 and 2 when it was called wrongly.
 

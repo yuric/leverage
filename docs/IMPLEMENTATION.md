@@ -487,8 +487,9 @@ failing test first for each):
 - **A reset time further off than its window can last is none**: more than
   6 hours after the report for the five-hour window, 8 days for the weekly
   and per-model windows, 32 days for spend or no window. Only a time after
-  "resets", "reset at" or "try again" on the same line of a reply is a
-  reset time, never a log line's own timestamp.
+  "resets", "reset at" or "try again at" on the same line of a reply is a
+  reset time, never a log line's own timestamp, nor a time after a bare
+  "reset" or a "try again" with no "at".
 - **A sign-out is reported only on the tool's own word.** A status command
   that fails, crashes or prints neither its signed-in nor its signed-out
   reply is "could not tell". Codex's status is read by its recorded "Not
@@ -503,7 +504,9 @@ failing test first for each):
   made.
 - **A restore goes through a staging database**, renamed over the old one
   only after the replay test passes there; `bin/restore` also reads the
-  dump's list first.
+  dump's list first. A failed step of any kind, or a database that cannot
+  be dropped, removes the staging database and leaves the old one as it
+  was.
 - **The backup service has no login-role password or URL**, and the
   scripts' backup folders are sticky (mode 1777).
 - **The reply-file check reads every decoded string** of a file and of the
@@ -573,7 +576,7 @@ where it follows text seen elsewhere. The files are in
 | Claude (`claude` 2.1.325) | Made, invented: five-hour with a reset time, weekly without | Made, invented | Recorded | Recorded (`claude auth status`) |
 | Codex (`codex-cli` 0.169.0) | Made, invented: five-hour in a structured field, weekly in words | Made, invented | Recorded | Recorded (`codex login status`) |
 | Gemini (`agy` 1.5.12) | Made, invented: per-model | Made, invented | Made from observed (the shape of a signed-in reply) | None: no status command |
-| Grok (`grok` 1.0.77) | Made, invented: spend, on standard error | Made, invented | Made from observed ("You are not authenticated." on standard error; standard output, the agent's answer, is never read) | Recorded (`grok models`) |
+| Grok (`grok` 1.0.77) | Made, invented: spend, on standard error | Made, invented | Made from observed: the words from `grok models`, which printed them on standard output; the stream (standard error), the exit status and the second line are invented, so on the real tool a sign-out is expected to show only through `grok models` (standard output, the agent's answer, is never read) | Recorded (`grok models`) |
 
 Unverified for all four: a real limit reply, and the reply of a login that
 expired or was revoked during a run. The contract's `readers.json` keeps
