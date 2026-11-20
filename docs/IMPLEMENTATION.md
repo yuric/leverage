@@ -341,8 +341,8 @@ The plan's `[owner-later]` choices are in question 12, not here.
   `credential_limit` hold names the credential that stopped. HE-14: a
   builder the app runs counts as free for a fresh lease only if one of its
   candidates is available. HE-16: a Ready task no agent can start for want
-  of an account opens no item; its card says which account. HE-17: a
-  recovery time starts at `credential.limit_reached`, or at a
+  of an account opens no item; its card and its page say which account.
+  HE-17: a recovery time starts at `credential.limit_reached`, or at a
   `credential.signed_out` with a seat, and ends at the
   `credential.switched` of the same command (0 seconds) or else at the
   continuing seat's first event of that work; one that never ends is open,
@@ -449,10 +449,11 @@ Where the build differs from the plan, or settles what it left open:
 - **No typed result for `verify_credential` and `sign_in_again`.** Seven
   operations answer `helper_request_id` in an untyped result, milestone
   2's convention; typing two of them is a contract change no reader needs.
-- **No waiting account on the task page.** The board card names the
-  account a Ready task or a review waits for when no hold is open (HE-15,
-  HE-16); the task read has no such field, so the task page names the
-  account only from an open hold.
+- **The task read names the account a task waits for.** `TaskPage`
+  carries the board card's `waiting_for_credential_id` and
+  `waiting_until`, computed by the same call (`Board.waiting`), so the
+  task page says the card's sentence for a Ready task or a review waiting
+  with no hold, as HE-15 asks of both.
 - **`pg_dump` keeps owners in a custom-format archive** even with
   `--no-owner`; the restore's `--no-owner` drops them, and the archive
   holds no `GRANT` or `REVOKE`.
@@ -1162,8 +1163,9 @@ skeleton's pull request description, as rule AR-004 asks.
         signed out" opens beside it. Alternative: close it and open a
         sign-out hold, which moves the task to Blocked.
       - **HE-15**: a review no reviewer can take for want of an account
-        waits with no item; the card says which account. Alternative: open
-        "Account signed out" with no hold, a contract change.
+        waits with no item; the card and the task page say which account.
+        Alternative: open "Account signed out" with no hold, a contract
+        change.
       - **HE-25 (ii)**: an edited contract keeps the review count, so the
         next failed review at the limit opens the item again. Alternative:
         an edit gives one more try.
@@ -1270,9 +1272,6 @@ skeleton's pull request description, as rule AR-004 asks.
       - `verify_credential` and `sign_in_again` keep an untyped result.
         Alternative: a typed `helper_request_id` result for all seven
         operations that answer one.
-      - The task page names the account a task waits for only from an
-        open hold; the board card names it in every case. Alternative: two
-        waiting fields on the task read.
       - The Needs you button "Let it try once more" and the task page's
         "Allow one more try" are two labels for one command. Alternative:
         one label.

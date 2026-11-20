@@ -13413,6 +13413,22 @@
               "$ref": "#/components/schemas/Hold"
             }
           },
+          "waiting_for_credential_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The account the task waits for, or null: the board card's waiting_for_credential_id for the same task, from the same reading (milestone 3 plan HM-40, HE-15, HE-16)."
+          },
+          "waiting_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When that account resets, or null: the board card's waiting_until for the same task."
+          },
           "reviews": {
             "type": "array",
             "items": {
@@ -13463,6 +13479,8 @@
           "actions",
           "questions",
           "holds",
+          "waiting_for_credential_id",
+          "waiting_until",
           "reviews",
           "inbox_items",
           "events",
@@ -13550,6 +13568,8 @@
                 "closed_at": "2026-01-01T00:00:00Z"
               }
             ],
+            "waiting_for_credential_id": "00000000-0000-4000-8000-000000000314",
+            "waiting_until": "2026-01-01T00:00:00Z",
             "reviews": [
               {
                 "id": "00000000-0000-4000-8000-000000000079",

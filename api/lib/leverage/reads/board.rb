@@ -22,7 +22,9 @@ module Leverage
     #   waits with no item and no hold (HE-15): the same choice of account.
     #
     # The app writes the sentence from the account's name and state and the
-    # time, as it does MA-29's.
+    # time, as it does MA-29's. The task page (TaskPage) names it with the
+    # same two fields, from the same call to waiting, so the page and the
+    # card always agree.
     module Board
       module_function
 
@@ -35,10 +37,9 @@ module Leverage
           items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task_ids, state: "open")
             .order(:opened_at, :id).to_a
           item_json = inbox_items(items).group_by { |item| item.fetch(:about_id) }
-          credentials = Credential.where(id: holds.values.flatten.filter_map(&:credential_id)).index_by(&:id)
-          waits = AccountWaits.new(workspace_id, tasks.select { |task| !holds.key?(task.id) })
+          waits = waiting(workspace_id, tasks, holds)
 
-          { tasks: tasks.map { |task| card(task, holds.fetch(task.id, []), item_json[task.id]&.first, credentials, waits) },
+          { tasks: tasks.map { |task| card(task, holds.fetch(task.id, []), item_json[task.id]&.first, waits.fetch(task.id)) },
             as_of_seq: as_of_seq, reviewer_seat_exists: reviewer_seat?(workspace_id) }
         end
       end
@@ -56,16 +57,30 @@ module Leverage
         items.map { |item| Shapes.inbox_item(item, seqs.fetch(item.id)) }
       end
 
-      def card(task, holds, item, credentials, waits)
-        held = holds.find(&:credential_id)
-        account, until_ = if held
-          credential = credentials[held.credential_id]
-          [ held.credential_id, (credential.limited_until if credential && credential.state == "active") ]
-        else
-          waits.for(task)
-        end
+      def card(task, holds, item, waiting)
         { task: Shapes.task_summary(task), blocked: holds.any?, hold_reasons: holds.map(&:reason).uniq,
-          waiting_for_credential_id: account, waiting_until: Shapes.time(until_), inbox_item: item }
+          **waiting, inbox_item: item }
+      end
+
+      # The account each task waits for and when it resets, as the card and
+      # the task page say it: task id => { waiting_for_credential_id:,
+      # waiting_until: }. open_holds maps a task id to its open holds. A hold
+      # that names a credential says which, and its reset time only while
+      # the account is active; a task with no hold asks AccountWaits.
+      def waiting(workspace_id, tasks, open_holds)
+        held = tasks.to_h { |task| [ task.id, open_holds.fetch(task.id, []).find(&:credential_id) ] }.compact
+        credentials = Credential.where(id: held.values.map(&:credential_id)).index_by(&:id)
+        waits = AccountWaits.new(workspace_id, tasks.select { |task| open_holds.fetch(task.id, []).empty? })
+
+        tasks.to_h do |task|
+          account, until_ = if (hold = held[task.id])
+            credential = credentials[hold.credential_id]
+            [ hold.credential_id, (credential.limited_until if credential && credential.state == "active") ]
+          else
+            waits.for(task)
+          end
+          [ task.id, { waiting_for_credential_id: account, waiting_until: Shapes.time(until_) } ]
+        end
       end
 
       # Which account a Ready or In review task with no hold waits for

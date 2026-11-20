@@ -5,8 +5,9 @@ module Leverage
     # every hold, the reviews, the open Needs you items, the task's events in
     # seq order for its log, the names that log needs and its recovery times
     # (milestone 3 plan HE-17, which RecoveryTimes computes from the events
-    # alone). One snapshot, so
-    # the page and as_of_seq are one moment of the log.
+    # alone), and the account the task waits for and when it resets, from
+    # Board.waiting, the reading its board card uses (HE-15, HE-16). One
+    # snapshot, so the page and as_of_seq are one moment of the log.
     module TaskPage
       UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
@@ -30,12 +31,15 @@ module Leverage
         events = Event.where(workspace_id: workspace_id, task_id: task.id).order(:seq).to_a
         items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task.id, state: "open")
           .order(:opened_at, :id).to_a
+        holds = Hold.where(task_id: task.id).order(:opened_at, :id).to_a
+        waiting = Board.waiting(workspace_id, [ task ], { task.id => holds.select { |hold| hold.closed_at.nil? } })
 
         { task: Shapes.task_summary(task),
           criteria: criteria.map { |criterion| Shapes.criterion(criterion, evidence.fetch(criterion.id, [])) },
           actions: Action.where(task_id: task.id).order(:position, :id).map { |action| Shapes.action(action) },
           questions: Question.where(task_id: task.id).order(:asked_at, :id).map { |question| Shapes.question(question) },
-          holds: Hold.where(task_id: task.id).order(:opened_at, :id).map { |hold| Shapes.hold(hold) },
+          holds: holds.map { |hold| Shapes.hold(hold) },
+          **waiting.fetch(task.id),
           reviews: reviews.map { |review| Shapes.review(review) },
           inbox_items: Board.inbox_items(items),
           events: events.map { |event| Shapes.event(event) },

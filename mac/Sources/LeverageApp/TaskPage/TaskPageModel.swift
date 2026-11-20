@@ -127,15 +127,14 @@ final class TaskPageModel {
         return known
     }
 
-    /// The card's words for this task, from the read.
+    /// The card's words for this task, from the read: the account it waits
+    /// for and when it resets are the card's own fields (HE-15, HE-16).
     var status: CardContent? {
         guard let page else { return nil }
         let holds = openHolds
-        let waiting = holds.first { $0.credentialID != nil }
-        let account = waiting?.credentialID.flatMap { cardAccounts[$0] }
         let card = BoardTask(
             task: page.task, blocked: !holds.isEmpty, holdReasons: holds.map(\.reason),
-            waitingForCredentialID: waiting?.credentialID, waitingUntil: account?.limitedUntil)
+            waitingForCredentialID: page.waitingForCredentialID, waitingUntil: page.waitingUntil)
         return CardWording.content(
             for: card, seatNames: seatNames, reviewerSeatExists: page.reviewerSeatExists, accounts: cardAccounts,
             clock: clock)
@@ -269,7 +268,8 @@ final class TaskPageModel {
             let read = try await api.task(id: taskID)
             var position = read.asOfSeq
             var readAccounts = accounts
-            if read.names.contains(where: { $0.kind == .credential }) || read.holds.contains(where: { $0.credentialID != nil }) {
+            if read.waitingForCredentialID != nil || read.names.contains(where: { $0.kind == .credential })
+                || read.holds.contains(where: { $0.credentialID != nil }) {
                 // The provider and the reset time are a nicety: the page still names the account without them.
                 do {
                     let list = try await api.credentials()

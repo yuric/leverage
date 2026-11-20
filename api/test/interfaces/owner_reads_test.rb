@@ -410,10 +410,20 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal card, page
   end
 
-  test "the task page names no account for a task that waits for none" do
+  test "the task page names no account for a task that waits for none, nor for a credential hold that closed" do
     task = scenario.task(state: "ready")
 
     page, card = page_and_card(task)
+
+    assert_equal({ "waiting_for_credential_id" => nil, "waiting_until" => nil }, page)
+    assert_equal card, page
+
+    credential = scenario.credential
+    scenario.limit_credential(credential, reset_at: Time.current.change(usec: 0) + 3600)
+    working = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    scenario.hold(working, reason: "credential_limit", credential: credential).update_columns(closed_at: Time.current)
+
+    page, card = page_and_card(working)
 
     assert_equal({ "waiting_for_credential_id" => nil, "waiting_until" => nil }, page)
     assert_equal card, page
