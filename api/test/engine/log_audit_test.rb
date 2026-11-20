@@ -88,6 +88,25 @@ class LogAuditTest < ActiveSupport::TestCase
     assert(found.any? { |line| line.include?("task.ready") && line.include?("gate") }, found.inspect)
   end
 
+  # RC-50, RD-12: review claim-next writes the provider rule's applied row
+  # for the review it skips, on that review's task, and claims another.
+  test "a review claim-next that skips one task's review and claims another's passes" do
+    scenario = Scenario.new
+    scenario.rule(key: "different_provider_review", origin: "shipped")
+    claude = scenario.credential(provider: "claude")
+    skipped = scenario.task(state: "in_review", builder: scenario.seat(credential: claude))
+    taken = scenario.task(state: "in_review", builder: scenario.seat(credential: scenario.credential(provider: "codex")))
+    reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "claude", name: "Another claude"))
+    after = scenario.workspace.reload.last_seq
+    outcome = T.apply(T::Request.new(command: "claim_review", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: reviewer.id, key: "skip-and-claim", request_hash: "s" * 64, params: {}))
+
+    assert outcome.completed?, outcome.refusal&.code
+    written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", after).order(:seq)
+    assert_equal [ [ "check.finished", skipped.id ], [ "review.started", taken.id ] ], written.pluck(:type, :task_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   # credential.switched is a side event in the registry, but only the rows
   # that name it may write it (milestone 3 plan §2.3 and WP9): the trace's
   # last command (pass_review, which ends the task) with a switch appended
