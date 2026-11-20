@@ -113,44 +113,44 @@ struct SessionGuard: OwnerAPI {
         try await guarded { try await base.installTool(provider: provider, key: key) }
     }
 
-    // The Handoff milestone's calls (first version: passed through unguarded).
+    // The Handoff milestone's calls.
 
     func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage {
-        try await base.listInbox(afterSeq: afterSeq, wait: wait)
+        try await guarded { try await base.listInbox(afterSeq: afterSeq, wait: wait) }
     }
 
     func promoteTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.promoteTask(taskID: taskID, key: key)
+        try await guarded { try await base.promoteTask(taskID: taskID, key: key) }
     }
 
     func editContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey) async throws
         -> PlainOutcome {
-        try await base.editContract(taskID: taskID, request, key: key)
+        try await guarded { try await base.editContract(taskID: taskID, request, key: key) }
     }
 
     func holdTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.holdTask(taskID: taskID, key: key)
+        try await guarded { try await base.holdTask(taskID: taskID, key: key) }
     }
 
     func resumeTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.resumeTask(taskID: taskID, key: key)
+        try await guarded { try await base.resumeTask(taskID: taskID, key: key) }
     }
 
     func pauseSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.pauseSeat(seatID: seatID, key: key)
+        try await guarded { try await base.pauseSeat(seatID: seatID, key: key) }
     }
 
     func resumeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.resumeSeat(seatID: seatID, key: key)
+        try await guarded { try await base.resumeSeat(seatID: seatID, key: key) }
     }
 
     func changeSeat(seatID: UUID, _ request: ChangeSeatRequest, key: IdempotencyKey) async throws
         -> PlainOutcome {
-        try await base.changeSeat(seatID: seatID, request, key: key)
+        try await guarded { try await base.changeSeat(seatID: seatID, request, key: key) }
     }
 
     func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
-        try await base.signInAgain(credentialID: credentialID, key: key)
+        try await guarded { try await base.signInAgain(credentialID: credentialID, key: key) }
     }
 }
 

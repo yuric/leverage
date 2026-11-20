@@ -442,5 +442,35 @@ public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
         self.enabled = enabled
     }
 
-    public func encode(to encoder: any Encoder) throws {}
+    enum CodingKeys: String, CodingKey {
+        case name, role, model, effort, enabled
+        case strengthRank = "strength_rank"
+        case credentialID = "credential_id"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(role, forKey: .role)
+        try model.write(to: &container, forKey: .model)
+        try effort.write(to: &container, forKey: .effort)
+        try strengthRank.write(to: &container, forKey: .strengthRank)
+        switch credentialID {
+        case .keep: break
+        case .set(let id): try container.encodeID(id, forKey: .credentialID)
+        case .clear: try container.encodeNil(forKey: .credentialID)
+        }
+        try container.encodeIfPresent(enabled, forKey: .enabled)
+    }
+}
+
+extension Setting where Value: Encodable {
+    /// Writes nothing for `keep`, the value for `set`, and null for `clear`.
+    fileprivate func write<Key: CodingKey>(to container: inout KeyedEncodingContainer<Key>, forKey key: Key) throws {
+        switch self {
+        case .keep: break
+        case .set(let value): try container.encode(value, forKey: key)
+        case .clear: try container.encodeNil(forKey: key)
+        }
+    }
 }

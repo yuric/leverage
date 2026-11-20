@@ -126,15 +126,16 @@ extension AppRuntime {
     public var inboxCursor: any InboxCursorStoring { InMemoryInboxCursor.shared }
 }
 
-/// The notifier that posts nothing: permission is never given.
+/// The notifier that posts nothing. Permission is never given, so the app's
+/// own line says notifications are off (HM-28).
 public final class SilentNotifier: Notifying {
     public static let shared = SilentNotifier()
 
     public init() {}
 
-    public func requestPermission() async -> Bool { true }
-    public func isPermitted() async -> Bool { true }
-    public func post(_ notification: OwnerNotification) async { _ = notification }
+    public func requestPermission() async -> Bool { false }
+    public func isPermitted() async -> Bool { false }
+    public func post(_ notification: OwnerNotification) async {}
     public func onClick(_ handler: (@Sendable (UUID) -> Void)?) {}
 }
 
@@ -142,10 +143,13 @@ public final class SilentNotifier: Notifying {
 public final class InMemoryInboxCursor: InboxCursorStoring, @unchecked Sendable {
     public static let shared = InMemoryInboxCursor()
 
+    private let lock = NSLock()
+    private var stored = 0
+
     public init() {}
 
-    public func load() -> Int { 0 }
-    public func save(_ seq: Int) throws {}
+    public func load() -> Int { lock.withLock { stored } }
+    public func save(_ seq: Int) throws { lock.withLock { stored = seq } }
 }
 
 /// The runtime where the services are not built: every service reports

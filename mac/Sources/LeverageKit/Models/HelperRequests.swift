@@ -10,22 +10,29 @@ public struct HelperRequestParams: Codable, Equatable, Sendable {
     public let model: String?
     /// The seat's effort; nil for the tool's default.
     public let effort: String?
-    public var taskID: UUID? { nil }
-    public var reviewID: UUID? { nil }
+    /// A start request's task to continue; at most one of `taskID` and
+    /// `reviewID` is set (HD-1, HD-9).
+    public let taskID: UUID?
+    /// A start request's review to continue.
+    public let reviewID: UUID?
 
     public init(
         provider: Provider? = nil, credentialKind: CredentialKind? = nil, role: SeatRole? = nil,
-        model: String? = nil, effort: String? = nil
+        model: String? = nil, effort: String? = nil, taskID: UUID? = nil, reviewID: UUID? = nil
     ) {
         self.provider = provider
         self.credentialKind = credentialKind
         self.role = role
         self.model = model
         self.effort = effort
+        self.taskID = taskID
+        self.reviewID = reviewID
     }
 
     enum CodingKeys: String, CodingKey {
         case provider, role, model, effort
+        case taskID = "task_id"
+        case reviewID = "review_id"
         case credentialKind = "credential_kind"
     }
 }

@@ -18,13 +18,16 @@ public struct Credential: Codable, Equatable, Sendable {
     public let strengthRank: Int?
     public let lastVerifiedAt: Date?
     /// When a limit was reported for it; nil when it is not limited.
-    public var limitedSince: Date? { nil }
+    /// `limitedUntil` is when that limit ends, nil when the provider gave no
+    /// time. Limited means this is set and `limitedUntil` is nil or later
+    /// than now (HE-3).
+    public let limitedSince: Date?
 
     public init(
         id: UUID, kind: CredentialKind = .login, provider: Provider, name: String, maskedLabel: String? = nil,
         plan: String? = nil, accountEmail: String? = nil, state: CredentialState = .active,
-        limitedUntil: Date? = nil, position: Int, model: String? = nil, effort: String? = nil,
-        strengthRank: Int? = nil, lastVerifiedAt: Date? = nil
+        limitedUntil: Date? = nil, limitedSince: Date? = nil, position: Int, model: String? = nil,
+        effort: String? = nil, strengthRank: Int? = nil, lastVerifiedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -35,6 +38,7 @@ public struct Credential: Codable, Equatable, Sendable {
         self.accountEmail = accountEmail
         self.state = state
         self.limitedUntil = limitedUntil
+        self.limitedSince = limitedSince
         self.position = position
         self.model = model
         self.effort = effort
@@ -47,6 +51,7 @@ public struct Credential: Codable, Equatable, Sendable {
         case maskedLabel = "masked_label"
         case accountEmail = "account_email"
         case limitedUntil = "limited_until"
+        case limitedSince = "limited_since"
         case strengthRank = "strength_rank"
         case lastVerifiedAt = "last_verified_at"
     }
