@@ -37,7 +37,10 @@ module Leverage
   # lease on another account. So it must belong to a fitting row.
   # A command whose rows have no state (report_request_result, change_seat:
   # a verified login may close the credential holds of several tasks) may
-  # touch several tasks; any other touches one.
+  # touch several tasks. Any other touches its own task (its first event's),
+  # and beside it only the side events a row writes on another task: the
+  # "Account signed out" item a sign-out opens on another task's
+  # credential_limit hold (HE-11, OTHER_TASK).
   #
   # Steps. Each task's rows, in the order they opened: the first opens at
   # task.created, each closes where the next opens (the same time, in the
@@ -50,6 +53,7 @@ module Leverage
     CREDENTIAL_HOLD_RELEASE = "credential_hold_release".freeze
     CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
     ROW_ONLY = %w[credential.switched].freeze
+    OTHER_TASK = %w[inbox.opened].freeze
     TERMINAL = %w[task.done task.cancelled].freeze
     REFUSED_MAY_WRITE = /\A(check|hold|inbox)\./
     LEASE_FIELD = "lease_seat_id".freeze
@@ -152,7 +156,15 @@ module Leverage
       tasks = events.filter_map(&:task_id).uniq
       named = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
       stateless = named.any? && named.none? { |row| row.fetch("from") || row.fetch("to") }
-      return [ "touches #{tasks.size} tasks" ] if tasks.size > 1 && !stateless
+      others = []
+      if tasks.size > 1 && !stateless
+        own = events.first.task_id
+        others = events.select { |event| event.task_id && event.task_id != own }
+        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| OTHER_TASK.include?(event.type) }
+
+        events -= others
+        tasks = [ own ]
+      end
 
       task = tasks.first unless tasks.size > 1
       state = task && states[task]
@@ -164,7 +176,7 @@ module Leverage
       return [ "has no row from #{state.inspect} that writes #{types.join(", ")}" ] if kept.empty?
 
       allowed = kept.flat_map { |row| row.fetch("events") + extra_events(row) }.to_set
-      stray = types.reject { |type| allowed.include?(type) || side_types.include?(type) }
+      stray = (types + others.map(&:type)).reject { |type| allowed.include?(type) || side_types.include?(type) }
       problems = []
       problems << "wrote #{stray.uniq.join(", ")}, which no matched row allows" unless stray.empty?
       stateful = kept.select { |row| row.fetch("from") || row.fetch("to") }
