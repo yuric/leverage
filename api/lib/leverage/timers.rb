@@ -6,9 +6,19 @@ module Leverage
   # Milestone 2 has the two lease timers and command_key_retention;
   # milestone 3 adds the credential hold release (a task timer, due as rule
   # 8 of its plan's §2.1 and HE-23 say) and seat_run_placement (a workspace
-  # timer, HD-4). The task timers of later milestones (check and job
-  # timeouts) arrive with their entries; the workspace timers are fired by
-  # the sweep (Sweep), never by a command.
+  # timer, HD-4). Milestone 4 adds the four job timers (JOB_TIMERS: a rule
+  # check's attempt or a contract draft not claimed, or not finished, in
+  # time) and two workspace timers, orchestrator_offline and
+  # reviewer_eligibility. The workspace timers are fired by the sweep
+  # (Sweep), never by a command.
+  #
+  # A job timer's events are the app's, with no key, effective at its due
+  # time, also when a writer of another package (Jobs, RuleChecks,
+  # PendingTransitions, Holds) writes them: the timer runs it inside
+  # as_timer, a TimerContext whose actor, key and effective time are the
+  # timer's, so a writer that keeps the context's defaults, and dates the
+  # rows it changes with ctx.effective_at, records the miss at the due
+  # time (milestone 4 plan WP7; trace 07).
   module Timers
     # The task timers a command applies first, by the subject whose due
     # time they read (timers.json).
@@ -46,6 +56,56 @@ module Leverage
     # The param Timers.apply_workspace hands the time in by; Context reads
     # it as the command's effective_at.
     EFFECTIVE_AT = "effective_at".freeze
+
+    # The job timers (timers.json): the kind of job each reads, the state it
+    # must be in, and which of its due times (job_due_at) it reads. An
+    # approval job is milestone 5's and question jobs have timers of their
+    # own there (DB-31).
+    JOB_TIMERS = {
+      "check_queue_timeout" => { kind: "rule_check", state: "queued", due: :queue }.freeze,
+      "check_run_timeout" => { kind: "rule_check", state: "claimed", due: :run }.freeze,
+      "contract_draft_job_queue_timeout" => { kind: "contract_draft", state: "queued", due: :queue }.freeze,
+      "contract_draft_job_run_timeout" => { kind: "contract_draft", state: "claimed", due: :run }.freeze
+    }.freeze
+    # The two a claim must not find in its way (apply_claimable).
+    QUEUE_TIMERS = JOB_TIMERS.select { |_timer, spec| spec.fetch(:due) == :queue }.keys.freeze
+
+    # job_due_at in SQL, for the sweep and for a command's due timers: the
+    # attempt's times and the rule version's own timeouts for a check, the
+    # job's own times for a draft, the workspace's timeouts otherwise.
+    JOB_DUE_SQL = {
+      "rule_check" => {
+        queue: "rule_check_attempts.queued_at + COALESCE(rule_versions.queue_timeout_seconds, " \
+               "workspaces.check_queue_timeout_seconds) * interval '1 second'",
+        run: "rule_check_attempts.started_at + COALESCE(rule_versions.run_timeout_seconds, " \
+             "workspaces.check_run_timeout_seconds) * interval '1 second'"
+      }.freeze,
+      "contract_draft" => {
+        queue: "jobs.queued_at + workspaces.check_queue_timeout_seconds * interval '1 second'",
+        run: "jobs.claimed_at + workspaces.check_run_timeout_seconds * interval '1 second'"
+      }.freeze
+    }.freeze
+    CHECK_JOINS = "JOIN rule_check_attempts ON rule_check_attempts.job_id = jobs.id " \
+                  "JOIN rule_checks ON rule_checks.id = rule_check_attempts.rule_check_id " \
+                  "JOIN rule_versions ON rule_versions.id = rule_checks.rule_version_id".freeze
+
+    # A command's Context for one timer applied inside it (as_timer): the
+    # app's, with no key and the timer's effective time, on the command's
+    # workspace, clock and lock. Each event it appends is also the
+    # command's, so the command sees it in ctx.events and commits it.
+    class TimerContext < Transitions::Context
+      def initialize(parent, command, effective_at)
+        request = Transitions::Request.new(command: command, workspace_id: parent.workspace.id, caller_kind: nil,
+          caller_id: nil, key: nil, request_hash: nil, params: { EFFECTIVE_AT => effective_at.utc.iso8601(6) })
+        super(request: request, workspace: parent.workspace, at: parent.at)
+        @parent = parent
+      end
+
+      def appended(event, seconds)
+        super
+        @parent.appended(event, seconds)
+      end
+    end
 
     # The workspace's timeout of each due time kind (timers.json).
     WORKSPACE_TIMEOUTS = { queue: :check_queue_timeout_seconds, run: :check_run_timeout_seconds }.freeze
@@ -103,12 +163,13 @@ module Leverage
     end
 
     # Applies every timer due on the request's target task (or the task of
-    # its target review) and on every task or review the calling seat
-    # holds, with effective_at the due time, actor app, no command_id, and
-    # seq before the command's own events: the leases, and the credential
-    # hold release (test 7, whoever the caller is). A timer's own command
-    # (the sweep's) applies itself and gets nothing here, and so does a
-    # command with no workspace yet (create_owner).
+    # its target review, job or rule check) and on every task or review the
+    # calling seat holds, and the task of the job it holds, with effective_at
+    # the due time, actor app, no command_id, and seq before the command's
+    # own events: the leases, the credential hold release and the job timers
+    # (test 7, whoever the caller is). A timer's own command (the sweep's)
+    # applies itself and gets nothing here, and so does a command with no
+    # workspace yet (create_owner).
     #
     # ctx - the command's Transitions::Context.
     #
@@ -141,24 +202,60 @@ module Leverage
     end
 
     # Runs the task timers due on each task, each in the order of its due
-    # time, so effective times never go backwards: the credential hold
-    # release when it is due no later than the builder's lease, then the
-    # lease (whose end closes a credential hold still open, SM-15); then
-    # the review lease timer of each of their due reviews. Returns the
-    # Events written.
+    # time, so effective times never go backwards (L120): on each task the
+    # credential hold release when it is due no later than the builder's
+    # lease, the lease (whose end closes a credential hold still open,
+    # SM-15) and the job timers, by due time; then the review lease timer
+    # of each of their due reviews; then the job timers due after a review
+    # lease of their task. Each timer runs at most once in a command.
+    # Returns the Events written.
     def apply_task_timers(ctx, tasks)
       written = ctx.events.size
-      tasks.each do |task|
-        if credential_hold_first?(task, ctx.at)
-          apply(ctx, Transitions::Table.entry_for(CREDENTIAL_HOLD).new(CREDENTIAL_HOLD, targets: [ task ]))
-          task = Task.find(task.id)
-        end
-        apply(ctx, Transitions::Entries::BuilderLeaseExpiry.new(BUILDER_LEASE, targets: [ task ])) if Leases.due?(task, ctx.at)
-      end
+      applied = Set.new
+      tasks.each { |task| apply_before_reviews(ctx, task, applied) }
       due_reviews_of(ctx, tasks.map(&:id)).each do |review|
         apply(ctx, Transitions::Entries::ReviewLeaseExpiry.new(REVIEW_LEASE, targets: [ review ]))
       end
+      tasks.each do |task|
+        due_job_timers(ctx, task, applied).each { |_due, timer, job| apply_job_timer(ctx, timer, job, applied) }
+      end
       ctx.events.drop(written)
+    end
+
+    # One task's credential hold release, builder lease and job timers, the
+    # earliest due first (a tie: the hold, then the lease, then the jobs),
+    # leaving the job timers due after one of the task's review leases to
+    # apply_task_timers.
+    def apply_before_reviews(ctx, task, applied)
+      review_due = due_reviews_of(ctx, [ task.id ]).map(&:lease_due_at).min
+      loop do
+        task = Task.find(task.id)
+        due = []
+        due << [ credential_hold_due_at(task), 0, :credential ] if !applied.include?([ :credential, task.id ]) &&
+          credential_hold_first?(task, ctx.at)
+        due << [ task.lease_due_at, 1, :lease ] if !applied.include?([ :lease, task.id ]) && Leases.due?(task, ctx.at)
+        due_job_timers(ctx, task, applied).each do |time, timer, job|
+          due << [ time, 2, [ timer, job ] ] unless review_due && time > review_due
+        end
+        break if due.empty?
+
+        _time, _rank, what = due.each_with_index.min_by { |(time, rank, _what), index| [ time, rank, index ] }.first
+        case what
+        when :credential
+          applied << [ :credential, task.id ]
+          apply(ctx, Transitions::Table.entry_for(CREDENTIAL_HOLD).new(CREDENTIAL_HOLD, targets: [ task ]))
+        when :lease
+          applied << [ :lease, task.id ]
+          apply(ctx, Transitions::Entries::BuilderLeaseExpiry.new(BUILDER_LEASE, targets: [ task ]))
+        else
+          apply_job_timer(ctx, *what, applied)
+        end
+      end
+    end
+
+    def apply_job_timer(ctx, timer, job, applied)
+      applied << job.id
+      apply(ctx, Transitions::Table.entry_for(timer).new(timer, targets: [ job ]))
     end
 
     # Applies the due lease timers a claim would otherwise find in its way:
@@ -166,7 +263,14 @@ module Leverage
     # task goes back to Ready), for :review every review lease (the review
     # loses its reviewer), so what was due is claimable now, after its
     # lease_expired event at the due time. Returns the Events it wrote.
+    #
+    # For :job, before a job claim: every queued job of the workspace past
+    # its queue due time is timed out first (queued once more, or ended on
+    # its second miss), oldest due first, so a claim never takes an attempt
+    # whose time to be claimed has passed (L398).
     def apply_claimable(ctx, kind)
+      return apply_queue_timers(ctx) if kind == :job
+
       workspace_id = ctx.workspace.id
       tasks = if kind == :review
         due = Review.where(workspace_id: workspace_id, verdict: nil, lease_time_left_while_paused: nil)
@@ -176,6 +280,18 @@ module Leverage
         Task.where(workspace_id: workspace_id, lease_time_left_while_paused: nil).where(lease_due_at: ..ctx.at)
       end
       apply_lease_timers(ctx, tasks.order(:id).to_a)
+    end
+
+    # The job queue timers due in the workspace, oldest due first. Returns
+    # the Events written.
+    def apply_queue_timers(ctx)
+      written = ctx.events.size
+      applied = Set.new
+      due = QUEUE_TIMERS.flat_map do |timer|
+        job_timer_scope(Job.where(workspace_id: ctx.workspace.id), timer, ctx.at).map { |job| [ job.timer_due_at, timer, job ] }
+      end
+      due.sort_by { |time, _timer, job| [ time, job.id ] }.each { |_time, timer, job| apply_job_timer(ctx, timer, job, applied) }
+      ctx.events.drop(written)
     end
 
     # Runs the builder lease timer of each task whose lease is due, then
@@ -213,13 +329,15 @@ module Leverage
       ids = target_ids(ctx.request.params)
       return [] if ids.empty? && ctx.request.caller_kind != "seat"
 
-      task_ids = ids.empty? ? [] : ids + Review.where(workspace_id: workspace_id, id: ids).pluck(:task_id)
-      scope = Task.where(workspace_id: workspace_id, id: task_ids)
+      task_ids = ids.empty? ? [] : ids + [ Review, Job, RuleCheck ].flat_map { |model| model.where(workspace_id: workspace_id, id: ids).pluck(:task_id) }
+      scope = Task.where(workspace_id: workspace_id, id: task_ids.compact)
       if ctx.request.caller_kind == "seat"
         seat_id = ctx.request.caller_id
         held_reviews = Review.where(workspace_id: workspace_id, reviewer_seat_id: seat_id, verdict: nil).select(:task_id)
+        held_jobs = Job.where(workspace_id: workspace_id, claimed_by_seat_id: seat_id, state: "claimed").select(:task_id)
         scope = scope.or(Task.where(workspace_id: workspace_id, holder_seat_id: seat_id))
           .or(Task.where(workspace_id: workspace_id, id: held_reviews))
+          .or(Task.where(workspace_id: workspace_id, id: held_jobs))
       end
       scope.order(:id).to_a
     end
@@ -258,6 +376,92 @@ module Leverage
     def effective_at(task, due_at)
       latest = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at)
       latest && latest > due_at ? latest : due_at
+    end
+
+    # --- the job timers (milestone 4 plan WP7; timers.json) ---
+
+    # The job timer that reads this job now (its kind and state), or nil.
+    def job_timer_for(job)
+      JOB_TIMERS.find { |_timer, spec| spec.fetch(:kind) == job.kind && spec.fetch(:state) == job.state }&.first
+    end
+
+    # The job's due time for this timer (job_due_at), or nil.
+    def job_timer_due_at(job, timer) = job_due_at(job, JOB_TIMERS.fetch(timer).fetch(:due))
+
+    # Whether the timer is due on the job at at: the job is of the timer's
+    # kind and in its state, and its due time has come.
+    def job_timer_due?(job, timer, at)
+      return false unless job_timer_for(job) == timer
+
+      due = job_timer_due_at(job, timer)
+      !due.nil? && due <= at
+    end
+
+    # Whether a job's miss is its second (L399, DB-31): a draft's job is
+    # the attempt, so its own attempt_number says so; a check's attempt is
+    # the second try of a miss when the attempt before it was queued once
+    # more (job.requeued on its job). An attempt the owner ran again, or
+    # one run again after a withdrawal or an error, misses for the first
+    # time (WP7's reading; trace 18, command 13).
+    def second_miss?(job)
+      return job.attempt_number >= 2 unless job.kind == "rule_check"
+
+      attempt = RuleCheckAttempt.find_by(job_id: job.id)
+      previous = attempt && RuleCheckAttempt.find_by(rule_check_id: attempt.rule_check_id,
+        attempt_number: attempt.attempt_number - 1)
+      return false unless previous&.job_id
+
+      Event.where(workspace_id: job.workspace_id, type: "job.requeued", subject_kind: "job", subject_id: previous.job_id)
+        .exists?
+    end
+
+    # Runs the block with a TimerContext for timer at effective_at, inside
+    # the command whose Context is ctx. Returns the block's value.
+    def as_timer(ctx, timer, effective_at)
+      yield TimerContext.new(ctx, timer, [ effective_at, ctx.at ].min)
+    end
+
+    # The jobs of scope the timer is due on at at, each with its due time
+    # (timer_due_at), oldest due first.
+    def job_timer_scope(scope, timer, at)
+      spec = JOB_TIMERS.fetch(timer)
+      due = JOB_DUE_SQL.fetch(spec.fetch(:kind)).fetch(spec.fetch(:due))
+      scope = scope.joins("JOIN workspaces ON workspaces.id = jobs.workspace_id")
+      scope = scope.joins(CHECK_JOINS) if spec.fetch(:kind) == "rule_check"
+      scope.where(kind: spec.fetch(:kind), state: spec.fetch(:state)).where("#{due} <= ?", at)
+        .select("jobs.*, #{due} AS timer_due_at").order(Arel.sql("timer_due_at, jobs.id"))
+    end
+
+    # The job timers due on one task at ctx.at that have not run in this
+    # command, as [due, timer, job], oldest due first.
+    def due_job_timers(ctx, task, applied)
+      jobs = Job.where(workspace_id: ctx.workspace.id, task_id: task.id)
+      return [] unless jobs.where(state: %w[queued claimed]).exists?
+
+      JOB_TIMERS.keys.flat_map do |timer|
+        job_timer_scope(jobs, timer, ctx.at).reject { |job| applied.include?(job.id) }.map { |job| [ job.timer_due_at, timer, job ] }
+      end.sort_by { |time, _timer, job| [ time, job.id ] }
+    end
+
+    # What the sweep's run of a job timer takes: the workspace's jobs it is
+    # due on, oldest due first, at most limit of them. A job whose task has
+    # a lease due earlier is left until that lease has ended, as a command
+    # would order them (apply_task_timers): the sweep runs the job timers
+    # before the leases and again after them.
+    def due_jobs(workspace_id, at, timer, limit:)
+      job_timer_scope(Job.where(workspace_id: workspace_id), timer, at).to_a
+        .reject { |job| behind_lease?(job, job.timer_due_at, at) }.first(limit)
+    end
+
+    # Whether the job's task has a builder or review lease due at at and
+    # earlier than due.
+    def behind_lease?(job, due, at)
+      task = job.task_id && Task.find_by(id: job.task_id, workspace_id: job.workspace_id)
+      return false unless task
+      return true if Leases.due?(task, at) && task.lease_due_at < due
+
+      Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: nil).where.not(reviewer_seat_id: nil)
+        .any? { |review| Leases.due?(review, at) && review.lease_due_at < due }
     end
 
     # --- the credential hold release (milestone 3 plan §2.1 rules 7, 8) ---
