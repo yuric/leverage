@@ -109,12 +109,14 @@ module Leverage
           RuleChecks.new_attempt(ctx, check, job: job)
         end
 
-        # The open check_error holds whose rule's latest check on the task
-        # ended in error, oldest first, each as [hold, check, whether its
-        # task item is open].
+        # The open check_error holds whose check ended in error, oldest
+        # first, each as [hold, check, whether its task item is open]. A
+        # hold's check is the one it names (holds.rule_check_id), else its
+        # rule's latest check on the task.
         def errored_held(workspace_id)
           ::Hold.where(workspace_id: workspace_id, reason: CHECK_ERROR, closed_at: nil).order(:opened_at, :id).filter_map do |hold|
-            check = RuleCheck.where(workspace_id: workspace_id, task_id: hold.task_id, rule_id: hold.rule_id)
+            check = hold.rule_check_id && RuleCheck.find_by(id: hold.rule_check_id, workspace_id: workspace_id)
+            check ||= RuleCheck.where(workspace_id: workspace_id, task_id: hold.task_id, rule_id: hold.rule_id)
               .order(:updated_at, :id).last
             next unless check&.result == "error"
 
