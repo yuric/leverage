@@ -171,6 +171,37 @@ class InboxTest < CommittingTestCase
     end
   end
 
+  # The workspace's "Orchestrator offline" item as the sweep's timer opens
+  # it (WP7), with the count it had then (milestone 4 plan RD-16).
+  def offline_item(waiting_checks:)
+    ActiveRecord::Base.transaction do
+      item = InboxItem.create!(workspace_id: scenario.workspace_id, kind: "orchestrator_offline", about_kind: "workspace",
+        about_id: scenario.workspace_id, choices: [], opened_at: scenario.database_now,
+        facts: { "role" => "orchestrator", "waiting_checks" => waiting_checks, "credential_id" => nil })
+      scenario.append("inbox.opened", subject: item, payload: { kind: item.kind })
+      item
+    end
+  end
+
+  test "an open Orchestrator offline item says how many checks wait now, not when it opened (RD-18), as the health line does" do
+    rule = scenario.rule
+    task = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    scenario.rule_check(task, rule: rule)
+    item = offline_item(waiting_checks: 1)
+    scenario.rule_check(task, rule: rule)
+    scenario.rule_check(task, rule: rule)
+    _, hold = held_task
+
+    items = read["items"]
+
+    offline = items.find { |entry| entry["id"] == item.id }
+    assert_equal({ "role" => "orchestrator", "waiting_checks" => 3, "credential_id" => nil }, offline["facts"])
+    assert_equal({ "round" => 3 }, items.find { |entry| entry["hold_id"] == hold.id }["facts"], "other items keep their facts")
+    assert_equal 1, item.reload.facts["waiting_checks"], "the read writes nothing"
+    health = Leverage::Reads::SystemHealth.call(scenario.workspace_id)
+    assert_equal offline.dig("facts", "waiting_checks"), health[:waiting_checks]
+  end
+
   test "it never writes: no command row and no event" do
     held_task
     before = [ Command.count, Event.count, Workspace.find(scenario.workspace_id).last_seq ]

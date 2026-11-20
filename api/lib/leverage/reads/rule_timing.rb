@@ -9,7 +9,7 @@ module Leverage
       module_function
 
       # rule_id: - one rule's answer, or nil for every rule's.
-      def call(workspace_id, rule_id: nil)
+      def call(workspace_id, rule_id: nil, as_of: nil)
         []
       end
     end

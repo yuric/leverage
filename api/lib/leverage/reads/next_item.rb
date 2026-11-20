@@ -58,7 +58,7 @@ module Leverage
 
         # Tests only: answers eligibility and briefing from these objects
         # inside the block.
-        def with_collaborators(eligibility: nil, briefing: nil)
+        def with_collaborators(eligibility: nil, briefing: nil, jobs: nil)
           saved = @collaborators
           @collaborators = saved.merge({ eligibility: eligibility, briefing: briefing }.compact)
           yield

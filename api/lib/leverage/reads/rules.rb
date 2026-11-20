@@ -12,6 +12,12 @@ module Leverage
       def call(workspace_id)
         { "rules" => [] }
       end
+
+      # Tests only: answers what the rules engine says of a version from
+      # words inside the block.
+      def with_collaborators(words: nil)
+        yield
+      end
     end
   end
 end

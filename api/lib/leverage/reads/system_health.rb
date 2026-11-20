@@ -42,6 +42,11 @@ module Leverage
         { backup_last_ran_at: Shapes.time(last), backup_late: late }
       end
 
+      # Tests only: answers RolePresence from presence inside the block.
+      def with_collaborators(presence: nil)
+        yield
+      end
+
       def database_now = ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
     end
   end
