@@ -145,10 +145,19 @@ struct LimitWaitEndToEndTests {
             #expect(held.id("credential_id") == one)
 
             // While it waits: no Needs you item, and the card names One and
-            // the time it resets (HM-40).
+            // the time it resets (HM-40). The reset comes 12 s after the
+            // stand-in's reply, and the sweep may close the hold first on a
+            // slow machine: the card is checked only when the hold was still
+            // open after the board was read, so the board was read while it
+            // waited (review).
             let card = try await world.owner.board().tasks.first { $0.task.id == task }
-            #expect(card?.waitingForCredentialID == one, "the card names the login it waits for")
-            #expect(card?.waitingUntil != nil, "the card names the time")
+            let stillHeld = try await world.owner.task(id: task).holds.contains {
+                $0.id == held.subjectID && $0.closedAt == nil
+            }
+            if stillHeld {
+                #expect(card?.waitingForCredentialID == one, "the card names the login it waits for")
+                #expect(card?.waitingUntil != nil, "the card names the time")
+            }
             let items = try await world.owner.listInbox(afterSeq: nil, wait: nil).items
             #expect(!items.contains { $0.aboutID == task || $0.credentialID == one }, "no Needs you item: \(items)")
 
