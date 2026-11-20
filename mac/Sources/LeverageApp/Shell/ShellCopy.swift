@@ -40,10 +40,10 @@ enum ShellCopy: OwnerFacingCopy {
         switch self {
         case .appName: "leverage"
         case .tabBoard: "Board"
-        case .tabNeedsYou: ""
+        case .tabNeedsYou: "Needs you"
         case .tabAgents: "Agents"
         case .tabCredentials: "Credentials"
-        case .tabHandoff: ""
+        case .tabHandoff: "Handoff"
         case .addTask: "Add task"
         case .backToBoard: "Back to the board"
         case .signOut: "Sign out"
@@ -53,7 +53,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .healthLate: "Background work is late"
         case .healthAgentsStopped: "Agents are not running on this Mac"
         case .healthUnreachable: "Can't reach leverage on this Mac"
-        case .healthBackupLate: ""
+        case .healthBackupLate: "The daily backup is late"
         case .tryAgain: "Try again"
 
         case .startingTitle: "Starting leverage"

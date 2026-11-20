@@ -81,5 +81,9 @@ final class ScreenContext {
 
     /// Asks for permission to notify, then watches the inbox until the task
     /// is cancelled. The shell runs it while the owner is signed in.
-    func startInbox() async {}
+    func startInbox() async {
+        inbox.attach(to: feed)
+        defer { inbox.detach() }
+        await inbox.run()
+    }
 }

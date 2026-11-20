@@ -74,6 +74,8 @@ final class HealthLineModel {
                 status = .agentsStopped
             } else if health.sweepLate {
                 status = .late
+            } else if health.backupLate {
+                status = .backupLate
             } else {
                 status = .running
             }

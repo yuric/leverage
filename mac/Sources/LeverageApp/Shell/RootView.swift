@@ -47,6 +47,7 @@ struct AppShell: View {
         }
         .padding(Tokens.Spacing.window)
         .environment(context)
+        .task { await context.startInbox() }
         .sheet(isPresented: $navigator.isAddTaskPresented) {
             AddTaskSheet().environment(context)
         }

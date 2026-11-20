@@ -7,14 +7,29 @@ struct NeedsYouNames: Sendable {
     var tasks: [UUID: String] = [:]
     var credentials: [UUID: Credential] = [:]
 
-    func taskTitle(_ id: UUID?) -> String { "" }
-    func accountName(_ id: UUID?) -> String { "" }
-    func provider(of id: UUID?) -> Provider? { nil }
+    /// The task's title, or "A task" when the board did not say.
+    func taskTitle(_ id: UUID?) -> String {
+        id.flatMap { tasks[$0] } ?? NeedsYouCopy.aTask.text
+    }
 
-    /// Reads the board and the credentials, in that order; the lower of their
-    /// two positions is where the events tail starts.
+    /// "Claude, Personal": the provider and the name, never the email.
+    func accountName(_ id: UUID?) -> String {
+        guard let credential = id.flatMap({ credentials[$0] }) else { return NeedsYouCopy.anAccount.text }
+        return "\(ProviderNames.name(credential.provider)), \(credential.name)"
+    }
+
+    func provider(of id: UUID?) -> Provider? { id.flatMap { credentials[$0]?.provider } }
+
+    /// Reads the board and the credentials, in that order, so that the lower
+    /// of their two positions is a point the events tail can start from
+    /// before the inbox was read.
     static func read(from owner: any OwnerAPI) async throws -> (names: NeedsYouNames, asOfSeq: Int) {
-        (NeedsYouNames(), 0)
+        let board = try await owner.board()
+        let list = try await owner.credentials()
+        var names = NeedsYouNames()
+        for entry in board.tasks { names.tasks[entry.task.id] = entry.task.title }
+        for entry in list.credentials { names.credentials[entry.credential.id] = entry.credential }
+        return (names, min(board.asOfSeq, list.asOfSeq))
     }
 }
 
@@ -30,11 +45,82 @@ struct NeedsYouButton: Identifiable, Equatable, Sendable {
 /// The words of each item kind (HM-24), shared by the screen and the notifier.
 enum NeedsYouWords {
     /// Whether the screen can open an item of this kind: every choice it
-    /// offers has a route (HM-21).
-    static func isShown(_ kind: NeedsYouItem) -> Bool { false }
-    static func heading(for item: InboxItem, names: NeedsYouNames) -> String { "" }
-    static func body(for item: InboxItem, names: NeedsYouNames) -> String { "" }
-    static func buttons(for item: InboxItem) -> [NeedsYouButton] { [] }
-    /// The heading of a notification sent from an event alone.
-    static func settledHeading(kind: NeedsYouItem?) -> String { "" }
+    /// offers has a route (HM-21). In this milestone that is three kinds.
+    static func isShown(_ kind: NeedsYouItem) -> Bool {
+        switch kind {
+        case .accountSignedOut, .limitWithNoResetTime, .pastRoundLimit: true
+        default: false
+        }
+    }
+
+    /// The account an item names: its own, or the one its facts name.
+    static func credentialID(of item: InboxItem) -> UUID? {
+        if let id = item.credentialID { return id }
+        return item.facts["credential_id"]?.stringValue.flatMap(UUID.init(uuidString:))
+    }
+
+    /// The task an item is about; nil for an item about a project or the workspace.
+    static func taskID(of item: InboxItem) -> UUID? { item.aboutKind == .task ? item.aboutID : nil }
+
+    static func heading(for item: InboxItem, names: NeedsYouNames) -> String {
+        let task = names.taskTitle(taskID(of: item))
+        let account = names.accountName(credentialID(of: item))
+        switch item.kind {
+        case .accountSignedOut: return NeedsYouCopy.signedOutHeading.filled(["account": account])
+        case .limitWithNoResetTime: return NeedsYouCopy.limitHeading.filled(["account": account])
+        case .pastRoundLimit:
+            return NeedsYouCopy.sentBackHeading.filled(["task": task, "count": String(sentBack(item))])
+        default: return NeedsYouCopy.unknownLine.filled(["task": task])
+        }
+    }
+
+    static func body(for item: InboxItem, names: NeedsYouNames) -> String {
+        let task = names.taskTitle(taskID(of: item))
+        let credential = credentialID(of: item)
+        let account = names.accountName(credential)
+        switch item.kind {
+        case .accountSignedOut:
+            return NeedsYouCopy.signedOutBody.filled(["task": task, "account": account])
+        case .limitWithNoResetTime:
+            let provider = names.provider(of: credential).map(ProviderNames.name) ?? NeedsYouCopy.anAccount.text
+            return NeedsYouCopy.limitBody.filled(["task": task, "account": account, "provider": provider])
+        case .pastRoundLimit: return NeedsYouCopy.sentBackBody.text
+        default: return ""
+        }
+    }
+
+    /// The buttons an item offers: one for each of its own choices that has a
+    /// route, in the order the item lists them.
+    static func buttons(for item: InboxItem) -> [NeedsYouButton] {
+        guard isShown(item.kind) else { return [] }
+        return item.choices.compactMap { choice in
+            switch choice {
+            case .signInAgain where item.kind == .accountSignedOut:
+                NeedsYouButton(action: .signInAgain, label: NeedsYouCopy.signInAgain.text)
+            case .allowAnotherRound where item.kind == .pastRoundLimit:
+                NeedsYouButton(action: .allowAnotherTry, label: NeedsYouCopy.letItTryOnceMore.text)
+            case .editContract where item.kind == .pastRoundLimit:
+                NeedsYouButton(action: .changeTask, label: NeedsYouCopy.changeTask.text)
+            case .cancel where item.kind == .pastRoundLimit:
+                NeedsYouButton(action: .cancelTask, label: NeedsYouCopy.cancelTask.text)
+            default: nil
+            }
+        }
+    }
+
+    /// The heading of a notification sent from an event alone, when the item
+    /// itself is gone.
+    static func settledHeading(kind: NeedsYouItem?) -> String {
+        switch kind {
+        case .accountSignedOut: NeedsYouCopy.kindSignedOut.text
+        case .limitWithNoResetTime: NeedsYouCopy.kindLimit.text
+        case .pastRoundLimit: NeedsYouCopy.kindSentBack.text
+        default: NeedsYouCopy.kindOther.text
+        }
+    }
+
+    private static func sentBack(_ item: InboxItem) -> Int {
+        guard case .number(let value)? = item.facts["round"] else { return 0 }
+        return Int(value)
+    }
 }

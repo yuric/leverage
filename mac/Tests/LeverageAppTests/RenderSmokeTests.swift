@@ -129,7 +129,9 @@ struct RenderSmokeTests {
         await model.load()
         #expect(model.rows.count == 4)
         #expect(drawsSomething(render(NeedsYouContent(model: model, notificationsAreOff: true))))
-        #expect(drawsSomething(render(NeedsYouContent(model: model, notificationsAreOff: false).environment(\.colorScheme, .dark))))
+        // Without a ground, dark-mode default text can match the card in this renderer, so the
+        // dark picture carries the line in its own colour, which is what separates it.
+        #expect(AgentFixtures.draws(NeedsYouContent(model: model, notificationsAreOff: true).environment(\.colorScheme, .dark)))
         open.value = []
         await model.load()
         #expect(model.rows.isEmpty)
