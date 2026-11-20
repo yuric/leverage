@@ -18,9 +18,24 @@ module Leverage
       # the task it picks is Ready, unheld and held by nobody.
       #
       # Result: ClaimTaskResult.
+      #
+      # Gated at task.before_claim, about the seat (milestone 4 plan §2.1,
+      # RE-5, SM-14). A model check makes the claim provisional (wait): the
+      # seat holds the Ready task with no lease, no event and no briefing,
+      # so nobody else is offered it, until the check passes and the claim
+      # completes as the seat, with its key; then task.claimed, the lease
+      # and the briefing come. The claim a pending transition stores names
+      # no task: its key finds the task it reserved
+      # (PendingTransitions.for_request).
       class Claim < Entry
         def load(ctx)
           @seat = Seat.find_by(id: ctx.request.caller_id, workspace_id: ctx.workspace.id) || raise(NotFound, "No such seat")
+          reserved = PendingTransitions.for_request(ctx.request)
+          if reserved && reserved.command == command
+            @task = Task.find_by!(id: reserved.task_id, workspace_id: ctx.workspace.id)
+            return
+          end
+
           # A builder lease past its due time has ended (EN-14): its timer
           # runs first, so its task is back in Ready and claimable now.
           Timers.apply_claimable(ctx, :task)
@@ -34,7 +49,13 @@ module Leverage
         end
 
         def gate_request_fields(_ctx)
-          super.merge(task_id: @task.id, project_id: @task.project_id, round: @task.round)
+          super.merge(task_id: @task.id, project_id: @task.project_id, round: @task.round, subject_kind: "seat",
+            subject_id: @seat.id)
+        end
+
+        # The claim waits on a model check: provisional (RE-5).
+        def wait(_ctx, _pending)
+          @task.update!(holder_seat_id: @seat.id)
         end
 
         def perform(ctx)

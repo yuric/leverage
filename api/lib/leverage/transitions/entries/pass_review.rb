@@ -15,6 +15,13 @@ module Leverage
       #
       # Params: id (the review), verdict "passed", failed_criteria [], notes,
       # tokens, spend.
+      #
+      # Gated at task.before_done, about the review (milestone 4 plan §2.1,
+      # SM-6). A model check makes the pass wait, with the verdict kept
+      # whole: its events, cost.reported among them, are written when it
+      # completes. A failed gate is a failed review in full (fail_for_gate):
+      # fail_review's rows with the rule's check as the failed criterion,
+      # and no review.passed.
       class PassReview < Entry
         def load(ctx)
           @params = ctx.request.params
@@ -51,6 +58,18 @@ module Leverage
           ctx.emit("cost.reported", task: @task, subject: @review,
             payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
           @result = nil
+        end
+
+        # The failed gate's effect (hooks.json failed_review, SM-6): the
+        # verdict becomes fail_review's, with the review criterion as the
+        # failed criterion and failed_rule_check_id the check; the
+        # review.failed policies run as for any failed review.
+        def fail_for_gate(ctx, check, cause_id: nil)
+          failed = FailReview.new
+          failed.load_for_gate(ctx, review: @review, seat: @seat, check: check)
+          failed.refusals(ctx)
+          Gate.outcome(ctx, failed, Gate.call(ctx, failed))
+          @result = failed.result
         end
       end
     end

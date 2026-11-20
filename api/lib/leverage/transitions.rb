@@ -12,13 +12,20 @@ module Leverage
   #      the calling seat holds, each through its own entry, before the
   #      command's own events.
   #   4. The entry's refusals; Precedence picks the first by the registry.
-  #   5. At a row with a hook, Gate asks Gating (EN-5).
+  #      A seat waiting on its task's pending transition answers pending to
+  #      every command the registry does not allow while pending (RE-4).
+  #   5. At a row with a hook, Gate asks Gating, writes what it planned and
+  #      decides: perform, wait (a pending transition, 202) or the hook's
+  #      failed-gate effect (milestone 4 plan §2.1, rules 1 to 8).
   #   6. entry.perform changes rows and writes events through EventLog;
   #      then ReviewerEligibility.after_command looks at what it changed
   #      (milestone 4 plan SM-42).
   #   7. Idempotency.store writes the commands row, for a refusal too, so
-  #      the timer events of step 3 commit with it (test 7).
-  #   8. Commit; CommandLog writes one line.
+  #      the timer events of step 3 and the rule checks of step 5 commit
+  #      with it (test 7, RE-7). A command whose key now names a pending
+  #      transition (its own, or one run_as stored under it) answers
+  #      pending, and its row is linked to the transition.
+  #   8. Commit; CommandLog writes one line, with the time spent in Gate.
   #
   # A command the app runs (a timer, the sweep) has no caller and no key:
   # steps 2 and 7 are skipped.
@@ -51,10 +58,32 @@ module Leverage
       # table). It answers the command's outcome: :completed, :pending or
       # :refused.
       #
-      # First version: does nothing and answers :completed. WP4 writes it:
-      # the entry's refusals, its gate and perform, as the requester.
+      # The entry's load and refusals (a pending answer among them, RE-4),
+      # then its gate and perform, all as the requester
+      # (Context#as_requester): its events carry the requester as actor and
+      # key as command_id. When the gate waits, the transition is stored
+      # under the requester and key, and the calling command, whose key it
+      # is, answers pending (step 7).
       def run_as(ctx, command, requester:, key:, params:)
-        :completed
+        requested = PendingTransitions::Requested.new(command: command.to_s, workspace_id: ctx.workspace.id,
+          requester_kind: requester.is_a?(User) ? "owner" : "seat", requester_id: requester.id, command_key: key,
+          params: params.to_h.deep_stringify_keys)
+        ctx.as_requester(requested, cause_id: nil) do
+          entry = Table.entry_for(command).new(command.to_s)
+          entry.load(ctx)
+          refusal = Precedence.first(refusals(ctx, entry))
+          next :refused if refusal
+
+          Gate.outcome(ctx, entry, Gate.call(ctx, entry)).outcome
+        end
+      end
+
+      # Step 6 for an entry the gate lets through, at once or when its
+      # pending transition completes: perform, then
+      # ReviewerEligibility.after_command with what it changed.
+      def perform(ctx, entry)
+        entry.perform(ctx)
+        ReviewerEligibility.after_command(ctx, entry)
       end
 
       # Tests only: answers apply from the stand-in inside the block.
@@ -71,7 +100,7 @@ module Leverage
       def run(request)
         entry_class = Table.entry_for(request.command)
         started = monotonic
-        timing = { lock_wait: 0.0, writes: 0.0 }
+        timing = { lock_wait: 0.0, writes: 0.0, gate: 0.0 }
         outcome = ActiveRecord::Base.transaction(requires_new: true) do
           ctx = context(request, timing)
           stored = Idempotency.find(request)
@@ -80,22 +109,36 @@ module Leverage
           Timers.apply_due(ctx)
           entry = entry_class.new(request.command)
           entry.load(ctx)
-          refusal = Precedence.first(entry.refusals(ctx))
-          outcome = if refusal
-            Outcome.refused(refusal)
-          else
-            Gate.call(ctx, entry)
-            entry.perform(ctx)
-            ReviewerEligibility.after_command(ctx, entry)
-            Outcome.completed(entry.result, once: entry.once)
+          refusal = Precedence.first(refusals(ctx, entry))
+          outcome = refusal ? Outcome.refused(refusal) : gated(ctx, entry, timing)
+          pending = PendingTransitions.for_request(request)
+          outcome = Outcome.new(outcome: :pending) if pending && !outcome.refused?
+          unless request.by_app?
+            row = Idempotency.store(ctx, request, outcome)
+            PendingTransitions.link(row, pending) if pending && outcome.outcome == :pending
           end
-          Idempotency.store(ctx, request, outcome) unless request.by_app?
           timing[:writes] = ctx.write_seconds
           outcome
         end
         CommandLog.write(request, outcome, lock_wait: timing[:lock_wait], writes: timing[:writes],
-          total: monotonic - started)
+          total: monotonic - started, gate: timing[:gate])
         outcome
+      end
+
+      # The entry's refusals and, for a seat waiting on its task's pending
+      # transition, pending (RE-4).
+      def refusals(ctx, entry)
+        codes = entry.refusals(ctx)
+        PendingTransitions.blocks?(ctx, entry.command) ? codes + [ "pending" ] : codes
+      end
+
+      # Steps 5 and 6: the gate, timed (CommandLog's gate_ms), then what it
+      # decided.
+      def gated(ctx, entry, timing)
+        gating = monotonic
+        result = Gate.call(ctx, entry)
+        timing[:gate] = monotonic - gating
+        Gate.outcome(ctx, entry, result)
       end
 
       def context(request, timing)
