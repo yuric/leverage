@@ -174,6 +174,23 @@ class BackupRestoreTest < CommittingTestCase
     on_database(@scratch) { assert_equal task.title, Task.find(task.id).title }
   end
 
+  # The shortest beginning of a dump whose list pg_restore still reads:
+  # the dump cut just after its table of contents, with none of its data.
+  def list_only_length(path)
+    bytes = File.binread(path)
+    low = 0
+    high = bytes.bytesize
+    probe = File.join(@folder, "probe.dump")
+    while low < high
+      middle = (low + high) / 2
+      File.binwrite(probe, bytes.byteslice(0, middle))
+      _out, status = Open3.capture2e(tool_env, "pg_restore", "--list", probe)
+      status.success? ? high = middle : low = middle + 1
+    end
+    File.delete(probe)
+    low
+  end
+
   def restoring_databases
     ActiveRecord::Base.lease_connection.select_values(
       ActiveRecord::Base.sanitize_sql([ "SELECT datname FROM pg_database WHERE datname LIKE ?", "#{@scratch}%" ])
@@ -183,22 +200,29 @@ class BackupRestoreTest < CommittingTestCase
   # Review: --replace dropped the database before pg_restore had read the
   # dump, so a dump that could not be restored left no database at all.
   test "a restore with --replace from a dump that cannot be restored leaves the database as it was (review)" do
-    walk = Walk.new(seed: 33).run
-    task = Task.where(workspace_id: walk.workspace_id).first
-    assert task, walk.to_s
+    scenario.task(state: "backlog")
     run = B.run!(folder: @folder, keep: 14)
     path = File.join(@folder, run.file_name)
-    capture_io { B.restore(path, target: target(@scratch), workspace_id: walk.workspace_id) }
-    on_database(@scratch) { Task.where(id: task.id).update_all(title: "Changed after the dump") }
+    # The database the restore would replace: made from the schema, with
+    # one task of its own.
+    Open3.capture2e(tool_env, "createdb", *tool_args, "--maintenance-db=postgres", @scratch).then do |out, status|
+      assert status.success?, out
+    end
+    out, status = Open3.capture2e(tool_env, "psql", *tool_args, "--dbname", @scratch, "--quiet", "--set",
+      "ON_ERROR_STOP=1", "--file", Rails.root.join("db/structure.sql").to_s)
+    assert status.success?, out
+    task = on_database(@scratch) { Scenario.new.task(state: "backlog", title: "Changed after the dump") }
 
     garbage = File.join(@folder, "leverage-garbage.dump")
     File.write(garbage, "not a dump at all")
     truncated = File.join(@folder, "leverage-truncated.dump")
-    File.binwrite(truncated, File.binread(path).byteslice(0, File.size(path) * 3 / 4))
+    File.binwrite(truncated, File.binread(path).byteslice(0, list_only_length(path)))
+    _list, listed = Open3.capture2e(tool_env, "pg_restore", "--list", truncated)
+    assert listed.success?, "the truncated dump keeps its list, so only the restore itself can find the loss"
 
     [ garbage, truncated ].each do |bad|
       assert_raises(B::Failed, bad) do
-        capture_io { B.restore(bad, target: target(@scratch), replace: true, workspace_id: walk.workspace_id) }
+        capture_io { B.restore(bad, target: target(@scratch), replace: true) }
       end
       assert database_exists?(@scratch), "#{bad}: the database is still there"
       on_database(@scratch) { assert_equal "Changed after the dump", Task.find(task.id).title, bad }

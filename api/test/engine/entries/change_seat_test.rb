@@ -235,12 +235,13 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_empty HelperRequest.where(seat_id: @builder.id)
   end
 
-  test "turning off a seat that is already off releases nothing and queues nothing" do
+  # Review: a change that changes nothing writes no seat.changed.
+  test "turning off a seat that is already off releases nothing, queues nothing and writes nothing" do
     @builder.update!(enabled: false, wanted_running: false)
     outcome, events = change(@builder, enabled: false)
 
     assert_completed(outcome)
-    assert_equal %w[seat.changed], events.map(&:type)
+    assert_empty events
     assert_empty HelperRequest.where(seat_id: @builder.id)
   end
 
