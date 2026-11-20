@@ -26,7 +26,7 @@ require_relative "../support/http_trace_runner"
 # before the interruption, nothing reopened, one claim, the same builder),
 # and the recovery times of HE-17, read through get_task and compared in
 # the trace's own seconds.
-class HandoffTest < ActionDispatch::IntegrationTest
+class HandoffHttpTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
   include HttpCalls
 
