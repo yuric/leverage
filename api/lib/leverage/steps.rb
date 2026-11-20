@@ -6,7 +6,10 @@ module Leverage
   # It reads only the log, the task's open step and the task's criteria
   # (their kinds), never a row an entry changes, so the order in which an
   # entry updates its rows and emits its events does not matter, and a
-  # replay of the log can drive it the same way.
+  # replay of the log can drive it the same way. Which criteria a task has
+  # as of an event is read from the log too (task.contract_changed's added
+  # and removed ids): an edit (milestone 3 plan HE-25) removes criteria, so
+  # the rows as they are later are not the ones an earlier event saw.
   #
   # The rules it keeps:
   #
@@ -292,8 +295,19 @@ module Leverage
     end
 
     def review_criterion_id(event)
-      Criterion.where(workspace_id: event.workspace_id, task_id: event.task_id, kind: "review", removed_at: nil)
+      Criterion.where(workspace_id: event.workspace_id, id: criteria_as_of(event).to_a, kind: "review")
         .order(:position).pick(:id)
+    end
+
+    # The ids of the task's criteria as of an event: added by a
+    # task.contract_changed up to it and not removed since. A criterion's
+    # kind never changes (ContractDiff keeps an id by position and kind).
+    def criteria_as_of(event)
+      Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: "task.contract_changed")
+        .where("seq <= ?", event.seq).order(:seq).pluck(:payload).each_with_object(Set.new) do |payload, ids|
+          ids.merge(Array(payload["added_criterion_ids"]))
+          ids.subtract(Array(payload["removed_criterion_ids"]))
+        end
     end
 
     # The task's open holds just before and just after the event, oldest
@@ -362,8 +376,8 @@ module Leverage
       private
 
       def build_ids
-        @build_ids ||= Criterion.where(workspace_id: @event.workspace_id, task_id: @event.task_id, kind: "build",
-          removed_at: nil).pluck(:id)
+        @build_ids ||= Criterion.where(workspace_id: @event.workspace_id, id: Steps.criteria_as_of(@event).to_a,
+          kind: "build").pluck(:id)
       end
 
       def from_log
