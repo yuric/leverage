@@ -75,8 +75,13 @@ class BackupRestoreTest < CommittingTestCase
 
   def target(name) = B::Target.current.with(database: name)
 
+  # Trace 09 committed into the worker's database: its rows stay (events
+  # cannot be deleted), so they take ids of their own and never meet the
+  # ids a later trace run in this database binds.
+  def committed_trace = TraceRunner.new("09-core-loop-no-rules").run
+
   test "a dump of trace 09's log restores into a new database where the replay and the audit pass and the rows are the same" do
-    runner = TraceRunner.new("09-core-loop-no-rules").run
+    runner = committed_trace
     assert_empty runner.failures, runner.failures.join("\n")
     workspace_id = runner.workspace_id
     before = events_of(workspace_id)
@@ -119,6 +124,18 @@ class BackupRestoreTest < CommittingTestCase
     assert_includes restored, "CREATE TABLE public.events"
     refute_match(/OWNER TO/, restored)
     refute_match(/\bGRANT\b/, restored)
+  end
+
+  test "the trace this test commits leaves no id that a later trace run in the same database meets" do
+    committed = committed_trace
+    assert_empty committed.failures, committed.failures.join("\n")
+
+    ActiveRecord::Base.transaction do
+      later = TraceRunner.new("09-core-loop-no-rules").run
+      assert_empty later.failures, later.failures.join("\n")
+      refute_equal committed.workspace_id, later.workspace_id
+      raise ActiveRecord::Rollback
+    end
   end
 
   test "bin/restore over a database that holds events exits non-zero without --replace and changes nothing" do
