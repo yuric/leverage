@@ -25,6 +25,7 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
     @seat_id = SecureRandom.uuid
     @task_id = SecureRandom.uuid
     @request_id = SecureRandom.uuid
+    @job_id = SecureRandom.uuid
   end
 
   def limit_body
@@ -47,6 +48,19 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
         path: "/v1/helper/credentials/#{@credential_id}/signed-out", body: signed_out_body, result: nil },
       { op: "sign_in_again", command: "sign_in_again", caller: "owner", path: "/v1/owner/credentials/#{@credential_id}/sign-in",
         body: nil, result: { "helper_request_id" => @request_id } }
+    ]
+  end
+
+  # The same two reports about a job's run (milestone 4 plan RD-40, HE-33):
+  # exactly one of task_id, review_id and job_id is set, and a job_id
+  # makes the controller run report_job_limit or report_job_signed_out.
+  def job_calls
+    [
+      { op: "report_limit", command: "report_job_limit", caller: "helper", path: "/v1/helper/credentials/#{@credential_id}/limit-reached",
+        body: limit_body.merge("task_id" => nil, "job_id" => @job_id), result: nil },
+      { op: "report_signed_out", command: "report_job_signed_out", caller: "helper",
+        path: "/v1/helper/credentials/#{@credential_id}/signed-out",
+        body: signed_out_body.merge("task_id" => nil, "job_id" => @job_id), result: nil }
     ]
   end
 
@@ -75,17 +89,17 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
   end
 
   test "each call runs its entry for its caller and answers the completed outcome with its result" do
-    calls.each do |call|
+    (calls + job_calls).each do |call|
       stand_in = T::StandIn.new
       stand_in.script(call[:command], T::Outcome.completed(call[:result]))
       assert_request_matches_contract("POST", call[:path], call[:body])
 
-      T.with_stand_in(stand_in) { send_call(call, key: "key-#{call[:op]}") }
+      T.with_stand_in(stand_in) { send_call(call, key: "key-#{call[:command]}") }
 
       assert_response :ok, "#{call[:op]}: #{response.body}"
       assert_response_matches_contract
       body = response.parsed_body
-      assert_equal({ "key" => "key-#{call[:op]}", "command" => call[:command], "outcome" => "completed", "refusal" => nil },
+      assert_equal({ "key" => "key-#{call[:command]}", "command" => call[:command], "outcome" => "completed", "refusal" => nil },
         body.slice("key", "command", "outcome", "refusal"), call[:op])
       call[:result] ? assert_equal(call[:result], body["result"], call[:op]) : assert_nil(body["result"], call[:op])
 
@@ -94,7 +108,7 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
       assert_equal @scenario.workspace_id, request.workspace_id
       assert_equal call[:caller], request.caller_kind
       assert_equal (call[:caller] == "helper" ? @helper.id : @owner.id), request.caller_id
-      assert_equal "key-#{call[:op]}", request.key
+      assert_equal "key-#{call[:command]}", request.key
       assert_equal (call[:body] || {}).merge("id" => @credential_id), request.params, call[:op]
       raw = call[:body] && JSON.generate(call[:body])
       assert_equal Leverage::Idempotency.request_hash(method: "POST", path: call[:path], body: raw.to_s), request.request_hash
@@ -102,11 +116,11 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
   end
 
   test "each call answers a refusal as 409 with the refusal in the outcome" do
-    calls.each do |call|
+    (calls + job_calls).each do |call|
       stand_in = T::StandIn.new
       stand_in.script(call[:command], T::Outcome.refused(T::Refusal.new(code: "invalid_state")))
 
-      T.with_stand_in(stand_in) { send_call(call, key: "refused-#{call[:op]}") }
+      T.with_stand_in(stand_in) { send_call(call, key: "refused-#{call[:command]}") }
 
       assert_response :conflict, call[:op]
       assert_response_matches_contract
@@ -124,16 +138,62 @@ class HandoffCallsTest < ActionDispatch::IntegrationTest
     assert_response :accepted
   end
 
-  test "a report that names a job reaches the entry, which answers its 404" do
-    call = calls.first
-    body = limit_body.merge("task_id" => nil, "job_id" => SecureRandom.uuid)
-    @stand_in.script("report_limit") { |_request| raise T::NotFound, "No such job" }
-    with_stand_in { send_call(call, body: body) }
+  test "a report that names a job reaches report_job_limit, which a task's or a review's report does not" do
+    @stand_in.script("report_job_limit", T::Outcome.completed(nil)).script("report_limit", T::Outcome.completed(nil))
+    call = job_calls.first
+    with_stand_in { send_call(call) }
+
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal "report_job_limit", response.parsed_body["command"]
+    assert_equal call[:body].merge("id" => @credential_id), @stand_in.requests.sole.params
+
+    with_stand_in { send_call(calls.first, key: "task-report") }
+
+    assert_equal %w[report_job_limit report_limit], @stand_in.requests.map(&:command)
+    with_stand_in { send_call(calls.first, key: "review-report", body: limit_body.merge("task_id" => nil, "review_id" => SecureRandom.uuid)) }
+
+    assert_equal %w[report_job_limit report_limit report_limit], @stand_in.requests.map(&:command)
+  end
+
+  test "a report that names a job reaches report_job_signed_out, which a task's or a review's report does not" do
+    @stand_in.script("report_job_signed_out", T::Outcome.completed(nil)).script("report_signed_out", T::Outcome.completed(nil))
+    call = job_calls.second
+    with_stand_in { send_call(call) }
+
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal "report_job_signed_out", response.parsed_body["command"]
+    assert_equal call[:body].merge("id" => @credential_id), @stand_in.requests.sole.params
+
+    with_stand_in { send_call(calls.second, key: "task-report") }
+    with_stand_in { send_call(calls.second, key: "review-report", body: signed_out_body.merge("task_id" => nil, "review_id" => SecureRandom.uuid)) }
+
+    assert_equal %w[report_job_signed_out report_signed_out report_signed_out], @stand_in.requests.map(&:command)
+  end
+
+  test "a report that names a job and a task, or a job and a review, or nothing, is 422 invalid and runs no command" do
+    [ [ calls.first, limit_body ], [ calls.second, signed_out_body ] ].each do |call, body|
+      [ body.merge("job_id" => @job_id), body.merge("task_id" => nil, "review_id" => SecureRandom.uuid, "job_id" => @job_id),
+        body.merge("task_id" => nil, "review_id" => nil, "job_id" => nil) ].each do |bad|
+        with_stand_in { send_call(call, body: bad) }
+
+        assert_transport_error :unprocessable_content, "invalid"
+      end
+    end
+  end
+
+  test "a job's report is 401 for any caller but the helper, and the entry's 404 for a job it cannot find is the answer" do
+    call = job_calls.first
+    with_stand_in { send_call(call, token: @owner_token) }
+
+    assert_transport_error :unauthorized, "unauthenticated"
+    @stand_in.script("report_job_limit") { |_request| raise T::NotFound, "No such job" }
+    with_stand_in { send_call(call) }
 
     assert_response :not_found
     assert_equal "not_found", response.parsed_body.dig("error", "code")
     assert_matches_component("TransportError", response.parsed_body)
-    assert_equal body.merge("id" => @credential_id), @stand_in.requests.sole.params
   end
 
   test "each call is 401 for any caller but its own, before anything else" do
