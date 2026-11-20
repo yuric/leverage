@@ -40,10 +40,13 @@ module Leverage
       # requester is the caller, and cause_id is the one it was given unless
       # the event names its own. In a command the app runs through
       # Timers.apply_workspace, effective_at is the time it was given
-      # unless the event names its own.
+      # unless the event names its own, and never earlier than the latest
+      # event of the event's task: the sweep reads that time before it
+      # waits for the lock, and a command may write on the task meanwhile
+      # (effective times never go backwards within a task, L120, L220).
       def emit(type, **fields)
         fields = { cause_id: @cause_id }.merge(fields) if @cause_id
-        fields = { effective_at: effective_at }.merge(fields) unless effective_at == at
+        fields = fields.merge(effective_at: not_before_task(fields)) unless effective_at == at || fields.key?(:effective_at)
         EventLog.append(self, type: type, **fields)
       end
 
@@ -87,6 +90,17 @@ module Leverage
         when "helper" then [ "app", request.caller_id ]
         else [ "app", nil ]
         end
+      end
+
+      # effective_at, or, for an event on a task, that task's latest
+      # effective_at when it is later. Never later than at: at is never
+      # earlier than the workspace's last event (WorkspaceLock.take).
+      def not_before_task(fields)
+        task_id = fields.key?(:task_id) ? fields[:task_id] : fields[:task]&.id
+        return effective_at unless task_id
+
+        latest = Event.where(workspace_id: workspace.id, task_id: task_id).maximum(:effective_at)
+        latest && latest > effective_at ? latest : effective_at
       end
 
       # Called by EventLog for each event it inserts.

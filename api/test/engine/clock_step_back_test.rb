@@ -37,14 +37,14 @@ class ClockStepBackTest < ActiveSupport::TestCase
     with_clock(last_event(workspace_id).at - seconds, &)
   end
 
-  test "the time the lock gives is never earlier than the workspace's last event" do
+  test "the time the lock gives is later than the workspace's last event, by a microsecond when the clock reads earlier" do
     use_scenario
     scenario.task(state: "ready")
     last = last_event(scenario.workspace_id)
 
     _workspace, at = clock_back(scenario.workspace_id, 0.040) { Leverage::WorkspaceLock.take(scenario.workspace_id) }
 
-    assert_operator at, :>=, last.at, "the clock read 40 ms back and the command took that time"
+    assert_equal last.at + Rational(1, 1_000_000), at, "the clock read 40 ms back and the command took that time"
   end
 
   test "a command sent while the clock reads earlier writes after the last event, and its step does not close early" do
@@ -64,7 +64,7 @@ class ClockStepBackTest < ActiveSupport::TestCase
     assert outcome.completed?, outcome.inspect
     claimed = last_event(scenario.workspace_id)
     assert_equal "task.claimed", claimed.type
-    assert_operator claimed.at, :>=, before.at, "at went back as seq grew (L219)"
+    assert_operator claimed.at, :>, before.at, "at went back as seq grew (L219), or two commands share one"
     assert_operator task.reload.lease_due_at, :>=, before.at + 600, "the lease runs from a time before the last event"
     assert_empty TaskStep.where(task_id: task.id).where("closed_at < opened_at").to_a
   end
@@ -100,7 +100,8 @@ class ClockStepBackTest < ActiveSupport::TestCase
   SEEDS.each do |seed|
     test "walk seed #{seed} holds its steps, replay and audit while the clock steps back" do
       random = Random.new(seed)
-      jittery = -> { Workspace.connection.select_value("SELECT clock_timestamp()") - (random.rand * 0.050) }
+      # Whole microseconds, as the database's clock reads.
+      jittery = -> { (Workspace.connection.select_value("SELECT clock_timestamp()") - (random.rand * 0.050)).round(6) }
       walk = with_clock(jittery) { Walk.new(seed: seed, steps: 100).run }
 
       assert_empty Leverage::Replay.diff(walk.workspace_id), walk.to_s
