@@ -5,60 +5,6 @@ import Testing
 
 @testable import LeverageAppServices
 
-/// A fake helper program in a temporary folder. Run n records its
-/// environment in `state/env-<n>` and its arguments in `state/args-<n>`,
-/// writes one line to standard error, and then exits with line n of
-/// `state/codes`, or, past the end of that file, runs until it is asked to
-/// stop.
-final class FakeHelperProgram: @unchecked Sendable {
-    let folder: TemporaryFolder
-    var program: URL { folder.url.appendingPathComponent("bin/LeverageHelper") }
-    var state: URL { folder.url.appendingPathComponent("state") }
-    var support: URL { folder.url.appendingPathComponent("support") }
-
-    init(exitCodes: [Int32]) throws {
-        folder = try TemporaryFolder(prefix: "leverage-helper-supervisor")
-        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        try Data(exitCodes.map { "\($0)\n" }.joined().utf8).write(to: state.appendingPathComponent("codes"))
-        let dir = state.path
-        try writeScript(program, """
-            #!/bin/sh
-            dir='\(dir)'
-            n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
-            # The trap is set before the run is counted: a test that stops the
-            # helper as soon as it sees the count still finds the run's line.
-            trap 'echo "fake helper run $n asked to stop" >&2; exit 0' TERM
-            echo "$n" > "$dir/count"
-            env | grep -v -E '^(PWD|OLDPWD|SHLVL|_)=' | sort > "$dir/env-$n"
-            printf '%s\\n' "$0" "$@" > "$dir/args-$n"
-            echo "fake helper run $n" >&2
-            code=$(sed -n "${n}p" "$dir/codes")
-            if [ -n "$code" ]; then exit "$code"; fi
-            while :; do sleep 0.05; done
-            """)
-    }
-
-    var runs: Int {
-        Int((try? String(contentsOf: state.appendingPathComponent("count"), encoding: .utf8))?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
-    }
-
-    func environment(ofRun n: Int) -> [String: String] {
-        let text = (try? String(contentsOf: state.appendingPathComponent("env-\(n)"), encoding: .utf8)) ?? ""
-        var found: [String: String] = [:]
-        for line in text.split(separator: "\n") {
-            if let equals = line.firstIndex(of: "=") {
-                found[String(line[..<equals])] = String(line[line.index(after: equals)...])
-            }
-        }
-        return found
-    }
-
-    func arguments(ofRun n: Int) -> String {
-        (try? String(contentsOf: state.appendingPathComponent("args-\(n)"), encoding: .utf8)) ?? ""
-    }
-}
-
 /// An owner API that answers `issue_helper_token` with the next token of a
 /// list; nil stands for a repeated answer, which carries none.
 private func issuer(_ tokens: [String?]) -> FakeOwnerAPI {
@@ -104,7 +50,7 @@ struct HelperSupervisorTests {
         var configuration = HelperSupervisor.Configuration(
             helperProgram: fake.program, supportFolder: fake.support, environment: parentEnvironment)
         configuration.restartDelay = .zero
-        configuration.stopGracePeriod = .seconds(5)
+        configuration.stopGracePeriod = Patience.scaled(.seconds(5))
         return HelperSupervisor(configuration: configuration, now: now, log: Log(component: "test", write: { _ in }))
     }
 
@@ -139,6 +85,7 @@ struct HelperSupervisorTests {
         let files = textOfEveryFile(under: fake.support)
         #expect(files.values.allSatisfy { !$0.contains("lvh_made-up") })
         #expect(files["logs/helper.log"]?.contains("fake helper run 1") == true)
+        await fake.expectNothingLeft()
     }
 
     @Test("a repeated answer has no token, so the token is issued again with a new key")
@@ -154,6 +101,7 @@ struct HelperSupervisorTests {
         #expect(Set(keys).count == 2)
         #expect(fake.environment(ofRun: 1)["LEVERAGE_HELPER_TOKEN"] == "lvh_made-up-second")
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("exit code 3: a new token with a new key, and the helper started again")
@@ -170,6 +118,7 @@ struct HelperSupervisorTests {
         #expect(keys.count == 2)
         #expect(Set(keys).count == 2)
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("restarted at most three times in a minute: not a fourth time")
@@ -185,6 +134,7 @@ struct HelperSupervisorTests {
         #expect(fake.runs == 4)
         #expect(owner.calls.count == 4)
         #expect(await helper.state() == .stoppedTrying)
+        await fake.expectNothingLeft()
     }
 
     @Test("Try again after it stopped trying starts counting again")
@@ -199,6 +149,7 @@ struct HelperSupervisorTests {
         #expect(await eventually { fake.runs == 5 })
         #expect(await helper.state() == .running)
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("failures more than a minute apart do not add up")
@@ -213,6 +164,7 @@ struct HelperSupervisorTests {
         #expect(await eventually { fake.runs == 6 })
         #expect(await eventually { await helper.state() == .running })
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("stop asks the helper to stop, waits for it, and does not start it again")
@@ -230,6 +182,7 @@ struct HelperSupervisorTests {
         try await Task.sleep(for: .milliseconds(200))
         #expect(fake.runs == 1)
         #expect(owner.calls.count == 1)
+        await fake.expectNothingLeft()
     }
 
     @Test("a second start while it runs starts nothing more")
@@ -242,6 +195,7 @@ struct HelperSupervisorTests {
         #expect(await helper.start(apiBaseURL: apiURL, issuer: owner) == .running)
         #expect(owner.calls.count == 1)
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("a start that was waiting for its token when the owner stopped and started again starts no second helper")
@@ -260,6 +214,7 @@ struct HelperSupervisorTests {
         #expect(fake.runs == 1)
         #expect(fake.environment(ofRun: 1)["LEVERAGE_HELPER_TOKEN"] == "lvh_made-up-2")
         await helper.stop()
+        await fake.expectNothingLeft()
     }
 
     @Test("a token that cannot be issued counts as a failed start")
@@ -272,6 +227,7 @@ struct HelperSupervisorTests {
         #expect(await eventually { await helper.state() == .stoppedTrying })
         #expect(fake.runs == 0)
         #expect(owner.calls.count == 4)
+        await fake.expectNothingLeft()
     }
 
     @Test("the helper's log is replaced when it passes its limit")
@@ -294,6 +250,82 @@ struct HelperSupervisorTests {
         let current = files["logs/helper.log"] ?? ""
         #expect(current.contains("fake helper run 1") && !current.contains("xxxxxxxxxx"), "\(current)")
         #expect(files["logs/helper.log.1"]?.count == 2_000)
+        await fake.expectNothingLeft()
+    }
+
+    // MARK: Nothing outlives its stop, and no stop loses a helper
+
+    @Test("a second stop while the first still waits for the helper also waits for it")
+    func secondStopWaitsToo() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        try fake.holdOnStop(run: 1)
+        let helper = supervisor(fake)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        #expect(await eventually { fake.isRunning(run: 1) })
+        let firstStop = Task { await helper.stop() }
+        #expect(await eventually { fake.log.contains("fake helper run 1 asked to stop") })
+
+        // As when the owner quits while a Sign out still stops the helper:
+        // the quit must not go on while the helper still runs.
+        let secondStop = Task {
+            await helper.stop()
+            return fake.isRunning(run: 1)
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        fake.letGo(run: 1)
+        #expect(await secondStop.value == false)
+        await firstStop.value
+        #expect(await helper.state() == .stopped)
+        await fake.expectNothingLeft()
+    }
+
+    @Test("a start while a stop still waits for the helper starts a new one once the old one has ended")
+    func startDuringStopStartsAfterIt() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        try fake.holdOnStop(run: 1)
+        let owner = issuer([])
+        let helper = supervisor(fake)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: owner) == .running)
+        #expect(await eventually { fake.isRunning(run: 1) })
+        let stopping = Task { await helper.stop() }
+        #expect(await eventually { fake.log.contains("fake helper run 1 asked to stop") })
+
+        // As when the owner signs out and at once signs in again.
+        let starting = Task { await helper.start(apiBaseURL: apiURL, issuer: owner) }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fake.runs == 1, "a second helper started while the first one still ran")
+        fake.letGo(run: 1)
+        #expect(await starting.value == .running)
+        await stopping.value
+
+        // The stop that ended before the start does not hide the new helper.
+        #expect(await helper.state() == .running)
+        #expect(fake.runs == 2)
+        #expect(await eventually(within: .seconds(5)) { fake.isRunning(run: 2) })
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: owner) == .running)
+        #expect(fake.runs == 2)
+        await helper.stop()
+        #expect(!fake.isRunning(run: 2))
+        await fake.expectNothingLeft()
+    }
+
+    @Test("a fake helper whose parent is gone ends by itself, as the real one does, so a crashed test run leaves none")
+    func fakeEndsWithItsParent() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        // A shell starts the fake in the background and exits at once, as
+        // the test process did when it crashed while a fake ran.
+        let parent = Process()
+        parent.executableURL = URL(fileURLWithPath: "/bin/sh")
+        parent.arguments = ["-c", "\"$0\" </dev/null >/dev/null 2>&1 &", fake.program.path]
+        parent.environment = ["PATH": "/usr/bin:/bin"]
+        try parent.run()
+        parent.waitUntilExit()
+
+        #expect(await eventually { fake.processID(ofRun: 1) != nil })
+        #expect(await eventually(within: .seconds(10)) { !fake.isRunning(run: 1) })
+        await fake.expectNothingLeft()
     }
 }
 
