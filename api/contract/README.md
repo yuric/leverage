@@ -135,7 +135,7 @@ An operation's `caller`:
 | `job_holder` | The seat that claimed the job. |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
-| `public` | No sign-in; the infrastructure health check only. |
+| `public` | No sign-in: the infrastructure health check, and setup on a new installation (whether an owner exists, and creating it, which is allowed once). |
 
 ### Adding a name
 
@@ -173,7 +173,9 @@ one file for each number in the type's `schema_versions`. Every file follows
 `payloads/<type>.v<n+1>.json` and appends `n+1` to the type's
 `schema_versions`; the server writes the newest version, and every reader
 handles every listed version. Old events are never rewritten. Until the
-pull request that adds a type merges, its `v1` may still change.
+first release of leverage no log holds an event a released build wrote, so
+a version may still change in place; each such change is recorded in
+[decisions.md](decisions.md) (DB-48 is the first).
 
 ## The event record
 
@@ -239,6 +241,10 @@ tables. A From cell of "Any" means every state but Done and Cancelled; a
 To cell "X, once ..." also names the state the task starts from.
 
 ## Golden traces
+
+Traces 01 to 08 run in a workspace with the shipped rules; 09 and 10 run in
+a workspace with no rule at all, as the core loop creates it, so their
+`setup.rules` is empty.
 
 Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
 (settings, users, helpers, credentials, seats, projects and rules that
@@ -347,3 +353,36 @@ A migration's timestamp is the moment it was generated
 (`bin/rails generate migration`), never a hand-typed one: a stamp set in
 the future would sort after migrations generated later and run after them
 on a fresh database. `api/db/structure.sql` is the schema.
+
+## What the Core loop milestone added
+
+The Core loop added to this contract and changed nothing in it that was
+not provisional, except four things named below.
+
+- Six operations, each a registry `operations` entry and an `openapi.json`
+  operation, with a derived `state_machine.json` row with `events: []` for
+  each command: `get_setup_state` and `create_owner` (the first sign-in,
+  caller `public`), `sign_out_owner`, `get_helper_request` (provisional),
+  `report_request_progress` and `get_landing_prompt`. The commands
+  `create_owner`, `sign_out` and `report_request_progress` were added to
+  `commands`.
+- `HelperRequest.params` and `HelperRequest.progress`, the shapes of the
+  provisional owner reads (each with `as_of_seq`), `Seat.wanted_running`,
+  `LandingPrompt`, and `BriefingResponse.review_notes` (the notes of the
+  task's failed reviews, outside the briefing's hash).
+- Traces 09 and 10, with no rules.
+
+The four changes to what was not provisional:
+
+- The description of `AddCredentialRequest` now says the row is inserted
+  at the Add command, so that the credential's name is kept only in its
+  own row. No shape changed.
+- The derived `issue_helper_token` row gained the conditional event
+  `review.released` (when a seat still marked running holds a review),
+  because a new helper token treats every such seat as stopped.
+- The builder's `prd_may_read` in `roles.json` gained "the notes of its
+  task's failed reviews", with the PRD's Roles table in the same change.
+- The `task.contract_changed` v1 payload gained `minimum_strength_rank`
+  (null for none), so that the log rebuilds the rank Complete contract
+  sets (decisions.md, DB-48); every golden trace that writes the event
+  carries it.

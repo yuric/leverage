@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The app bundle's Info.plist (milestone 2 plan PK-1). scripts/build_app.sh
+  copies it into dist/Leverage.app/Contents and sets the three values marked
+  below: the version (api/config/application.rb's Leverage::VERSION) and the
+  tag of the API image the bundle was built with, which Live.swift reads.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>LeverageApp</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.leverage.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>leverage</string>
+	<key>CFBundleDisplayName</key>
+	<string>leverage</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<!-- Set by scripts/build_app.sh. -->
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<!-- Set by scripts/build_app.sh. -->
+	<key>CFBundleVersion</key>
+	<string>0.0.0</string>
+	<!-- Set by scripts/build_app.sh: the leverage-api image tag. -->
+	<key>LeverageAPIImageTag</key>
+	<string>local</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.developer-tools</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+</dict>
+</plist>

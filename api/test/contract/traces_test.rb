@@ -10,12 +10,17 @@ require "time"
 class TracesTest < Minitest::Test
   include ContractTestHelpers
 
-  # The eight traces plan IF-33 names.
+  # The eight traces plan IF-33 names, and the two the core loop's plan adds
+  # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13).
   NAMES = %w[
     01-happy-path 02-failed-review-rework 03-stop-rework-pass-approve-done
     04-two-actions-custom-rule 05-limit-handoff 06-signed-out-hold-verify
     07-pending-gate-check-error-override 08-lease-expiry-and-cancel
+    09-core-loop-no-rules 10-leases-no-rules
   ].freeze
+  # The traces whose workspace has no rule at all: in the core loop the
+  # workspace is created with none (milestone 2 plan, EN-4, Q-12).
+  RULE_FREE = %w[09-core-loop-no-rules 10-leases-no-rules].freeze
 
   START = Time.utc(2026, 11, 19, 9, 0, 0)
   SYMBOL = /\A\$([a-z][a-z_]*):[a-z0-9][a-z0-9_]*\z/
@@ -464,7 +469,7 @@ class TracesTest < Minitest::Test
   def seconds(time) = Integer(TIME.match(time)[1], 10)
   def all_events(trace) = trace["commands"].flat_map { |command| command["expect"]["events"] }
 
-  def test_the_eight_traces_of_if_33_exist_and_no_other
+  def test_the_traces_of_if_33_and_ts_8_exist_and_no_other
     files = Dir.glob("*.json", base: File.join(CONTRACT_ROOT, "traces")).map { |file| File.basename(file, ".json") }.sort
     assert_equal NAMES, files
     traces.each { |name, trace| assert_equal name, trace["name"] }
@@ -490,7 +495,10 @@ class TracesTest < Minitest::Test
       ids = setup.values_at("users", "helpers", "credentials", "seats", "projects", "rules").flatten.map { |row| row["id"] }
       assert_empty duplicates(ids), name
       rules = setup["rules"]
-      shipped.each { |key| assert_equal 1, rules.count { |rule| rule["key"] == key && rule["origin"] == "shipped" }, "#{name}: #{key}" }
+      assert_equal RULE_FREE.include?(name), rules.empty?, "#{name}: only the rule-free traces have no rules"
+      unless rules.empty?
+        shipped.each { |key| assert_equal 1, rules.count { |rule| rule["key"] == key && rule["origin"] == "shipped" }, "#{name}: #{key}" }
+      end
       rules.each do |rule|
         assert_includes [ true, false ], rule["enabled"], "#{name}: #{rule["id"]}"
         assert_match(/\A\$rule_version:/, rule["current_version_id"], "#{name}: #{rule["id"]}")
@@ -654,7 +662,11 @@ class TracesTest < Minitest::Test
         assert_empty fields.keys - result.fetch("properties").keys, "#{where}: not fields of the result"
         type = claims[command["operation_id"]] or next
         event = command["expect"]["events"].find { |candidate| candidate["type"] == type }
-        %w[credential_id model].each { |field| assert_equal event["payload"][field], fields[field], "#{where}: #{field}" }
+        %w[credential_id model].each do |field|
+          expected = event["payload"][field]
+          # A seat whose model is empty records null (milestone 2 plan EN-7).
+          expected.nil? ? assert_nil(fields[field], "#{where}: #{field}") : assert_equal(expected, fields[field], "#{where}: #{field}")
+        end
         seen += 1
       end
     end

@@ -36,7 +36,7 @@ class ErrorsTest < ActionDispatch::IntegrationTest
 
     assert_equal 400, status
     assert_match %r{\Aapplication/json}, headers["content-type"]
-    assert_equal({ "error" => { "code" => "bad_request", "message" => "Invalid path parameters" } },
+    assert_equal({ "error" => { "code" => "malformed", "message" => "Invalid path parameters" } },
                  JSON.parse(body))
   end
 
@@ -45,7 +45,7 @@ class ErrorsTest < ActionDispatch::IntegrationTest
                                                  query: "a[]=1&a[b]=2")
 
     assert_equal 400, status
-    assert_equal "bad_request", JSON.parse(body).dig("error", "code")
+    assert_equal "malformed", JSON.parse(body).dig("error", "code")
   end
 
   test "an unexpected error outside a controller hides its message" do
@@ -73,7 +73,7 @@ class ErrorsTest < ActionDispatch::IntegrationTest
       get "/missing"
 
       assert_response :bad_request
-      assert_equal "bad_request", response.parsed_body.dig("error", "code")
+      assert_equal "malformed", response.parsed_body.dig("error", "code")
     end
   end
 

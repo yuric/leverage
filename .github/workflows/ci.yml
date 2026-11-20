@@ -61,7 +61,7 @@ jobs:
     # macos-26 defaults to Xcode 26.6, the toolchain the package is built
     # with locally; its swift-tools-version needs Xcode 26 or later.
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: mac
@@ -71,10 +71,85 @@ jobs:
           persist-credentials: false
       - name: Show the toolchain
         run: swift --version
+      # The generated Swift lists must equal a fresh run of their generator
+      # over the contract (rule AR-002). -I keeps the script's folder off
+      # Python's import path.
+      - name: Generated contract lists are current
+        working-directory: .
+        run: python3 -I scripts/generate_swift_contract.py --check
+      - name: Self-test of the generator
+        working-directory: .
+        run: python3 -I scripts/test_generate_swift_contract.py
+      # The stand-in tools every Mac test runs instead of a provider's tool.
+      - name: Self-test of the stand-in tools
+        working-directory: .
+        run: python3 -I mac/Tests/StandIns/test_provider_tool.py
       - name: Build
         run: swift build
+      # The runner has three cores. With every test at once, the app tests
+      # waited on a crowded main thread and the stand-in tools took longer to
+      # start than the tests' ceilings, so the tests run one at a time and
+      # wait longer for what must happen (see AGENTS.md).
       - name: Test
-        run: swift test
+        env:
+          LEVERAGE_TEST_PATIENCE: "4"
+        run: swift test --no-parallel
+      # The app bundle, without the API image (that needs this job's Docker,
+      # which macOS runners do not have).
+      - name: Self-test of the bundle's compose file
+        working-directory: .
+        run: python3 -I scripts/test_app_compose.py
+      - name: Build the app bundle
+        working-directory: .
+        run: scripts/build_app.sh --no-image
+      - name: Check the bundle's Info.plist and signature
+        working-directory: .
+        run: |
+          plutil -lint dist/Leverage.app/Contents/Info.plist
+          codesign --verify --strict dist/Leverage.app
+
+  e2e:
+    name: End-to-end run with stand-in tools
+    # The whole loop: the API in its containers, and the helper and the
+    # runner built for Linux by the runner's own Swift (the package's `e2e`
+    # lane, its default on Linux). No provider is called: the tests use the
+    # stand-in tools of mac/Tests/StandIns.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the toolchain
+        run: |
+          swift --version
+          docker --version
+          docker compose version
+      - name: Use the example configuration
+        run: cp .env.example .env
+      - name: Build the helper, the runner and the end-to-end tests
+        working-directory: mac
+        env:
+          LEVERAGE_ONLY: e2e
+        run: swift build --build-tests
+      - name: Self-test of the stand-in tools
+        run: python3 -I mac/Tests/StandIns/test_provider_tool.py
+      - name: Self-test of the secret scan
+        run: python3 -I scripts/test_secret_scan.py
+      - name: Self-test of the end-to-end script and of these steps
+        run: python3 -I scripts/test_e2e_core_loop.py
+      - name: Self-test of the real Gemini check's refusals
+        run: python3 -I scripts/test_real_gemini_through_app.py
+      # Stand-in tools only. It builds the Swift runner lane, in a build
+      # folder of its own, to run the runner's driver against them.
+      - name: Self-test of the developer check with a real tool
+        run: python3 -I scripts/test_real_provider_run.py
+      - name: The end-to-end run
+        run: scripts/e2e_core_loop.sh
+      - name: Self-test of the speed report
+        run: python3 -I scripts/test_speed_report.py
+      - name: Speed smoke run
+        run: scripts/speed_run.sh --smoke
 
   imports:
     name: Import directions

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-7.75 -7.75 79.5 79.5">
+  <!-- The app icon: docs/design/mockup.html's lever lifting a weight, drawn
+       on macOS's icon grid (the tile is 824 of 1024 points, centred).
+       scripts/build_app.sh turns it into AppIcon.icns. -->
+  <rect width="64" height="64" rx="14.4" fill="#0A63E0"/>
+  <path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  <path d="M21 38 29 53H13z" fill="#fff"/>
+  <rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"/>
+  <path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

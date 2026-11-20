@@ -1,0 +1,49 @@
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
+/// `HelperAPI` over HTTP, with the helper's token.
+public struct HelperClient: HelperAPI {
+    public let transport: HTTPTransport
+
+    public init(transport: HTTPTransport) {
+        self.transport = transport
+    }
+
+    public init(baseURL: URL, helperToken: String, session: URLSession = .shared) {
+        transport = HTTPTransport(baseURL: baseURL, token: helperToken, session: session)
+    }
+
+    public func next(wait: Int?) async throws -> HelperNext {
+        try await transport.read(.getHelperNext, waitSeconds: wait)
+    }
+
+    public func reportRequestProgress(requestID: UUID, _ progress: HelperCheckProgress, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        try await transport.command(
+            .reportRequestProgress, path: ["id": requestID.contractString], body: progress, key: key)
+    }
+
+    public func reportRequestResult(requestID: UUID, _ result: HelperRequestResult, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        try await transport.command(
+            .reportRequestResult, path: ["id": requestID.contractString],
+            body: ReportRequestResultRequest(result: result), key: key)
+    }
+
+    public func issueSeatToken(requestID: UUID, key: IdempotencyKey) async throws
+        -> CommandOutcome<SeatTokenPickupAnswer> {
+        try await transport.command(.issueSeatToken, path: ["id": requestID.contractString], key: key)
+    }
+
+    public func reportRunStarted(seatID: UUID, _ report: RunStartedReport, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.reportRunStarted, path: ["id": seatID.contractString], body: report, key: key)
+    }
+
+    public func reportRunStopped(seatID: UUID, _ report: RunStoppedReport, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.reportRunStopped, path: ["id": seatID.contractString], body: report, key: key)
+    }
+}

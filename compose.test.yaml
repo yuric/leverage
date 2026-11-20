@@ -1,0 +1,10 @@
+# For automated runs only, always together with compose.yaml:
+#   docker compose -f compose.yaml -f compose.test.yaml up -d db api
+#   docker compose -f compose.yaml -f compose.test.yaml port api 3000
+# It replaces the API's port mapping so that Docker picks a free port on
+# 127.0.0.1, because a fixed one may already be taken on the machine. The
+# owner's app does not use this file.
+services:
+  api:
+    ports: !override
+      - "127.0.0.1::3000"

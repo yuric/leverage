@@ -3,6 +3,10 @@ require_relative "../config/environment"
 require "rails/test_help"
 require "rake"
 
+# The owner's password is hashed at bcrypt's lowest cost in tests, so
+# Scenario's owner does not cost a quarter of a second each time.
+ActiveModel::SecurePassword.min_cost = true
+
 module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers
@@ -17,6 +21,12 @@ module ActiveSupport
 
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
+
+    # The production gating for milestone 2 (config/initializers/
+    # leverage_gating.rb), set again before each test: the gating
+    # conformance suite unsets the implementation after each of its tests,
+    # and it runs in the same process.
+    setup { Leverage::Gating.implementation = Leverage::Gating::NoRules.new }
 
     # Fires the deferred state trigger (C7) before the test's transaction is
     # rolled back, so a test that changes tasks.state without an event for
@@ -35,12 +45,13 @@ end
 module DatabaseTestHooks
   module_function
 
-  # Runs db:grants (lib/tasks/db_grants.rake) on the current connection.
+  # Applies db:grants (lib/tasks/db_grants.rake) on the current
+  # connection, without setting leverage_api's password: the parallel
+  # workers would all update the role's one row at once, and no test logs
+  # in as leverage_api.
   def grant_app_role
     Rails.application.load_tasks unless Rake::Task.task_defined?("db:grants")
-    task = Rake::Task["db:grants"]
-    task.reenable
-    task.invoke
+    DbGrants.apply(ActiveRecord::Base.lease_connection, password: false)
   end
 
   def fire_deferred_constraints
@@ -59,3 +70,11 @@ end
 # schema changed (maintain_test_schema), with no rake task and so no grants:
 # grant the application role there too, for a run in one process.
 DatabaseTestHooks.grant_app_role
+
+# The shared test support of milestone 2 (plan WP1): Scenario builds state,
+# CommittingTestCase commits, StateTableCases reads the state table and
+# OpenapiAssertions holds every request and response to openapi.json.
+require_relative "support/scenario"
+require_relative "support/committing_test_case"
+require_relative "support/state_table_cases"
+require_relative "support/openapi_assertions"

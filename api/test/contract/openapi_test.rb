@@ -14,12 +14,15 @@ class OpenapiTest < Minitest::Test
   # The operation that returns each one, and the token property it carries.
   ONE_TIME_OPERATIONS = {
     "issue_seat_token" => %w[SeatTokenPickup seat_token], "connect_seat" => %w[SeatConnected seat_token],
-    "issue_helper_token" => %w[HelperTokenIssued helper_token], "sign_in_owner" => %w[OwnerSession session_token]
+    "issue_helper_token" => %w[HelperTokenIssued helper_token], "sign_in_owner" => %w[OwnerSession session_token],
+    "create_owner" => %w[OwnerSession session_token]
   }.freeze
-  # The owner reads whose shapes wait for track F's queries (IF-18). The
-  # events tail and the Needs you list are stable.
+  # The owner reads whose shapes wait for track F's queries (IF-18), and the
+  # helper request's progress (milestone 2 plan, IN-23). The events tail,
+  # the Needs you list, the setup state and the landing prompt are stable.
   PROVISIONAL_READS = %w[
     get_board get_task list_decisions list_seats list_projects list_rules list_credentials get_system_health
+    get_helper_request
   ].freeze
 
   def doc = Leverage::Contract.openapi
@@ -226,7 +229,7 @@ class OpenapiTest < Minitest::Test
     provisional = operations.select { |_, _, op| op["x-provisional"] }.map { |_, _, op| op["operationId"] }
     assert_equal PROVISIONAL_READS.sort, provisional.sort
     stable = owner_reads - provisional
-    assert_equal %w[get_owner_command list_events list_inbox], stable.sort
+    assert_equal %w[get_landing_prompt get_owner_command get_setup_state list_events list_inbox], stable.sort
   end
 
   def test_health_is_infrastructure_outside_the_agent_calls
@@ -368,7 +371,7 @@ class OpenapiTest < Minitest::Test
 
       refs = [ op["responses"].fetch("200") ].map { |response| json_schema(response)["$ref"] }.compact.map { |ref| ref.split("/").last }
       one_time = refs & ONE_TIME_RESPONSES.map { |name| "#{name}Completed" }
-      allowed = %w[issue_seat_token connect_seat issue_helper_token sign_in_owner]
+      allowed = %w[issue_seat_token connect_seat issue_helper_token sign_in_owner create_owner]
       assert_equal allowed.include?(op["operationId"]), !one_time.empty?, op["operationId"]
     end
     # Only the four one-time responses may name a token at all (C17).
@@ -416,6 +419,7 @@ class OpenapiTest < Minitest::Test
     helper = operations.select { |_, _, op| op["tags"] == [ "helper" ] }.map { |path, method, _| "#{method.upcase} #{path}" }
     assert_equal [
       "GET /v1/helper/next", "POST /v1/helper/requests/{id}/result", "POST /v1/helper/requests/{id}/seat-token",
+      "POST /v1/helper/requests/{id}/progress",
       "POST /v1/helper/seats/{id}/run-started", "POST /v1/helper/seats/{id}/run-stopped",
       "POST /v1/helper/credentials/{id}/limit-reached", "POST /v1/helper/credentials/{id}/signed-out",
       "POST /v1/helper/credentials/{id}/readings"
@@ -426,6 +430,7 @@ class OpenapiTest < Minitest::Test
   def test_the_owner_issues_the_helper_token_and_signs_in
     assert_equal({ "$ref" => "#/components/schemas/HelperTokenIssuedCompleted" }, response_schema("issue_helper_token", "200"))
     assert_equal({ "$ref" => "#/components/schemas/OwnerSessionCompleted" }, response_schema("sign_in_owner", "200"))
+    assert_equal({ "$ref" => "#/components/schemas/OwnerSessionCompleted" }, response_schema("create_owner", "200"))
     assert_equal %w[email_address password].sort, schemas.fetch("SignInRequest").fetch("required").sort
   end
 
@@ -484,7 +489,7 @@ class OpenapiTest < Minitest::Test
         strength_rank last_verified_at],
       "Project" => %w[name goal budget spent paused],
       "InboxItem" => %w[kind about_kind about_id hold_id credential_id choices facts state opened_at resolved_at],
-      "HelperRequest" => %w[kind seat_id credential_id state requested_at picked_up_at finished_at result],
+      "HelperRequest" => %w[kind seat_id credential_id state requested_at picked_up_at finished_at result params progress],
       "Hold" => %w[task_id project_id reason rule_id credential_id opened_at closed_at]
     }
     columns.each do |component, names|

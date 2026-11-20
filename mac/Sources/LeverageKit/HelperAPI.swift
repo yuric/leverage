@@ -1,0 +1,25 @@
+import Foundation
+
+/// The helper's calls, one method per operation milestone 2 serves. The
+/// helper takes `any HelperAPI`: `HelperClient` sends them over HTTP with
+/// the helper's token, and LeverageTestSupport's `FakeHelperAPI` answers
+/// them in memory.
+public protocol HelperAPI: Sendable {
+    /// `get_helper_next`: the next request; with `wait`, a long poll.
+    func next(wait: Int?) async throws -> HelperNext
+    /// `report_request_progress`: one check's state while a request runs.
+    func reportRequestProgress(requestID: UUID, _ progress: HelperCheckProgress, key: IdempotencyKey)
+        async throws -> PlainOutcome
+    /// `report_request_result`.
+    func reportRequestResult(requestID: UUID, _ result: HelperRequestResult, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `issue_seat_token`: a fresh token for the seat of a `start_seat`
+    /// request; a repeated answer carries none, so ask again with a new key.
+    func issueSeatToken(requestID: UUID, key: IdempotencyKey) async throws -> CommandOutcome<SeatTokenPickupAnswer>
+    /// `report_run_started`.
+    func reportRunStarted(seatID: UUID, _ report: RunStartedReport, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `report_run_stopped`.
+    func reportRunStopped(seatID: UUID, _ report: RunStoppedReport, key: IdempotencyKey) async throws
+        -> PlainOutcome
+}

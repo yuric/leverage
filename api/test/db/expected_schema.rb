@@ -131,7 +131,8 @@ module ExpectedSchema
         "token_hash" => text(null: true),
         "last_polled_at" => time,
         "run_state" => text(null: true),
-        "removed_at" => time
+        "removed_at" => time,
+        "wanted_running" => bool("false")
       ).merge(STAMPS),
       indexes: [ idx("workspace_id"), idx("credential_id"), idx("token_hash", unique: true) ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("credential_id", "credentials") ]
@@ -145,7 +146,9 @@ module ExpectedSchema
         "requested_at" => time(null: false),
         "picked_up_at" => time,
         "finished_at" => time,
-        "result" => jsonb(null: true)
+        "result" => jsonb(null: true),
+        "params" => jsonb(default: "'{}'::jsonb"),
+        "progress" => jsonb(default: "'[]'::jsonb")
       ).merge(STAMPS),
       indexes: [ idx("workspace_id"), idx("seat_id") ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("seat_id", "seats") ]

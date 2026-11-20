@@ -9,7 +9,7 @@ public struct Configuration: Sendable {
     public let apiBaseURL: URL
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
-        if let value = environment["LEVERAGE_API_URL"],
+        if let value = environment[EnvironmentKeys.apiURL],
            let url = URL(string: value),
            let scheme = url.scheme?.lowercased(),
            scheme == "http" || scheme == "https",

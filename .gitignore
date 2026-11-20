@@ -38,3 +38,6 @@ __pycache__/
 !/api/log/.keep
 /api/config/master.key
 /api/config/credentials/*.key
+
+# The app bundle scripts/build_app.sh assembles
+/dist/

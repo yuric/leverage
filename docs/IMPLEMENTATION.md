@@ -55,14 +55,14 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-19 |
-| **On `main`** | The rules, the PRD with the gate settled, the first two decision records, the design reference, the provider-terms record and the skeleton |
-| **Next** | The Core loop milestone, once the contract is merged |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton and the contract (milestone 1) |
+| **Next** | The Core loop milestone (milestone 2): built on `feat/core-loop` with every check passing on the owner's Mac, in review as pull request [#13](https://github.com/yuric/leverage/pull/13) |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 1 contract | `feat/contract` | #12 | In review |
+| Milestone 2 core loop | `feat/core-loop` | [#13](https://github.com/yuric/leverage/pull/13) | In review |
 
 ## Milestones
 
@@ -74,8 +74,8 @@ the PRD's milestone list. How the build is run locally is in
 | # | Milestone | Status | Pull request | Notes |
 | --- | --- | --- | --- | --- |
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
-| 1 | Contract | In review | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
-| 2 | Core loop | Not started | | With account setup and the part that starts agents. The first milestone usable without a terminal |
+| 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
+| 2 | Core loop | In review | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
 | 3 | Handoff | Not started | | |
 | 4 | Rule checks | Not started | | |
 | 5 | Questions and approvals | Not started | | |
@@ -190,6 +190,245 @@ from that record, or settles what it left open:
 - **The branch merged `main`** after the skeleton landed, so that the
   milestone's checks run against the merged skeleton.
 
+### The Core loop milestone
+
+The Core loop's choices where the PRD leaves a gap were made in the
+milestone's plan under the IDs below, which the code, the tests and the
+contract cite ("milestone 2 plan EN-24"). Each line is the choice as built.
+The plan's `[owner-later]` choices are in question 11, not here.
+
+- **Scope.** SC-1: the commands the PRD's Core loop paragraph lists, the
+  agent calls they need (SC-7: claim, briefing, pass, submit and review
+  need next, command outcome, heartbeat, start criterion and release), the
+  first-sign-in operations, and Cancel, Allow one more round and Remove
+  seat. SC-3: Complete contract with an outward action is `422 invalid`,
+  so no Finishing row can be reached. SC-4: Add task into the Imaginarium
+  is `422 invalid`; the app adds to Backlog. SC-11 (also question 11): the
+  "No reviewer is eligible" item is not opened.
+- **The transition function.** EN-2: a later milestone's command has no
+  entry and no route. EN-5: `Gating::NoRules` allows everything and plans
+  nothing. EN-6: the briefing is the brief (empty), the role file and the
+  contract, hashed with SHA-256 over canonical JSON. EN-7: `task.claimed`
+  and `review.started` carry the seat's credential id and model, and so do
+  the claim results. EN-8: a seat the app runs claims only while its own
+  credential is active and not limited. EN-9: a passed review passes the
+  review criterion; a failed one reopens each failed builder criterion.
+  EN-10: during rework criterion events open no step. EN-11: a step may
+  last zero time. EN-12: a verdict writes `cost.reported` and adds to
+  `tasks.spent`. EN-13: `rounds_exceeded` opens when a failure brings the
+  round to the limit, after the normal move, and pauses the fresh lease.
+  EN-14: due timers are applied before a command on its task and on what
+  the calling seat holds; reads treat a past lease as ended. EN-15:
+  `lease_expired` goes to the seat whose lease ended by expiry, else
+  `not_holder`. EN-16, EN-17: the pipeline (lock, key, timers, refusals,
+  gate, entry, store, one commit). EN-18: tests make a lease due with
+  `Scenario#make_due`; no clock stub. EN-20: heartbeats and last-polled
+  writes take the workspace lock, at most every 10 seconds per seat (15 for
+  the helper, 5 minutes for a session). EN-21: 64 Puma threads, a pool of
+  32. EN-22: the sweep every 15 seconds, purging once an hour. EN-23: claim
+  order by priority, then age, then id. EN-24: the server and the sweep log
+  in as `leverage_api`. EN-25: test 2 is seeded random walks (200 by
+  default). EN-26: tests that need commits use `CommittingTestCase`. EN-27:
+  the review step opens at `review.started`. EN-28: `review.failed`
+  carries the failed round. EN-30: Cancel follows its rows and ends both
+  leases. EN-31: Allow one more round adds one to `extra_rounds` and closes
+  the hold.
+- **Interfaces.** IN-1: no path is typed outside the registry. IN-4:
+  `bcrypt`, passwords of at least 8 characters. IN-5: a session lasts until
+  sign-out. IN-8: a key is 1 to 128 of `[A-Za-z0-9_-]`; the request hash is
+  over the method, path and raw body. IN-9: setup, sign-in and sign-out
+  carry a key and store a `commands` row. IN-10: heartbeats carry a key.
+  IN-11: a token is returned once; a repeat answers the `*Repeated` form.
+  IN-13: the order of answers (401, 400 or 422, 404, refusals,
+  `not_eligible` last). IN-17: what ends each token. IN-18: tokens are a
+  kind prefix and 32 random bytes, stored as SHA-256. IN-20: Add task
+  sends title, goal, priority, work reference and Backlog, and Complete
+  contract every required field. IN-22: `helper_requests.params` carries
+  only non-secret inputs. IN-23: account commands complete at once with a
+  `helper_request_id`, and the helper reports progress per check. IN-25:
+  Verify writes `credential.verified` or `credential.signed_out`. IN-26:
+  the wait for the owner's sign-in is inside the add request. IN-29:
+  Connect takes name and role, and a login for a seat the app runs. IN-33:
+  `get_system_health`'s fields. IN-34: one log line per command. IN-35:
+  the task read carries its events and names. IN-40: Remove seat ends the
+  token at once, stops a run, and releases a Working task (with no builder
+  left on it) and a review the seat holds.
+- **Clients and helper.** CL-2: one table drives the four tools; Claude's
+  driver is the reference. CL-3, CL-4: with no rules, builder and reviewer
+  may share a provider or a login. CL-5: the runner is its own executable.
+  CL-9: the account folder reaches the runner as `LEVERAGE_SETTINGS_DIR`.
+  CL-10: every child gets an allow-listed environment; a tool gets no
+  leverage token. CL-11: a verdict reports the tool's tokens and spend 0.
+  CL-15: Add ends with the login listed. CL-18: no Remove credential; a
+  failed add deletes its folder and row. CL-20: a second Gemini login is
+  refused. CL-22: a failed tool run is a release; three in a row end the
+  runner. CL-23: a stop ends the tool's process group and gives back what
+  the seat holds. CL-26: the end-to-end reviewer fails round 0 and passes
+  round 1. CL-29: Mac-side logging. CL-31: `on_hold` pauses a flow.
+- **Providers.** PV-1: evidence levels (`probe`, `help`, `documented`,
+  `unverified`). PV-2: the runner's command lines, in
+  [ARCHITECTURE.md](ARCHITECTURE.md#providers-tools). PV-3: where the
+  helper looks for a tool. PV-7: the stand-in tools.
+- **Mac app.** MA-6: any `401` returns to sign-in. MA-8: the Credentials
+  tab is a flat list with Verify. MA-9: a card opens the task page with
+  Back to the board. MA-10: Connect offers Builder and Reviewer. MA-12: one
+  Connect sheet with the token shown once, and the landing prompt. MA-13:
+  the form always sends both commands. MA-15: the form's footnote. MA-16: a
+  Backlog task's page offers Send to agents. MA-17: the pop-up's check
+  list. MA-19: one sentence per refusal and transport error. MA-20: reads
+  carry `as_of_seq` and the app follows the events tail. MA-22: a minimum
+  window width of 860 points. MA-23: the health line's four sentences.
+  MA-26: a provider with one sign-in for the Mac shows as Added. MA-27: the
+  name is required. MA-28: plain words in the log. MA-29: a task past the
+  round limit offers two buttons. MA-30: Remove behind a confirmation.
+- **Packaging.** PK-2: the app writes the server folder once and starts
+  the containers. PK-5: plain HTTP on loopback. PK-6: the first sign-in is
+  in the app. PK-7: a seat's token lives only in its runner's environment.
+- **Tests.** TS-8: golden traces 09 and 10 run whole; 01 to 08 are listed
+  as not yet runnable, each with its milestone. TS-9: one end-to-end
+  script. TS-10: test 6 is a claim race and a reader tailing by `seq`.
+
+Where the build differs from the plan, or settles what it left open:
+
+- **A lease expiry clears the builder.** When a builder's lease ends and
+  the task returns to Ready, the task's builder is cleared, as the PRD's
+  replay list says; the plan had kept it.
+- **No project on a task.** Add task refuses a project, so milestone 1's
+  traces 01 to 08 run no command yet in this milestone.
+- **The review criterion is the form's.** Complete contract requires the
+  criteria to end with exactly one review criterion, so the Add task form
+  appends "An independent reviewer agrees."; the plan had the server add
+  it.
+- **"Allow one more try".** The button is not called "Allow one more
+  round", because "round" is one of the words the app may not show.
+- **The sweep runs every 15 seconds**, as the plan says; `timers.json`'s
+  trigger text says "at most every 30 seconds", which this meets.
+- **`helper_requests.progress`**, a third new column, holds per-check
+  progress between reports.
+- **`task.contract_changed` v1 changed after the contract merged.** It
+  now carries `minimum_strength_rank` (contract DB-48), so the replay
+  rebuilds the rank; the contract's README had allowed a change in place
+  only until the type's pull request merged.
+- **The Swift copy of the contract** also holds the operations and the
+  interface schema's own enums, and `HoldReason.isInBlocked`.
+- **Each package committed its own work** by explicit path, the red tests
+  first; the plan had the managing agent commit.
+
+## What the Core loop proves, and how far
+
+- **The whole loop runs with stand-in tools.** `scripts/e2e_core_loop.sh`
+  runs the real API in its containers, the real helper and the real runner,
+  with the stand-in tools of `mac/Tests/StandIns/` in place of the
+  providers' tools: it creates the owner, adds a Claude and a Codex login
+  through Add credential (each stand-in starts signed out and the flow goes
+  on by itself), connects a builder and a reviewer, adds a task with two
+  criteria, and waits for Done; a second test stops a reviewer mid-review
+  and another reviewer finishes it. It then replays the log and scans the
+  logs and a database dump for secrets. It passed three times in a row on
+  the owner's Mac on 2026-11-19 with no retry, and again in the final run.
+  On Linux in CI (the `e2e` job, run 44625056944) the helper, the runner
+  and the end-to-end tests compiled and the containers came up healthy,
+  but both tests stopped at once because they looked for their programs
+  in an `.xctest` bundle, which SwiftPM does not make on Linux. The fix
+  passed the whole end-to-end lane in an aarch64 Linux container on the
+  owner's Mac; it has not yet been seen passing in CI, which runs x86_64.
+- **The Mac tests run one at a time on the macOS runner.** On GitHub's
+  three-core macOS runner (run 44634551151) the whole package's tests at
+  once took over two minutes and about a dozen failed: the app tests'
+  waits ran out on a crowded main thread, and the stand-in tools took
+  longer to start than the tests' ceilings. The same failures came back on
+  the owner's Mac under CPU load. CI now runs `swift test --no-parallel`
+  with `LEVERAGE_TEST_PATIENCE=4`, which lengthens only the waits for what
+  must happen and the ceilings for a stand-in to answer; this passed five
+  times in a row on the loaded Mac. It has not yet been seen passing on
+  the runner.
+- **The failed review is shown with stand-in tools only.** The task in the
+  end-to-end run goes through one failed review because the stand-in
+  reviewer is scripted to fail round 0. Nothing can make a real provider
+  fail a review on request, so no run on a real tool has shown it.
+- **No real provider has run through the product by an agent's hand.** No
+  agent signed in, ran an installer or a sign-in command, or used a login
+  through Add credential. Two developer checks exist for the tools already
+  signed in on the Mac, never run in CI: `scripts/real_provider_run.sh`
+  (plan PV-6, narrower than its text: one build prompt through the
+  runner's tool driver, with the tool's own sign-in, and no containers,
+  seats or task; it proves the driver's flags only) and
+  `scripts/real_gemini_through_app.sh` (one Gemini login through Add
+  credential, a task to Done). The managing agent's runs of them are
+  recorded in the pull request description; see the pull request. Neither
+  is the product's path, and neither marks a PRD line as met. The owner's
+  first run is the first real one through the app (see
+  [Waiting for the owner](#waiting-for-the-owner)).
+- **The app bundle starts its server.** `scripts/smoke_app.sh` opens
+  `dist/Leverage.app` with a Finder-like environment and gets a healthy
+  answer from the server it started, in about 5 seconds once the images are
+  on the Mac. Opening it from Finder itself has not been tried.
+
+Which provider's tool can be installed from the pop-up (PRD line "a
+missing tool installed from the pop-up") and which continues on its own
+after the owner signs in ("a signed-out tool caught, the flow continues"):
+neither line is marked met for a real tool. Installing from the pop-up is
+shown with a stand-in installer for Claude only (`ToolInstallerTests`);
+Codex's and Gemini's installers are in the catalog but not tested, and
+Grok has none. Continuing on its own after the owner signs in is shown
+with stand-in tools for all four: Claude, Codex and Grok through their
+status commands and Gemini through the repeated test prompt
+(`AddChecksTests`), and Claude and Codex again in the end-to-end run. The
+evidence levels are those of
+[ARCHITECTURE.md](ARCHITECTURE.md#providers-tools).
+
+| Provider | Installed from the pop-up | Continues on its own after sign-in | Evidence |
+| --- | --- | --- | --- |
+| Claude (Claude Code) | Yes in code: the vendor's script `https://claude.ai/install.sh`, run with `/bin/bash` | By polling `claude auth status`; whether `claude auth login` opens the browser itself and needs no terminal is not known | Installer `documented`; status `probe`; sign-in `help` |
+| Codex | Yes in code: the vendor's script `https://chatgpt.com/codex/install.sh`, run with `/bin/sh` | By polling `codex login status`; what `codex login` does is not known | Installer `documented`; status `probe`; sign-in `help` |
+| Gemini (Antigravity) | Yes in code: the vendor's script `https://antigravity.google/cli/install.sh`, run with `/bin/bash` | By repeating the test prompt every 15 seconds; a signed-out `agy` has never been seen | Installer `documented`; test prompt `probe` (signed in only) |
+| Grok (Grok Build) | No: no documented source was reachable; the pop-up says leverage can't install it yet | By reading `grok models`; `grok login --oauth` is a browser login by its help | Status `probe` (signed out only); sign-in `help`; installer `unverified` |
+
+## Measurements
+
+The speed of writing events and steps, measured by `scripts/speed_run.sh`
+on the owner's Mac (Mac15,14, Apple M3 Ultra) on 2026-11-19 at 22:31 UTC:
+50 seats (25 builders and 25 reviewers that connect on their own) for 120
+seconds, `RAILS_MAX_THREADS` 64 and a pool of 32 connections, 3775
+commands sent by the seats, each seat ticking every 2 seconds with the
+seats' ticks spread evenly over the 2 seconds. Milliseconds, nearest-rank
+percentiles.
+
+| Command | n | Lock wait p50 | p95 | p99 | Event and step writes p50 | p95 | p99 | Whole transition p50 | p95 | p99 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| acknowledge_briefing | 225 | 0.393 | 0.902 | 34.793 | 2.040 | 4.441 | 9.971 | 5.486 | 11.212 | 53.630 |
+| acknowledge_review_briefing | 200 | 0.400 | 1.160 | 1.514 | 0.973 | 2.619 | 3.190 | 4.771 | 11.350 | 13.818 |
+| claim | 225 | 0.322 | 0.985 | 1.373 | 1.701 | 4.364 | 5.135 | 6.424 | 15.634 | 18.136 |
+| claim_review | 200 | 0.439 | 1.160 | 1.494 | 2.233 | 4.897 | 6.485 | 8.435 | 18.232 | 26.030 |
+| heartbeat | 1275 | 0.534 | 1.419 | 2.713 | 0.000 | 0.000 | 0.000 | 3.782 | 7.265 | 10.916 |
+| heartbeat_review | 400 | 0.481 | 1.224 | 27.660 | 0.000 | 0.000 | 0.000 | 3.521 | 7.442 | 35.632 |
+| pass_criterion | 425 | 0.467 | 1.026 | 1.348 | 2.640 | 6.271 | 8.325 | 7.455 | 16.096 | 19.963 |
+| pass_review | 200 | 0.382 | 0.966 | 33.332 | 2.503 | 5.331 | 12.369 | 7.404 | 19.294 | 50.452 |
+| start_criterion | 425 | 0.411 | 0.793 | 1.478 | 1.875 | 3.684 | 5.904 | 5.654 | 10.018 | 18.634 |
+| submit | 200 | 0.398 | 1.194 | 1.435 | 1.554 | 4.178 | 6.063 | 6.063 | 16.646 | 24.732 |
+| All commands | 3775 | 0.459 | 1.207 | 2.713 | 1.349 | 3.788 | 6.616 | 5.290 | 12.316 | 24.638 |
+| Commands that wrote events | 2100 | 0.406 | 1.030 | 1.855 | 2.049 | 4.709 | 7.570 | 6.560 | 15.763 | 26.030 |
+
+- **The PRD's figure.** Writing events and steps took 4.709 ms at the 95th
+  percentile over the 2100 commands that wrote events, within the 20 ms
+  target; the PRD's Speed row now says so. Earlier runs on the same Mac
+  gave 2.2 to 4.3 ms for the same figure. Heartbeats write no event, so
+  they are left out of that figure. The check that runs in the app is not
+  measured: no rule exists yet.
+- **The wait for the workspace lock is short.** 1.03 ms at the 95th
+  percentile for commands that wrote events. The earlier runs' 158 to
+  347 ms came from the speed run itself: its 50 seats all ticked at the
+  same instant, so each tick's commands queued for the lock within about
+  300 ms and the lock stood idle for the rest of the 2 seconds
+  (PostgreSQL's own wait on the lock statement agreed). The lock is held
+  5.8 ms on average (21 per cent of the time at about 36 lock takes a
+  second), and the seats now tick on clocks spread over the 2 seconds, as
+  separate agents do. Nothing in the engine changed.
+- **The tail is not explained.** A few commands waited 27 to 35 ms for the
+  lock (the p99 of three commands above), from 12 holds of the lock over
+  30 ms out of 3582. Whether that is garbage collection, a sweep pass or
+  the Mac's other load at the time was not traced.
+
 ## Installed for the build
 
 Nothing was installed on the owner's Mac. Every Ruby command ran in a
@@ -207,6 +446,11 @@ build 17F113, Swift 6.3.3).
 | `json_schemer` gem | 2.5.0 (MIT) | RubyGems, inside the API image | Validating the contract's schemas, data files and payloads |
 | `hana` gem | 1.3.7 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (JSON Pointer) |
 | `simpleidn` gem | 0.3.0 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (internationalized host names) |
+| `bcrypt` gem | 3.1.22 (MIT) | RubyGems, inside the API image | The owner's password (`has_secure_password`), from the Core loop milestone |
+| `leverage-api` images | `m2`, `m2-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestone's tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
+
+The Core loop milestone installed nothing on the Mac. `lychee`, the link
+check, is not installed on the Mac, so it runs only in CI.
 
 The direct gems, their licenses and why each is needed are listed in the
 skeleton's pull request description, as rule AR-004 asks.
@@ -348,6 +592,217 @@ skeleton's pull request description, as rule AR-004 asks.
     *Proposed:* answer it with that open decision, and add a "Change
     credential" owner command if the owner chooses them.
 
+11. **The choices made for the owner in the Core loop.** The owner's
+    standing instruction for this run is to decide, record and continue,
+    so each was taken and the milestone was built on it. Each line says
+    what was chosen and the alternative.
+    - **The landing prompt** (the owner's issue 11, Q-15): a seat that
+      connects on its own gets a landing prompt the owner copies from the
+      Agent roster, built now. Alternative: wait for the MCP server in
+      the Questions and approvals milestone.
+    - **PRD changes Q-1 to Q-15**, written into the PRD in this milestone:
+      - **Q-1**: the Core loop's Mac app and owner commands name sign-in,
+        sign-out, the helper's token, Cancel, Allow one more round and
+        Remove seat, and Add credential is for logins. Alternative: build
+        only the commands the paragraph listed.
+      - **Q-2**: promote, edit a contract, hold and resume, and pause,
+        resume and change a seat arrive in the Handoff milestone.
+        Alternative: build Edit contract now.
+      - **Q-3**: projects, the Activity screen, deleting content, changing
+        workspace settings and the MCP server arrive in Questions and
+        approvals. Alternative: now, or no milestone.
+      - **Q-4**: API tokens in Add credential arrive in the Credentials
+        milestone. Alternative: both kinds now.
+      - **Q-5**: the Packaging row's working assumption: the helper and
+        the runner ship inside the app, which starts the containers
+        through Docker Desktop; built on the owner's Mac, not notarized.
+        Alternative: a launch agent, or a notarized installer.
+      - **Q-6**: the app issues the helper a new token at each start, in
+        its environment only; HTTP on loopback, HTTPS once the server
+        leaves the Mac. Alternative: a stored token.
+      - **Q-7**: a pasted API token reaches the helper over its standard
+        input and goes into the Keychain, built with API tokens.
+        Alternative: decide it with that milestone.
+      - **Q-8**: the Speed row carries the measured 4.7 ms. Alternative:
+        leave the figure a guess.
+      - **Q-9**: a builder may read the notes of its task's failed reviews,
+        returned with the briefing outside its hash. Alternative: rework
+        without knowing why the review failed.
+      - **Q-10**: how Grok Build keeps an account is not captured; a Mac
+        holds one Grok login. Alternative: a folder per Grok login,
+        unverified.
+      - **Q-11**: the sign-in screen first creates the owner's sign-in on a
+        new installation, and sign-out is an owner command. Alternative: a
+        setup command in a terminal.
+      - **Q-12**: a workspace created before the Rule checks milestone has
+        no rules, and that milestone writes them once. Alternative: write
+        rule records now that nothing checks.
+      - **Q-13**: two more golden traces, for a workspace with no rules.
+        Alternative: replace two of the eight.
+      - **Q-14**: the daily backup and the tested restore arrive in the
+        Handoff milestone; until then the deployment document says where
+        the database is and what destroys it. Alternative: build the backup
+        now.
+      - **Q-15**: the landing prompt, above.
+    - **The plan's choices for the owner:**
+      - **SC-2**: Promote, Edit contract, Hold and resume, and pause,
+        resume and change a seat are not built; a sent contract cannot be
+        corrected, only cancelled and added again. Alternative: build Edit
+        contract now.
+      - **SC-5**: the pop-up offers the four logins; API tokens wait for
+        the Credentials milestone. Alternative: both kinds now.
+      - **SC-6**: the MCP server is placed in Questions and approvals.
+        Alternative: now, over the 16 agent calls.
+      - **SC-8**: no projects, no Activity tab and no board filters.
+        Alternative: build them empty now.
+      - **SC-9**: Cancel and Allow one more round are built, and a task at
+        the round limit is held. Alternative: no round limit until the
+        Handoff milestone.
+      - **SC-10**: Remove seat is built, and a seat can connect on its own.
+        Alternative: leave "It connects on its own" out until then.
+      - **SC-11**: the "No reviewer is eligible" item is not opened while
+        no rule exists; a task with no reviewer agent says so on its page.
+        Alternative: open the item now with a contract change.
+      - **SC-12**: no backup in this milestone. Alternative: build it now.
+      - **EN-4**: creating a workspace writes no `rule.created` yet. When
+        the Rule checks milestone lands, the provider rule ships on, so a
+        builder and a reviewer on one provider or one login (allowed now,
+        CL-3, CL-4) stop reviewing each other's work until a second
+        provider is connected or the rule is turned off. Alternative: write
+        the rule records now and ignore them.
+      - **EN-6**: the builder's and reviewer's role files are short texts
+        written in this milestone (`api/config/role_files/`), for the
+        owner to read. Alternative: the owner writes them.
+      - **EN-19**: speed is measured as the time inside one transition
+        spent writing events and steps, with 50 seats on the owner's Mac,
+        not in CI. Alternative: measure the whole request.
+      - **IN-2**: the first sign-in is created in the app by an open setup
+        call, allowed once. Alternative: a setup command in a terminal.
+      - **IN-7**: no forgotten-password path. Alternative: a reset by
+        command in the container.
+      - **IN-24**: Add credential inserts the credential's row at once,
+        signed out, and it counts as added only when its checks pass.
+        Alternative: keep the name with the helper request until then.
+      - **IN-30**: issuing the helper's token treats every running seat as
+        stopped and starts again every seat the owner wants running, so
+        agents come back when the app opens. Alternative: the owner starts
+        each agent again.
+      - **CL-6**: the runner makes every call itself and reads marker lines
+        from the tool's answer; the tool never calls leverage. Alternative:
+        give the tool the MCP server.
+      - **CL-7**: the tool runs in the task's folder, or in
+        `<support folder>/work/<task id>/` when the task names none.
+        Alternative: always a folder of leverage's own.
+      - **CL-8**: a builder's run may edit its folder and a reviewer's is
+        read-only; a Claude run does not load the folder's own settings.
+        Antigravity's read-only mode answered a plain prompt with a plan,
+        so a Gemini login is not offered for the Reviewer role.
+        Alternatives: load the project's settings; let Gemini review in
+        that mode.
+      - **CL-19**: the helper waits up to 10 minutes for a sign-in or an
+        install. Alternative: a shorter wait with a Retry button.
+      - **CL-21**: Grok is treated as one sign-in for the Mac. Alternative:
+        a folder per Grok login, unverified.
+      - **PV-4**: the helper opens the provider's own sign-in and goes on by
+        itself when the status says signed in; for Antigravity it repeats
+        the test prompt. Alternative: a Retry button.
+      - **PV-5**: the vendor's own install script, only over HTTPS from a
+        listed host, after the owner confirms; Grok Build has none.
+        Alternative: no installs from the pop-up.
+      - **PV-6**: a developer check with tools already signed in on the
+        Mac, `scripts/real_provider_run.sh`, built narrower than PV-6's
+        text: one build prompt through the runner's tool driver, with no
+        containers, seats or task, so it proves the driver's flags only.
+        Its results: see the pull request. Alternatives: PV-6's whole loop
+        (containers, two seats, a task to Done), which would also prove
+        the marker lines and a real reviewer; or let the owner's first run
+        find a wrong flag.
+      - **MA-1**: the board is built, the only way to a task, with Show
+        cancelled. Alternative: a plain task list.
+      - **MA-7**: the owner's session is kept in the login Keychain; a
+        rebuilt app may ask once to read it. Alternative: sign in at every
+        launch.
+      - **PK-1**: one app bundle, built on the owner's Mac by
+        `scripts/build_app.sh`, signed ad hoc. Alternatives: a launch
+        agent; a notarized installer.
+      - **PK-3**: Docker Desktop must already be installed; the app starts
+        it when it is not running. Alternative: bundle another container
+        runtime.
+      - **PK-4**: a new helper token at each app start, in the helper's
+        environment only, restarted at most three times a minute.
+        Alternative: a token stored in the Keychain and a helper that
+        outlives the app.
+      - **PK-8**: agents work only while the app is open; closing the
+        window keeps them, quitting stops them. Alternative: a helper that
+        outlives the app.
+      - **PK-9**: the whole loop runs in CI on Linux (the `e2e` job); if it
+        cannot be built there in two attempts, the job is removed and the
+        script stays a local step. Its first run compiled everything on
+        Linux and then failed to find the test programs; the fix is not yet
+        seen passing in CI (above). Alternative: a fake server on the Mac
+        side.
+      - **PK-10**: the first run on real logins is the owner's (below).
+        Alternative: none; no agent can sign in.
+    - **Other choices made while building:**
+      - The bundle identifier is `local.leverage.app`. Alternative: one
+        under the owner's own domain.
+      - The real Gemini check (`scripts/real_gemini_through_app.sh`, not
+        run) adds a Gemini login through Add credential as the builder, and
+        a stand-in Codex reviewer that connects on its own, because the
+        runner refuses a Gemini reviewer. Alternative: stop that check at
+        submit.
+      - `task.contract_changed` v1 gained `minimum_strength_rank` in place
+        (contract DB-48), so the replay rebuilds the rank Complete contract
+        sets; a payload version may change in place until leverage's first
+        release, each change recorded in `api/contract/decisions.md`.
+        Alternative: a v2 payload, with readers for both.
+      - The speed run spreads its seats' ticks evenly over one tick, as
+        separate agents' clocks are; its 50 seats used to tick at the same
+        instant, which made the lock wait of 158 to 347 ms the earlier
+        measurements showed (see [Measurements](#measurements)).
+        Alternatives: a random phase per seat, or keeping the burst as a
+        named worst case.
+      - The command-key purge runs once an hour, since `commands` has no
+        index on its creation time. Alternative: add the index and purge
+        every pass.
+      - A seat's verdict that opens the round-limit hold records the hold
+        and the Needs you item with the app as actor. Alternative: the seat
+        as actor, as one of milestone 1's traces does for another hold.
+      - From the adversarial review: the Connect sheet asks for an effort
+        only for Claude and Antigravity, whose drivers pass `--effort`; a
+        Codex or Grok agent runs on its tool's own effort. Alternative:
+        pass Grok's `--effort`, known from its `--help` only.
+      - From the adversarial review: Remove seat also releases a review
+        the seat holds, and a claim first ends the leases past their due
+        time that stand in its way, as `fail_review` does for the
+        builder's. Alternative: leave both to the sweep, up to 15 seconds
+        later.
+      - From the adversarial review: in production the API answers only a
+        request addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
+        (the compose name the speed run uses). Alternative: none that keeps
+        a rebinding web page out.
+      - From the second review: the API refuses any request body not sent
+        as JSON, whatever its method and path, so a sign-in sent as a form
+        to a mistyped path never reaches the request log. Alternative: keep
+        the refusal to POST, PUT, PATCH and DELETE under `/v1/`, and drop
+        a form's parameters from the log instead.
+      - From the second review: a runner whose helper is already gone when
+        it starts (its parent is already launchd) stops at once, as it
+        does when the helper goes later. Alternative: the helper passes its
+        own process id to the runner, which compares it with its parent.
+      - From the second review: the end-to-end secret scan refuses a secret
+        shorter than 8 characters, the shortest whose base64 copy it can
+        find at every alignment. Alternative: look for shorter base64
+        pieces, with more matches by chance.
+      - From the adversarial review: the landing prompt lists each call by
+        name, method and path, without the contract's one-line summary,
+        two of which use the engine word "lease". Alternative: reword the
+        contract's summaries and the PRD's agent-call table.
+    - **Also for the owner to know:** the API still has no security scanner
+      (question 6); nothing backs up the log yet (Q-14); Grok Build cannot
+      be installed from the pop-up, and whether each tool's sign-in needs a
+      terminal is unknown until the owner's first run.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -361,3 +816,10 @@ run is also listed here until the owner has read it.
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
 | [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) | Added in the delegated run: the pinned versions, the test tools and the code units of the skeleton. The owner has not read it |
 | [ADR 0003](adr/0003-contract-format.md) | Added in the delegated run: the contract's format, `structure.sql`, the two database roles and `json_schemer`. The owner has not read it |
+| Pull request 12 | The contract (milestone 1), merged in the delegated run after an adversarial review; its AI-assistance boxes are unticked |
+| [ADR 0004](adr/0004-one-app-bundle-for-the-first-run.md) | Added in the delegated run: one app bundle that starts the server and the helper. The owner has not read it |
+| [ADR 0005](adr/0005-code-units-of-the-core-loop.md) | Added in the delegated run: the runner, the app services, the test units, the build lanes and the Linux build. The owner has not read it |
+| [ADR 0006](adr/0006-owner-sign-in-and-tokens.md) | Added in the delegated run: `bcrypt`, the tokens, the setup call and loopback HTTP. The owner has not read it |
+| [ADR 0007](adr/0007-sweep-service-and-database-login-role.md) | Added in the delegated run: the sweep service, long polls and the `leverage_api` login role. The owner has not read it |
+| The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login and a reviewer on another; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
+| The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are recorded in the pull request description; see the pull request. A tool not run there waits for the owner |

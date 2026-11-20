@@ -6,3 +6,14 @@
 Rails.application.config.filter_parameters += [
   :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
 ]
+
+# A leverage token (lvs_ seat, lvh_ helper, lvo_ owner session; milestone 2
+# plan IN-18) is filtered wherever it appears in a logged value, whatever
+# the parameter is called: the names above catch the fields meant to hold
+# one, and this catches a token sent where none belongs. The form is
+# Leverage::Tokens::FORM's, without the anchors; the constant is not
+# loaded this early.
+LEVERAGE_TOKEN_IN_TEXT = /lv[sho]_[A-Za-z0-9_-]{43}/
+Rails.application.config.filter_parameters << lambda do |_key, value|
+  value.gsub!(LEVERAGE_TOKEN_IN_TEXT, "[FILTERED]") if value.is_a?(String) && !value.frozen?
+end

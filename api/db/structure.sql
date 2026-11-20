@@ -263,6 +263,10 @@ CREATE TABLE public.helper_requests (
     result jsonb,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    params jsonb DEFAULT '{}'::jsonb NOT NULL,
+    progress jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT helper_requests_params_hold_no_name_or_token CHECK ((NOT jsonb_path_exists(params, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "^name$|(^|_)token$" flag "i")'::jsonpath))),
+    CONSTRAINT helper_requests_progress_holds_no_name_or_token CHECK ((NOT jsonb_path_exists(progress, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "^name$|(^|_)token$" flag "i")'::jsonpath))),
     CONSTRAINT helper_requests_result_holds_no_token CHECK (((result IS NULL) OR (NOT jsonb_path_exists(result, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "(^|_)token$" flag "i")'::jsonpath))))
 );
 
@@ -573,7 +577,8 @@ CREATE TABLE public.seats (
     run_state text,
     removed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    wanted_running boolean DEFAULT false NOT NULL
 );
 
 
@@ -2336,6 +2341,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261119182802'),
 ('20261119162424'),
 ('20261119162423'),
 ('20261119162422'),

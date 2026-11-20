@@ -5,26 +5,38 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has a skeleton and its contract, and no product behavior yet. The
-repository holds the documentation, the research behind its practices, and
-the scripts and checks that keep them consistent, plus:
+leverage has its contract and the Core loop milestone: an owner can sign
+in, add logins, connect a builder and a reviewer, and take a task from a
+form to Done, on the owner's Mac. That is shown end to end with stand-in
+provider tools; no real provider has run through it yet. The repository holds the documentation,
+the research behind its practices, and the scripts and checks that keep
+them consistent, plus:
 
-- `api/`: a Rails application in API mode that answers `GET /v1/health`,
-  with Minitest tests;
+- `api/`: a Rails application in API mode, with Minitest tests. It serves
+  the owner's, the agents' and the helper's calls of the Core loop through
+  one transition function (`api/lib/leverage/transitions.rb`), and runs a
+  timer sweep (`api/bin/sweep`); `bin/rails leverage:verify_log` replays a
+  workspace's log against its tables;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
   [README](api/contract/README.md); `api/db/`: the migrations and
   `structure.sql` for every table of the Data model;
-  `api/lib/leverage/`: `Leverage::Contract`, which reads the contract, and
-  `Leverage::Gating`, the gating interface with a stand-in;
-- `mac/`: a Swift package with the library LeverageKit, the helper
-  LeverageHelper and the Mac app LeverageApp, with Swift Testing tests;
-- `compose.yaml` and `.env.example`: the API and PostgreSQL in Docker
-  containers on the owner's Mac, the one environment in
-  [docs/DEPLOY.md](docs/DEPLOY.md);
+- `mac/`: a Swift package with the library LeverageKit, the reference
+  runner LeverageRunner, the helper LeverageHelper, the app's services
+  LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests
+  and stand-in provider tools in `mac/Tests/StandIns/`;
+- `compose.yaml` (the API, the sweep and PostgreSQL in Docker containers on
+  the owner's Mac, the one environment in [docs/DEPLOY.md](docs/DEPLOY.md)),
+  `compose.test.yaml` (lets Docker pick the API's port in automated runs)
+  and `.env.example`;
+- `scripts/`: besides the checks below, `build_app.sh` (builds
+  `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
+  with stand-in tools), `speed_run.sh`, `secret_scan.py`,
+  `generate_swift_contract.py` and `app_compose.py`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
-  migrations-from-zero check and the import check on every pull request;
+  migrations-from-zero check, the import check, the app bundle and the
+  end-to-end run on Linux on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract.
 
@@ -146,9 +158,22 @@ python3 scripts/check_registry.py                    # PRD lists vs the registry
 python3 scripts/test_check_registry.py               # self-test of that check
 python3 scripts/check_contract_tables.py             # PRD tables vs the contract
 python3 scripts/test_check_contract_tables.py        # self-test of that check
+python3 -I scripts/generate_swift_contract.py --check  # Swift copy of the contract is current
+python3 -I scripts/test_generate_swift_contract.py   # self-test of the generator
+python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
+python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
+python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
+python3 -I scripts/test_speed_report.py              # self-test of the speed report
+python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
+python3 -I scripts/test_real_provider_run.py         # the developer check, with stand-in tools
+python3 -I mac/Tests/StandIns/test_provider_tool.py  # self-test of the stand-in tools
 ```
 
-CI also runs the API's tests and RuboCop, and the Swift build and tests, listed under "Build, test, and run" below.
+After changing anything under `api/contract/registry.json` or the
+interface schema's enums, run `python3 scripts/generate_swift_contract.py`
+and commit the regenerated `mac/Sources/LeverageKit/Generated/Contract.swift`.
+
+CI also runs the API's tests and RuboCop, the Swift build and tests, the app bundle, and the end-to-end run, listed under "Build, test, and run" below.
 
 With a base commit and a description file, `check_rules.py` also checks a
 pull request:
@@ -189,15 +214,20 @@ The API (`api/`):
 ```bash
 docker compose build                                 # build the API image
 docker compose run --rm api bin/rails test           # tests, against PostgreSQL
-docker compose run --rm --no-deps api bin/rails zeitwerk:check  # autoloading
-docker compose run --rm api bin/rubocop              # style
-docker compose up -d                                 # run the API and the database
+docker compose run --rm api bin/rails zeitwerk:check # autoloading
+docker compose run --rm -e SEED=1 -e WALKS=1000 api bin/rails test test/engine/step_partition_test.rb  # 1000 random walks
+docker compose run --rm --no-deps api bin/rubocop    # style
+docker compose up -d                                 # run the API, the sweep and the database
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
+docker compose exec -T api bin/rails leverage:verify_log  # replay every workspace's log
 docker compose down                                  # stop; the data is kept
 ```
 
 `API_PORT` in `.env` moves the API off port 3000 when that port is taken;
-use the same port in the `curl` line.
+use the same port in the `curl` line. An automated `up` adds
+`-f compose.yaml -f compose.test.yaml`, so that Docker picks the port, and
+reads it with `docker compose -f compose.yaml -f compose.test.yaml port api
+3000`.
 
 The contract tests need no database. While you change the code, run them
 from your checkout through a bind mount, without rebuilding the image:
@@ -206,10 +236,10 @@ from your checkout through a bind mount, without rebuilding the image:
 docker compose run --rm --no-deps --entrypoint "" -v "$PWD/api:/rails" api bin/contract_test
 ```
 
-When several checkouts (git worktrees) of this repository run containers at
-once, export `COMPOSE_PROJECT_NAME` and `API_IMAGE_TAG` with a value of
-their own in each, so that each has its own containers, image tag and
-database volume.
+When several checkouts (git worktrees) of this repository, or several
+agents in one checkout, run containers at once, export
+`COMPOSE_PROJECT_NAME` and `API_IMAGE_TAG` with a value of their own in
+each, so that each has its own containers, image tag and database volume.
 
 The Mac side (`mac/`):
 
@@ -217,13 +247,52 @@ The Mac side (`mac/`):
 cd mac
 swift build                                          # build every target
 swift test                                           # tests
-swift run LeverageHelper                             # print the API's health
-swift run LeverageApp                                # open the app's window
 ```
 
-`LEVERAGE_API_URL` gives the helper and the app the API's address when it
-is not `http://127.0.0.1:3000`. How to run and operate it all is in
-[docs/DEPLOY.md](docs/DEPLOY.md).
+`LEVERAGE_ONLY=<lane>` builds and tests one lane of the package: `kit`,
+`runner`, `helper`, `services`, `app` or `e2e` (the only lane on Linux).
+When several agents work at once, each builds its own lane in its own
+`--scratch-path`, so that a half-written file in one lane never stops
+another from compiling.
+
+On a slow machine, such as GitHub's three-core macOS runner, run the tests
+one at a time and with more patience, as CI does:
+
+```bash
+LEVERAGE_TEST_PATIENCE=4 swift test --no-parallel
+```
+
+`LEVERAGE_TEST_PATIENCE` multiplies only the waits for something that must
+happen, the ceilings a stand-in or a fake has to answer within, and the
+suites' time limits; a limit whose shortness a test checks is never
+multiplied. Unset, it is 1.
+
+The whole product, from the repository root (Docker and Swift, nothing
+else):
+
+```bash
+scripts/e2e_core_loop.sh                             # the whole loop with stand-in tools
+scripts/speed_run.sh                                 # 50 seats for 120 s; prints the speed table
+scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, open it, check its server
+```
+
+Each starts a compose project of its own and removes it, also on failure.
+`smoke_app.sh` uses a support folder and a compose project of its own
+(`leverage-smoke-<pid>`). No automated test calls a real provider: the
+tests find the providers' tools only through `LEVERAGE_TOOL_DIR`, on the
+stand-ins. `scripts/real_gemini_through_app.sh` runs only with
+`LEVERAGE_REAL_PROVIDER=gemini` and never in CI.
+
+A developer check with a real tool already signed in on the Mac, never in
+CI, run only by the maintainer or the managing agent of a delegated run:
+
+```bash
+LEVERAGE_REAL_PROVIDER=claude scripts/real_provider_run.sh claude   # or codex, gemini, grok
+```
+
+It sends one build prompt through the runner's tool driver and proves the
+driver's flags only. Its self-test runs in the `e2e` job with stand-in
+tools. How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Documentation style
 

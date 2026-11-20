@@ -1715,6 +1715,109 @@
         }
       }
     },
+    "/v1/owner/setup": {
+      "get": {
+        "operationId": "get_setup_state",
+        "summary": "Says whether the owner's sign-in exists yet.",
+        "description": "No sign-in: the Mac app asks it on a new installation to show either Create your sign-in or Sign in (milestone 2 plan IN-2). It says nothing else.",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "public",
+        "x-leverage-command": [
+          "read"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "create_owner",
+        "summary": "Creates the workspace, its one owner and a session.",
+        "description": "No sign-in, and allowed once: with an email address and a password it creates the workspace with default settings and no rule, the one owner and a session, in one transaction (milestone 2 plan IN-2). Once an owner exists a new key is answered 404 `not_found`; a repeat of the key that created it answers its stored outcome. The session token is returned once and never stored in a command outcome.",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "public",
+        "x-leverage-command": [
+          "create_owner"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInRequest"
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The command completed. The first answer for the key carries the token in `result` (OwnerSession); a repeat of the key answers 200 with the same envelope and OwnerSessionRepeated, without the token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerSessionCompleted"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "404 `not_found`: an owner already exists and the key is new.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The command was refused; the body names the cause.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusedOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
     "/v1/owner/session": {
       "post": {
         "operationId": "sign_in_owner",
@@ -1750,6 +1853,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OwnerSessionCompleted"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "description": "The command was refused; the body names the cause.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusedOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/owner/session/sign-out": {
+      "post": {
+        "operationId": "sign_out_owner",
+        "summary": "Ends the owner's session.",
+        "description": "Deletes the session the bearer token names; the token answers 401 from then on (milestone 2 plan IN-5). A POST, because the contract has no DELETE. A repeat of the key answers 401: the session that would prove who asks is the one the first call ended (IN-9).",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "owner",
+        "x-leverage-command": [
+          "sign_out"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The command completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletedOutcome"
                 }
               }
             }
@@ -2526,6 +2694,74 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthenticated"
+          }
+        }
+      }
+    },
+    "/v1/owner/helper-requests/{id}": {
+      "get": {
+        "operationId": "get_helper_request",
+        "summary": "Reads one helper request with each check's progress.",
+        "description": "What the Mac app follows after Add credential, Verify, Install, Start or Stop, which complete at once with `helper_request_id` in their result (milestone 2 plan IN-23).",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "owner",
+        "x-leverage-command": [
+          "read"
+        ],
+        "x-provisional": true,
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PathId"
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "description": "Seconds to wait for a change, at most 30; 0 answers at once.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 30,
+              "default": 0
+            }
+          },
+          {
+            "name": "changed_after",
+            "in": "query",
+            "required": false,
+            "description": "The `updated_at` the caller last saw. With `wait`, the answer comes as soon as the request changed after it, or when `wait` runs out.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelperRequestStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -5465,6 +5701,75 @@
         }
       }
     },
+    "/v1/owner/seats/{id}/landing-prompt": {
+      "get": {
+        "operationId": "get_landing_prompt",
+        "summary": "Reads the landing prompt of a seat that connects on its own.",
+        "description": "The text the owner pastes into an agent that connects on its own: where the server is, how the agent signs in, the calls its role may make, and the defaults it confirms with its user (milestone 2 plan Q-15, the owner's issue 11). It never contains the seat's token, which is shown once by connect_seat. It can be read again at any time.",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "owner",
+        "x-leverage-command": [
+          "read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PathId"
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LandingPrompt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 `malformed`: the address the request came in on (its Host) cannot be put in a pasted command.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "description": "404 `not_found`: no such seat in the workspace, or it was removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The seat is one the app runs, which needs no prompt: the body is a Refusal with code `invalid_state` and `rule_id` and `reason` null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/owner/seats/{id}/start": {
       "post": {
         "operationId": "start_seat",
@@ -6306,6 +6611,87 @@
         }
       }
     },
+    "/v1/helper/requests/{id}/progress": {
+      "post": {
+        "operationId": "report_request_progress",
+        "summary": "Reports one check's state while a request runs.",
+        "description": "One check of a run_add_checks or verify request, by the check names of HelperCheckResult, while the request runs (milestone 2 plan IN-23). It writes no event; report_request_result reports the outcome.",
+        "tags": [
+          "helper"
+        ],
+        "x-leverage-caller": "helper",
+        "x-leverage-command": [
+          "report_request_progress"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PathId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelperCheckProgress"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "helperBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The command completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletedOutcome"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The command was refused; the body names the cause.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusedOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
     "/v1/helper/requests/{id}/result": {
       "post": {
         "operationId": "report_request_result",
@@ -7067,6 +7453,8 @@
           "delete_content",
           "change_workspace_settings",
           "sign_in",
+          "create_owner",
+          "sign_out",
           "issue_helper_token",
           "connect_seat",
           "pause_seat",
@@ -7090,6 +7478,7 @@
           "issue_seat_token",
           "report_run_started",
           "report_run_stopped",
+          "report_request_progress",
           "report_request_result",
           "report_reading",
           "builder_lease_expiry",
@@ -8200,11 +8589,18 @@
               "string",
               "null"
             ]
+          },
+          "review_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewNote"
+            }
           }
         },
         "required": [
           "briefing",
-          "work_reference"
+          "work_reference",
+          "review_notes"
         ],
         "examples": [
           {
@@ -8276,9 +8672,89 @@
                 ]
               }
             },
-            "work_reference": "example"
+            "work_reference": "example",
+            "review_notes": []
+          },
+          {
+            "briefing": {
+              "hash": "example",
+              "versions": {
+                "rule_version_ids": [
+                  "00000000-0000-4000-8000-000000000046"
+                ],
+                "brief_version": 1,
+                "role_file_version": "example",
+                "contract_version": 1
+              },
+              "rules": [
+                {
+                  "rule_id": "00000000-0000-4000-8000-000000000047",
+                  "rule_version_id": "00000000-0000-4000-8000-000000000048",
+                  "key": "example",
+                  "name": "example",
+                  "instruction": "example",
+                  "may_apply": false
+                }
+              ],
+              "brief": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000049",
+                  "project_id": "00000000-0000-4000-8000-000000000050",
+                  "kind": "rule",
+                  "text": "example",
+                  "author_kind": "owner",
+                  "author_id": "00000000-0000-4000-8000-000000000051"
+                }
+              ],
+              "role_file": "example",
+              "contract": {
+                "contract_version": 1,
+                "goal": "example",
+                "details": "example",
+                "criteria": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000052",
+                    "task_id": "00000000-0000-4000-8000-000000000053",
+                    "position": 1,
+                    "text": "example",
+                    "kind": "build",
+                    "state": "open",
+                    "passed_at": "2026-01-01T00:00:00Z",
+                    "passed_by_seat_id": "00000000-0000-4000-8000-000000000054",
+                    "evidence": [
+                      {
+                        "id": "00000000-0000-4000-8000-000000000055",
+                        "criterion_id": "00000000-0000-4000-8000-000000000056",
+                        "kind": "link",
+                        "value": "example"
+                      }
+                    ]
+                  }
+                ],
+                "actions": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000057",
+                    "task_id": "00000000-0000-4000-8000-000000000058",
+                    "kind": "publish",
+                    "description": "example",
+                    "state": "contracted",
+                    "approved_by_kind": "owner",
+                    "approved_by_id": "00000000-0000-4000-8000-000000000059"
+                  }
+                ]
+              }
+            },
+            "work_reference": "example",
+            "review_notes": [
+              {
+                "review_id": "00000000-0000-4000-8000-000000000310",
+                "round": 0,
+                "notes": "The second criterion does not hold yet."
+              }
+            ]
           }
-        ]
+        ],
+        "description": "The briefing with its hash, the work reference and, for the builder after a failed review, the notes of the task's failed reviews, oldest first (PRD Agent interface; milestone 2 plan Q-9). The work reference and the notes are outside the hash. A reviewer's briefing has no notes."
       },
       "ClaimTaskResult": {
         "type": "object",
@@ -10569,6 +11045,10 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "wanted_running": {
+            "type": "boolean",
+            "description": "Set by Start (and by Connect for a seat the app runs), cleared by Stop and Remove; the helper's token issue starts every seat that is wanted running (milestone 2 plan IN-30)."
           }
         },
         "required": [
@@ -10584,7 +11064,8 @@
           "paused",
           "last_polled_at",
           "run_state",
-          "removed_at"
+          "removed_at",
+          "wanted_running"
         ],
         "examples": [
           {
@@ -10600,7 +11081,8 @@
             "paused": false,
             "last_polled_at": "2026-01-01T00:00:00Z",
             "run_state": "stopped",
-            "removed_at": "2026-01-01T00:00:00Z"
+            "removed_at": "2026-01-01T00:00:00Z",
+            "wanted_running": false
           }
         ]
       },
@@ -11494,7 +11976,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when the helper reports every check passed. The masked label is made on the Mac. Model, effort and strength rank are what handoff uses; whether the Mac app fills them from a provider default or the owner chooses them is the PRD's open decision \"How a credential's model is set\", and either way they arrive here.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. Model, effort and strength rank are what handoff uses; whether the Mac app fills them from a provider default or the owner chooses them is the PRD's open decision \"How a credential's model is set\", and either way they arrive here.",
         "properties": {
           "credential_id": {
             "type": "string",
@@ -11787,7 +12269,7 @@
       "HelperRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "What the server wants done on the Mac. It never holds a seat token.",
+        "description": "What the server wants done on the Mac. It never holds a seat token or a credential's name: `params` holds the non-secret inputs and `progress` each check's state while it runs (milestone 2 plan IN-22, IN-23).",
         "properties": {
           "id": {
             "type": "string",
@@ -11855,6 +12337,19 @@
                 "type": "null"
               }
             ]
+          },
+          "params": {
+            "$ref": "#/components/schemas/HelperRequestParams"
+          },
+          "progress": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelperCheckProgress"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -11866,7 +12361,10 @@
           "requested_at",
           "picked_up_at",
           "finished_at",
-          "result"
+          "result",
+          "params",
+          "progress",
+          "updated_at"
         ],
         "examples": [
           {
@@ -11890,7 +12388,13 @@
               "tool_version": "example",
               "plan": null,
               "account_email": null
-            }
+            },
+            "params": {
+              "provider": "claude",
+              "credential_kind": "login"
+            },
+            "progress": [],
+            "updated_at": "2026-01-01T00:00:00Z"
           }
         ]
       },
@@ -11936,7 +12440,13 @@
                 "tool_version": "example",
                 "plan": null,
                 "account_email": null
-              }
+              },
+              "params": {
+                "provider": "claude",
+                "credential_kind": "login"
+              },
+              "progress": [],
+              "updated_at": "2026-01-01T00:00:00Z"
             }
           }
         ]
@@ -12671,6 +13181,17 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "inbox_item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task's open Needs you item, or null."
           }
         },
         "required": [
@@ -12678,7 +13199,8 @@
           "blocked",
           "hold_reasons",
           "waiting_for_credential_id",
-          "waiting_until"
+          "waiting_until",
+          "inbox_item"
         ],
         "examples": [
           {
@@ -12706,24 +13228,36 @@
               "owner_question"
             ],
             "waiting_for_credential_id": "00000000-0000-4000-8000-000000000199",
-            "waiting_until": "2026-01-01T00:00:00Z"
+            "waiting_until": "2026-01-01T00:00:00Z",
+            "inbox_item": null
           }
         ]
       },
       "Board": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisional (IF-18): the Kanban read.",
+        "description": "Provisional (IF-18, milestone 2 plan MA-20, MA-29): the Kanban read.",
         "properties": {
           "tasks": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BoardTask"
             }
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The seq of the last event the read reflects: the rows and this number are one moment of the log (milestone 2 plan MA-20)."
+          },
+          "reviewer_seat_exists": {
+            "type": "boolean",
+            "description": "Whether the workspace has a reviewer seat that is not removed; the board and the task page say so when it has none (milestone 2 plan SC-11, MA-29)."
           }
         },
         "required": [
-          "tasks"
+          "tasks",
+          "as_of_seq",
+          "reviewer_seat_exists"
         ],
         "examples": [
           {
@@ -12753,16 +13287,64 @@
                   "owner_question"
                 ],
                 "waiting_for_credential_id": "00000000-0000-4000-8000-000000000204",
-                "waiting_until": "2026-01-01T00:00:00Z"
+                "waiting_until": "2026-01-01T00:00:00Z",
+                "inbox_item": null
+              },
+              {
+                "task": {
+                  "id": "00000000-0000-4000-8000-000000000200",
+                  "project_id": "00000000-0000-4000-8000-000000000201",
+                  "title": "example",
+                  "goal": "example",
+                  "details": "example",
+                  "state": "imaginarium",
+                  "round": 1,
+                  "holder_seat_id": "00000000-0000-4000-8000-000000000202",
+                  "builder_seat_id": "00000000-0000-4000-8000-000000000203",
+                  "lease_due_at": "2026-01-01T00:00:00Z",
+                  "lease_time_left_while_paused": 1,
+                  "minimum_strength_rank": 1,
+                  "contract_version": 1,
+                  "budget_cap": 0.0,
+                  "spent": 0.0,
+                  "work_reference": "example",
+                  "priority": "low"
+                },
+                "blocked": false,
+                "hold_reasons": [
+                  "owner_question"
+                ],
+                "waiting_for_credential_id": "00000000-0000-4000-8000-000000000204",
+                "waiting_until": "2026-01-01T00:00:00Z",
+                "inbox_item": {
+                  "id": "00000000-0000-4000-8000-000000000180",
+                  "kind": "question_passed_on",
+                  "about_kind": "task",
+                  "about_id": "00000000-0000-4000-8000-000000000181",
+                  "hold_id": "00000000-0000-4000-8000-000000000182",
+                  "credential_id": "00000000-0000-4000-8000-000000000183",
+                  "choices": [
+                    "answer"
+                  ],
+                  "facts": {},
+                  "state": "open",
+                  "opened_at": "2026-01-01T00:00:00Z",
+                  "opened_seq": 1,
+                  "resolved_by_kind": "owner",
+                  "resolved_by_id": "00000000-0000-4000-8000-000000000184",
+                  "resolved_at": "2026-01-01T00:00:00Z"
+                }
               }
-            ]
+            ],
+            "as_of_seq": 12,
+            "reviewer_seat_exists": true
           }
         ]
       },
       "TaskPage": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisional (IF-18): the task page read.",
+        "description": "Provisional (IF-18, milestone 2 plan MA-20, MA-29, IN-35): the task page read.",
         "properties": {
           "task": {
             "$ref": "#/components/schemas/TaskSummary"
@@ -12790,6 +13372,42 @@
             "items": {
               "$ref": "#/components/schemas/Hold"
             }
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Review"
+            }
+          },
+          "inbox_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxItem"
+            },
+            "description": "The task's open Needs you items."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "description": "The task's events in seq order, for its log."
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogName"
+            },
+            "description": "The names of the seats and credentials its events carry."
+          },
+          "reviewer_seat_exists": {
+            "type": "boolean",
+            "description": "Whether the workspace has a reviewer seat that is not removed; the board and the task page say so when it has none (milestone 2 plan SC-11, MA-29)."
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The seq of the last event the read reflects: the rows and this number are one moment of the log (milestone 2 plan MA-20)."
           }
         },
         "required": [
@@ -12797,7 +13415,13 @@
           "criteria",
           "actions",
           "questions",
-          "holds"
+          "holds",
+          "reviews",
+          "inbox_items",
+          "events",
+          "names",
+          "reviewer_seat_exists",
+          "as_of_seq"
         ],
         "examples": [
           {
@@ -12877,7 +13501,71 @@
                 "opened_at": "2026-01-01T00:00:00Z",
                 "closed_at": "2026-01-01T00:00:00Z"
               }
-            ]
+            ],
+            "reviews": [
+              {
+                "id": "00000000-0000-4000-8000-000000000079",
+                "task_id": "00000000-0000-4000-8000-000000000080",
+                "round": 1,
+                "reviewer_seat_id": "00000000-0000-4000-8000-000000000081",
+                "lease_due_at": "2026-01-01T00:00:00Z",
+                "verdict": "passed",
+                "failed_criteria": [
+                  "00000000-0000-4000-8000-000000000082"
+                ],
+                "notes": "example"
+              }
+            ],
+            "inbox_items": [
+              {
+                "id": "00000000-0000-4000-8000-000000000180",
+                "kind": "question_passed_on",
+                "about_kind": "task",
+                "about_id": "00000000-0000-4000-8000-000000000181",
+                "hold_id": "00000000-0000-4000-8000-000000000182",
+                "credential_id": "00000000-0000-4000-8000-000000000183",
+                "choices": [
+                  "answer"
+                ],
+                "facts": {},
+                "state": "open",
+                "opened_at": "2026-01-01T00:00:00Z",
+                "opened_seq": 1,
+                "resolved_by_kind": "owner",
+                "resolved_by_id": "00000000-0000-4000-8000-000000000184",
+                "resolved_at": "2026-01-01T00:00:00Z"
+              }
+            ],
+            "events": [
+              {
+                "id": "00000000-0000-4000-8000-000000000166",
+                "workspace_id": "00000000-0000-4000-8000-000000000167",
+                "seq": 1,
+                "at": "2026-01-01T00:00:00Z",
+                "effective_at": "2026-01-01T00:00:00Z",
+                "type": "task.created",
+                "schema_version": 1,
+                "actor_kind": "owner",
+                "actor_id": "00000000-0000-4000-8000-000000000168",
+                "project_id": "00000000-0000-4000-8000-000000000169",
+                "task_id": "00000000-0000-4000-8000-000000000170",
+                "round": 1,
+                "subject_kind": "criterion",
+                "subject_id": "00000000-0000-4000-8000-000000000171",
+                "cause_id": "00000000-0000-4000-8000-000000000172",
+                "command_id": "example",
+                "payload": {}
+              }
+            ],
+            "names": [
+              {
+                "kind": "seat",
+                "id": "00000000-0000-4000-8000-000000000300",
+                "name": "example"
+              }
+            ],
+            "reviewer_seat_exists": false,
+            "as_of_seq": 12
           }
         ]
       },
@@ -12953,17 +13641,23 @@
       "SeatsList": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisional (IF-18): the roster.",
+        "description": "Provisional (IF-18, milestone 2 plan MA-20): the roster.",
         "properties": {
           "seats": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Seat"
             }
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The seq of the last event the read reflects: the rows and this number are one moment of the log (milestone 2 plan MA-20)."
           }
         },
         "required": [
-          "seats"
+          "seats",
+          "as_of_seq"
         ],
         "examples": [
           {
@@ -12981,9 +13675,11 @@
                 "paused": false,
                 "last_polled_at": "2026-01-01T00:00:00Z",
                 "run_state": "stopped",
-                "removed_at": "2026-01-01T00:00:00Z"
+                "removed_at": "2026-01-01T00:00:00Z",
+                "wanted_running": false
               }
-            ]
+            ],
+            "as_of_seq": 12
           }
         ]
       },
@@ -13080,17 +13776,23 @@
       "CredentialsList": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisional (IF-18): the Credentials tab.",
+        "description": "Provisional (IF-18, milestone 2 plan MA-20): the Credentials tab.",
         "properties": {
           "credentials": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CredentialWithReading"
             }
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The seq of the last event the read reflects: the rows and this number are one moment of the log (milestone 2 plan MA-20)."
           }
         },
         "required": [
-          "credentials"
+          "credentials",
+          "as_of_seq"
         ],
         "examples": [
           {
@@ -13136,14 +13838,15 @@
                   ]
                 }
               }
-            ]
+            ],
+            "as_of_seq": 12
           }
         ]
       },
       "SystemHealth": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisional (IF-18): the system health line.",
+        "description": "Provisional (IF-18, milestone 2 plan IN-33): the system health line.",
         "properties": {
           "sweep_last_ran_at": {
             "type": [
@@ -13153,34 +13856,56 @@
             "format": "date-time"
           },
           "sweep_late": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the sweep's last run is more than 120 seconds ago, or it never ran."
           },
-          "orchestrator_online": {
-            "type": "boolean"
-          },
-          "queued_jobs": {
-            "type": "integer",
-            "minimum": 0
+          "helper_last_reported_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           },
           "queued_helper_requests": {
             "type": "integer",
             "minimum": 0
+          },
+          "ready_tasks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting_reviews": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "orchestrator": {
+            "type": "string",
+            "enum": [
+              "not_set_up",
+              "online",
+              "offline"
+            ],
+            "description": "Always not_set_up until the orchestrator seat exists (milestone 4)."
           }
         },
         "required": [
           "sweep_last_ran_at",
           "sweep_late",
-          "orchestrator_online",
-          "queued_jobs",
-          "queued_helper_requests"
+          "helper_last_reported_at",
+          "queued_helper_requests",
+          "ready_tasks",
+          "waiting_reviews",
+          "orchestrator"
         ],
         "examples": [
           {
             "sweep_last_ran_at": "2026-01-01T00:00:00Z",
             "sweep_late": false,
-            "orchestrator_online": false,
-            "queued_jobs": 1,
-            "queued_helper_requests": 1
+            "helper_last_reported_at": "2026-01-01T00:00:00Z",
+            "queued_helper_requests": 0,
+            "ready_tasks": 1,
+            "waiting_reviews": 0,
+            "orchestrator": "not_set_up"
           }
         ]
       },
@@ -14181,6 +14906,366 @@
               "repeated": true
             },
             "refusal": null
+          }
+        ]
+      },
+      "SetupState": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Whether the one owner of this installation exists (milestone 2 plan IN-2).",
+        "properties": {
+          "owner_exists": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "owner_exists"
+        ],
+        "examples": [
+          {
+            "owner_exists": false
+          }
+        ]
+      },
+      "LandingPrompt": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work when it has none.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "check_interval_minutes": {
+            "type": "integer",
+            "const": 20
+          }
+        },
+        "required": [
+          "text",
+          "check_interval_minutes"
+        ],
+        "examples": [
+          {
+            "text": "You are the builder seat Example of leverage. Read your role file, your briefing and your rules before any work.",
+            "check_interval_minutes": 20
+          }
+        ]
+      },
+      "HelperRequestParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The non-secret inputs of a helper request that the helper has no other way to learn (milestone 2 plan IN-22): the provider and kind of a credential request, the role, provider, model and effort of a seat request, the provider of an install. The credential and the seat are named by the request's own ids. It never holds a credential's name or a token: the database refuses a `name` key and any key ending in `token`.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "codex",
+              "gemini",
+              "grok",
+              "claude_api",
+              "openai_api",
+              "gemini_api",
+              "grok_api",
+              "openrouter"
+            ]
+          },
+          "credential_kind": {
+            "type": "string",
+            "enum": [
+              "login",
+              "api_token"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "builder",
+              "reviewer",
+              "planner",
+              "orchestrator"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The seat's model; null for the tool's default."
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The seat's effort; null for the tool's default."
+          }
+        },
+        "examples": [
+          {
+            "provider": "claude",
+            "credential_kind": "login"
+          },
+          {
+            "role": "builder",
+            "provider": "codex",
+            "model": null,
+            "effort": null
+          }
+        ]
+      },
+      "InstallOffer": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "For the tool_installed check of a missing tool: what would be installed and from where, or that leverage cannot install it (milestone 2 plan IN-23, PV-5). `source_url` is an HTTPS address on a host the helper's catalog lists.",
+        "properties": {
+          "installable": {
+            "type": "boolean"
+          },
+          "what": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "source_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "pattern": "^https://"
+          }
+        },
+        "required": [
+          "installable",
+          "what",
+          "source_url"
+        ],
+        "examples": [
+          {
+            "installable": true,
+            "what": "Example tool",
+            "source_url": "https://example.test/install.sh"
+          },
+          {
+            "installable": false,
+            "what": null,
+            "source_url": null
+          }
+        ]
+      },
+      "HelperCheckProgress": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One check's state while a request runs (milestone 2 plan IN-23). `failure` is a code, never provider text, and is set only when `state` is `failed`. `install` is set only on tool_installed while it waits for the owner to confirm an install, or when it failed because leverage cannot install the tool.",
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "tool_installed",
+              "signed_in",
+              "test_prompt",
+              "token_works",
+              "reading_taken"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "running",
+              "waiting_for_sign_in",
+              "waiting_for_install",
+              "passed",
+              "failed"
+            ]
+          },
+          "failure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "not_installed",
+              "not_signed_in",
+              "no_answer",
+              "rejected",
+              "unreachable",
+              "timed_out",
+              null
+            ]
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstallOffer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "check",
+          "state",
+          "failure",
+          "install"
+        ],
+        "examples": [
+          {
+            "check": "signed_in",
+            "state": "waiting_for_sign_in",
+            "failure": null,
+            "install": null
+          },
+          {
+            "check": "tool_installed",
+            "state": "waiting_for_install",
+            "failure": null,
+            "install": {
+              "installable": true,
+              "what": "Example tool",
+              "source_url": "https://example.test/install.sh"
+            }
+          }
+        ]
+      },
+      "HelperRequestStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Provisional (milestone 2 plan IN-23, MA-20): one helper request with each check's progress, and the log position it was read at.",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/HelperRequest"
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "request",
+          "as_of_seq"
+        ],
+        "examples": [
+          {
+            "request": {
+              "id": "00000000-0000-4000-8000-000000000158",
+              "kind": "start_seat",
+              "seat_id": "00000000-0000-4000-8000-000000000159",
+              "credential_id": "00000000-0000-4000-8000-000000000160",
+              "state": "queued",
+              "requested_at": "2026-01-01T00:00:00Z",
+              "picked_up_at": "2026-01-01T00:00:00Z",
+              "finished_at": "2026-01-01T00:00:00Z",
+              "result": {
+                "outcome": "finished",
+                "checks": [
+                  {
+                    "check": "tool_installed",
+                    "passed": false,
+                    "failure": "not_installed"
+                  }
+                ],
+                "tool_version": "example",
+                "plan": null,
+                "account_email": null
+              },
+              "params": {
+                "provider": "claude",
+                "credential_kind": "login"
+              },
+              "progress": [
+                {
+                  "check": "signed_in",
+                  "state": "waiting_for_sign_in",
+                  "failure": null,
+                  "install": null
+                },
+                {
+                  "check": "tool_installed",
+                  "state": "waiting_for_install",
+                  "failure": null,
+                  "install": {
+                    "installable": true,
+                    "what": "Example tool",
+                    "source_url": "https://example.test/install.sh"
+                  }
+                }
+              ],
+              "updated_at": "2026-01-01T00:00:00Z"
+            },
+            "as_of_seq": 12
+          }
+        ]
+      },
+      "LogName": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "A name the task page's log shows for an id its events carry (milestone 2 plan IN-35).",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "seat",
+              "credential"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name"
+        ],
+        "examples": [
+          {
+            "kind": "seat",
+            "id": "00000000-0000-4000-8000-000000000300",
+            "name": "example"
+          }
+        ]
+      },
+      "ReviewNote": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The notes of one failed review of the task, which the builder reworks from (milestone 2 plan Q-9, CL-6). Outside the briefing's hash, like the work reference.",
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "review_id",
+          "round",
+          "notes"
+        ],
+        "examples": [
+          {
+            "review_id": "00000000-0000-4000-8000-000000000310",
+            "round": 0,
+            "notes": "The second criterion does not hold yet."
           }
         ]
       }

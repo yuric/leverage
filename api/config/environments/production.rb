@@ -58,12 +58,14 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # DNS rebinding protection (PRD, Security): the API answers only a
+  # request addressed to this Mac's loopback, the address the app, the
+  # helper and the runners use, or to the compose service name api, which
+  # the speed run uses inside the compose network. A web page that rebinds
+  # its own name to 127.0.0.1 sends that name as Host and is refused 403
+  # before any controller runs. Rails compares the host without its port.
+  config.hosts = [ "127.0.0.1", "localhost", "[::1]", "api" ]
+
+  # The compose health check asks /up, whatever the Host.
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

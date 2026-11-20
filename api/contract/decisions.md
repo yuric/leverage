@@ -347,6 +347,16 @@ Where two inventories chose differently, the decision names the conflict.
   transition function under the lock. D-G51, D-G52.
 - **DB-47** `[shape]` No PostgreSQL enum types: text validated from the
   registry. Release reasons exist only in payloads. D-G54, D-G55 (`jsonb`).
+- **DB-48** `[shape]` Added by the Core loop milestone, after the
+  contract merged. `task.contract_changed` carries
+  `minimum_strength_rank`, the task's rank as the contract sets it, or
+  `null` for none. The PRD's replay list names the rank among the task's
+  replay columns, and Complete contract (later Edit contract) sets it, so
+  the event that sets it carries it, as `task.reassigned` does for
+  escalation (SM-9). The field was added to `v1` in place, not as a `v2`:
+  no build of leverage has been released, so no log holds a `v1` event
+  without it. Every golden trace's `task.contract_changed` gained
+  `"minimum_strength_rank": null`, the value its command sends.
 
 ## State machine (SM)
 

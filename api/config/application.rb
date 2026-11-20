@@ -18,6 +18,8 @@ require "rails/test_unit/railtie"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+require_relative "../lib/middleware/json_bodies_only"
+
 module Leverage
   # The app version: the one place it is set. GET /v1/health reports it.
   VERSION = "0.1.0"
@@ -29,7 +31,7 @@ module Leverage
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks])
+    config.autoload_lib(ignore: %w[assets middleware tasks])
 
     # db/structure.sql, not schema.rb: the schema has triggers, partial and
     # NULLS NOT DISTINCT indexes, and a deferrable constraint.
@@ -51,5 +53,9 @@ module Leverage
     # Errors raised before a controller runs (in the router or a middleware)
     # get the same JSON error shape as the rest; see ApplicationController.
     config.exceptions_app = ->(env) { ApplicationController.exceptions_app(env) }
+
+    # A body that is not sent as JSON is 400 before Rails parses it into
+    # params, which its log line would print (lib/middleware).
+    config.middleware.use JsonBodiesOnly
   end
 end
