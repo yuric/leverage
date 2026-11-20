@@ -101,11 +101,13 @@ module Leverage
         end
 
         # A new attempt of the errored check, with the input its last job
-        # had.
+        # had; its job runs the attempt after the last (Jobs.queue's
+        # attempt_number).
         def run_again(ctx, check, task)
           last = RuleCheckAttempt.where(rule_check_id: check.id).order(:attempt_number).last
           input = (last&.job_id && Job.find_by(id: last.job_id)&.input) || {}
-          job = Jobs.queue(ctx, kind: "rule_check", task: task, target: check, seat_role: ROLE, input: input)
+          job = Jobs.queue(ctx, kind: "rule_check", task: task, target: check, seat_role: ROLE, input: input,
+            attempt_number: (last&.attempt_number || 0) + 1)
           RuleChecks.new_attempt(ctx, check, job: job)
         end
 
