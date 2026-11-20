@@ -45,14 +45,8 @@ module Leverage
       apply_task_timers(ctx, due_candidates(ctx))
     end
 
-    # Whether the command is a timer's own: Table::TIMERS, and the two
-    # timers of milestone 3 while they wait in Table::PENDING (its plan,
-    # HT-6), which WP10 moves into TIMERS.
-    def timer_command?(command)
-      table = Transitions::Table
-      pending = table.const_defined?(:PENDING_GROUPS, false) ? table::PENDING_GROUPS.fetch("TIMERS", []) : []
-      table::TIMERS.include?(command) || pending.include?(command)
-    end
+    # Whether the command is a timer's own (Table::TIMERS).
+    def timer_command?(command) = Transitions::Table::TIMERS.include?(command)
 
     # Applies the due lease timers on every task and review a seat holds,
     # as apply_due does for the caller: for a command that decides by what

@@ -86,7 +86,7 @@ class StateTableAllTest < ActiveSupport::TestCase
     assert_operator not_served.size, :>, 0
     assert_equal finishing_rows.map(&:name).sort, not_served.map(&:name).sort
     not_served.each { |kase| assert_equal "invalid_state", kase.expected_refusal, kase.name }
-    (cases - not_served).each { |kase| assert_equal kase.refusal, kase.expected_refusal, kase.name }
+    (cases - not_served).each { |kase| assert kase.refusal == kase.expected_refusal, kase.name }
   end
 
   test "every state a task can be in has a case for every command that reads one" do
