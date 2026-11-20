@@ -168,6 +168,10 @@ struct HandoffModelTests {
         let seats = [
             Fixtures.runningSeat(Fixtures.builderID, name: "A", credential: Fixtures.loginID, runOn: Fixtures.secondLoginID),
             Fixtures.seat(Fixtures.reviewerID, name: "B", credential: thirdID, run: .stopped),
+            // A stopped agent that still names a run's account is not working on it.
+            Seat(
+                id: UUID(), name: "C", provider: .claude, role: .builder, credentialID: Fixtures.loginID,
+                runState: .stopped, runCredentialID: Fixtures.loginID),
         ]
         let model = makeModel(owner(three(), seats: seats))
         await model.load()

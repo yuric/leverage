@@ -194,8 +194,8 @@ final class RosterModel {
             logins = accounts.filter { $0.kind == .login }.sorted { $0.position < $1.position }
                 .map(ConnectAgentModel.LoginChoice.init)
             rows = present.map { seat in
-                let waiting = seat.enabled && !seat.paused && seat.runState == .running
-                    ? AgentWait.account(for: seat, in: accounts, at: at).map(ProviderNames.account) : nil
+                // The row says it only for an agent that is on and running.
+                let waiting = AgentWait.account(for: seat, in: accounts, at: at).map(ProviderNames.account)
                 return RosterRow(
                     seat: seat, loginName: seat.credentialID.flatMap { loginNames[$0] }, doing: doing[seat.id],
                     waitingFor: waiting, now: at)

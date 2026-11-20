@@ -509,6 +509,20 @@ struct RosterModelTests {
         #expect(rowWords(model, Fixtures.ownID) == "Builder. Connects on its own.")
     }
 
+    @Test("an account whose reset time is known is named before one with no reset time")
+    func knownResetBeforeUnknown() async {
+        let list = CredentialsList(
+            credentials: [
+                Fixtures.account(Fixtures.loginID, name: "Personal", since: now.addingTimeInterval(-60), position: 1),
+                Fixtures.account(
+                    Fixtures.secondLoginID, name: "Team", provider: .codex, since: now.addingTimeInterval(-60),
+                    until: now.addingTimeInterval(3600), position: 2),
+            ], asOfSeq: 11)
+        let model = makeModel(Fixtures.owner(credentials: list))
+        await model.load()
+        #expect(rowWords(model, Fixtures.builderID) == "Builder. Waiting for Codex, Team.")
+    }
+
     @Test("a signed-out account below is the one waited for, because only the owner can bring it back")
     func waitingForASignedOutAccount() async {
         let list = CredentialsList(

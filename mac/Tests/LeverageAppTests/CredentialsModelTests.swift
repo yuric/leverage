@@ -375,6 +375,19 @@ struct CredentialsModelTests {
         #expect(keys.count == 3 && keys[0] == keys[1] && keys[1] != keys[2])
     }
 
+    @Test("a refused Sign in again does not keep its key")
+    func signInAgainRefusedKeyDropped() async {
+        let owner = owner([Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut)])
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        owner.script { $0.signInAgain = { _, key in .refused(refusal, key: key.value, command: .signInAgain) } }
+        let model = makeModel(owner)
+        await model.load()
+        await model.signInAgain(Fixtures.secondLoginID)
+        await model.signInAgain(Fixtures.secondLoginID)
+        let keys = Fixtures.calls(owner, .signInAgain).map(\.key)
+        #expect(keys.count == 2 && keys[0] != keys[1])
+    }
+
     @Test("a refused Sign in again shows the sentence for its code")
     func signInAgainRefused() async {
         let owner = owner([Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut)])
