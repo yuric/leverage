@@ -316,15 +316,16 @@ struct RequestLoopTests {
 
     // MARK: The helper's own dispatch
 
-    @Test("the helper answers the kinds this milestone does not serve with a failed result")
+    @Test("the helper answers the kind this milestone does not serve, read_usage, with a failed result")
     func unservedKinds() async throws {
         let rig = try HelperRig()
         let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
 
-        for kind in [HelperRequestKind.openSignIn, .readUsage] {
-            let result = await runtime.handle(helperRequest(kind, credential: UUID()))
-            #expect(result?.outcome == .failed)
-        }
+        // open_sign_in is served from milestone 3 (HE-36); usage readers are
+        // milestone 6's.
+        let result = await runtime.handle(helperRequest(.readUsage, credential: UUID()))
+        #expect(result?.outcome == .failed)
+        #expect(rig.api.calls.isEmpty)
     }
 
     @Test("the helper sends each kind to the part that does it")
@@ -341,6 +342,10 @@ struct RequestLoopTests {
         let verified = await runtime.handle(helperRequest(
             .verify, credential: credential, params: .init(provider: .codex, credentialKind: .login)))
         #expect(verified?.outcome == .finished)
+        let signedInAgain = await runtime.handle(helperRequest(
+            .openSignIn, credential: credential, params: .init(provider: .codex, credentialKind: .login)))
+        #expect(signedInAgain?.outcome == .finished)
+        #expect(signedInAgain?.checks.count == 3)
         let started = await runtime.handle(helperRequest(
             .startSeat, seat: seat, credential: credential, params: .init(provider: .codex, role: .reviewer)))
         #expect(started?.outcome == .finished)
