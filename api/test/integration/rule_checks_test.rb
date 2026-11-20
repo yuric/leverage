@@ -25,7 +25,7 @@ require_relative "../support/integration_helpers"
 #   the requester's GET /v1/next answering command and GET
 #   /v1/commands/{key} its refusal: task_cancelled (L919), lease_expired
 #   and invalid_state.
-class RuleChecksTest < ActionDispatch::IntegrationTest
+class RuleChecksHttpTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
   include HttpCalls
   include IntegrationHelpers

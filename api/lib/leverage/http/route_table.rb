@@ -87,11 +87,6 @@ module Leverage
         "draft_contract" => "v1/owner/tasks#draft_contract"
       }.freeze
 
-      # The twelve operations milestone 4 serves (its plan §2.3, RT-6) are in
-      # ROUTES, drawn like every other. WP13 deletes this empty list and the
-      # test that names it.
-      PENDING = {}.freeze
-
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)

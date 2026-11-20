@@ -26,8 +26,8 @@ class StateTableTimersTest < ActiveSupport::TestCase
 
   COMMANDS = %w[builder_lease_expiry review_lease_expiry command_key_retention].freeze
 
-  test "the three are Table::TIMERS but milestone 3's two" do
-    assert_equal COMMANDS, T::Table::TIMERS - %w[credential_hold_release seat_run_placement]
+  test "the three are milestone 2's Table::TIMERS: the first five but milestone 3's two" do
+    assert_equal COMMANDS, T::Table::TIMERS.first(5) - %w[credential_hold_release seat_run_placement]
   end
 
   setup { @scenario = Scenario.new(lease_length_seconds: 600) }
