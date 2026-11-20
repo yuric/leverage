@@ -105,4 +105,17 @@ class ConnectSeatTest < ActiveSupport::TestCase
 
     assert_equal 3, Seat.find(outcome.result.fetch("seat_id")).strength_rank
   end
+
+  # Milestone 3 plan HD-1: Connect builds the start from SeatRuns.placement.
+  test "a seat connected on a limited login starts on its first available login" do
+    own = @scenario.credential
+    below = @scenario.credential(provider: "codex")
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
+
+    outcome = assert_completed(owner_command("connect_seat", body(credential_id: own.id, model: "seat-model")))
+
+    start = HelperRequest.find_by!(seat_id: outcome.result.fetch("seat_id"), kind: "start_seat")
+    assert_equal below.id, start.credential_id
+    assert_equal({ "role" => "builder", "provider" => "codex", "model" => nil, "effort" => nil }, start.params)
+  end
 end

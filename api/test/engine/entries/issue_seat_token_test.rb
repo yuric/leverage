@@ -4,7 +4,8 @@ require "test_helper"
 # start_seat request the helper has, a fresh seat token, whose digest
 # replaces the seat's token_hash, so the previous token ends. The token is
 # returned once and never stored: not in the commands row, not in the
-# helper request, never in an event.
+# helper request, never in an event. The seat's run is then on the start
+# request's credential (milestone 3 plan HD-3).
 class IssueSeatTokenTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
@@ -94,5 +95,19 @@ class IssueSeatTokenTest < ActiveSupport::TestCase
     assert_equal [ :refused, "invalid_state", nil ], [ outcome.outcome, outcome.refusal.code, outcome.once ]
     assert_equal Leverage::Tokens.digest(@old_token), @seat.reload.token_hash
     assert_equal "refused", Command.find_by!(key: "pickup-removed").outcome
+  end
+
+  test "the token puts the seat's run on the credential of the start the helper holds (HD-3)" do
+    other = @scenario.credential(provider: "codex")
+    start = HelperRequest.create!(workspace_id: @scenario.workspace_id, kind: "start_seat", seat_id: @seat.id,
+      credential_id: other.id, state: "picked_up", requested_at: @scenario.database_now,
+      params: { "role" => "builder", "provider" => "codex" })
+    @seat.update!(run_credential_id: nil, run_state: "stopped", run_stop_reason: "limit")
+
+    assert T.apply(request(id: start.id, key: "pickup-other")).completed?
+
+    @seat.reload
+    assert_equal [ other.id, "limit" ], [ @seat.run_credential_id, @seat.run_stop_reason ],
+      "the reason of the last run's end is kept (HD-3)"
   end
 end

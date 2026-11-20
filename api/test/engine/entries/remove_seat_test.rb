@@ -1,14 +1,19 @@
 require "test_helper"
 require_relative "accounts_support"
+require_relative "call_spy"
 
 # remove_seat (PRD L148, L823; milestone 2 plan IN-17, IN-40, SC-10): writes
 # seat.removed, sets removed_at, ends the token at once, clears wanted
 # running and, for a seat the app runs, queues stop_seat. A Working task the
 # seat holds is released to Ready with seat_removed, with no builder, as
 # every return to Ready clears it (the PRD's replay list); a review it holds
-# with a live lease is released, so another reviewer can claim it.
+# with a live lease is released, so another reviewer can claim it. The
+# seat-bound holds of the task it loses close after task.released, which
+# then leaves the wait_ready cause to hold.closed (milestone 3 plan §2.1
+# rule 7, HE-35).
 class RemoveSeatTest < ActiveSupport::TestCase
   include AccountsSupport
+  include CallSpy
 
   setup { use_scenario }
 
@@ -97,5 +102,23 @@ class RemoveSeatTest < ActiveSupport::TestCase
 
   test "an unknown seat is not found" do
     assert_raises(T::NotFound) { owner_command("remove_seat", { "id" => SecureRandom.uuid }) }
+  end
+
+  test "the seat-bound holds of the released task are closed after task.released, with the wait_ready cause" do
+    own = @scenario.credential
+    seat = @scenario.seat(credential: own, run_state: "stopped", wanted_running: true)
+    task = @scenario.task(state: "working", builder: seat)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600, seat: seat, task: task)
+    @scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    calls = spy_on(Leverage::Holds, :close_seat_bound) do
+      @written = events_written { assert_completed(remove(seat)) }
+    end
+
+    released = @written.find { |event| event.type == "task.released" }
+    assert_equal({ "reason" => "seat_removed", "wait_cause" => nil }, released.payload)
+    assert_equal [ [ task.id, released.id, nil ] ],
+      calls.map { |call| [ call.arguments.last.id, call.keywords[:cause].id, call.keywords[:wait_cause] ] },
+      "no other builder exists, so the cause is not credential_limit (HE-35)"
   end
 end

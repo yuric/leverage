@@ -134,4 +134,40 @@ class IssueHelperTokenTest < ActiveSupport::TestCase
     assert_equal [ "stopped", true ], [ seat.run_state, seat.wanted_running ]
     assert_equal 1, HelperRequest.where(seat_id: seat.id, kind: "start_seat", state: "queued").count
   end
+
+  # Milestone 3 plan HD-1: the reconciliation builds each start from
+  # SeatRuns.placement, so a seat that holds a task when the app opens
+  # again continues it on the account recorded for it.
+  test "a seat that holds a task starts again on the task's credential, naming the task" do
+    other = @scenario.credential(provider: "codex")
+    seat = running_seat(role: "builder")
+    task = @scenario.task(state: "working", builder: seat)
+    task.update!(credential_id: other.id)
+
+    assert_completed(issue)
+
+    start = HelperRequest.find_by!(seat_id: seat.id, kind: "start_seat", state: "queued")
+    assert_equal other.id, start.credential_id
+    assert_equal({ "role" => "builder", "provider" => "codex", "model" => nil, "effort" => nil, "task_id" => task.id },
+      start.params)
+    assert_nil seat.reload.run_credential_id, "the old run is over"
+  end
+
+  test "a seat that holds a task under a credential hold gets no start; an idle one starts on its first available login" do
+    own = @scenario.credential
+    below = @scenario.credential(provider: "codex")
+    held = @scenario.seat(credential: own, run_state: "stopped", wanted_running: true)
+    task = @scenario.task(state: "working", builder: held)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600, seat: held, task: task)
+    @scenario.limit_credential(below, reset_at: @scenario.database_now + 3600)
+    @scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+    third = @scenario.credential(provider: "grok")
+    idle = @scenario.seat(credential: below, run_state: "stopped", wanted_running: true)
+
+    assert_completed(issue)
+
+    assert_equal 0, HelperRequest.where(seat_id: held.id, kind: "start_seat").count
+    start = HelperRequest.find_by!(seat_id: idle.id, kind: "start_seat")
+    assert_equal third.id, start.credential_id
+  end
 end

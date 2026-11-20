@@ -89,4 +89,44 @@ class StartSeatTest < ActiveSupport::TestCase
     assert_equal first.result, second.result
     assert_equal 1, HelperRequest.where(seat_id: seat.id, kind: "start_seat").count
   end
+
+  # Milestone 3 plan HD-1: Start builds its request from SeatRuns.placement.
+  test "a seat that holds a task starts on the task's credential and names the task" do
+    other = @scenario.credential(provider: "codex")
+    seat = @scenario.seat(credential: @scenario.credential, run_state: "stopped", token: false)
+    task = @scenario.task(state: "working", builder: seat)
+    task.update!(credential_id: other.id)
+
+    outcome = assert_completed(owner_command("start_seat", { "id" => seat.id }))
+
+    request = HelperRequest.find(outcome.result.fetch("helper_request_id"))
+    assert_equal other.id, request.credential_id
+    assert_equal task.id, request.params.fetch("task_id")
+    assert_equal "codex", request.params.fetch("provider")
+  end
+
+  test "an idle seat whose own login is limited starts on its first available login" do
+    own = @scenario.credential
+    below = @scenario.credential(provider: "codex")
+    seat = @scenario.seat(credential: own, run_state: "stopped", token: false)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
+
+    outcome = assert_completed(owner_command("start_seat", { "id" => seat.id }))
+
+    assert_equal below.id, HelperRequest.find(outcome.result.fetch("helper_request_id")).credential_id
+  end
+
+  test "a seat whose task waits under a credential hold is wanted running and gets no start until the hold closes" do
+    own = @scenario.credential
+    seat = @scenario.seat(credential: own, run_state: "stopped", token: false)
+    task = @scenario.task(state: "working", builder: seat)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600, seat: seat, task: task)
+    @scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    outcome = assert_completed(owner_command("start_seat", { "id" => seat.id }))
+
+    assert_equal({ "helper_request_id" => nil }, outcome.result)
+    assert seat.reload.wanted_running
+    assert_equal 0, HelperRequest.where(seat_id: seat.id, kind: "start_seat").count
+  end
 end

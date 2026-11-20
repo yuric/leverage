@@ -5,7 +5,9 @@ require_relative "accounts_support"
 # IF-21): a run stopped. The seat's run state becomes stopped and its token
 # ends; a review the seat holds is released, so another reviewer can claim
 # it; a builder's task keeps its lease until the lease ends. No event of its
-# own.
+# own. The seat keeps why its run stopped and its run is on no credential
+# (milestone 3 plan HD-3, HD-10); a report about an earlier run, on another
+# credential than the seat's run is on now, changes nothing.
 class ReportRunStoppedTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -95,5 +97,29 @@ class ReportRunStoppedTest < ActiveSupport::TestCase
       helper_command("report_run_stopped", { "id" => SecureRandom.uuid, "credential_id" => SecureRandom.uuid,
         "observed_at" => "2026-11-19T12:00:00Z", "stop_reason" => "stopped" })
     end
+  end
+
+  test "the run keeps why it stopped and is on no credential any more (HD-3, HD-10)" do
+    seat = running_seat
+
+    assert_completed(report(seat, stop_reason: "limit"))
+
+    assert_equal [ "stopped", nil, "limit" ], [ seat.reload.run_state, seat.run_credential_id, seat.run_stop_reason ]
+  end
+
+  test "a report about an earlier run of the seat, on another credential, changes nothing" do
+    reviewer = running_seat(role: "reviewer")
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer)
+    other = @scenario.credential(provider: "codex")
+    @scenario.run(reviewer, on: other)
+    digest = reviewer.reload.token_hash
+
+    written = events_written { assert_completed(report(reviewer, stop_reason: "stopped")) }
+
+    assert_empty written
+    reviewer.reload
+    assert_equal [ "running", other.id, digest, nil ],
+      [ reviewer.run_state, reviewer.run_credential_id, reviewer.token_hash, reviewer.run_stop_reason ]
+    assert_equal reviewer.id, review.reload.reviewer_seat_id, "a handed-over review is never released by the old run's stop"
   end
 end

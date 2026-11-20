@@ -5,7 +5,8 @@ require "test_helper"
 # row reads no task state (from: null), changes none (to: null) and writes
 # no event, so each case runs the real entry through the pipeline for a
 # caller the row's "who" names and checks that the command completed and
-# wrote exactly the row's events: none.
+# wrote exactly the row's events: none. issue_seat_token also puts the
+# seat's run on the start request's credential (milestone 3 plan HD-3).
 class StateTableSignInTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
@@ -36,7 +37,9 @@ class StateTableSignInTest < ActiveSupport::TestCase
       scenario = Scenario.new
       seat = scenario.seat(credential: scenario.credential, token: false)
       request = HelperRequest.create!(workspace_id: scenario.workspace_id, kind: "start_seat", seat_id: seat.id,
-        state: "picked_up", requested_at: scenario.database_now, params: { "role" => "builder", "provider" => "claude" })
+        credential_id: seat.credential_id, state: "picked_up", requested_at: scenario.database_now,
+        params: { "role" => "builder", "provider" => "claude" })
+      @start = request
       T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "helper",
         caller_id: scenario.helper.id, key: key, request_hash: "d" * 64, params: { "id" => request.id })
     else
@@ -66,5 +69,9 @@ class StateTableSignInTest < ActiveSupport::TestCase
       "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
     assert_empty kase.conditional_events
     assert Command.exists?(key: request.key, command: kase.command), "#{kase.command} stores its commands row"
+    if kase.command == "issue_seat_token"
+      assert_equal @start.credential_id, Seat.find(@start.seat_id).run_credential_id,
+        "the seat's run is on the credential of the start it was issued for (milestone 3 plan HD-3)"
+    end
   end
 end

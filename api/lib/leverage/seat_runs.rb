@@ -112,11 +112,12 @@ module Leverage
     # a run that dies on its own is started again only by the helper's next
     # token.
     #
+    # reason: - the RunStoppedReport.stop_reason (milestone 3 plan HD-3).
     # actor_kind:, actor_id: - who the review.released is written as;
     #   default the request's caller.
     #
     # Returns the events it wrote.
-    def run_stopped(ctx, seat, **actor)
+    def run_stopped(ctx, seat, reason: nil, **actor)
       seat.update!(run_state: "stopped", token_hash: nil)
       held_reviews(ctx, seat).map { |review| release_review(ctx, review, **actor) }
     end
