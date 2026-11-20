@@ -336,8 +336,11 @@ Where two inventories chose differently, the decision names the conflict.
   `check.finished` of the last of the claim's blocking checks still
   running when one of them is `failed` or `error`, or every one
   `withdrawn` (the engine decides a pending claim only then; milestone 4
-  WP20); a warn rule's check sets and settles nothing. It is also cleared
-  by a `hold.opened` on the task, and by
+  WP20); a warn rule's check sets and settles nothing. When every one
+  passed and the command that settled the last writes no `task.claimed`,
+  the claim was refused for a seat that may no longer claim and the
+  provisional holder is cleared after that command (milestone 4 review,
+  finding 7). It is also cleared by a `hold.opened` on the task, and by
   `task.released`; holder cleared by `task.submitted`, `task.released`,
   `task.lease_expired`, `task.returned`, `task.cancelled` and `task.done`.
   Settles D-G48, M-G7, M-G31.
@@ -370,7 +373,10 @@ Where two inventories chose differently, the decision names the conflict.
   other reason. The check held at the re-run limit is planned
   with no attempt and no job, so no `check.*` event names it until it is
   let through or withdrawn: without the field the replay meets a
-  `rule_checks` row the log does not make (L369, test 1). The field was
+  `rule_checks` row the log does not make (L369, test 1). A
+  `rerun_limit` hold's `hold.opened` also sets that row's result back to
+  none: a row withdrawn when its waiting command ended (a release) and
+  met again is held again, not run (milestone 4 review, finding 2). The field was
   added to `v1` in place, as DB-48's was: no released build wrote the
   event. Every golden trace's `hold.opened` gained it; traces 07, 17, 18
   and 19 name the check on those holds.
