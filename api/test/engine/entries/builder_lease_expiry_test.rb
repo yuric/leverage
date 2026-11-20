@@ -126,4 +126,55 @@ class BuilderLeaseExpiryTest < ActiveSupport::TestCase
 
     assert Leverage::Leases.ended_by_expiry?(task.reload, @builder)
   end
+
+  # --- Milestone 3 (its plan, WP4, HE-35, SM-15) ---------------------------
+
+  # A builder whose only account is limited with no reset time, holding a
+  # Working task under a credential_limit hold, and no other builder.
+  def limited_builder_task(hold: true)
+    scenario = Scenario.new(lease_length_seconds: 600)
+    own = scenario.limit_credential(scenario.credential, reset_at: nil)
+    builder = scenario.seat(role: "builder", credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    held = scenario.hold(task, reason: "credential_limit", credential: own) if hold
+    [ scenario, task, held ]
+  end
+
+  def timer_in(scenario, params)
+    T.apply(T::Request.new(command: "builder_lease_expiry", workspace_id: scenario.workspace_id, caller_kind: nil,
+      caller_id: nil, key: nil, request_hash: nil, params: params))
+  end
+
+  test "under a credential_limit hold the lease still ends; the seat-bound hold then closes with the wait_cause" do
+    scenario, task, hold = limited_builder_task
+    due = scenario.database_now
+    scenario.make_due(task, at: due)
+
+    assert timer_in(scenario, "task_id" => task.id).completed?
+
+    events = Event.where(task_id: task.id).where("seq > ?", Event.where(subject_id: hold.id, type: "hold.opened").pick(:seq))
+      .where.not(type: %w[inbox.opened]).order(:seq).to_a
+    assert_equal %w[task.lease_expired hold.closed inbox.resolved], events.map(&:type)
+    expired, closed, resolved = events
+    assert_equal({ "wait_cause" => nil }, expired.payload, "the step stays on the hold until hold.closed")
+    assert_equal [ hold.id, "credential_limit" ], [ closed.subject_id, closed.payload.fetch("wait_cause") ]
+    [ expired, closed, resolved ].each do |event|
+      assert_equal [ due, "app", nil, nil ], [ event.effective_at, event.actor_kind, event.actor_id, event.command_id ]
+    end
+    assert_nil closed.cause_id
+    assert hold.reload.closed_at
+    step = TaskStep.find_by!(task_id: task.id, closed_at: nil)
+    assert_equal [ "wait_ready", "credential_limit", closed.id ], step.values_at(:kind, :cause_kind, :opening_event_id)
+  end
+
+  test "with no hold open, task.lease_expired carries the wait_cause (HE-35)" do
+    scenario, task, = limited_builder_task(hold: false)
+    scenario.make_due(task)
+
+    timer_in(scenario, "task_id" => task.id)
+
+    expired = Event.where(task_id: task.id, type: "task.lease_expired").sole
+    assert_equal({ "wait_cause" => "credential_limit" }, expired.payload)
+    assert_equal [ "wait_ready", "credential_limit" ], TaskStep.find_by!(task_id: task.id, closed_at: nil).values_at(:kind, :cause_kind)
+  end
 end

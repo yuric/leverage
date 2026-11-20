@@ -58,7 +58,8 @@ module Leverage
     #
     # Returns the Hold.
     def close(ctx, hold:, task:, choice: nil, lease_seat_id: nil, wait_cause: nil, cause_id: nil,
-              actor_kind: ctx.actor.first, actor_id: ctx.actor.last, round: task.round)
+              actor_kind: ctx.actor.first, actor_id: ctx.actor.last, round: task.round, effective_at: ctx.at,
+              command_id: ctx.request.key)
       hold.update!(closed_at: ctx.at, closed_by_kind: actor_kind, closed_by_id: actor_id)
       ctx.emit("hold.closed", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { reason: hold.reason, rule_id: hold.rule_id, credential_id: hold.credential_id,

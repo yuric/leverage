@@ -33,7 +33,7 @@ class StepTrackerTest < ActiveSupport::TestCase
         expect.fetch("events").map { |event| append_expected(ctx, event).id }
       end
       check_command("#{name} command #{index + 1} (#{command.fetch("command")})", expect, ids)
-      yield(index + 1) if block_given?
+      yield(index + 1, ids) if block_given?
     end
     Event.find(@bound_to_real.values.first).task_id
   end
@@ -114,6 +114,47 @@ class StepTrackerTest < ActiveSupport::TestCase
     task_id = feed("10-leases-no-rules")
     assert_lifetime(task_id)
     assert_equal 0, TaskStep.where(task_id: task_id, closed_at: nil).count, "a cancelled task has no open step"
+  end
+
+  # Milestone 3 (plan WP4): the handoff's traces. Each has several tasks;
+  # every one of them is checked command by command, and each task that
+  # has ended has steps that sum to its lifetime.
+  {
+    "11-limit-handoff-no-rules" => "wait_limit with the candidate that resets first, then build again",
+    "12-signed-out-hold-verify-no-rules" => "wait_owner for credential_signed_out",
+    "13-limit-next-signed-out-no-rules" => "wait_owner for a limit whose next candidate is signed out",
+    "14-handoff-edges-no-rules" => "wait_limit, and wait_ready with the cause credential_limit at hold.closed",
+    "15-owner-controls-no-rules" => "idea, wait_seat for a paused seat, wait_owner for owner_hold"
+  }.each do |name, what|
+    test "trace #{name[0, 2]}'s events yield exactly its steps: #{what}" do
+      feed(name)
+      ended = TaskStep.where(workspace_id: @scenario.workspace_id).distinct.pluck(:task_id)
+        .reject { |task_id| TaskStep.where(task_id: task_id, closed_at: nil).exists? }
+      assert_not_empty ended
+      ended.each { |task_id| assert_lifetime(task_id) }
+    end
+  end
+
+  test "trace 11: wait_limit names the credential the hold names and the seat that holds the task" do
+    feed("11-limit-handoff-no-rules") do |number, ids|
+      next unless number == 9
+
+      step = TaskStep.find_by!(opening_event_id: ids, kind: "wait_limit")
+      hold_opened = Event.find(step.opening_event_id)
+      assert_equal [ "hold.opened", "credential", hold_opened.payload.fetch("credential_id") ],
+        [ hold_opened.type, step.subject_kind, step.subject_id ]
+      assert_equal @binder.id("$seat:builder"), step.seat_id, "the seat responsible holds the task (L278, rule 4)"
+    end
+  end
+
+  test "trace 14: the lease ending under credential_limit opens wait_ready at hold.closed with its cause" do
+    feed("14-handoff-edges-no-rules") do |number, ids|
+      next unless number == 32
+
+      step = TaskStep.find_by!(opening_event_id: ids)
+      assert_equal [ "wait_ready", "credential_limit", "hold.closed" ],
+        [ step.kind, step.cause_kind, Event.find(step.opening_event_id).type ]
+    end
   end
 
   test "trace 10: the build row opened with no criterion is given the criterion that passes (rule 5)" do
@@ -204,8 +245,9 @@ class StepTrackerTest < ActiveSupport::TestCase
     seat_event("criterion.started", task, builder, subject: first)
     assert_equal [ "build", first.id ], open_step(task).values_at(:kind, :subject_id)
     seat_event("criterion.started", task, builder, subject: first)
-    assert_equal 1, TaskStep.where(task_id: task.id, kind: "build", subject_id: first.id).count,
-      "announcing the same criterion again opens no new row"
+    assert_equal [ 2, 1 ], [ TaskStep.where(task_id: task.id, kind: "build", subject_id: first.id).count,
+                             TaskStep.where(task_id: task.id, closed_at: nil).count ],
+      "announcing the same criterion again in a later command opens a new row (SM-25; milestone 3 plan HD-9)"
 
     seat_event("criterion.passed", task, builder, subject: first)
     assert_equal [ "build", first.id ], open_step(task).values_at(:kind, :subject_id), "one criterion is still open"

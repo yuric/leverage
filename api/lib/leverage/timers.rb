@@ -12,6 +12,7 @@ module Leverage
     # time they read (timers.json).
     BUILDER_LEASE = "builder_lease_expiry".freeze
     REVIEW_LEASE = "review_lease_expiry".freeze
+    CREDENTIAL_HOLD = "credential_hold_release".freeze
 
     # The params a path or a body names a task or a review by: /v1/tasks/{id}
     # and /v1/owner/tasks/{id} name a task, /v1/reviews/{id} a review.
@@ -150,6 +151,17 @@ module Leverage
       latest = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at)
       latest && latest > due_at ? latest : due_at
     end
+
+    # Empty symbols for WP4's red run (milestone 3 plan WP4).
+    def credential_hold(_task) = nil
+
+    def credential_hold_due_at(_task) = nil
+
+    def credential_hold_due?(_task, _at) = false
+
+    def credential_hold_effective_at(_task) = nil
+
+    def due_credential_holds(_workspace_id, _at, _from_states, limit:) = []
 
     def target_ids(params)
       TARGET_PARAMS.filter_map { |name| params[name] }.select { |value| value.is_a?(String) && UUID.match?(value) }.uniq

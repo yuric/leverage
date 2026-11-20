@@ -68,4 +68,57 @@ class ReleaseTest < ActiveSupport::TestCase
   test "a seat that does not hold the task is not_holder" do
     assert_equal "not_holder", release(@scenario.seat(role: "builder")).refusal.code
   end
+
+  # --- Milestone 3 (its plan, WP4, HE-35, SM-15) ---------------------------
+
+  test "every seat-bound hold closes after task.released, each hold.closed then its item, by the seat" do
+    credential = @scenario.credential
+    paused, signed_out = ActiveRecord::Base.transaction(requires_new: true) do
+      ctx = @scenario.context
+      [ Leverage::Holds.open(ctx, task: @task, reason: "seat_paused"),
+        Leverage::Holds.open(ctx, task: @task, reason: "credential_signed_out", credential_id: credential.id) ]
+    end
+    assert release.completed?
+
+    assert_equal %w[task.released hold.closed hold.closed inbox.resolved], written.map(&:type)
+    released, first, second, = written
+    assert_equal [ paused.id, signed_out.id ], [ first.subject_id, second.subject_id ]
+    assert_equal({ "reason" => "unable_to_continue", "wait_cause" => nil }, released.payload)
+    written.each { |event| assert_equal [ "seat", @builder.id, released.effective_at ], [ event.actor_kind, event.actor_id, event.effective_at ] }
+    assert_equal "wait_ready", TaskStep.find_by!(task_id: @task.id, closed_at: nil).kind
+  end
+
+  test "the wait_cause goes on task.released with no hold, and on the last hold.closed under one (HE-35)" do
+    scenario = Scenario.new
+    own = scenario.limit_credential(scenario.credential, reset_at: scenario.database_now + 3600)
+    builder = scenario.seat(role: "builder", credential: own)
+    free = scenario.task(state: "working", builder: builder)
+    @scenario = scenario
+    @task = free
+    assert release(builder).completed?
+    assert_equal({ "reason" => "unable_to_continue", "wait_cause" => "credential_limit" }, written.sole.payload)
+    assert_equal [ "wait_ready", "credential_limit" ], TaskStep.find_by!(task_id: free.id, closed_at: nil).values_at(:kind, :cause_kind)
+
+    @task = scenario.task(state: "working", builder: builder)
+    scenario.hold(@task, reason: "credential_limit", credential: own, item: false)
+    assert release(builder).completed?
+    released, closed = written
+    assert_equal [ nil, "credential_limit" ], [ released.payload.fetch("wait_cause"), closed.payload.fetch("wait_cause") ]
+    assert_equal [ "wait_ready", "credential_limit", closed.id ],
+      TaskStep.find_by!(task_id: @task.id, closed_at: nil).values_at(:kind, :cause_kind, :opening_event_id)
+  end
+
+  test "a hold not bound to the seat stays open, so neither the release nor hold.closed carries a wait_cause" do
+    paused, owner_hold = ActiveRecord::Base.transaction(requires_new: true) do
+      ctx = @scenario.context
+      [ Leverage::Holds.open(ctx, task: @task, reason: "seat_paused"), Leverage::Holds.open(ctx, task: @task, reason: "owner_hold") ]
+    end
+    assert release.completed?
+
+    assert_equal %w[task.released hold.closed], written.map(&:type)
+    assert_equal [ nil, nil ], written.map { |event| event.payload.fetch("wait_cause") }
+    assert paused.reload.closed_at
+    assert_nil owner_hold.reload.closed_at
+    assert_equal "wait_owner", TaskStep.find_by!(task_id: @task.id, closed_at: nil).kind
+  end
 end

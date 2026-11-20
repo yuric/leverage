@@ -198,4 +198,123 @@ class HoldsTest < ActiveSupport::TestCase
     H.close(context(at: ctx.at + 5), hold: hold, task: task.reload)
     assert_equal "build", TaskStep.find_by!(task_id: task.id, closed_at: nil).kind
   end
+
+  # --- Milestone 3 (plan WP4): the four hold reasons of the handoff, the
+  # seat-bound close, and what a timer's or a handoff's close needs. ------
+
+  # Each reason's lease clock, as the registry's lease_clock column says:
+  # credential_limit and seat_paused let the lease run (L121, L697),
+  # credential_signed_out and owner_hold pause it.
+  {
+    "credential_limit" => false, "credential_signed_out" => true, "seat_paused" => false, "owner_hold" => true
+  }.each do |reason, pauses|
+    test "#{reason} #{pauses ? "pauses" : "does not pause"} the builder's lease clock, as the registry says" do
+      registry = Leverage::Contract.registry.fetch("hold_reasons").find { |entry| entry.fetch("reason") == reason }
+      assert_equal pauses ? "pauses" : "runs", registry.fetch("lease_clock")
+
+      credential = @scenario.credential if reason.start_with?("credential")
+      task = working_task
+      ctx = context
+      task.update_columns(lease_due_at: ctx.at + 250)
+      hold = H.open(ctx, task: task, reason: reason, credential_id: credential&.id, item: false)
+
+      assert_equal pauses, H.pausing?(task)
+      assert_equal(pauses ? [ nil, 250 ] : [ ctx.at + 250, nil ], [ task.reload.lease_due_at, left(task) ])
+      H.close(context(at: ctx.at + 100), hold: hold, task: task.reload)
+      assert_equal(pauses ? ctx.at + 100 + 250 : ctx.at + 250, task.reload.lease_due_at)
+    end
+  end
+
+  test "two holds stacked follow the oldest: wait_seat, then wait_limit when seat_paused closes, each naming the seat" do
+    credential = @scenario.credential
+    task = working_task
+    ctx = context
+    paused = H.open(ctx, task: task, reason: "seat_paused")
+    later = context(at: ctx.at + 10)
+    H.open(later, task: task, reason: "credential_limit", credential_id: credential.id, item: false)
+    assert_equal [ "wait_seat", "seat", @builder.id, @builder.id ],
+      TaskStep.find_by!(task_id: task.id, closed_at: nil).values_at(:kind, :subject_kind, :subject_id, :seat_id)
+
+    H.close(context(at: ctx.at + 20), hold: paused, task: task.reload)
+    assert_equal [ "wait_limit", "credential", credential.id, @builder.id ],
+      TaskStep.find_by!(task_id: task.id, closed_at: nil).values_at(:kind, :subject_kind, :subject_id, :seat_id)
+  end
+
+  test "close takes the effective time, the key and the actor a timer gives, and yields hold.closed before inbox.resolved" do
+    credential = @scenario.credential
+    task = working_task
+    ctx = context
+    hold = H.open(ctx, task: task, reason: "credential_signed_out", credential_id: credential.id)
+    later = context(at: ctx.at + 600)
+    between = nil
+
+    H.close(later, hold: hold, task: task.reload, effective_at: ctx.at + 300, command_id: nil, actor_kind: "app",
+      actor_id: nil) do |closed|
+      between = later.emit("credential.switched", task: task, subject: credential, cause_id: closed.id, command_id: nil,
+        actor_kind: "app", actor_id: nil, effective_at: ctx.at + 300,
+        payload: { from_credential_id: credential.id, model: nil, seat_id: @builder.id, review_id: nil, job_id: nil })
+    end
+
+    closed, switched, resolved = later.events.last(3)
+    assert_equal %w[hold.closed credential.switched inbox.resolved], [ closed.type, switched.type, resolved.type ]
+    assert_equal between.id, switched.id
+    [ closed, resolved ].each do |event|
+      assert_equal [ ctx.at + 300, nil, "app", nil ], [ event.effective_at, event.command_id, event.actor_kind, event.actor_id ]
+    end
+    assert_equal [ "app", nil, later.at ], hold.reload.values_at(:closed_by_kind, :closed_by_id, :closed_at)
+  end
+
+  test "close_seat_bound closes the seat-bound holds oldest first, each hold.closed then its item, as the cause's actor" do
+    credential = @scenario.credential
+    task = working_task
+    ctx = context
+    owner_hold = H.open(ctx, task: task, reason: "owner_hold")
+    paused = H.open(ctx, task: task, reason: "seat_paused")
+    signed_out = H.open(ctx, task: task, reason: "credential_signed_out", credential_id: credential.id)
+    release = context(at: ctx.at + 50, caller: [ "seat", @builder.id ])
+    released = release.emit("task.released", task: task, payload: { reason: "unable_to_continue", wait_cause: nil })
+
+    closed = H.close_seat_bound(release, task, cause: released, wait_cause: "credential_limit")
+
+    assert_equal [ paused.id, signed_out.id ], closed.map(&:id)
+    events = release.events.drop(1)
+    assert_equal %w[hold.closed hold.closed inbox.resolved], events.map(&:type)
+    events.each do |event|
+      assert_equal [ "seat", @builder.id, released.effective_at, released.command_id, nil ],
+        [ event.actor_kind, event.actor_id, event.effective_at, event.command_id, event.cause_id ]
+    end
+    assert_equal [ nil, nil ], events.first(2).map { |event| event.payload.fetch("wait_cause") },
+      "owner_hold stays open, so no wait_ready opens and no hold.closed carries the cause"
+    assert_nil owner_hold.reload.closed_at
+    assert_equal({ "choice" => nil }, events.last.payload)
+  end
+
+  test "close_seat_bound puts the wait_cause on the last hold.closed when no hold is left, as a timer's events" do
+    credential = @scenario.credential
+    task = working_task
+    ctx = context
+    first = H.open(ctx, task: task, reason: "credential_limit", credential_id: credential.id, item: false)
+    second = H.open(ctx, task: task, reason: "seat_paused")
+    timer = context(at: ctx.at + 100)
+    expired = timer.emit("task.lease_expired", task: task, payload: { wait_cause: nil }, actor_kind: "app", actor_id: nil,
+      command_id: nil, effective_at: ctx.at + 60)
+
+    H.close_seat_bound(timer, task, cause: expired, wait_cause: "credential_limit")
+
+    first_closed, second_closed = timer.events.drop(1)
+    assert_equal [ first.id, second.id ], [ first_closed.subject_id, second_closed.subject_id ]
+    assert_equal [ nil, "credential_limit" ], [ first_closed, second_closed ].map { |event| event.payload.fetch("wait_cause") }
+    assert_equal [ "app", nil, nil, ctx.at + 60 ],
+      [ second_closed.actor_kind, second_closed.actor_id, second_closed.command_id, second_closed.effective_at ]
+  end
+
+  test "close_seat_bound with no seat-bound hold open closes nothing" do
+    task = working_task
+    ctx = context
+    H.open(ctx, task: task, reason: "owner_hold")
+    released = ctx.emit("task.released", task: task, payload: { reason: "unable_to_continue", wait_cause: nil })
+
+    assert_empty H.close_seat_bound(ctx, task, cause: released, wait_cause: nil)
+    assert_equal %w[hold.opened task.released], ctx.events.map(&:type)
+  end
 end
