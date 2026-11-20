@@ -54,13 +54,14 @@ class CheckRunTimeoutTest < ActiveSupport::TestCase
     _task, short, = pending_check(rule: own, started: true, checker: orchestrator)
     _other, long, = pending_check(rule: scenario.rule(hook: "task.before_ready"), started: true,
       checker: scenario.orchestrator)
+    short_job = job_of(short)
     due = make_run_due(short, timeout: 45)
     make_run_due(long, timeout: 45)
 
     outcome = nil
     with_writers { outcome = timer("check_run_timeout") }
 
-    assert_equal [ job_of(short).id ], timed_out(outcome)
+    assert_equal [ short_job.id ], timed_out(outcome)
     assert_instant due, Event.where(workspace_id: scenario.workspace_id, type: "job.timed_out").sole.effective_at
   end
 

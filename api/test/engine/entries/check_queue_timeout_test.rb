@@ -131,7 +131,7 @@ class CheckQueueTimeoutTest < ActiveSupport::TestCase
 
     assert_equal [ job_of_attempt(short, 1).id ], timed_out(outcome),
       "the other check waits for the workspace's 120 seconds"
-    assert_instant due, Event.where(type: "job.timed_out").sole.effective_at
+    assert_instant due, Event.where(workspace_id: scenario.workspace_id, type: "job.timed_out").sole.effective_at
   end
 
   test "an attempt not yet due, a claimed one and a finished one are left alone" do

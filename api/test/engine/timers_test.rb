@@ -544,6 +544,21 @@ class JobTimersDueTest < CommittingTestCase
     assert_equal "refused", Command.find_by!(caller_id: orchestrator.id, key: "late-result").outcome
   end
 
+  test "a call that names a job it does not hold applies that job's due timers first all the same" do
+    _task, check, = pending_check
+    job = job_of(check)
+    due = make_queue_due(check)
+    other = orchestrator_polled(5)
+    before = last_seq
+
+    outcome = nil
+    with_writers { outcome = apply(seat_request("submit_job_result", other, "not-mine", { "id" => job.id }), ResultCall) }
+
+    assert_equal "invalid_state", outcome.refusal&.code, "the job was never claimed, and is now timed out"
+    assert_equal %w[job.timed_out job.requeued check.queued], events_after(before).map(&:type)
+    assert_by_app_at events_after(before), due
+  end
+
   test "a call that names no job applies the timers of the job the calling seat holds" do
     orchestrator = orchestrator_polled(5)
     _task, check, = pending_check(started: true, checker: orchestrator)

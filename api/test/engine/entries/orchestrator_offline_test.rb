@@ -103,7 +103,7 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
   end
 
   test "it opens when no orchestrator seat exists at all (RD-16)" do
-    _check, since = waiting_check(40)
+    _check, since = waiting_check(0)
     before = last_seq
 
     with_writers { timer("orchestrator_offline") }
@@ -199,7 +199,7 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     check, hold = errored_check
     errored_job = job_of(check)
     open_item
-    orchestrator.update_columns(last_polled_at: scenario.database_now - 2)
+    orchestrator.update_columns(last_polled_at: scenario.database_now)
     before = last_seq
 
     calls = with_writers { timer("orchestrator_offline") }
@@ -220,7 +220,7 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     orchestrator = orchestrator_polled(600)
     check, hold = errored_check(hook: "task.before_claim", task_state: "ready", command: "claim")
     open_item
-    orchestrator.update_columns(last_polled_at: scenario.database_now - 2)
+    orchestrator.update_columns(last_polled_at: scenario.database_now)
     before = last_seq
 
     calls = with_writers { timer("orchestrator_offline") }
