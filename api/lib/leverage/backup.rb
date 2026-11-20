@@ -182,14 +182,13 @@ module Leverage
       tool!(target, spawner, "pg_restore", "--list", file)
       staging = target.with(database: "#{target.database}#{STAGING}#{SecureRandom.hex(4)}")
       restore_into(staging, file, workspace_id, spawner)
-      drop_database(target, spawner: spawner)
-      rename_database(target, from: staging.database)
+      replace_with(target, staging, spawner)
       target
     end
 
     # Makes staging from the dump, gives the roles their rights and runs
-    # the replay test there. On any failure staging is dropped and the
-    # target was never touched.
+    # the replay test there. On any failure, of whatever kind, staging is
+    # dropped, the target was never touched, and the error is a Failed.
     def restore_into(staging, file, workspace_id, spawner)
       tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
         staging.database)
@@ -200,13 +199,32 @@ module Leverage
         DbGrants.apply(ActiveRecord::Base.lease_connection)
         verify!(workspace_id)
       end
-    rescue Failed
+    rescue StandardError => error
+      drop_quietly(staging, spawner)
+      raise if error.is_a?(Failed)
+
+      raise Failed, "#{error.class.name}: #{first_line(error.message)}"
+    end
+
+    # Drops the target and gives staging its name. A target that cannot be
+    # dropped is kept as it was, and staging is dropped with it named in
+    # the message; between the drop and the rename, the message says to
+    # rename staging by hand.
+    def replace_with(target, staging, spawner)
       begin
-        drop_database(staging, spawner: spawner)
-      rescue Failed
-        nil
+        drop_database(target, spawner: spawner)
+      rescue Failed => error
+        drop_quietly(staging, spawner)
+        raise Failed, "the database #{target.database} could not be dropped, so it was kept as it was " \
+                      "and the restored copy #{staging.database} was removed: #{error.message}"
       end
-      raise
+      rename_database(target, from: staging.database)
+    end
+
+    def drop_quietly(target, spawner)
+      drop_database(target, spawner: spawner)
+    rescue Failed
+      nil
     end
 
     # Gives the database from its name the target's, over the maintenance

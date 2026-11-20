@@ -31,9 +31,10 @@ enum ReplyReading {
 
     /// The first ISO 8601 time (`2026-11-19T12:00:00Z`, with or without
     /// fractions of a second, `Z` or an offset) the text states after a
-    /// reset word ("resets", "reset at", "try again at") on the same line.
-    /// A time with no reset word before it, such as a log line's own
-    /// leading timestamp, is no reset time. Nothing is estimated (L615): a
+    /// reset word ("resets", "reset at", "try again at", in any case) on the
+    /// same line. A time with no reset word before it, such as a log line's
+    /// own leading timestamp, or after a bare "reset" or a "try again" with
+    /// no "at", is no reset time. Nothing is estimated (L615): a
     /// reply that says "in two hours" states no time.
     static func statedTime(in text: String) -> Date? {
         guard let iso = try? NSRegularExpression(pattern: isoPattern),
@@ -51,7 +52,7 @@ enum ReplyReading {
         return nil
     }
 
-    private static let resetWordPattern = #"\b(resets?|try again)\b"#
+    private static let resetWordPattern = #"\b(resets|reset at|try again at)\b"#
 
     private static let isoPattern =
         #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})"#
