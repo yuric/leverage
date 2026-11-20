@@ -4,7 +4,8 @@
 # pg_dump --no-privileges), so they are applied by this task, after every
 # task that builds or changes the schema, and by test/test_helper.rb on each
 # parallel test worker's database. The append-only triggers hold whatever
-# the role.
+# the role. On backup_runs, which the owner role's backup writes, the role
+# may only read (milestone 3 plan HB-4).
 #
 # The rights are computed from information_schema, so a table added by a
 # later migration needs no grant of its own. Running the task twice changes
@@ -30,6 +31,9 @@ module DbGrants
   def role = "leverage_app"
   def api_role = "leverage_api"
   def append_only = %w[events rule_versions]
+  # Tables the application's role may only read: the owner role's backup
+  # writes backup_runs (milestone 3 plan HB-4).
+  def read_only = %w[backup_runs]
 
   # The advisory lock key that serializes setting leverage_api's password:
   # "lvpw" in ASCII.
@@ -42,13 +46,20 @@ module DbGrants
       connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
       tables(connection).each do |table|
         quoted = connection.quote_table_name(table)
-        rights = append_only.include?(table) ? "SELECT, INSERT" : "SELECT, INSERT, UPDATE, DELETE"
+        rights = rights_on(table)
         connection.execute("REVOKE ALL ON #{quoted} FROM #{role}")
         connection.execute("GRANT #{rights} ON #{quoted} TO #{role}")
       end
       connection.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO #{role}")
       create_api_role(connection)
       set_api_password(connection, ENV["LEVERAGE_API_DB_PASSWORD"].to_s) if password
+    end
+  end
+
+  def rights_on(table)
+    if append_only.include?(table) then "SELECT, INSERT"
+    elsif read_only.include?(table) then "SELECT"
+    else "SELECT, INSERT, UPDATE, DELETE"
     end
   end
 

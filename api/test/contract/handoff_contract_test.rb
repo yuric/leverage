@@ -162,7 +162,7 @@ class HandoffContractTest < Minitest::Test
     description = operation("sign_in_again").fetch("description")
     assert_includes description, "helper_request_id"
     assert_includes description, "open_sign_in"
-    assert_includes schemas.fetch("HelperRequestStatus").fetch("description"), "Sign in again"
+    assert_includes operation("get_helper_request").fetch("description"), "Sign in again"
   end
 
   # HD-1: a start request names the work its run continues.

@@ -1,11 +1,11 @@
-# The API, its timer sweep and their PostgreSQL database, for the first run
-# on the owner's Mac. Copy .env.example to .env first; every secret comes
+# The API, its timer sweep, its daily backup and their PostgreSQL database,
+# for the first run on the owner's Mac. Copy .env.example to .env first; every secret comes
 # from that file. Automated runs add compose.test.yaml, which lets Docker
 # pick the API's port.
 name: leverage
 
-# What the API and the sweep share: the image, the settings and the two
-# database URLs. DATABASE_URL names the owner role and is what every
+# What the API, the sweep and the backup share: the image, the settings and
+# the two database URLs. DATABASE_URL names the owner role and is what every
 # command but the server and the sweep uses; bin/docker-entrypoint puts
 # API_DATABASE_URL (the login role leverage_api) in its place for those two
 # when LEVERAGE_API_DB_PASSWORD is set (milestone 2 plan EN-24).
@@ -64,6 +64,28 @@ services:
     <<: *api
     environment: *api-environment
     command: ["bin/sweep"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # The daily backup (milestone 3 plan HB-1 to HB-4): bin/backup looks when
+  # it starts and every 15 minutes, and when no backup_runs row is newer
+  # than BACKUP_EVERY_HOURS it dumps the database into BACKUP_DIR and keeps
+  # the newest BACKUP_KEEP. It runs as the owner role: the entrypoint
+  # switches roles only for the server and the sweep. The dumps go to a
+  # folder on the host, outside Docker's volumes, so that losing the db
+  # volume does not take them with it; LEVERAGE_BACKUP_DIR names it. The
+  # maintainer's restore runs here too: bin/restore (docs/DEPLOY.md).
+  backup:
+    <<: *api
+    environment:
+      <<: *api-environment
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_EVERY_HOURS: ${BACKUP_EVERY_HOURS:-24}
+    command: ["bin/backup"]
+    volumes:
+      - ${LEVERAGE_BACKUP_DIR:-./backups}:/backups
     depends_on:
       api:
         condition: service_healthy

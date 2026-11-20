@@ -386,3 +386,72 @@ The four changes to what was not provisional:
   (null for none), so that the log rebuilds the rank Complete contract
   sets (decisions.md, DB-48); every golden trace that writes the event
   carries it.
+
+## What the Handoff milestone added
+
+The Handoff milestone serves eleven operations that were already in the
+contract (`report_limit`, `report_signed_out`, `sign_in_again`,
+`list_inbox`, `promote_task`, `edit_contract`, `hold_task`, `resume_task`,
+`pause_seat`, `resume_seat`, `change_seat`). It adds no event type, hold
+reason, refusal, check result, release reason, Needs you item or choice.
+What it added, each from the milestone 3 plan:
+
+- **One workspace timer and its command**, `seat_run_placement` (HD-4):
+  a `timers.json` entry fired on every sweep, a registry `commands`
+  entry, and a row in the derived `timers` group that writes no event. It
+  moves an idle seat's run to its first available candidate and starts
+  again a run that a limit or a sign-out ended, through `start_seat`
+  helper requests.
+- **Meanings**, in `state_machine.json` and `timers.json`:
+  `candidate_available` also holds when no candidate below the stopped
+  credential is available and the seat's own credential is, and
+  `no_candidate_available` is its opposite (HE-4); `owner_must_act` is
+  false when a candidate between the seat's own credential and the
+  stopped one is available, because the hold is then due at once (HE-4);
+  `builder_free` and `builder_busy` count, for a seat the app runs,
+  whether one of its candidates is available (HE-14); the due time of
+  `credential_hold_release` is rule 8 of the plan's section 2.1 (HE-23).
+- **Side events on four rows**: `report_request_result` may close a
+  `credential_limit` hold (a passed Verify or sign-in of a credential
+  limited with no reset time, HE-2, or `credential.added`, HE-10),
+  resolve "Limit with no reset time", open "Account signed out" beside
+  another task's `credential_limit` hold that a sign-out leaves with no
+  due time, and resolve "Account signed out" while its hold stays open
+  (HE-11); the six `report_signed_out` rows may open that same item
+  (HE-11); `change_seat` may close the seat's credential hold when it
+  gives the seat another credential, with `credential.switched` when
+  `credential_differs` and `inbox.resolved` (HE-10, HE-27).
+- **`needs_you.json`**: the `closes` text of `limit_with_no_reset_time`
+  says that until the usage readers exist a passed Verify or Sign in
+  again is the reading that shows capacity (HE-2). Its `prd_choices` is
+  unchanged.
+- **Descriptions**: `hold.opened`'s `credential_id` names the credential
+  that stopped when no candidate has a reset time (HE-13), and the first
+  signed-out candidate for `credential_signed_out` (HE-12); the two
+  reports answer `completed` with a null result (HE-8) and `404` for a
+  job until jobs arrive (HE-33); `sign_in_again` answers
+  `helper_request_id` (HE-36).
+- **Fields**: `HelperRequestParams.task_id` and `review_id`, the work a
+  start request's run continues (HD-1); in the provisional reads,
+  `Credential.limited_since` (HE-3), `Seat.run_credential_id` and
+  `Seat.run_stop_reason` (HD-3, HD-10), `TaskPage.recovery_times`, a
+  list of `RecoveryTime` (HE-17, HE-18), and
+  `SystemHealth.backup_last_ran_at` and `backup_late` (HB-4). The
+  command `seat_run_placement` joins the `CommandName` enum.
+- **Schema**: one migration adds `credentials.limited_since` with a check
+  that `limited_until` is null unless it is set, and sets
+  `strength_rank` to 1 where it was null (HE-3, HE-5);
+  `seats.run_credential_id` (no foreign key, as DB-10) and
+  `seats.run_stop_reason` (HD-3); and the table `backup_runs`, one row
+  per dump, with no `workspace_id`, because a dump is of the whole
+  database (HB-4). `db:grants` gives `leverage_app` SELECT alone on
+  `backup_runs`; the owner role, which the backup runs as, writes it.
+
+`readers.json` is unchanged: every login reader stays provisional, with
+`capture.limit` and `capture.sign_out` at `none`. `WorkspaceSettings` is
+unchanged: the recovery time ceiling still has no value (HE-1).
+
+One field is named after its column, not as the plan wrote it: the plan's
+`Seat.running_on_credential_id` is `Seat.run_credential_id`, because a
+JSON field is the Data model's column name (see Names) and
+`columns_test.rb` holds every field of `Seat` to a column of `seats`.

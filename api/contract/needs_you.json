@@ -171,7 +171,7 @@
       "prd_choices": "None. It closes when a reading shows capacity.",
       "choices": [],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
-      "closes": "When a reading shows capacity for the credential (L199, L696)."
+      "closes": "When a reading shows capacity for the credential (L199, L696). Until the usage readers exist, a passed Verify or Sign in again of the credential is that reading (milestone 3 plan HE-2)."
     },
     {
       "item": "no_reviewer_eligible",

@@ -41,3 +41,6 @@ __pycache__/
 
 # The app bundle scripts/build_app.sh assembles
 /dist/
+
+# The daily backup's dumps on a developer's own run (LEVERAGE_BACKUP_DIR)
+/backups/

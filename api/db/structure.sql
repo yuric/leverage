@@ -81,6 +81,19 @@ CREATE TABLE public.ar_internal_metadata (
 
 
 --
+-- Name: backup_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.backup_runs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ran_at timestamp with time zone NOT NULL,
+    file_name text NOT NULL,
+    bytes bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
 -- Name: brief_entries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -177,7 +190,9 @@ CREATE TABLE public.credentials (
     strength_rank integer,
     last_verified_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    limited_since timestamp with time zone,
+    CONSTRAINT credentials_limited_until_needs_limited_since CHECK (((limited_until IS NULL) OR (limited_since IS NOT NULL)))
 );
 
 
@@ -578,7 +593,9 @@ CREATE TABLE public.seats (
     removed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    wanted_running boolean DEFAULT false NOT NULL
+    wanted_running boolean DEFAULT false NOT NULL,
+    run_credential_id uuid,
+    run_stop_reason text
 );
 
 
@@ -715,6 +732,14 @@ ALTER TABLE ONLY public.actions
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: backup_runs backup_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.backup_runs
+    ADD CONSTRAINT backup_runs_pkey PRIMARY KEY (id);
 
 
 --
@@ -983,6 +1008,20 @@ CREATE UNIQUE INDEX index_actions_on_task_id_and_position ON public.actions USIN
 --
 
 CREATE INDEX index_actions_on_workspace_id ON public.actions USING btree (workspace_id);
+
+
+--
+-- Name: index_backup_runs_on_file_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_backup_runs_on_file_name ON public.backup_runs USING btree (file_name);
+
+
+--
+-- Name: index_backup_runs_on_ran_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_backup_runs_on_ran_at ON public.backup_runs USING btree (ran_at);
 
 
 --
@@ -2341,6 +2380,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261120011824'),
 ('20261119182802'),
 ('20261119162424'),
 ('20261119162423'),
