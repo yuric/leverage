@@ -10,17 +10,27 @@ require "time"
 class TracesTest < Minitest::Test
   include ContractTestHelpers
 
-  # The eight traces plan IF-33 names, and the two the core loop's plan adds
-  # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13).
+  # The eight traces plan IF-33 names, the two the core loop's plan adds
+  # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13), and
+  # the five the handoff milestone adds, also with no rules (milestone 3
+  # plan HT-1; PRD R-7).
   NAMES = %w[
     01-happy-path 02-failed-review-rework 03-stop-rework-pass-approve-done
     04-two-actions-custom-rule 05-limit-handoff 06-signed-out-hold-verify
     07-pending-gate-check-error-override 08-lease-expiry-and-cancel
     09-core-loop-no-rules 10-leases-no-rules
+    11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
+    13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules
+    15-owner-controls-no-rules
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
-  # workspace is created with none (milestone 2 plan, EN-4, Q-12).
-  RULE_FREE = %w[09-core-loop-no-rules 10-leases-no-rules].freeze
+  # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
+  # rule exists before milestone 4 (milestone 3 plan HT-1).
+  RULE_FREE = %w[
+    09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules
+    12-signed-out-hold-verify-no-rules 13-limit-next-signed-out-no-rules
+    14-handoff-edges-no-rules 15-owner-controls-no-rules
+  ].freeze
 
   START = Time.utc(2026, 11, 19, 9, 0, 0)
   SYMBOL = /\A\$([a-z][a-z_]*):[a-z0-9][a-z0-9_]*\z/
@@ -805,6 +815,150 @@ class TracesTest < Minitest::Test
     assert events.any? { |event| event["type"] == "check.finished" && event["payload"]["result"] == "error" }
     assert_includes events.map { |event| event["type"] }, "check.overridden"
     assert events.any? { |event| event["command_id"] == pending["key"] && event["type"] == "task.ready" }
+  end
+
+  # Recovery time as milestone 3 plan HE-17 reads the PRD (Handoff,
+  # Recovery time): it starts at credential.limit_reached, or at a
+  # credential.signed_out a run found (seat_id set; one found by Verify
+  # starts nothing). Its work is the review the payload names, or else the
+  # build work of the task. It ends at the credential.switched for the same
+  # work written by the same command (0 seconds), or else at the first
+  # later event of that task, by a seat, of a type of that work. Returns
+  # [effective second of the start, seconds or nil when it never ends].
+  BUILD_WORK = %w[task.claimed task.briefing_acknowledged criterion.started criterion.passed task.submitted task.released].freeze
+  REVIEW_WORK = %w[review.started task.briefing_acknowledged review.passed review.failed review.released].freeze
+
+  def recovery_times(name)
+    trace = Leverage::Contract.trace(name)
+    events = trace["commands"].each_with_index.flat_map { |command, index| command["expect"]["events"].map { |event| [ event, index ] } }
+    events.each_with_index.filter_map do |(event, index), position|
+      next unless event["type"] == "credential.limit_reached" || (event["type"] == "credential.signed_out" && event["payload"]["seat_id"])
+
+      review = event["payload"]["review_id"]
+      same_work = ->(other) { other["task_id"] == event["task_id"] && other["payload"]["review_id"] == review }
+      switch = events.find { |other, other_index| other_index == index && other["type"] == "credential.switched" && same_work.call(other) }
+      ending = switch&.first || events[(position + 1)..].map(&:first).find do |other|
+        next false unless other["task_id"] == event["task_id"] && other["actor_kind"] == "seat"
+
+        if review
+          REVIEW_WORK.include?(other["type"]) && other["subject_kind"] == "review" && other["subject_id"] == review
+        else
+          BUILD_WORK.include?(other["type"]) && other["subject_kind"] != "review"
+        end
+      end
+      start = seconds(event["effective_at"])
+      [ start, ending && seconds(ending["effective_at"]) - start ]
+    end
+  end
+
+  def events_of(name, command) = Leverage::Contract.trace(name)["commands"].select { |entry| entry["command"] == command }.map { |entry| entry["expect"]["events"] }
+
+  def test_trace_11_hands_off_below_waits_for_the_reset_and_returns_with_he_17s_recovery_times
+    name = "11-limit-handoff-no-rules"
+    events = all_events(Leverage::Contract.trace(name))
+    own = Leverage::Contract.trace(name)["setup"]["seats"].to_h { |seat| [ seat["id"], seat["credential_id"] ] }
+    first, second = events_of(name, "report_limit")
+    assert_equal %w[credential.limit_reached credential.switched], first.map { |event| event["type"] }
+    assert_equal %w[credential.limit_reached hold.opened], second.map { |event| event["type"] }, "no item while a reset time is known"
+    back = events_of(name, "credential_hold_release").flatten.find { |event| event["type"] == "credential.switched" }
+    assert_equal own.fetch(back["payload"]["seat_id"]), back["subject_id"], "back to the seat's own login"
+    assert_equal [ [ 600, 0 ], [ 900, 1600 ] ], recovery_times(name), "milestone 3 plan HT-1, HE-17"
+    assert_includes events.map { |event| event["type"] }, "task.done"
+  end
+
+  def test_trace_12_holds_on_a_sign_out_until_a_login_is_verified_with_he_17s_recovery_time
+    name = "12-signed-out-hold-verify-no-rules"
+    held = events_of(name, "report_signed_out").first
+    assert_equal %w[credential.signed_out hold.opened inbox.opened], held.map { |event| event["type"] }
+    assert_equal [ "credential_signed_out", held.first["subject_id"] ], held[1]["payload"].values_at("reason", "credential_id"), "HE-12: the reported login"
+    assert_empty events_of(name, "sign_in_again").flatten, "Sign in again writes no event"
+    result = events_of(name, "report_request_result").first
+    assert_equal %w[credential.verified hold.closed credential.switched inbox.resolved], result.map { |event| event["type"] }
+    assert_equal "sign_in_again", result.last["payload"]["choice"], "HE-29"
+    assert_equal [ [ 600, 300 ] ], recovery_times(name), "milestone 3 plan HT-1, HE-17"
+  end
+
+  def test_trace_13_holds_a_limit_on_the_signed_out_next_login_and_continues_on_it
+    name = "13-limit-next-signed-out-no-rules"
+    trace = Leverage::Contract.trace(name)
+    held = events_of(name, "report_limit").first
+    assert_equal %w[credential.limit_reached hold.opened inbox.opened], held.map { |event| event["type"] }
+    signed_out = trace["setup"]["credentials"].find { |row| row["state"] == "signed_out" }
+    assert_equal [ "credential_signed_out", signed_out["id"] ], held[1]["payload"].values_at("reason", "credential_id"), "HE-12: the next login"
+    assert_equal "account_signed_out", held[2]["payload"]["kind"]
+    switch = events_of(name, "report_request_result").flatten.find { |event| event["type"] == "credential.switched" }
+    assert_equal signed_out["id"], switch["subject_id"]
+    assert_equal [ [ 600, 220 ] ], recovery_times(name), "HD-9: the continuing run's criterion.started ends it"
+    assert_includes all_events(trace).map { |event| event["type"] }, "task.done"
+  end
+
+  def test_trace_14_has_each_edge_of_handoff
+    name = "14-handoff-edges-no-rules"
+    trace = Leverage::Contract.trace(name)
+    commands = trace["commands"]
+    types = ->(command) { command["expect"]["events"].map { |event| event["type"] } }
+    reports = commands.select { |command| command["command"] == "report_limit" }
+    own = trace["setup"]["seats"].to_h { |seat| [ seat["id"], seat["credential_id"] ] }
+
+    no_reset = reports.find { |command| command["body"]["reset_at"].nil? }
+    assert_equal %w[credential.limit_reached hold.opened inbox.opened], types.call(no_reset), "a limit with no reset time"
+    assert_equal "limit_with_no_reset_time", no_reset["expect"]["events"].last["payload"]["kind"]
+    cleared = commands.find { |command| types.call(command) == %w[credential.verified hold.closed inbox.resolved] }
+    assert cleared, "a passed Verify closes it (HE-2)"
+    assert_nil cleared["expect"]["events"].last["payload"]["choice"]
+
+    beside = commands.find { |command| types.call(command) == %w[credential.signed_out inbox.opened] }
+    assert beside, "HE-11: the item opens beside the credential_limit hold"
+    assert_nil beside["expect"]["events"].first["payload"]["seat_id"]
+    assert commands.any? { |command| types.call(command) == %w[credential.verified inbox.resolved] }, "HE-11: resolved while the hold waits"
+
+    expiry = commands.find { |command| command["command"] == "builder_lease_expiry" }
+    assert_equal %w[task.lease_expired hold.closed], types.call(expiry)
+    assert_equal [ "credential_limit", "credential_limit" ], expiry["expect"]["events"].last["payload"].values_at("reason", "wait_cause")
+    assert_equal "credential_limit", expiry["expect"]["steps_opened"].first["cause_kind"]
+
+    back = reports.find do |command|
+      switch = command["expect"]["events"].find { |event| event["type"] == "credential.switched" }
+      switch && switch["subject_id"] == own[switch["payload"]["seat_id"]]
+    end
+    assert back, "HE-4: back to the seat's own login at a report"
+
+    at_once = reports.find { |command| types.call(command) == %w[credential.limit_reached hold.opened] && command["expect"]["events"].last["payload"]["credential_id"] != command["body"]["credential_id"] && commands.any? { |release| release["command"] == "credential_hold_release" && release["expect"]["events"].first["effective_at"] == command["at"] } }
+    assert at_once, "HE-4: a hold with no item that the timer closes at once"
+
+    review_switch = reports.find { |command| command["body"]["review_id"] && types.call(command) == %w[credential.limit_reached credential.switched] }
+    assert review_switch, "a reviewer's limit that switches"
+    task = review_switch["expect"]["events"].first["task_id"]
+    built = all_events(trace).select { |event| event["task_id"] == task && %w[task.claimed credential.switched].include?(event["type"]) && event["payload"]["review_id"].nil? }
+    provider = trace["setup"]["credentials"].to_h { |row| [ row["id"], row["provider"] ] }
+    refute_includes built.map { |event| provider.fetch(event["payload"]["credential_id"] || event["subject_id"]) },
+      provider.fetch(review_switch["expect"]["events"].last["subject_id"]), "HE-41: a provider that did not build the task"
+
+    released = commands.find { |command| command["command"] == "report_signed_out" }
+    assert_equal %w[credential.signed_out review.released], types.call(released)
+    review = released["body"]["review_id"]
+    later = commands[(commands.index(released) + 1)..].find { |command| command["command"] == "claim_review" && command["expect"]["events"].first["subject_id"] == review }
+    refute_equal released["body"]["seat_id"], later["caller"], "another reviewer claims it"
+
+    failed = commands.find { |command| command["command"] == "fail_review" }
+    assert_includes types.call(failed), "credential.switched", "the fresh lease starts on another login"
+    assert failed["expect"]["events"].first["payload"]["lease_seat_id"]
+  end
+
+  def test_trace_15_uses_each_owner_control
+    name = "15-owner-controls-no-rules"
+    trace = Leverage::Contract.trace(name)
+    commands = trace["commands"].map { |command| command["command"] }
+    %w[promote edit_contract hold resume pause_seat resume_seat change_seat].each { |command| assert_includes commands, command }
+    assert_equal "imaginarium", trace["commands"].first["body"]["state"]
+    edits = trace["commands"].select { |command| command["command"] == "edit_contract" }.map { |command| command["expect"]["events"].map { |event| event["type"] } }
+    assert_includes edits, %w[task.contract_changed], "an edit in Backlog"
+    assert_includes edits, %w[task.contract_changed task.returned], "an edit in Working"
+    assert_includes edits, %w[task.contract_changed task.returned hold.closed inbox.resolved], "an edit answers Past the round limit"
+    events = all_events(trace)
+    assert events.any? { |event| event["type"] == "inbox.resolved" && event["payload"]["choice"] == "edit_contract" }
+    assert events.any? { |event| event["type"] == "task.released" && event["payload"]["reason"] == "seat_disabled" }
+    assert_equal %w[owner_hold seat_paused rounds_exceeded], events.select { |event| event["type"] == "hold.opened" }.map { |event| event["payload"]["reason"] }
   end
 
   def test_trace_08_expires_a_lease_at_its_due_time_and_refuses_the_late_call
