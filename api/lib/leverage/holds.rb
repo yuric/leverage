@@ -27,13 +27,21 @@ module Leverage
   #   its checks running (L378);
   # - when the last hold on a task lifts, its pending transition is gated
   #   again (PendingTransitions.reenter, trigger hold_lifted, rule 9),
-  #   unless the task has ended or the hold is closed by the waiting
-  #   command itself while it is performed.
+  #   unless the task has ended, the hold is closed by the waiting command
+  #   itself while it is performed, or the hold is check_error or
+  #   rerun_limit, whose closer acts on the check and gates the transition
+  #   with it (override_check, rerun_check, a job's result, a rule turned
+  #   off, PendingTransitions.cancel), so it is gated once.
   module Holds
     PAUSES = "pauses".freeze
     # The reasons bound to the seat that holds the task: they close when it
     # loses the task (SM-15; state_machine.json, release's holds_closed).
     SEAT_BOUND = %w[seat_paused credential_limit credential_signed_out].freeze
+    # The holds a check of a pending transition opens (L392, RD-45). Whoever
+    # closes one acts on that check (Let it through once, Run it again, its
+    # result, its rule turned off, the transition cancelled) and gates the
+    # transition again itself, with the check as the trigger.
+    CHECK_HOLDS = %w[check_error rerun_limit].freeze
 
     module_function
 
@@ -105,7 +113,7 @@ module Leverage
       end
       if remaining.empty?
         mark_resume(ctx, task)
-        reenter_pending(ctx, task)
+        reenter_pending(ctx, task) unless CHECK_HOLDS.include?(hold.reason)
       end
       hold
     end
@@ -203,10 +211,11 @@ module Leverage
     end
 
     # The last hold lifted: the task's pending transition, if any, is gated
-    # again (L378, rule 9). Not on a task that has ended (Cancel closes its
-    # holds after withdrawing what waited, EN-30), and not inside the
-    # waiting command itself while it is performed (its key is the
-    # request's, Context#as_requester).
+    # again (L378, rule 9), once: not when that hold is one of its checks'
+    # (CHECK_HOLDS, whose closer gates it), not on a task that has ended
+    # (Cancel closes its holds after withdrawing what waited, EN-30), and
+    # not inside the waiting command itself while it is performed (its key
+    # is the request's, Context#as_requester).
     def reenter_pending(ctx, task)
       return if ended?(ctx, Task.find(task.id))
 
