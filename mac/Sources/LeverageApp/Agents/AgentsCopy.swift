@@ -99,7 +99,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .noLogins: "No login has been added yet."
         case .geminiHidden: "Gemini logins can't review yet, so they are not listed."
         case .providerLabel: "Which tool is it?"
-        case .notTestedForChecking: "Not tested."
+        case .notTestedForChecking: "Not tested for checking tasks."
         case .modelLabel: "Model"
         case .modelHint: "Leave empty to use the tool's own default."
         case .effortLabel: "Effort"

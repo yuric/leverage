@@ -56,8 +56,8 @@ final class ConnectAgentModel {
         }
     }
 
-    /// The roles Connect offers (MA-10). The planner and the orchestrator arrive with the jobs they take.
-    static let roles: [SeatRole] = [.builder, .reviewer]
+    /// The roles Connect offers (MA-10): the planner and the orchestrator are connected like a builder.
+    static let roles: [SeatRole] = [.builder, .reviewer, .planner, .orchestrator]
 
     var mode: Mode = .runOnLogin {
         didSet { if mode != oldValue { clearFormLines() } }
@@ -104,7 +104,12 @@ final class ConnectAgentModel {
     }
 
     /// Whether the sheet says an orchestrator is not tested for checking tasks (RV-5).
-    var showsNotTestedNote: Bool { false }
+    var showsNotTestedNote: Bool {
+        role == .orchestrator
+            && OrchestratorTesting.isUntested(
+                provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
+                tested: testedProviders)
+    }
 
     // MARK: the form
 

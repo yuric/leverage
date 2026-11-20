@@ -86,7 +86,10 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         canResume = seat.paused
         canChange = true
         pausedNote = seat.paused ? AgentsCopy.pausedNote.text : nil
-        notTestedNote = nil
+        notTestedNote = seat.role == .orchestrator
+            && OrchestratorTesting.isUntested(
+                provider: seat.provider, model: seat.model, connectsOnItsOwn: !runsOnApp, tested: testedProviders)
+            ? AgentsCopy.notTestedForChecking.text : nil
     }
 }
 

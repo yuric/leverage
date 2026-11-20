@@ -145,6 +145,11 @@ struct RosterRowView: View {
                 Text(verbatim: row.lastPolledLine)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
+                if let note = row.notTestedNote {
+                    Text(verbatim: note)
+                        .font(.system(size: Tokens.FontSize.small))
+                        .foregroundStyle(Tokens.Tone.wait.foreground)
+                }
                 if let note = row.pausedNote {
                     Text(verbatim: note)
                         .font(.system(size: Tokens.FontSize.small))

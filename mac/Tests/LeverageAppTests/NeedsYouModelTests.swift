@@ -528,13 +528,16 @@ struct NeedsYouModelTests {
         await model.load()
         let draw = { (dark: Bool) in
             AgentFixtures.draws(
-                NeedsYouContent(model: model, notificationsAreOff: false).environment(\.colorScheme, dark ? .dark : .light))
+                NeedsYouContent(model: model, notificationsAreOff: true).environment(\.colorScheme, dark ? .dark : .light))
         }
         #expect(draw(false))
         #expect(draw(true))
         let refused = try #require(model.rows.first { $0.kind == .refusedForEveryAgent }?.id)
         await model.perform(.letThroughOnce, on: refused)
         #expect(draw(false))
+        let row = try #require(model.rows.first { $0.id == refused })
+        #expect(AgentFixtures.draws(NeedsYouRowView(row: row, model: model), width: 520, height: 320))
+        #expect(AgentFixtures.draws(NeedsYouRowView(row: row, model: model).environment(\.colorScheme, .dark), width: 520, height: 320))
         model.dismissLetThrough()
         let couldNot = try #require(model.rows.first { $0.kind == .checkCouldNotRun }?.id)
         await model.perform(.turnRuleOff, on: couldNot)
