@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "pending_ends_support"
 
 # The review_lease_expiry timer (PRD L90, L120-L121; timers.json; milestone
 # 2 plan WP5): a reviewer's lease that reaches its due time ends. The task
@@ -7,7 +8,13 @@ require "test_helper"
 # command_id, at the due time. Run as its own command (the sweep), it takes
 # one review (params review_id) or every due review of the workspace,
 # oldest due first, at most params limit of them.
+#
+# A pending pass under the review whose lease ends (milestone 4 plan §2.1
+# rule 11, trace 18 command 45) is cancelled with lease_expired, through
+# PendingTransitions.cancel, before review.lease_expired is written.
 class ReviewLeaseExpiryTest < ActiveSupport::TestCase
+  include PendingEndsSupport
+
   T = Leverage::Transitions
 
   setup do
@@ -96,5 +103,41 @@ class ReviewLeaseExpiryTest < ActiveSupport::TestCase
     review = other.review(other.task(state: "in_review"))
 
     assert_raises(T::NotFound) { timer("review_id" => review.id) }
+  end
+
+  test "the lease that ends under a pending pass cancels it with lease_expired before review.lease_expired (rule 11)" do
+    review = claimed_review(due: @scenario.database_now - 1)
+    task = Task.find(review.task_id)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: @reviewer)
+    outcome = nil
+    calls = recording_cancels { outcome = timer("review_id" => review.id) }
+
+    assert outcome.completed?
+    assert_equal [ Cancelled.new(pending.id, "lease_expired", []) ], calls
+    assert_equal [ review.id ], outcome.result.fetch("expired_review_ids")
+    assert_equal 1, expiries.size
+    assert_nil review.reload.reviewer_seat_id
+  end
+
+  test "the sweep's whole-workspace run cancels the pending pass of each review it ends and of no other" do
+    other = @scenario.seat(role: "reviewer")
+    under_pass = claimed_review(due: @scenario.database_now - 2)
+    plain = claimed_review(other, due: @scenario.database_now - 1)
+    pending = @scenario.pending_transition(Task.find(under_pass.task_id), command: "pass_review", requester: @reviewer)
+    still_live = claimed_review(@scenario.seat(role: "reviewer"))
+    @scenario.pending_transition(Task.find(still_live.task_id), command: "pass_review", requester: Seat.find(still_live.reviewer_seat_id))
+    calls = recording_cancels { assert timer.completed? }
+
+    assert_equal [ Cancelled.new(pending.id, "lease_expired", []) ], calls,
+      "a lease that has not ended keeps its pending pass, and a review with none cancels nothing"
+    assert_equal [ under_pass.id, plain.id ].sort, expiries.map(&:subject_id).sort
+    assert_not_nil still_live.reload.reviewer_seat_id
+  end
+
+  test "a lease that ends with no pending transition cancels nothing" do
+    review = claimed_review(due: @scenario.database_now - 1)
+    calls = recording_cancels { assert timer("review_id" => review.id).completed? }
+
+    assert_empty calls
   end
 end

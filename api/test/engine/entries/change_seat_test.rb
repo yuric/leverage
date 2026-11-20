@@ -1,5 +1,6 @@
 require "test_helper"
 require_relative "owner_controls_support"
+require_relative "pending_ends_support"
 
 # Change a seat (PRD L148, L258; milestone 3 plan HE-27, HE-10, HM-51):
 # only the fields the request sets change, and seat.changed is written.
@@ -12,8 +13,17 @@ require_relative "owner_controls_support"
 # it holds with seat_disabled, caused by seat.changed, closing its
 # seat-bound holds; a review it holds is released when its run is reported
 # stopped (IF-21). Turning it on starts nothing.
+#
+# Milestone 4 (plan WP5b, §2.1 rule 11, §0.1 facts 12 and 28): all four
+# roles are accepted; a change that disables the seat cancels, with
+# invalid_state and before task.released, the pending submit of the Working
+# task it takes, and the provisional claim it holds; it cancels a pending
+# pass of a reviewer only when the stopped run is reported (IF-21), and a
+# change that does not disable the seat cancels nothing. A job the seat
+# holds as a checker is left to its run timeout.
 class ChangeSeatTest < ActiveSupport::TestCase
   include OwnerControlsSupport
+  include PendingEndsSupport
 
   setup do
     use_scenario
@@ -92,9 +102,20 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_completed(outcome)
   end
 
-  test "planner and orchestrator are 422 invalid in this milestone" do
-    assert_raises(T::Invalid) { change(@builder, role: "planner") }
-    assert_raises(T::Invalid) { change(@builder, role: "orchestrator") }
+  test "all four roles are accepted: a seat that holds nothing becomes a planner, an orchestrator, a reviewer again" do
+    %w[planner orchestrator reviewer builder].each do |role|
+      outcome, events = change(@builder, role: role)
+
+      assert_completed(outcome)
+      assert_equal %w[seat.changed], events.map(&:type)
+      assert_equal role, @builder.reload.role
+    end
+  end
+
+  test "a role of no kind is 422 invalid" do
+    assert_raises(T::Invalid) { change(@builder, role: "owner") }
+    assert_raises(T::Invalid) { change(@builder, role: nil) }
+    assert_equal "builder", @builder.reload.role
   end
 
   test "a new login: credential and provider change, the run is not touched, and no task means no look" do
@@ -249,5 +270,90 @@ class ChangeSeatTest < ActiveSupport::TestCase
     scenario.remove(@builder)
     assert_raises(T::NotFound) { change(@builder, name: "Made-up") }
     assert_raises(T::NotFound) { owner_run("change_seat", "id" => SecureRandom.uuid) }
+  end
+
+  test "disabling a builder whose submit is pending cancels it with invalid_state after seat.changed, before task.released" do
+    task = working_task(@builder)
+    pending = scenario.pending_transition(task, command: "submit", requester: @builder)
+    events = nil
+    calls = recording_cancels { _, events = change(@builder, enabled: false) }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", %w[seat.changed]) ], calls
+    assert_equal %w[seat.changed task.released], events.map(&:type)
+  end
+
+  test "disabling a provisional claimant cancels the claim with invalid_state; the cancel is all the task gets" do
+    task = scenario.task(state: "ready")
+    task.update!(holder_seat_id: @builder.id)
+    pending = scenario.pending_transition(task, command: "claim", requester: @builder)
+    events = nil
+    outcome = nil
+    calls = recording_cancels { outcome, events = change(@builder, enabled: false) }
+
+    assert_completed(outcome)
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", %w[seat.changed]) ], calls
+    assert_equal %w[seat.changed], events.map(&:type)
+    assert_equal "stop_seat", HelperRequest.where(seat_id: @builder.id).sole.kind
+  end
+
+  test "disabling a reviewer cancels no pending pass: that comes when its stopped run is reported (IF-21)" do
+    reviewer = running_seat(role: "reviewer")
+    task = scenario.task(state: "in_review")
+    review = scenario.review(task, reviewer: reviewer)
+    pending = scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    calls = recording_cancels { change(reviewer, enabled: false) }
+
+    assert_empty calls
+    assert_equal [ reviewer.id, "pending" ], [ review.reload.reviewer_seat_id, pending.reload.state ]
+
+    written = nil
+    calls = recording_cancels do
+      written = events_written do
+        assert_completed(helper_command("report_run_stopped", { "id" => reviewer.id, "credential_id" => reviewer.run_credential_id,
+          "observed_at" => "2026-11-19T12:00:00Z", "stop_reason" => "stopped" }))
+      end
+    end
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal %w[review.released], written.map(&:type)
+  end
+
+  test "a change that does not disable the seat cancels nothing, under a pending submit or a provisional claim" do
+    task = working_task(@builder)
+    scenario.pending_transition(task, command: "submit", requester: @builder)
+    claimant = running_seat
+    ready = scenario.task(state: "ready")
+    ready.update!(holder_seat_id: claimant.id)
+    scenario.pending_transition(ready, command: "claim", requester: claimant)
+    calls = recording_cancels do
+      change(@builder, name: "Made-up renamed", model: "made-up-model-2", enabled: true)
+      change(claimant, effort: "high")
+    end
+
+    assert_empty calls
+  end
+
+  test "disabling a seat that is already off, or one that holds nothing pending, cancels nothing" do
+    @builder.update!(enabled: false, wanted_running: false)
+    scenario.pending_transition(working_task(@builder), command: "submit", requester: @builder)
+    idle = running_seat
+    calls = recording_cancels do
+      change(@builder, enabled: false)
+      change(idle, enabled: false)
+    end
+
+    assert_empty calls
+  end
+
+  test "disabling an orchestrator leaves the job it claimed to its run timeout: no job event" do
+    orchestrator = scenario.orchestrator(credential: @login, run_state: "running", wanted_running: true)
+    task = scenario.task(state: "ready")
+    scenario.rule_check(task, rule: scenario.rule(hook: "task.before_claim"), started: true, checker: orchestrator)
+    job = Job.where(claimed_by_seat_id: orchestrator.id).sole
+    outcome, events = change(orchestrator, enabled: false)
+
+    assert_completed(outcome)
+    assert_equal %w[seat.changed], events.map(&:type)
+    assert_equal [ "claimed", orchestrator.id ], Job.find(job.id).attributes.values_at("state", "claimed_by_seat_id")
   end
 end
