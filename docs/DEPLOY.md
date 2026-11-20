@@ -166,6 +166,7 @@ sets:
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
 | `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
+| `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on, and the folder each test keeps its files in; `scripts/e2e_core_loop.sh` sets both. |
 
 The helper's and a seat's tokens, and the run's inputs, are set by the app

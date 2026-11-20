@@ -86,8 +86,14 @@ jobs:
         run: python3 -I mac/Tests/StandIns/test_provider_tool.py
       - name: Build
         run: swift build
+      # The runner has three cores. With every test at once, the app tests
+      # waited on a crowded main thread and the stand-in tools took longer to
+      # start than the tests' ceilings, so the tests run one at a time and
+      # wait longer for what must happen (see AGENTS.md).
       - name: Test
-        run: swift test
+        env:
+          LEVERAGE_TEST_PATIENCE: "4"
+        run: swift test --no-parallel
       # The app bundle, without the API image (that needs this job's Docker,
       # which macOS runners do not have).
       - name: Self-test of the bundle's compose file

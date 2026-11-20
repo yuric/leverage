@@ -332,6 +332,16 @@ Where the build differs from the plan, or settles what it left open:
   in an `.xctest` bundle, which SwiftPM does not make on Linux. The fix
   passed the whole end-to-end lane in an aarch64 Linux container on the
   owner's Mac; it has not yet been seen passing in CI, which runs x86_64.
+- **The Mac tests run one at a time on the macOS runner.** On GitHub's
+  three-core macOS runner (run 44634551151) the whole package's tests at
+  once took over two minutes and about a dozen failed: the app tests'
+  waits ran out on a crowded main thread, and the stand-in tools took
+  longer to start than the tests' ceilings. The same failures came back on
+  the owner's Mac under CPU load. CI now runs `swift test --no-parallel`
+  with `LEVERAGE_TEST_PATIENCE=4`, which lengthens only the waits for what
+  must happen and the ceilings for a stand-in to answer; this passed five
+  times in a row on the loaded Mac. It has not yet been seen passing on
+  the runner.
 - **The failed review is shown with stand-in tools only.** The task in the
   end-to-end run goes through one failed review because the stand-in
   reviewer is scripted to fail round 0. Nothing can make a real provider

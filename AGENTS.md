@@ -255,6 +255,18 @@ When several agents work at once, each builds its own lane in its own
 `--scratch-path`, so that a half-written file in one lane never stops
 another from compiling.
 
+On a slow machine, such as GitHub's three-core macOS runner, run the tests
+one at a time and with more patience, as CI does:
+
+```bash
+LEVERAGE_TEST_PATIENCE=4 swift test --no-parallel
+```
+
+`LEVERAGE_TEST_PATIENCE` multiplies only the waits for something that must
+happen, the ceilings a stand-in or a fake has to answer within, and the
+suites' time limits; a limit whose shortness a test checks is never
+multiplied. Unset, it is 1.
+
 The whole product, from the repository root (Docker and Swift, nothing
 else):
 
