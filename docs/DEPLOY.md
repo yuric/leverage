@@ -92,8 +92,11 @@ the Docker volume `leverage-app_db-data`. The log cannot be rebuilt from
 anything else. The `backup` service dumps the whole database once a day
 into `<support folder>/backups`, a folder outside Docker
 ([Backups and restore](#backups-and-restore)). So the volume is lost by any
-of these, and the log can then be restored from the newest dump, losing
-what was written after it (at most a day):
+of these, and the log can then be restored from the newest dump made
+before the loss, losing what was written after it (at most a day). Check
+the dump's time and size: the backup makes no dump of a database that
+holds no workspace, so the volume's loss alone adds no dump, but once the
+owner signs up again on the new database its dumps are small and newer:
 
 - `docker compose -p leverage-app down --volumes`, or removing the
   `leverage-app` project with its volumes in Docker Desktop;
@@ -117,7 +120,15 @@ How the backup and the restore are built is
   looks every 15 minutes. When no dump is newer than `BACKUP_EVERY_HOURS`
   (24) it writes `leverage-<UTC time>.dump` (`pg_dump`, custom format) into
   the folder mounted at `/backups`, mode 0600, and records it in the
-  `backup_runs` table. A first start makes the first dump within a minute.
+  `backup_runs` table. While the database holds no workspace (a new one,
+  before the owner signs up, or one whose volume was lost) it makes no dump,
+  says so once in its log ("The database holds no workspace yet"), and
+  looks again every 30 seconds, so the first dump follows the owner's
+  sign-up within a minute.
+- **A dump now.** `docker compose exec backup bin/backup --once` (for the
+  app: `dc exec backup bin/backup --once`, with `dc` as under
+  [Restoring](#restoring)) makes one dump at once, prints its file name and
+  exits non-zero if it failed.
 - **Where.** For the app, `<support folder>/backups`, which the app makes
   with mode 0700 and names in `LEVERAGE_BACKUP_DIR` in its server folder's
   `.env`. For a server started from the repository, the folder in
@@ -151,12 +162,15 @@ How the backup and the restore are built is
 A restore is the maintainer's command, in a terminal; there is no restore
 in the app. `bin/restore` runs in the `backup` service, which has the
 folder and the database's owner role. It refuses to replace a database
-whose log holds an event unless given `--replace`; otherwise it drops and
-creates the database, restores the dump into it, gives the database roles
-their rights again (`db:grants`), and runs the replay test
-(`leverage:verify_log`). It exits 0 only when every step passed, 1 when it
-refused or a step failed (its message says which), and 2 when it was
-called wrongly.
+whose log holds an event unless given `--replace`; otherwise it checks
+that `pg_restore` can read the dump, restores it into a new database
+beside the one it replaces (`<name>_restoring_<hex>`), gives the database
+roles their rights again (`db:grants`) and runs the replay test
+(`leverage:verify_log`) there, and only then drops the database and gives
+the new one its name. A dump that cannot be restored, or whose log fails
+the replay test, leaves the database as it was. It exits 0 only when every
+step passed, 1 when it refused or a step failed (its message says which),
+and 2 when it was called wrongly.
 
 For a server started from the repository, with the dump's file name from
 the backups folder:
@@ -171,7 +185,10 @@ Leave out `--replace` when the database is new or empty, as after its
 volume was lost; then start `db` alone first (`docker compose up -d db`).
 `scripts/restore_drill.sh` runs exactly that case: a log, a dump, the
 volume removed, the restore into the new, empty cluster, and the same
-count, highest position and checksum of the events afterwards.
+count, highest position and checksum of the events afterwards. It then
+removes the volume again, starts every service on the empty cluster as
+the app does, checks that the backup made no dump of it, and restores the
+same dump again.
 
 For the app, quit `Leverage.app` first so that it does not start the
 services again, and run the same three lines with the app's own files:
@@ -190,7 +207,13 @@ the drill runs the repository's form.
 **Afterwards, the owner** opens the app, which issues the helper a new
 token, and in Credentials runs Verify on each login, choosing Sign in again
 on any that says it is signed out. Tokens issued after the dump no longer
-match, and the log holds nothing written after the dump.
+match, and the log holds nothing written after the dump. The app finds by
+itself that the Needs you cursor it keeps (`<support folder>/inbox-cursor`)
+is of the log before the restore, starts it again, and announces every
+open item once more. The health line's last backup time, and which dumps
+pruning may delete, come from the restored database's `backup_runs`: they
+know only the dumps made before the dump that was restored, so dumps made
+after it are kept until removed by hand.
 
 ## Running the server without the app
 
@@ -359,9 +382,9 @@ cannot be undone.
 
 Only one version exists, so there is nothing to roll back to yet. Migrations
 only go forward, so returning to an earlier version after a schema change
-needs a dump made before it, restored as under
-[Restoring](#restoring); the steps of an upgrade are _TBD_ until the first
-one.
+needs a dump made before it ([A dump now](#backups-and-restore)), restored
+as under [Restoring](#restoring); the steps of an upgrade are _TBD_ until
+the first one.
 
 ## Operations
 

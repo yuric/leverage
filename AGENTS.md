@@ -232,7 +232,7 @@ docker compose run --rm api bin/rails test           # tests, against PostgreSQL
 docker compose run --rm api bin/rails zeitwerk:check # autoloading
 docker compose run --rm -e SEED=1 -e WALKS=1000 api bin/rails test test/engine/step_partition_test.rb  # 1000 random walks
 docker compose run --rm --no-deps api bin/rubocop    # style
-docker compose up -d                                 # run the API, the sweep and the database
+docker compose up -d                                 # run the API, the sweep, the database and the daily backup (into ./backups)
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
 docker compose exec -T api bin/rails leverage:verify_log  # replay every workspace's log
 docker compose exec -T api bin/rails leverage:recovery_times  # every recovery time
@@ -302,7 +302,9 @@ when it is set. Anything else that starts the `backup` service, or runs
 its own first, so that nothing writes into the checkout's `./backups`.
 `smoke_app.sh` uses a support folder and a compose project of its own
 (`leverage-smoke-<pid>`), sets `LEVERAGE_NOTIFICATIONS=off` so that no
-notification permission is asked for, and waits for the first dump. No automated test calls a real provider: the
+notification permission is asked for, signs up a made-up owner (the
+backup dumps no database without a workspace) and waits for the first
+dump. No automated test calls a real provider: the
 tests find the providers' tools only through `LEVERAGE_TOOL_DIR`, on the
 stand-ins. `scripts/real_gemini_through_app.sh` runs only with
 `LEVERAGE_REAL_PROVIDER=gemini` and never in CI.

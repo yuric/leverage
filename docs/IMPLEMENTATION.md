@@ -422,7 +422,8 @@ Where the build differs from the plan, or settles what it left open:
 - **`seats.run_credential_id`**, not the plan's `running_on_credential_id`,
   because a read's field is its column's name.
 - **A fourth answer from `SignInStatus`, "could not tell".** A status
-  command that does not start or runs past its 30 seconds no longer
+  command that does not start, runs past its 30 seconds, fails without its
+  signed-out reply or prints something that is neither reply no longer
   answers "signed out": the runner then treats the run as milestone 2's
   failure and sends no sign-out report, and the helper's checks still read
   it as not signed in. The plan allowed three answers.
@@ -467,6 +468,57 @@ Where the build differs from the plan, or settles what it left open:
   seats no run credential; the trace runner and eligibility fill both in.
 - **Each package committed its own work** by explicit path, the red tests
   first; one package worked in a worktree of its own.
+
+What the adversarial review of the milestone found, and what changed (one
+failing test first for each):
+
+- **A second report on a held task is refused.** A limit or sign-out
+  report on a task that already waits on a credential hold is
+  `invalid_state`: no run is on it (HE-21), so the report is stale, and it
+  used to open a second hold and a second item.
+- **A signed-out login the task passes over is no reason to hold it.** A
+  login rule 3 passes over for the task (its minimum strength rank) makes
+  no hold `credential_signed_out`, gets no "Account signed out" item, and
+  does not stop `wait_ready`'s `credential_limit` cause; a hold left with
+  no item and no due time after Sign in again gets the item for what
+  still blocks it.
+- **A lease restarts from the hold's effective close**, the due time a
+  timer closes it at, not the sweep's later time (PRD L118).
+- **A reset time further off than its window can last is none**: more than
+  6 hours after the report for the five-hour window, 8 days for the weekly
+  and per-model windows, 32 days for spend or no window. Only a time after
+  "resets", "reset at" or "try again" on the same line of a reply is a
+  reset time, never a log line's own timestamp.
+- **A sign-out is reported only on the tool's own word.** A status command
+  that fails, crashes or prints neither its signed-in nor its signed-out
+  reply is "could not tell". Codex's status is read by its recorded "Not
+  logged in", not by its exit code. Grok's standard output, the agent's
+  answer, is never read for a limit or a sign-out, and no detector reads a
+  run that a signal killed.
+- **No dump of a database with no workspace.** After the volume is lost
+  the backup does not dump the new, empty database; it says so once and
+  looks again every 30 seconds, so the first dump follows the owner's
+  sign-up. The smoke run signs up a made-up owner for it, and the drill
+  starts every service on an emptied cluster and checks that no dump was
+  made.
+- **A restore goes through a staging database**, renamed over the old one
+  only after the replay test passes there; `bin/restore` also reads the
+  dump's list first.
+- **The backup service has no login-role password or URL**, and the
+  scripts' backup folders are sticky (mode 1777).
+- **The reply-file check reads every decoded string** of a file and of the
+  JSON its outputs hold, and any field named for an email, plan,
+  organisation, account or tier; Claude's recorded sign-out reply has its
+  `service_tier` scrubbed.
+- **The inbox cursor is checked against the log** when the app starts, and
+  started again from 0 when it is of another log.
+- **Smaller ones:** Sign in again for Gemini says to sign in to
+  Antigravity, not to a window; editing a Ready task, or an In review task
+  no reviewer holds, and its log line say nothing of an agent stopping; a
+  signed-out account's card never shows a reset time; a released review's
+  log line says it waits for a reviewer with an available account;
+  `report_request_progress` takes Sign in again's checks; a seat change
+  that changes nothing writes no event; DEPLOY.md gives a dump on demand.
 
 ## What the Handoff milestone proves, and how far
 
@@ -521,7 +573,7 @@ where it follows text seen elsewhere. The files are in
 | Claude (`claude` 2.1.325) | Made, invented: five-hour with a reset time, weekly without | Made, invented | Recorded | Recorded (`claude auth status`) |
 | Codex (`codex-cli` 0.169.0) | Made, invented: five-hour in a structured field, weekly in words | Made, invented | Recorded | Recorded (`codex login status`) |
 | Gemini (`agy` 1.5.12) | Made, invented: per-model | Made, invented | Made from observed (the shape of a signed-in reply) | None: no status command |
-| Grok (`grok` 1.0.77) | Made, invented: spend | Made, invented | Made from observed ("You are not authenticated.") | Recorded (`grok models`) |
+| Grok (`grok` 1.0.77) | Made, invented: spend, on standard error | Made, invented | Made from observed ("You are not authenticated." on standard error; standard output, the agent's answer, is never read) | Recorded (`grok models`) |
 
 Unverified for all four: a real limit reply, and the reply of a login that
 expired or was revoked during a run. The contract's `readers.json` keeps
@@ -1177,10 +1229,24 @@ skeleton's pull request description, as rule AR-004 asks.
       to an agent's own account when none below is free (HE-4). The mockup
       is not edited.
     - **Other choices made while building:**
-      - A status command that does not answer in 30 seconds is "could not
-        tell", and the run is a plain failure, not a sign-out. Alternative:
-        read it as signed out, which marks the account signed out and opens
-        an item for nothing.
+      - A status command that does not answer in 30 seconds, or fails
+        without its signed-out reply, is "could not tell", and the run is a
+        plain failure, not a sign-out. Alternative: read it as signed out,
+        which marks the account signed out and opens an item for nothing.
+      - Set by the adversarial review: a reset time more than 6 hours (five
+        hours), 8 days (weekly, per model) or 32 days (spend, or no window)
+        after the report is stored as none, which the next Verify clears.
+        Alternative: keep any reset time, which one wrong reply could make
+        park a login for months.
+      - Set by the adversarial review: the backup makes no dump while the
+        database holds no workspace, and looks again every 30 seconds.
+        Alternative: dump the empty database, whose dump would then be the
+        newest after a lost volume.
+      - Set by the adversarial review: a stored Needs you cursor the log
+        has no event at or after, or whose position holds another kind of
+        event, starts again from 0, so every open item is announced again
+        once. Alternative: keep it, and miss every new item until the log
+        passes it.
       - Sign in again looks at the status first: an account its tool calls
         signed in opens no sign-in window and goes straight to the test
         prompt. A login revoked at the provider while its tool still says

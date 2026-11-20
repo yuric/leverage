@@ -24,8 +24,10 @@ once it makes its first release.
   the order and its eight fixed rules. The owner can save a task as an
   idea and move it to Backlog, change a task's contract, pause and continue
   a task, and pause, resume and change an agent. A `backup` container dumps
-  the database once a day to a folder on the Mac and keeps 14, and
-  `bin/restore` makes the database again and passes the replay test. Every
+  the database once a day to a folder on the Mac and keeps 14 (none while
+  the database holds no workspace), and `bin/restore` makes the database
+  again beside the old one and replaces it only once the restored log
+  passes the replay test. Every
   interruption is shown with stand-in tools only, and the limit replies
   they play are made, not observed. The PRD gains the changes R-1 to R-10;
   the choices are recorded in ADRs 0008 to 0010.

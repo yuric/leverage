@@ -41,10 +41,14 @@ the milestone's plan HD-7, HD-8 and HE-32.
    run's output settles nothing and the provider has a status command
    (Claude, Codex and Grok), the runner asks `SignInStatus`, under a
    30-second limit. Its output is read for the one signed-in field and
-   dropped: it answers signed in, signed out, no status command, or could
-   not tell (a status command that would not start or ran past its
-   limit), and nothing of the output is logged, returned or kept. Could
-   not tell leaves the run a failure, not a sign-out.
+   dropped: it answers signed in, signed out (only on the tool's own
+   signed-out reply: Claude's `loggedIn` false, Codex's "Not logged in",
+   Grok's "You are not authenticated."), no status command, or could not
+   tell (a status command that would not start, ran past its limit, or
+   failed or printed neither reply), and nothing of the output is logged,
+   returned or kept. Could not tell leaves the run a failure, not a
+   sign-out. Grok's standard output, the agent's answer, is never read,
+   and no detector reads a run that a signal killed.
 4. **Every rule names the reply file it was written to.** The replies are
    files under `mac/Tests/StandIns/replies/<provider>/`, each with `meta`
    (provider, tool, tool version, `basis`, date, what it shows, the

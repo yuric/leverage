@@ -25,7 +25,8 @@ milestone's plan HB-1 to HB-8.
 2. **The owner role.** The service connects as the database's owner role,
    which `DATABASE_URL` already names in every container of the image:
    `pg_dump` must read every table and sequence whatever a later migration
-   adds, and a restore must drop and create the database. The connection
+   adds, and a restore must drop and create the database. The service is
+   given neither the login role's URL nor its password. The connection
    is read from `ActiveRecord::Base.connection_db_config` and passed to the
    PostgreSQL tools as `--host`, `--port`, `--username` and `--dbname`, with
    the password in `PGPASSWORD`, never in an argument (HB-1).
@@ -43,8 +44,11 @@ milestone's plan HB-1 to HB-8.
    prunes. Pruning deletes only files that this database's `backup_runs`
    rows name, beyond the newest `BACKUP_KEEP` (14); a file no row names is
    never touched. A failed dump leaves no file and no row and is tried at
-   the next look. `bin/backup --once` makes one dump and exits non-zero if
-   it fails (HB-3).
+   the next look. While the database holds no workspace (a new one, as
+   after the volume was lost) it makes no dump, says so once and looks
+   again every 30 seconds, so a lost volume adds no dump that would be
+   newer than the log's. `bin/backup --once` makes one dump and exits
+   non-zero if it fails (HB-3).
 5. **`backup_runs` is the record.** One row per dump (ran at, file name,
    size), with no workspace, because a dump is of the whole database and
    the first one is made before an owner exists. The application's role
@@ -54,18 +58,23 @@ milestone's plan HB-1 to HB-8.
 6. **`bin/restore` makes the database again.** Run in the `backup` service
    by the maintainer, with the API, the sweep and the backup stopped. It
    refuses to replace a database whose `events` table holds a row unless
-   given `--replace`; drops and creates the database; runs `pg_restore
-   --no-owner --no-privileges --exit-on-error` into the empty database;
-   gives the roles their rights again (`db:grants`); and runs
-   `leverage:verify_log`. It exits 0 only when every step passed, the
+   given `--replace`; checks that `pg_restore --list` reads the dump;
+   creates a staging database beside it and runs `pg_restore --no-owner
+   --no-privileges --exit-on-error` into it; gives the roles their rights
+   again (`db:grants`) and runs `leverage:verify_log` there; and only then
+   drops the database and renames the staging one to its name, so a dump
+   that cannot be restored leaves the database as it was. It exits 0 only
+   when every step passed, the
    replay test included; 1 on a refusal or a failed step; 2 on wrong use
    (HB-5).
 7. **The restore is tested three times.** `backup_restore_test.rb` in the
    `api` job restores a committed log into a database that does not exist
    yet; `scripts/restore_drill.sh` restores a seeded log into a cluster
    whose volume was removed, which has no database and no `leverage_app`
-   role; and `scripts/e2e_handoff.sh` runs the same drill on the log of its
-   last test, which holds this milestone's events (HB-6).
+   role, then removes the volume again, starts every service on the empty
+   cluster, checks that no dump of it was made and restores again; and
+   `scripts/e2e_handoff.sh` runs the same drill on the log of its last
+   test, which holds this milestone's events (HB-6).
 
 ## Alternatives considered
 

@@ -740,7 +740,7 @@ documentation, never run; `unverified` is none of these. Nothing below
 | Provider (tool) | Account | Status and sign-in | Installer | Reviewer run | Builder run differs by |
 | --- | --- | --- | --- | --- | --- |
 | Claude (Claude Code, `claude`) | `CLAUDE_CONFIG_DIR` (`probe`); needs `USER` (`probe`) | `claude auth status`, field `loggedIn` (`probe`); `claude auth login` (`help`) | `https://claude.ai/install.sh` with `/bin/bash` (`documented`) | `claude -p <prompt> --output-format json --no-session-persistence --permission-mode dontAsk` (`probe`), with `--strict-mcp-config --setting-sources user` (`help`) | `--permission-mode acceptEdits`, `--model`, `--effort` (`help`) |
-| Codex (Codex, `codex`) | `CODEX_HOME` (`probe`) | `codex login status`, exit code (`probe`); `codex login` (`help`) | `https://chatgpt.com/codex/install.sh` with `/bin/sh` (`documented`) | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <dir> -o <file>` (`probe`) | `--sandbox workspace-write`, `-m` (`help`); no effort is passed, and Connect asks for none |
+| Codex (Codex, `codex`) | `CODEX_HOME` (`probe`) | `codex login status`, signed out when it says "Not logged in" (`probe`); `codex login` (`help`) | `https://chatgpt.com/codex/install.sh` with `/bin/sh` (`documented`) | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <dir> -o <file>` (`probe`) | `--sandbox workspace-write`, `-m` (`help`); no effort is passed, and Connect asks for none |
 | Gemini (Antigravity, `agy`) | One sign-in for the Mac (`help`; the PRD states it) | No status or sign-in command (`help`): the test prompt is repeated | `https://antigravity.google/cli/install.sh` with `/bin/bash` (`documented`) | Not offered: `agy -p <prompt> --output-format json --print-timeout <n>s --mode plan` answered with a plan, not the word asked for (`probe`), so the runner refuses a Gemini reviewer and Connect does not list a Gemini login for one | Builder: the same without `--mode plan`, with `--mode accept-edits`, `--model`, `--effort` (`help`) |
 | Grok (Grok Build, `grok`) | Treated as one sign-in for the Mac (`unverified`) | `grok models`, signed out when it says "You are not authenticated." (`probe`); `grok login --oauth` (`help`) | None: no documented source was reachable (`unverified`) | `grok -p <prompt> --cwd <dir> --permission-mode plan` (`help`) | `--permission-mode acceptEdits`, `-m` (`help`); no effort is passed, and Connect asks for none |
 
@@ -811,7 +811,10 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   the kind, the window and a stated reset time reach the helper, in the
   `RunEndReport` line, and the logs say only the kind. A status command
   prints the account's email, organisation and plan, so `SignInStatus`
-  reads its one signed-in field and keeps, logs and returns nothing else.
+  reads its one signed-in field and keeps, logs and returns nothing else;
+  it answers signed out only on the tool's own signed-out reply. Grok's
+  standard output is the agent's answer and is never read for a limit or a
+  sign-out, nor is any run a signal killed.
 - **The helper's reports are checked against what the seat holds.** A
   limit or sign-out report must name a credential that is an added login,
   a seat with a credential, and exactly one task or review; it is refused
