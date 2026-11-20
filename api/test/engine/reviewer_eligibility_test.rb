@@ -100,6 +100,7 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
   test "with no reviewer seat at all the item opens; a reviewer of another provider that never built the task keeps it closed" do
     reevaluate
     assert_equal 1, items(state: "open").count
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
 
     reviewer("codex")
     reevaluate
@@ -121,12 +122,14 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     scenario.remove(reviewer("codex"))
     reevaluate
     assert_equal 1, items(state: "open").count
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
   test "a reviewer that connects on its own counts by its own provider" do
     scenario.seat(role: "reviewer", provider: "claude")
     reevaluate
     assert_equal 1, items(state: "open").count
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
 
     scenario.seat(role: "reviewer", provider: "grok")
     reevaluate
@@ -269,6 +272,29 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     assert opened, "review.lease_expired is one of SM-42's three events"
     assert_equal [ "app", nil, expired.id, nil, expired.effective_at ],
       opened.attributes.values_at("actor_kind", "actor_id", "cause_id", "command_id", "effective_at")
+  end
+
+  # The same inside a command that is then refused: the timer's events
+  # commit with the refusal (test 7), and so does the item they cause
+  # (SM-42), not at the next sweep (WP9's request 3).
+  test "a review lease that ends inside a command that is then refused still opens the item" do
+    codex = reviewer("codex")
+    scenario.review(@task, reviewer: codex)
+    Leverage::Gating.implementation = ProviderWorld.for(@rule, built_by: { @task.id => %w[claude codex] })
+    scenario.make_due(@review.reload)
+
+    outcome = nil
+    before = scenario.workspace.reload.last_seq
+    written = events_written { outcome = owner_command("resume", { "id" => @task.id }) }
+    assert outcome.refused?, "resume on a task with no hold is refused"
+    expired = written.find { |event| event.type == "review.lease_expired" }
+    assert expired, written.map(&:type).inspect
+    opened = written.find { |event| event.type == "inbox.opened" }
+    assert opened, "review.lease_expired is one of SM-42's three events, whatever the command it ended in"
+    assert_equal [ "app", nil, expired.id, nil, expired.effective_at ],
+      opened.attributes.values_at("actor_kind", "actor_id", "cause_id", "command_id", "effective_at")
+    assert_equal 1, items(state: "open").count
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
   test "a reviewer's limit with no allowed candidate releases the review and opens the item as the helper (trace 19, L913)" do
