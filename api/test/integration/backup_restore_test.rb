@@ -174,6 +174,38 @@ class BackupRestoreTest < CommittingTestCase
     on_database(@scratch) { assert_equal task.title, Task.find(task.id).title }
   end
 
+  def restoring_databases
+    ActiveRecord::Base.lease_connection.select_values(
+      ActiveRecord::Base.sanitize_sql([ "SELECT datname FROM pg_database WHERE datname LIKE ?", "#{@scratch}%" ])
+    )
+  end
+
+  # Review: --replace dropped the database before pg_restore had read the
+  # dump, so a dump that could not be restored left no database at all.
+  test "a restore with --replace from a dump that cannot be restored leaves the database as it was (review)" do
+    walk = Walk.new(seed: 33).run
+    task = Task.where(workspace_id: walk.workspace_id).first
+    assert task, walk.to_s
+    run = B.run!(folder: @folder, keep: 14)
+    path = File.join(@folder, run.file_name)
+    capture_io { B.restore(path, target: target(@scratch), workspace_id: walk.workspace_id) }
+    on_database(@scratch) { Task.where(id: task.id).update_all(title: "Changed after the dump") }
+
+    garbage = File.join(@folder, "leverage-garbage.dump")
+    File.write(garbage, "not a dump at all")
+    truncated = File.join(@folder, "leverage-truncated.dump")
+    File.binwrite(truncated, File.binread(path).byteslice(0, File.size(path) * 3 / 4))
+
+    [ garbage, truncated ].each do |bad|
+      assert_raises(B::Failed, bad) do
+        capture_io { B.restore(bad, target: target(@scratch), replace: true, workspace_id: walk.workspace_id) }
+      end
+      assert database_exists?(@scratch), "#{bad}: the database is still there"
+      on_database(@scratch) { assert_equal "Changed after the dump", Task.find(task.id).title, bad }
+      assert_equal [ @scratch ], restoring_databases, "#{bad}: no database is left behind"
+    end
+  end
+
   test "bin/restore with no file, or a file that is not there, exits non-zero" do
     _out, _err, status = bin_restore(@scratch)
     refute status.success?

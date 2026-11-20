@@ -350,6 +350,22 @@ class CandidatesTest < ActiveSupport::TestCase
     assert C.any_signed_out?(seat)
   end
 
+  test "any_signed_out? with a piece of work leaves out a signed-out login rule 3 passes over for it (review)" do
+    own = @scenario.credential(provider: "claude", strength_rank: 3)
+    weak = @scenario.credential(provider: "codex", strength_rank: 1)
+    seat = @scenario.seat(credential: own, strength_rank: 3)
+    task = @scenario.task(state: "working", builder: seat)
+    task.update_columns(minimum_strength_rank: 3)
+    @scenario.sign_out_credential(weak)
+
+    assert C.any_signed_out?(seat), "with no work every candidate counts"
+    refute C.any_signed_out?(seat, task)
+    assert_nil C.signed_out_for(seat, task)
+    weak.update_columns(strength_rank: 3)
+    assert C.any_signed_out?(seat, task)
+    assert_equal weak.id, C.signed_out_for(seat, task).id
+  end
+
   test "HE-5: within the seat's provider group the seat's model is used, in another the credential's" do
     own = @scenario.credential(provider: "claude", model: "credential-model")
     same = @scenario.credential(provider: "claude", model: "other-claude-model")
@@ -400,6 +416,16 @@ class CandidatesTest < ActiveSupport::TestCase
     task = @scenario.task(state: "ready")
 
     assert_nil C.wait_cause(task, @now)
+  end
+
+  test "HE-35: a signed-out candidate the task's minimum rank passes over does not stop credential_limit (review)" do
+    own = limited(@scenario.credential(provider: "claude", strength_rank: 3))
+    @scenario.sign_out_credential(@scenario.credential(provider: "codex", strength_rank: 1))
+    @scenario.seat(credential: own, strength_rank: 3)
+    task = @scenario.task(state: "ready")
+    task.update_columns(minimum_strength_rank: 3)
+
+    assert_equal "credential_limit", C.wait_cause(task, @now)
   end
 
   test "HE-35: a seat that connects on its own always counts as having one" do

@@ -315,6 +315,42 @@ class ReportLimitTest < ActiveSupport::TestCase
     assert_nil gemini.reload.limited_since
   end
 
+  test "a second limit report under a new key on a task already held is invalid_state and writes nothing (review)" do
+    grok_z = scenario.credential(provider: "grok", model: "grok-model-1")
+    builder = scenario.seat(role: "builder", credential: grok_z)
+    task = scenario.task(state: "working", builder: builder)
+    assert_completed(report_limit(grok_z, builder, task: task, window: "weekly"))
+    holds = Hold.where(task_id: task.id).count
+    items = InboxItem.where(about_id: task.id).count
+
+    written = events_written { assert_refused("invalid_state", report_limit(grok_z, builder, task: task, window: "weekly")) }
+
+    assert_empty written
+    assert_equal [ holds, items ], [ Hold.where(task_id: task.id).count, InboxItem.where(about_id: task.id).count ]
+    assert_equal 1, Event.where(task_id: task.id, type: "credential.limit_reached").count
+  end
+
+  # Review: a candidate that rule 3 passes over for the task is not one
+  # the hold may wait for (PRD L670): a signed-out login the task's
+  # minimum strength rank passes over neither makes the hold
+  # credential_signed_out nor gets its item.
+  test "a signed-out login the task passes over leaves the hold credential_limit, with Limit with no reset time (review)" do
+    claude = scenario.credential(provider: "claude", model: "claude-model-1", strength_rank: 3)
+    codex = scenario.sign_out_credential(scenario.credential(provider: "codex", strength_rank: 1))
+    builder = scenario.seat(role: "builder", credential: claude, strength_rank: 3)
+    task = scenario.task(state: "working", builder: builder)
+    task.update_columns(minimum_strength_rank: 3)
+
+    written = events_written { assert_completed(report_limit(claude, builder, task: task, window: "weekly")) }
+
+    assert_equal %w[credential.limit_reached hold.opened inbox.opened], written.map(&:type)
+    hold = open_hold(task)
+    assert_equal [ "credential_limit", claude.id ], [ hold.reason, hold.credential_id ]
+    item = InboxItem.find_by!(hold_id: hold.id)
+    assert_equal [ "limit_with_no_reset_time", claude.id ], [ item.kind, item.credential_id ]
+    refute_equal codex.id, item.credential_id
+  end
+
   test "the same report sent again with the same key writes nothing more" do
     trace_11
     key = new_key

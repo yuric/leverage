@@ -83,8 +83,12 @@ module Leverage
 
     # Whether any of the seat's candidates is signed out (rule 6: the
     # hold's reason is then credential_signed_out).
-    def any_signed_out?(seat)
+    def any_signed_out?(seat, _work = nil)
       self.for(seat).any? { |credential| credential.state == "signed_out" }
+    end
+
+    def signed_out_for(seat, _work)
+      self.for(seat).find { |credential| credential.state == "signed_out" }
     end
 
     # HE-5: the model a run of the seat on credential uses. Within the

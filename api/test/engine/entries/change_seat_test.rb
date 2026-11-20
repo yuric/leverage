@@ -45,12 +45,19 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_equal 1, @builder.reload.strength_rank
   end
 
-  test "an empty change writes seat.changed alone and changes nothing" do
+  # Review: a change that changes nothing writes no seat.changed.
+  test "an empty change, or one that sets every field to what it is, completes with no event and changes nothing" do
     before = @builder.reload.attributes.except("updated_at")
     outcome, events = change(@builder)
 
+    assert_equal({ "helper_request_id" => nil }, assert_completed(outcome).result)
+    assert_empty events
+    assert_equal before, @builder.reload.attributes.except("updated_at")
+
+    outcome, events = change(@builder, name: @builder.name, model: @builder.model, effort: @builder.effort,
+      strength_rank: @builder.strength_rank, role: @builder.role, enabled: true, credential_id: @login.id)
     assert_completed(outcome)
-    assert_equal %w[seat.changed], events.map(&:type)
+    assert_empty events
     assert_equal before, @builder.reload.attributes.except("updated_at")
   end
 

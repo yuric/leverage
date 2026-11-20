@@ -30,6 +30,7 @@ module Leverage
   module Backup
     # bin/backup looks when it starts and then every 15 minutes (HB-3).
     LOOK_EVERY = 15 * 60
+    EMPTY_LOOK_EVERY = 30
     EVERY_HOURS = 24
     KEEP = 14
     FOLDER = "/backups".freeze
@@ -76,6 +77,8 @@ module Leverage
     def due?(every_hours: EVERY_HOURS)
       !BackupRun.where("ran_at > ?", database_now - every_hours.to_f.hours).exists?
     end
+
+    def empty? = false
 
     # One backup. Returns its BackupRun, or nil when it failed (logged).
     def run(folder: FOLDER, keep: KEEP, target: nil, spawner: SPAWN, log: nil)

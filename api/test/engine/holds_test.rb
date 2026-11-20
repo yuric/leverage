@@ -139,6 +139,25 @@ class HoldsTest < ActiveSupport::TestCase
     assert_equal start + 2800, task.reload.lease_due_at
   end
 
+  # Review: a timer closes a hold at its due time, which can be earlier
+  # than the command that writes it (the sweep looks every 15 s). The lease
+  # runs again from the hold's effective close, so the delay gives it no
+  # time (PRD L118).
+  test "a hold closed at an earlier effective time restarts the lease from that time, not the command's (review)" do
+    credential = @scenario.credential
+    task = working_task
+    ctx = context
+    task.update_columns(lease_due_at: ctx.at + 250)
+    hold = H.open(ctx, task: task, reason: "credential_signed_out", credential_id: credential.id)
+
+    later = context(at: ctx.at + 600)
+    H.close(later, hold: hold, task: task.reload, effective_at: ctx.at + 300, command_id: nil, actor_kind: "app",
+      actor_id: nil)
+
+    assert_equal ctx.at + 300 + 250, task.reload.lease_due_at
+    assert_nil task.lease_time_left_while_paused
+  end
+
   test "closing one hold while another pausing hold is open keeps the clock paused and sets no resume" do
     task = working_task
     ctx = context

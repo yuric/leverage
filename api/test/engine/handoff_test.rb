@@ -155,6 +155,50 @@ class HandoffTest < ActiveSupport::TestCase
     assert_empty InboxItem.where(hold_id: hold.id)
   end
 
+  # Review: a credential_signed_out hold that names a login rule 3 passes
+  # over for the task (as the hold of a version before the review could
+  # open). Once that login is signed in again its item is resolved, and
+  # the hold, with no due time, would wait with nothing for the owner to
+  # do: the item for what still blocks it opens instead.
+  test "a hold left with no item and no due time after Sign in again gets the item for what still blocks it (review)" do
+    claude = scenario.credential(provider: "claude", model: "claude-model-1", strength_rank: 3)
+    codex = scenario.sign_out_credential(scenario.credential(provider: "codex", strength_rank: 1))
+    builder = scenario.seat(role: "builder", credential: claude, strength_rank: 3)
+    task = scenario.task(state: "working", builder: builder)
+    task.update_columns(minimum_strength_rank: 3)
+    scenario.limit_credential(claude, seat: builder, task: task, window: "weekly")
+    hold = scenario.hold(task, reason: "credential_signed_out", credential: codex, facts: { credential_id: codex.id })
+    item = InboxItem.find_by!(hold_id: hold.id)
+
+    written = events_written do
+      as_helper { |ctx| H.reevaluate(ctx, verified: codex, cause: verify(ctx, codex), choice: "sign_in_again") }
+    end
+
+    assert_equal %w[credential.verified inbox.resolved inbox.opened], written.map(&:type)
+    assert_equal "resolved", item.reload.state
+    assert_nil hold.reload.closed_at
+    opened = InboxItem.find_by!(hold_id: hold.id, state: "open")
+    assert_equal [ "limit_with_no_reset_time", claude.id, { "credential_id" => claude.id } ],
+      [ opened.kind, opened.credential_id, opened.facts ]
+    assert_equal [ opened.id, task.id ], [ written.last.subject_id, written.last.task_id ]
+  end
+
+  test "an Account signed out item does not open for a login rule 3 passes over for the held task (review)" do
+    grok_z = scenario.credential(provider: "grok", strength_rank: 3)
+    weak = scenario.credential(provider: "codex", strength_rank: 1)
+    builder = scenario.seat(role: "builder", credential: grok_z, strength_rank: 3)
+    task = scenario.task(state: "working", builder: builder)
+    task.update_columns(minimum_strength_rank: 3)
+    scenario.limit_credential(grok_z)
+    hold = scenario.hold(task, reason: "credential_limit", credential: grok_z, item: false)
+    scenario.sign_out_credential(weak)
+
+    written = events_written { as_helper { |ctx| H.reevaluate(ctx, signed_out: weak) } }
+
+    assert_empty written
+    assert_empty InboxItem.where(hold_id: hold.id)
+  end
+
   test "tasks: limits the look to those tasks" do
     trace_12
     @claude_b.update!(state: "active", last_verified_at: from_now(0))

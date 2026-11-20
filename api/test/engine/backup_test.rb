@@ -118,6 +118,7 @@ class BackupTest < CommittingTestCase
   end
 
   test "a dump into a folder it cannot write leaves no file and no row, logs the folder, and raises nothing from the loop" do
+    scenario
     File.chmod(0o500, @folder)
     refute File.writable?(@folder), "the test needs a folder this user cannot write"
 
@@ -181,6 +182,7 @@ class BackupTest < CommittingTestCase
   end
 
   test "a backup is due with no row, not within the hours of the newest row, and due again after them" do
+    scenario
     assert B.due?(every_hours: 24)
 
     row = BackupRun.create!(file_name: "leverage-20260101T000000000Z.dump", ran_at: database_now - 23.hours, bytes: 1)
@@ -188,6 +190,32 @@ class BackupTest < CommittingTestCase
 
     row.update!(ran_at: database_now - 25.hours)
     assert B.due?(every_hours: 24)
+  end
+
+  # Review: after the volume is lost, the first look finds a new, empty
+  # database; a dump of it would become the newest file in the folder.
+  test "no backup is due while the database holds no workspace, whatever the rows say (review)" do
+    with_scratch_database do
+      assert_equal 0, Workspace.count
+      refute B.due?(every_hours: 24)
+      assert B.empty?
+    end
+    scenario
+    refute B.empty?
+  end
+
+  test "while the database holds no workspace the loop makes no dump and looks again within a minute (review)" do
+    with_scratch_database do
+      sleeps = []
+      B.run_loop(folder: @folder, keep: 14, every_hours: 24, stop: -> { sleeps.any? },
+        sleeper: ->(seconds) { sleeps << seconds }, log: @log)
+
+      assert_equal [ B::EMPTY_LOOK_EVERY ], sleeps
+      assert_operator B::EMPTY_LOOK_EVERY, :<=, 60
+      assert_empty Dir.children(@folder)
+      assert_equal 0, BackupRun.count
+      assert_empty @lines
+    end
   end
 
   # A stand-in for the module, so the loop is tested without waiting.
@@ -210,6 +238,8 @@ class BackupTest < CommittingTestCase
     def run(folder:, keep:, log:)
       @runs << [ folder, keep ]
     end
+
+    def empty? = false
   end
 
   test "the loop looks when it starts and then every 15 minutes, backs up only when due, and survives an error" do

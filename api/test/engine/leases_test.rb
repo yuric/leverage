@@ -84,6 +84,15 @@ class LeasesTest < ActiveSupport::TestCase
     assert_equal 90, @task.reload.lease_time_left_while_paused.to_i
   end
 
+  test "restart at: a given time runs the clock again from that time (review)" do
+    ctx = @scenario.context
+    L.grant(ctx, @task, paused: true)
+    left = @task.reload.lease_time_left_while_paused.to_f
+    L.restart(@scenario.context(at: ctx.at + 90), @task, at: ctx.at + 30)
+
+    assert_equal ctx.at + 30 + left, @task.reload.lease_due_at
+  end
+
   test "restart of a lease that is not paused changes nothing" do
     ctx = context
     due = @task.lease_due_at

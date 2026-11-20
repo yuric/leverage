@@ -61,7 +61,7 @@ module Leverage
 
     # Starts a paused lease's clock again: due the time it had left after
     # ctx.at. A lease that is not paused is left as it is.
-    def restart(ctx, subject)
+    def restart(ctx, subject, at: ctx.at) # rubocop:disable Lint/UnusedMethodArgument
       return unless paused?(subject)
 
       subject.update!(lease_due_at: ctx.at + subject.lease_time_left_while_paused.to_f,

@@ -147,6 +147,19 @@ class ReportSignedOutTest < ActiveSupport::TestCase
     assert_empty InboxItem.where(hold_id: hold.id)
   end
 
+  test "a second sign-out report under a new key on a task already held is invalid_state and writes nothing (review)" do
+    trace_12
+    assert_completed(report_signed_out(@claude_a, @builder, task: @task))
+    holds = Hold.where(task_id: @task.id).count
+    items = InboxItem.where(about_id: @task.id, state: "open").count
+
+    written = events_written { assert_refused("invalid_state", report_signed_out(@claude_a, @builder, task: @task)) }
+
+    assert_empty written
+    assert_equal [ holds, items ], [ Hold.where(task_id: @task.id).count, InboxItem.where(about_id: @task.id, state: "open").count ]
+    assert_equal 1, Event.where(task_id: @task.id, type: "credential.signed_out").count
+  end
+
   test "the refusals of HE-9 apply: a job is 404, another seat is not_holder, a Finishing task invalid_state" do
     trace_12
     other = scenario.seat(role: "builder", credential: @claude_a)
