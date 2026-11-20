@@ -5,26 +5,34 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has its contract, the Core loop milestone and the Handoff
-milestone: an owner can sign in, add logins, connect a builder and a
-reviewer, and take a task from a form to Done, on the owner's Mac; a run
-that meets a provider limit or a signed-out login continues on the next
-account in the Handoff order, or waits and tells the owner through Needs
-you and a notification; the owner can promote, edit, pause and continue a
-task and pause, resume and change an agent; and the database is backed up
-every day, with a tested restore. That is shown end to end with stand-in
-provider tools; no real provider has run through it yet, and no
-interruption has been shown on a real provider. The repository holds the documentation,
+leverage has its contract and the Core loop, Handoff and Rule checks
+milestones: an owner can sign in, add logins, connect a builder, a
+reviewer, an orchestrator and a planner, and take a task from a form to
+Done, on the owner's Mac; a run that meets a provider limit or a
+signed-out login continues on the next account in the Handoff order, or
+waits and tells the owner through Needs you and a notification; the owner
+can promote, edit, pause and continue a task and pause, resume and change
+an agent; the database is backed up every day, with a tested restore; and
+the seven shipped rules and the owner's own rules gate a task's moves,
+checked in the server or by the orchestrator agent, with Settings, a
+Timing section and a rule checklist in the app. That is shown end to end
+with stand-in provider tools. A real provider has run through the server
+only as an orchestrator checking two contracts, in the maintainer's real
+checks; no real builder, reviewer or planner has, and no interruption has
+been shown on a real provider. The repository holds the documentation,
 the research behind its practices, and the scripts and checks that keep
 them consistent, plus:
 
 - `api/`: a Rails application in API mode, with Minitest tests. It serves
-  the owner's, the agents' and the helper's calls of the Core loop through
-  one transition function (`api/lib/leverage/transitions.rb`), runs a
-  timer sweep (`api/bin/sweep`) and a daily backup (`api/bin/backup`, with
-  `api/bin/restore`); `bin/rails leverage:verify_log` replays a
-  workspace's log against its tables, and `bin/rails
-  leverage:recovery_times` prints each interrupted run's recovery time;
+  the owner's, the agents' and the helper's calls through one transition
+  function (`api/lib/leverage/transitions.rb`), which asks the rules engine
+  (`api/lib/leverage/rules/`), runs a timer sweep (`api/bin/sweep`) and a
+  daily backup (`api/bin/backup`, with `api/bin/restore`); `bin/rails
+  leverage:verify_log` replays a workspace's log against its tables,
+  `bin/rails leverage:recovery_times` prints each interrupted run's
+  recovery time, `bin/rails leverage:rule_timing` each rule's runs and
+  times, and `bin/rails leverage:install_shipped_rules` (run before the
+  server starts) writes the shipped rules of a workspace that has none;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
@@ -36,6 +44,9 @@ them consistent, plus:
   LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
+- `evals/specific-details/`: the eval suite of the rule "Every task needs
+  specific details" (24 made-up cases, the bar, and the results of the
+  maintainer's run on Claude Code, Codex and Antigravity);
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
@@ -43,13 +54,19 @@ them consistent, plus:
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
   with stand-in tools), `e2e_handoff.sh` (six runs interrupted by a limit
-  or a sign-out, with stand-in tools), `restore_drill.sh` (a backup
-  restored into an emptied cluster), `speed_run.sh`, `secret_scan.py`,
-  `generate_swift_contract.py` and `app_compose.py`;
+  or a sign-out, with stand-in tools), `e2e_rule_checks.sh` (seven runs
+  with the rules on and an orchestrator, with stand-in tools),
+  `restore_drill.sh` (a backup restored into an emptied cluster),
+  `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
+  `app_compose.py`, and the maintainer's runs on real tools,
+  `eval_rule.sh` (the eval suite, scored by `eval_score.py`) and
+  `real_rule_check.sh` (one real verdict through the server);
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
   migrations-from-zero check, the import check, the reply-file check, the
-  app bundle, and on Linux the end-to-end runs (`e2e_core_loop.sh`,
-  `e2e_handoff.sh`) and the restore drill on every pull request;
+  app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  `e2e_handoff.sh`, `e2e_rule_checks.sh`) and the restore drill, and the
+  eval suite's checks (`check_evals.py` and the self-tests of the eval
+  scripts), on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract.
 
@@ -182,13 +199,18 @@ python3 -I scripts/test_speed_report.py              # self-test of the speed re
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
 python3 -I scripts/test_real_provider_run.py         # the developer check, with stand-in tools
 python3 -I mac/Tests/StandIns/test_provider_tool.py  # self-test of the stand-in tools
+python3 -I scripts/check_evals.py                    # the eval suite's cases, results and registry list
+python3 -I scripts/test_check_evals.py               # self-test of that check
+python3 -I scripts/test_eval_score.py                # self-test of the eval scorer
+bash scripts/test_eval_rule.sh                       # the eval script's refusals and plumbing, stand-in tools
+bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
 ```
 
 After changing anything under `api/contract/registry.json` or the
 interface schema's enums, run `python3 scripts/generate_swift_contract.py`
 and commit the regenerated `mac/Sources/LeverageKit/Generated/Contract.swift`.
 
-CI also runs the API's tests and RuboCop, the Swift build and tests, the app bundle, and the end-to-end run, listed under "Build, test, and run" below.
+CI also runs the API's tests and RuboCop, the Swift build and tests, the app bundle, and the end-to-end runs, listed under "Build, test, and run" below.
 
 With a base commit and a description file, `check_rules.py` also checks a
 pull request:
@@ -236,6 +258,7 @@ docker compose up -d                                 # run the API, the sweep, t
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
 docker compose exec -T api bin/rails leverage:verify_log  # replay every workspace's log
 docker compose exec -T api bin/rails leverage:recovery_times  # every recovery time
+docker compose exec -T api bin/rails leverage:rule_timing  # each rule's runs and times
 docker compose down                                  # stop; the data is kept
 ```
 
@@ -289,6 +312,7 @@ else):
 ```bash
 scripts/e2e_core_loop.sh                             # the whole loop with stand-in tools
 scripts/e2e_handoff.sh                               # six interrupted runs, one compose project each
+scripts/e2e_rule_checks.sh                           # seven runs with the rules on, one compose project each
 scripts/restore_drill.sh                             # back up, empty the cluster, restore, replay
 scripts/speed_run.sh                                 # 50 seats for 120 s; prints the speed table
 scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, open it, check its server
@@ -318,7 +342,21 @@ LEVERAGE_REAL_PROVIDER=claude scripts/real_provider_run.sh claude   # or codex, 
 
 It sends one build prompt through the runner's tool driver and proves the
 driver's flags only. Its self-test runs in the `e2e` job with stand-in
-tools. How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).
+tools.
+
+The eval suite's run and the real rule checks reach real tools too, and
+are run by the maintainer only, never in CI, each with its switch set by
+hand (`LEVERAGE_EVAL_REAL=1`, `LEVERAGE_REAL_PROVIDER`):
+
+```bash
+LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
+LEVERAGE_REAL_PROVIDER=claude scripts/real_rule_check.sh claude   # or codex, gemini; gemini --through-app
+```
+
+An agent never sets either switch. Against the stand-ins, with
+`LEVERAGE_TOOL_DIR` on a copy of `mac/Tests/StandIns/bin` and the switch
+unset, anyone may run both (`eval_rule.sh` also needs `--out <folder>`).
+How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Documentation style
 

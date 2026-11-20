@@ -10,6 +10,33 @@ once it makes its first release.
 
 ### Added
 
+- Added rule checks: rules with versions in Settings, checks by an
+  orchestrator agent, tasks that wait on a check, letting a check through
+  once, a Timing section and rule checklist on each task, drafting a
+  task's details, and the item that says no agent may review. The PRD's
+  Rule checks milestone: every workspace has the seven shipped rules, on,
+  written at sign-up or, for an existing installation, when the server
+  starts; four of them start acting in a later version. The owner's rules
+  gate a task becoming ready, an agent starting it, its work being
+  submitted and its review passing; a rule leverage checks itself answers
+  at once, and one a model judges is a job for an orchestrator agent,
+  which the helper starts like any other agent, while the task waits and
+  goes on by itself when the check ends. A check that cannot run, an agent
+  turned away by every check, a fourth try and an offline orchestrator
+  each come to Needs you, and the owner can run a check again or let it
+  through once with a reason. The provider rule keeps a reviewer off any
+  provider that built the task, also after a handoff, and "No agent may
+  review this" says when nobody may. The Rules screen in Settings edits,
+  adds, reverts, turns off and removes rules, each change a new wording
+  that earlier checks keep. The task page shows where a task's time went
+  and what each rule said; a planner agent can draft a task's details. An
+  agent's briefing and the reference runner's prompts carry the rules, and
+  a rule's reason reaches a builder only as quoted material. The rule
+  "Every task needs specific details" has its wording and an eval suite of
+  24 cases, which Claude Code, Codex and Antigravity each passed at their
+  default model. The server's request log now keeps no text but ids. The
+  PRD gains the changes S-1 to S-14; the choices are recorded in ADRs 0011
+  to 0013.
 - Added handoff: work continues on the next account when one reaches its
   limit or is signed out, Needs you with notifications, the Handoff tab,
   pausing and editing tasks and agents, and a daily backup. The PRD's

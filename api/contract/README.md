@@ -565,8 +565,10 @@ check result. What it added and changed, each from the milestone 4 plan
   (RD-38).
 - **A registry list**, `lists.orchestrator_tested_providers`: the login
   providers whose tool's default model passed the eval suite (RV-5).
-  It is empty until the suite has been run, and it refuses nothing;
-  `meta/registry.schema.json` lets it be empty.
+  The managing agent's run of the suite set it to `claude`, `codex` and
+  `gemini`; `scripts/check_evals.py` holds it equal to the results that
+  met the bar. It refuses nothing, and `meta/registry.schema.json` lets
+  it be empty.
 - **`needs_you.json`**: the `orchestrator_offline` item opens only while
   a check waits (RD-16); `facts.waiting_checks` is the count now (RD-18);
   `facts.role` keeps `planner`, which is never written (RD-20).

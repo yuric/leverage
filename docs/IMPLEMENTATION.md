@@ -55,14 +55,14 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-20 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1) and the Core loop (milestone 2) |
-| **Next** | The Handoff milestone (milestone 3): built on `feat/handoff` with every check passing on the owner's Mac; its pull request is [#14](https://github.com/yuric/leverage/pull/14). Once merged it is not called done until the owner has set the recovery time ceiling |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2) and Handoff (milestone 3) |
+| **Next** | The Rule checks milestone (milestone 4): built on `feat/rule-checks` with every check passing on the owner's Mac; its pull request: None yet |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 3 handoff | `feat/handoff` | [#14](https://github.com/yuric/leverage/pull/14) | In review |
+| Milestone 4 rule checks | `feat/rule-checks` | None yet | Built; every check of its plan passes on the owner's Mac but the link check, which runs only in CI; not yet pushed; its adversarial review is next |
 
 ## Milestones
 
@@ -76,8 +76,8 @@ the PRD's milestone list. How the build is run locally is in
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
 | 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
-| 3 | Handoff | In review | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Once merged it is not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
-| 4 | Rule checks | Not started | | |
+| 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
+| 4 | Rule checks | In progress | None yet | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 13. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
 | 5 | Questions and approvals | Not started | | |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
 | 7 | Analytics page | Not in this build | | See question 1 |
@@ -562,7 +562,176 @@ following, each fixed with a test that failed first:
 - **The contract README lists the task page's two waiting fields** among
   the milestone's additions.
 
-### The Rule checks milestone: a reliable API suite
+### The Rule checks milestone
+
+The Rule checks milestone's choices where the PRD leaves a gap were made in
+the milestone's plan under the IDs below, which the code, the tests and
+the contract cite ("milestone 4 plan RD-45"). Each line is the choice as
+built. The plan's `[owner-later]` choices (RS-2, RE-2, RD-2, RD-8, RD-12,
+RD-24, RD-25, RD-29, RD-33, RD-45, RD-51, RD-61, RV-2 to RV-7, RM-1) are in
+question 13, not here.
+
+- **Scope.** RS-1: what the PRD's Rule checks paragraph lists, with what
+  earlier milestones left to it: the planner and Draft contract, "No
+  reviewer is eligible", the health line's orchestrator half and a job's
+  limit and sign-out reports; no rule effect that needs a command of the
+  Questions and approvals milestone. RS-3: of milestones 2 and 3 only
+  EN-4, EN-5, SC-11, HE-15, HE-41, IN-33, MA-10, MA-13, MA-15 and, as far
+  as the provider rule refuses a reviewer, CL-3 and CL-4 are taken back.
+- **The engine and the gate**
+  ([ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md)).
+  RE-1: `lib/leverage/rules/` reads, the gate and four writers write.
+  RE-3: a transition settled later updates its requester's `commands` row,
+  marks it for `GET /v1/next`, and writes its events under the requester's
+  key with the settling check's event as cause. RE-4: while a task waits,
+  its holder's, reviewer's or provisional claimant's other commands on it
+  answer `pending`, unless allowed while pending; the owner is never
+  blocked. RE-5: a provisional claim sets the holder with no lease. RE-6:
+  a planner's result runs Complete contract as the planner, and may answer
+  `pending`. RE-7: a refused command commits its check rows. RE-8: a job
+  result writes `cost.reported` for the job, adding to a project's spent
+  only. RE-9: no payload gains a field for a reason, an instruction or a
+  request.
+- **Rule records.** RD-1: all seven shipped rules are written. RD-3: the
+  one-time write counts as turning the rules on (briefings change; "No
+  reviewer is eligible" is evaluated). RD-4: a custom rule's moment is
+  fixed when it is added. RD-5: Revert on a custom rule, Remove on a
+  shipped one and any command on a removed rule are `invalid_state`.
+  RD-6: Save checks every field. RD-7: a new default reaches a workspace
+  only through Revert. RD-23: a custom rule's key is `custom_` and its id.
+  RD-62: one Settings sentence per checker function, also the instruction
+  of an app rule in a briefing.
+- **Gates, claims and re-runs.** RD-9: test 4 covers the four gate hooks a
+  task reaches, each with an app and a model gate, and the provider
+  policy. RD-10: a Complete contract whose gate fails answers `completed`
+  with the contract changed and the task held for details. RD-11: a
+  waiting review's step names the provider rule once it refuses a
+  reviewer. RD-13: a hold on a Ready task, or pausing its claimant, ends a
+  provisional claim with `invalid_state`. RD-14: claim-next first offers a
+  task the seat has an unused override on. RD-42, RD-43: Run it again is
+  for errored checks only; at "before an agent starts it" it closes the
+  hold and queues nothing. RD-44: one job row per attempt. RD-46: the
+  owner's contract change starts the re-run count again. RD-47: "Let it
+  through once" on "Every agent was turned away" lets the named agent
+  through. RD-48: after letting a failed "ready to start" check through,
+  the app sends Complete contract again. RD-49: a failed warn check shows
+  in the checklist only. RD-50: the provider compared is that of the
+  account the review would run on. RD-52: milestone 1's traces are not
+  changed; `add_task` takes a project of the workspace.
+- **When a check cannot run.** RD-15: the 120 seconds of L912 rest on the
+  sweep's 15 seconds and the 10-second poll write; a busy runner polls
+  every 30 seconds. RD-16: the offline item opens only while something
+  waits, also with no orchestrator seat, and resolves only when the
+  orchestrator is back. RD-17: the health read keeps its three values.
+  RD-18: "N checks waiting" is counted at each read. RD-19: only errored
+  checks are queued again. RD-20: no item for an offline planner.
+- **Custom rules and screens.** RD-21: four moments are offered. RD-22:
+  two scopes are offered. RD-26: a rule's row shows its runs, average
+  time, tokens, reported spend and overrides. RD-27: a save that waits
+  closes the sheet, the card says "Checking the details" and a failed
+  check "Needs details". RD-28: the checklist and the Timing section.
+  RM-2: the Rules screen reads again after a `rule.*` event, the task page
+  after any event of its task. RM-3: Add task reads the rules once.
+- **Jobs.** RD-30: everything a checker needs is in the claim's
+  `material`. RD-31: the quote frame and the nonce. RD-32: tokens and spend
+  as the tool reports them. RD-34: `run_due_at`, and the tool ended 10
+  seconds before it. RD-35: one job at a time, oldest first. RD-36: job
+  claim-next skips the jobs of tasks the seat built. RD-37: Draft contract
+  is refused while a draft waits and outside Backlog; the stored work
+  reference, strength and cap are kept whatever a draft says. RD-38,
+  RD-39: a rule's reason reaches a builder only as quoted material. RD-40:
+  a job's run that meets a limit hands off like a task's, and with no
+  candidate the job runs into its timeout. RD-41: a late result is
+  `invalid_state`. These are
+  [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md).
+- **Speed.** RD-59: the check timeouts and the re-run limit keep their
+  defaults. RD-60: app-run checks measured as the time inside the gate
+  ([Measurements](#measurements)).
+- **Eval suite.** RV-1: a suite is a folder
+  ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
+- **Tests.** RT-1: four golden traces, 16 to 19, reviewed line by line by
+  an agent that did not write them. RT-2: tests of milestones 2 and 3 keep
+  a workspace with no rules; the earlier end-to-end classes turn the
+  shipped rules off. RT-3: test 2's walks gain the twenty new commands, a
+  drawn rule set, an orchestrator and a planner. RT-4: test 4 is
+  `gate_test.rb` and one line of the log audit on every log. RT-5: test 3
+  per group and over the whole table of 68 commands. RT-6: the new
+  entries and routes stayed out of earlier walks until built; nothing of
+  that remains. RT-7: the timing queries are tested on the traces' logs.
+  RT-8: the secret scan looks for task text in events and logs. RT-9:
+  `scripts/e2e_rule_checks.sh`, one compose project per test.
+
+The merged contract overruled the milestone's inventory in three places:
+each check attempt is a job of its own, and a re-queue writes
+`job.requeued` on the old job and no `job.queued` (trace 07, DB-31); a
+limit or sign-out report for a job's run has its own rows
+(`report_job_limit`, `report_job_signed_out`); and a hold does not stop a
+job claim (question 7).
+
+Where the build differs from the plan, or settles what it left open:
+
+- **Trace 19 had two Gemini logins**, which the schema refuses (one per
+  workspace); its Gemini reviewer now runs on the one login.
+- **Trace 07's two digests are one.** Its two checks of one request
+  carried two made-up digests, which one function of the inputs cannot
+  give; both are now the real hash of the request.
+- **`hold.opened` names the check** (contract DB-49): the hold of a check
+  that errored, was held at the re-run limit or turned every agent away
+  carries `rule_check_id`, changed in place under DB-48's convention.
+- **The order inside a command has two exceptions**, which the contract's
+  README states: a waiting command ended from outside writes its
+  withdrawals before the row's own event, and Complete contract closes
+  "Needs details" first.
+- **A check's job is queued after its `check.queued`**, by `RuleChecks`,
+  so the events come in the traces' order; the plan had `Jobs.queue`
+  called beside the writer.
+- **The cause of a settled transition** is the settling check's
+  `check.finished`, as trace 07 has it, not the override that let it
+  through.
+- **Claim-next for reviews asks the engine itself** for the provider
+  rule's row, beside the gate, so the plan's "the gate is the only caller"
+  does not hold; test 4 and the audit cover both.
+- **A pass whose gate fails reads `completed`**: the verdict took effect as
+  a failed review.
+- **One waiting command per task.** A second gated command on a task that
+  waits answers `pending`, the owner's second Complete contract included.
+- **A blocking failure takes effect at once**: model checks planned beside
+  it are not written and no job is queued.
+- **A job is claimed only on the seat's first available account**, as
+  builders and reviewers claim (HD-4), and a job past its due time is
+  never handed out.
+- **A job's check run passes the seat's model and effort when set**; with
+  none set its arguments are the answering check's. No tool run starts
+  with less than 15 seconds before its end, and each tool run of a job
+  gets a new folder of its own.
+- **A waiting claim, submit or pass is asked for by its key every second**
+  until it is decided; the plan had a long poll, which `get_command` does
+  not take.
+- **The reference runner gives its tool the briefing's rules**, quoted,
+  in the builder's, reviewer's and rework prompts; without it a builder
+  learnt a custom rule only when its submit was refused.
+- **The server's request log keeps no text but ids**: every other string
+  parameter is `[FILTERED]`, found by the end-to-end run's scan for task
+  text.
+- **The offline item names the workspace** as what it is about, as the
+  interface schema requires; it was empty and the app could not read the
+  Needs you list while it was open.
+- **A verdict's spend adds to the task's project**, found by replaying the
+  traces against the PRD's Cost text.
+- **`LeverageRunner eval` finds its tool itself**, in the catalog's folders
+  (only `LEVERAGE_TOOL_DIR` on the stand-ins), and prints it with
+  `--resolve-only` before any case goes out. `runs.json` reserves 30 tool
+  runs before a model's run and settles the count after it, so a crashed
+  run still counts, and keeps the reason for each change between runs.
+- **Two eval cases changed in review**: case 08's details now state the
+  three facts its criterion checks, and a made-up shop name that turned out
+  to be a real seller's was replaced. No label changed.
+- **The generator's self-test** asks a doctored registry what an empty
+  provider list gives, since the committed list now holds the eval's
+  results.
+- **Each package committed its own work** by explicit path, the red tests
+  first; most worked in a worktree of their own and brought their commits
+  onto the branch themselves.
 
 The API suite failed now and then on the owner's Mac. Each cause was fixed
 with a test that failed first:
@@ -600,6 +769,68 @@ with a test that failed first:
   records the miss within 15 seconds at the due time, and claim-next's
   state row writes no `job.timed_out`. No requirement or audit rule needs
   the miss sooner.
+
+## What the Rule checks milestone proves, and how far
+
+- **The rules work end to end with stand-in tools.**
+  `scripts/e2e_rule_checks.sh` runs seven tests, each in a compose project
+  of its own with the real API, sweep, backup, helper and runner, the
+  shipped rules on and an orchestrator among the agents, the stand-in
+  tools answering every check: a task from the form to Done; a vague task
+  sent back for details and then passed; a custom rule that blocks a
+  submit until the builder's rework passes; a fourth try that waits until
+  the owner lets it through; the orchestrator stopped, its item opened
+  within 120 seconds by the server's clock, and the checks going on when
+  it starts again; the provider rule keeping a reviewer on the builder's
+  provider away until a reviewer on another provider is connected; and a
+  drafted contract. After each the replay, the step partition and the
+  audit with its gate line pass, and no event and no log holds the test's
+  task text or a nonce-shaped marker. It passed three times in a row on
+  the owner's Mac, and again on the milestone's last commit, as did
+  milestones 2 and 3's runs with the shipped rules turned off.
+- **Model checks on real tools ran only outside the product's normal
+  path.** No draft, no builder and no reviewer has run on a real provider
+  through this milestone. Real verdicts came from the eval suite's tool
+  runs and from the real checks through the server: an orchestrator on
+  Claude Code, Codex and Antigravity each checked two contracts, and only
+  Antigravity's ran as a seat the helper started
+  ([Measurements](#measurements)).
+- **The eval suite's reach is narrow.** It ran each tool's default model
+  at the version on the owner's Mac, on 24 made-up cases labelled by an
+  agent, one run each. All three models scored 24 of 24, so the suite does
+  not tell them apart and says nothing about harder cases. It does not
+  cover Grok, an instruction the owner edits, a model the owner chooses
+  for an orchestrator, the model set on a credential a check is handed to,
+  or another provider reached by handoff, and nothing stops any of them
+  (RV-5, RD-40).
+- **What a checker could reach if task text got past the frame**: nothing
+  on Claude; any file the Mac user can read on Codex, whose sandbox stops
+  only writing; unknown on Gemini and Grok (RD-33, the table in
+  [ARCHITECTURE.md](ARCHITECTURE.md#trust-boundaries)). The eval's file
+  case is one probe of it, not a proof.
+- **With the reference runner** a review the provider rule keeps from a
+  reviewer writes no `applied` row and its wait names no cause, because
+  the runner asks `GET /v1/next` before it claims; "No reviewer is
+  eligible" still opens. The row and the cause are proven for a client
+  that calls claim-next, in trace 19 and over HTTP (RD-12).
+- **With the provider rule off**, a review that waits only because every
+  reviewer's accounts are unavailable still has no item (RD-51).
+- **Four shipped rules exist and do nothing yet** (RD-8).
+- **L913's "on the seat's next request"** for a failed check let through
+  is proven in the server and in the runner's tests, not end to end; end
+  to end, the owner's override completes the submit that waits at the
+  re-run limit.
+- **The 120 seconds of L912** rest on the sweep's 15 seconds and on an
+  orchestrator that keeps polling while it works: the reference runner
+  does, an agent that connects on its own is only told to by its role
+  file (RD-15).
+- **Test 4** covers the four gate hooks a task reaches and one policy; the
+  rest are the Questions and approvals milestone's.
+- **A first run with the shipped rules on needs three agents on two
+  providers** (RS-2).
+- **A job's limit or sign-out** is proven in the server, the runner and
+  the helper's tests and in trace 19, not in an end-to-end run.
+- **The API still has no security scanner** (question 6).
 
 ## What the Handoff milestone proves, and how far
 
@@ -812,6 +1043,82 @@ the work waited and the time ends at the continuing agent's first event.
   time is recorded and read from the log, not how long the owner will
   wait.
 
+### The eval suite of "Every task needs specific details"
+
+No supported model missed the bar. The managing agent ran
+`LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh
+specific-details` once, on 2026-11-20, after the script's self-tests and
+its run against the stand-ins (in which the stand-ins, which pass every
+check, missed the bar, as they should). The sign-in checks showed Claude
+Code and Codex (its default account) signed in; Grok's tool is not signed
+in on the owner's Mac, so it was not run. Each tool ran at its default
+model ("the tool's default": none names its model in a check's answer),
+on the sign-in it holds, with no second Codex account. One run per model,
+exit 0, 72 tool runs and no second try; the bar is at least 21 of 24
+correct, at most 1 wrongly passed, no instructed pass and no leak
+([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
+
+| Provider | Tool and version | Model | Date | Correct | Wrongly passed | Wrongly failed | No verdict | Instructed passes | Leaks | Tool runs | Met the bar |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| claude | Claude Code 2.1.325 | The tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | 24 | Yes |
+| codex | Codex CLI 0.169.0 | The tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | 24 | Yes |
+| gemini | Antigravity (`agy`) 1.5.13 | The tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | 24 | Yes |
+
+- **The instruction was not changed**: every model met the bar on the
+  first run, so the wording run is the wording shipped. 72 of the 270 tool
+  runs the suite may use are spent. The registry's
+  `orchestrator_tested_providers` names `claude`, `codex` and `gemini`.
+- **What it does not show.** All three scored 24 of 24, so the suite does
+  not tell them apart, and it says nothing about cases harder than these
+  24. It is the bar the plan set, met; it is not a measure of how well a
+  checker does on an owner's real tasks.
+
+The real checks through the server (`scripts/real_rule_check.sh`, two
+contracts per run, one specific and one vague), also by the managing
+agent on 2026-11-20. Each counted as passed only after the replay and the
+secret scan:
+
+| Check | Run | Result | Time |
+| --- | --- | --- | --- |
+| Claude, runner on its own | 1 | Failed: the specific task was not Ready within 300 s | 330 s |
+| Codex, runner on its own | 1 | Passed (test 13.9 s) | 40 s |
+| Gemini (`agy`), runner on its own | 1 | Passed (test 28.3 s) | 54 s |
+| Gemini through the app (the helper starts the orchestrator on a Gemini login added through Add credential) | 1 | Passed (test 34.2 s) | 60 s |
+| Claude, runner on its own | 2 | Passed (test 11.3 s) | 39 s |
+
+Claude's first run failed in the test, not the product: the test built
+the runner's environment by hand without `USER`, with which alone Claude
+Code finds its sign-in, so the tool answered "Not logged in", the runner
+stopped as for a signed-out tool, and both jobs ran into their timeout as
+designed. The helper hands `USER` to every runner. The test now passes it,
+and the second run passed. 10 of the 16 tool runs the real checks may use
+were spent, so the milestone made 82 real tool runs of its ceiling of 286.
+
+### The time app-run checks add
+
+Measured by `scripts/speed_run.sh` on the owner's Mac (Mac15,14, Apple M3
+Ultra) on 2026-11-20 at 17:35 UTC, on commit e362342: 50 seats for 120
+seconds, each ticking every 2 seconds spread evenly, the shipped rules on
+and "specific details" off, so every gated command passes the gate with
+app-run rules only; `RAILS_MAX_THREADS` 64, a pool of 32; 3775 commands.
+Milliseconds.
+
+| Group | n | Gate p50 | Gate p95 | Gate p99 | Event and step writes p95 | Whole transition p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| All commands | 3775 | 0.002 | 1.110 | 2.147 | 3.917 | 26.702 |
+| Commands that wrote events | 2100 | 0.002 | 1.546 | 2.556 | 4.557 | 30.295 |
+
+- **The PRD's figure.** App-run checks added 1.1 ms at the 95th
+  percentile, within the 50 ms target, which stays; the PRD's Speed row
+  says so (S-13). The gates with real work are claim (p95 0.908 ms),
+  claim_review (2.477), pass_review (2.080) and submit (2.075).
+- **Event and step writes stay within 20 ms** (4.557 ms at the 95th
+  percentile for the commands that wrote events; milestone 2 measured 3.7
+  to 4.7 ms).
+- **Not traced**, as in milestone 2: the tails of the lock wait and the
+  whole transition at the 99th percentile (81 ms and 108 ms over all
+  commands; submit's whole transition 310 ms).
+
 ## Installed for the build
 
 Nothing was installed on the owner's Mac. Every Ruby command ran in a
@@ -830,10 +1137,10 @@ build 17F113, Swift 6.3.3).
 | `hana` gem | 1.3.7 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (JSON Pointer) |
 | `simpleidn` gem | 0.3.0 (MIT) | RubyGems, inside the API image | Needed by `json_schemer` (internationalized host names) |
 | `bcrypt` gem | 3.1.22 (MIT) | RubyGems, inside the API image | The owner's password (`has_secure_password`), from the Core loop milestone |
-| `leverage-api` images | `m2`, `m2-rc`, `m3`, `m3-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestones' tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
+| `leverage-api` images | `m2`, `m2-rc`, `m3`, `m3-rc`, `m4`, `m4-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestones' tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
 | `swift` image | `6.4.2-noble` (by digest, the one milestone 2 recorded) | Docker Hub official image | Building and running the `e2e` lane on Linux on the Mac; no file refers to it |
 
-The Core loop and Handoff milestones installed nothing on the Mac. `lychee`, the link
+The Core loop, Handoff and Rule checks milestones installed nothing on the Mac. `lychee`, the link
 check, is not installed on the Mac, so it runs only in CI.
 
 The direct gems, their licenses and why each is needed are listed in the
@@ -937,7 +1244,14 @@ skeleton's pull request description, as rule AR-004 asks.
    - **RC-17**: a cancelled pending transition answers `refused` with
      `lease_expired`, `task_cancelled` or `invalid_state`, and shows as
      `command` in `GET /v1/next`. Alternative: a separate `cancelled`
-     outcome.
+     outcome. As built in the Rule checks milestone: `task_cancelled` when
+     the owner cancels the task; `lease_expired` when the builder's lease
+     ends under a waiting submit or the review lease under a waiting pass;
+     `invalid_state` for every other ending: the owner edits the contract
+     or an input changed by re-entry, the builder releases (a waiting
+     submit or a provisional claim), the reviewer releases, the reviewer's
+     run stops or its account has no candidate left, the seat is removed
+     or disabled, and a hold or a pause ends a provisional claim.
    - **RC-51**: the gating interface is `Leverage::Gating` with the four
      reads other parts need (briefing rules, providers that built a task,
      whether a provider is allowed, the claim-next filter). Alternative:
@@ -1358,6 +1672,198 @@ skeleton's pull request description, as rule AR-004 asks.
       agent loses its task when its time on it runs out; the API still has
       no security scanner (question 6).
 
+13. **The choices made for the owner in the Rule checks milestone.** The
+    owner's standing instruction for this run is to decide, record and
+    continue, so each was taken and the milestone was built on it. Each
+    line says what was chosen and the alternative. The plan's IDs are
+    listed under [The Rule checks milestone](#the-rule-checks-milestone).
+    - **PRD changes S-1 to S-14**, written into the PRD in this milestone:
+      - **S-1**: a Lifecycle row "Write the shipped rules" (from None,
+        Unchanged, by the app, `rule.created`), the command the server
+        runs when it starts for a workspace that has none. Alternative: a
+        workspace timer on the first sweep, which leaves up to 15 seconds
+        with no rules.
+      - **S-2**: a sentence saying when a task has specific details, after
+        the Shipped rules table. Alternative: leave the meaning to the
+        instruction alone.
+      - **S-3**: the suite's 24 cases, its bar, the supported models named
+        before it ran, and an orchestrator on any login and model with the
+        roster saying what the suite did not cover. Alternative: call
+        supported whichever models pass.
+      - **S-4**: a checker's reason of at most 500 characters; task text,
+        the contract included, reaches the checker in marked quotations and
+        its verdict is read only from marked lines; a reason reaches a
+        builder as quoted material. Alternative: "a short reason" with no
+        bound, and the contract outside the quotations.
+      - **S-5**: the re-run count is kept per rule, hook, round and subject
+        and starts again when the owner changes the contract; the fourth
+        run's command waits under `rerun_limit`, which an override
+        completes and turning the rule off or a cancel ends; the owner may
+        override a check held there. Alternative: refuse the fourth command
+        and override the last failed check, which matches no later
+        request.
+      - **S-6**: the offline item opens only while a check waits; a seat
+        keeps polling while it works on a job; on return only errored
+        checks are queued again, as new attempts. Alternative: the item
+        whenever the orchestrator is offline, and every waiting check
+        queued again.
+      - **S-7**: a pending transition keeps, while pending, the request it
+        will complete with. Alternative: write the contract's rows at once
+        with no event.
+      - **S-8**: a job result after its timeout is refused
+        `invalid_state`. Alternative: discard it with another answer.
+      - **S-9**: the provider compared is that of the account the review
+        would run on, and "No reviewer is eligible" also opens while the
+        only reviewers the rule allows wait for an account. Alternative:
+        the seat's own provider, and no item for a wait on accounts.
+      - **S-10**: four shipped rules start acting in the Questions and
+        approvals milestone, with the moment "before anything goes out" and
+        the scopes by project and by action, and until then a failure
+        routed to the orchestrator is delivered as one routed to the owner.
+        Alternative: build their effects now, with commands of that
+        milestone.
+      - **S-11**: how often a rule ran counts its checks that applied, its
+        average time is queue plus run per attempt, and its row shows its
+        overrides. Alternative: count every check row.
+      - **S-12**: four more golden traces for the Rule checks milestone.
+        Alternative: replace four of the earlier ones.
+      - **S-13**: the Speed row's "a guess until it is measured" became the
+        measured 1.1 ms; 50 ms stays. Alternative: none; the plan said to
+        measure it.
+      - **S-14**: for a move to Ready the requester is the owner or a
+        planner, and the Mac app sends Complete contract again after the
+        owner lets a failed check through. Alternative: complete the move
+        on the override alone, which L382 does not allow.
+    - **The plan's choices for the owner:**
+      - **RS-2**: the rules ship on, "Every task needs specific details"
+        among them, so every new task waits for the orchestrator and a
+        first run needs three agents on two providers. Alternative: ship
+        that rule off, against L435 and L440.
+      - **RE-2**: a waiting command's request is kept in
+        `pending_transitions.params`, task text that Delete content must
+        blank. Alternative: write the contract's rows at once with no
+        event, which replay would report.
+      - **RD-2**: the shipped rules of an existing workspace are written by
+        a command the server runs before it starts. Alternative: a
+        workspace timer on the first sweep.
+      - **RD-8**: the four rules whose effects are the next milestone's are
+        created on and do nothing, shown in Settings as starting in a later
+        version. Alternative: create them off, or write only three now.
+      - **RD-12**: `GET /v1/next` never offers a review the provider rule
+        keeps from the seat, so the reference runner's wait names no cause
+        and writes no `applied` row; the item still opens. Alternative:
+        offer the review once so the claim writes the row, against L529.
+      - **RD-24**: a rule's route `orchestrator` is accepted and behaves as
+        `owner` until the next milestone. Alternative: refuse it with `422`
+        until then.
+      - **RD-25**: Settings is the last item of the left pane and shows
+        Rules only. Alternative: the app menu's Settings window.
+      - **RD-29**: the engine's words are said on screen as "Let it through
+        once", "wording of" a date, "When it runs" and "being checked".
+        Alternative: the PRD table's words, "Override" among them.
+      - **RD-33**: a checker runs each tool's check mode in an empty
+        folder; on Codex it can still read the Mac user's files, and on
+        Gemini and Grok its reach is not observed. Alternative: refuse
+        Codex, Gemini and Grok as orchestrators until each has a mode with
+        no tools.
+      - **RD-45**: the fourth try waits under `rerun_limit` and the owner's
+        override of a check that never ran completes it. Alternative:
+        refuse the command and override the last failed check.
+      - **RD-51**: "No reviewer is eligible" opens while the provider rule
+        is on and no reviewer may review now, a wait for accounts included;
+        with the rule off, a wait for accounts has no item. Alternative:
+        "Account signed out" with no hold, a contract change.
+      - **RD-61**: the orchestrator's and the planner's role files are
+        short texts written in this milestone, for the owner to read.
+        Alternative: the owner writes them.
+      - **RV-2**: the shipped instruction's wording of "specific details".
+        Alternative: another wording of S-2.
+      - **RV-3**: 24 made-up cases, 12 to pass and 12 to fail, four
+        telling the checker what to do, one run each. Alternative: more
+        cases or several runs per case.
+      - **RV-4**: the supported models are the three login tools' default
+        models, fixed before the run; Grok is not among them because its
+        tool is not signed in here. Alternative: call supported whichever
+        pass.
+      - **RV-5**: the bar is 21 of 24 correct, at most 1 wrongly passed,
+        no instructed pass and no leak; the results refuse no orchestrator
+        and the app says which were not tested. Alternative: one accuracy
+        figure, or refuse an untested orchestrator.
+      - **RV-6**: the maintainer alone runs the suite on real tools, at
+        most three runs and 90 tool runs per model and 270 in all.
+        Alternative: a higher ceiling, or runs in CI.
+      - **RV-7**: the suite covers the shipped wording only; the cases were
+        labelled by one agent and read by another. Alternative: a suite for
+        an edited instruction too.
+      - **RM-1**: the words of the screens, among them the five items'
+        titles and "Not tested for checking tasks.". Alternative: the
+        mockup's or the PRD's words where they differ.
+    - **Contract additions that are not provisional**, each in
+      [the contract's README](../api/contract/README.md): the command
+      `install_shipped_rules` and its Lifecycle row; `create_owner`'s row,
+      which now writes `rule.created`; the two guards of `rerun_check`;
+      the side events of the rows that end a waiting command from outside,
+      and `rerun_limit` closing when its rule is turned off;
+      `timers.json`'s `review_lease_expiry`; `wait_review`'s new opener;
+      the job shapes' `material` and `run_due_at`; the 500-character
+      reason; the registry list `orchestrator_tested_providers`;
+      `pending_transitions.params`; and `hold.opened`'s `rule_check_id`
+      (DB-49). Not changed: RC-17's three codes, the health read's three
+      orchestrator values, `SaveRuleRequest.route`'s three values, and the
+      requests that connect and change a seat. Alternative for each:
+      leave the contract as milestone 1 wrote it, which no trace of this
+      milestone fits.
+    - **Questions found while building:**
+      - Should an orchestrator be limited to the providers and models the
+        eval suite covered? *Chosen meanwhile:* nothing is limited, and the
+        app says which are not covered (RV-5). A limit is a PRD change and
+        must say what a job's handoff to an uncovered account does (RD-40).
+      - The check held at the re-run limit that the owner lets through
+        writes only `check.overridden`, never `check.finished`, against
+        L369 ("every rule check row ... writes a `check.finished`").
+        *Chosen meanwhile:* as the contract allows; L369 could say what
+        holds for a check that never ran.
+      - L162 says "Needs details" closes at the next
+        `task.contract_changed`; L176 says Complete contract "first
+        closes" it, and a Complete contract that waits closes it with no
+        such event. *Chosen meanwhile:* L176's reading; L162 could add "or
+        when Complete contract is sent".
+      - A waiting pass that is cancelled reports no cost, though its
+        tokens were spent (L513). *Chosen meanwhile:* the stored verdict is
+        performed whole or not at all. Alternative: write its
+        `cost.reported` at once.
+      - With two claim rules, one check that fails while the other still
+        runs keeps the claim waiting until the other ends. *Chosen
+        meanwhile:* the engine and replay agree on that. Alternative: the
+        failure ends the claim at once and withdraws the other check,
+        which L393 may intend and which needs a contract change.
+      - L828 still says waiting checks "queue again on their own" when the
+        orchestrator returns, where S-6 now says only errored ones are
+        queued again and queued ones stay. *Chosen meanwhile:* L828 is
+        left as it is.
+      - "Draft the details" is offered on a Backlog task whether or not a
+        planner is connected; a draft nobody writes times out twice and
+        says so (RD-37). Alternative: a task-page field that hides it with
+        no planner.
+    - **Where the mockup and what is built differ**, for the owner of the
+      design reference: there is no design for Settings, the Timing
+      section, the rule checklist or the Connect sheet's two new roles;
+      the roster names an orchestrator's role and says no sentence of
+      what it does, since the mockup's ("Answers agents' questions and
+      asks you when it cannot.") is the next milestone's behaviour; the
+      plan's "Checks tasks against your rules." was not built. The mockup
+      is not edited.
+    - **Also for the owner to know:** after the upgrade a builder and a
+      reviewer on one provider no longer review each other's work until a
+      second provider is connected or the provider rule is turned off
+      (EN-4, RD-51); the offline item can read "0 waiting" until the
+      orchestrator is back (RD-16); a planner that is not running leaves
+      no item (RD-20); an agent that connects on its own and checks tasks
+      must keep polling while it works, or it shows as offline (RD-15);
+      the timeouts and the re-run limit cannot be changed until the next
+      milestone (RD-59); the milestone made 82 real tool runs of its
+      ceiling of 286; the API still has no security scanner (question 6).
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -1381,7 +1887,15 @@ run is also listed here until the owner has read it.
 | [ADR 0008](adr/0008-how-a-run-moves-to-another-account.md) | Added in the delegated run: how a run moves to another account. The owner has not read it |
 | [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md) | Added in the delegated run: the detectors and the recorded and made replies. The owner has not read it |
 | [ADR 0010](adr/0010-daily-backup-and-restore.md) | Added in the delegated run: the daily backup and the restore. The owner has not read it |
-| The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login and a reviewer on another; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
+| Pull request 14 | Handoff (milestone 3), merged in the delegated run after an adversarial review; its AI-assistance boxes are unticked |
+| [ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md) | Added in the delegated run: the rules engine reads, the gate and four writers write, and a waiting command is stored whole. The owner has not read it |
+| [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md) | Added in the delegated run: how task text reaches a checker, and what a checker on each provider can reach. The owner has not read it |
+| [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) | Added in the delegated run: eval suites, their bar, their ceilings, and that their results refuse nothing. The owner has not read it |
+| The eval suite of "Every task needs specific details" | The 24 cases and their labels, the instruction's wording, the bar and the list of supported models (RV-2 to RV-5), all chosen by agents. No supported model missed the bar: Claude Code, Codex and Antigravity each scored 24 of 24 at their default model ([Measurements](#measurements)) |
+| The orchestrator's and the planner's role files | `api/config/role_files/orchestrator.md` and `planner.md`, written in the delegated run (RD-61) |
+| A first run with the rules on | On real logins with an orchestrator connected: three agents on two providers, a task that waits for its check and goes on, and one the check sends back for details. No real builder, reviewer or planner has run through this milestone; real model checks ran only in the eval and in the real checks through the server |
+| Grok as an orchestrator | It can be connected now and is shown as not tested. To cover it, sign in to Grok and run `LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 LEVERAGE_EVAL_PROVIDERS=grok scripts/eval_rule.sh specific-details`; if it meets the bar, add `grok` to `bar.json`'s supported models, to `SUPPORTED` in `scripts/check_evals.py` (and the PRD's sentence naming the supported models) and to the registry list |
+| The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login, a reviewer on a login of another provider and an orchestrator, since the shipped rules are on; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
 | The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are in pull request 13: Claude, Codex and Gemini passed; Grok is installed and not signed in, so its run waits for the owner |
 | The three interrupted forms on real logins | A real limit cannot be caused on request, so the first one a real run meets is also the first test of a detector against a real reply. When it happens, the tool's reply is to be captured, scrubbed and committed as a recorded reply file. Until then PRD test 9 and the release line on recorded limit replies are not met as written, and a real limit will most likely stop the agent with no handoff |
 | A sign-out on a real login | Sign one account out in its provider's own tool while an agent works on it, and follow the notification. The reply of a login that expires during a run is to be captured the same way; the recorded ones are of a tool that never held a login |
