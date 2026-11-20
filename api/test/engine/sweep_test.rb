@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "entries/job_timers_support"
 
 # The sweep (PRD L118, L404, L822; timers.json trigger; milestone 2 plan
 # WP5, EN-22): it applies due task timers to tasks no command has touched,
@@ -11,6 +12,12 @@ require "test_helper"
 # the workspace timer seat_run_placement once on every run. Their entries
 # are WP3's and WP5's; the tests here stand in for them with entries of
 # their own, called the way the sweep calls the real ones.
+#
+# Milestone 4 (its plan, WP7): the sweep also applies the check and draft
+# timers to jobs no command has touched, and fires the two workspace timers
+# of milestone 4, orchestrator_offline and reviewer_eligibility (WP9's
+# entry), on every run through Timers.apply_workspace, so a run fires three
+# workspace timers, four when it purges.
 module SweepTestEntries
   # Closes a due credential hold, as WP3's credential_hold_release does
   # when the sweep runs it with params limit.
@@ -69,7 +76,8 @@ class SweepTest < ActiveSupport::TestCase
 
     run = runs.sole
     assert_equal 2, run.tasks_touched
-    assert_equal 1, run.workspace_timers_fired, "seat_run_placement only: no purge was asked for (HD-4)"
+    assert_equal 3, run.workspace_timers_fired,
+      "seat_run_placement, orchestrator_offline and reviewer_eligibility: no purge was asked for (HD-4)"
     assert_operator run.ran_at, :>=, due
   end
 
@@ -79,8 +87,8 @@ class SweepTest < ActiveSupport::TestCase
 
     S.sweep_workspace(@scenario.workspace_id)
 
-    assert_equal [ 0, 1 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ],
-      "seat_run_placement runs on every sweep (HD-4)"
+    assert_equal [ 0, 3 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ],
+      "seat_run_placement (HD-4), orchestrator_offline and reviewer_eligibility run on every sweep"
     assert_equal seq, Workspace.find(@scenario.workspace_id).last_seq
   end
 
@@ -116,7 +124,8 @@ class SweepTest < ActiveSupport::TestCase
 
     refute Command.exists?(old.id)
     refute SweepRun.exists?(old_run.id)
-    assert_equal 2, runs.sole.workspace_timers_fired, "command_key_retention and seat_run_placement"
+    assert_equal 4, runs.sole.workspace_timers_fired,
+      "command_key_retention, seat_run_placement, orchestrator_offline and reviewer_eligibility"
   end
 
   test "pass sweeps every workspace and says how many" do
@@ -265,6 +274,70 @@ class SweepTest < ActiveSupport::TestCase
 
     assert_equal 2, E::Placement::RUNS[@scenario.workspace_id]
     assert_equal 1, E::Placement::RUNS[other.workspace_id]
-    assert_equal [ 1, 1 ], runs.map(&:workspace_timers_fired)
+    assert_equal [ 3, 3 ], runs.map(&:workspace_timers_fired)
   end
+
+  # --- Milestone 4 ---------------------------------------------------------
+
+  include JobTimersSupport
+
+  def scenario = @scenario
+
+  test "it fires orchestrator_offline and reviewer_eligibility on every run, through Timers.apply_workspace" do
+    started = @scenario.database_now
+
+    calls = spy_on(Leverage::Timers, :apply_workspace) { S.sweep_workspace(@scenario.workspace_id) }
+
+    assert_equal [ [ @scenario.workspace_id, "orchestrator_offline" ], [ @scenario.workspace_id, "reviewer_eligibility" ] ],
+      calls.map(&:arguments)
+    calls.each do |call|
+      assert_operator call.keywords.fetch(:at), :>=, started
+      assert_operator call.keywords.fetch(:at), :<=, runs.sole.ran_at
+    end
+  end
+
+  test "an offline orchestrator's item opens in the run that finds a check waiting" do
+    orchestrator_polled(600)
+    pending_check
+
+    with_writers { S.sweep_workspace(@scenario.workspace_id) }
+
+    assert InboxItem.exists?(workspace_id: @scenario.workspace_id, kind: "orchestrator_offline", state: "open")
+  end
+
+  test "it times out an untouched check and an untouched draft at their due times and counts their tasks" do
+    _task, check, = pending_check
+    check_due = make_queue_due(check)
+    draft = @scenario.job(kind: "contract_draft", task: @scenario.task(state: "backlog"), state: "claimed",
+      seat: @scenario.planner)
+    draft_due = make_job_due(draft, :run)
+
+    with_writers { S.sweep_workspace(@scenario.workspace_id) }
+
+    timed_out = Event.where(workspace_id: @scenario.workspace_id, type: "job.timed_out").order(:seq)
+    assert_equal [ [ job_of_attempt(check, 1), check_due.to_f ], [ draft.id, draft_due.to_f ] ],
+      timed_out.map { |event| [ event.subject_id, event.effective_at.to_f ] }
+    assert_equal 2, runs.sole.tasks_touched
+  end
+
+  test "a check due before its task's lease times out first; one due after it waits for the lease to end" do
+    early_task, early, = pending_check(task_state: "working", command: "submit")
+    make_queue_due(early)
+    @scenario.make_due(early_task)
+    late_task, late, = pending_check(task_state: "working", command: "submit")
+    @scenario.make_due(late_task)
+    make_queue_due(late)
+
+    with_writers { S.sweep_workspace(@scenario.workspace_id) }
+
+    order = ->(task) { Event.where(task_id: task.id, type: %w[job.timed_out task.lease_expired]).order(:seq).map(&:type) }
+    assert_equal %w[job.timed_out task.lease_expired], order.call(early_task)
+    assert_equal %w[task.lease_expired job.timed_out], order.call(late_task)
+    [ early_task, late_task ].each do |task|
+      times = Event.where(task_id: task.id).order(:seq).map(&:effective_at)
+      assert_equal times.sort, times, "effective times never go backwards within a task (L120)"
+    end
+  end
+
+  def job_of_attempt(check, number) = RuleCheckAttempt.find_by!(rule_check_id: check.id, attempt_number: number).job_id
 end

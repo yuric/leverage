@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "entries/job_timers_support"
 
 # Timers run first (PRD L118-L120, test 7 at L842, L913; milestone 2 plan
 # EN-14, EN-16, EN-17, EN-18): before a command, every timer already due on
@@ -483,4 +484,165 @@ class CredentialHoldTimerTest < CommittingTestCase
       assert_empty written, command
     end
   end
+end
+
+# Test 7 for the check and draft timers (PRD L118, L398, L399; milestone 4
+# plan WP7): with no sweep, the timers due on a task are applied before any
+# command on it, at their due times, by the app, with no key and seq before
+# the command's own events, so a job past its due time is timed out before
+# the command is looked at. That a late result is then refused is WP6's
+# case (submit_job_result), and the two together are WP12's: here the
+# command is a stand-in that refuses a result for a job that is no longer
+# claimed, and the writers are JobTimersSupport's stand-ins.
+class JobTimersDueTest < CommittingTestCase
+  include JobTimersSupport
+
+  E = TimerTestEntries
+
+  # A job result: path id is the job. Refused invalid_state for a job that
+  # is no longer claimed (RD-41).
+  class ResultCall < Leverage::Transitions::Entry
+    def load(ctx)
+      @job = Job.find_by!(id: ctx.request.params.fetch("id"), workspace_id: ctx.workspace.id)
+    end
+
+    def refusals(_ctx) = @job.reload.state == "claimed" ? [] : [ "invalid_state" ]
+
+    def perform(_ctx) = @result = {}
+  end
+
+  def seat_request(command, seat, key, params = {})
+    T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id, key: key,
+      request_hash: "hash-#{key}", params: params)
+  end
+
+  def owner_request(command, key, params = {})
+    T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: key, request_hash: "hash-#{key}", params: params)
+  end
+
+  def apply(request, entry)
+    T::Table.with_entries(request.command => entry) { T.apply(request) }
+  end
+
+  test "test 7: a result sent after the run's due time finds its job timed out at the due time, and the miss commits" do
+    orchestrator = orchestrator_polled(5)
+    _task, check, = pending_check(started: true, checker: orchestrator)
+    job = job_of(check)
+    due = make_run_due(check)
+    before = last_seq
+
+    outcome = nil
+    with_writers { outcome = apply(seat_request("submit_job_result", orchestrator, "late-result", { "id" => job.id }), ResultCall) }
+
+    assert_equal "invalid_state", outcome.refusal&.code
+    events = events_after(before)
+    assert_equal %w[job.timed_out job.requeued check.queued], events.map(&:type)
+    assert_by_app_at events, due
+    assert_equal before + 1, events.first.seq
+    assert_operator events.first.at, :>, due
+    assert_equal "refused", Command.find_by!(caller_id: orchestrator.id, key: "late-result").outcome
+  end
+
+  test "a call that names no job applies the timers of the job the calling seat holds" do
+    orchestrator = orchestrator_polled(5)
+    _task, check, = pending_check(started: true, checker: orchestrator)
+    due = make_run_due(check)
+    before = last_seq
+
+    with_writers { apply(seat_request("claim_job", orchestrator, "claim-next"), E::Untargeted) }
+
+    assert_by_app_at events_after(before), due
+    assert_equal "timed_out", Job.find(job_of_attempt(check, 1)).state
+  end
+
+  test "the owner's command on a check applies its task's due timers first" do
+    _task, check, = pending_check
+    due = make_queue_due(check)
+    before = last_seq
+
+    with_writers { apply(owner_request("override_check", "override-1", { "id" => check.id }), E::Untargeted) }
+
+    assert_equal %w[job.timed_out job.requeued check.queued], events_after(before).map(&:type)
+    assert_by_app_at events_after(before), due
+  end
+
+  test "a command on a task applies its draft's due timer first" do
+    task = scenario.task(state: "backlog")
+    job = scenario.job(kind: "contract_draft", task: task)
+    due = make_job_due(job, :queue)
+    before = last_seq
+
+    with_writers { apply(owner_request("draft_contract", "draft-1", { "id" => task.id }), E::Untargeted) }
+
+    assert_equal %w[job.timed_out job.requeued], events_after(before).map(&:type)
+    assert_by_app_at events_after(before), due
+  end
+
+  test "a job not yet due is left alone, and so is another task's" do
+    _task, check, = pending_check
+    _other, due_check, = pending_check
+    make_queue_due(due_check)
+    before = last_seq
+
+    calls = with_writers { apply(owner_request("override_check", "override-2", { "id" => check.id }), E::Untargeted) }
+
+    assert_empty calls
+    assert_equal before, last_seq
+  end
+
+  # Effective times never go backwards within a task (L120): the timers due
+  # on one task run in the order of their due times.
+  test "a check that was due before its task's lease times out first" do
+    task, check, = pending_check(task_state: "working", command: "submit")
+    job_due = make_queue_due(check)
+    lease_due = scenario.make_due(task).lease_due_at
+    before = last_seq
+
+    with_writers { apply(owner_request("hold", "hold-1", { "id" => task.id }), E::Untargeted) }
+
+    events = events_after(before)
+    assert_equal %w[job.timed_out job.requeued check.queued task.lease_expired], events.map(&:type)
+    assert_equal [ job_due, job_due, job_due, lease_due ].map(&:to_f), events.map { |event| event.effective_at.to_f }
+  end
+
+  test "a lease that was due before its task's check ends first" do
+    task, check, = pending_check(task_state: "working", command: "submit")
+    lease_due = scenario.make_due(task).lease_due_at
+    job_due = make_queue_due(check)
+    before = last_seq
+
+    with_writers { apply(owner_request("hold", "hold-2", { "id" => task.id }), E::Untargeted) }
+
+    events = events_after(before)
+    assert_equal %w[task.lease_expired job.timed_out job.requeued check.queued], events.map(&:type)
+    assert_equal [ lease_due, job_due, job_due, job_due ].map(&:to_f), events.map { |event| event.effective_at.to_f }
+  end
+
+  test "before a job claim, every queued job past its queue due time is timed out; a claimed one is not" do
+    orchestrator = orchestrator_polled(5)
+    _task, queued, = pending_check
+    queue_due = make_queue_due(queued)
+    draft = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog"))
+    make_job_due(draft, :queue)
+    _other, running, = pending_check(started: true, checker: scenario.orchestrator)
+    make_run_due(running)
+
+    written = nil
+    with_writers do
+      written = ActiveRecord::Base.transaction do
+        Leverage::Timers.apply_claimable(scenario.context(request: seat_request("claim_job", orchestrator, "claim")), :job)
+      end
+    end
+
+    assert_equal "timed_out", Job.find(job_of_attempt(queued, 1)).state
+    assert_equal "timed_out", draft.reload.state
+    assert_equal "claimed", job_of(running).state, "a run timeout is the holder's, not the claim's"
+    assert_instant queue_due, Event.where(workspace_id: scenario.workspace_id, type: "job.timed_out")
+      .order(:seq).first.effective_at
+    assert_equal %w[job.timed_out job.requeued check.queued job.timed_out job.requeued], written.map(&:type),
+      "the check's job first: it was due first"
+  end
+
+  def job_of_attempt(check, number) = RuleCheckAttempt.find_by!(rule_check_id: check.id, attempt_number: number).job_id
 end

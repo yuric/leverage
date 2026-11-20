@@ -8,7 +8,17 @@ module Leverage
   # First version (milestone 4 plan §4, the hand-over table): every role is
   # online, offline since nil, and no account is the cause. WP7 writes it.
   module RolePresence
+    # The seconds after a seat's last poll at which it stops counting
+    # (L401). Not set yet: WP7 writes it.
+    OFFLINE_AFTER = nil
+
     module_function
+
+    # The time the role has been online since, or nil while it is offline.
+    # Not written yet: WP7 writes it.
+    def online_since(workspace, role, at)
+      nil
+    end
 
     # workspace - a Workspace; role - "orchestrator" or "planner"; at - a
     # Time.
