@@ -1,6 +1,7 @@
 import Foundation
 import LeverageKit
 import LeverageTestSupport
+import Testing
 
 @testable import LeverageApp
 
@@ -89,5 +90,53 @@ enum TaskScreenFixtures {
 
     static func plain(_ command: CommandName, key: IdempotencyKey) -> PlainOutcome {
         .completed(.object([:]), key: key.value, command: command)
+    }
+
+    // MARK: accounts and time (milestone 3)
+
+    static let personalID = UUID(uuidString: "55555555-5555-4555-8555-555555555555")!
+    static let workID = UUID(uuidString: "66666666-6666-4666-8666-666666666666")!
+
+    /// A login, with an email that must never reach the screen.
+    static func credential(
+        _ id: UUID, provider: Provider = .claude, name: String = "Personal", state: CredentialState = .active,
+        limitedUntil: Date? = nil
+    ) -> Credential {
+        Credential(
+            id: id, provider: provider, name: name, accountEmail: "someone@example.invalid", state: state,
+            limitedUntil: limitedUntil, limitedSince: limitedUntil == nil ? nil : Date(timeIntervalSince1970: 1_780_000_000),
+            position: 1)
+    }
+
+    static func credentials(_ list: [Credential], asOfSeq: Int = 10) -> CredentialsList {
+        CredentialsList(credentials: list.map { CredentialWithReading(credential: $0) }, asOfSeq: asOfSeq)
+    }
+
+    /// A time in UTC, so the words a test checks do not depend on this Mac's zone.
+    static func date(_ day: Int, _ hour: Int, _ minute: Int = 0, month: Int = 11, year: Int = 2026) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    /// Thursday 19 November 2026, 10:00 UTC, in English.
+    static func clock(now: Date = date(19, 10)) -> ResetClock {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        calendar.locale = Locale(identifier: "en_US")
+        return ResetClock(now: { now }, calendar: calendar, locale: Locale(identifier: "en_US"))
+    }
+
+    /// A sentence with the narrow no-break space the Mac puts before AM and PM made plain.
+    static func flat(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+}
+
+extension FakeOwnerAPI {
+    /// The call at `index`, or a failed test instead of a crash when there are fewer.
+    func call(at index: Int) throws -> FakeCall {
+        let all = calls
+        return try #require(all.indices.contains(index) ? all[index] : nil, "call \(index) of \(all.count)")
     }
 }

@@ -9,7 +9,8 @@ enum AddTaskCopy: OwnerFacingCopy {
     case priorityLabel, priorityLow, priorityNormal, priorityHigh
     case workLabel, workPlaceholder, workHint
     case footnote
-    case cancel, save, saving
+    case cancel, save, saving, saveAsIdea, ideaKeepsNoCriteria
+    case changeTaskTitle, saveChanges, saveAndSend, editWarning
     case savedNotSent
 
     /// The last criterion of every task: the independent review (PRD Terms).
@@ -39,6 +40,12 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .cancel: "Cancel"
         case .save: "Save task"
         case .saving: "Saving…"
+        case .saveAsIdea: "Not yet"
+        case .ideaKeepsNoCriteria: "Not yet"
+        case .changeTaskTitle: "Not yet"
+        case .saveChanges: "Not yet"
+        case .saveAndSend: "Not yet"
+        case .editWarning: "Not yet"
         case .savedNotSent:
             "The task is saved in Backlog but was not sent to agents yet. Press Save task to send it again."
         case .reviewCriterion: "An independent reviewer agrees."

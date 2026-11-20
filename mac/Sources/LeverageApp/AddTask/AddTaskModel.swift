@@ -132,6 +132,15 @@ final class AddTaskModel {
         if case .failed = state { createdTaskID != nil } else { false }
     }
 
+    /// Whether Save as an idea is on.
+    var canSaveAsIdea: Bool { false }
+
+    /// Whether the criteria typed would be left out of an idea (HM-48).
+    var ideaDropsCriteria: Bool { false }
+
+    /// Save as an idea: Add task alone, into the Imaginarium (HM-48).
+    func saveAsIdea() async {}
+
     /// Sends Add task and then Complete contract.
     func save() async {
         guard canSave else { return }

@@ -19,7 +19,7 @@ enum TaskPageCopy: OwnerFacingCopy {
 
     // What the owner can do.
     case sendToAgents, sending, backlogHint
-    case pausedAtLimit, allowOneMoreTry, cancelTask
+    case pausedAtLimit, allowOneMoreTry, cancelTask, moveToBacklog, pauseTask, continueTask, changeTask
     case cancelQuestion, cancelExplanation, keepTask, working
 
     // The log's sentences.
@@ -32,6 +32,13 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logReleasedUnable, logReleasedNotSuited, logReleasedStopping, logReleasedSwitchedOff
     case logReleasedRemoved, logReleasedOther, logLeaseExpired
     case logPausedAtLimit, logPaused, logNoLongerPaused, logUpdated
+    case logLimitReached, logLimitReachedIn, logLimitResets, logSignedOutStopped, logSignedOutFound, logSwitched
+    case logSwitchedFrom, logVerified, logWaitingForAccount, logWaitingForAccountToSignIn, logOwnerPaused
+    case logAgentPaused, logAccountAvailable, logAccountSignedInAgain, logOwnerContinued, logAgentResumed
+    case logWaitsForAccount, logPromoted, logReturned, logInboxSignedOut, logInboxLimit, logInboxPastLimit
+    case logInboxOther, logInboxSettled, logChoseTryAgain, logChoseChange, logChoseSignIn, logSeatPaused
+    case logSeatResumed, logSeatChanged, logReviewStoppedLimit, logReviewStoppedSignedOut
+    case backAtWork, backAtWorkAtOnce, notBackAtWork, endedBeforeBackAtWork
 
     var text: String {
         switch self {
@@ -97,6 +104,15 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logPaused: "The task was paused."
         case .logNoLongerPaused: "The task is no longer paused."
         case .logUpdated: "The task was updated."
+        case .logLimitReached, .logLimitReachedIn, .logLimitResets, .logSignedOutStopped, .logSignedOutFound,
+            .logSwitched, .logSwitchedFrom, .logVerified, .logWaitingForAccount, .logWaitingForAccountToSignIn,
+            .logOwnerPaused, .logAgentPaused, .logAccountAvailable, .logAccountSignedInAgain, .logOwnerContinued,
+            .logAgentResumed, .logWaitsForAccount, .logPromoted, .logReturned, .logInboxSignedOut, .logInboxLimit,
+            .logInboxPastLimit, .logInboxOther, .logInboxSettled, .logChoseTryAgain, .logChoseChange,
+            .logChoseSignIn, .logSeatPaused, .logSeatResumed, .logSeatChanged, .logReviewStoppedLimit,
+            .logReviewStoppedSignedOut, .backAtWork, .backAtWorkAtOnce, .notBackAtWork, .endedBeforeBackAtWork:
+            "Not yet"
+        case .moveToBacklog, .pauseTask, .continueTask, .changeTask: "Not yet"
         }
     }
 }

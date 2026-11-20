@@ -65,10 +65,13 @@ final class TaskPageModel {
     @ObservationIgnored private var allowKey: IdempotencyKey?
     @ObservationIgnored private var cancelKey: IdempotencyKey?
 
-    init(taskID: UUID, api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void) {
+    @ObservationIgnored private let clock: ResetClock
+
+    init(taskID: UUID, api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system) {
         self.taskID = taskID
         self.api = api
         self.noteRead = noteRead
+        self.clock = clock
     }
 
     // MARK: what the page shows
@@ -153,6 +156,18 @@ final class TaskPageModel {
         guard let state = page?.task.state else { return false }
         return state != .done && state != .cancelled && !isBusy
     }
+
+    var canMoveToBacklog: Bool { false }
+    var canPause: Bool { false }
+    var canContinue: Bool { false }
+    var canChangeTask: Bool { false }
+    private(set) var editor: EditContractModel?
+
+    func moveToBacklog() async {}
+    func pauseTask() async {}
+    func continueTask() async {}
+    func beginEditing() {}
+    func endEditing() {}
 
     // MARK: reading
 

@@ -8,6 +8,14 @@ struct CardChip: Equatable, Sendable {
     let tone: Tokens.Tone
 }
 
+/// What a card knows about an account the task waits for: its name as the
+/// owner reads it, whether it is signed out, and when its limit ends.
+struct CardAccount: Equatable, Sendable {
+    let name: String
+    let isSignedOut: Bool
+    let limitedUntil: Date?
+}
+
 /// What a card (and the top of a task page) says about a task, in plain words.
 struct CardContent: Equatable, Sendable {
     let statusLine: String
@@ -18,7 +26,10 @@ struct CardContent: Equatable, Sendable {
 /// The words of a card, from the task's state, its holds and the names of the
 /// agents (MA-1, MA-28, MA-29). One home, used by the board and the task page.
 enum CardWording {
-    static func content(for task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool) -> CardContent {
+    static func content(
+        for task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool,
+        accounts: [UUID: CardAccount] = [:], clock: ResetClock = .system
+    ) -> CardContent {
         let state = task.task.state
         let lane = BoardLane.lane(for: task)
         let agent = (task.task.holderSeatID ?? task.task.builderSeatID).flatMap { seatNames[$0] }
@@ -66,12 +77,7 @@ enum CardWording {
 
         var note: String?
         if waits.contains(.credentialLimit) || (task.waitingForCredentialID != nil && state != .done) {
-            if let until = task.waitingUntil {
-                let time = until.formatted(date: .abbreviated, time: .shortened)
-                note = BoardCopy.noteWaitingForLoginAt.filled(["time": time])
-            } else {
-                note = BoardCopy.noteWaitingForLogin.text
-            }
+            note = BoardCopy.noteWaitingForAccount.text
         } else if state == .inReview, !reviewerSeatExists {
             note = BoardCopy.noteNoReviewer.text
         }
@@ -88,8 +94,12 @@ struct BoardCard: Identifiable, Equatable, Sendable {
     let chip: CardChip?
     let note: String?
 
-    init(task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool) {
-        let content = CardWording.content(for: task, seatNames: seatNames, reviewerSeatExists: reviewerSeatExists)
+    init(
+        task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool, accounts: [UUID: CardAccount] = [:],
+        clock: ResetClock = .system
+    ) {
+        let content = CardWording.content(
+            for: task, seatNames: seatNames, reviewerSeatExists: reviewerSeatExists, accounts: accounts, clock: clock)
         id = task.task.id
         title = task.task.title
         lane = BoardLane.lane(for: task)
@@ -124,9 +134,12 @@ final class BoardModel {
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
 
-    init(api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void) {
+    @ObservationIgnored private let clock: ResetClock
+
+    init(api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system) {
         self.api = api
         self.noteRead = noteRead
+        self.clock = clock
     }
 
     /// The lanes as drawn: the six, and the cancelled lane while the switch is on.

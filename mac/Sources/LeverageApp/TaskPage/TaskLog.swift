@@ -14,7 +14,10 @@ struct LogEntry: Identifiable, Equatable, Sendable {
 /// criterion's words from the page's criteria. An event this milestone has no
 /// sentence for reads as a general one rather than leaving a gap.
 enum TaskLog {
-    static func entries(events: [EventRecord], names: [LogName], criteria: [Criterion]) -> [LogEntry] {
+    static func entries(
+        events: [EventRecord], names: [LogName], criteria: [Criterion], recoveryTimes: [RecoveryTime] = [],
+        accounts: [UUID: String] = [:], clock: ResetClock = .system
+    ) -> [LogEntry] {
         let seats = Dictionary(
             names.filter { $0.kind == .seat }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         let words = Dictionary(criteria.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })

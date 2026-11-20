@@ -207,13 +207,160 @@ struct BoardModelTests {
         #expect(rounds?.chip?.text == "Sent back too many times")
     }
 
-    @Test("a task waiting for a login to reset says so, and when")
-    func waitingForLogin() async {
-        let until = Date(timeIntervalSince1970: 1_780_003_600)
-        let waiting = await card(
-            Fixtures.boardTask(.working, holds: [.credentialLimit], waitingFor: UUID(), waitingUntil: until))
-        #expect(waiting?.chip?.text == "No login left")
-        #expect(waiting?.note?.hasPrefix("Waiting for a login to reset") == true)
+    // MARK: a task waiting for an account (HM-40, HM-45, HM-42)
+
+    private let personal = Fixtures.personalID
+    private let clock = Fixtures.clock()
+
+    private func accountCard(
+        _ task: BoardTask, credentials: [Credential]? = nil, reviewer: Bool = true
+    ) async -> BoardCard? {
+        let owner = Fixtures.owner(board: Fixtures.board([task], reviewer: reviewer))
+        if let credentials {
+            owner.script { $0.credentials = { Fixtures.credentials(credentials) } }
+        }
+        let model = BoardModel(api: owner, noteRead: { _ in }, clock: clock)
+        await model.load()
+        return model.lanes.flatMap(\.cards).first
+    }
+
+    @Test("a task waiting on a limit stays in In progress, and its card names the account and the time it resets")
+    func waitingOnALimit() async {
+        let until = Fixtures.date(19, 18)
+        let card = await accountCard(
+            Fixtures.boardTask(.working, holder: Fixtures.builderID, builder: Fixtures.builderID, holds: [.credentialLimit], waitingFor: personal, waitingUntil: until),
+            credentials: [Fixtures.credential(personal, limitedUntil: until)])
+        #expect(card?.lane == .inProgress)
+        #expect(card?.statusLine == "Builder One is building")
+        #expect(card?.chip?.text == "No login left")
+        #expect(card?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM.")
+    }
+
+    @Test("a reset on another day names the weekday, and one far away names the date")
+    func resetOnAnotherDay() async {
+        let task = { (until: Date) in
+            Fixtures.boardTask(.working, holds: [.credentialLimit], waitingFor: self.personal, waitingUntil: until)
+        }
+        let credentials = [Fixtures.credential(personal)]
+        let tomorrow = await accountCard(task(Fixtures.date(20, 9, 30)), credentials: credentials)
+        #expect(tomorrow?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at Friday 9:30 AM.")
+        let later = await accountCard(task(Fixtures.date(30, 9, 30)), credentials: credentials)
+        #expect(later?.note.map(Fixtures.flat)?.contains("Nov 30") == true)
+        #expect(later?.note.map(Fixtures.flat)?.contains("Monday") == false)
+    }
+
+    @Test("a limit with no reset time says the account did not say when it is available again")
+    func waitingWithNoTime() async {
+        let card = await accountCard(
+            Fixtures.boardTask(.working, holds: [.credentialLimit], waitingFor: personal),
+            credentials: [Fixtures.credential(personal)])
+        #expect(card?.lane == .inProgress)
+        #expect(card?.note == "Waiting for Claude, Personal. It did not say when it is available again.")
+    }
+
+    @Test("a task waiting on a signed-out account is in Blocked, says where it came from, and names the account")
+    func waitingOnASignIn() async {
+        let card = await accountCard(
+            Fixtures.boardTask(.working, holds: [.credentialSignedOut], waitingFor: personal),
+            credentials: [Fixtures.credential(personal, state: .signedOut)])
+        #expect(card?.lane == .blocked)
+        #expect(card?.statusLine == "Paused, was In progress")
+        #expect(card?.chip?.text == "Login signed out")
+        #expect(card?.chip?.tone == .stop)
+        #expect(card?.note == "Claude, Personal is signed out. Sign in again to continue.")
+    }
+
+    @Test("a task the owner paused is in Blocked and says it was paused by the owner and from which lane")
+    func pausedByTheOwner() async {
+        let working = await card(Fixtures.boardTask(.working, holds: [.ownerHold]))
+        #expect(working?.lane == .blocked)
+        #expect(working?.statusLine == "Paused, was In progress")
+        #expect(working?.chip?.text == "Paused by you")
+        let ready = await card(Fixtures.boardTask(.ready, holds: [.ownerHold]))
+        #expect(ready?.statusLine == "Paused, was Ready")
+        let backlog = await card(Fixtures.boardTask(.backlog, holds: [.ownerHold]))
+        #expect(backlog?.statusLine == "Paused, was Backlog")
+    }
+
+    @Test("a Ready task no agent can start because its account is at a limit stays in Ready and names the account")
+    func readyWaitingOnALimit() async {
+        let until = Fixtures.date(19, 15, 45)
+        let card = await accountCard(
+            Fixtures.boardTask(.ready, waitingFor: personal, waitingUntil: until),
+            credentials: [Fixtures.credential(personal, limitedUntil: until)])
+        #expect(card?.lane == .ready)
+        #expect(card?.chip?.text == "No login left")
+        #expect(card?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 3:45 PM.")
+    }
+
+    @Test("a Ready task whose account is signed out opens no item, and its card says which account")
+    func readyWaitingOnASignedOutAccount() async {
+        let card = await accountCard(
+            Fixtures.boardTask(.ready, waitingFor: personal),
+            credentials: [Fixtures.credential(personal, state: .signedOut)])
+        #expect(card?.lane == .ready)
+        #expect(card?.chip?.text == "Login signed out")
+        #expect(card?.note == "Claude, Personal is signed out. Sign in again to continue.")
+    }
+
+    @Test("a task in review that waits for an account keeps its review chip and names the account")
+    func inReviewWaiting() async {
+        let until = Fixtures.date(19, 18)
+        let card = await accountCard(
+            Fixtures.boardTask(.inReview, builder: Fixtures.builderID, waitingFor: personal, waitingUntil: until),
+            credentials: [Fixtures.credential(personal, limitedUntil: until)])
+        #expect(card?.lane == .inProgress)
+        #expect(card?.chip?.text == "In review")
+        #expect(card?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM.")
+    }
+
+    @Test("when the accounts cannot be read the card still says it waits, for an account, and when")
+    func accountsFailing() async {
+        let owner = Fixtures.owner(board: Fixtures.board([
+            Fixtures.boardTask(.working, holds: [.credentialLimit], waitingFor: personal, waitingUntil: Fixtures.date(19, 18)),
+        ]))
+        owner.script { $0.credentials = { throw URLError(.timedOut) } }
+        let model = BoardModel(api: owner, noteRead: { _ in }, clock: clock)
+        await model.load()
+        #expect(model.state == .loaded)
+        #expect(model.lanes.flatMap(\.cards).first?.note.map(Fixtures.flat) == "Waiting for an account, which resets at 6:00 PM.")
+    }
+
+    @Test("the accounts are read only when a card waits for one, and never put an email on a card")
+    func accountsReadOnlyWhenNeeded() async {
+        let plain = Fixtures.owner(board: Fixtures.board([Fixtures.boardTask(.ready)]))
+        let none = BoardModel(api: plain, noteRead: { _ in }, clock: clock)
+        await none.load()
+        #expect(plain.calls.map(\.operation) == [.getBoard, .listSeats])
+
+        let owner = Fixtures.owner(board: Fixtures.board([
+            Fixtures.boardTask(.working, holds: [.credentialSignedOut], waitingFor: personal),
+        ]))
+        owner.script { $0.credentials = { Fixtures.credentials([Fixtures.credential(personal, state: .signedOut)]) } }
+        let model = BoardModel(api: owner, noteRead: { _ in }, clock: clock)
+        await model.load()
+        #expect(owner.calls.map(\.operation) == [.getBoard, .listSeats, .listCredentials])
+        for card in model.lanes.flatMap(\.cards) {
+            for text in [card.statusLine, card.chip?.text, card.note].compactMap({ $0 }) {
+                #expect(!text.contains("@") && !text.contains("example.invalid"), "\(text)")
+            }
+        }
+    }
+
+    @Test("the Ideas lane holds the ideas with their cards, and an idea says it is not started")
+    func ideasLane() async {
+        let tasks = [
+            Fixtures.boardTask(.imaginarium, title: "Try a weekly summary email"),
+            Fixtures.boardTask(.imaginarium, title: "Add a dark theme"),
+            Fixtures.boardTask(.backlog, title: "Draft the copy"),
+        ]
+        let model = makeModel(Fixtures.owner(board: Fixtures.board(tasks)))
+        await model.load()
+        let ideas = model.lanes.first { $0.lane == .imaginarium }
+        #expect(ideas?.cards.map(\.title) == ["Try a weekly summary email", "Add a dark theme"])
+        #expect(ideas?.cards.map(\.statusLine) == ["Not started yet", "Not started yet"])
+        #expect(BoardLane.imaginarium.heading.text == "Ideas")
+        #expect(titles(model, in: .backlog) == ["Draft the copy"])
     }
 
     @Test("a task in review with no reviewer agent connected says so on its card, and only then")
@@ -234,15 +381,23 @@ struct BoardModelTests {
                     Fixtures.boardTask(state, holder: Fixtures.builderID, builder: Fixtures.builderID, holds: [$0])
                 }
         }
-        let model = makeModel(Fixtures.owner(board: Fixtures.board(tasks, reviewer: false)))
+        let waiting = TaskState.allCases.flatMap { state in
+            HoldReason.allCases.map {
+                Fixtures.boardTask(state, holds: [$0], waitingFor: Fixtures.personalID, waitingUntil: Fixtures.date(19, 18))
+            } + [Fixtures.boardTask(state, waitingFor: Fixtures.personalID)]
+        }
+        let owner = Fixtures.owner(board: Fixtures.board(tasks + waiting, reviewer: false))
+        owner.script { $0.credentials = { Fixtures.credentials([Fixtures.credential(Fixtures.personalID)]) } }
+        let model = BoardModel(api: owner, noteRead: { _ in }, clock: Fixtures.clock())
         await model.load()
         model.showCancelled = true
         let cards = model.lanes.flatMap(\.cards)
-        #expect(cards.count == tasks.count)
+        #expect(cards.count == tasks.count + waiting.count)
         for card in cards {
             for text in [card.statusLine, card.chip?.text, card.note].compactMap({ $0 }) {
                 #expect(BannedTerms.found(in: text).isEmpty, "\(text)")
                 #expect(!text.contains("_") && !text.contains("{"), "\(text)")
+                #expect(!text.localizedCaseInsensitiveContains("Nothing was lost"), "\(text)")
             }
         }
     }
@@ -331,5 +486,41 @@ struct BoardRenderTests {
         let empty = BoardModel(api: Fixtures.owner(board: Fixtures.board([])), noteRead: { _ in })
         await empty.load()
         #expect(draws(BoardLanes(lanes: empty.lanes, open: { _ in })))
+    }
+}
+
+@Suite("ResetTime")
+struct ResetTimeTests {
+    private let clock = TaskScreenFixtures.clock()
+    private func text(_ date: Date) -> String { TaskScreenFixtures.flat(ResetTime.text(for: date, clock: clock)) }
+
+    @Test("a time today is the Mac's short time and nothing else")
+    func today() {
+        #expect(text(TaskScreenFixtures.date(19, 18)) == "6:00 PM")
+        #expect(text(TaskScreenFixtures.date(19, 10, 5)) == "10:05 AM")
+        #expect(text(TaskScreenFixtures.date(19, 0, 0)) == "12:00 AM")
+    }
+
+    @Test("a time on another day within the week names the weekday")
+    func thisWeek() {
+        #expect(text(TaskScreenFixtures.date(20, 9, 30)) == "Friday 9:30 AM")
+        #expect(text(TaskScreenFixtures.date(25, 23, 59)) == "Wednesday 11:59 PM")
+    }
+
+    @Test("a time earlier than today or a week away names the date instead")
+    func farAway() {
+        #expect(text(TaskScreenFixtures.date(26, 9, 30)).hasPrefix("Nov 26"))
+        #expect(text(TaskScreenFixtures.date(18, 9, 30)).hasPrefix("Nov 18"))
+        #expect(text(TaskScreenFixtures.date(26, 9, 30)).hasSuffix("9:30 AM"))
+    }
+
+    @Test("today is read in the clock's own time zone")
+    func zone() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        let auckland = ResetClock(now: { TaskScreenFixtures.date(19, 10) }, calendar: calendar, locale: Locale(identifier: "en_US"))
+        // 10:00 UTC on the 19th is 23:00 on the 19th in Auckland; 11:00 UTC is midnight into the 20th.
+        #expect(TaskScreenFixtures.flat(ResetTime.text(for: TaskScreenFixtures.date(19, 11), clock: auckland)) == "Friday 12:00 AM")
+        #expect(TaskScreenFixtures.flat(ResetTime.text(for: TaskScreenFixtures.date(19, 10, 30), clock: auckland)) == "11:30 PM")
     }
 }
