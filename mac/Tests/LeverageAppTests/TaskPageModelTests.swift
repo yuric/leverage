@@ -520,6 +520,28 @@ struct TaskPageModelTests {
         #expect(idle.editor == nil)
     }
 
+    @Test("opened from Needs you's Change the task, the page opens the editor once it has read the task (HM-24, HM-49)")
+    func editorOpensFromNeedsYou() async {
+        let shared = Locked(readyPage(.inReview, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID)]))
+        let owner = ownerShowing(shared)
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, editOnOpen: true)
+        #expect(model.editor == nil)
+        await model.load()
+        #expect(model.editor?.draft.title == "Fix the totals")
+        model.endEditing()
+        await model.load()
+        #expect(model.editor == nil, "only the first read opens it")
+
+        let idea = Locked(page(.imaginarium))
+        let ideaModel = TaskPageModel(taskID: taskID, api: ownerShowing(idea), noteRead: { _ in }, editOnOpen: true)
+        await ideaModel.load()
+        #expect(ideaModel.editor == nil, "a task the editor is not for shows its page")
+
+        let plain = TaskPageModel(taskID: taskID, api: ownerShowing(Locked(readyPage(.working))), noteRead: { _ in })
+        await plain.load()
+        #expect(plain.editor == nil)
+    }
+
     @Test("when the editor saves, the page reads again and closes it")
     func editorSaved() async {
         let (model, owner, shared) = await loaded(readyPage(.working))

@@ -136,6 +136,14 @@ struct InterruptionTests {
         #expect(status.count == 1)
     }
 
+    @Test("a failure the output does not settle goes on as before when the status command could not tell (CL-22)")
+    func failedThenCouldNotTell() async throws {
+        let reply = try ReplyFile("claude", "run-failed.json")
+        let status = StatusAnswers(.couldNotTell)
+        #expect(await interruption(status: status).decide(after: reply.record, at: Date()) == .goOnAsBefore)
+        #expect(status.count == 1)
+    }
+
     @Test("an answer that names a limit is not a limit")
     func answerNamesALimit() async throws {
         let reply = try ReplyFile("claude", "run-answer-names-a-limit.json")

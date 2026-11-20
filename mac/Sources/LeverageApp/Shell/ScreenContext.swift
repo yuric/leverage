@@ -21,11 +21,16 @@ final class Navigator {
         openTaskID = nil
     }
 
-    /// Opens a task's page, with a way back to the board (MA-9).
-    func open(task id: UUID) {
+    /// Opens a task's page, with a way back to the board (MA-9). `editing`
+    /// asks the page to open the contract editor once it has read the task
+    /// (Needs you's Change the task, HM-24, HM-49).
+    func open(task id: UUID, editing: Bool = false) {
         place = .board
         openTaskID = id
     }
+
+    /// Whether the page of `id` was opened to change the task.
+    func takeEditRequest(for id: UUID) -> Bool { false }
 
     /// Back to the board from a task's page.
     func closeTask() { openTaskID = nil }

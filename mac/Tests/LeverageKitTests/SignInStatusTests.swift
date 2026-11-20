@@ -157,7 +157,7 @@ struct SignInStatusTests {
         expectNothingLeaks(answer, log)
     }
 
-    @Test("a status command that passes its time limit is signed out, and its output is not kept")
+    @Test("a status command that passes its time limit cannot tell, and its output is not kept")
     func timeLimit() async throws {
         let folder = try TemporaryFolder(prefix: "sign-in-status")
         let log = CapturedLog()
@@ -166,21 +166,21 @@ struct SignInStatusTests {
             try entry(.exitCode),
             tool: try ownTool(folder, #"echo "Signed in as \#(email) (\#(organisation))"; exec /bin/sleep 30"#),
             environment: [:], log: log, timeLimit: .milliseconds(300))
-        #expect(answer == .signedOut)
+        #expect(answer == .couldNotTell)
         expectNothingLeaks(answer, log)
     }
 
-    @Test("a tool that cannot be started is signed out")
+    @Test("a tool that cannot be started cannot tell")
     func cannotStart() async throws {
         let folder = try TemporaryFolder(prefix: "sign-in-status")
         let log = CapturedLog()
         let answer = await check(
             try entry(.exitCode), tool: folder.path("missing-tool"), environment: [:], log: log)
-        #expect(answer == .signedOut)
+        #expect(answer == .couldNotTell)
     }
 
-    @Test("the three answers, and nothing else, can leave the function")
-    func threeAnswers() {
-        #expect(SignInAnswer.allCases == [.signedIn, .signedOut, .noStatusCommand])
+    @Test("the four answers, and nothing else, can leave the function")
+    func fourAnswers() {
+        #expect(SignInAnswer.allCases == [.signedIn, .signedOut, .noStatusCommand, .couldNotTell])
     }
 }

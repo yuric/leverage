@@ -19,8 +19,12 @@ struct LiveSettings: Equatable, Sendable {
     var composeSource: URL
     var imageTag: String
     var helperProgram: URL
+    /// The bundle the app runs from; `UserNotifier.make` decides on it
+    /// (HM-27). Outside a bundle it is the program's own folder.
+    var bundleURL: URL
 
-    init(info: [String: Any], resources: URL, executable: URL) {
+    init(info: [String: Any], resources: URL, executable: URL, bundleURL: URL? = nil) {
+        self.bundleURL = bundleURL ?? executable.deletingLastPathComponent()
         composeSource = resources.appendingPathComponent("compose.yaml")
         if let tag = info[Self.imageTagKey] as? String, Self.isImageTag(tag) {
             imageTag = tag
@@ -37,7 +41,8 @@ struct LiveSettings: Equatable, Sendable {
         return LiveSettings(
             info: bundle.infoDictionary ?? [:],
             resources: bundle.resourceURL ?? executable.deletingLastPathComponent(),
-            executable: executable)
+            executable: executable,
+            bundleURL: bundle.bundleURL)
     }
 
     /// A Docker image tag: a letter, digit or underscore, then up to 127

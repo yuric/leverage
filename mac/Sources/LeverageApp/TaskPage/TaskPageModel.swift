@@ -74,7 +74,10 @@ final class TaskPageModel {
 
     @ObservationIgnored private let clock: ResetClock
 
-    init(taskID: UUID, api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system) {
+    init(
+        taskID: UUID, api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, clock: ResetClock = .system,
+        editOnOpen: Bool = false
+    ) {
         self.taskID = taskID
         self.api = api
         self.noteRead = noteRead

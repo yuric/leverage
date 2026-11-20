@@ -82,7 +82,7 @@ struct Interruption: Sendable {
             return .retryInPlace
         case .failed:
             switch await signInStatus() {
-            case .signedOut: return .accountStopped(.signedOut)
+            case .signedOut, .couldNotTell: return .accountStopped(.signedOut)
             case .signedIn, .noStatusCommand: return .goOnAsBefore
             }
         }

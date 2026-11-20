@@ -18,7 +18,7 @@ struct ToolStatus: Sendable {
             timeLimit: locator.timings.commandLimit)
         switch answer {
         case .signedIn: return true
-        case .signedOut: return false
+        case .signedOut, .couldNotTell: return false
         case .noStatusCommand:
             return await prober.answers(entry, tool: tool, accountFolder: accountFolder, settings: settings)
         }

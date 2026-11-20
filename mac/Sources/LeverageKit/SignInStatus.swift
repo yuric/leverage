@@ -7,6 +7,9 @@ public enum SignInAnswer: String, CaseIterable, Sendable {
     /// The provider has no status command (Antigravity): the answering
     /// check, a test prompt, is its sign-in check instead (PV-3).
     case noStatusCommand = "no status command"
+    /// The status command could not start, or passed its time limit: it
+    /// said nothing either way.
+    case couldNotTell = "could not tell"
 }
 
 /// "Is this account signed in", from the catalog's status command (plan
