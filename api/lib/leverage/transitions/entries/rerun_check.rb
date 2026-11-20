@@ -6,9 +6,10 @@ module Leverage
       #
       #   rerun_queues          at any hook but before an agent starts it, the
       #                         check runs again as a new attempt of the same
-      #                         row with a job of its own (Jobs.queue,
-      #                         RuleChecks.new_attempt), with the input its
-      #                         last job had; its check_error hold closes
+      #                         row with a job of its own
+      #                         (RuleChecks.queue_attempt: check.queued, then
+      #                         job.queued, trace 19 command 20), with RC-33's
+      #                         input for that attempt; its check_error hold closes
       #                         when a result other than error arrives.
       #   rerun_of_claim_check  an errored claim check has already lapsed its
       #                         provisional claim: its check_error hold
@@ -44,9 +45,7 @@ module Leverage
             Holds.close(ctx, hold: hold, task: @task, choice: RUN_AGAIN)
           else
             version = RuleVersion.find(@check.rule_version_id)
-            job = Jobs.queue(ctx, kind: JOB_KIND, task: @task, target: @check,
-              seat_role: version.checker_role || "orchestrator", input: last_job&.input || {})
-            RuleChecks.new_attempt(ctx, @check, job: job)
+            RuleChecks.queue_attempt(ctx, @check, kind: JOB_KIND, seat_role: version.checker_role || "orchestrator")
           end
           @result = nil
         end
@@ -62,11 +61,6 @@ module Leverage
             closed_at: nil).order(:opened_at, :id).find do |open|
               open.rule_check_id == @check.id || (open.rule_check_id.nil? && open.rule_id == @check.rule_id)
             end
-        end
-
-        def last_job
-          attempt = RuleCheckAttempt.where(rule_check_id: @check.id).where.not(job_id: nil).order(:attempt_number).last
-          attempt && Job.find_by(id: attempt.job_id)
         end
 
         def invalid_state = Refusal.new(code: Contract.state_machine.fetch("unlisted_pair_refusal"))

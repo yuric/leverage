@@ -65,7 +65,12 @@ module Leverage
         def expire(ctx, review, task)
           effective_at = Timers.effective_at(task, review.lease_due_at)
           pending = PendingTransitions.of(task)
-          PendingTransitions.cancel(ctx, pending, "lease_expired") if pending
+          # The withdrawals are the timer's: the app's, with no key, at the
+          # lease's due time (trace 18, command 45; WP5b's request 1).
+          if pending
+            PendingTransitions.cancel(ctx, pending, "lease_expired", effective_at: effective_at, actor_kind: "app",
+              actor_id: nil, command_id: nil)
+          end
           Leases.end_lease(ctx, review)
           review.update!(reviewer_seat_id: nil)
           ctx.emit("review.lease_expired", task: task, subject: review, payload: {}, actor_kind: "app", actor_id: nil,

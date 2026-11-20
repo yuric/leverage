@@ -100,6 +100,7 @@ module Leverage
           @failed.each { |criterion| ctx.emit("criterion.reopened", task: @task, subject: criterion, payload: {}) }
           ctx.emit("cost.reported", task: @task, subject: @review,
             payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
+          add_to_project(spend)
           place_fresh_lease(ctx, failed) if @free
 
           reached = @task.round + 1
@@ -111,6 +112,15 @@ module Leverage
         end
 
         private
+
+        # The verdict's spend runs cost.reported for the task's project
+        # (L513): it adds to the project's spent, as the replay rebuilds it.
+        def add_to_project(spend)
+          return unless @task.project_id
+
+          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
+          project.update!(spent: project.spent + spend)
+        end
 
         def load_builder(ctx)
           @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)

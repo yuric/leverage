@@ -57,6 +57,7 @@ module Leverage
           ctx.emit("task.done", task: @task, payload: {})
           ctx.emit("cost.reported", task: @task, subject: @review,
             payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
+          add_to_project(spend)
           @result = nil
         end
 
@@ -70,6 +71,17 @@ module Leverage
           failed.refusals(ctx)
           Gate.outcome(ctx, failed, Gate.call(ctx, failed))
           @result = failed.result
+        end
+
+        private
+
+        # The verdict's spend runs cost.reported for the task's project
+        # (L513): it adds to the project's spent, as the replay rebuilds it.
+        def add_to_project(spend)
+          return unless @task.project_id
+
+          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
+          project.update!(spent: project.spent + spend)
         end
       end
     end

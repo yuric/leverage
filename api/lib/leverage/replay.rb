@@ -19,7 +19,11 @@ module Leverage
   # Holder rules (L781, DB-43): set by task.claimed, and by any event whose
   # payload names lease_seat_id (a failed review's fresh lease, Offer task
   # again); cleared by task.submitted, task.released, task.lease_expired,
-  # task.returned, task.cancelled and task.done. The builder is set by
+  # task.returned, task.cancelled and task.done. A provisional claim (RE-5)
+  # sets the holder with the check.queued of its task.before_claim check
+  # (claimant_seat_id) and clears it with that check's failed, errored or
+  # withdrawn check.finished and with a hold.opened on the task, while the
+  # task is still Ready. The builder is set by
   # task.claimed and cleared when the task returns to Ready or Backlog or is
   # cancelled. The minimum strength rank and the contract version are set
   # by task.contract_changed, which carries both (the rank is null for
@@ -36,10 +40,20 @@ module Leverage
   # are not replay columns are read from the rows, as the tracker reads
   # them: a criterion's kind (which criterion a passed review passes).
   #
-  # Events that change a replay column but that no milestone-2 command
-  # writes (outward actions, rule checks, rules, escalation, owner rework)
-  # raise Unsupported, as Steps does: the milestone that writes them
-  # teaches the replay.
+  # Rules (milestone 4): rule.created sets enabled and the current version
+  # (version 1), rule.changed and rule.reverted the current version,
+  # rule.enabled and rule.disabled the switch; rule.removed changes no
+  # replay column. Rule checks: a check.queued makes the row, or runs it
+  # again (DB-25: the result goes back to none); check.finished sets the
+  # result (an app check's row is made by it, as it has no check.queued);
+  # check.overridden sets who and when, from its actor and its time (the
+  # command's at, which RuleChecks.override stores). Job events change no
+  # replay column.
+  #
+  # Events that change a replay column but that no command of milestones
+  # 2 to 4 writes (outward actions, escalation, owner rework) raise
+  # Unsupported, as Steps does: the milestone that writes them teaches the
+  # replay.
   module Replay
     # An event that changes a replay column and that the replay does not
     # yet project.
@@ -50,8 +64,14 @@ module Leverage
       task_id round kind step_class subject_kind subject_id seat_id cause_kind cause_rule_id opened_at closed_at
       opening_event_id closing_event_id
     ].freeze
-    UNSUPPORTED = /\A(action\.|check\.|rule\.|task\.reassigned\z|task\.returned_for_rework\z)/
+    UNSUPPORTED = /\A(action\.|task\.reassigned\z|task\.returned_for_rework\z)/
+    CLAIM_HOOK = "task.before_claim".freeze
+    LAPSES = %w[failed error withdrawn].freeze
     LEASE_FIELD = "lease_seat_id".freeze
+    # Projection keys that are not replay columns.
+    INTERNAL = %w[provisional].freeze
+    # A provisional claim becomes the claim, or ends with the holder.
+    ENDS_PROVISIONAL = %w[task.claimed task.released task.cancelled].freeze
     BATCH = 1_000
 
     module_function
@@ -107,6 +127,8 @@ module Leverage
         projection[:tasks][event.task_id] = { "state" => payload.fetch("state"), "round" => 0, "holder_seat_id" => nil,
           "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0 }
         return
+      when /\Arule\./ then return rule(projection, event, payload)
+      when /\Acheck\./ then return check(projection, event, payload, task)
       when "project.created"
         projection[:projects][event.project_id] = { "paused" => false, "spent" => BigDecimal("0") }
       when "project.paused", "project.resumed"
@@ -115,6 +137,7 @@ module Leverage
         spend(projection, event, payload)
       when "hold.opened"
         projection[:holds][event.subject_id] = { "reason" => payload.fetch("reason") }
+        lapse(task)
       when "hold.closed"
         projection[:holds].delete(event.subject_id)
       when "criterion.started", "criterion.passed", "criterion.reopened"
@@ -162,6 +185,48 @@ module Leverage
         task["round"] += 1
       end
       task["holder_seat_id"] = payload[LEASE_FIELD] if payload[LEASE_FIELD]
+      task.delete("provisional") if ENDS_PROVISIONAL.include?(event.type)
+    end
+
+    # --- rules and rule checks -------------------------------------------------
+
+    def rule(projection, event, payload)
+      rules = projection[:rules]
+      case event.type
+      when "rule.created"
+        rules[event.subject_id] = { "enabled" => payload.fetch("enabled"), "current_version" => payload.fetch("version") }
+      when "rule.changed", "rule.reverted" then rules.fetch(event.subject_id)["current_version"] = payload.fetch("version")
+      when "rule.enabled", "rule.disabled" then rules.fetch(event.subject_id)["enabled"] = event.type == "rule.enabled"
+      end
+    end
+
+    def check(projection, event, payload, task)
+      checks = projection[:rule_checks]
+      row = (checks[event.subject_id] ||= { "result" => nil, "overridden_by_user_id" => nil, "overridden_at" => nil })
+      case event.type
+      when "check.queued"
+        row["result"] = nil
+        provisional(task, payload)
+      when "check.finished"
+        row["result"] = payload.fetch("result")
+        lapse(task) if payload["hook"] == CLAIM_HOOK && LAPSES.include?(payload.fetch("result"))
+      when "check.overridden" then row.merge!("overridden_by_user_id" => event.actor_id, "overridden_at" => event.at)
+      end
+    end
+
+    # A provisional claim's claimant holds the Ready task (RE-5, DB-43).
+    def provisional(task, payload)
+      return unless task && payload["hook"] == CLAIM_HOOK && payload["claimant_seat_id"]
+
+      task.merge!("holder_seat_id" => payload.fetch("claimant_seat_id"), "provisional" => true)
+    end
+
+    # The provisional claim lapses (DB-43): its check failed, erred or was
+    # withdrawn, or a hold opened on the task.
+    def lapse(task)
+      return unless task && task["state"] == "ready" && task.delete("provisional")
+
+      task["holder_seat_id"] = nil
     end
 
     # The task returns to Ready or Backlog: no holder and no builder.
@@ -210,7 +275,7 @@ module Leverage
       return [ "#{table} #{id}: the table has a row the log does not make" ] if from_log.nil?
       return [ "#{table} #{id}: the log makes a row the table does not have" ] if from_table.nil?
 
-      from_log.keys.filter_map do |column|
+      from_log.keys.excluding(*INTERNAL).filter_map do |column|
         next if from_log[column] == from_table[column]
 
         "#{table} #{id} #{column}: the log says #{from_log[column].inspect}, the table says #{from_table[column].inspect}"
