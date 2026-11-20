@@ -244,7 +244,12 @@ To cell "X, once ..." also names the state the task starts from.
 
 Traces 01 to 08 run in a workspace with the shipped rules; 09 to 15 run in
 a workspace with no rule at all, as the core loop creates it, so their
-`setup.rules` is empty.
+`setup.rules` is empty. The Rule checks milestone's 16 to 19 run with the
+shipped rules too: 16 with all seven on, 17 and 18 with "Every task needs
+specific details" off and the custom rules their own commands add, and 19
+with none, its first command writing them (`install_shipped_rules`).
+Trace 18 sets a 300-second lease, so that a lease ends before a claimed
+check's run timeout.
 
 Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
 (settings, users, helpers, credentials, seats, projects and rules that
@@ -288,9 +293,22 @@ How the traces write what the PRD leaves to the writer:
   frees the builder.
 - **A pending transition's completion** carries the original requester's
   key, and its `cause_id` is the `check.finished` that completed it, even
-  inside another caller's command.
+  inside another caller's command. The check held at the re-run limit
+  never ran and writes no `check.finished` until it is withdrawn, so a
+  completion the owner's "Let it through once" on it gives names that
+  `check.overridden` (milestone 4 plan RD-45, RE-3; trace 17).
 - **Order** inside a command: the hook's check events, the row's events,
-  `cost.reported`, then the other side events.
+  `cost.reported`, then the other side events. Two exceptions (milestone 4
+  plan section 2.1): a waiting command ended from outside (rule 11) writes
+  its withdrawals first (`check.finished` withdrawn, `job.withdrawn`) and
+  then the row's own event (`task.released`, `task.lease_expired`,
+  `review.lease_expired`, `task.cancelled`; trace 18); and Complete
+  contract closes an open `contract_incomplete` hold first (L175), before
+  the hook's check events (trace 16). A job result writes `job.finished`,
+  the check's `check.finished`, `cost.reported`, then the holds and items,
+  then the requester's completion; a planner's draft that waits writes
+  `job.finished` and `cost.reported`, then its Complete contract's check
+  and job events (RE-6).
 - **Round**: every event of a command carries the task's round before the
   command; `review.failed` and `task.returned_for_rework` raise it for what
   follows, and a step they open carries the new round.
