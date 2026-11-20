@@ -8,9 +8,10 @@ module Leverage
       # - name, model, effort, strength rank apply at once; the next run
       #   uses them. A null model or effort is "", the tool's default, and a
       #   null rank is 1, the seats' default (IN-29).
-      # - role: builder or reviewer (planner and orchestrator are 422
-      #   invalid until milestone 4, as in connect_seat); a change of role is
-      #   invalid_state while the seat holds a task or a review.
+      # - role: builder, reviewer, planner or orchestrator (the registry's
+      #   seat_roles; milestone 4 plan §0.1 fact 12 lifts the limit of the
+      #   two job roles); a change of role is invalid_state while the seat
+      #   holds a task or a review.
       # - credential_id: for a seat the app runs only (a seat that connects
       #   on its own has no login: 422 invalid). The login must be an added
       #   login of the workspace (404 for an unknown id, 422 invalid for an
@@ -25,7 +26,13 @@ module Leverage
       #   (SeatRuns.release_working_task), and its seat-bound holds close
       #   (Holds.close_seat_bound, with HE-35's wait_cause). A review the
       #   seat holds is released when its run is reported stopped (IF-21).
-      #   enabled true starts nothing: the owner chooses Start.
+      #   enabled true starts nothing: the owner chooses Start. Milestone 4
+      #   (plan §2.1 rule 11): the pending submit of that Working task, and a
+      #   provisional claim the seat holds, are cancelled with invalid_state
+      #   after seat.changed and before task.released; a reviewer's pending
+      #   pass is cancelled when its run is reported stopped (SeatRuns), not
+      #   by the change; a job the seat holds as a checker or a planner is
+      #   left to its run timeout.
       #
       # The row's other side events need Finishing (action_unconfirmed,
       # milestone 5), checks and jobs (milestone 4) or No reviewer is
@@ -39,7 +46,6 @@ module Leverage
       #
       # Params: id (the seat), and the ChangeSeatRequest body.
       class ChangeSeat < Entry
-        ROLES = %w[builder reviewer].freeze
         CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
 
         def load(ctx)
@@ -50,8 +56,8 @@ module Leverage
           if @params.key?("name") && !(@params["name"].is_a?(String) && !@params["name"].empty?)
             raise Invalid, "A seat needs a name"
           end
-          if @params.key?("role") && !ROLES.include?(@params["role"])
-            raise Invalid, "Builder and reviewer seats only in this milestone"
+          if @params.key?("role") && !Contract.list("seat_roles").include?(@params["role"])
+            raise Invalid, "A seat is a builder, a reviewer, a planner or an orchestrator"
           end
 
           load_login(ctx) if @params.key?("credential_id")

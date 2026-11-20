@@ -11,9 +11,13 @@ module Leverage
       # paused lease is released too (review.released), so another reviewer
       # can claim it at once: a removed seat can never act on it again, and
       # a seat that connects on its own has no run whose stop would release
-      # it (IF-21). A review lease past its due time is its timer's. The
-      # row's other side events need holds and rules of later milestones
-      # and are not written.
+      # it (IF-21). A review lease past its due time is its timer's. A
+      # pending submit, a pending pass or a provisional claim of the seat is
+      # cancelled with invalid_state, after seat.removed and before the task
+      # or the review is released (milestone 4 plan §2.1 rule 11,
+      # SeatRuns.removed). A job the seat holds as a checker or a planner is
+      # left to its run timeout. The row's other side events need holds of
+      # later milestones and are not written.
       #
       # A removed or unknown seat is 404.
       #

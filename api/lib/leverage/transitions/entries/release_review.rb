@@ -5,6 +5,8 @@ module Leverage
       # review back. The review has no reviewer and no lease, the task stays
       # In review, unassigned, and any reviewer may claim it, this one
       # included. review.released is about the review. Allowed under a hold.
+      # The reviewer's pending pass, if it has one, is cancelled first with
+      # invalid_state (milestone 4 plan §2.1 rule 11).
       #
       # Params: id (the review).
       class ReleaseReview < Entry
@@ -20,6 +22,8 @@ module Leverage
         end
 
         def perform(ctx)
+          pending = PendingTransitions.of(@task)
+          PendingTransitions.cancel(ctx, pending, "invalid_state") if pending
           Leases.end_lease(ctx, @review)
           @review.update!(reviewer_seat_id: nil, credential_id: nil)
           ctx.emit("review.released", task: @task, subject: @review, payload: {})

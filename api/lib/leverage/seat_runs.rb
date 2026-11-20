@@ -15,6 +15,14 @@ module Leverage
   # (builder_lease_expiry, review_lease_expiry), which writes the
   # lease_expired event the log needs; only a live or paused lease is
   # released here.
+  #
+  # Milestone 4 (plan §2.1 rule 11): whatever this module takes from a seat
+  # first ends the waiting command the seat has on it, through
+  # PendingTransitions.cancel with invalid_state: the pending pass of a
+  # review a stopped run or a removed seat releases, the pending submit of
+  # the Working task a removed or disabled seat releases, and the
+  # provisional claim a removed or disabled seat holds. The cancel comes
+  # before the release's own event.
   module SeatRuns
     # Where a seat's run belongs now (milestone 3 plan HD-1, HD-4): the
     # credential, and the work it continues (a Task, a Review or nil). A
@@ -182,20 +190,26 @@ module Leverage
     # moment, it is no longer wanted running, a Working task it holds is
     # released with seat_removed (caused by removed, the seat.removed
     # Event), a review it holds is released, and a seat the app runs gets
-    # a stop_seat request.
+    # a stop_seat request. A pending submit, a pending pass or a
+    # provisional claim of the seat is cancelled first (rule 11).
     #
     # Returns the stop_seat HelperRequest, or nil.
     def removed(ctx, seat, cause:)
       seat.update!(token_hash: nil, wanted_running: false)
       release_working_task(ctx, seat, reason: "seat_removed", cause: cause)
-      held_reviews(ctx, seat).each { |review| release_review(ctx, review) }
+      held_reviews(ctx, seat).each do |review|
+        cancel_pending(ctx, Task.find(review.task_id))
+        release_review(ctx, review)
+      end
       seat.credential_id && queue(ctx, "stop_seat", seat: seat)
     end
 
     # A seat's run has stopped, or is treated as stopped (IN-30): run state
     # stopped, the token ended (IN-17), and a review the seat holds released
-    # so another reviewer can claim it (IF-21, L914). A builder's task keeps
-    # its lease until the lease ends (L121). wanted_running is not touched:
+    # so another reviewer can claim it (IF-21, L914), after its pending pass,
+    # if any, is cancelled (rule 11). A builder's task keeps its lease until
+    # the lease ends (L121), and its pending submit with it. wanted_running
+    # is not touched:
     # a run that dies on its own is started again only by the helper's next
     # token.
     #
@@ -212,7 +226,10 @@ module Leverage
     def run_stopped(ctx, seat, reason: nil, **actor)
       seat.update!(run_state: "stopped", token_hash: nil, run_credential_id: nil,
         run_stop_reason: reason || seat.run_stop_reason)
-      held_reviews(ctx, seat).map { |review| release_review(ctx, review, **actor) }
+      held_reviews(ctx, seat).map do |review|
+        cancel_pending(ctx, Task.find(review.task_id))
+        release_review(ctx, review, **actor)
+      end
     end
 
     # Releases a review: no reviewer, no lease; the task stays In review.
@@ -231,12 +248,22 @@ module Leverage
     # Holds.close_seat_bound, after task.released and caused by it; the
     # cause of the wait_ready step that opens (HE-35) is on the hold.closed
     # that opens it when a seat-bound hold was open, else on
-    # task.released. Returns the task.released Event, or nil when the seat
-    # holds no Working task with a live or paused lease.
+    # task.released.
+    #
+    # Milestone 4 (rule 11): a provisional claim the seat holds in Ready is
+    # cancelled (cancel_provisional_claim); the claim has no lease and no
+    # task.claimed, so it gets no task.released, and the cancel is all the
+    # task gets. A pending submit of the Working task is cancelled before
+    # task.released is written.
+    #
+    # Returns the task.released Event, or nil when the seat holds no
+    # Working task with a live or paused lease.
     def release_working_task(ctx, seat, reason:, cause: nil)
+      cancel_provisional_claim(ctx, seat)
       task = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "working").order(:created_at).first
       return nil unless task && lease_live?(ctx, task)
 
+      cancel_pending(ctx, task)
       bound = Hold.where(workspace_id: task.workspace_id, task_id: task.id, closed_at: nil, reason: SEAT_BOUND_REASONS)
         .exists?
       task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil, resume_pending_since: nil, lease_due_at: nil,
@@ -246,6 +273,27 @@ module Leverage
         payload: { reason: reason, wait_cause: (wait_cause unless bound) })
       Holds.close_seat_bound(ctx, task, cause: released, wait_cause: wait_cause) if bound
       released
+    end
+
+    # Cancels the provisional claim the seat holds, if it holds one (PRD
+    # L390, SM-14): a Ready task whose holder is the seat, under its pending
+    # claim, with invalid_state (rule 11). The claim has no lease, so no
+    # timer ends it; a removed, disabled or paused claimant does, and no
+    # hold opens for it.
+    #
+    # Returns nothing worth reading.
+    def cancel_provisional_claim(ctx, seat)
+      task = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "ready").order(:created_at).first
+      cancel_pending(ctx, task) if task
+    end
+
+    # Ends the waiting command of the task, if it has one, because a seat's
+    # run or the seat itself took the task or the review from the
+    # requester (rule 11): PendingTransitions.cancel with invalid_state.
+    # Nothing happens for a task with no pending transition.
+    def cancel_pending(ctx, task)
+      pending = PendingTransitions.of(task)
+      PendingTransitions.cancel(ctx, pending, "invalid_state") if pending
     end
 
     # The non-secret inputs of a start_seat request (IN-22): the seat's

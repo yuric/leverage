@@ -16,6 +16,11 @@ module Leverage
       #
       # Result: expired_review_ids, the reviews whose lease it ended.
       #
+      # Milestone 4 (plan §2.1 rule 11): a pending pass under the review
+      # whose lease ends is cancelled first with lease_expired, through
+      # PendingTransitions.cancel, so that its checks and jobs are withdrawn
+      # before review.lease_expired is written.
+      #
       # The row's side events ("No reviewer is eligible") arrive with rules
       # in milestone 4 (SC-11).
       class ReviewLeaseExpiry < Entry
@@ -59,6 +64,8 @@ module Leverage
 
         def expire(ctx, review, task)
           effective_at = Timers.effective_at(task, review.lease_due_at)
+          pending = PendingTransitions.of(task)
+          PendingTransitions.cancel(ctx, pending, "lease_expired") if pending
           Leases.end_lease(ctx, review)
           review.update!(reviewer_seat_id: nil)
           ctx.emit("review.lease_expired", task: task, subject: review, payload: {}, actor_kind: "app", actor_id: nil,
