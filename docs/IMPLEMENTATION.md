@@ -523,6 +523,17 @@ failing test first for each):
   `report_request_progress` takes Sign in again's checks; a seat change
   that changes nothing writes no event; DEPLOY.md gives a dump on demand.
 
+A second review, of those fixes, found five more (all minor), each fixed
+with a test that failed first or with its sentence made true: the
+end-to-end wait test fails, rather than passing over the card's check,
+when the hold closed before the board was read, and its reset is 30
+seconds ahead so that the board is read while the hold is open; a restore
+drops its staging database on a failed step of any kind and when the
+database it would replace cannot be dropped; a reset time is read only
+after "resets", "reset at" or "try again at"; and ADR 0010, the health
+read's comment and the Grok row of the detection table say what the code
+and the reply file say.
+
 ## What the Handoff milestone proves, and how far
 
 - **Every interruption is played by stand-in tools.** No agent signed in,
@@ -537,7 +548,8 @@ failing test first for each):
   with the criterion passed before the interruption kept, one claim and
   the same builder; then the replay and the audit pass, each recovery time
   is within the working bar, and the secret scan finds nothing. It passed
-  three times in a row on the owner's Mac and again in the final run.
+  three times in a row on the owner's Mac, last after the second review's
+  fixes.
 - **The detection rules for a real limit are unproven** until a real limit
   reply is captured. No tool's limit reply is documented or observed, so
   every limit reply the detectors are written to is made, with an invented
@@ -706,20 +718,20 @@ percentiles.
 
 How long each interrupted run of `scripts/e2e_handoff.sh` took to get back
 to work, in seconds, as `bin/rails leverage:recovery_times` reads it from
-each test's log (plan HE-17). Runs 1 to 3 were in a row at commit 7d6eaba
-on 2026-11-20 between 04:22 and 04:35 UTC; the final run was at 04:45 UTC
-on the pull request's code. "Handoff" means another account took over in
+each test's log (plan HE-17). Runs 1 to 3 were in a row at commit f3e4330,
+after the second review's fixes, on 2026-11-20 between 06:34 and 06:48
+UTC. "Handoff" means another account took over in
 the command that recorded the interruption; "the seat's next event" means
 the work waited and the time ends at the continuing agent's first event.
 
-| Test | Form | Ended by | Run 1 | Run 2 | Run 3 | Final run |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| `LimitHandoffEndToEndTests.testSameProvider` | A limit, another login of the same provider | Handoff | 0 | 0 | 0 | 0 |
-| `LimitHandoffEndToEndTests.testOtherProvider` | A limit, a login of another provider | Handoff | 0 | 0 | 0 | 0 |
-| `LimitWaitEndToEndTests.testWaitsForTheReset` | A limit with no other login, reset 12 seconds ahead | The seat's next event | 21 | 22 | 21 | 22 |
-| `SignedOutEndToEndTests.testHandsOff` | A login found signed out, another login takes over | Handoff | 0 | 0 | 0 | 0 |
-| `SignedOutEndToEndTests.testHeldUntilSignIn` | A login found signed out, no other; Sign in again | The seat's next event | 4 | 4 | 4 | 4 |
-| `LimitThenSignedOutEndToEndTests.testHeldUntilTheNextSignsIn` | A limit while the next login is signed out; Sign in again | The seat's next event | 4 | 4 | 4 | 4 |
+| Test | Form | Ended by | Run 1 | Run 2 | Run 3 |
+| --- | --- | --- | ---: | ---: | ---: |
+| `LimitHandoffEndToEndTests.testSameProvider` | A limit, another login of the same provider | Handoff | 0 | 0 | 0 |
+| `LimitHandoffEndToEndTests.testOtherProvider` | A limit, a login of another provider | Handoff | 0 | 0 | 0 |
+| `LimitWaitEndToEndTests.testWaitsForTheReset` | A limit with no other login, reset 30 seconds ahead | The seat's next event | 37 | 36 | 36 |
+| `SignedOutEndToEndTests.testHandsOff` | A login found signed out, another login takes over | Handoff | 0 | 0 | 0 |
+| `SignedOutEndToEndTests.testHeldUntilSignIn` | A login found signed out, no other; Sign in again | The seat's next event | 4 | 4 | 4 |
+| `LimitThenSignedOutEndToEndTests.testHeldUntilTheNextSignsIn` | A limit while the next login is signed out; Sign in again | The seat's next event | 4 | 4 | 4 |
 
 - **Against what.** The recovery time ceiling is not set: it is the
   owner's to set before the milestone is called done
@@ -728,7 +740,7 @@ the work waited and the time ends at the continuing agent's first event.
   helper's 10-minute wait for a sign-in plus five minutes) and gave to
   that check alone; every one is within it, and none was open.
 - **What they say.** The runs are scripted: a stand-in signs in at once
-  and a reset is 12 seconds ahead, so these are seconds where a real wait
+  and a reset is 30 seconds ahead, so these are seconds where a real wait
   for a reset or for the owner is minutes or hours. They prove that the
   time is recorded and read from the log, not how long the owner will
   wait.
