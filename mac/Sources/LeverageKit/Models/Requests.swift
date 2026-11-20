@@ -25,8 +25,9 @@ public struct SignInRequest: Encodable, Equatable, Sendable, CustomStringConvert
     public var customMirror: Mirror { Mirror(self, children: [:]) }
 }
 
-/// `CriterionInput`: a criterion as the contract form sends it.
-public struct CriterionInput: Encodable, Equatable, Sendable {
+/// `CriterionInput`: a criterion as the contract form sends it. A contract
+/// draft's material (`DraftMaterial`) reads it back.
+public struct CriterionInput: Codable, Equatable, Sendable {
     public let text: String
     public let kind: CriterionKind
 

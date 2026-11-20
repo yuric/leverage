@@ -28,8 +28,9 @@ enum ContractDocument {
     }
 
     /// The operations served so far: milestone 2's 48 (16 agent calls, the
-    /// health check, 21 owner calls, 5 helper calls and six additions) and
-    /// milestone 3's eleven, which are the last block of the list.
+    /// health check, 21 owner calls, 5 helper calls and six additions),
+    /// milestone 3's eleven and, last, the twelve of the Rule checks
+    /// milestone.
     static let served: [String] = [
         "get_next", "get_command", "claim_next_task", "get_task_briefing",
         "acknowledge_task_briefing", "heartbeat_task", "start_criterion", "pass_criterion",
@@ -47,10 +48,16 @@ enum ContractDocument {
         // Milestone 3 (Handoff, plan section 2.3).
         "report_limit", "report_signed_out", "sign_in_again", "list_inbox", "promote_task",
         "edit_contract", "hold_task", "resume_task", "pause_seat", "resume_seat", "change_seat",
+        // Milestone 4 (Rule checks, plan section 2.3).
+        "claim_next_job", "submit_job_result", "list_rules", "add_rule", "save_rule", "enable_rule",
+        "disable_rule", "revert_rule", "remove_rule", "rerun_check", "override_check", "draft_contract",
     ]
 
+    /// The twelve operations the Rule checks milestone serves.
+    static let ruleChecks: [String] = Array(served.suffix(12))
+
     /// The eleven operations the Handoff milestone serves.
-    static let handoff: [String] = Array(served.suffix(11))
+    static let handoff: [String] = Array(served.dropLast(12).suffix(11))
 
     /// The registry entry of one operation.
     static func operation(_ id: String) -> JSONValue? {
@@ -134,6 +141,9 @@ struct ContractExamplesTests {
         "SeatsList": decodes(SeatsList.self),
         "CredentialsList": decodes(CredentialsList.self),
         "SystemHealth": decodes(SystemHealth.self),
+        "ClaimNextJobCompleted": decodes(CommandOutcome<JobClaim>.self),
+        "DraftContractCompleted": decodes(CommandOutcome<DraftContractResult>.self),
+        "RulesList": decodes(RulesList.self),
         "InboxPage": decodes(InboxPage.self),
         "HelperNext": decodes(HelperNext.self),
         "HelperRequestStatus": decodes(HelperRequestStatus.self),
@@ -145,8 +155,10 @@ struct ContractExamplesTests {
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 59)
+        #expect(ContractDocument.served.count == 71)
         #expect(ContractDocument.handoff.first == "report_limit")
+        #expect(ContractDocument.handoff.last == "change_seat")
+        #expect(ContractDocument.ruleChecks.first == "claim_next_job")
         for id in ContractDocument.served {
             #expect(ContractDocument.operation(id) != nil, "\(id) is not in registry.json")
             #expect(ContractDocument.openAPIOperation(id) != nil, "\(id) is not in openapi.json")
@@ -174,7 +186,7 @@ struct ContractExamplesTests {
                 }
             }
         }
-        #expect(decoded > 100)
+        #expect(decoded > 110)
     }
 
     @Test("a token answer is the token the first time and repeated, with none, after",
@@ -327,6 +339,35 @@ struct ContractExamplesTests {
         ("PassCriterionRequest", ["evidence", "kind"], EvidenceKind.allCases.map(\.rawValue)),
         ("ReleaseTaskRequest", ["reason"],
          ReleaseReason.allCases.filter(\.isChosenBySeat).map(\.rawValue)),
+        // The Rule checks milestone.
+        ("RuleVersion", ["hook"], RuleHook.allCases.map(\.rawValue)),
+        ("RuleVersion", ["kind"], RuleKind.allCases.map(\.rawValue)),
+        ("RuleVersion", ["checker"], RuleChecker.allCases.map(\.rawValue)),
+        ("RuleVersion", ["on_fail"], RuleOnFail.allCases.map(\.rawValue)),
+        ("RuleVersion", ["route"], RuleRoute.allCases.map(\.rawValue)),
+        ("RuleVersion", ["origin"], RuleOrigin.allCases.map(\.rawValue)),
+        ("RuleVersion", ["author_kind"], ActorKind.allCases.map(\.rawValue)),
+        ("RuleScope", ["kind"], RuleScopeKind.allCases.map(\.rawValue)),
+        ("RuleScope", ["action_kinds", "items"], ActionKind.allCases.map(\.rawValue)),
+        ("AddRuleRequest", ["hook"], RuleHook.allCases.filter(\.isCustomAllowed).map(\.rawValue)),
+        ("SaveRuleRequest", ["on_fail"], RuleOnFail.allCases.map(\.rawValue)),
+        ("SaveRuleRequest", ["route"], RuleRoute.allCases.map(\.rawValue)),
+        ("TaskRuleCheck", ["hook"], RuleHook.allCases.map(\.rawValue)),
+        ("TaskRuleCheck", ["checker"], RuleChecker.allCases.map(\.rawValue)),
+        ("TaskRuleCheck", ["on_fail"], RuleOnFail.allCases.map(\.rawValue)),
+        ("TaskRuleCheck", ["result"], CheckResult.allCases.map(\.rawValue)),
+        ("TaskRuleCheck", ["effect"], RuleEffect.allCases.map(\.rawValue)),
+        ("TaskStep", ["kind"], StepKind.allCases.map(\.rawValue)),
+        ("TaskStep", ["step_class"], StepClass.allCases.map(\.rawValue)),
+        ("TaskStep", ["subject_kind"], StepSubjectKind.allCases.map(\.rawValue)),
+        ("TaskStep", ["cause_kind"], StepCauseKind.allCases.map(\.rawValue)),
+        ("TaskPage", ["draft"], DraftState.allCases.map(\.rawValue)),
+        ("RuleCheckJobInput", ["hook"], RuleHook.allCases.map(\.rawValue)),
+        ("RuleCheckJobResult", ["result"], CheckVerdict.allCases.map(\.rawValue)),
+        ("ClaimJobResult", ["kind"], JobKind.allCases.map(\.rawValue)),
+        ("QuotedText", ["label"], QuotedLabel.allCases.map(\.rawValue)),
+        ("CheckContract", ["criteria", "items", "kind"], CriterionKind.allCases.map(\.rawValue)),
+        ("CheckContract", ["criteria", "items", "state"], CriterionState.allCases.map(\.rawValue)),
     ]
 
     @Test("every enum the models read equals the interface schema's")
@@ -420,10 +461,10 @@ struct ContractExamplesTests {
         let late = Data("""
             {"sweep_last_ran_at":null,"sweep_late":true,"helper_last_reported_at":null,
              "queued_helper_requests":0,"ready_tasks":0,"waiting_reviews":0,"orchestrator":"not_set_up",
-             "backup_last_ran_at":null,"backup_late":true}
+             "backup_last_ran_at":null,"backup_late":true,"waiting_checks":2}
             """.utf8)
         let again = try LeverageJSON.decoder().decode(SystemHealth.self, from: late)
-        #expect(again.backupLastRanAt == nil && again.backupLate)
+        #expect(again.backupLastRanAt == nil && again.backupLate && again.waitingChecks == 2)
     }
 
     @Test("a start request carries the task or review its run continues")
@@ -454,6 +495,27 @@ struct ContractExamplesTests {
         ("RecoveryTime", keys(of: RecoveryTime.self)),
         ("HelperRequestParams", keys(of: HelperRequestParams.self)),
         ("InboxPage", keys(of: InboxPage.self)),
+        ("Rule", keys(of: RuleRecord.self)),
+        ("RuleVersion", keys(of: RuleVersion.self)),
+        ("RuleScope", keys(of: RuleScope.self)),
+        ("RuleStats", keys(of: RuleStats.self)),
+        ("RuleWithVersion", keys(of: RuleRow.self)),
+        ("RulesList", keys(of: RulesList.self)),
+        ("TaskRuleCheck", keys(of: RuleCheckRow.self)),
+        ("RuleCheckAttempt", keys(of: CheckAttempt.self)),
+        ("TaskStep", keys(of: TaskStepRow.self)),
+        ("PendingCommand", keys(of: PendingState.self)),
+        ("TaskPage", keys(of: TaskPage.self)),
+        ("BoardTask", keys(of: BoardTask.self)),
+        ("CheckMaterial", keys(of: CheckMaterial.self)),
+        ("CheckContract", keys(of: CheckContract.self)),
+        ("QuotedText", keys(of: QuotedText.self)),
+        ("DraftMaterial", keys(of: DraftMaterial.self)),
+        ("RuleCheckJobInput", keys(of: RuleCheckJobInput.self)),
+        ("ContractDraftJobInput", keys(of: ContractDraftJobInput.self)),
+        ("ClaimJobResult", keys(of: JobClaim.self)),
+        ("DraftContractResult", keys(of: DraftContractResult.self)),
+        ("RuleCheckJobResult", keys(of: RuleCheckVerdict.self)),
     ]
 
     private static func keys<Model: Codable & SendableMetatype>(of type: Model.Type)
@@ -468,6 +530,10 @@ struct ContractExamplesTests {
 
     @Test("a model keeps every field of its schema and writes no other", arguments: [
         "Credential", "Seat", "SystemHealth", "RecoveryTime", "HelperRequestParams", "InboxPage",
+        "Rule", "RuleVersion", "RuleScope", "RuleStats", "RuleWithVersion", "RulesList", "TaskRuleCheck",
+        "RuleCheckAttempt", "TaskStep", "PendingCommand", "TaskPage", "BoardTask", "CheckMaterial",
+        "CheckContract", "QuotedText", "DraftMaterial", "RuleCheckJobInput", "ContractDraftJobInput",
+        "ClaimJobResult", "DraftContractResult", "RuleCheckJobResult",
     ])
     func modelsKeepEveryField(component: String) throws {
         let entry = try #require(Self.roundTrips.first { $0.component == component })

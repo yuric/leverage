@@ -152,6 +152,47 @@ struct SessionGuard: OwnerAPI {
     func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await guarded { try await base.signInAgain(credentialID: credentialID, key: key) }
     }
+
+    // The Rule checks milestone's calls.
+
+    func listRules() async throws -> RulesList { try await guarded { try await base.listRules() } }
+
+    func addRule(_ request: AddRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.addRule(request, key: key) }
+    }
+
+    func saveRule(ruleID: UUID, _ request: SaveRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.saveRule(ruleID: ruleID, request, key: key) }
+    }
+
+    func enableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.enableRule(ruleID: ruleID, key: key) }
+    }
+
+    func disableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.disableRule(ruleID: ruleID, key: key) }
+    }
+
+    func revertRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.revertRule(ruleID: ruleID, key: key) }
+    }
+
+    func removeRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.removeRule(ruleID: ruleID, key: key) }
+    }
+
+    func rerunCheck(checkID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.rerunCheck(checkID: checkID, key: key) }
+    }
+
+    func overrideCheck(checkID: UUID, _ request: OverrideCheckRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await guarded { try await base.overrideCheck(checkID: checkID, request, key: key) }
+    }
+
+    func draftContract(taskID: UUID, key: IdempotencyKey) async throws -> CommandOutcome<DraftContractResult> {
+        try await guarded { try await base.draftContract(taskID: taskID, key: key) }
+    }
 }
 
 /// The helper's token comes from `issue_helper_token`: this hands any

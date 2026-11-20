@@ -25,10 +25,16 @@ public struct BoardTask: Codable, Equatable, Sendable {
     public let waitingUntil: Date?
     /// The task's open Needs you item, if any (MA-29).
     public let inboxItem: InboxItem?
+    /// A transition of the task is pending and no hold is open (RD-27).
+    public var checking: Bool = false
+    /// The reason of the failed check behind an open `contract_incomplete`
+    /// hold, or nil (RD-27). Text a model wrote: shown as data.
+    public var checkReason: String? = nil
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
-        waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil
+        waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil,
+        checking: Bool = false, checkReason: String? = nil
     ) {
         self.task = task
         self.blocked = blocked
@@ -179,12 +185,26 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let waitingForCredentialID: UUID?
     /// When that account resets, as its board card says.
     public let waitingUntil: Date?
+    /// The task's steps in order, from `task_steps` (RD-24).
+    public var steps: [TaskStepRow] = []
+    /// The task's lifetime to `asOf`: the sum of its steps' seconds.
+    public var lifetimeSeconds: Double = 0
+    /// The database time the open step and the lifetime are measured to.
+    public var asOf: Date = Date(timeIntervalSince1970: 0)
+    /// The task's rule checks in order of creation (RD-28).
+    public var ruleChecks: [RuleCheckRow] = []
+    /// The waiting command and what it waits on, or nil.
+    public var pending: PendingState? = nil
+    /// Where a contract draft stands (RD-37).
+    public var draft: DraftState = .none
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
         holds: [Hold] = [], waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, reviews: [Review] = [],
         inboxItems: [InboxItem] = [], events: [EventRecord] = [], names: [LogName] = [],
-        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int
+        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int,
+        steps: [TaskStepRow] = [], lifetimeSeconds: Double = 0, asOf: Date = Date(timeIntervalSince1970: 0),
+        ruleChecks: [RuleCheckRow] = [], pending: PendingState? = nil, draft: DraftState = .none
     ) {
         self.task = task
         self.criteria = criteria
@@ -304,11 +324,14 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     /// True when the newest backup is more than 26 hours old, or when there
     /// is none and the workspace is more than an hour old (HB-4).
     public let backupLate: Bool
+    /// Rule checks queued and not claimed, plus those held with
+    /// `check_error`, counted at each read (RD-18).
+    public var waitingChecks: Int = 0
 
     public init(
         sweepLastRanAt: Date?, sweepLate: Bool, helperLastReportedAt: Date?, queuedHelperRequests: Int,
         readyTasks: Int, waitingReviews: Int, orchestrator: OrchestratorState = .notSetUp,
-        backupLastRanAt: Date? = nil, backupLate: Bool = false
+        backupLastRanAt: Date? = nil, backupLate: Bool = false, waitingChecks: Int = 0
     ) {
         self.sweepLastRanAt = sweepLastRanAt
         self.sweepLate = sweepLate

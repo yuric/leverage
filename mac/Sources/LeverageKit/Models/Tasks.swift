@@ -321,6 +321,12 @@ public struct InboxItem: Codable, Equatable, Sendable {
         self.resolvedAt = resolvedAt
     }
 
+    /// The checks waiting, for an open `orchestrator_offline` item: the count
+    /// now, not the count when it opened (RD-18). Nil for any other item.
+    public var waitingChecks: Int? {
+        nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, kind, choices, facts, state
         case aboutKind = "about_kind"

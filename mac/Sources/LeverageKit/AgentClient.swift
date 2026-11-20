@@ -91,4 +91,13 @@ public struct AgentClient: AgentAPI {
         -> PlainOutcome {
         try await transport.command(.giveVerdict, path: ["id": reviewID.contractString], body: request, key: key)
     }
+
+    public func claimNextJob(key: IdempotencyKey) async throws -> CommandOutcome<JobClaim> {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
 }

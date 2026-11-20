@@ -174,4 +174,47 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
     public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await transport.command(.signInAgain, path: ["id": credentialID.contractString], key: key)
     }
+
+    public func listRules() async throws -> RulesList {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func addRule(_ request: AddRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func saveRule(ruleID: UUID, _ request: SaveRuleRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func enableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func disableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func revertRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func removeRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func rerunCheck(checkID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func overrideCheck(checkID: UUID, _ request: OverrideCheckRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func draftContract(taskID: UUID, key: IdempotencyKey) async throws
+        -> CommandOutcome<DraftContractResult> {
+        throw LeverageClientError.invalidBody
+    }
 }
