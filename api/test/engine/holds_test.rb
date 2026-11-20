@@ -398,19 +398,33 @@ class HoldsTest < ActiveSupport::TestCase
   test "the last hold lifting re-enters the pending transition once, with the trigger hold_lifted (L378, rule 9)" do
     task = working_task
     pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
-    rule = @scenario.rule
     first = H.open(context, task: task, reason: "owner_hold")
-    second = H.open(context, task: task, reason: "rerun_limit", rule_id: rule.id)
+    second = H.open(context, task: task, reason: "rounds_exceeded", facts: { round: 0 })
 
     calls = with_pending(pending) { H.close(context, hold: first, task: task.reload) }
     assert_empty calls, "a hold is still open: nothing re-enters (rule 9)"
 
     closing = context
-    calls = with_pending(pending) { H.close(closing, hold: second, task: task.reload) }
+    calls = with_pending(pending) { H.close(closing, hold: second, task: task.reload, choice: "allow_another_round") }
     assert_equal [ [ :reenter, pending.id, :hold_lifted ] ], calls.map(&:summary)
     assert_nil calls.sole.argument.rule_check_id
     assert_equal %w[hold.closed inbox.resolved], calls.sole.written_before.last(2),
       "it re-enters after the hold has closed and its item is resolved"
+  end
+
+  # Override, Run it again, the re-run's result, a rule turned off and a
+  # cancel each close the check's hold and gate the transition with the
+  # check themselves (override_check.rb, rule_records.rb): Holds does not
+  # gate it a second time in the same command.
+  %w[check_error rerun_limit].each do |reason|
+    test "the last hold lifting is #{reason}, a check's own hold: Holds leaves the re-entry to its closer" do
+      task = working_task
+      pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
+      rule = @scenario.rule
+      hold = H.open(context, task: task, reason: reason, rule_id: rule.id)
+
+      assert_empty(with_pending(pending) { H.close(context, hold: hold, task: task.reload) })
+    end
   end
 
   test "closing the last hold re-enters nothing with no pending transition, on a cancelled task, or inside the waiting command" do
