@@ -35,9 +35,9 @@ require "time"
 # instants of the nearest bound times around it (the database's now
 # standing for the command's own @t), keeping the trace's order. An
 # unbound one after the command's own @t is a future time, FUTURE + s
-# seconds, so future times keep their order and the clock never reaches
-# one. The trace then reaches a future time without a clock stub, as a
-# lease reaches its due time (EN-18): before a command at @t:s, every
+# seconds (an hour on), so future times keep their order and the clock
+# never reaches one. The trace then reaches a future time without a clock
+# stub, as a lease reaches its due time (EN-18): before a command at @t:s, every
 # future @t:n with n <= s is moved to the database's now, each
 # credential whose limited_until is that time with it, and @t:n is bound
 # again to the new instant (pass_times). So a reset passes between two
@@ -87,7 +87,10 @@ class TraceRunner
   STEP_IDS = %w[task_id subject_id seat_id cause_rule_id].freeze
   HELPER_REQUEST = "helper_request".freeze
   UNFINISHED_REQUESTS = %w[queued picked_up].freeze
-  FUTURE = 365 * 24 * 3600
+  # An hour: later than any trace's run, and well within the shortest
+  # bound on a reported reset time (Leverage::Handoff::RESET_BOUNDS, six
+  # hours for the five-hour window), so a trace's reset times are kept.
+  FUTURE = 3600
   LEASE_ENDS = %w[task.lease_expired review.lease_expired].freeze
   # The hold reasons that pause a lease clock (the registry's lease_clock).
   PAUSING = Leverage::Contract.registry.fetch("hold_reasons")
