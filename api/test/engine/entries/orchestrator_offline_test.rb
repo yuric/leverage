@@ -207,15 +207,14 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
 
     calls = with_writers { timer("orchestrator_offline") }
 
-    assert_equal [ "Jobs.queue", "RuleChecks.new_attempt" ], calls.map(&:name)
-    queued = calls.first.keywords
-    assert_equal [ "rule_check", check.task_id, check.id, "orchestrator", errored_job.input, 3 ],
-      [ queued.fetch(:kind), queued.fetch(:task).id, queued.fetch(:target).id, queued.fetch(:seat_role), queued.fetch(:input),
-        queued.fetch(:attempt_number) ], "the job runs the check's third attempt (trace 19, command 31)"
-    assert_equal check.id, calls.last.arguments.second.id
+    assert_equal [ "RuleChecks.queue_attempt" ], calls.map(&:name)
+    assert_equal [ check.id, { seat_role: "orchestrator" } ], [ calls.sole.arguments.second.id, calls.sole.keywords ]
     events = events_after(before)
-    assert_equal %w[inbox.resolved job.queued check.queued].sort, events.map(&:type).sort
-    assert_equal "inbox.resolved", events.first.type
+    assert_equal %w[inbox.resolved check.queued job.queued], events.map(&:type)
+    fresh = Job.where(target_id: check.id).order(:attempt_number).last
+    assert_equal [ 3, fresh.id ], [ events.second.payload["attempt_number"], events.second.payload["job_id"] ],
+      "the check's third attempt, on a job of its own"
+    refute_equal errored_job.id, fresh.id
     assert_by_app_at events, orchestrator.reload.last_polled_at
     assert_nil hold.reload.closed_at, "the hold closes when the new attempt's result arrives (L403)"
   end
@@ -258,9 +257,9 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
 
     calls = with_writers { timer("orchestrator_offline") }
 
-    assert_equal [ "Jobs.queue", "RuleChecks.new_attempt" ], calls.map(&:name),
+    assert_equal [ "RuleChecks.queue_attempt" ], calls.map(&:name),
       "only the check that erred while the orchestrator was offline, with no item of its own, is queued again"
-    assert_equal without_item.id, calls.last.arguments.second.id
+    assert_equal without_item.id, calls.sole.arguments.second.id
     refute(events_after(before).any? { |event| event.type.start_with?("inbox.") })
     assert_empty(with_writers { timer("orchestrator_offline") }, "queued again once: the check waits for its result")
   end

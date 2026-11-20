@@ -22,7 +22,7 @@ module JobTimersSupport
   # The writers a timer calls, and their stand-ins below.
   WRITERS = {
     Leverage::Jobs => %i[time_out requeue queue],
-    Leverage::RuleChecks => %i[error new_attempt],
+    Leverage::RuleChecks => %i[error new_attempt queue_attempt],
     Leverage::PendingTransitions => %i[reenter]
   }.freeze
 
@@ -32,7 +32,9 @@ module JobTimersSupport
   # Runs the block with the stand-in writers; returns the calls, in order.
   def with_writers
     calls = []
-    saved = WRITERS.flat_map { |mod, names| names.map { |name| [ mod, name, mod.method(name) ] } }
+    # A writer another package has not written yet here is defined for the
+    # block and removed afterwards.
+    saved = WRITERS.flat_map { |mod, names| names.map { |name| [ mod, name, mod.respond_to?(name) && mod.method(name) ] } }
     WRITERS.each do |mod, names|
       names.each do |name|
         stand_in = Writers.method(name)
@@ -45,7 +47,9 @@ module JobTimersSupport
     yield
     calls
   ensure
-    saved&.each { |mod, name, original| mod.define_singleton_method(name, original) }
+    saved&.each do |mod, name, original|
+      original ? mod.define_singleton_method(name, original) : mod.singleton_class.remove_method(name)
+    end
   end
 
   # The stand-ins. Each writes what the contract's rows say its writer
@@ -102,6 +106,26 @@ module JobTimersSupport
         payload: identity(check).merge(attempt_number: number, job_id: job.id, blocking: blocking, claimant_seat_id: nil,
           pending_transition_id: check.pending_transition_id, action_id: nil))
       attempt
+    end
+
+    # The next attempt on a job of its own, in the traces' order:
+    # check.queued names the job, then the job is queued (job.queued), then
+    # the attempt row names it (trace 19, command 31).
+    def queue_attempt(ctx, check, kind: "rule_check", seat_role: "orchestrator")
+      number = RuleCheckAttempt.where(rule_check_id: check.id).maximum(:attempt_number).to_i + 1
+      last = RuleCheckAttempt.find_by(rule_check_id: check.id, attempt_number: number - 1)
+      job_id = SecureRandom.uuid
+      check.update!(result: nil)
+      blocking = RuleVersion.find(check.rule_version_id).on_fail != "warn"
+      ctx.emit("check.queued", task: task_of(check), subject: check,
+        payload: identity(check).merge(attempt_number: number, job_id: job_id, blocking: blocking, claimant_seat_id: nil,
+          pending_transition_id: check.pending_transition_id, action_id: nil))
+      job = Job.create!(id: job_id, workspace_id: check.workspace_id, kind: kind, task_id: check.task_id,
+        project_id: check.project_id, target_kind: "rule_check", target_id: check.id, seat_role: seat_role, state: "queued",
+        queued_at: ctx.effective_at, input: (last&.job_id && Job.find_by(id: last.job_id)&.input) || {}, attempt_number: number)
+      ctx.emit("job.queued", task: task_of(check), subject: job, payload: { kind: kind })
+      RuleCheckAttempt.create!(workspace_id: check.workspace_id, rule_check_id: check.id, attempt_number: number, job_id: job.id,
+        queued_at: job.queued_at)
     end
 
     # Rule 9 and 10 of the plan's §2.1, for an errored blocking check: the
