@@ -173,11 +173,14 @@ module Leverage
       end
 
       # The planned holds, each naming its check (an index into checks or a
-      # rule_checks id).
+      # rule_checks id). A hold whose planned check was not written (beside
+      # a blocking failure) does not open: nothing is left for it to hold.
       def open_planned(ctx, task, holds, checks)
         holds.each do |planned|
           ref = planned.rule_check_id
-          check_id = ref.is_a?(Integer) ? checks.fetch(ref)&.id : ref
+          next if ref.is_a?(Integer) && checks.fetch(ref).nil?
+
+          check_id = ref.is_a?(Integer) ? checks.fetch(ref).id : ref
           open_hold(ctx, task, planned, check_id: check_id)
         end
       end

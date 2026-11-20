@@ -27,6 +27,8 @@ module Leverage
     # Refusals that do not end a waiting command at re-entry: a hold leaves
     # it running (L378, RE-4), and the task answers pending to its holder.
     KEEP_RUNNING = %w[on_hold pending].freeze
+    # The hooks whose command a pending transition stores (rules 6, 7).
+    GATE_HOOKS = %w[task.before_ready task.before_claim task.before_submit task.before_done].freeze
 
     # A stored request as Context#as_requester reads it: what run_as
     # performs as someone else, with no pending_transitions row.
@@ -65,6 +67,7 @@ module Leverage
         return nil
       end
 
+      close_settled_holds(ctx, pending, trigger, **as)
       decision = Gating.reenter(pending_transition_id: pending.id, trigger: trigger)
       cause = cause_of(pending, trigger)
       case decision.action
@@ -162,6 +165,19 @@ module Leverage
       command_row.update!(pending_transition_id: pending.id)
     end
 
+    # Whether a gated command meets a task that already waits on another
+    # command's pending transition: a task has at most one (PRD L373), so
+    # the owner's or a planner's second Complete contract answers pending
+    # too (RC-41 leaves them unblocked otherwise). The entry is loaded and
+    # its state row found.
+    def taken?(ctx, entry)
+      return false unless GATE_HOOKS.include?(entry.hook)
+
+      task_id = entry.gate_request_fields(ctx)[:task_id]
+      pending = task_id && PendingTransition.find_by(workspace_id: ctx.workspace.id, task_id: task_id, state: PENDING)
+      !pending.nil? && pending.command_key != ctx.request.key
+    end
+
     # Whether the task the command is about has a pending transition that
     # the calling seat waits on, as its holder, the reviewer holding its
     # review, or its provisional claimant, and the command is not one the
@@ -242,12 +258,44 @@ module Leverage
 
     # Opens the holds a decision plans, each naming its check, by the app
     # unless the caller names an actor, with the check's check.finished of
-    # this command as cause (traces 07 and 18).
+    # this command as cause (traces 07 and 18). A hold of that reason
+    # already open for that check is not opened again.
     def open_holds(ctx, pending, planned, **as)
       return if planned.empty?
 
       task = Task.find(pending.task_id)
-      planned.each { |hold| Transitions::Gate.open_hold(ctx, task, hold, check_id: hold.rule_check_id, **as) }
+      planned.each do |hold|
+        next if Hold.exists?(workspace_id: task.workspace_id, task_id: task.id, reason: hold.reason,
+          rule_check_id: hold.rule_check_id, closed_at: nil)
+
+        Transitions::Gate.open_hold(ctx, task, hold, check_id: hold.rule_check_id, **as)
+      end
+    end
+
+    # The choice a check's own hold's item is resolved with when the check
+    # settles at re-entry (needs_you.json; WP0T's choice 9).
+    SETTLED_CHOICES = { check_finished: "run_again", check_overridden: "override_once",
+                        check_withdrawn: "turn_rule_off", rule_switched_off: "turn_rule_off" }.freeze
+
+    # The check_error and rerun_limit holds of the transition's checks that
+    # have settled since (a re-run's result, an override, a withdrawal)
+    # close before it is gated again, by the app with the command's key and
+    # that check's check.finished of this command as cause (rule 9: no hold
+    # open; trace 19 command 21). A closer that closed the hold itself
+    # (override_check, a rule turned off) leaves nothing here.
+    def close_settled_holds(ctx, pending, trigger, **as)
+      checks = RuleCheck.where(workspace_id: pending.workspace_id, pending_transition_id: pending.id).to_a
+        .select { |check| check.overridden_at || ![ nil, "error" ].include?(check.result) }
+      return if checks.empty?
+
+      fields = { actor_kind: "app", actor_id: nil }.merge(RuleChecks.event_fields(as))
+      task = Task.find(pending.task_id)
+      Hold.where(workspace_id: pending.workspace_id, task_id: task.id, closed_at: nil, reason: Holds::CHECK_HOLDS,
+        rule_check_id: checks.map(&:id)).order(:opened_at, :id).each do |hold|
+        cause = ctx.events.reverse.find { |event| event.type == "check.finished" && event.subject_id == hold.rule_check_id }
+        Holds.close(ctx, hold: hold, task: Task.find(task.id), choice: SETTLED_CHOICES[trigger.kind], cause_id: cause&.id,
+          **fields)
+      end
     end
 
     # Closes the open check_error and rerun_limit holds of these checks,
@@ -283,7 +331,7 @@ module Leverage
         Review.where(workspace_id: workspace_id, id: ids).pluck(:task_id)
     end
 
-    private_class_method :refused_now, :loaded_entry, :cause_of, :settle, :lapse_claim, :open_holds, :close_own_holds,
+    private_class_method :refused_now, :loaded_entry, :close_settled_holds, :cause_of, :settle, :lapse_claim, :open_holds, :close_own_holds,
       :waiting_tasks, :named_task_ids
   end
 end

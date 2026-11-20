@@ -125,11 +125,14 @@ module Leverage
         outcome
       end
 
-      # The entry's refusals and, for a seat waiting on its task's pending
-      # transition, pending (RE-4).
+      # The entry's refusals and pending: for a seat waiting on its task's
+      # pending transition (RE-4), and for a gated command on a task that
+      # already waits on another (L373).
       def refusals(ctx, entry)
         codes = entry.refusals(ctx)
-        PendingTransitions.blocks?(ctx, entry.command) ? codes + [ "pending" ] : codes
+        waits = PendingTransitions.blocks?(ctx, entry.command) ||
+          (Precedence.first(codes).nil? && PendingTransitions.taken?(ctx, entry))
+        waits ? codes + [ "pending" ] : codes
       end
 
       # Steps 5 and 6: the gate, timed (CommandLog's gate_ms), then what it

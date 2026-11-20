@@ -27,10 +27,8 @@ module Leverage
     # Writes an Evaluation's checks for task, in the order of
     # evaluation.checks, under pending when the command waits (rules 5 and
     # 6): an app check's row with its one attempt and check.finished; a
-    # model check's row, then, for the PlannedJob that names it, the job
-    # through Jobs.queue, whose block is given the new Job before
-    # job.queued is written, so the check.queued that names it comes first
-    # (traces 07, 16 to 18); a model check the plan gives no job (the run
+    # model check's row, then, for the PlannedJob that names it, its first
+    # attempt (queue_attempt); a model check the plan gives no job (the run
     # past the re-run limit, RD-45) is a row with no attempt and no event.
     #
     # Returns the RuleCheck rows in the order of evaluation.checks, so a
@@ -43,7 +41,7 @@ module Leverage
           emit_finished(ctx, check, task, **as)
         else
           job = evaluation.jobs.find { |candidate| candidate.rule_check_ref == index }
-          queue(ctx, check, task, job, **as) if job
+          queue_attempt(ctx, check, kind: job.kind, seat_role: job.seat_role, **as) if job
         end
         check
       end
@@ -91,20 +89,35 @@ module Leverage
       emit(ctx, "check.overridden", check, {}, **as)
     end
 
-    # The next attempt of the check on a job of its own (empty until the
-    # code that follows).
-    def queue_attempt(ctx, check, kind: "rule_check", seat_role: "orchestrator", **as) = nil
+    # The next attempt of the check on a job of its own, in the order the
+    # traces write them (07, 16 to 19): check.queued names the job, then
+    # Jobs.queue makes it with that id and writes job.queued, then the
+    # attempt row names it. What write does for a model check, and what a
+    # re-run that queues a new job does (rerun_check, the orchestrator's
+    # return; milestone 4 plan RD-42, RD-19). The job's input is RC-33's,
+    # with the hook's inputs from the waiting command's stored request. The
+    # row's result is null until the attempt finishes (DB-25). Returns the
+    # RuleCheckAttempt.
+    def queue_attempt(ctx, check, kind: "rule_check", seat_role: "orchestrator", **as)
+      check.update!(result: nil, reason: nil) unless check.result.nil?
+      task = task_of(check)
+      number = next_attempt_number(check)
+      job_id = SecureRandom.uuid
+      emit_queued(ctx, check, number, job_id, **as)
+      job = Jobs.queue(ctx, kind: kind, task: task, target: check, seat_role: seat_role, input: job_input(ctx, check, task, number),
+        id: job_id, attempt_number: number, **as)
+      attempt(ctx, check, job: job, started: false, finished: false, queued_at: job.queued_at, **as)
+    end
 
-    # A new attempt of the check, run by job (check.queued): the first
-    # attempt (write), after a miss, a re-run, or the orchestrator's
-    # return. The row's result is null until the attempt finishes (DB-25).
-    # Returns the RuleCheckAttempt.
+    # A new attempt of the check, run by job, a job already made
+    # (check.queued): after a miss, the timed-out job's work queued again
+    # (Jobs.requeue writes no job.queued, trace 07). The row's result is
+    # null until the attempt finishes (DB-25). Returns the
+    # RuleCheckAttempt.
     def new_attempt(ctx, check, job:, **as)
       check.update!(result: nil, reason: nil) unless check.result.nil?
       made = attempt(ctx, check, job: job, started: false, finished: false, queued_at: job.queued_at, **as)
-      emit(ctx, "check.queued", check, payload(check).merge(attempt_number: made.attempt_number, job_id: job.id,
-        blocking: blocking?(check), claimant_seat_id: claimant(check), pending_transition_id: check.pending_transition_id,
-        action_id: (check.subject_id if check.subject_kind == ACTION)), **as)
+      emit_queued(ctx, check, made.attempt_number, job.id, **as)
       made
     end
 
@@ -150,14 +163,22 @@ module Leverage
       RuleCheck.create!(**identity, project_id: task&.project_id, rule_id: planned.rule_id, **fields)
     end
 
-    def queue(ctx, check, task, planned_job, **as)
-      input = { rule_check_id: check.id, attempt_number: next_attempt_number(check), rule_version_id: check.rule_version_id,
-                hook: check.hook, task_id: task&.id, project_id: task&.project_id,
-                inputs: HookInputs.for(hook: check.hook, task: task, params: ctx.request.params,
-                  seat: (Seat.find(check.subject_id) if check.subject_kind == "seat"),
-                  review: (Review.find(check.subject_id) if check.subject_kind == "review")) }
-      Jobs.queue(ctx, kind: planned_job.kind, task: task, target: check, seat_role: planned_job.seat_role,
-        input: input.deep_stringify_keys) { |job| new_attempt(ctx, check, job: job, **as) }
+    def emit_queued(ctx, check, number, job_id, **as)
+      emit(ctx, "check.queued", check, payload(check).merge(attempt_number: number, job_id: job_id,
+        blocking: blocking?(check), claimant_seat_id: claimant(check), pending_transition_id: check.pending_transition_id,
+        action_id: (check.subject_id if check.subject_kind == ACTION)), **as)
+    end
+
+    # RC-33's rule check input; the hook's inputs from the waiting
+    # command's stored request (RE-2), else the command's own.
+    def job_input(ctx, check, task, number)
+      pending = check.pending_transition_id && PendingTransition.find_by(id: check.pending_transition_id)
+      params = pending&.params || ctx.request.params
+      inputs = HookInputs.for(hook: check.hook, task: task, params: params,
+        seat: (Seat.find(check.subject_id) if check.subject_kind == "seat"),
+        review: (Review.find(check.subject_id) if check.subject_kind == "review"))
+      { rule_check_id: check.id, attempt_number: number, rule_version_id: check.rule_version_id, hook: check.hook,
+        task_id: task&.id, project_id: task&.project_id, inputs: inputs }.deep_stringify_keys
     end
 
     def attempt(ctx, check, job:, started:, finished:, queued_at: nil, **_as)
@@ -234,7 +255,7 @@ module Leverage
         .order(:seq).last
     end
 
-    private_class_method :row_for, :queue, :attempt, :end_attempt, :next_attempt_number, :latest_attempt, :emit_finished,
+    private_class_method :row_for, :emit_queued, :job_input, :attempt, :end_attempt, :next_attempt_number, :latest_attempt, :emit_finished,
       :wait_cause, :payload, :claimant, :emit, :task_of, :last_event
   end
 end
