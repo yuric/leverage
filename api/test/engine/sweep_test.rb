@@ -321,10 +321,10 @@ class SweepTest < ActiveSupport::TestCase
   end
 
   test "a check due before its task's lease times out first; one due after it waits for the lease to end" do
-    early_task, early, = pending_check(task_state: "working", command: "submit")
+    early_task, early = working_task_with_check
     make_queue_due(early)
     @scenario.make_due(early_task)
-    late_task, late, = pending_check(task_state: "working", command: "submit")
+    late_task, late = working_task_with_check
     @scenario.make_due(late_task)
     make_queue_due(late)
 

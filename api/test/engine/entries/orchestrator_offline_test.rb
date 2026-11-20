@@ -39,8 +39,11 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
   # second miss leaves it (trace 07, command 5); item: whether the task's
   # Check could not run item opened (only while the orchestrator was
   # online, SM-39). hook: the check's hook. Returns [check, hold].
+  # An errored claim check has already lapsed its provisional claim
+  # (L392): its transition is no longer pending.
   def errored_check(item: false, hook: nil, task_state: "backlog", command: "complete_contract")
-    task, check, = pending_check(attempts: 2, hook: hook, task_state: task_state, command: command)
+    task, check, pending = pending_check(attempts: 2, hook: hook, task_state: task_state, command: command)
+    pending.update!(state: "cancelled", params: nil) if command == "claim"
     job = job_of(check)
     job.update!(state: "timed_out")
     check.update!(result: "error")

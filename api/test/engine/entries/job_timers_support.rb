@@ -142,6 +142,16 @@ module JobTimersSupport
     [ task, check, pending ]
   end
 
+  # A Working task with a model check of a warn rule queued on it (no
+  # transition waits, RC-16), so that the task's lease ending takes nothing
+  # from the check: what a test of the order of a task's timers needs.
+  # Returns [task, check].
+  def working_task_with_check
+    task = scenario.task(state: "working")
+    rule = (@warn_rule ||= scenario.rule(hook: "task.before_submit", on_fail: "warn"))
+    [ task, scenario.rule_check(task, rule: rule) ]
+  end
+
   # The latest attempt of a check, and its job.
   def latest_attempt(check) = RuleCheckAttempt.where(rule_check_id: check.id).order(:attempt_number).last
 

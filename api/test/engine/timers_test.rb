@@ -609,7 +609,7 @@ class JobTimersDueTest < CommittingTestCase
   # Effective times never go backwards within a task (L120): the timers due
   # on one task run in the order of their due times.
   test "a check that was due before its task's lease times out first" do
-    task, check, = pending_check(task_state: "working", command: "submit")
+    task, check = working_task_with_check
     job_due = make_queue_due(check)
     lease_due = scenario.make_due(task).lease_due_at
     before = last_seq
@@ -622,7 +622,7 @@ class JobTimersDueTest < CommittingTestCase
   end
 
   test "a lease that was due before its task's check ends first" do
-    task, check, = pending_check(task_state: "working", command: "submit")
+    task, check = working_task_with_check
     lease_due = scenario.make_due(task).lease_due_at
     job_due = make_queue_due(check)
     before = last_seq
