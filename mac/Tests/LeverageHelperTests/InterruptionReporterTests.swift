@@ -23,6 +23,7 @@ struct InterruptionReporterTests {
     private let credential = UUID()
     private let task = UUID()
     private let review = UUID()
+    private let job = UUID()
     private let observed = Date(timeIntervalSince1970: 1_800_000_000)
     private let reset = Date(timeIntervalSince1970: 1_800_003_600)
 
@@ -115,6 +116,50 @@ struct InterruptionReporterTests {
             limitLine(toolVersion: nil), seatID: seat, credentialID: credential, toolVersion: "1.0 (located)")
 
         #expect(rig.calls(.reportLimit).first?.body?["tool_version"]?.stringValue == "1.0 (located)")
+    }
+
+    // MARK: A job
+
+    private func jobLine(kind: RunEndReport.Kind) -> RunEndReport {
+        RunEndReport(
+            kind: kind, window: kind == .limit ? .fiveHour : nil, resetAt: nil,
+            taskID: nil, reviewID: nil, jobID: job, toolVersion: "9.9.9 (made-up tool)", observedAt: observed)
+    }
+
+    @Test("a limit line that names a job sends report_limit with job_id, and no task or review")
+    func jobLimitSendsJobID() async throws {
+        let rig = try HelperRig()
+
+        let result = await reporter(rig).report(
+            jobLine(kind: .limit), seatID: seat, credentialID: credential, toolVersion: nil)
+
+        #expect(result == .reported)
+        #expect(rig.api.calls.map(\.operation) == [.reportLimit])
+        let call = try #require(rig.calls(.reportLimit).first)
+        #expect(call.path["id"] == credential.contractString)
+        let body = try #require(call.body)
+        #expect(body["job_id"]?.stringValue == job.contractString)
+        #expect(body["task_id"] == .null)
+        #expect(body["review_id"] == .null)
+        #expect(body["window"]?.stringValue == "five_hour")
+        #expect(body["seat_id"]?.stringValue == seat.contractString)
+    }
+
+    @Test("a sign-out line that names a job sends report_signed_out with job_id, and no task or review")
+    func jobSignOutSendsJobID() async throws {
+        let rig = try HelperRig()
+
+        let result = await reporter(rig).report(
+            jobLine(kind: .signedOut), seatID: seat, credentialID: credential, toolVersion: nil)
+
+        #expect(result == .reported)
+        #expect(rig.api.calls.map(\.operation) == [.reportSignedOut])
+        let body = try #require(rig.calls(.reportSignedOut).first?.body)
+        #expect(body["job_id"]?.stringValue == job.contractString)
+        #expect(body["task_id"] == .null)
+        #expect(body["review_id"] == .null)
+        #expect(body["window"] == nil)
+        #expect(rig.calls(.reportRunStopped).isEmpty)
     }
 
     // MARK: Refused
