@@ -18,6 +18,14 @@ module Leverage
     # The hold reasons a credential stop opens (registry hold_reasons).
     CREDENTIAL_REASONS = %w[credential_limit credential_signed_out].freeze
 
+    # How far after observed_at a reported reset time may be, by the window
+    # it names (registry limit_windows), with a margin: a reset further off
+    # is no reset the provider gave, and is stored as none, which the next
+    # Verify clears (HE-2). A report that names no window takes the longest.
+    RESET_BOUNDS = {
+      "five_hour" => 6 * 3600, "weekly" => 8 * 86_400, "per_model" => 8 * 86_400, "spend" => 32 * 86_400
+    }.freeze
+
     # The Needs you item a sign-out opens or that its verification resolves
     # (needs_you.json).
     ACCOUNT_SIGNED_OUT = "account_signed_out".freeze
@@ -28,7 +36,8 @@ module Leverage
     # credential.limit_reached or credential.signed_out, with the credential
     # as subject, on the work's task. A limit: limited_since is the
     # command's time, and limited_until the reset time when it is after
-    # observed_at (HE-32), never earlier than a later reset already stored
+    # observed_at (HE-32) and no further after it than the window can last
+    # (RESET_BOUNDS), never earlier than a later reset already stored
     # (HE-22); a limit with no reset time has none. A sign-out: state
     # signed_out. The seat's run is recorded as ended (HD-10).
     #
@@ -42,7 +51,7 @@ module Leverage
       on = task || Task.find(review.task_id)
       payload = { seat_id: seat.id, review_id: review&.id, job_id: nil }
       if kind == "limit"
-        reset = reset_at if reset_at && observed_at && reset_at > observed_at
+        reset = reset_at if plausible_reset?(window, reset_at, observed_at)
         stored = credential.limited_until
         credential.update!(limited_since: ctx.at, limited_until: reset && stored && stored > reset ? stored : reset)
         first = ctx.emit("credential.limit_reached", task: on, subject: credential,
@@ -53,6 +62,13 @@ module Leverage
       end
       SeatRuns.ended_by_interruption(seat, kind)
       first
+    end
+
+    # Whether reset_at is after observed_at and within the window's bound.
+    def plausible_reset?(window, reset_at, observed_at)
+      return false unless reset_at && observed_at && reset_at > observed_at
+
+      reset_at - observed_at <= RESET_BOUNDS.fetch(window, RESET_BOUNDS.values.max)
     end
 
     # Rule 6: with a next candidate (Candidates.next_after), switch; with
@@ -301,7 +317,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
+    private_class_method :plausible_reset?, :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
       :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end
