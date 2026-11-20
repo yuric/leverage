@@ -40,6 +40,13 @@ struct RunnerTiming: Sendable {
     var idlePause: Duration
     /// The wait before the next heartbeat, from the lease's end and now.
     var heartbeatInterval: @Sendable (_ leaseDueAt: Date, _ now: Date) -> Duration
+    /// While a job's tool runs, `GET /v1/next` with no wait this often, so
+    /// that the seat keeps counting as polling (RD-15).
+    var jobPollInterval: Duration = .seconds(30)
+    /// How the job poll waits; a test gives a clock of its own.
+    var pause: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    /// The time now, which a job's time limit is measured from (RD-34).
+    var now: @Sendable () -> Date = { Date() }
 
     static let standard = RunnerTiming(
         nextWait: 30, errorPause: .seconds(1), idlePause: .seconds(1), heartbeatInterval: thirdOfWhatIsLeft)

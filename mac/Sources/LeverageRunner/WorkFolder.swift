@@ -49,6 +49,13 @@ enum WorkFolder {
         return .existing(folder, reference: reference ?? given)
     }
 
+    /// A new empty folder for one tool run of a job, under `<work root>/jobs/`,
+    /// which the caller removes with `removeJobFolder` after the run (RD-33).
+    /// Nil when it cannot be made.
+    static func makeJobFolder(workRoot: URL) -> URL? { nil }
+
+    static func removeJobFolder(_ folder: URL) {}
+
     static func reviewer(reference: String?, home: String) -> URL? {
         let given = reference?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return given.isEmpty ? nil : existingFolder(given, home: home)

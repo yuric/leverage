@@ -5,6 +5,10 @@ import LeverageKit
 /// section 2.2). A placeholder for WP14: it answers "no draft" to
 /// everything.
 enum DraftParser {
+    /// The independent review the Add task form adds (`AddTaskCopy`), used
+    /// when the task has no review criterion of its own.
+    static let reviewCriterion = "An independent reviewer agrees."
+
     /// The contract in `text`, or nil for no draft: the JSON object between
     /// the nonce's two markers, with the task's title kept, each sentence a
     /// `build` criterion, the one `review` criterion the Add task form adds,

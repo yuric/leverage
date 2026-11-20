@@ -47,6 +47,27 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     }
 }
 
+/// What the runner's arguments ask for: a seat's run (none), the probe, the
+/// version, or the eval harness (milestone 4 plan section 2.2).
+enum RunnerSubcommand: Equatable, Sendable {
+    case seat
+    case probe
+    case version
+    /// `eval` and the arguments after it, for `EvalRun`.
+    case eval([String])
+    case unknown(String)
+
+    /// `arguments` without the program's own name.
+    init(arguments: [String]) {
+        switch arguments.first {
+        case nil: self = .seat
+        case "probe": self = .probe
+        case "--version": self = .version
+        case let other?: self = .unknown(other)
+        }
+    }
+}
+
 /// What a tool run needs: the provider's tool, its account and its limits.
 /// The probe needs only this; a seat's run needs `RunnerConfiguration`.
 struct ToolConfiguration: Sendable, Equatable {

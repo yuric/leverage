@@ -319,10 +319,27 @@ struct RunnerLoopTests {
     func otherKinds() async throws {
         let harness = try Harness()
         let loop = harness.loop(.builder, driver: ScriptedDriver.agreeable())
-        harness.next([NextItem(kind: .review), NextItem(kind: .command, id: "abc")], then: loop)
+        harness.next([NextItem(kind: .review), NextItem(kind: .job), NextItem(kind: .command)], then: loop)
 
         #expect(await runToEnd(loop) == 0)
-        #expect(harness.operations == [.getNext, .getNext, .getNext])
+        #expect(harness.operations == [.getNext, .getNext, .getNext, .getNext])
+    }
+
+    // Milestone 4: a `command` item names a command of this seat whose
+    // outcome changed after it stopped waiting on it; reading it once clears
+    // the item, which would otherwise repeat (plan section 2.2, RunnerLoop).
+    @Test("a command item is read once by its key, for every role", arguments: SeatRole.allCases)
+    func commandItem(role: SeatRole) async throws {
+        let harness = try Harness()
+        let loop = harness.loop(role, driver: ScriptedDriver.agreeable())
+        harness.api.script {
+            $0.command = { key in .completed(.object([:]), key: key.value, command: .submitJobResult) }
+        }
+        harness.next([NextItem(kind: .command, id: "made-up-key-1")], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(harness.operations == [.getNext, .getCommand, .getNext])
+        #expect(harness.calls(.getCommand).first?.path["key"] == "made-up-key-1")
     }
 
     @Test("the loop asks with the long poll's wait")
@@ -350,6 +367,9 @@ struct RunnerLoopTests {
         #expect(timing.errorPause <= .seconds(2))
         #expect(timing.idlePause <= .seconds(2))
         #expect(timing.nextWait == 30)
+        // A busy job seat asks every 30 seconds, well inside the 90 seconds
+        // after which it counts as offline (RD-15).
+        #expect(timing.jobPollInterval == .seconds(30))
         let now = Date()
         #expect(timing.heartbeatInterval(now.addingTimeInterval(3600), now) == .seconds(600))
         #expect(timing.heartbeatInterval(now.addingTimeInterval(90), now) == .seconds(30))

@@ -22,7 +22,14 @@ struct CheckJob: Sendable {
     /// False for the eval, which makes its own second try (RV-6).
     var allowsSecondRun = true
 
+    /// How long before `run_due_at` the tool is ended (RD-34).
+    static let endsBeforeDue: TimeInterval = 10
+
     /// Runs the job `claim` carries; the tool is ended 10 seconds before
     /// `claim.runDueAt` (RD-34).
     func run(_ claim: JobClaim, input: RuleCheckJobInput) async throws -> JobRunEnd { .noResult }
+
+    /// The whole seconds a tool run of the job may take at `now`: until 10
+    /// seconds before `runDueAt`. Nil when less than one second is left.
+    static func timeLimit(runDueAt: Date, now: Date) -> Int? { nil }
 }

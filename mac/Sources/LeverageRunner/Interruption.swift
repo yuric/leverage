@@ -94,7 +94,7 @@ struct Interruption: Sendable {
     /// run again after each of `waits` (the caller's heartbeat runs on
     /// meanwhile) and is then a failure; a limit or a sign-out is the
     /// account's stop, with the report `main` prints (HD-6, HD-7).
-    func run(for subject: LeaseSubject, _ attempt: @Sendable () async throws -> ToolRun) async throws -> Result {
+    func run(for subject: InterruptedWork, _ attempt: @Sendable () async throws -> ToolRun) async throws -> Result {
         var retries = 0
         while true {
             let failure: ToolFailure
@@ -129,12 +129,13 @@ struct Interruption: Sendable {
     /// reset time the reply stated, the work, and when it was seen. The
     /// tool's version is left to the helper, which found the tool and knows
     /// it (HD-6).
-    static func report(_ outcome: RunOutcome, of subject: LeaseSubject, at observedAt: Date) -> RunEndReport {
+    static func report(_ outcome: RunOutcome, of subject: InterruptedWork, at observedAt: Date) -> RunEndReport {
         let taskID: UUID?
         let reviewID: UUID?
         switch subject {
         case .task(let id): (taskID, reviewID) = (id, nil)
         case .review(let id): (taskID, reviewID) = (nil, id)
+        case .job: (taskID, reviewID) = (nil, nil)
         }
         if case .limit(let window, let resetAt) = outcome {
             return RunEndReport(

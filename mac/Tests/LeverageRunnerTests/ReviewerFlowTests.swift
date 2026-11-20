@@ -180,3 +180,46 @@ struct ReviewerFlowTests {
         #expect(harness.operations == [.getNext, .getNext, .getNext])
     }
 }
+
+// A pass that waits on a rule at "when the review has passed" (milestone 4
+// plan section 2.2): the reviewer waits on get_command, heartbeating, and
+// the flow ends once the pass is decided, also when it became a failed review.
+extension ReviewerFlowTests {
+    @Test("a pass that answers pending waits on get_command, heartbeating, and ends the flow once decided",
+          arguments: [CommandName.passReview, .failReview])
+    func pendingPass(decided: CommandName) async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver { _, _ in
+            .answer("LEVERAGE-CRITERION 1: PASS\nLEVERAGE-CRITERION 2: PASS\nLEVERAGE-NOTES: Fine.", tokens: 4)
+        }
+        let loop = reviewer(harness, driver: driver, timing: .fast(heartbeatEvery: .milliseconds(5)))
+        let verdicts = Counter()
+        let beats = Counter()
+        harness.api.script {
+            $0.giveVerdict = { _, _, key in
+                verdicts.increment() == 1
+                    ? .pending(key: key.value, command: .passReview)
+                    : .completed(.object([:]), key: key.value, command: decided)
+            }
+            $0.heartbeatReview = { _, _ in
+                beats.increment()
+                return .completed(HeartbeatResult(leaseDueAt: Date().addingTimeInterval(3600)), key: "k",
+                                  command: .heartbeatReview)
+            }
+            $0.command = { key in
+                beats.value < 2
+                    ? .pending(key: key.value, command: .passReview)
+                    : .completed(.object([:]), key: key.value, command: decided)
+            }
+        }
+        harness.next([NextItem(kind: .review)], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(harness.calls(.giveVerdict).count == 2)
+        #expect(Set(harness.calls(.giveVerdict).map(\.key)).count == 1)
+        #expect(!harness.calls(.getCommand).isEmpty)
+        #expect(harness.calls(.releaseReview).isEmpty)
+        #expect(driver.runs.count == 1)
+        #expect(harness.operations.last == .getNext)
+    }
+}

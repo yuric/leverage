@@ -109,14 +109,22 @@ final class ScriptedDriver: ToolDriver, @unchecked Sendable {
         let prompt: String
         let folder: URL
         let purpose: ToolPurpose
+        /// The run's own time limit, if the caller set one.
+        let timeLimitSeconds: Int?
+        let seatModel: Bool
     }
 
     private let lock = NSLock()
     private var recorded: [Run] = []
     private var cancelled = 0
-    private let respond: @Sendable (String, ToolPurpose) -> Step
+    private let respond: @Sendable (ToolRunRequest) async -> Step
 
     init(_ respond: @escaping @Sendable (String, ToolPurpose) -> Step) {
+        self.respond = { respond($0.prompt, $0.purpose) }
+    }
+
+    /// A driver that sees the whole request, and may take its time.
+    init(request respond: @escaping @Sendable (ToolRunRequest) async -> Step) {
         self.respond = respond
     }
 
@@ -134,9 +142,13 @@ final class ScriptedDriver: ToolDriver, @unchecked Sendable {
     var runs: [Run] { lock.withLock { recorded } }
     var cancelledRuns: Int { lock.withLock { cancelled } }
 
-    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
-        lock.withLock { recorded.append(Run(prompt: prompt, folder: folder, purpose: purpose)) }
-        switch respond(prompt, purpose) {
+    func execute(_ request: ToolRunRequest) async throws -> ToolRun {
+        lock.withLock {
+            recorded.append(Run(
+                prompt: request.prompt, folder: request.folder, purpose: request.purpose,
+                timeLimitSeconds: request.timeLimitSeconds, seatModel: request.seatModel))
+        }
+        switch await respond(request) {
         case .answer(let text, let tokens):
             return .answered(ToolAnswer(text: text, tokens: tokens))
         case .fail(let failure):

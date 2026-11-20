@@ -55,6 +55,12 @@ struct BuilderFlow: Sendable {
 
     static let handoffNote = "Done; the evidence attached to each criterion shows where its proof is."
 
+    /// How many times a submit a rule refused is reworked by the tool before
+    /// the task is given back: the server's re-run limit (RD-45, RD-59)
+    /// holds the fourth distinct try for the owner, so a fourth refusal
+    /// means something else refuses it.
+    static let maximumRuleReworks = 3
+
     /// Claims the next task and works on it; nil when nothing was claimed.
     func claim() async throws -> FlowEnd? {
         let api = context.api

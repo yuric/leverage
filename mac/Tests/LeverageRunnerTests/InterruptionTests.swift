@@ -245,6 +245,23 @@ struct InterruptionTests {
         #expect(report.reviewID == reviewID && report.taskID == nil)
     }
 
+    @Test("a limit during a job's run names the job, and no task or review (milestone 4, RD-40)")
+    func jobLimit() async throws {
+        let jobID = UUID()
+        let attempts = Attempts([try failed("run-limit-five-hour.json")])
+        let result = try await interruption().run(for: .job(jobID), attempts.attempt)
+        guard case .accountStopped(let report) = result else {
+            Issue.record("expected the account to stop, got \(result)")
+            return
+        }
+        #expect(report.jobID == jobID)
+        #expect(report.taskID == nil && report.reviewID == nil)
+        #expect(report.window == .fiveHour)
+        let signedOut = Interruption.report(.signedOut, of: .job(jobID), at: Date())
+        #expect(signedOut.jobID == jobID && signedOut.kind == .signedOut)
+        #expect(try RunEndReport(line: signedOut.line()).jobID == jobID)
+    }
+
     @Test("with no credential a rate limit is not retried and a limit is a failure")
     func noCredentialRun() async throws {
         let rate = Attempts([try failed("run-rate-limited.json")])
