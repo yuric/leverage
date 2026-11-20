@@ -38,9 +38,9 @@ questions, each with its own paths:
   a data-only dump (pg_dump --data-only, plain text). The same word in the
   task's own rows of that dump is not a hit, and neither is it anywhere
   else in an event's row.
-- --not-in-logs WORD with --logs PATH: each word must be in no file under
-  the log paths (the containers', the helper's and the runs' logs). Those
-  files must also hold no nonce-shaped marker of a check or draft frame:
+- --logs PATH, with --not-in-logs WORD or alone: each word must be in no
+  file under the log paths (the containers', the helper's and the runs'
+  logs). Those files must also hold no nonce-shaped marker of a check or draft frame:
   LEVERAGE-VERDICT-, -REASON-, -QUOTE-, -END- or -DRAFT- followed by 12
   hexadecimal characters, which only a prompt or a tool's answer carries.
   The stand-ins' record of each call holds the prompts, so it is never one
@@ -60,7 +60,9 @@ file.
 Usage:
   python3 -I scripts/secret_scan.py [--secrets FILE]... [--literal VALUE]...
       [--replies FOLDER]... [--not-in-events WORD... --events-dump FILE...]
-      [--not-in-logs WORD... --logs PATH...] [PATH...]
+      [--logs PATH... [--not-in-logs WORD...]] [PATH...]
+
+Paths to scan for secrets may come before, between or after the options.
 
 Standard library only.
 """
@@ -329,7 +331,8 @@ def main(argv):
     parser.add_argument("--not-in-logs", action="append", default=[], metavar="WORD")
     parser.add_argument("--logs", action="append", default=[], metavar="PATH")
     parser.add_argument("paths", nargs="*", metavar="PATH")
-    arguments = parser.parse_args(argv)
+    # The end-to-end scripts add each test's folders between the options.
+    arguments = parser.parse_intermixed_args(argv)
     try:
         if not (arguments.paths or arguments.events_dump or arguments.logs):
             raise Refused("no path to scan")
@@ -339,8 +342,6 @@ def main(argv):
             raise Refused("--not-in-logs needs --logs")
         if arguments.events_dump and not arguments.not_in_events:
             raise Refused("--events-dump needs --not-in-events")
-        if arguments.logs and not arguments.not_in_logs:
-            raise Refused("--logs needs --not-in-logs")
         secrets = replies = files = []
         if arguments.paths:
             replies = read_replies(arguments.replies)
