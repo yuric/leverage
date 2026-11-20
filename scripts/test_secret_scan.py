@@ -552,6 +552,24 @@ class TaskTextTests(unittest.TestCase):
         self.assertEqual(code, 2, output)
         self.assertIn("word 1 of --not-in-events is too short", output)
 
+    def test_paths_to_scan_may_come_between_the_options(self):
+        # The end-to-end scripts add each test's folders as they find them.
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("api.log", "Completed 200 OK\n")
+        api = self.scan.file("api.log", "signed in with " + PASSWORD + "\n")
+        code, output = self.scan.run(
+            "--secrets", self.scan.secrets(PASSWORD), self.logs, "--logs", self.logs, api,
+            "--not-in-logs", MARKER_WORD, "--not-in-events", MARKER_WORD, "--events-dump", path)
+        self.assertEqual(code, 1, output)
+        self.assertIn("api.log:1: secret 1", output)
+
+    def test_logs_alone_are_looked_at_for_a_nonce(self):
+        # The real checks of §5.5 have no marker word of their own.
+        self.log("runner.log", f"LEVERAGE-REASON-{NONCE}: fine\n")
+        code, output = self.scan.run("--logs", self.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("runner.log:1: nonce-shaped marker", output)
+
     def test_logs_with_no_file_are_refused(self):
         path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
         code, output = self.run_words(path)
