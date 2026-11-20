@@ -46,8 +46,7 @@ class ConnectionBudgetTest < ActiveSupport::TestCase
 
   test "a heavy section leaves its threads' connections closed, not idle in the pool" do
     pool = ActiveRecord::Base.connection_pool
-    ActiveRecord::Base.lease_connection.select_value("SELECT 1")
-    before = pool.connections.size
+    own = ActiveRecord::Base.lease_connection
 
     ConnectionBudget.heavy(5) do
       ready = Concurrent::CountDownLatch.new(5)
@@ -62,7 +61,9 @@ class ConnectionBudgetTest < ActiveSupport::TestCase
       end.each(&:join)
     end
 
-    assert_equal before, pool.connections.size, "the pool still holds the threads' connections after the section"
+    # Only the test's own connection is left: an earlier test's idle one
+    # in this worker's pool is closed too.
+    assert_equal [ own ], pool.connections, "the pool still holds the threads' connections after the section"
   end
 
   test "a section that would pass HEAVY is refused before it starts" do
