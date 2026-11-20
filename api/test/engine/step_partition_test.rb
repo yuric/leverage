@@ -86,11 +86,18 @@ class StepPartitionTest < ActiveSupport::TestCase
     end
   end
 
+  # The walks this test reads are always the same twenty, whatever SEED
+  # is: a walk is the same for the same seed, and twenty walks from a
+  # random first seed leave a command never completed now and then (SEED=8
+  # and SEED=9 of the first 60 left "resume"), which made the whole suite
+  # fail by chance.
+  COVERAGE_SEEDS = (10_001..10_020)
+
   test "the walks complete every milestone-3 command and the credential timer, and move a reset" do
     completed = Set.new
     moved = false
-    20.times do |number|
-      walk = Walk.new(seed: SEED + 10_000 + number, steps: STEPS).run
+    COVERAGE_SEEDS.each do |seed|
+      walk = Walk.new(seed: seed, steps: STEPS).run
       completed.merge(walk.log.select { |step| step.answer == "completed" }.map(&:command))
       moved ||= walk.log.any? { |step| step.action == :pass_reset }
     end
