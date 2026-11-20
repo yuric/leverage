@@ -562,6 +562,39 @@ following, each fixed with a test that failed first:
 - **The contract README lists the task page's two waiting fields** among
   the milestone's additions.
 
+### The Rule checks milestone: a reliable API suite
+
+The API suite failed now and then on the owner's Mac. Each cause was fixed
+with a test that failed first:
+
+- **At most eight test workers.** `bin/rails test` started one worker per
+  processor (20 on the owner's Mac), and with the race tests' twenty
+  threads passed PostgreSQL's 100 connections ("too many clients
+  already"). Workers are now one per processor up to eight
+  (`PARALLEL_WORKERS` still overrides), the three twenty-thread race tests
+  run one at a time across the workers, and a test holds the worst case
+  (68 connections with eight workers) under the server's limit.
+- **A command's time never goes back.** The database clock steps back on
+  Docker Desktop for Mac (0.59 ms was seen), and a command then took a
+  time before the last event's and wrote a step that closed before it
+  opened. The time a command takes under the workspace lock is now at
+  least one microsecond after the workspace's last event (PRD L219, L825),
+  and an event a workspace timer writes on a task takes effect no earlier
+  than that task's latest event (L120, L220).
+- **A rule turned off while its command waits no longer blocks**, even
+  when its check had already failed: the engine lets the move through
+  (L380, L976) and the log audit now agrees.
+- **Replay holds a provisional claim for its blocking checks only**: a
+  warn rule's check never keeps a claim waiting, so the claim ends when
+  its last blocking check fails (DB-43 read that way).
+- **"No reviewer is eligible" opens right after a review lease ends inside
+  a command**, also when that command is then refused, beside the lease
+  timer's events and at their time (SM-42).
+- **Claim-next does not apply the job timers first.** It never hands out a
+  job past its due time, the sweep records the miss within 15 seconds at
+  the due time, and claim-next's state row writes no `job.timed_out`. No
+  requirement or audit rule needs the miss sooner.
+
 ## What the Handoff milestone proves, and how far
 
 - **Every interruption is played by stand-in tools.** No agent signed in,
