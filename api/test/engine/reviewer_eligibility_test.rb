@@ -346,6 +346,23 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
+  # The lease timer writes the item of its review.lease_expired at once;
+  # after_command reads only task.submitted and review.released, or an
+  # item would follow the command's own events with the lease's earlier
+  # effective time.
+  test "after_command leaves a review.lease_expired the command wrote to the lease timer" do
+    written = events_written do
+      ActiveRecord::Base.transaction(requires_new: true) do
+        ctx = scenario.context(request: owner_request("hold", { "id" => @task.id }))
+        ctx.emit("review.lease_expired", task: @task, subject: @review, payload: {}, actor_kind: "app", actor_id: nil,
+          command_id: nil)
+        assert_empty RE.after_command(ctx, T::Table.entry_for("hold").new)
+      end
+    end
+    assert_equal %w[review.lease_expired], written.map(&:type)
+    assert_empty items
+  end
+
   test "a reviewer's limit with no allowed candidate releases the review and opens the item as the helper (trace 19, L913)" do
     codex = scenario.credential(provider: "codex")
     seat = scenario.seat(role: "reviewer", credential: codex)
