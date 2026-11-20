@@ -31,7 +31,8 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "06-signed-out-hold-verify" => [ 5, 0 ],
     "07-pending-gate-check-error-override" => [ 5, 0 ],
     "08-lease-expiry-and-cancel" => [ 5, 0 ],
-    "11-limit-handoff-no-rules" => [ 3, 7 ]
+    "11-limit-handoff-no-rules" => [ 3, 7 ],
+    "12-signed-out-hold-verify-no-rules" => [ 3, 7 ]
   }.freeze
 
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
