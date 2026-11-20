@@ -126,6 +126,40 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
+  # One command may apply both timers of one task (Timers.apply_task_timers):
+  # the credential hold, due first, closes and switches the account, then
+  # the lease, past its due time too, ends. Both are timers' events with no
+  # key, in one group: the release's and the lease end's are each matched to
+  # their own timer (WP9's choice 4, met by walk seed 883 of SEED=1).
+  test "a credential release and a lease end applied for one task in one command pass" do
+    scenario = Scenario.new
+    own = scenario.credential
+    below = scenario.credential(provider: "codex")
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(below, reset_at: scenario.database_now + 7200)
+    after = scenario.workspace.reload.last_seq
+    params = { "id" => own.id, "credential_id" => own.id, "seat_id" => builder.id, "task_id" => task.id,
+               "review_id" => nil, "job_id" => nil, "window" => "five_hour",
+               "reset_at" => (scenario.database_now + 3600).utc.iso8601(6),
+               "observed_at" => (scenario.database_now - 1).utc.iso8601(6), "tool_version" => "0.0.0-made-up" }
+    outcome = T.apply(T::Request.new(command: "report_limit", workspace_id: scenario.workspace_id, caller_kind: "helper",
+      caller_id: scenario.helper.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "e" * 64, params: params))
+    assert outcome.completed?, outcome.refusal&.code
+    assert Hold.find_by(task_id: task.id, reason: "credential_limit", closed_at: nil), "the hold waits for the reset"
+
+    below.update_columns(limited_until: scenario.database_now - 2) # its reset passed: due at once, on that login
+    scenario.make_due(task, at: scenario.database_now)
+    assert_operator Leverage::Timers.credential_hold_due_at(task.reload), :<=, task.lease_due_at, "the hold is due first"
+    T.apply(T::Request.new(command: "heartbeat", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: builder.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "f" * 64, params: { "id" => task.id }))
+
+    timers = Event.where(workspace_id: scenario.workspace_id, command_id: nil).where("seq > ?", after).order(:seq)
+    assert_equal %w[hold.closed credential.switched task.lease_expired], timers.pluck(:type).first(3)
+    assert_equal 1, timers.pluck(:at).uniq.size, "one command applied both timers"
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   # A timer's events have no key: the credential hold release (hold.closed,
   # credential.switched) is read as credential_hold_release, and the same
   # events as no timer writes them when no credential hold closes.
