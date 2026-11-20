@@ -112,4 +112,73 @@ class CompleteContractTest < ActiveSupport::TestCase
     assert_equal %w[hold.closed task.contract_changed task.ready], written.map(&:type)
     assert hold.reload.closed_at
   end
+
+  # HE-35: the wait_ready step task.ready opens names credential_limit when
+  # a builder would take the task but for its accounts, none of them is
+  # available, and none is signed out.
+  test "task.ready names credential_limit when every builder that could take the task waits for a limit (HE-35)" do
+    claude = @scenario.credential(provider: "claude")
+    @scenario.seat(role: "builder", credential: claude)
+    @scenario.limit_credential(claude, reset_at: @scenario.database_now + 3600)
+
+    assert apply(body).completed?
+    assert_equal({ "wait_cause" => "credential_limit" }, written.last.payload)
+    assert_equal "credential_limit", TaskStep.find_by!(task_id: @task.id, kind: "wait_ready").cause_kind
+  end
+
+  test "task.ready names no cause when a builder can take the task, or one of their logins is signed out" do
+    claude = @scenario.credential(provider: "claude")
+    codex = @scenario.credential(provider: "codex")
+    @scenario.seat(role: "builder", credential: claude)
+    @scenario.limit_credential(claude, reset_at: @scenario.database_now + 3600)
+    @scenario.sign_out_credential(codex)
+
+    assert apply(body).completed?
+    assert_equal({ "wait_cause" => nil }, written.last.payload)
+  end
+
+  # Edit contract (milestone 3) returns a task to the Backlog with its
+  # criteria; Complete contract then keeps each criterion whose position,
+  # kind and text are unchanged, with its state, and diffs the rest by
+  # position and kind as Edit contract does (HE-25 (i); trace 15).
+  def returned_to_backlog
+    @task = @scenario.task(state: "working", criteria: %w[build build review], work_reference: nil)
+    copy, layout, = Criterion.where(task_id: @task.id).order(:position).to_a
+    copy.update!(text: "The copy names this year's prices.", state: "passed", passed_at: @scenario.database_now)
+    layout.update!(text: "The layout matches the rest of the site.")
+    Criterion.find_by!(task_id: @task.id, kind: "review").update!(text: "An independent reviewer agrees.")
+    @task.update!(state: "backlog", holder_seat_id: nil, builder_seat_id: nil, lease_due_at: nil)
+    @scenario.append("task.returned", task: @task, actor_kind: "owner", actor_id: @owner.id)
+    Criterion.where(task_id: @task.id).order(:position).to_a
+  end
+
+  test "an unchanged contract keeps every criterion, with its state, and only the version goes up" do
+    kept = returned_to_backlog
+    version = @task.contract_version
+
+    assert apply(body).completed?
+    changed = written.first
+    assert_equal({ "contract_version" => version + 1, "minimum_strength_rank" => nil, "added_criterion_ids" => [],
+                   "reset_criterion_ids" => [], "removed_criterion_ids" => [], "added_action_ids" => [],
+                   "removed_action_ids" => [] }, changed.payload)
+    assert_equal kept.map(&:id), Criterion.where(task_id: @task.id, removed_at: nil).order(:position).pluck(:id)
+    assert_equal "passed", kept.first.reload.state
+  end
+
+  test "a changed text resets its criterion, a new position is added, a gone one removed, a changed kind both" do
+    copy, layout, review = returned_to_backlog
+    criteria = [ { "text" => "The copy names next year's prices.", "kind" => "build" },
+                 { "text" => "The layout matches the rest of the site.", "kind" => "review" } ]
+
+    assert apply(body(criteria: criteria)).completed?
+    payload = written.first.payload
+    added = Criterion.where(task_id: @task.id, removed_at: nil, position: 2).sole
+    assert_equal [ [ added.id ], [ copy.id ], [ layout.id, review.id ].sort ],
+      [ payload["added_criterion_ids"], payload["reset_criterion_ids"], payload["removed_criterion_ids"].sort ]
+    copy.reload
+    assert_equal [ "open", "The copy names next year's prices.", nil ], [ copy.state, copy.text, copy.passed_at ]
+    assert layout.reload.removed_at
+    assert review.reload.removed_at
+    assert_equal [ copy.id, added.id ], Criterion.where(task_id: @task.id, removed_at: nil).order(:position).pluck(:id)
+  end
 end

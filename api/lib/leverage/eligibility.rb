@@ -29,7 +29,7 @@ module Leverage
     # normal, low, then the oldest, then the id (EN-23); with no open hold,
     # no minimum strength rank above the seat's, a running project, and not
     # filtered out by gating (RC-19). nil too when the seat may not claim.
-    def next_task(seat)
+    def next_task(seat, at: Time.current)
       return nil unless may_claim?(seat, :task)
 
       excluded = Gating.claimable_filter(seat_id: seat.id, kind: :task).excluded_task_ids
@@ -47,7 +47,7 @@ module Leverage
     # never built (L455, read from task.claimed), whose provider gating
     # allows, and not filtered out by gating (RC-50). nil too when the seat
     # may not claim.
-    def next_review(seat)
+    def next_review(seat, at: Time.current)
       return nil unless may_claim?(seat, :review)
 
       excluded = Gating.claimable_filter(seat_id: seat.id, kind: :review).excluded_review_ids
@@ -66,7 +66,7 @@ module Leverage
     # not removed. It reads the rows: FailReview first ends the builder's
     # leases that are past their due time (Timers.apply_held_by), as the
     # claims end the leases in their way (Timers.apply_claimable).
-    def builder_free?(seat)
+    def builder_free?(seat, task = nil, at: Time.current)
       return false unless seat&.enabled && !seat.paused && seat.removed_at.nil?
 
       !holds_anything?(seat)

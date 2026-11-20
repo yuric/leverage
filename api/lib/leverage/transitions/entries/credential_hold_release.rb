@@ -8,6 +8,11 @@ module Leverage
       # First version (milestone 3 plan §4, the hand-over table): does nothing.
       # WP4 writes it.
       class CredentialHoldRelease < Entry
+        def initialize(command = self.class.command, targets: nil)
+          super(command)
+          @tasks = targets
+        end
+
         def perform(_ctx)
           @result = nil
         end

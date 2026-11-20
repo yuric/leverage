@@ -8,8 +8,9 @@ module Leverage
       # First version (milestone 3 plan §4, the hand-over table): not built yet.
       # WP3 writes it.
       class ReportLimit < Entry
+        # Empty for WP3's red run: writes nothing.
         def perform(_ctx)
-          raise NotImplementedError, "#{command} is not built yet"
+          @result = nil
         end
       end
     end

@@ -143,4 +143,83 @@ class FailReviewTest < ActiveSupport::TestCase
     assert_equal %w[task.lease_expired review.failed criterion.reopened cost.reported], types
     assert_empty Leverage::Replay.diff(@scenario.workspace_id)
   end
+
+  # HE-14, HD-1 (milestone 3 plan §2.1): a builder the app runs is free for
+  # the fresh lease only if one of its candidates is available for the task;
+  # the lease starts on the first of them, with credential.switched when it
+  # is not the credential last recorded for the task (caused by
+  # review.failed, written by the app after the row's own events), and the
+  # seat's run is placed there.
+
+  # A task In review built by builder, its review claimed and acknowledged
+  # by a reviewer of its own (a reviewer holds one review at a time).
+  def in_review_built_by(builder)
+    @other_reviewer = @scenario.seat(role: "reviewer")
+    task = @scenario.task(state: "in_review", builder: builder, criteria: %w[build review])
+    review = @scenario.review(task, reviewer: @other_reviewer)
+    apply("acknowledge_review_briefing", { "id" => review.id,
+      "briefing_hash" => B.hash_for(task, seat: @other_reviewer, review: review) }, @other_reviewer)
+    [ task, review, Criterion.find_by!(task_id: task.id, kind: "build") ]
+  end
+
+  def fail_built(review, criterion)
+    apply("fail_review", { "id" => review.id, "verdict" => "failed", "failed_criteria" => [ criterion.id ],
+      "notes" => "The named criterion does not hold yet.", "tokens" => 1, "spend" => 0 }, @other_reviewer)
+  end
+
+  test "the fresh lease starts on the builder's first available login, with credential.switched (trace 14)" do
+    claude_o = @scenario.credential(provider: "claude", model: "claude-model-1")
+    claude_m = @scenario.credential(provider: "claude", model: "claude-model-1")
+    builder = @scenario.seat(role: "builder", credential: claude_o, model: "claude-model-1")
+    task, review, criterion = in_review_built_by(builder)
+    task.update_columns(credential_id: claude_m.id)
+
+    ensured = nil
+    calls = []
+    original = Leverage::SeatRuns.method(:ensure_run_on)
+    Leverage::SeatRuns.define_singleton_method(:ensure_run_on) do |ctx, seat, credential, work|
+      calls << [ seat.id, credential.id, work.class.name, work.id ]
+      original.call(ctx, seat, credential, work)
+    end
+    begin
+      assert fail_built(review, criterion).completed?
+      ensured = calls
+    ensure
+      Leverage::SeatRuns.define_singleton_method(:ensure_run_on, original)
+    end
+
+    assert_equal %w[review.failed criterion.reopened cost.reported credential.switched], written.map(&:type)
+    failed = written.first
+    switched = written.last
+    assert_equal [ claude_o.id, failed.id, "app", nil, @key ],
+      [ switched.subject_id, switched.cause_id, switched.actor_kind, switched.actor_id, switched.command_id ]
+    assert_equal({ "from_credential_id" => claude_m.id, "model" => "claude-model-1", "seat_id" => builder.id,
+                   "review_id" => nil, "job_id" => nil }, switched.payload)
+    assert_equal [ "working", builder.id, claude_o.id ], task.reload.attributes.values_at("state", "holder_seat_id", "credential_id")
+    assert_equal [ [ builder.id, claude_o.id, "Task", task.id ] ], ensured
+  end
+
+  test "no switch when the first available login is the one recorded" do
+    claude_o = @scenario.credential(provider: "claude")
+    builder = @scenario.seat(role: "builder", credential: claude_o)
+    task, review, criterion = in_review_built_by(builder)
+
+    assert fail_built(review, criterion).completed?
+    assert_equal %w[review.failed criterion.reopened cost.reported], written.map(&:type)
+    assert_equal claude_o.id, task.reload.credential_id
+  end
+
+  test "a builder with no available candidate is busy: Ready, and the wait names credential_limit (HE-14, HE-35)" do
+    claude_o = @scenario.credential(provider: "claude")
+    builder = @scenario.seat(role: "builder", credential: claude_o)
+    task, review, criterion = in_review_built_by(builder)
+    @scenario.limit_credential(claude_o, reset_at: @scenario.database_now + 3600)
+    @builder.update!(enabled: false)
+
+    assert fail_built(review, criterion).completed?
+    assert_equal [ "ready", nil, nil ], task.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id")
+    failed = written.first
+    assert_equal [ nil, "credential_limit" ], failed.payload.values_at("lease_seat_id", "wait_cause")
+    assert_not_includes written.map(&:type), "credential.switched"
+  end
 end

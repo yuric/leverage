@@ -527,3 +527,61 @@ class NextHttpTest < ActionDispatch::IntegrationTest
     assert_nil removed.reload.last_polled_at
   end
 end
+
+# GET /v1/next with the real Eligibility (milestone 3 plan HD-4): it offers
+# a task or a review only when a claim would take it, so it never offers
+# what a claim refuses. A seat the app runs is offered work only while its
+# run is on its first available candidate.
+class NextItemEligibilityTest < ActiveSupport::TestCase
+  T = Leverage::Transitions
+
+  setup do
+    @scenario = Scenario.new
+    @own = @scenario.credential(provider: "claude")
+    @below = @scenario.credential(provider: "codex")
+    @builder = @scenario.seat(role: "builder", credential: @own)
+    @reviewer = @scenario.seat(role: "reviewer", credential: @own)
+  end
+
+  def claim(seat, command)
+    T.apply(T::Request.new(command: command, workspace_id: @scenario.workspace_id, caller_kind: "seat", caller_id: seat.id,
+      key: "key-#{SecureRandom.hex(6)}", request_hash: command, params: {}))
+  end
+
+  def offered(seat) = Leverage::Reads::NextItem.call(seat.reload)["kind"]
+
+  # The kind offered and whether a claim of it completes agree, for each
+  # place the seat's run can be.
+  def assert_agree(seat, kind, command)
+    [ @own, @below, nil ].each do |where|
+      @scenario.run(seat, on: where)
+      expected = offered(seat)
+      outcome = nil
+      ActiveRecord::Base.transaction(requires_new: true) do
+        outcome = claim(seat, command)
+        raise ActiveRecord::Rollback
+      end
+      assert_equal expected == kind, outcome.completed?, "run on #{where&.provider.inspect}: offered #{expected}"
+    end
+  end
+
+  test "a builder is offered a task exactly when its claim would take it" do
+    @scenario.task(state: "ready")
+    assert_agree(@builder, "task", "claim")
+
+    @scenario.limit_credential(@own, reset_at: @scenario.database_now + 3600)
+    assert_agree(@builder, "task", "claim")
+    @scenario.run(@builder, on: @below)
+    assert_equal "task", offered(@builder)
+  end
+
+  test "a reviewer is offered a review exactly when its claim would take it" do
+    @scenario.task(state: "in_review")
+    assert_agree(@reviewer, "review", "claim_review")
+
+    @scenario.sign_out_credential(@own)
+    assert_agree(@reviewer, "review", "claim_review")
+    @scenario.run(@reviewer, on: @below)
+    assert_equal "review", offered(@reviewer)
+  end
+end

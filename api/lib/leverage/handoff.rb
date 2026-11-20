@@ -10,6 +10,9 @@ module Leverage
   # them; a package that calls one before then asserts in its own tests
   # that it called it with the right arguments.
   module Handoff
+    # How many open credential holds reevaluate reads at a time (HE-10).
+    BATCH = 100
+
     module_function
 
     # Rule 5: marks the stopped credential (a limit: limited_since, and

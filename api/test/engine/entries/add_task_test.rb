@@ -1,8 +1,9 @@
 require "test_helper"
 
 # Add task (PRD Lifecycle L77; milestone 2 plan SC-3, SC-4, SC-8): the owner
-# adds a task to the Backlog and task.created is written. The Imaginarium,
-# a project, criteria and outward actions are 422 invalid in this milestone.
+# adds a task to the Backlog, or to the Imaginarium now that Promote exists
+# (milestone 3 plan HE-24), and task.created is written. A project, criteria
+# and outward actions are 422 invalid in this milestone.
 class AddTaskTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
@@ -44,8 +45,19 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal %w[backlog normal], [ task.state, task.priority ]
   end
 
-  test "the Imaginarium is 422 invalid, because nothing can promote a task out of it yet (SC-4)" do
-    assert_raises(T::Invalid) { apply(body(state: "imaginarium")) }
+  test "a task added to the Imaginarium is an idea, with task.created there (HE-24)" do
+    outcome = apply(body(state: "imaginarium"))
+
+    assert outcome.completed?
+    task = Task.find(outcome.result.fetch("task_id"))
+    assert_equal "imaginarium", task.state
+    event = written.sole
+    assert_equal [ "task.created", { "state" => "imaginarium" } ], [ event.type, event.payload ]
+    assert_equal [ [ "idea", event.id ] ], TaskStep.where(task_id: task.id).pluck(:kind, :opening_event_id)
+  end
+
+  test "a state other than the Imaginarium or the Backlog is 422 invalid" do
+    assert_raises(T::Invalid) { apply(body(state: "ready")) }
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
   end
 
