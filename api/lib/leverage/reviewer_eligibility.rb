@@ -15,7 +15,8 @@ module Leverage
   # do not count: neither Hold nor a verdict is a command that re-evaluates
   # it.
   #
-  # It runs on what a command changed, after its perform (Transitions):
+  # It runs on what a command changed, after its perform (Transitions),
+  # and on what the timers applied before a command's refusals changed:
   #
   # - for the task of each task.submitted, review.released and
   #   review.lease_expired the command wrote (SM-42: the review waits),
@@ -58,12 +59,27 @@ module Leverage
     def after_command(ctx, entry)
       return [] if ctx.workspace.nil?
 
-      causes = ctx.events.select { |event| WAITING.include?(event.type) && event.task_id }
-        .group_by(&:task_id).transform_values(&:last)
-      written = causes.flat_map { |task_id, cause| reevaluate(ctx, task_ids: [ task_id ], cause: cause) }
+      written = after_events(ctx)
       command = entry.command.to_s
       written += reevaluate(ctx) if REEVALUATED_BY.include?(command) && !TASK_ROWS.include?(command)
       written
+    end
+
+    # The tasks of the waiting events the command wrote so far, each
+    # re-evaluated with that event as its cause. Called by after_command,
+    # and by Transitions right after the timers it applies before a
+    # command's refusals: a review lease's end commits whatever the command
+    # then does, and so does the item it causes (SM-42), written beside it
+    # at its effective time, before the command's own events (effective
+    # times never go backwards within a task, L120). Reevaluating again
+    # after perform writes nothing unless the command changed who may
+    # review. Returns the Events it wrote.
+    def after_events(ctx)
+      return [] if ctx.workspace.nil?
+
+      causes = ctx.events.select { |event| WAITING.include?(event.type) && event.task_id }
+        .group_by(&:task_id).transform_values(&:last)
+      causes.flat_map { |task_id, cause| reevaluate(ctx, task_ids: [ task_id ], cause: cause) }
     end
 
     # Opens or resolves the item for each task whose review waits for a

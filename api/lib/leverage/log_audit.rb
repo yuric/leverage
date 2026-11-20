@@ -218,9 +218,13 @@ module Leverage
     end
 
     # The workspace timer or the one-time write a group of events with no
-    # key belongs to, by what they name, or nil.
+    # key belongs to, by what they name, or nil. A group with a lease end
+    # is task timers': the "No reviewer is eligible" item beside a
+    # review.lease_expired is that timer's side event (SM-42), and a
+    # command applies no workspace timer.
     def workspace_timer(events)
       return INSTALL if events.any? { |event| event.type == "rule.created" }
+      return if events.any? { |event| TIMER_EVENTS.key?(event.type) }
 
       kinds = events.select { |event| event.type.start_with?("inbox.") }.filter_map do |event|
         event.type == "inbox.opened" ? (event.payload || {})["kind"] : InboxItem.find_by(id: event.subject_id)&.kind

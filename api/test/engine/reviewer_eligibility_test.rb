@@ -100,7 +100,6 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
   test "with no reviewer seat at all the item opens; a reviewer of another provider that never built the task keeps it closed" do
     reevaluate
     assert_equal 1, items(state: "open").count
-    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
 
     reviewer("codex")
     reevaluate
@@ -122,14 +121,12 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     scenario.remove(reviewer("codex"))
     reevaluate
     assert_equal 1, items(state: "open").count
-    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
   test "a reviewer that connects on its own counts by its own provider" do
     scenario.seat(role: "reviewer", provider: "claude")
     reevaluate
     assert_equal 1, items(state: "open").count
-    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
 
     scenario.seat(role: "reviewer", provider: "grok")
     reevaluate
@@ -266,12 +263,15 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = ProviderWorld.for(@rule, built_by: { @task.id => %w[claude codex] })
     scenario.make_due(@review.reload)
 
+    before = scenario.workspace.reload.last_seq
     written = events_written { assert_completed(owner_command("hold", { "id" => @task.id })) }
     expired = written.find { |event| event.type == "review.lease_expired" }
     opened = written.find { |event| event.type == "inbox.opened" }
     assert opened, "review.lease_expired is one of SM-42's three events"
     assert_equal [ "app", nil, expired.id, nil, expired.effective_at ],
       opened.attributes.values_at("actor_kind", "actor_id", "cause_id", "command_id", "effective_at")
+    # The item is the lease timer's side event, not the reviewer_eligibility timer's.
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
   # The same inside a command that is then refused: the timer's events
