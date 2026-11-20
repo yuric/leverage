@@ -287,8 +287,10 @@ How the traces write what the PRD leaves to the writer:
   event of a seat's or the owner's command carries that command's key, or
   the key of the pending command it completes.
 - **A check's identity** (`subject_kind`, `subject_id`, `input_hash`) is
-  in `check.queued` and `check.finished`; the traces' hashes are made-up
-  digests, the same for every attempt of one check.
+  in `check.queued` and `check.finished`. In a trace one set of hashed
+  inputs carries one digest, the same for every attempt of one check, and
+  two sets two digests. The digests are made up, except trace 07's: its
+  two checks hash one request and carry the engine's own hash of it.
   `action.lease_granted` carries actor `app` and the key of the command that
   frees the builder.
 - **A pending transition's completion** carries the original requester's

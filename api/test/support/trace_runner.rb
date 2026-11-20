@@ -71,12 +71,9 @@ require "time"
 #
 # Milestone 4 (its plan RT-1; WP0T's requests 1a to 1e, WP7's request 2):
 #
-#   Input hashes. A trace's input_hash values are made-up digests
+#   Input hashes. Most of a trace's input_hash values are made-up digests
 #   (api/contract/README.md), so a digest is bound like a symbol: the same
-#   digest must be the same engine hash, and two digests two hashes. Trace
-#   07 gives the two checks of one request two digests (WP0T's and WP1's
-#   notes), which one function of the inputs cannot do: ALIASED_DIGESTS
-#   names that pair, which may share one hash.
+#   digest must be the same engine hash, and two digests two hashes.
 #   Due times a result answers (claim_job's run_due_at) lie after the
 #   command, so they are checked by arithmetic, not bound: the command's
 #   own instant plus the trace's seconds between the two.
@@ -121,13 +118,6 @@ class TraceRunner
   # bound on a reported reset time (Leverage::Handoff::RESET_BOUNDS, six
   # hours for the five-hour window), so a trace's reset times are kept.
   FUTURE = 3600
-  # Trace 07's two digests of one set of inputs (see the class comment).
-  ALIASED_DIGESTS = {
-    "07-pending-gate-check-error-override" => [
-      %w[b244976f1ce9c1209a24222176282b9ebb7bfbf690acb1388cfe176fddf61601
-         cde192e4791a05f15aa5aa8b0b7a23d70be50b9cff80b2558b1256a26942e73f]
-    ]
-  }.freeze
   DIGEST = /\A\h{64}\z/
   # The seat roles whose presence RolePresence reads (L401), and how long a
   # poll keeps a seat online (RolePresence::OFFLINE_AFTER).
@@ -699,16 +689,12 @@ class TraceRunner
       return fail_at(where, "#{path} #{actual.inspect}, but the digest #{digest[0, 8]} is #{@digests[digest].inspect}")
     end
     other = @hashes[actual]
-    if other && !aliased?(other, digest)
+    if other
       return fail_at(where, "#{path} #{actual.inspect} is the digest #{other[0, 8]} already, not #{digest[0, 8]}")
     end
 
     @digests[digest] = actual
-    @hashes[actual] ||= digest
-  end
-
-  def aliased?(first, second)
-    ALIASED_DIGESTS.fetch(name, []).any? { |pair| (pair - [ first, second ]).empty? }
+    @hashes[actual] = digest
   end
 
   def match_id(symbol, actual, where, path)
