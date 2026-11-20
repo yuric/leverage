@@ -96,10 +96,12 @@ class TraceRunner
   attr_reader :name, :trace, :scenario, :failures, :setup_seq
 
   # trace: the trace itself, when a test runs a changed copy of one.
-  def initialize(name, trace: nil)
+  # namespace: TraceBinder's, for a run whose rows are committed and stay
+  # in the worker's database, so that its ids meet no later run's.
+  def initialize(name, trace: nil, namespace: Leverage::Contract::TraceBinder::NAMESPACE)
     @name = name
     @trace = trace || Leverage::Contract.trace(name)
-    @binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 1, 1))
+    @binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 1, 1), namespace: namespace)
     @ids = {}
     @symbols = {}
     @events = {}

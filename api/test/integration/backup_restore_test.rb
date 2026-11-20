@@ -78,7 +78,7 @@ class BackupRestoreTest < CommittingTestCase
   # Trace 09 committed into the worker's database: its rows stay (events
   # cannot be deleted), so they take ids of their own and never meet the
   # ids a later trace run in this database binds.
-  def committed_trace = TraceRunner.new("09-core-loop-no-rules").run
+  def committed_trace = TraceRunner.new("09-core-loop-no-rules", namespace: SecureRandom.uuid).run
 
   test "a dump of trace 09's log restores into a new database where the replay and the audit pass and the rows are the same" do
     runner = committed_trace
