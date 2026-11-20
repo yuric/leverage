@@ -127,4 +127,87 @@ class BriefingTest < ActiveSupport::TestCase
     acknowledge(task, @reviewer, B.hash_for(task, seat: @reviewer, review: review), review: review)
     assert_equal :current, B.acknowledgement(task, seat: @reviewer, review: review)
   end
+
+  # --- milestone 4: rules join the briefing (L470, L476; plan WP3) ---------
+
+  def use_engine = Leverage::Gating.implementation = Leverage::Rules::Engine.new
+
+  # Saves a new version of rule with fields changed, as save_rule will.
+  def save(rule, **fields)
+    current = @scenario.current_version(rule)
+    version = RuleVersion.create!(current.attributes.except("id", "created_at").merge("version" => current.version + 1)
+      .merge(fields.stringify_keys))
+    rule.update!(current_version: version.version)
+    version
+  end
+
+  test "the rules join the briefing with their versions: a model rule's instruction, an app rule's sentence (L470, RD-62)" do
+    use_engine
+    rules = @scenario.with_shipped_rules.to_h { |rule| [ rule.key, rule ] }
+    acting = %w[acceptance_criteria specific_details different_provider_review].map { |key| rules.fetch(key) }
+    versions = acting.map { |rule| @scenario.current_version(rule) }
+    briefing = B.for(@task, seat: @builder)
+
+    assert_matches_component("Briefing", briefing)
+    assert_equal versions.map(&:id), briefing["versions"]["rule_version_ids"]
+    assert_equal [
+      [ acting[0].id, versions[0].id, "acceptance_criteria", "Every task needs acceptance criteria",
+        "Every task needs at least 1 acceptance criterion besides the review.", false ],
+      [ acting[1].id, versions[1].id, "specific_details", "Every task needs specific details", versions[1].instruction, false ],
+      [ acting[2].id, versions[2].id, "different_provider_review", "A different provider reviews every task",
+        "An agent on a provider that built the task may not review it.", false ]
+    ], briefing["rules"].map { |rule| rule.values_at("rule_id", "rule_version_id", "key", "name", "instruction", "may_apply") }
+    parts = acting.map { |rule| { "kind" => "rule", "id" => rule.id, "version" => 1 } }
+    expected = Digest::SHA256.hexdigest(Leverage::Gating::CanonicalJson.dump([
+      { "kind" => "brief", "id" => nil, "version" => 0 },
+      { "kind" => "role_file", "id" => "builder", "version" => Leverage::VERSION },
+      { "kind" => "contract", "id" => @task.id, "version" => @task.contract_version }
+    ] + parts))
+    assert_equal expected, briefing["hash"]
+  end
+
+  test "the hash changes when a rule in it is saved, switched or removed, and a reviewer reads the same rules" do
+    use_engine
+    rule = @scenario.rule(hook: "task.before_submit")
+    deciding = @scenario.rule(hook: "task.before_done", scope_kind: "checker_decides")
+    hashes = [ B.hash_for(@task, seat: @builder) ]
+    assert_equal [ [ rule.id, false ], [ deciding.id, true ] ],
+      B.for(@task, seat: @builder)["rules"].map { |row| row.values_at("rule_id", "may_apply") }
+
+    saved = save(rule, instruction: "A made-up instruction, saved again.")
+    hashes << B.hash_for(@task, seat: @builder)
+    assert_equal [ saved.id, @scenario.current_version(deciding).id ], B.for(@task, seat: @builder)["versions"]["rule_version_ids"]
+    assert_equal "A made-up instruction, saved again.", B.for(@task, seat: @builder)["rules"].first["instruction"]
+
+    rule.update!(enabled: false)
+    hashes << B.hash_for(@task, seat: @builder)
+    assert_equal [ deciding.id ], B.for(@task, seat: @builder)["rules"].map { |row| row["rule_id"] }
+    rule.update!(enabled: true)
+    assert_equal hashes[1], B.hash_for(@task, seat: @builder), "the hash covers the parts' versions only"
+
+    deciding.update!(removed_at: @scenario.database_now)
+    hashes << B.hash_for(@task, seat: @builder)
+    assert_equal [ rule.id ], B.for(@task, seat: @builder)["rules"].map { |row| row["rule_id"] }
+    assert_equal hashes.uniq, hashes
+
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: @reviewer)
+    assert_equal B.for(task, seat: @scenario.seat)["rules"], B.for(task, seat: @reviewer, review: review)["rules"]
+  end
+
+  test "a builder sent back by a rule when the review has passed reads its name and reason after the reviewer's notes (RD-38)" do
+    rule = @scenario.rule(hook: "task.before_done", name: "Made-up done rule")
+    check = @scenario.rule_check(@task, rule: rule, result: "failed", reason: "The made-up check's reason.")
+    with_notes = Review.create!(workspace_id: @task.workspace_id, task_id: @task.id, round: 0, verdict: "failed",
+      notes: "The reviewer's notes.", reviewer_seat_id: @reviewer.id, failed_rule_check_id: check.id)
+    without = Review.create!(workspace_id: @task.workspace_id, task_id: @task.id, round: 1, verdict: "failed",
+      reviewer_seat_id: @reviewer.id, failed_rule_check_id: check.id)
+
+    response = B.response(@task, seat: @builder)
+    assert_matches_component("BriefingResponse", response)
+    assert_equal [
+      [ with_notes.id, "The reviewer's notes.\n\nMade-up done rule: The made-up check's reason." ],
+      [ without.id, "Made-up done rule: The made-up check's reason." ]
+    ], response["review_notes"].map { |note| note.values_at("review_id", "notes") }
+  end
 end

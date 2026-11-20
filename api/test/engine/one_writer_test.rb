@@ -3,8 +3,10 @@ require "test_helper"
 # The two lines of milestone 2 plan §2.1 a static test holds: only
 # lib/leverage/event_log.rb inserts into events (PRD L215), and no file
 # under app/controllers/ or lib/leverage/reads/ calls a writing Active
-# Record method or sends writing SQL. Comments are not code and are
-# skipped.
+# Record method or sends writing SQL. Milestone 4 adds a third (its plan
+# §2, RE-1): no file under lib/leverage/rules/ does either, because
+# Leverage::Gating decides and the transition function writes. Comments
+# are not code and are skipped.
 class OneWriterTest < ActiveSupport::TestCase
   ROOT = Rails.root
   EVENT_LOG = "lib/leverage/event_log.rb".freeze
@@ -20,6 +22,9 @@ class OneWriterTest < ActiveSupport::TestCase
     /\b(INSERT\s+INTO|UPDATE\s+"?\w+"?\s+SET|DELETE\s+FROM|TRUNCATE|SELECT\s+.*\bFOR\s+UPDATE)\b/i
   ].freeze
 
+  # The folders of the third line, which only read (milestone 4 plan §2).
+  READ_ONLY_RULES = [].freeze
+
   def self.code_lines(text)
     text.each_line.with_index(1).reject { |line, _| line.strip.start_with?("#") }
   end
@@ -30,6 +35,12 @@ class OneWriterTest < ActiveSupport::TestCase
         "#{file.delete_prefix("#{ROOT}/")}:#{number}: #{line.strip}" if patterns.any? { |pattern| pattern.match?(line) }
       end
     end
+  end
+
+  # The writes in the files of READ_ONLY_RULES under root.
+  def self.rules_offences(root)
+    files = READ_ONLY_RULES.flat_map { |folder| Dir[File.join(root.to_s, folder, "**", "*.rb")] }.sort
+    offences(files, WRITE)
   end
 
   def ruby_files(*folders)
@@ -62,5 +73,20 @@ class OneWriterTest < ActiveSupport::TestCase
     assert_equal 4, self.class.offences([ sample.path ], WRITE).size
   ensure
     sample&.unlink
+  end
+
+  test "files under lib/leverage/rules call no writing Active Record method" do
+    assert_not_empty Dir[ROOT.join("lib/leverage/rules/**/*.rb")]
+    assert_empty self.class.rules_offences(ROOT)
+  end
+
+  test "the rules scan reports a write in a file under rules/" do
+    Dir.mktmpdir do |root|
+      path = File.join(root, "lib/leverage/rules/made_up.rb")
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, "rule.update!(enabled: false)\n# rule.update!(enabled: true) in a comment is not code\n")
+
+      assert_equal 1, self.class.rules_offences(root).size
+    end
   end
 end
