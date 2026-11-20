@@ -69,6 +69,39 @@ require "time"
 # an acknowledgement sends the hash of the briefing the seat would read at
 # that point, Briefing.hash_for(task or review, seat) (WP3's choice 5).
 #
+# Milestone 4 (its plan RT-1; WP0T's requests 1a to 1e, WP7's request 2):
+#
+#   Input hashes. A trace's input_hash values are made-up digests
+#   (api/contract/README.md), so a digest is bound like a symbol: the same
+#   digest must be the same engine hash, and two digests two hashes. Trace
+#   07 gives the two checks of one request two digests (WP0T's and WP1's
+#   notes), which one function of the inputs cannot do: ALIASED_DIGESTS
+#   names that pair, which may share one hash.
+#   Due times a result answers (claim_job's run_due_at) lie after the
+#   command, so they are checked by arithmetic, not bound: the command's
+#   own instant plus the trace's seconds between the two.
+#   Setup times. A setup login limited until a later @t is limited until a
+#   future time, as a reset a request sends (above), and the time passes
+#   the same way; its limited_since is that many seconds before the
+#   database's now.
+#   Presence (RolePresence, L401, RD-15): an orchestrator or planner seat
+#   counts as online while it polled within 90 seconds. Polls are reads
+#   and no trace can show them, so before each command the runner puts
+#   each such seat's last poll where the trace has it: a seat the app runs
+#   (it has a login) polls all the time, its runner on GET /v1/next; a
+#   seat that connects on its own polled at the setup's last_polled_at, at
+#   each command it sends and all the time while it holds a claimed job.
+#   A note "polled at N" puts the poll at N. A seat whose last poll p is
+#   less than 90 seconds back is given that poll's instant; one further
+#   back the instant 90 seconds before @t:p+90, so the engine's own
+#   arithmetic finds it offline since @t:p+90.
+#   Job timers. As a lease, a job's queue or run timeout is put at its due
+#   time first: its attempt's and its job's queued (or started and claimed)
+#   times move back so that the due time is the database's now.
+#   A $rule_check sent before any event shows its id (trace 17's override
+#   of the row held at the re-run limit, RD-45) is bound to the check the
+#   open rerun_limit hold names.
+#
 # Steps are compared as they are just after the command that opens them:
 # the criterion back-fill (PRD rule 5) later gives an open build row its
 # criterion, which the trace cannot show (step_closed has no subject; the
@@ -91,6 +124,21 @@ class TraceRunner
   # bound on a reported reset time (Leverage::Handoff::RESET_BOUNDS, six
   # hours for the five-hour window), so a trace's reset times are kept.
   FUTURE = 3600
+  # Trace 07's two digests of one set of inputs (see the class comment).
+  ALIASED_DIGESTS = {
+    "07-pending-gate-check-error-override" => [
+      %w[b244976f1ce9c1209a24222176282b9ebb7bfbf690acb1388cfe176fddf61601
+         cde192e4791a05f15aa5aa8b0b7a23d70be50b9cff80b2558b1256a26942e73f]
+    ]
+  }.freeze
+  DIGEST = /\A\h{64}\z/
+  # The seat roles whose presence RolePresence reads (L401), and how long a
+  # poll keeps a seat online (RolePresence::OFFLINE_AFTER).
+  JOB_ROLES = %w[orchestrator planner].freeze
+  POLLED_AT = /polled at (-?[0-9]+)/
+  # The job timers, and which due time each runs at (timers.json).
+  JOB_TIMERS = { "check_queue_timeout" => :queue, "contract_draft_job_queue_timeout" => :queue,
+                 "check_run_timeout" => :run, "contract_draft_job_run_timeout" => :run }.freeze
   LEASE_ENDS = %w[task.lease_expired review.lease_expired].freeze
   # The hold reasons that pause a lease clock (the registry's lease_clock).
   PAUSING = Leverage::Contract.registry.fetch("hold_reasons")
@@ -112,6 +160,10 @@ class TraceRunner
     @leases = {}
     @future = Set.new
     @failures = []
+    @digests = {}
+    @hashes = {}
+    @polls = {}
+    @placed = {}
   end
 
   def workspace_id = scenario.workspace_id
@@ -128,12 +180,26 @@ class TraceRunner
   # disagreements are in failures.
   def run(limit = trace.fetch("commands").size)
     seed
-    commands = trace.fetch("commands").first(limit)
+    run_commands(trace.fetch("commands").first(limit))
+    self
+  rescue Unbound => error
+    @failures << error.message
+    self
+  end
+
+  # A symbol a request sends before the trace shows its id: the run stops
+  # there, with the failures before it.
+  class Unbound < ArgumentError; end
+
+  private
+
+  def run_commands(commands)
     index = 0
     while index < commands.size
       command = commands[index]
       following = commands[index + 1]
       pass_times(command, index)
+      place_polls(command)
       if command.fetch("caller") == "app"
         make_due(command, index)
         if following && following.fetch("caller") != "app" && following.fetch("at") == command.fetch("at")
@@ -148,10 +214,7 @@ class TraceRunner
         index += 1
       end
     end
-    self
   end
-
-  private
 
   # --- setup -------------------------------------------------------------
 
@@ -163,6 +226,10 @@ class TraceRunner
     @scenario = Scenario.new
     scenario.seed(@binder.bind(setup))
     added_but_signed_out(setup)
+    limited_in_setup(setup)
+    Array(setup["seats"]).each do |row|
+      @polls[row.fetch("id")] = [ seconds(row["last_polled_at"]) ] if row["last_polled_at"]
+    end
     @setup_seq = scenario.workspace.reload.last_seq
   end
 
@@ -176,6 +243,91 @@ class TraceRunner
     ids = Array(setup["credentials"]).select { |row| row.fetch("state") == "signed_out" }
       .map { |row| @binder.id(row.fetch("id")) }
     Credential.where(workspace_id: workspace_id, id: ids).update_all(last_verified_at: @binder.start)
+  end
+
+  # A setup login limited until a later @t is limited until a future time
+  # (sent_time's FUTURE), since that many seconds before the database's now
+  # (WP0T's request 1c).
+  def limited_in_setup(setup)
+    Array(setup["credentials"]).each do |row|
+      until_link = row["limited_until"]
+      next unless until_link
+
+      @command_seconds = 0
+      values = { limited_until: sent_time(seconds(until_link)) }
+      values[:limited_since] = scenario.database_now + seconds(row["limited_since"]) if row["limited_since"]
+      Credential.where(id: @binder.id(row.fetch("id"))).update_all(values)
+    end
+  end
+
+  # --- presence ------------------------------------------------------------
+
+  # Puts each orchestrator's and planner's last poll where the trace has it
+  # before the command at @t:s (see the class comment).
+  def place_polls(command)
+    reached = seconds(command.fetch("at"))
+    @command_seconds = reached
+    noted = command["note"].to_s[POLLED_AT, 1]&.then { |text| Integer(text, 10) }
+    caller = command.fetch("caller")
+    Seat.where(workspace_id: workspace_id, role: JOB_ROLES, removed_at: nil).find_each do |seat|
+      symbol = @symbols[seat.id]
+      next unless symbol
+
+      history = (@polls[symbol] ||= [])
+      history << noted if noted
+      continuous = seat.credential_id || Job.exists?(claimed_by_seat_id: seat.id, state: "claimed")
+      history << reached if caller == symbol || (continuous && !noted)
+      last = history.select { |time| time <= reached }.max
+      seat.update_columns(last_polled_at: poll_instant(last, reached)) if last
+    end
+  end
+
+  # The last_polled_at that makes RolePresence answer for @t:last as the
+  # trace does at @t:reached.
+  def poll_instant(last, reached)
+    return scenario.database_now if last == reached
+    return trace_instant(last) if last + Leverage::RolePresence::OFFLINE_AFTER > reached
+
+    trace_instant(last + Leverage::RolePresence::OFFLINE_AFTER) - Leverage::RolePresence::OFFLINE_AFTER
+  end
+
+  # A trace time's instant: bound, placed already, or placed now between
+  # the bound times around it.
+  def trace_instant(number)
+    @times.fetch(number) { @placed[number] ||= between(number) }
+  end
+
+  # --- job timers ------------------------------------------------------------
+
+  # A job timer's job is put at its due time (the database's now): its
+  # attempt's and its own times move back by what is left (EN-18).
+  def make_job_due(command, index)
+    kind = JOB_TIMERS[command.fetch("command")]
+    return unless kind
+
+    command.fetch("expect").fetch("events").select { |event| event.fetch("type") == "job.timed_out" }.each do |event|
+      job = Job.find_by(id: @ids[event.fetch("subject_id")])
+      next fail_at(label(command, index), "cannot find the job #{event.fetch("subject_id")} times out") unless job
+
+      due = Leverage::Timers.job_due_at(job, kind)
+      next fail_at(label(command, index), "#{event.fetch("subject_id")} has no #{kind} due time") unless due
+
+      shift = scenario.database_now - due
+      move_job_times(job, kind, shift)
+    end
+  end
+
+  # shift: the database's now less the due time (negative: the times move
+  # back).
+  def move_job_times(job, kind, shift)
+    attempt = RuleCheckAttempt.find_by(job_id: job.id)
+    if kind == :queue
+      job.update_columns(queued_at: job.queued_at + shift)
+      attempt&.update_columns(queued_at: attempt.queued_at + shift)
+    else
+      job.update_columns(claimed_at: job.claimed_at + shift) if job.claimed_at
+      attempt&.update_columns(started_at: attempt.started_at + shift) if attempt&.started_at
+    end
   end
 
   # --- running -----------------------------------------------------------
@@ -221,6 +373,7 @@ class TraceRunner
   # A credential hold's release is due at a reset that pass_times has
   # already moved, or at once: nothing more to move for it.
   def make_due(command, index)
+    make_job_due(command, index)
     command.fetch("expect").fetch("events").each do |event|
       type = event.fetch("type")
       next unless LEASE_ENDS.include?(type)
@@ -275,13 +428,22 @@ class TraceRunner
     return key_id(symbol) if symbol.start_with?("$key:")
 
     bind_helper_request(symbol) if SYMBOL.match(symbol)[1] == HELPER_REQUEST && !@ids.key?(symbol)
-    @ids.fetch(symbol) { raise ArgumentError, "#{name}: #{symbol} is sent before the trace shows its id" }
+    bind_held_check(symbol) if SYMBOL.match(symbol)[1] == "rule_check" && !@ids.key?(symbol)
+    @ids.fetch(symbol) { raise Unbound, "#{name}: #{symbol} is sent before the trace shows its id" }
   end
 
   def bind_helper_request(symbol)
     request = HelperRequest.where(workspace_id: workspace_id, state: UNFINISHED_REQUESTS)
       .where.not(id: @symbols.keys).order(created_at: :desc, id: :desc).first
     bind_symbol(symbol, request.id, "#{symbol}, the newest unfinished helper request") if request
+  end
+
+  # The row held at the re-run limit writes no event (RD-45; WP0T's
+  # request 1a): its symbol is the check the open rerun_limit hold names.
+  def bind_held_check(symbol)
+    check_id = Hold.where(workspace_id: workspace_id, reason: "rerun_limit", closed_at: nil).where.not(rule_check_id: nil)
+      .order(:opened_at, :id).pluck(:rule_check_id).find { |id| !@symbols.key?(id) }
+    bind_symbol(symbol, check_id, "#{symbol}, the check the open rerun_limit hold names") if check_id
   end
 
   # --- times a request sends ---------------------------------------------
@@ -415,7 +577,26 @@ class TraceRunner
     return unless fields
 
     result = outcome.result || {}
-    fields.each { |key, value| match_value(value, result[key], where, "result #{key}") }
+    fields.each do |key, value|
+      if value.is_a?(String) && TIME.match?(value) && seconds(value) > @command_seconds
+        match_due(value, result[key], where, "result #{key}")
+      else
+        match_value(value, result[key], where, "result #{key}")
+      end
+    end
+  end
+
+  # A due time after the command: the command's own instant plus the
+  # trace's seconds between them.
+  def match_due(link, actual, where, path)
+    own = @times[@command_seconds]
+    return fail_at(where, "#{path}: the command's own @t:#{@command_seconds} is not bound") unless own
+
+    expected = own + (seconds(link) - @command_seconds)
+    actual = Time.iso8601(actual) if actual.is_a?(String)
+    return if actual && (actual - expected).abs < 0.000_001
+
+    fail_at(where, "#{path} #{actual&.iso8601(6).inspect}, expected #{link}, #{expected.iso8601(6)}")
   end
 
   # --- lease arithmetic --------------------------------------------------
@@ -494,6 +675,8 @@ class TraceRunner
   # --- matching symbols, event links and times ---------------------------
 
   def match_value(expected, actual, where, path)
+    return match_digest(expected, actual, where, path) if path.end_with?("input_hash") && DIGEST.match?(expected.to_s)
+
     case expected
     when Hash
       unless actual.is_a?(Hash) && actual.keys.sort == expected.keys.sort
@@ -513,6 +696,26 @@ class TraceRunner
     else
       fail_at(where, "#{path} #{actual.inspect}, expected #{expected.inspect}") unless actual == expected
     end
+  end
+
+  # A trace's digest stands for the engine's hash of the same inputs.
+  def match_digest(digest, actual, where, path)
+    if @digests.key?(digest)
+      return if @digests[digest] == actual
+
+      return fail_at(where, "#{path} #{actual.inspect}, but the digest #{digest[0, 8]} is #{@digests[digest].inspect}")
+    end
+    other = @hashes[actual]
+    if other && !aliased?(other, digest)
+      return fail_at(where, "#{path} #{actual.inspect} is the digest #{other[0, 8]} already, not #{digest[0, 8]}")
+    end
+
+    @digests[digest] = actual
+    @hashes[actual] ||= digest
+  end
+
+  def aliased?(first, second)
+    ALIASED_DIGESTS.fetch(name, []).any? { |pair| (pair - [ first, second ]).empty? }
   end
 
   def match_id(symbol, actual, where, path)

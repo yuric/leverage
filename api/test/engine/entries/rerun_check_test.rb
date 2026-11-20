@@ -27,27 +27,26 @@ class RerunCheckTest < ActiveSupport::TestCase
     @hold = rule_hold(@task, "check_error", rule: @rule, check: @check)
   end
 
+  # Through RuleChecks.queue_attempt, so check.queued names the job before
+  # job.queued (trace 19, command 20; WP4's request 1).
   test "an errored check runs again as a new attempt with its own job; the hold stays open (trace 19, command 20; L400)" do
     errored_submit
-    previous = Job.find(RuleCheckAttempt.where(rule_check_id: @check.id).order(:attempt_number).last.job_id)
-    previous.update!(input: { "made_up" => "the check's stored input" })
-    job = nil
     key = new_key
 
-    calls = recording({ Leverage::Jobs => :queue, Leverage::RuleChecks => :new_attempt },
-      fakes: { "Jobs.queue" => ->(*, **) { job = fake_job(@task, @check) } }) do
+    calls = recording({ Leverage::RuleChecks => :queue_attempt }) do
       assert_completed(owner_command("rerun_check", { "id" => @check.id }, key: key))
     end
 
-    queued = calls.fetch("Jobs.queue").sole
-    assert_equal({ kind: "rule_check", task: @task, target: @check, seat_role: "orchestrator",
-                   input: { "made_up" => "the check's stored input" } }, queued.keywords)
-    attempt = calls.fetch("RuleChecks.new_attempt").sole
-    assert_equal [ @check.id, { job: job } ], [ attempt.arguments[1].id, attempt.keywords ]
-    assert_kind_of Leverage::Transitions::Context, attempt.arguments[0]
-    assert_equal key, attempt.arguments[0].request.key
+    queued = calls.fetch("RuleChecks.queue_attempt").sole
+    assert_equal [ @check.id, { kind: "rule_check", seat_role: "orchestrator" } ], [ queued.arguments[1].id, queued.keywords ]
+    assert_kind_of Leverage::Transitions::Context, queued.arguments[0]
+    assert_equal key, queued.arguments[0].request.key
+    events = written_by(key)
+    assert_equal %w[check.queued job.queued], events.map(&:type)
+    job = Job.find(events.last.subject_id)
+    assert_equal [ job.id, 3 ], events.first.payload.values_at("job_id", "attempt_number")
+    assert_equal [ "rule_check", @check.id, "queued", 3 ], [ job.target_kind, job.target_id, job.state, job.attempt_number ]
     assert_nil @hold.reload.closed_at, "check_error closes when the new result arrives, not now"
-    assert_empty written_by(key).select { |event| event.type.start_with?("hold.", "inbox.") }
   end
 
   test "an errored claim check has its hold closed with run_again and nothing queued (RD-42, L392)" do
@@ -57,7 +56,7 @@ class RerunCheckTest < ActiveSupport::TestCase
     rule_hold(task, "check_error", rule: rule, check: check)
     key = new_key
 
-    calls = recording({ Leverage::Jobs => :queue, Leverage::RuleChecks => :new_attempt }) do
+    calls = recording({ Leverage::Jobs => :queue, Leverage::RuleChecks => :queue_attempt }) do
       assert_completed(owner_command("rerun_check", { "id" => check.id }, key: key))
     end
 
@@ -89,7 +88,7 @@ class RerunCheckTest < ActiveSupport::TestCase
                scenario.rule_check(task, rule: rule, result: "withdrawn", input_hash: "3" * 64),
                scenario.rule_check(task, rule: rule, input_hash: "4" * 64) ]
 
-    calls = recording({ Leverage::Jobs => :queue, Leverage::RuleChecks => :new_attempt }) do
+    calls = recording({ Leverage::Jobs => :queue, Leverage::RuleChecks => :queue_attempt }) do
       checks.each do |check|
         outcome, events = owner_run("rerun_check", { "id" => check.id })
         assert_refused("invalid_state", outcome)

@@ -31,6 +31,74 @@ class ReplayTest < ActiveSupport::TestCase
     end
   end
 
+  # Milestone 4 (its plan RT-1, test 1): the rule checks' result and
+  # override, the rules' switch and current version, a provisional claim's
+  # holder (DB-43), and the steps check and draft, in the traces that write
+  # them, and in the milestone 1 traces that run whole with rules.
+  %w[
+    01-happy-path 02-failed-review-rework 05-limit-handoff 06-signed-out-hold-verify
+    07-pending-gate-check-error-override 08-lease-expiry-and-cancel 16-model-gate-and-draft
+    17-submit-rule-rerun-and-override 18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
+  ].each do |name|
+    test "the log of trace #{name}, with its rules and checks, rebuilds every replay column" do
+      assert_empty log_diff(run_trace(name))
+    end
+  end
+
+  test "a rule's switch and current version changed without an event are found" do
+    runner = run_trace("17-submit-rule-rerun-and-override")
+    rules = Leverage::Replay.project(runner.workspace_id).fetch(:rules)
+    assert_equal Rule.where(workspace_id: runner.workspace_id).pluck(:id).sort, rules.keys.sort
+    custom = Rule.where(workspace_id: runner.workspace_id, removed_at: nil).where("key LIKE 'custom_%'").order(:created_at).first
+    assert_operator rules.fetch(custom.id).fetch("current_version"), :>, 1, "trace 17 saves its rule as a new version"
+    custom.update_columns(enabled: !custom.enabled, current_version: custom.current_version - 1)
+    found = log_diff(runner)
+    assert(found.any? { |line| line.include?("rules #{custom.id} enabled") }, found.inspect)
+    assert(found.any? { |line| line.include?("rules #{custom.id} current_version") }, found.inspect)
+  end
+
+  test "a rule check's result and override changed without an event are found" do
+    runner = run_trace("07-pending-gate-check-error-override")
+    checks = Leverage::Replay.project(runner.workspace_id).fetch(:rule_checks)
+    overridden = RuleCheck.where(workspace_id: runner.workspace_id).where.not(overridden_at: nil).sole
+    assert_equal [ "error", overridden.overridden_by_user_id, overridden.overridden_at ],
+      checks.fetch(overridden.id).values_at("result", "overridden_by_user_id", "overridden_at")
+    passed = RuleCheck.where(workspace_id: runner.workspace_id, result: "passed").sole
+    passed.update_columns(result: "failed")
+    overridden.update_columns(overridden_at: nil, overridden_by_user_id: nil)
+    found = log_diff(runner)
+    assert(found.any? { |line| line.include?("rule_checks #{passed.id} result") }, found.inspect)
+    assert(found.any? { |line| line.include?("rule_checks #{overridden.id} overridden_at") }, found.inspect)
+    assert(found.any? { |line| line.include?("rule_checks #{overridden.id} overridden_by_user_id") }, found.inspect)
+  end
+
+  # DB-43: the provisional holder is set by the claim check's check.queued
+  # (claimant_seat_id) and cleared by its failed, errored or withdrawn
+  # check.finished, by a hold.opened on the task and by task.released.
+  test "a provisional claim's holder is rebuilt from its check, and cleared when the check fails" do
+    scenario = Scenario.new
+    rule = scenario.rule(hook: "task.before_claim")
+    task = scenario.task(state: "ready")
+    builder = scenario.seat
+    seat_call = lambda do |seat, command, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "seat",
+        caller_id: seat.id, key: "k-#{SecureRandom.hex(6)}", request_hash: "c" * 64, params: params))
+    end
+    assert_equal :pending, seat_call.call(builder, "claim", {}).outcome
+    holder = -> { Leverage::Replay.project(scenario.workspace_id).fetch(:tasks).fetch(task.id).fetch("holder_seat_id") }
+    assert_equal [ builder.id, builder.id ], [ holder.call, task.reload.holder_seat_id ]
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+
+    orchestrator = scenario.orchestrator
+    assert seat_call.call(orchestrator, "claim_job", {}).completed?
+    job = Job.find_by!(workspace_id: scenario.workspace_id, state: "claimed")
+    assert seat_call.call(orchestrator, "submit_job_result", "id" => job.id,
+      "result" => { "result" => "failed", "reason" => "A made-up reason." }, "tokens" => 1, "spend" => 0).completed?
+    assert_equal "failed", RuleCheck.find_by!(workspace_id: scenario.workspace_id, rule_id: rule.id).result
+    assert_equal [ nil, nil ], [ holder.call, task.reload.holder_seat_id ]
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+  end
+
   # The open set of holds with its reasons, mid-trace: trace 11 after its
   # second limit (a credential_limit hold waits for the reset), trace 12
   # after its sign-out (credential_signed_out), trace 15 while an agent is

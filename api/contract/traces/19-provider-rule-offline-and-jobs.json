@@ -21,7 +21,6 @@
       {"id": "$credential:claude_b", "kind": "login", "provider": "claude", "name": "Claude B", "state": "active", "limited_until": null, "position": 1, "model": null, "effort": null, "strength_rank": 1},
       {"id": "$credential:gemini_h", "kind": "login", "provider": "gemini", "name": "Gemini H", "state": "active", "limited_until": null, "position": 2, "model": "gemini-model-1", "effort": null, "strength_rank": 1},
       {"id": "$credential:claude_r", "kind": "login", "provider": "claude", "name": "Claude R", "state": "active", "limited_until": null, "position": 3, "model": null, "effort": null, "strength_rank": 1},
-      {"id": "$credential:gemini_r", "kind": "login", "provider": "gemini", "name": "Gemini R", "state": "active", "limited_until": null, "position": 4, "model": null, "effort": null, "strength_rank": 1},
       {"id": "$credential:codex_o", "kind": "login", "provider": "codex", "name": "Codex O", "state": "active", "limited_until": null, "position": 5, "model": null, "effort": null, "strength_rank": 1},
       {"id": "$credential:grok_o", "kind": "login", "provider": "grok", "name": "Grok O", "state": "active", "limited_until": null, "position": 6, "model": "grok-model-1", "effort": null, "strength_rank": 1},
       {"id": "$credential:codex_r", "kind": "login", "provider": "codex", "name": "Codex R", "state": "active", "limited_since": "@t:-300", "limited_until": "@t:1500", "position": 7, "model": null, "effort": null, "strength_rank": 1},
@@ -30,7 +29,7 @@
     "seats": [
       {"id": "$seat:builder", "name": "Builder", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_b", "enabled": true, "paused": false, "last_polled_at": null},
       {"id": "$seat:rv_claude", "name": "Claude reviewer", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:claude_r", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:rv_gemini", "name": "Gemini reviewer", "provider": "gemini", "model": "gemini-model-1", "effort": "high", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:gemini_r", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:rv_gemini", "name": "Gemini reviewer", "provider": "gemini", "model": "gemini-model-1", "effort": "high", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:gemini_h", "enabled": true, "paused": false, "last_polled_at": null},
       {"id": "$seat:rv_codex", "name": "Codex reviewer", "provider": "codex", "model": "codex-model-1", "effort": "high", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:codex_r", "enabled": true, "paused": false, "last_polled_at": null},
       {"id": "$seat:orchestrator", "name": "Orchestrator", "provider": "codex", "model": "codex-model-1", "effort": "high", "role": "orchestrator", "strength_rank": 2, "credential_id": "$credential:codex_o", "enabled": true, "paused": false, "last_polled_at": "@t:-10"}
     ],

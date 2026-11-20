@@ -22,7 +22,7 @@ module PendingEndsSupport
     original_of = mod.method(:of)
     original_cancel = mod.method(:cancel)
     mod.define_singleton_method(:of) { |task| PendingTransition.find_by(task_id: task.id, state: "pending") }
-    mod.define_singleton_method(:cancel) do |ctx, pending, code|
+    mod.define_singleton_method(:cancel) do |ctx, pending, code, **_timer|
       calls << Cancelled.new(pending.id, code, ctx.events.map(&:type))
       pending.update_columns(state: "cancelled", params: nil)
       nil

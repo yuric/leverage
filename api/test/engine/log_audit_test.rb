@@ -42,6 +42,52 @@ class LogAuditTest < ActiveSupport::TestCase
     end
   end
 
+  # Milestone 4 (its plan RE-3, RT-4): a waiting command's own events under
+  # its key in the command that brings the last result, rule check, job and
+  # hold events beside a command's row, the job timers' and the workspace
+  # timers' events with no key, and the one-time write of the shipped rules.
+  %w[
+    01-happy-path 02-failed-review-rework 05-limit-handoff 06-signed-out-hold-verify
+    07-pending-gate-check-error-override 08-lease-expiry-and-cancel 16-model-gate-and-draft
+    17-submit-rule-rerun-and-override 18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
+  ].each do |name|
+    test "the log of trace #{name}, with its rules, checks and jobs, passes" do
+      assert_empty audit(run_trace(name))
+    end
+  end
+
+  # RE-3's second key: a row's own events may be written under another
+  # command's key only when a pending transition of that key exists.
+  test "a move written later under a key that never waited is found" do
+    runner = run_trace("16-model-gate-and-draft")
+    key = key_of(runner, "$key:t1_complete_2")
+    PendingTransition.where(workspace_id: runner.workspace_id, command_key: key).update_all(command_key: "made-up-key")
+    found = audit(runner)
+    assert(found.any? { |line| line.include?(key) }, found.inspect)
+  end
+
+  # RT-4: no task.ready, task.claimed, task.submitted or review.passed
+  # whose command had, at its hook, an enabled blocking gate without a row
+  # that passed, did not apply, was withdrawn or was overridden.
+  test "a move past a blocking gate whose check did not pass is found" do
+    runner = run_trace("16-model-gate-and-draft")
+    key = key_of(runner, "$key:t1_complete_2")
+    pending = PendingTransition.find_by!(workspace_id: runner.workspace_id, command_key: key)
+    rule = Rule.find_by!(workspace_id: runner.workspace_id, key: "specific_details")
+    check = RuleCheck.where(pending_transition_id: pending.id, rule_id: rule.id).sole
+    check.update_columns(result: "failed")
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("task.ready") && line.include?(check.rule_id) }, found.inspect)
+  end
+
+  test "a move past a blocking gate with no check at all is found" do
+    runner = run_trace("01-happy-path")
+    RuleCheckAttempt.where(workspace_id: runner.workspace_id).delete_all
+    RuleCheck.where(workspace_id: runner.workspace_id).delete_all
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("task.ready") && line.include?("gate") }, found.inspect)
+  end
+
   # credential.switched is a side event in the registry, but only the rows
   # that name it may write it (milestone 3 plan §2.3 and WP9): the trace's
   # last command (pass_review, which ends the task) with a switch appended

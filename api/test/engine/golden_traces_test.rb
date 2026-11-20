@@ -2,60 +2,52 @@ require "test_helper"
 require_relative "../support/trace_runner"
 
 # Golden traces (PRD test 8; milestone 2 plan TS-8): every trace whose
-# commands all have an entry in Transitions::Table and whose setup has no
-# rule runs whole through the engine, and its events and steps are compared
+# commands all have an entry in Transitions::Table runs whole through the
+# engine, with its setup's rules (milestone 4 plan RT-1, RT-6: the rules
+# engine is the production gating), and its events and steps are compared
 # with the trace's field for field and row for row (TraceRunner). Each
 # trace that cannot run whole is named in NOT_YET with the milestone that
 # lets it and a prefix: the number of its leading commands that run before
-# the first one a rule, a later command or a later event would change. A
-# trace in neither set, or in both, fails.
+# the first one a later command or a later event would change. A trace in
+# neither set, or in both, fails.
 class GoldenTracesTest < ActiveSupport::TestCase
-  # trace => [milestone, prefix]. Each of traces 01 to 08 starts with a
-  # command milestone 2 cannot run as written: 04 with add_rule (milestone
-  # 4), the others with add_task naming a project ($project:site), which
-  # add_task refused because tasks had no project until milestone 5 (SC-8,
-  # Q-3; WP3's choice 1). So their prefix is 0, and the milestone is 5,
-  # when projects arrive and rules (milestone 4) are already there; 03 and
-  # 04 also reach Finishing with outward actions (milestone 5, the
-  # TS8-check).
-  #
-  # The handoff milestone's traces 11 to 15 run whole (milestone 3 plan
-  # HT-1, HT-6).
+  # trace => [milestone, prefix]. Traces 03 and 04 have outward actions
+  # (their contracts name them, 04 adds a rule at action.requested, and
+  # both reach Finishing: milestone 5, the TS8-check). Every other trace
+  # runs whole from milestone 4 (its plan RT-6): 01, 02 and 05 to 08 name
+  # a project, which add_task takes since RD-52, and their workspaces have
+  # the shipped rules; 16 to 19 are milestone 4's own.
   NOT_YET = {
-    "01-happy-path" => [ 5, 0 ],
-    "02-failed-review-rework" => [ 5, 0 ],
-    "03-stop-rework-pass-approve-done" => [ 5, 0 ],
-    "04-two-actions-custom-rule" => [ 5, 0 ],
-    "05-limit-handoff" => [ 5, 0 ],
-    "06-signed-out-hold-verify" => [ 5, 0 ],
-    "07-pending-gate-check-error-override" => [ 5, 0 ],
-    "08-lease-expiry-and-cancel" => [ 5, 0 ],
-    # The rule checks milestone's four (milestone 4 plan RT-1, RT-6). They
-    # run whole in milestone 4, when the engine and the twenty new commands
-    # are in. 16 runs its add_task, which names a project; its Complete
-    # contract meets a model gate that NoRules does not plan. 17 and 18
-    # start with add_rule, and 19, whose workspace has no rule, with
-    # install_shipped_rules (milestone 4 plan RD-2).
-    "16-model-gate-and-draft" => [ 4, 1 ],
-    "17-submit-rule-rerun-and-override" => [ 4, 0 ],
-    "18-claim-gate-done-gate-and-ends" => [ 4, 0 ],
-    "19-provider-rule-offline-and-jobs" => [ 4, 0 ]
+    "03-stop-rework-pass-approve-done" => [ 5, 1 ],
+    "04-two-actions-custom-rule" => [ 5, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
   HANDOFF = %w[11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules 13-limit-next-signed-out-no-rules
                14-handoff-edges-no-rules 15-owner-controls-no-rules].freeze
 
+  # The milestone 1 traces milestone 4 runs whole, and its own four.
+  RULE_CHECKS = %w[01-happy-path 02-failed-review-rework 05-limit-handoff 06-signed-out-hold-verify
+                   07-pending-gate-check-error-override 08-lease-expiry-and-cancel 16-model-gate-and-draft
+                   17-submit-rule-rerun-and-override 18-claim-gate-done-gate-and-ends
+                   19-provider-rule-offline-and-jobs].freeze
+
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
 
   def self.trace(name) = Leverage::Contract.trace(name)
 
-  # Whole: every command has an entry (Table.include?) and the setup has no
-  # rule.
+  # Whether the command has an entry, served or not yet in its group
+  # (Table.entry_for, milestone 4 plan RT-6).
+  def self.entry?(command)
+    Leverage::Transitions::Table.entry_for(command)
+    true
+  rescue Leverage::Transitions::Table::UnknownCommand
+    false
+  end
+
+  # Whole: every command has an entry.
   def self.runnable?(name)
-    trace = trace(name)
-    Array(trace.fetch("setup")["rules"]).empty? &&
-      trace.fetch("commands").all? { |command| Leverage::Transitions::Table.include?(command.fetch("command")) }
+    trace(name).fetch("commands").all? { |command| entry?(command.fetch("command")) }
   end
 
   RUN = NAMES.select { |name| runnable?(name) }.freeze
@@ -65,38 +57,36 @@ class GoldenTracesTest < ActiveSupport::TestCase
     assert_empty RUN & NOT_YET.keys, "a trace that runs whole is still in NOT_YET"
     assert_includes RUN, "09-core-loop-no-rules"
     assert_includes RUN, "10-leases-no-rules"
-    HANDOFF.each { |name| assert_includes RUN, name }
+    (HANDOFF + RULE_CHECKS).each { |name| assert_includes RUN, name }
   end
 
-  test "each NOT_YET trace names a later milestone and a prefix of commands milestone 2 has" do
+  test "each NOT_YET trace names a later milestone and a prefix of commands that have entries" do
     NOT_YET.each do |name, (milestone, prefix)|
-      assert_operator milestone, :>, 2, name
+      assert_operator milestone, :>, 4, name
       commands = self.class.trace(name).fetch("commands")
       assert_includes 0..commands.size, prefix, name
       commands.first(prefix).each do |command|
-        assert Leverage::Transitions::Table.include?(command.fetch("command")), "#{name}: #{command.fetch("command")}"
+        assert self.class.entry?(command.fetch("command")), "#{name}: #{command.fetch("command")}"
       end
     end
   end
 
-  # Written for the traces of milestone 1, which wait for a later milestone
-  # than 3 (milestone 3 plan HT-6). A trace whose workspace has no rule
-  # starts with the one-time write of the shipped rules instead (milestone
-  # 4 plan RD-2, RT-1: trace 19).
-  test "the first command of every NOT_YET trace of a later milestone than 3 is one milestone 2 cannot run as written" do
-    NOT_YET.each do |name, (milestone, _prefix)|
-      next if milestone <= 3
-
-      trace = self.class.trace(name)
-      first = trace.fetch("commands").first
-      if Leverage::Transitions::Table.include?(first.fetch("command"))
-        assert first.fetch("body")["project_id"], "#{name}: its first command could run, so its prefix is not 0"
-      elsif Array(trace.fetch("setup")["rules"]).empty?
-        assert_equal "install_shipped_rules", first.fetch("command"), name
-      else
-        assert_equal "add_rule", first.fetch("command"), name
-      end
+  # Each prefix is the longest one: the command after it is milestone 5's
+  # (it has no entry, names an outward action, which add_task and Complete
+  # contract refuse until then, SC-3, or a rule at action.requested, which
+  # add_rule refuses, RD-21, or writes an outward action's event), and no
+  # command before it is.
+  test "the command after each NOT_YET trace's prefix is the first one that needs milestone 5" do
+    NOT_YET.each do |name, (_milestone, prefix)|
+      later = self.class.trace(name).fetch("commands").index { |command| self.class.later_milestone?(command) }
+      assert_equal later, prefix, name
     end
+  end
+
+  def self.later_milestone?(command)
+    body = command.fetch("body")
+    !entry?(command.fetch("command")) || Array(body["actions"]).any? || body["hook"] == "action.requested" ||
+      command.dig("expect", "events").any? { |event| event.fetch("type").start_with?("action.") }
   end
 
   RUN.each do |name|
