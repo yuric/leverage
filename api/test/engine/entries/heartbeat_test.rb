@@ -62,4 +62,21 @@ class HeartbeatTest < ActiveSupport::TestCase
   test "a seat that does not hold the task is not_holder" do
     assert_equal "not_holder", apply(@scenario.seat(role: "builder")).refusal.code
   end
+
+  # SM-14, RE-5 (milestone 4): a provisional claim holds the task in Ready
+  # with no lease; its claimant's heartbeat is accepted and does nothing.
+  test "a provisional claimant's heartbeat is accepted and does nothing: no lease, no event" do
+    claimant = @scenario.seat(role: "builder")
+    ready = @scenario.task(state: "ready")
+    ready.update_columns(holder_seat_id: claimant.id)
+    before = @scenario.database_now
+    outcome = apply(claimant, ready)
+
+    assert outcome.completed?
+    assert_equal [ "ready", claimant.id, nil, nil ],
+      ready.reload.attributes.values_at("state", "holder_seat_id", "lease_due_at", "lease_time_left_while_paused")
+    assert_operator Time.iso8601(outcome.result.fetch("lease_due_at")), :>=, before + 600,
+      "it answers when a lease would be due if one ran from now, as for a paused lease"
+    assert_empty written
+  end
 end
