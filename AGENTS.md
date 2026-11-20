@@ -296,7 +296,7 @@ scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, 
 
 Each starts a compose project of its own and removes it, also on failure.
 `e2e_handoff.sh` and `restore_drill.sh` also make a backup folder of their
-own (mode 0777) under `TMPDIR`; they use the image `API_IMAGE_TAG` names
+own (mode 1777, sticky) under `TMPDIR`; they use the image `API_IMAGE_TAG` names
 when it is set. Anything else that starts the `backup` service, or runs
 `bin/backup` or `bin/restore`, exports `LEVERAGE_BACKUP_DIR` to a folder of
 its own first, so that nothing writes into the checkout's `./backups`.

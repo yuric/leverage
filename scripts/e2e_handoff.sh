@@ -13,7 +13,7 @@
 # One compose project per test (leverage-e2e-handoff-<pid>-<n>), because
 # there is one owner per database and no test may meet a hold, a limited
 # account or a login an earlier test left. For each test, in order:
-#   1. a backup folder of its own (mode 0777), and db, api, sweep and backup
+#   1. a backup folder of its own (mode 1777), and db, api, sweep and backup
 #      started with both compose files on a port Docker picks;
 #   2. that one test, with swift test --filter and LEVERAGE_E2E=handoff;
 #   3. leverage:verify_log (replay, step partition, every command's events);
@@ -154,7 +154,7 @@ for test in "${tests[@]}"; do
   backups="$out/backups-$n"
   folder="$out/test-$n"
   mkdir -p "$backups" "$folder"
-  chmod 0777 "$backups"
+  chmod 1777 "$backups"
   export LEVERAGE_BACKUP_DIR="$backups"
 
   # 1. Containers of its own.

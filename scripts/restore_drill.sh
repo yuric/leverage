@@ -5,7 +5,7 @@
 # restored log is the same log and passes the replay test.
 #
 #   scripts/restore_drill.sh
-#       makes a backup folder of its own (mode 0777, under TMPDIR), starts
+#       makes a backup folder of its own (mode 1777, under TMPDIR), starts
 #       db and api in a compose project of its own and fills it with
 #       bin/rails runner script/drill/seed.rb.
 #   scripts/restore_drill.sh --from-project <name>
@@ -16,9 +16,12 @@
 # (count, highest seq, an MD5 over every id in seq order); makes one
 # backup; removes the project's volumes; starts db alone and restores the
 # newest dump; reads the figures again and compares; starts api and asks
-# whether an owner exists. The project is removed at the end, also on
-# failure, with the folder the drill made itself (the caller's folder is
-# left in place).
+# whether an owner exists. Then it removes the volumes once more and starts
+# every service on the empty cluster, as the app does when it opens: the
+# backup must make no dump of the empty database, so the newest dump is
+# still the one made before the loss, and it restores again. The project is
+# removed at the end, also on failure, with the folder the drill made itself
+# (the caller's folder is left in place).
 #
 # Every compose call names both files and the project, so api is never
 # published on a fixed port. A dump's name and mode are read only from
@@ -66,7 +69,7 @@ else
   project="leverage-drill-$$"
   folder=$(mktemp -d "${TMPDIR:-/tmp}/leverage-drill.XXXXXX")
   own_folder=true
-  chmod 0777 "$folder"
+  chmod 1777 "$folder"
 fi
 export LEVERAGE_BACKUP_DIR="$folder"
 
@@ -112,6 +115,18 @@ if [ -z "$from_project" ]; then
   C run --rm --no-deps api bin/rails runner script/drill/seed.rb
 fi
 
+# With --from-project, the project's own backup service makes the first
+# dump about 30 s after the owner signs up (it makes none while the
+# database holds no workspace): wait for it, a while, before stopping it.
+if [ -n "$from_project" ]; then
+  waited=0
+  until [ "$(query "$DATABASE" "SELECT count(*) FROM backup_runs")" -ge 1 ]; do
+    [ "$waited" -lt 120 ] || fail "the project's backup service made no dump of its log within 120 s"
+    sleep 2
+    waited=$((waited + 2))
+  done
+fi
+
 # 1. Nothing writes while the drill measures.
 step "1. stopping api, sweep and backup"
 C stop api sweep backup
@@ -121,7 +136,7 @@ read -r count _seq _md5 <<<"$before"
 runs_before=$(query "$DATABASE" "SELECT count(*) FROM backup_runs")
 step "events before: $before; backup_runs rows: $runs_before"
 if [ -n "$from_project" ] && [ "$runs_before" -lt 1 ]; then
-  fail "the project's backup service made no dump when it started"
+  fail "the project's backup service made no dump of its log"
 fi
 
 # 2. One backup.
@@ -162,3 +177,33 @@ port=$(C port api 3000 | sed 's/.*://')
 setup=$(curl -fsS "http://127.0.0.1:$port/v1/owner/setup") || fail "get_setup_state did not answer"
 [[ "$setup" == *'"owner_exists":true'* ]] || fail "get_setup_state says no owner exists: $setup"
 step "get_setup_state: $setup"
+
+# 6. The volume lost again, and every service started on the new, empty
+# cluster, as the app does when it opens: the backup makes no dump of the
+# empty database, so the newest dump is still the one made before the
+# loss, which restores as in step 4.
+listing() {
+  C run --rm --no-deps --entrypoint "" backup ls -1 /backups | tr -d '\r'
+}
+step "6. removing the volumes again, and starting every service on the empty cluster"
+C down --volumes
+files_before=$(listing)
+C up -d --wait db api sweep backup
+waited=0
+until C logs backup 2>/dev/null | grep -q "holds no workspace"; do
+  [ "$waited" -lt 60 ] || fail "the backup service did not say that the database holds no workspace"
+  sleep 2
+  waited=$((waited + 2))
+done
+files_after=$(listing)
+[ "$files_after" = "$files_before" ] ||
+  fail "the backup wrote into the folder on the empty database: before [$files_before], after [$files_after]"
+newest=$(printf '%s\n' "$files_after" | grep -E '^leverage-[0-9]{8}T[0-9]{9}Z\.dump$' | sort | tail -n 1)
+[ "$newest" = "$dump" ] || fail "the newest dump is $newest, not $dump, the one made before the loss"
+step "the backup made no dump of the empty database; the newest dump is still $dump"
+C stop api sweep backup
+C run --rm --no-deps backup bin/restore "/backups/$dump" || fail "bin/restore exited non-zero after the second loss"
+again=$(figures)
+[ "$again" = "$before" ] || fail "the events restored after the second loss differ: before $before, after $again"
+step "events after the second restore: $again"
+

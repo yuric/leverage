@@ -207,14 +207,17 @@ class BackupTest < CommittingTestCase
   test "while the database holds no workspace the loop makes no dump and looks again within a minute (review)" do
     with_scratch_database do
       sleeps = []
-      B.run_loop(folder: @folder, keep: 14, every_hours: 24, stop: -> { sleeps.any? },
-        sleeper: ->(seconds) { sleeps << seconds }, log: @log)
+      said = []
+      B.run_loop(folder: @folder, keep: 14, every_hours: 24, stop: -> { sleeps.size >= 2 },
+        sleeper: ->(seconds) { sleeps << seconds }, log: @log, say: ->(line) { said << line })
 
-      assert_equal [ B::EMPTY_LOOK_EVERY ], sleeps
+      assert_equal [ B::EMPTY_LOOK_EVERY ] * 2, sleeps
       assert_operator B::EMPTY_LOOK_EVERY, :<=, 60
       assert_empty Dir.children(@folder)
       assert_equal 0, BackupRun.count
       assert_empty @lines
+      assert_equal [ B::EMPTY_LINE ], said, "said once, not at every look"
+      assert_includes B::EMPTY_LINE, "holds no workspace"
     end
   end
 

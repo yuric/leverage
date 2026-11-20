@@ -141,7 +141,8 @@ How the backup and the restore are built is
   mkdir -p /srv/leverage/backups && sudo chown 1000:1000 /srv/leverage/backups && chmod 0700 /srv/leverage/backups
   ```
 
-  The scripts in this repository make theirs with mode 0777 instead and
+  The scripts in this repository make theirs with mode 1777 instead (any
+  user may write, only a file's owner may rename or remove it) and
   read a dump only from inside a container. A Linux host has run this only
   in CI's `e2e` job.
 

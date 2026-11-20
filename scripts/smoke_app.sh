@@ -13,10 +13,11 @@
 # the owner's folder, project, Keychain and notifications are never
 # touched. Within 60 seconds the process must be alive and GET /v1/health
 # must answer "ok" on the port the app wrote to <support>/server/.env.
-# Within the same time again the first dump must be in <support>/backups
-# (mode 0700), with mode 0600. Then it stops the app, removes the compose
-# project with its volume, and deletes the support folder, whether the
-# check passed or not.
+# Then it signs up a made-up owner (the backup dumps no database without a
+# workspace), and within the same time again the first dump must be in
+# <support>/backups (mode 0700), with mode 0600. Then it stops the app,
+# removes the compose project with its volume, and deletes the support
+# folder, whether the check passed or not.
 #
 # Options:
 #   --app PATH       the bundle to start (default: dist/Leverage.app)
@@ -39,7 +40,7 @@ while [ $# -gt 0 ]; do
       case "$2" in ''|*[!0-9]*) echo "smoke_app: --timeout takes whole seconds" >&2; exit 2 ;; esac
       timeout=$2; shift ;;
     --keep) keep=1 ;;
-    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "smoke_app: unknown argument: $1 (see --help)" >&2; exit 2 ;;
   esac
   shift
@@ -163,9 +164,19 @@ kill -0 "$pid" 2>/dev/null || fail "the app is not running after its server answ
 say "after ${elapsed} s the app (pid $pid) is running and GET /v1/health on 127.0.0.1:$port answers $answer"
 
 # The backup service starts with the others (the app runs `compose up` with
-# no service named) and makes its first dump when it first looks (HB-3).
+# no service named). It makes no dump while the database holds no
+# workspace, and looks again every 30 s (HB-3 as the review changed it), so
+# the owner is signed up first, with a made-up address and a password made
+# here, which live only in this run's database and are never printed.
 grep -qx "LEVERAGE_BACKUP_DIR=$backups" "$server/.env" \
   || fail "the app did not write LEVERAGE_BACKUP_DIR=$backups to $server/.env"
+password=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 24 || true)
+[ "${#password}" -eq 24 ] || fail "could not make a password for the made-up owner"
+printf '{"email_address":"smoke-owner@example.invalid","password":"%s"}' "$password" \
+  | curl -fsS --max-time 10 -o /dev/null -X POST "http://127.0.0.1:$port/v1/owner/setup" \
+      -H "Content-Type: application/json" -H "Idempotency-Key: smoke-owner-$$" --data-binary @- \
+  || fail "create_owner did not answer"
+say "signed up a made-up owner, so the backup has a workspace to keep"
 dump_started=$(date +%s)
 deadline=$((dump_started + timeout))
 dump=""

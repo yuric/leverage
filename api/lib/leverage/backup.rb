@@ -37,6 +37,7 @@ module Leverage
     # again every 30 seconds, so the first dump follows the owner's sign-up.
     LOOK_EVERY = 15 * 60
     EMPTY_LOOK_EVERY = 30
+    EMPTY_LINE = "The database holds no workspace yet: no dump until the owner signs up.".freeze
     EVERY_HOURS = 24
     KEEP = 14
     FOLDER = "/backups".freeze
@@ -138,19 +139,23 @@ module Leverage
 
     # bin/backup: a look when it starts and then every look_every seconds
     # (every EMPTY_LOOK_EVERY while the database holds no workspace), until
-    # stop answers true; a backup at each look where one is due. A
+    # stop answers true; a backup at each look where one is due. say is
+    # told EMPTY_LINE once while the database holds no workspace. A
     # look that fails is logged and the next one runs on time. The sleeper,
     # stop and the module are parameters, so the loop is tested without
     # waiting.
     def run_loop(folder: FOLDER, keep: KEEP, every_hours: EVERY_HOURS, look_every: LOOK_EVERY, stop: -> { false },
-                 sleeper: nil, log: nil, backup: self)
+                 sleeper: nil, log: nil, say: nil, backup: self)
       log ||= method(:log_error)
       sleeper ||= ->(seconds) { pause(seconds, stop) }
+      said = false
       until stop.call
         wait = look_every
         begin
           if backup.empty?
             wait = [ EMPTY_LOOK_EVERY, look_every ].min
+            say&.call(EMPTY_LINE) unless said
+            said = true
           elsif backup.due?(every_hours: every_hours)
             backup.run(folder: folder, keep: keep, log: log)
           end
