@@ -21,9 +21,10 @@ module Leverage
   # payload names lease_seat_id (a failed review's fresh lease, Offer task
   # again); cleared by task.submitted, task.released, task.lease_expired,
   # task.returned, task.cancelled and task.done. A provisional claim (RE-5)
-  # sets the holder with the check.queued of its task.before_claim check
-  # (claimant_seat_id) and clears it when the last of its checks still
-  # running has its result and one of them failed or erred, or every one
+  # sets the holder with the check.queued of its task.before_claim
+  # blocking check (claimant_seat_id) and clears it when the last of its
+  # blocking checks still running has its result and one of them failed or
+  # erred, or every one
   # was withdrawn (a rule turned off leaves the claim waiting on its other
   # checks, L379; the engine decides only then), and with a hold.opened on
   # the task, while the task is still Ready. The builder is set by
@@ -231,26 +232,28 @@ module Leverage
     end
 
     # A provisional claim's claimant holds the Ready task (RE-5, DB-43),
-    # while its claim checks run.
+    # while its blocking claim checks run. A warn rule's check never keeps
+    # a claim waiting (Rules::Reentry step 3, RC-16), so it is not among
+    # them: a claim with no blocking check is claimed in the same command.
     def provisional(task, payload, check_id)
-      return unless task && payload["hook"] == CLAIM_HOOK && payload["claimant_seat_id"]
+      return unless task && payload["hook"] == CLAIM_HOOK && payload["claimant_seat_id"] && payload["blocking"]
 
       task["holder_seat_id"] = payload.fetch("claimant_seat_id")
       (task["provisional"] ||= Set.new) << check_id
     end
 
     # A claim check's result (DB-43). The engine decides a pending claim
-    # only once none of its checks is still running (Rules::Reentry, steps
-    # 3 and 6), so the claimant holds the Ready task until then: when the
-    # last running check of the claim has its result, a failure or an error
-    # among them ends the provisional claim, and so does every one of them
-    # withdrawn (a rule turned off leaves the claim waiting on the others,
-    # L379); otherwise task.claimed follows.
+    # only once none of its blocking checks is still running
+    # (Rules::Reentry, steps 3 and 6), so the claimant holds the Ready task
+    # until then: when the last running blocking check of the claim has
+    # its result, a failure or an error among them ends the provisional
+    # claim, and so does every one of them withdrawn (a rule turned off
+    # leaves the claim waiting on the others, L379); otherwise task.claimed
+    # follows. A warn rule's check settles nothing.
     def settle_claim_check(task, payload, check_id)
-      return unless task && payload["hook"] == CLAIM_HOOK && task["provisional"]
+      return unless task && payload["hook"] == CLAIM_HOOK && task["provisional"]&.delete?(check_id)
 
       result = payload.fetch("result")
-      task["provisional"].delete(check_id)
       task["provisional_failed"] = true if %w[failed error].include?(result)
       return unless task["provisional"].empty?
 
