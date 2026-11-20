@@ -72,10 +72,12 @@ module JobTimersSupport
       fresh
     end
 
-    def queue(ctx, kind:, task:, target:, seat_role:, input:)
+    # attempt_number: the attempt a rule check's job runs (Jobs.queue's
+    # optional keyword).
+    def queue(ctx, kind:, task:, target:, seat_role:, input:, attempt_number: 1)
       job = Job.create!(workspace_id: ctx.workspace.id, kind: kind, task_id: task&.id, project_id: task&.project_id,
         target_kind: Leverage::EventLog.kind_of(target), target_id: target.id, seat_role: seat_role, state: "queued",
-        queued_at: ctx.effective_at, input: input, attempt_number: 1)
+        queued_at: ctx.effective_at, input: input, attempt_number: attempt_number)
       ctx.emit("job.queued", task: task, subject: job, payload: { kind: kind })
       job
     end

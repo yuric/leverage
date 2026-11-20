@@ -206,8 +206,9 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
 
     assert_equal [ "Jobs.queue", "RuleChecks.new_attempt" ], calls.map(&:name)
     queued = calls.first.keywords
-    assert_equal [ "rule_check", check.task_id, check.id, "orchestrator", errored_job.input ],
-      [ queued.fetch(:kind), queued.fetch(:task).id, queued.fetch(:target).id, queued.fetch(:seat_role), queued.fetch(:input) ]
+    assert_equal [ "rule_check", check.task_id, check.id, "orchestrator", errored_job.input, 3 ],
+      [ queued.fetch(:kind), queued.fetch(:task).id, queued.fetch(:target).id, queued.fetch(:seat_role), queued.fetch(:input),
+        queued.fetch(:attempt_number) ], "the job runs the check's third attempt (trace 19, command 31)"
     assert_equal check.id, calls.last.arguments.second.id
     events = events_after(before)
     assert_equal %w[inbox.resolved job.queued check.queued].sort, events.map(&:type).sort
