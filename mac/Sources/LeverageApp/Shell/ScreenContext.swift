@@ -6,7 +6,7 @@ import Observation
 @MainActor
 @Observable
 final class Navigator {
-    enum Place: Equatable, Sendable { case board, needsYou, agents, credentials, handoff }
+    enum Place: Equatable, Sendable { case board, needsYou, agents, credentials, handoff, settings }
 
     private(set) var place: Place = .board
     /// The task whose page is open in the content area (MA-9); nil shows the

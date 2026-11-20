@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The floating left pane: the brand, the three tabs, and the health line at
+/// The floating left pane: the brand, the tabs, and the health line at
 /// its foot.
 struct SidePane: View {
     let context: ScreenContext
@@ -15,11 +15,11 @@ struct SidePane: View {
             .padding(.horizontal, 6)
 
             VStack(spacing: 2) {
-                tab(.board, ShellCopy.tabBoard, symbol: "square.grid.3x1.below.line.grid.1x2")
-                tab(.needsYou, ShellCopy.tabNeedsYou, symbol: "bell", badge: Self.badge(for: context.inbox.openCount))
-                tab(.agents, ShellCopy.tabAgents, symbol: "person.2")
-                tab(.credentials, ShellCopy.tabCredentials, symbol: "key")
-                tab(.handoff, ShellCopy.tabHandoff, symbol: "arrow.triangle.swap")
+                ForEach(Self.tabs, id: \.place) { entry in
+                    tab(
+                        entry.place, entry.copy, symbol: entry.symbol,
+                        badge: entry.place == .needsYou ? Self.badge(for: context.inbox.openCount) : nil)
+                }
             }
 
             Spacer(minLength: 0)
@@ -35,6 +35,22 @@ struct SidePane: View {
         .glass(.nav, radius: Tokens.Radius.window - Tokens.Spacing.window)
         .task { await context.health.run() }
     }
+
+    /// One tab of the pane.
+    struct Tab: Equatable {
+        let place: Navigator.Place
+        let copy: ShellCopy
+        let symbol: String
+    }
+
+    /// The tabs, top to bottom.
+    static let tabs: [Tab] = [
+        Tab(place: .board, copy: .tabBoard, symbol: "square.grid.3x1.below.line.grid.1x2"),
+        Tab(place: .needsYou, copy: .tabNeedsYou, symbol: "bell"),
+        Tab(place: .agents, copy: .tabAgents, symbol: "person.2"),
+        Tab(place: .credentials, copy: .tabCredentials, symbol: "key"),
+        Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
+    ]
 
     /// The count on the Needs you tab; nil when nothing is open.
     static func badge(for count: Int) -> String? { count > 0 ? String(count) : nil }

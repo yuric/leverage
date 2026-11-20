@@ -29,10 +29,16 @@ enum ShellFixtures {
             .repeated(OwnerSessionRepeated(userID: UUID(), createdAt: Date())), key: key, command: command)
     }
 
-    static func health(sweepLate: Bool = false, backupLate: Bool = false) -> SystemHealth {
+    /// A health read. The orchestrator is online unless a test says otherwise:
+    /// the contract's default would be `not_set_up`, which now has a sentence.
+    static func health(
+        sweepLate: Bool = false, backupLate: Bool = false, orchestrator: OrchestratorState = .online,
+        waitingChecks: Int = 0
+    ) -> SystemHealth {
         SystemHealth(
             sweepLastRanAt: Date(), sweepLate: sweepLate, helperLastReportedAt: Date(), queuedHelperRequests: 0,
-            readyTasks: 0, waitingReviews: 0, backupLastRanAt: backupLate ? nil : Date(), backupLate: backupLate)
+            readyTasks: 0, waitingReviews: 0, orchestrator: orchestrator, backupLastRanAt: backupLate ? nil : Date(),
+            backupLate: backupLate, waitingChecks: waitingChecks)
     }
 
     static func event(seq: Int) -> EventRecord {

@@ -18,6 +18,10 @@ final class HealthLineModel {
         case agentsStopped
         /// The daily backup is more than 26 hours old (HB-4).
         case backupLate
+        /// A rule an agent checks is on and no agent is set up to check (RD-17).
+        case noOrchestrator
+        /// The agent that checks tasks is not running (RD-17).
+        case orchestratorOffline
         /// The server does not answer.
         case unreachable
     }
@@ -48,6 +52,8 @@ final class HealthLineModel {
         case .late: .healthLate
         case .agentsStopped: .healthAgentsStopped
         case .backupLate: .healthBackupLate
+        case .noOrchestrator: .healthNoOrchestrator
+        case .orchestratorOffline: .healthOrchestratorOffline
         case .unreachable: .healthUnreachable
         }
     }
@@ -56,7 +62,7 @@ final class HealthLineModel {
         switch status {
         case .checking: .neutral
         case .running: .good
-        case .late, .agentsStopped, .backupLate: .warning
+        case .late, .agentsStopped, .backupLate, .noOrchestrator, .orchestratorOffline: .warning
         case .unreachable: .bad
         }
     }
