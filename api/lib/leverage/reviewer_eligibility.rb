@@ -16,15 +16,18 @@ module Leverage
   # it.
   #
   # It runs on what a command changed, after its perform (Transitions),
-  # and on what the timers applied before a command's refusals changed:
+  # and right after each review lease a timer ends:
   #
-  # - for the task of each task.submitted, review.released and
-  #   review.lease_expired the command wrote (SM-42: the review waits),
-  #   whichever command wrote it (a review lease timer applied inside
-  #   another command, a pending submit completed by a job result): its
-  #   events carry that event's key, effective time and actor (the app for
-  #   a seat's event) and name it as their cause, as the hold events of
-  #   Holds.close_seat_bound do;
+  # - for the task of each task.submitted and review.released the command
+  #   wrote (SM-42: the review waits), whichever command wrote it (a
+  #   pending submit completed by a job result), and for the task of each
+  #   review.lease_expired, at once, by the review lease timer that
+  #   writes it (Entries::ReviewLeaseExpiry), wherever that timer runs: as
+  #   the sweep's command, or inside another command, before its
+  #   refusals (Timers.apply_due) or in its load (Timers.apply_claimable,
+  #   Timers.apply_held_by). Its events carry that event's key, effective
+  #   time and actor (the app for a seat's event) and name it as their
+  #   cause, as the hold events of Holds.close_seat_bound do;
   # - for every waiting task, after a command of REEVALUATED_BY whose rows
   #   have no task state (a seat, rule or account change), with the
   #   command's own key, as its caller (the app for a seat), and no cause;
@@ -51,6 +54,11 @@ module Leverage
 
     # The events after which a review waits for a reviewer (SM-42).
     WAITING = %w[task.submitted review.released review.lease_expired].freeze
+    # Those after_command reads in what a command wrote. The review lease
+    # timer has written the item of each review.lease_expired already,
+    # right after it: read again after perform, the item would come after
+    # the command's own events with the lease's earlier effective time.
+    AFTER_PERFORM = (WAITING - %w[review.lease_expired]).freeze
 
     module_function
 
@@ -65,19 +73,13 @@ module Leverage
       written
     end
 
-    # The tasks of the waiting events the command wrote so far, each
-    # re-evaluated with that event as its cause. Called by after_command,
-    # and by Transitions right after the timers it applies before a
-    # command's refusals: a review lease's end commits whatever the command
-    # then does, and so does the item it causes (SM-42), written beside it
-    # at its effective time, before the command's own events (effective
-    # times never go backwards within a task, L120). Reevaluating again
-    # after perform writes nothing unless the command changed who may
-    # review. Returns the Events it wrote.
+    # The tasks of the task.submitted and review.released events the
+    # command wrote so far, each re-evaluated with that event as its cause.
+    # Returns the Events it wrote.
     def after_events(ctx)
       return [] if ctx.workspace.nil?
 
-      causes = ctx.events.select { |event| WAITING.include?(event.type) && event.task_id }
+      causes = ctx.events.select { |event| AFTER_PERFORM.include?(event.type) && event.task_id }
         .group_by(&:task_id).transform_values(&:last)
       causes.flat_map { |task_id, cause| reevaluate(ctx, task_ids: [ task_id ], cause: cause) }
     end

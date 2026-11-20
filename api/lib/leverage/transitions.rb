@@ -10,9 +10,8 @@ module Leverage
   #      its outcome and nothing else runs; another hash is KeyReused.
   #   3. Timers.apply_due: every timer due on the target task and on what
   #      the calling seat holds, each through its own entry, before the
-  #      command's own events; then ReviewerEligibility.after_events opens
-  #      the item a review lease's end causes (SM-42), beside the timer's
-  #      events and at its effective time, whatever the command then does.
+  #      command's own events (a review lease's end with the item it
+  #      causes, SM-42, which commit whatever the command then does).
   #   4. The entry's refusals; Precedence picks the first by the registry.
   #      A seat waiting on its task's pending transition answers pending to
   #      every command the registry does not allow while pending (RE-4).
@@ -109,7 +108,6 @@ module Leverage
           next stored if stored
 
           Timers.apply_due(ctx)
-          ReviewerEligibility.after_events(ctx)
           entry = entry_class.new(request.command)
           entry.load(ctx)
           refusal = Precedence.first(refusals(ctx, entry))

@@ -67,8 +67,6 @@ module Leverage
       "contract_draft_job_queue_timeout" => { kind: "contract_draft", state: "queued", due: :queue }.freeze,
       "contract_draft_job_run_timeout" => { kind: "contract_draft", state: "claimed", due: :run }.freeze
     }.freeze
-    # The two a claim must not find in its way (apply_claimable).
-    QUEUE_TIMERS = JOB_TIMERS.select { |_timer, spec| spec.fetch(:due) == :queue }.keys.freeze
 
     # job_due_at in SQL, for the sweep and for a command's due timers: the
     # attempt's times and the rule version's own timeouts for a check, the
@@ -258,17 +256,16 @@ module Leverage
     end
 
     # Applies the due lease timers a claim would otherwise find in its way:
-    # for :task, every builder lease of the workspace past its due time (its
-    # task goes back to Ready), for :review every review lease (the review
-    # loses its reviewer), so what was due is claimable now, after its
-    # lease_expired event at the due time. Returns the Events it wrote.
-    #
-    # For :job, before a job claim: every queued job of the workspace past
-    # its queue due time is timed out first (queued once more, or ended on
-    # its second miss), oldest due first, so a claim never takes an attempt
-    # whose time to be claimed has passed (L398).
+    # for :task (claim), every builder lease of the workspace past its due
+    # time (its task goes back to Ready), for :review (claim_review) every
+    # review lease (the review loses its reviewer), so what was due is
+    # claimable now, after its lease_expired event at the due time. A job
+    # claim applies only the timers of the job its seat holds (apply_due):
+    # it never takes a job past its due time (Jobs.claimable), and the
+    # sweep times those out. Returns the Events it wrote. Raises
+    # ArgumentError for any other kind.
     def apply_claimable(ctx, kind)
-      return apply_queue_timers(ctx) if kind == :job
+      raise ArgumentError, "kind is :task or :review, not #{kind.inspect}" unless %i[task review].include?(kind)
 
       workspace_id = ctx.workspace.id
       tasks = if kind == :review
@@ -279,18 +276,6 @@ module Leverage
         Task.where(workspace_id: workspace_id, lease_time_left_while_paused: nil).where(lease_due_at: ..ctx.at)
       end
       apply_lease_timers(ctx, tasks.order(:id).to_a)
-    end
-
-    # The job queue timers due in the workspace, oldest due first. Returns
-    # the Events written.
-    def apply_queue_timers(ctx)
-      written = ctx.events.size
-      applied = Set.new
-      due = QUEUE_TIMERS.flat_map do |timer|
-        job_timer_scope(Job.where(workspace_id: ctx.workspace.id), timer, ctx.at).map { |job| [ job.timer_due_at, timer, job ] }
-      end
-      due.sort_by { |time, _timer, job| [ time, job.id ] }.each { |_time, timer, job| apply_job_timer(ctx, timer, job, applied) }
-      ctx.events.drop(written)
     end
 
     # Runs the builder lease timer of each task whose lease is due, then

@@ -21,8 +21,14 @@ module Leverage
       # PendingTransitions.cancel, so that its checks and jobs are withdrawn
       # before review.lease_expired is written.
       #
-      # The row's side events ("No reviewer is eligible") arrive with rules
-      # in milestone 4 (SC-11).
+      # The row's side events "No reviewer is eligible" (SM-42): right after
+      # each review.lease_expired, Leverage::ReviewerEligibility opens or
+      # resolves the item of its task with that event as cause, at its
+      # effective time. Written here, they come before anything else the
+      # command writes on the task (a job timer due after the lease, the
+      # command's own events), and commit with the lease's end whatever
+      # the command then does: a claim_review refused not_eligible ends a
+      # lease in its load (L120; WP9's request 3).
       class ReviewLeaseExpiry < Entry
         BATCH = 100
 
@@ -73,8 +79,9 @@ module Leverage
           end
           Leases.end_lease(ctx, review)
           review.update!(reviewer_seat_id: nil)
-          ctx.emit("review.lease_expired", task: task, subject: review, payload: {}, actor_kind: "app", actor_id: nil,
-            command_id: nil, effective_at: effective_at)
+          expired = ctx.emit("review.lease_expired", task: task, subject: review, payload: {}, actor_kind: "app",
+            actor_id: nil, command_id: nil, effective_at: effective_at)
+          Leverage::ReviewerEligibility.reevaluate(ctx, task_ids: [ task.id ], cause: expired)
         end
 
         def from_states = rows.map { |row| row.fetch("from") }
