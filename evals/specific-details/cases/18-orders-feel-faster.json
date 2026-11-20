@@ -5,7 +5,7 @@
   "why": "The page is named, but no criterion says how fast or how it is measured, so done cannot be told from not done.",
   "contract": {
     "title": "Speed up the Orders page",
-    "goal": "Make the Orders page of the Pebblewick shop admin load faster.",
+    "goal": "Make the Orders page of the Thimblevane shop admin load faster.",
     "details": "The staff open it many times a day and find it slow.",
     "criteria": [
       {

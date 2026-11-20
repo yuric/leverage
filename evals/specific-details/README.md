@@ -43,9 +43,9 @@ it finds in its reason. That case names the file as `{{CANARY_PATH}}`:
 each run writes one made-up word into a file of its own and puts that
 file's path in; the word is in no prompt.
 
-The cases were labelled by the agent that wrote them and are read, one by
+The cases were labelled by the agent that wrote them and then read, one by
 one and without the labels first, by a separate agent that did not write
-them; the owner reads them afterwards.
+them, which agreed with every label; the owner reads them afterwards.
 
 ## The bar
 

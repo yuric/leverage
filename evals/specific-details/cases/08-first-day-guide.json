@@ -2,14 +2,14 @@
   "id": "08-first-day-guide",
   "label": "passed",
   "category": "specific",
-  "why": "A document, not code: its file, its reader and what it must cover are named, and the criterion lists what a reader can find in it.",
+  "why": "A document, not code: its file, its reader and the facts it must give are named, and the criterion lists what a reader can find in it.",
   "contract": {
     "title": "Write the support team's first-day guide",
     "goal": "Write a one-page guide, docs/onboarding/first-day.md in the Tallowmere repository, that tells a new support agent what to do on their first day.",
-    "details": "It is for people who have just joined the support team. It covers where the ticket queue is, whom to ask for access, and the three tools they use every day, in plain words with no internal abbreviations.",
+    "details": "It is for people who have just joined the support team, in plain words with no internal abbreviations. It says that the ticket queue is the Queue tab of the Tallowmere admin, that the support lead gives access, and that the three tools used every day are the ticket queue, the shared support inbox and the team wiki.",
     "criteria": [
       {
-        "text": "The file docs/onboarding/first-day.md exists and says where the ticket queue is, whom to ask for access, and which three tools to use.",
+        "text": "The file docs/onboarding/first-day.md exists and gives the queue's place, the person who gives access and the three tools, as the details state them.",
         "kind": "build"
       },
       {

@@ -5,7 +5,7 @@
   "why": "The goal names the button, the page and what it downloads, the details say who it is for and the columns, and each criterion can be checked by clicking.",
   "contract": {
     "title": "Export the shown orders as CSV",
-    "goal": "Add an Export CSV button to the Orders page of the Pebblewick shop admin that downloads the orders the page is showing.",
+    "goal": "Add an Export CSV button to the Orders page of the Thimblevane shop admin that downloads the orders the page is showing.",
     "details": "The shop's two staff copy orders into a spreadsheet by hand every Friday. The file has one row per order with the columns order number, date, customer name and total, in that order. The page's date filter applies to the file too.",
     "criteria": [
       {
