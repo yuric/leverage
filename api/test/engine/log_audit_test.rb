@@ -93,16 +93,37 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
-  # Found by the walks (seed 460): a sign-out a run reports may leave
-  # another task's credential_limit hold with no due time and no item, and
-  # opens "Account signed out" there (HE-11, plan §2.3): the row's side
-  # event, on a task other than the report's own.
+  # Found by the walks (seed 460 of SEED=1): a sign-out a run reports may
+  # leave another task's credential_limit hold with no due time and no
+  # item, and opens "Account signed out" there (HE-11, plan §2.3): the
+  # row's side event, on a task other than the report's own.
   test "a sign-out that opens Account signed out on another task's hold passes" do
-    walk = Walk.new(seed: 460, steps: 80).run
-    other = Event.where(workspace_id: walk.workspace_id).group_by(&:command_id)
-      .any? { |key, events| key && events.first.type == "credential.signed_out" && events.map(&:task_id).compact.uniq.size > 1 }
-    assert other, "seed 460 no longer reaches it:\n#{walk}"
-    assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
+    scenario = Scenario.new
+    first = scenario.credential
+    second = scenario.credential(provider: "codex")
+    held = scenario.task(state: "working", builder: scenario.seat(credential: first))
+    reporting = scenario.task(state: "working", builder: scenario.seat(credential: first))
+    scenario.limit_credential(second)
+    helper = scenario.helper
+    report = lambda do |command, task, fields|
+      params = { "id" => first.id, "credential_id" => first.id, "seat_id" => task.holder_seat_id, "task_id" => task.id,
+                 "review_id" => nil, "job_id" => nil, "observed_at" => (scenario.database_now - 1).utc.iso8601(6),
+                 "tool_version" => "0.0.0-made-up" }.merge(fields)
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "helper",
+        caller_id: helper.id, key: "audit-#{SecureRandom.hex(6)}", request_hash: "d" * 64, params: params))
+        .tap { |outcome| assert outcome.completed?, outcome.refusal&.code }
+    end
+    after = scenario.workspace.reload.last_seq
+    report.call("report_limit", held, "window" => "five_hour",
+      "reset_at" => (scenario.database_now + 3600).utc.iso8601(6))
+    assert Hold.find_by(task_id: held.id, reason: "credential_limit", closed_at: nil)
+    report.call("report_signed_out", reporting, {})
+
+    signed_out = Event.find_by!(workspace_id: scenario.workspace_id, type: "credential.signed_out")
+    written = Event.where(workspace_id: scenario.workspace_id, command_id: signed_out.command_id)
+    assert_equal [ reporting.id, held.id ].sort, written.distinct.pluck(:task_id).sort
+    assert written.exists?(task_id: held.id, type: "inbox.opened")
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
   # A timer's events have no key: the credential hold release (hold.closed,
