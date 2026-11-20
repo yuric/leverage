@@ -1,4 +1,29 @@
 {
-  "runs": [],
+  "runs": [
+    {
+      "provider": "claude",
+      "date": "2026-11-20",
+      "tool_runs": 24,
+      "instruction_sha256": "b49ffaec2ea3f88fbe0ec629170bec42911c213e3af0919e8365373b7d145906",
+      "cases_sha256": "13b37acaed200a9d12d33a43676a6a0d552289fa8d015dc8db98a6e6d7b0b688",
+      "reserved": false
+    },
+    {
+      "provider": "codex",
+      "date": "2026-11-20",
+      "tool_runs": 24,
+      "instruction_sha256": "b49ffaec2ea3f88fbe0ec629170bec42911c213e3af0919e8365373b7d145906",
+      "cases_sha256": "13b37acaed200a9d12d33a43676a6a0d552289fa8d015dc8db98a6e6d7b0b688",
+      "reserved": false
+    },
+    {
+      "provider": "gemini",
+      "date": "2026-11-20",
+      "tool_runs": 24,
+      "instruction_sha256": "b49ffaec2ea3f88fbe0ec629170bec42911c213e3af0919e8365373b7d145906",
+      "cases_sha256": "13b37acaed200a9d12d33a43676a6a0d552289fa8d015dc8db98a6e6d7b0b688",
+      "reserved": false
+    }
+  ],
   "changes": []
 }
