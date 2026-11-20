@@ -408,6 +408,112 @@ struct AddTaskModelTests {
         draft.criteriaText = ""
         #expect(draft.criteria.map(\.kind) == [.review])
     }
+
+    // MARK: rule checks (RD-27, RM-3)
+
+    nonisolated private static func rules(acceptance: Bool? = nil, provider: Bool? = nil) -> RulesList {
+        var rows: [RuleRow] = []
+        if let acceptance { rows.append(Fixtures.ruleRow(key: "acceptance_criteria", name: "Every task needs acceptance criteria", enabled: acceptance)) }
+        if let provider { rows.append(Fixtures.ruleRow(key: "different_provider_review", name: "A different provider reviews every task", enabled: provider)) }
+        rows.append(Fixtures.ruleRow(key: "specific_details", name: "Every task needs specific details"))
+        return RulesList(rules: rows)
+    }
+
+    @Test("a save that answers pending closes the sheet: a check is looking at the details")
+    func pendingSaveCloses() async {
+        let owner = scripted(complete: { _, _, key in .pending(key: key.value, command: .completeContract) })
+        let saved = Locked(0)
+        let model = makeModel(owner, saved: saved)
+        await model.save()
+        #expect(model.state == .saved)
+        #expect(model.failure == nil)
+        #expect(saved.value == 1)
+        #expect(owner.calls.map(\.operation) == [.addTask, .completeContract])
+    }
+
+    @Test("a save that is refused still keeps the sheet open")
+    func refusedSaveStays() async {
+        let owner = scripted(complete: { _, _, key in
+            .refused(Refusal(code: .invalidState, ruleID: nil, reason: nil), key: key.value, command: .completeContract)
+        })
+        let saved = Locked(0)
+        let model = makeModel(owner, saved: saved)
+        await model.save()
+        #expect(model.state != .saved)
+        #expect(saved.value == 0)
+    }
+
+    @Test("before the rules are read the form says what it said in milestone 2")
+    func wordsBeforeTheRules() {
+        let model = makeModel(scripted())
+        #expect(model.criteriaHint.text == "One thing to check on each line.")
+        #expect(model.footnote.text == "An agent that did not build it reviews the work before it counts as done.")
+    }
+
+    @Test("while the acceptance-criteria rule is on the hint says an empty task waits in Backlog, and while the provider rule is on the footnote says another provider reviews")
+    func hintAndFootnoteFollowTheRules() async {
+        let owner = scripted()
+        owner.script { $0.listRules = { Self.rules(acceptance: true, provider: true) } }
+        let model = makeModel(owner)
+        await model.loadRules()
+        #expect(model.criteriaHint.text == "Leave this empty and the task waits in Backlog until you fill it in.")
+        #expect(model.footnote.text == "An agent from another provider reviews the work before it counts as done.")
+        #expect(owner.calls.map(\.operation) == [.listRules])
+    }
+
+    @Test("with the two rules off the form keeps milestone 2's words")
+    func rulesOff() async {
+        let owner = scripted()
+        owner.script { $0.listRules = { Self.rules(acceptance: false, provider: false) } }
+        let model = makeModel(owner)
+        await model.loadRules()
+        #expect(model.criteriaHint.text == "One thing to check on each line.")
+        #expect(model.footnote.text == "An agent that did not build it reviews the work before it counts as done.")
+    }
+
+    @Test("each rule decides its own words")
+    func rulesApartFromEachOther() async {
+        let owner = scripted()
+        owner.script { $0.listRules = { Self.rules(acceptance: true, provider: false) } }
+        let model = makeModel(owner)
+        await model.loadRules()
+        #expect(model.criteriaHint.text == "Leave this empty and the task waits in Backlog until you fill it in.")
+        #expect(model.footnote.text == "An agent that did not build it reviews the work before it counts as done.")
+
+        let other = scripted()
+        other.script { $0.listRules = { Self.rules(acceptance: false, provider: true) } }
+        let second = makeModel(other)
+        await second.loadRules()
+        #expect(second.criteriaHint.text == "One thing to check on each line.")
+        #expect(second.footnote.text == "An agent from another provider reviews the work before it counts as done.")
+    }
+
+    @Test("a rule the list does not carry counts as off, and a list that cannot be read leaves the words as they were")
+    func missingOrUnreadable() async {
+        let owner = scripted()
+        owner.script { $0.listRules = { Self.rules() } }
+        let model = makeModel(owner)
+        await model.loadRules()
+        #expect(model.criteriaHint.text == "One thing to check on each line.")
+
+        let failing = scripted()
+        failing.script { $0.listRules = { throw URLError(.cannotConnectToHost) } }
+        let broken = makeModel(failing)
+        await broken.loadRules()
+        #expect(broken.criteriaHint.text == "One thing to check on each line.")
+        #expect(broken.footnote.text == "An agent that did not build it reviews the work before it counts as done.")
+        #expect(broken.state == .editing, "the words are a nicety: the form works without them")
+    }
+
+    @Test("the rules are read once when the form opens, not again")
+    func readOnce() async {
+        let owner = scripted()
+        owner.script { $0.listRules = { Self.rules(acceptance: true) } }
+        let model = makeModel(owner)
+        await model.loadRules()
+        await model.loadRules()
+        #expect(owner.calls.filter { $0.operation == .listRules }.count == 1)
+    }
 }
 
 @MainActor

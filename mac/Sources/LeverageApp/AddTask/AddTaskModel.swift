@@ -155,6 +155,15 @@ final class AddTaskModel {
     /// and Save task has not already added this task to Backlog.
     var canSaveAsIdea: Bool { canSave && createdTaskID == nil }
 
+    /// Reads the rules once when the form opens, for its hint and its footnote (RM-3).
+    func loadRules() async {}
+
+    /// The line under the criteria: it follows the acceptance-criteria rule (RD-27).
+    var criteriaHint: AddTaskCopy { .criteriaHint }
+
+    /// The line under the form: it follows the provider rule (RD-27).
+    var footnote: AddTaskCopy { .footnote }
+
     /// Whether the criteria typed would be left out of an idea (HM-48).
     var ideaDropsCriteria: Bool { draft.hasTypedCriteria }
 

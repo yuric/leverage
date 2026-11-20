@@ -114,7 +114,7 @@ final class TaskPageModel {
             page.names.filter { $0.kind == .seat }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 
-    private var openHolds: [Hold] { page?.holds.filter { $0.closedAt == nil } ?? [] }
+    var openHolds: [Hold] { page?.holds.filter { $0.closedAt == nil } ?? [] }
 
     /// The names of the accounts the page can say: the read's own names, and
     /// where the accounts could be read, the provider and name as the owner knows them.
@@ -212,6 +212,18 @@ final class TaskPageModel {
     }
 
     private(set) var editor: EditContractModel?
+    /// The sheet that asks why a check is let through, while it is open.
+    private(set) var letThrough: LetThroughModel?
+
+    func askToLetThrough(_ checkID: UUID) {}
+
+    func dismissLetThrough() { letThrough = nil }
+
+    /// Run it again, for an errored check.
+    func runAgain(_ checkID: UUID) async {}
+
+    /// Draft the details: a planner writes the contract of a Backlog task.
+    func draftDetails() async {}
 
     func moveToBacklog() async {
         guard canMoveToBacklog else { return }

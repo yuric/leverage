@@ -16,7 +16,7 @@ struct LogEntry: Identifiable, Equatable, Sendable {
 enum TaskLog {
     static func entries(
         events: [EventRecord], names: [LogName], criteria: [Criterion], recoveryTimes: [RecoveryTime] = [],
-        accounts: [UUID: String] = [:], clock: ResetClock = .system
+        accounts: [UUID: String] = [:], ruleChecks: [RuleCheckRow] = [], clock: ResetClock = .system
     ) -> [LogEntry] {
         let seats = Dictionary(
             names.filter { $0.kind == .seat }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })

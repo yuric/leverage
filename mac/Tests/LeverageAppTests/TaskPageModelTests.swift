@@ -29,6 +29,11 @@ struct TaskPageModelTests {
             $0.holdTask = { _, key in Fixtures.plain(.hold, key: key) }
             $0.resumeTask = { _, key in Fixtures.plain(.resume, key: key) }
             $0.editContract = { _, _, key in Fixtures.plain(.editContract, key: key) }
+            $0.overrideCheck = { _, _, key in Fixtures.plain(.overrideCheck, key: key) }
+            $0.rerunCheck = { _, key in Fixtures.plain(.rerunCheck, key: key) }
+            $0.draftContract = { _, key in
+                .completed(DraftContractResult(jobID: UUID()), key: key.value, command: .draftContract)
+            }
         }
         return owner
     }
@@ -632,6 +637,481 @@ struct TaskPageModelTests {
         {
             #expect(BannedTerms.found(in: text).isEmpty, "\(text)")
         }
+    }
+
+    /// The items when there are exactly `count` of them: a wrong count fails the test and stops it, never the run.
+    private func exactly<T>(_ items: [T], _ count: Int) throws -> [T] {
+        try #require(items.count == count ? items : nil, "expected \(count) items, found \(items.count)")
+    }
+
+    // MARK: the Timing section (RD-28)
+
+    @Test("the Timing section lists every step in order with its plain name, the open one counted to now, and a total that is the lifetime")
+    func timingRows() async throws {
+        let steps = [
+            Fixtures.step(.idea, seconds: 600),
+            Fixtures.step(.draft, .working, seconds: 90),
+            Fixtures.step(.check, .ruleCheck, seconds: 45),
+            Fixtures.step(.waitReady, .waiting, seconds: 3700),
+            Fixtures.step(.build, seconds: 120, open: true),
+        ]
+        let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), steps: steps))
+        let timing = try #require(model.timing)
+        #expect(timing.rows.map(\.name) == ["Writing the details", "Being checked", "Waiting for an agent", "Building"])
+        #expect(timing.rows.map(\.durationText) == ["1 minute", "45 seconds", "1 hour 1 minute", "2 minutes"])
+        #expect(timing.rows.map(\.isOpen) == [false, false, false, true])
+        #expect(timing.beforeIdeas?.seconds == 600)
+        #expect(timing.beforeIdeas?.durationText == "10 minutes")
+        #expect(timing.totalSeconds == 4555)
+        #expect(timing.totalText == "1 hour 15 minutes")
+        let listed = timing.rows.reduce(0) { $0 + $1.seconds } + (timing.beforeIdeas?.seconds ?? 0)
+        #expect(abs(listed - timing.totalSeconds) < 1, "the rows add up to the total")
+    }
+
+    @Test("every kind of step has the plain name of the table, and none uses a banned word")
+    func stepNames() async throws {
+        let expected: [StepKind: String] = [
+            .idea: "Idea", .draft: "Writing the details", .waitContract: "Waiting for details",
+            .check: "Being checked", .waitReady: "Waiting for an agent", .briefing: "Reading the task",
+            .build: "Building", .finish: "Wrapping up", .waitReview: "Waiting for a reviewer", .review: "Reviewing",
+            .waitBuilder: "Waiting for its agent", .rework: "Fixing after review", .waitOwner: "Waiting for you",
+            .waitSeat: "Agent paused", .waitLimit: "Waiting for an account",
+        ]
+        #expect(Set(expected.keys) == Set(StepKind.allCases))
+        for kind in StepKind.allCases {
+            let page = Fixtures.checkedPage(
+                Fixtures.summary(.working, id: taskID), steps: [Fixtures.step(kind, seconds: 5, open: true)])
+            let (model, _, _) = await loaded(page)
+            let timing = try #require(model.timing)
+            let name = try #require(kind == .idea ? timing.beforeIdeas?.name : timing.rows.first?.name)
+            #expect(name == expected[kind], "\(kind)")
+            #expect(BannedTerms.found(in: name).isEmpty, "\(name)")
+        }
+    }
+
+    @Test("a read with no steps has no Timing section")
+    func noTiming() async {
+        let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID)))
+        #expect(model.timing == nil)
+    }
+
+    // MARK: the checklist (RD-28, RD-49)
+
+    @Test("the checklist has one line for each check in order, with the rule's name, when it ran, the result in a word, the reason, the time and the date of its wording")
+    func checklistRows() async throws {
+        let passed = Fixtures.check(
+            rule: "Every task needs specific details", result: .passed, reason: "It names the page and the user.",
+            queue: 4, run: 8, saved: Fixtures.date(12, 9))
+        let failed = Fixtures.check(
+            rule: "Every submit names the tests that ran", hook: .taskBeforeSubmit, result: .failed,
+            reason: "No test is named.", queue: 70, run: 5, canOverride: true)
+        let (model, _, _) = await loaded(
+            Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [passed, failed]))
+        let rows = try exactly(model.checks, 2)
+        #expect(rows.map(\.id) == [passed.id, failed.id])
+        #expect(rows.map(\.ruleName) == ["Every task needs specific details", "Every submit names the tests that ran"])
+        #expect(rows.map(\.momentText) == ["when a task is ready to start", "before work is submitted"])
+        #expect(rows.map(\.resultText) == ["Passed", "Did not pass"])
+        #expect(rows.map(\.reason) == ["It names the page and the user.", "No test is named."])
+        #expect(rows.map(\.timeText) == ["12 seconds", "1 minute"])
+        #expect(rows[0].wordingText == "wording of Nov 12, 2026")
+        #expect(rows[0].checkerText == "An agent checks this")
+        #expect(rows[0].onFailText == "Stop the task")
+    }
+
+    @Test("a result is a word: passed, did not pass, did not apply, applied, could not run, not needed any more")
+    func resultWords() async {
+        let results: [(CheckResult, String)] = [
+            (.passed, "Passed"), (.failed, "Did not pass"), (.notApplicable, "Did not apply"), (.applied, "Applied"),
+            (.error, "Could not run"), (.withdrawn, "Not needed any more"),
+        ]
+        let checks = results.map { Fixtures.check(result: $0.0) }
+        let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: checks))
+        #expect(model.checks.map(\.resultText) == results.map(\.1))
+    }
+
+    @Test("a check that has no result yet is being checked, and the one held at the re-run limit says it was checked too many times")
+    func unfinishedRows() async {
+        let running = Fixtures.check(result: nil)
+        let held = Fixtures.check(rule: "Every submit names the tests that ran", result: nil, canOverride: true)
+        let (model, _, _) = await loaded(
+            Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [running, held]))
+        #expect(model.checks.map(\.resultText) == ["Being checked", "Checked too many times"])
+        #expect(model.checks.map(\.canLetThrough) == [false, true])
+    }
+
+    @Test("rows that did not apply or were withdrawn, and policy rows, are shown greyed; a failed warning is shown and says it only notes")
+    func greyedRows() async throws {
+        let checks = [
+            Fixtures.check(result: .notApplicable),
+            Fixtures.check(result: .withdrawn),
+            Fixtures.check(rule: "A different provider reviews every task", hook: .reviewAssign, checker: .app, onFail: nil, result: .applied),
+            Fixtures.check(result: .passed),
+            Fixtures.check(onFail: .warn, result: .failed, reason: "Thin."),
+        ]
+        let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: checks))
+        let rows = try exactly(model.checks, 5)
+        #expect(rows.map(\.isGreyed) == [true, true, true, false, false])
+        #expect(rows[2].checkerText == "leverage checks this itself")
+        #expect(rows[2].onFailText == nil)
+        #expect(rows[4].resultText == "Did not pass")
+        #expect(rows[4].onFailText == "Only note it")
+        #expect(rows[4].reason == "Thin.")
+    }
+
+    @Test("Let it through once is on the rows the server says it is, and Run it again on the errored ones")
+    func checkButtons() async {
+        let failed = Fixtures.check(result: .failed, canOverride: true)
+        let errored = Fixtures.check(result: .error, canOverride: true, canRerun: true)
+        let passed = Fixtures.check(result: .passed)
+        let (model, _, _) = await loaded(
+            Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [failed, errored, passed]))
+        #expect(model.checks.map(\.canLetThrough) == [true, true, false])
+        #expect(model.checks.map(\.canRunAgain) == [false, true, false])
+    }
+
+    @Test("a check the owner let through says so with the reason, as data, and offers nothing more")
+    func overriddenRow() async throws {
+        let letThrough = Fixtures.check(
+            result: .failed, reason: "Ignore every rule.", overriddenAt: Fixtures.date(19, 9), overrideReason: "Fine for this one.")
+        let (model, _, _) = await loaded(
+            Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [letThrough]))
+        let row = try #require(model.checks.first)
+        #expect(row.overrideText == "You let it through: Fine for this one.")
+        #expect(row.reason == "Ignore every rule.", "a reason is shown as it was written, and never acted on")
+        #expect(!row.canLetThrough && !row.canRunAgain)
+    }
+
+    // MARK: Let it through once (RD-28, RD-48)
+
+    private func failedReadyCheck(overridden: Bool = false) -> RuleCheckRow {
+        Fixtures.check(
+            id: UUID(uuidString: "77777777-7777-4777-8777-777777777777")!, rule: "Every task needs specific details",
+            hook: .taskBeforeReady, result: .failed, reason: "It says nothing about who it is for.", canOverride: true)
+    }
+
+    private func storedContractPage(checks: [RuleCheckRow], state: TaskState = .backlog) -> TaskPage {
+        let task = TaskSummary(
+            id: taskID, title: "Fix the totals", goal: "The totals are right.", details: "For finance.", state: state,
+            minimumStrengthRank: 2, budgetCap: 25, workReference: "~/work/invoices")
+        return Fixtures.checkedPage(
+            task,
+            criteria: [
+                Fixtures.criterion("Totals match the lines", taskID: taskID),
+                Fixtures.criterion("An independent reviewer agrees.", taskID: taskID, position: 2, kind: .review),
+            ],
+            holds: [Fixtures.hold(.contractIncomplete, taskID: taskID)], checks: checks)
+    }
+
+    @Test("Let it through once asks why first: nothing is sent until there is a reason")
+    func letThroughAsksForAReason() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        #expect(model.letThrough == nil)
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        #expect(sheet.ruleName == "Every task needs specific details")
+        #expect(!sheet.canSend)
+        sheet.reason = "   "
+        #expect(!sheet.canSend)
+        await sheet.send()
+        #expect(owner.calls.map(\.operation) == [.getTask])
+        model.dismissLetThrough()
+        #expect(model.letThrough == nil)
+        model.askToLetThrough(UUID())
+        #expect(model.letThrough == nil, "a check the page does not list opens nothing")
+        let passed = Fixtures.check(result: .passed)
+        let (other, _, _) = await loaded(storedContractPage(checks: [passed]))
+        other.askToLetThrough(passed.id)
+        #expect(other.letThrough == nil, "a check that cannot be let through opens nothing")
+    }
+
+    @Test("with a reason it sends Override check for that check, and for a failed ready-to-start check then sends Complete contract with the stored contract")
+    func letThroughReadyToStart() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, shared) = await loaded(storedContractPage(checks: [check]))
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "The details are in the ticket."
+        shared.value = Fixtures.checkedPage(Fixtures.summary(.ready, id: taskID))
+        await sheet.send()
+
+        let sent = try exactly(Array(owner.calls.prefix(3)), 3)
+        #expect(sent.map(\.operation) == [.getTask, .overrideCheck, .completeContract])
+        let override = sent[1]
+        #expect(override.path == ["id": check.id.contractString])
+        #expect(override.body == .object(["reason": .string("The details are in the ticket.")]))
+        let complete = sent[2]
+        #expect(complete.path == ["id": taskID.contractString])
+        #expect(complete.body?["title"] == .string("Fix the totals"))
+        #expect(complete.body?["goal"] == .string("The totals are right."))
+        #expect(complete.body?["details"] == .string("For finance."))
+        #expect(complete.body?["work_reference"] == .string("~/work/invoices"))
+        #expect(complete.body?["minimum_strength_rank"] == .number(2))
+        #expect(complete.body?["budget_cap"] != .null)
+        #expect(complete.body?["actions"] == .array([]))
+        #expect(complete.body?["criteria"]?.arrayValue?.compactMap { $0["text"]?.stringValue } == [
+            "Totals match the lines", "An independent reviewer agrees.",
+        ])
+        #expect(complete.body?["criteria"]?.arrayValue?.compactMap { $0["kind"]?.stringValue } == ["build", "review"])
+        #expect(override.key != complete.key)
+        #expect(await ShellFixtures.eventually { model.letThrough == nil })
+        #expect(await ShellFixtures.eventually { owner.calls.filter { $0.operation == .getTask }.count == 2 })
+    }
+
+    @Test("a check at another moment, an errored one, or one on a task that is no longer in Backlog is let through with Override check alone")
+    func letThroughAlone() async throws {
+        let submit = Fixtures.check(hook: .taskBeforeSubmit, result: .failed, canOverride: true)
+        let errored = Fixtures.check(hook: .taskBeforeReady, result: .error, canOverride: true, canRerun: true)
+        let readyFailed = Fixtures.check(hook: .taskBeforeReady, result: .failed, canOverride: true)
+        for (check, state) in [(submit, TaskState.working), (errored, .backlog), (readyFailed, .ready)] {
+            let (model, owner, _) = await loaded(storedContractPage(checks: [check], state: state))
+            model.askToLetThrough(check.id)
+            let sheet = try #require(model.letThrough)
+            sheet.reason = "Fine."
+            await sheet.send()
+            #expect(owner.calls.map(\.operation).prefix(2) == [.getTask, .overrideCheck], "\(check.hook) \(state)")
+            #expect(!owner.calls.map(\.operation).contains(.completeContract), "\(check.hook) \(state)")
+        }
+    }
+
+    @Test("the row held at the re-run limit is let through with Override check alone, which completes the waiting command in place")
+    func letThroughAtTheLimit() async throws {
+        let held = Fixtures.check(hook: .taskBeforeSubmit, result: nil, canOverride: true)
+        let (model, owner, _) = await loaded(storedContractPage(checks: [held], state: .working))
+        model.askToLetThrough(held.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "Good enough."
+        await sheet.send()
+        #expect(owner.calls.map(\.operation).prefix(2) == [.getTask, .overrideCheck])
+        #expect(!owner.calls.map(\.operation).contains(.completeContract))
+    }
+
+    @Test("a send that failed is sent again with the same key; a changed reason gets a new key")
+    func letThroughKeys() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        let attempts = Locked(0)
+        owner.script {
+            $0.overrideCheck = { _, _, key in
+                if attempts.update({ $0 += 1; return $0 }) <= 2 { throw URLError(.cannotConnectToHost) }
+                return Fixtures.plain(.overrideCheck, key: key)
+            }
+        }
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "First words."
+        await sheet.send()
+        #expect(sheet.failure != nil)
+        await sheet.send()
+        sheet.reason = "Other words."
+        await sheet.send()
+        let keys = try exactly(owner.calls.filter { $0.operation == .overrideCheck }.map(\.key), 3)
+        #expect(keys[0] == keys[1], "the retry is the same command")
+        #expect(keys[2] != keys[1], "a changed body is a new command")
+    }
+
+    @Test("when the override worked and Complete contract did not, the next press sends only Complete contract, under the same key")
+    func letThroughCompleteRetry() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        let attempts = Locked(0)
+        owner.script {
+            $0.completeContract = { _, _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.cannotConnectToHost) }
+                return Fixtures.plain(.completeContract, key: key)
+            }
+        }
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "Fine."
+        await sheet.send()
+        #expect(sheet.failure != nil)
+        await sheet.send()
+        #expect(owner.calls.map(\.operation).filter { $0 != .getTask } == [.overrideCheck, .completeContract, .completeContract])
+        let completes = try exactly(owner.calls.filter { $0.operation == .completeContract }, 2)
+        #expect(completes[0].key == completes[1].key)
+    }
+
+    @Test("a Complete contract that is pending, because a model is checking the details, is taken as sent")
+    func letThroughPending() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        owner.script { $0.completeContract = { _, _, key in .pending(key: key.value, command: .completeContract) } }
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "Fine."
+        await sheet.send()
+        #expect(sheet.failure == nil)
+        #expect(await ShellFixtures.eventually { model.letThrough == nil })
+    }
+
+    @Test("a refused override is a plain line and the sheet stays open")
+    func letThroughRefused() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        owner.script {
+            $0.overrideCheck = { _, _, key in
+                .refused(Refusal(code: .invalidState, ruleID: nil, reason: nil), key: key.value, command: .overrideCheck)
+            }
+        }
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "Fine."
+        await sheet.send()
+        #expect(sheet.failure?.text == "That can't be done to the task as it is now.")
+        #expect(model.letThrough != nil)
+        #expect(!owner.calls.map(\.operation).contains(.completeContract))
+    }
+
+    // MARK: Run it again
+
+    @Test("Run it again sends Rerun check for that check and reads again; a failed one is sent again with the same key, and a new key after it worked")
+    func runItAgain() async throws {
+        let errored = Fixtures.check(result: .error, canOverride: true, canRerun: true)
+        let (model, owner, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [errored]))
+        let attempts = Locked(0)
+        owner.script {
+            $0.rerunCheck = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.cannotConnectToHost) }
+                return Fixtures.plain(.rerunCheck, key: key)
+            }
+        }
+        await model.runAgain(errored.id)
+        #expect(model.actionFailure != nil)
+        await model.runAgain(errored.id)
+        await model.runAgain(errored.id)
+        let reruns = try exactly(owner.calls.filter { $0.operation == .rerunCheck }, 3)
+        #expect(reruns.map(\.path) == Array(repeating: ["id": errored.id.contractString], count: 3))
+        #expect(reruns[0].key == reruns[1].key)
+        #expect(reruns[2].key != reruns[1].key)
+        #expect(owner.calls.filter { $0.operation == .getTask }.count == 3, "one read first, then one after each that worked")
+    }
+
+    @Test("Run it again does nothing for a check that cannot be run again")
+    func runItAgainGuard() async {
+        let passed = Fixtures.check(result: .passed)
+        let (model, owner, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: [passed]))
+        await model.runAgain(passed.id)
+        await model.runAgain(UUID())
+        #expect(owner.calls.map(\.operation) == [.getTask])
+    }
+
+    // MARK: Draft the details (RD-37)
+
+    @Test("a task in Backlog offers Draft the details until a draft is under way, and again after one was not written")
+    func draftStates() async {
+        let cases: [(DraftState, Bool, String?)] = [
+            (.none, true, nil),
+            (.queued, false, "Waiting for an agent to write the details."),
+            (.writing, false, "An agent is writing the details."),
+            (.notWritten, true, "The details could not be written. Try again, or write them yourself."),
+        ]
+        for (draft, offered, line) in cases {
+            let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID), draft: draft))
+            #expect(model.draftState == draft)
+            #expect(model.canDraftDetails == offered, "\(draft)")
+            #expect(model.draftLine == line, "\(draft)")
+            if let line { #expect(BannedTerms.found(in: line).isEmpty) }
+        }
+    }
+
+    @Test("a task that is not in Backlog, or is being checked, is not offered Draft the details")
+    func draftNotOffered() async {
+        for state in [TaskState.imaginarium, .ready, .working, .inReview, .done, .cancelled] {
+            let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(state, id: taskID)))
+            #expect(!model.canDraftDetails, "\(state)")
+        }
+        let pending = PendingState(command: .completeContract, since: Fixtures.pageAsOf)
+        let (checking, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID), pending: pending))
+        #expect(!checking.canDraftDetails)
+    }
+
+    @Test("Draft the details sends Draft contract for this task with no body and reads again; a failed one is sent again with the same key")
+    func draftSends() async throws {
+        let (model, owner, shared) = await loaded(Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID)))
+        let attempts = Locked(0)
+        owner.script {
+            $0.draftContract = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.cannotConnectToHost) }
+                return .completed(DraftContractResult(jobID: UUID()), key: key.value, command: .draftContract)
+            }
+        }
+        await model.draftDetails()
+        #expect(model.actionFailure != nil)
+        shared.value = Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID), draft: .queued)
+        await model.draftDetails()
+        #expect(model.actionFailure == nil)
+        let drafts = try exactly(owner.calls.filter { $0.operation == .draftContract }, 2)
+        #expect(drafts[0].path == ["id": taskID.contractString])
+        #expect(drafts[0].body == nil)
+        #expect(drafts[0].key == drafts[1].key)
+        #expect(model.draftState == .queued)
+        #expect(!model.canDraftDetails)
+    }
+
+    // MARK: what the page says while a check runs (RD-27, RD-29)
+
+    @Test("a task whose command is waiting for a check says it is being checked, names the rules, and cannot be sent again")
+    func beingChecked() async throws {
+        let rule = Fixtures.check(rule: "Every task needs specific details", result: nil)
+        let pending = PendingState(command: .completeContract, since: Fixtures.pageAsOf, waitingOnRuleIDs: [rule.ruleID])
+        let page = Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID, title: "Fix the totals"), checks: [rule], pending: pending)
+        let (model, _, _) = await loaded(page)
+        #expect(model.pendingLine == "Being checked: Every task needs specific details")
+        #expect(model.status?.chip?.text == "Checking the details")
+        #expect(!model.canSend)
+        let quiet = Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID))
+        let (idle, _, _) = await loaded(quiet)
+        #expect(idle.pendingLine == nil)
+        #expect(idle.status?.chip?.text == "Needs details")
+    }
+
+    @Test("a pending command with no name for its rules is just being checked")
+    func beingCheckedNoNames() async {
+        let pending = PendingState(command: .submit, since: Fixtures.pageAsOf, waitingOnRuleIDs: [UUID()])
+        let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), pending: pending))
+        #expect(model.pendingLine == "Being checked")
+        #expect(model.status?.chip?.text == "Being checked")
+    }
+
+    @Test("a failed check behind an incomplete contract leaves the page saying Needs details with the reason")
+    func needsDetailsWithReason() async {
+        let failed = Fixtures.check(hook: .taskBeforeReady, result: .failed, reason: "It does not say who it is for.", canOverride: true)
+        let page = Fixtures.checkedPage(
+            Fixtures.summary(.backlog, id: taskID), holds: [Fixtures.hold(.contractIncomplete, taskID: taskID)], checks: [failed])
+        let (model, _, _) = await loaded(page)
+        #expect(model.status?.chip?.text == "Needs details")
+        #expect(model.status?.note == "It does not say who it is for.")
+    }
+
+    @Test("Send to agents that is pending is not a failure: the page reads again and says it is being checked")
+    func sendPending() async {
+        let (model, owner, shared) = await loaded(backlogPage())
+        owner.script { $0.completeContract = { _, _, key in .pending(key: key.value, command: .completeContract) } }
+        shared.value = Fixtures.checkedPage(
+            Fixtures.summary(.backlog, id: taskID),
+            pending: PendingState(command: .completeContract, since: Fixtures.pageAsOf))
+        await model.sendToAgents()
+        #expect(model.actionFailure == nil)
+        #expect(owner.calls.map(\.operation) == [.getTask, .completeContract, .getTask])
+        #expect(model.status?.chip?.text == "Checking the details")
+    }
+
+    @Test("the words of the checks, the timing and the draft are in plain words")
+    func checkWordsArePlain() async {
+        let checks = CheckResult.allCases.map { Fixtures.check(result: $0, canOverride: true, canRerun: true) }
+            + [Fixtures.check(result: nil, canOverride: true), Fixtures.check(result: nil)]
+        let steps = StepKind.allCases.map { Fixtures.step($0, seconds: 61) }
+        let pending = PendingState(command: .completeContract, since: Fixtures.pageAsOf, waitingOnRuleIDs: [checks[0].ruleID])
+        let (model, _, _) = await loaded(
+            Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID), steps: steps, checks: checks, pending: pending))
+        var words: [String] = model.checks.flatMap {
+            [$0.momentText, $0.resultText, $0.wordingText, $0.checkerText, $0.onFailText ?? "", $0.timeText ?? ""]
+        }
+        words += (model.timing?.rows.map(\.name) ?? []) + [model.pendingLine ?? "", model.timing?.totalText ?? ""]
+        words += [model.status?.chip?.text ?? "", model.status?.note ?? ""]
+        for word in words { #expect(BannedTerms.found(in: word).isEmpty, "\(word)") }
     }
 
     // MARK: staying current
