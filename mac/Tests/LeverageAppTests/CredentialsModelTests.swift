@@ -15,7 +15,9 @@ struct CredentialsModelTests {
     private let requestID = UUID(uuidString: "78787878-7878-4878-8878-787878787878")!
 
     private func makeModel(_ owner: FakeOwnerAPI, reads: Locked<[Int]> = Locked([])) -> CredentialsModel {
-        CredentialsModel(api: owner, noteRead: { seq in reads.update { $0.append(seq) } }, now: { now }, timing: .quick)
+        CredentialsModel(
+            api: owner, noteRead: { seq in reads.update { $0.append(seq) } }, now: { now }, timing: .quick,
+            calendar: Fixtures.utc, locale: Fixtures.usEnglish)
     }
 
     private func owner(_ list: [CredentialWithReading]? = nil, asOfSeq: Int = 11) -> FakeOwnerAPI {
@@ -54,21 +56,81 @@ struct CredentialsModelTests {
         #expect(reads.value == [17])
     }
 
+    private var clock: ResetClock {
+        let at = now
+        return ResetClock(now: { at }, calendar: Fixtures.utc, locale: Fixtures.usEnglish)
+    }
+
     @Test("a ready login says it is signed in and answering; a signed-out one says so; one at its limit says until when")
-    func states() async {
+    func states() async throws {
         let later = now.addingTimeInterval(3600)
         let model = makeModel(owner([
             Fixtures.credential(Fixtures.loginID, name: "Personal"),
             Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut),
-            Fixtures.credential(Fixtures.geminiLoginID, name: "Work", limitedUntil: later),
-            Fixtures.credential(UUID(), name: "Old limit", limitedUntil: now.addingTimeInterval(-60)),
+            Fixtures.account(Fixtures.geminiLoginID, name: "Work", since: now.addingTimeInterval(-60), until: later, position: 3),
+            Fixtures.account(
+                UUID(), name: "Old limit", since: now.addingTimeInterval(-7200), until: now.addingTimeInterval(-60), position: 4),
         ]))
         await model.load()
+        try #require(model.rows.count == 4)
         #expect(model.rows[0].chip.text == "Ready" && model.rows[0].usage == "Signed in and answering.")
         #expect(model.rows[1].chip.text == "Signed out" && model.rows[1].usage == "Not signed in.")
-        #expect(model.rows[2].chip.text == "At its limit" && model.rows[2].usage.hasPrefix("Until "))
+        let time = ResetTime.text(for: later, clock: clock)
+        #expect(model.rows[2].chip.text == "At its limit")
+        #expect(model.rows[2].usage == "At its limit until \(time).")
         #expect(model.rows[3].chip.text == "Ready")
         for row in model.rows { #expect(BannedTerms.found(in: row.usage + row.chip.text).isEmpty) }
+    }
+
+    @Test("a limit with no reset time says the provider did not give one")
+    func limitWithNoTime() async throws {
+        let model = makeModel(owner([
+            Fixtures.account(Fixtures.loginID, name: "Personal", since: now.addingTimeInterval(-60), until: nil, position: 1),
+            Fixtures.account(
+                Fixtures.secondLoginID, name: "Team", provider: .codex, since: now.addingTimeInterval(-60), position: 2),
+        ]))
+        await model.load()
+        try #require(model.rows.count == 2)
+        #expect(model.rows[0].chip.text == "At its limit")
+        #expect(model.rows[0].usage == "At its limit. Claude did not say when it is available again.")
+        #expect(model.rows[1].usage == "At its limit. Codex did not say when it is available again.")
+    }
+
+    @Test("a limit is a reported limit: a reset time with no report is not one, and a passed time ends it (HE-3)")
+    func limitPredicate() async {
+        let model = makeModel(owner([
+            Fixtures.credential(Fixtures.loginID, name: "No report", limitedUntil: now.addingTimeInterval(600)),
+            Fixtures.account(
+                Fixtures.secondLoginID, name: "Passed", provider: .codex, since: now.addingTimeInterval(-600),
+                until: now.addingTimeInterval(-1), position: 2),
+        ]))
+        await model.load()
+        #expect(model.rows.map(\.chip.text) == ["Ready", "Ready"])
+    }
+
+    @Test("a signed-out account at its limit says it is signed out: signing in comes first")
+    func signedOutBeatsLimit() async throws {
+        let model = makeModel(owner([
+            Fixtures.account(
+                Fixtures.loginID, name: "Personal", state: .signedOut, since: now, until: now.addingTimeInterval(60), position: 1)
+        ]))
+        await model.load()
+        try #require(model.rows.count == 1)
+        #expect(model.rows[0].chip.text == "Signed out")
+    }
+
+    @Test("no row shows an email or a plan")
+    func neverTheEmail() async throws {
+        let model = makeModel(owner([
+            Fixtures.account(
+                Fixtures.loginID, name: "Personal", since: now, until: now.addingTimeInterval(60), position: 1,
+                email: Fixtures.madeUpEmail, plan: Fixtures.madeUpPlan)
+        ]))
+        await model.load()
+        let row = try #require(model.rows.first)
+        for line in [row.name, row.kindLine, row.providerName, row.chip.text, row.usage] {
+            #expect(!line.contains("@") && !line.contains("made up"), "\(line)")
+        }
     }
 
     @Test("an API token is named as one, though none can be added yet")
@@ -191,6 +253,139 @@ struct CredentialsModelTests {
         #expect(owner.calls.isEmpty)
     }
 
+    // MARK: Sign in again (HM-47)
+
+    @Test("only a signed-out login has Sign in again")
+    func signInAgainOffered() async {
+        let model = makeModel(owner([
+            Fixtures.credential(Fixtures.loginID, name: "Personal"),
+            Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut),
+            Fixtures.account(
+                Fixtures.geminiLoginID, name: "Work", kind: .apiToken, state: .signedOut, position: 3),
+            Fixtures.account(UUID(), name: "Limited", since: now, until: now.addingTimeInterval(60), position: 4),
+        ]))
+        await model.load()
+        #expect(model.rows.map(\.canSignInAgain) == [false, true, false, false])
+    }
+
+    private func signInOwner(
+        _ finished: @escaping @Sendable () -> HelperRequestStatus
+    ) -> FakeOwnerAPI {
+        let owner = owner([
+            Fixtures.credential(Fixtures.loginID, name: "Personal"),
+            Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut),
+        ])
+        let request = requestID
+        owner.script {
+            $0.signInAgain = { _, key in Fixtures.plain(.signInAgain, key: key, helperRequest: request) }
+            $0.helperRequest = { _, _, _ in finished() }
+        }
+        return owner
+    }
+
+    @Test("Sign in again sends sign_in_again for that login, follows the request to its end and reads again")
+    func signInAgain() async {
+        let request = requestID
+        let owner = signInOwner {
+            Fixtures.request(request, kind: .openSignIn, state: .finished, result: Fixtures.finished(), credential: Fixtures.secondLoginID)
+        }
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        await model.signInAgain(Fixtures.secondLoginID)
+        let sent = Fixtures.calls(owner, .signInAgain)
+        #expect(sent.count == 1 && sent.first?.path["id"] == Fixtures.secondLoginID.contractString)
+        #expect(sent.first?.key != nil)
+        #expect(Fixtures.calls(owner, .getHelperRequest).count == 1)
+        #expect(Fixtures.calls(owner, .listCredentials).count == 1)
+        #expect(!model.isSigningIn(Fixtures.secondLoginID))
+        #expect(model.failure(for: Fixtures.secondLoginID) == nil)
+    }
+
+    @Test("while the request runs the row says it waits for the owner to sign in in the window that opened")
+    func signInAgainWaits() async {
+        let request = requestID
+        let seen = Locked<[Bool]>([])
+        let owner = owner([Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut)])
+        let box = Locked<CredentialsModel?>(nil)
+        owner.script {
+            $0.signInAgain = { _, key in Fixtures.plain(.signInAgain, key: key, helperRequest: request) }
+            $0.helperRequest = { _, _, _ in
+                let waiting = await MainActor.run { box.value?.isSigningIn(Fixtures.secondLoginID) == true }
+                seen.update { $0.append(waiting) }
+                return Fixtures.request(request, kind: .openSignIn, state: .finished, result: Fixtures.finished())
+            }
+        }
+        let model = makeModel(owner)
+        box.update { $0 = model }
+        await model.load()
+        await model.signInAgain(Fixtures.secondLoginID)
+        #expect(seen.value == [true])
+        #expect(!model.isSigningIn(Fixtures.secondLoginID))
+        #expect(CredentialsCopy.waitingSignIn.text == "Waiting for you to sign in in the window that opened")
+    }
+
+    @Test("a sign-in that fails says which tool and what it did not do, in one line on that row")
+    func signInAgainFails() async {
+        let request = requestID
+        let owner = signInOwner {
+            Fixtures.request(
+                request, kind: .openSignIn, state: .failed,
+                progress: [Fixtures.progress(.signedIn, .failed, failure: .notSignedIn)],
+                result: Fixtures.finished(.failed, failing: [HelperCheckResult(check: .signedIn, passed: false, failure: .notSignedIn)]),
+                credential: Fixtures.secondLoginID)
+        }
+        let model = makeModel(owner)
+        await model.load()
+        await model.signInAgain(Fixtures.secondLoginID)
+        #expect(model.failure(for: Fixtures.secondLoginID) == "Codex is not signed in.")
+        #expect(model.failure(for: Fixtures.loginID) == nil)
+    }
+
+    @Test("Sign in again sends nothing for a login that is not signed out, or not on the list")
+    func signInAgainOnlyWhereItMakesSense() async {
+        let owner = signInOwner { Fixtures.request(UUID(), state: .finished, result: Fixtures.finished()) }
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        await model.signInAgain(Fixtures.loginID)
+        await model.signInAgain(UUID())
+        #expect(owner.calls.isEmpty)
+    }
+
+    @Test("Sign in again sent again after the network failed uses the same key; after an answer a new one")
+    func signInAgainKeys() async {
+        let owner = owner([Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut)])
+        let request = requestID
+        let attempts = Locked(0)
+        owner.script {
+            $0.signInAgain = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.timedOut) }
+                return Fixtures.plain(.signInAgain, key: key, helperRequest: request)
+            }
+            $0.helperRequest = { _, _, _ in Fixtures.request(request, kind: .openSignIn, state: .finished, result: Fixtures.finished()) }
+        }
+        let model = makeModel(owner)
+        await model.load()
+        await model.signInAgain(Fixtures.secondLoginID)
+        #expect(model.failure(for: Fixtures.secondLoginID) == ShellCopy.cannotReach.text)
+        await model.signInAgain(Fixtures.secondLoginID)
+        await model.signInAgain(Fixtures.secondLoginID)
+        let keys = Fixtures.calls(owner, .signInAgain).map(\.key)
+        #expect(keys.count == 3 && keys[0] == keys[1] && keys[1] != keys[2])
+    }
+
+    @Test("a refused Sign in again shows the sentence for its code")
+    func signInAgainRefused() async {
+        let owner = owner([Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut)])
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        owner.script { $0.signInAgain = { _, key in .refused(refusal, key: key.value, command: .signInAgain) } }
+        let model = makeModel(owner)
+        await model.load()
+        await model.signInAgain(Fixtures.secondLoginID)
+        #expect(model.failure(for: Fixtures.secondLoginID) == ShellCopy.refusalInvalidState.text)
+    }
+
     // MARK: staying current
 
     @Test("an event from the tail reads the list again")
@@ -226,7 +421,7 @@ struct CredentialsModelTests {
         let loaded = makeModel(owner([
             Fixtures.credential(Fixtures.loginID, name: "Personal"),
             Fixtures.credential(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut),
-            Fixtures.credential(Fixtures.geminiLoginID, name: "Work", limitedUntil: now.addingTimeInterval(600)),
+            Fixtures.account(Fixtures.geminiLoginID, name: "Work", since: now, until: now.addingTimeInterval(600), position: 3),
         ]))
         await loaded.load()
         #expect(Fixtures.draws(CredentialsContent(model: loaded, add: {})))

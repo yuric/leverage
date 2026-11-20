@@ -12,14 +12,17 @@ struct CredentialRow: Identifiable, Equatable, Sendable {
     let provider: Provider
     let chip: CardChip
     let usage: String
+    /// A signed-out login can be signed in again (HM-47).
+    let canSignInAgain: Bool
 
-    init(_ entry: CredentialWithReading, now: Date) {
+    init(_ entry: CredentialWithReading, now: Date, calendar: Calendar = .current, locale: Locale = .current) {
         let credential = entry.credential
         id = credential.id
         name = credential.name
         provider = credential.provider
         providerName = ProviderNames.name(credential.provider)
         kindLine = (credential.kind == .login ? CredentialsCopy.kindLogin : .kindToken).text
+        canSignInAgain = false
         if credential.state == .signedOut {
             chip = CardChip(text: CredentialsCopy.chipSignedOut.text, tone: .stop)
             usage = CredentialsCopy.usageSignedOut.text
@@ -62,7 +65,7 @@ final class CredentialsModel {
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, now: @escaping () -> Date = Date.init,
-        timing: FollowTiming = .normal
+        timing: FollowTiming = .normal, calendar: Calendar = .current, locale: Locale = .current
     ) {
         self.api = api
         self.noteRead = noteRead
@@ -71,6 +74,10 @@ final class CredentialsModel {
     }
 
     func isVerifying(_ id: UUID) -> Bool { verifying.contains(id) }
+
+    func isSigningIn(_ id: UUID) -> Bool { false }
+
+    func signInAgain(_ id: UUID) async {}
 
     /// The line a failed Verify left on that row.
     func failure(for id: UUID) -> String? { failures[id] }

@@ -81,7 +81,7 @@ struct RosterModelTests {
         let model = makeModel(Fixtures.owner(board: board))
         await model.load()
         #expect(row(model, Fixtures.builderID)?.roleLine == "Builder. Building Fix rounding in invoice totals.")
-        #expect(row(model, Fixtures.reviewerID)?.roleLine == "Reviewer. Stopped.")
+        #expect(row(model, Fixtures.reviewerID)?.roleLine == "Reviewer. Not running.")
         #expect(row(model, Fixtures.ownID)?.roleLine == "Builder. Connects on its own.")
     }
 
@@ -451,6 +451,288 @@ struct RosterModelTests {
         let after = Fixtures.calls(owner, .listSeats).count
         try? await Task.sleep(for: .milliseconds(40))
         #expect(Fixtures.calls(owner, .listSeats).count == after)
+    }
+
+    // MARK: the four words of an agent's state (HM-45)
+
+    private func rowWords(_ model: RosterModel, _ id: UUID) -> String { row(model, id)?.roleLine ?? "" }
+
+    @Test("a paused agent is Paused, and its row says pausing stops no run")
+    func pausedWords() async {
+        var list = Fixtures.seats().seats
+        list[0] = Fixtures.seat(
+            Fixtures.builderID, name: "Claude, Personal", credential: Fixtures.loginID, run: .running, paused: true)
+        let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
+        await model.load()
+        let paused = row(model, Fixtures.builderID)
+        #expect(paused?.roleLine == "Builder. Paused.")
+        #expect(paused?.detailLine.hasSuffix("Off") == true)
+        let note = paused?.pausedNote ?? ""
+        #expect(note.contains("does not stop its run"))
+        #expect(note.contains("goes back to waiting for any agent"))
+        #expect(BannedTerms.found(in: note).isEmpty)
+        #expect(row(model, Fixtures.reviewerID)?.pausedNote == nil)
+    }
+
+    @Test("an agent that is turned off is Off, and one with no run is Not running")
+    func offAndNotRunning() async {
+        var list = Fixtures.seats().seats
+        list[1] = Fixtures.seat(
+            Fixtures.reviewerID, name: "Codex, Team", role: .reviewer, provider: .codex,
+            credential: Fixtures.secondLoginID, run: .stopped, enabled: false)
+        let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
+        await model.load()
+        #expect(rowWords(model, Fixtures.reviewerID) == "Reviewer. Off.")
+        let notRunning = makeModel(Fixtures.owner())
+        await notRunning.load()
+        #expect(rowWords(notRunning, Fixtures.reviewerID) == "Reviewer. Not running.")
+        #expect(row(notRunning, Fixtures.reviewerID)?.runChip?.text == "Not running")
+    }
+
+    @Test("a running agent whose own account and every account below it are unavailable is Waiting for the account")
+    func waitingForAnAccount() async {
+        let later = now.addingTimeInterval(3600)
+        let list = CredentialsList(
+            credentials: [
+                Fixtures.account(Fixtures.loginID, name: "Personal", since: now.addingTimeInterval(-60), until: later, position: 1),
+                Fixtures.account(
+                    Fixtures.secondLoginID, name: "Team", provider: .codex, since: now.addingTimeInterval(-30),
+                    until: later.addingTimeInterval(7200), position: 2),
+            ], asOfSeq: 11)
+        let model = makeModel(Fixtures.owner(credentials: list))
+        await model.load()
+        // The account that resets first.
+        #expect(rowWords(model, Fixtures.builderID) == "Builder. Waiting for Claude, Personal.")
+        // Stopped: it has no run, and says so.
+        #expect(rowWords(model, Fixtures.reviewerID) == "Reviewer. Not running.")
+        // Connects on its own: it has no account of its own to wait for.
+        #expect(rowWords(model, Fixtures.ownID) == "Builder. Connects on its own.")
+    }
+
+    @Test("a signed-out account below is the one waited for, because only the owner can bring it back")
+    func waitingForASignedOutAccount() async {
+        let list = CredentialsList(
+            credentials: [
+                Fixtures.account(
+                    Fixtures.loginID, name: "Personal", since: now.addingTimeInterval(-60),
+                    until: now.addingTimeInterval(3600), position: 1),
+                Fixtures.account(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut, position: 2),
+            ], asOfSeq: 11)
+        let model = makeModel(Fixtures.owner(credentials: list))
+        await model.load()
+        #expect(rowWords(model, Fixtures.builderID) == "Builder. Waiting for Codex, Team.")
+    }
+
+    @Test("an agent with one account free, its own or one below it, is not waiting; one above its own does not count")
+    func notWaitingWhileAnAccountIsFree() async {
+        let limited = now.addingTimeInterval(3600)
+        let ownLimitedBelowFree = CredentialsList(
+            credentials: [
+                Fixtures.account(Fixtures.loginID, name: "Personal", since: now, until: limited, position: 1),
+                Fixtures.account(Fixtures.secondLoginID, name: "Team", provider: .codex, position: 2),
+            ], asOfSeq: 11)
+        let below = makeModel(Fixtures.owner(credentials: ownLimitedBelowFree))
+        await below.load()
+        #expect(rowWords(below, Fixtures.builderID) == "Builder. Running. Waiting for work.")
+
+        let aboveFreeOwnLimited = CredentialsList(
+            credentials: [
+                Fixtures.account(Fixtures.secondLoginID, name: "Team", provider: .codex, position: 1),
+                Fixtures.account(Fixtures.loginID, name: "Personal", since: now, until: limited, position: 2),
+            ], asOfSeq: 11)
+        let above = makeModel(Fixtures.owner(credentials: aboveFreeOwnLimited))
+        await above.load()
+        #expect(rowWords(above, Fixtures.builderID) == "Builder. Waiting for Claude, Personal.")
+
+        // A limit whose time has passed is no limit (HE-3).
+        let passed = CredentialsList(
+            credentials: [
+                Fixtures.account(
+                    Fixtures.loginID, name: "Personal", since: now.addingTimeInterval(-7200),
+                    until: now.addingTimeInterval(-60), position: 1)
+            ], asOfSeq: 11)
+        let past = makeModel(Fixtures.owner(credentials: passed))
+        await past.load()
+        #expect(rowWords(past, Fixtures.builderID) == "Builder. Running. Waiting for work.")
+    }
+
+    @Test("a paused agent says Paused and an agent turned off says Off, even when its accounts are unavailable")
+    func pausedOrOffBeatsWaiting() async {
+        var list = Fixtures.seats().seats
+        list[0] = Fixtures.seat(
+            Fixtures.builderID, name: "Claude, Personal", credential: Fixtures.loginID, run: .running, paused: true)
+        list[1] = Fixtures.seat(
+            Fixtures.reviewerID, name: "Codex, Team", role: .reviewer, provider: .codex,
+            credential: Fixtures.secondLoginID, run: .running, enabled: false)
+        let credentials = CredentialsList(
+            credentials: [
+                Fixtures.account(Fixtures.loginID, name: "Personal", state: .signedOut, position: 1),
+                Fixtures.account(Fixtures.secondLoginID, name: "Team", provider: .codex, state: .signedOut, position: 2),
+            ], asOfSeq: 11)
+        let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12), credentials: credentials))
+        await model.load()
+        #expect(rowWords(model, Fixtures.builderID) == "Builder. Paused.")
+        #expect(rowWords(model, Fixtures.reviewerID) == "Reviewer. Off.")
+    }
+
+    @Test("the account's name is the provider and the login's name, never its email or plan")
+    func waitingNamesNoEmail() async {
+        let list = CredentialsList(
+            credentials: [
+                Fixtures.account(
+                    Fixtures.loginID, name: "Personal", since: now, until: now.addingTimeInterval(60), position: 1,
+                    email: Fixtures.madeUpEmail, plan: Fixtures.madeUpPlan)
+            ], asOfSeq: 11)
+        let model = makeModel(Fixtures.owner(credentials: list))
+        await model.load()
+        for r in model.rows {
+            for line in [r.roleLine, r.detailLine, r.loginLine ?? "", r.lastPolledLine, r.pausedNote ?? ""] {
+                #expect(!line.contains("@") && !line.contains("made up"), "\(line)")
+            }
+        }
+    }
+
+    // MARK: Pause, Resume (HE-26)
+
+    @Test("Pause is offered on an agent that is on and not paused; Resume only on a paused one; Change on every agent")
+    func pauseButtons() async {
+        var list = Fixtures.seats().seats
+        list[0] = Fixtures.seat(
+            Fixtures.builderID, name: "Claude, Personal", credential: Fixtures.loginID, run: .running, paused: true)
+        list[1] = Fixtures.seat(
+            Fixtures.reviewerID, name: "Codex, Team", role: .reviewer, provider: .codex,
+            credential: Fixtures.secondLoginID, run: .stopped, enabled: false)
+        let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
+        await model.load()
+        let paused = row(model, Fixtures.builderID)
+        let off = row(model, Fixtures.reviewerID)
+        let on = row(model, Fixtures.ownID)
+        #expect(paused?.canPause == false && paused?.canResume == true)
+        #expect(off?.canPause == false && off?.canResume == false)
+        #expect(on?.canPause == true && on?.canResume == false)
+        #expect([paused, off, on].allSatisfy { $0?.canChange == true })
+    }
+
+    @Test("Pause sends pause_seat for that agent under a new key and reads again; it follows no helper request")
+    func pause() async {
+        let owner = Fixtures.owner()
+        owner.script { $0.pauseSeat = { _, key in Fixtures.plain(.pauseSeat, key: key) } }
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        await model.pause(Fixtures.ownID)
+        let sent = Fixtures.calls(owner, .pauseSeat)
+        #expect(sent.count == 1 && sent.first?.path["id"] == Fixtures.ownID.contractString)
+        #expect(sent.first?.key != nil)
+        #expect(sent.first?.body == nil)
+        #expect(Fixtures.calls(owner, .getHelperRequest).isEmpty)
+        #expect(Fixtures.calls(owner, .listSeats).count == 1)
+        #expect(model.failure(for: Fixtures.ownID) == nil)
+        #expect(!model.isBusy(Fixtures.ownID))
+    }
+
+    @Test("Resume sends resume_seat for a paused agent, and nothing for one that is not paused")
+    func resume() async {
+        var list = Fixtures.seats().seats
+        list[2] = Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok, paused: true)
+        let owner = Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12))
+        owner.script { $0.resumeSeat = { _, key in Fixtures.plain(.resumeSeat, key: key) } }
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        await model.resume(Fixtures.ownID)
+        await model.resume(Fixtures.builderID)
+        let sent = Fixtures.calls(owner, .resumeSeat)
+        #expect(sent.count == 1 && sent.first?.path["id"] == Fixtures.ownID.contractString)
+        #expect(Fixtures.calls(owner, .listSeats).count == 1)
+    }
+
+    @Test("Pause sends nothing for an agent that is already paused, turned off or not on the list")
+    func pauseOnlyWhereItMakesSense() async {
+        var list = Fixtures.seats().seats
+        list[0] = Fixtures.seat(
+            Fixtures.builderID, name: "Claude, Personal", credential: Fixtures.loginID, run: .running, paused: true)
+        list[1] = Fixtures.seat(
+            Fixtures.reviewerID, name: "Codex, Team", role: .reviewer, provider: .codex,
+            credential: Fixtures.secondLoginID, run: .stopped, enabled: false)
+        let owner = Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12))
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        await model.pause(Fixtures.builderID)
+        await model.pause(Fixtures.reviewerID)
+        await model.pause(UUID())
+        #expect(owner.calls.isEmpty)
+    }
+
+    @Test("Pause sent again after the network failed uses the same key; after an answer, a new one")
+    func pauseKeys() async {
+        let owner = Fixtures.owner()
+        let attempts = Locked(0)
+        owner.script {
+            $0.pauseSeat = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.networkConnectionLost) }
+                return Fixtures.plain(.pauseSeat, key: key)
+            }
+        }
+        let model = makeModel(owner)
+        await model.load()
+        await model.pause(Fixtures.ownID)
+        #expect(model.failure(for: Fixtures.ownID) == ShellCopy.cannotReach.text)
+        await model.pause(Fixtures.ownID)
+        await model.pause(Fixtures.ownID)
+        let keys = Fixtures.calls(owner, .pauseSeat).map(\.key)
+        #expect(keys.count == 3 && keys[0] == keys[1] && keys[1] != keys[2])
+        #expect(model.failure(for: Fixtures.ownID) == nil)
+    }
+
+    @Test("a refused Pause shows the sentence for its code on that row, and a refused Resume too")
+    func pauseRefused() async {
+        let owner = Fixtures.owner()
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        owner.script { $0.pauseSeat = { _, key in .refused(refusal, key: key.value, command: .pauseSeat) } }
+        let model = makeModel(owner)
+        await model.load()
+        await model.pause(Fixtures.ownID)
+        #expect(model.failure(for: Fixtures.ownID) == ShellCopy.refusalInvalidState.text)
+        #expect(model.failure(for: Fixtures.builderID) == nil)
+        await model.pause(Fixtures.ownID)
+        let keys = Fixtures.calls(owner, .pauseSeat).map(\.key)
+        #expect(keys.count == 2 && keys[0] != keys[1])
+    }
+
+    // MARK: Change (HM-51)
+
+    @Test("Change opens the sheet with that agent's values and the logins it can move to")
+    func beginChange() async {
+        let model = makeModel(Fixtures.owner())
+        await model.load()
+        #expect(model.changing == nil)
+        model.beginChange(Fixtures.builderID)
+        let sheet = model.changing
+        #expect(sheet?.name == "Claude, Personal")
+        #expect(sheet?.credentialID == Fixtures.loginID)
+        #expect(sheet?.enabled == true)
+        #expect(sheet?.loginChoices.map(\.label) == ["Claude, Personal", "Codex, Team"])
+        model.cancelChange()
+        #expect(model.changing == nil)
+        model.beginChange(UUID())
+        #expect(model.changing == nil)
+    }
+
+    @Test("a saved change closes the sheet and reads the roster again")
+    func changeSaved() async {
+        let owner = Fixtures.owner()
+        owner.script { $0.changeSeat = { _, _, key in Fixtures.plain(.changeSeat, key: key) } }
+        let model = makeModel(owner)
+        await model.load()
+        owner.forgetCalls()
+        model.beginChange(Fixtures.ownID)
+        model.changing?.name = "Renamed"
+        await model.changing?.save()
+        #expect(Fixtures.calls(owner, .changeSeat).count == 1)
+        #expect(model.changing == nil)
+        #expect(Fixtures.calls(owner, .listSeats).count == 1)
     }
 
     // MARK: words

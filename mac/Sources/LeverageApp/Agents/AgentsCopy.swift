@@ -14,6 +14,10 @@ enum AgentsCopy: OwnerFacingCopy {
     case chipRunning, chipStopped
     case start, stop, starting, stopping, remove, copyLandingPrompt, copied
     case startFailed, stopFailed
+    // Pause, Resume and Change (HM-45, HM-51, HE-26, HE-27).
+    case stateNotRunning, stateWaitingFor, chipNotRunning, pausedNote
+    case pause, resume, change, pausing, resuming, pauseFailed, resumeFailed
+    case changeTitle, changeNote, changeEnabledLabel, turnOffNote, turnOnNote, changeSave, changeSaving
     case removeTitle, removeMessage, removeConfirm, cancel
 
     // The Connect sheet.
@@ -62,6 +66,25 @@ enum AgentsCopy: OwnerFacingCopy {
         case .copied: "Copied"
         case .startFailed: "{name} could not start. Check its login in Credentials."
         case .stopFailed: "{name} did not stop. Try again."
+        case .stateNotRunning: "Not running."
+        case .stateWaitingFor: "Waiting for {account}."
+        case .chipNotRunning: "Not running"
+        case .pausedNote:
+            "Pausing does not stop its run. It takes no new work, and a task it is on waits. If the pause lasts longer than the agent's time on the task, the task goes back to waiting for any agent."
+        case .pause: "Pause"
+        case .resume: "Resume"
+        case .change: "Change"
+        case .pausing: "Pausing…"
+        case .resuming: "Resuming…"
+        case .pauseFailed: "{name} could not be paused. Try again."
+        case .resumeFailed: "{name} could not be resumed. Try again."
+        case .changeTitle: "Change {name}"
+        case .changeNote: "Changes apply the next time the agent starts a run."
+        case .changeEnabledLabel: "Turned on"
+        case .turnOffNote: "Turning it off stops its run and sends any task it is building back to waiting."
+        case .turnOnNote: "Turning it on does not start it. Choose Start on its row."
+        case .changeSave: "Save"
+        case .changeSaving: "Saving…"
         case .removeTitle: "Remove {name}?"
         case .removeMessage: "Its token stops working at once, and anything it is working on goes back to waiting."
         case .removeConfirm: "Remove"

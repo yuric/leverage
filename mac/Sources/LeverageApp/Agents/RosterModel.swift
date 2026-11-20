@@ -19,8 +19,13 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let canStop: Bool
     /// An agent that connects on its own has a landing prompt; one the app runs has none.
     let canCopyLandingPrompt: Bool
+    let canPause: Bool
+    let canResume: Bool
+    let canChange: Bool
+    /// What pausing does and does not do (HE-26), on a paused agent's row.
+    let pausedNote: String?
 
-    init(seat: Seat, loginName: String?, doing: String?, now: Date) {
+    init(seat: Seat, loginName: String?, doing: String?, waitingFor: String? = nil, now: Date) {
         id = seat.id
         name = seat.name
         let runsOnApp = seat.credentialID != nil
@@ -65,6 +70,10 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         canStart = runsOnApp && seat.enabled && !seat.paused && seat.runState != .running
         canStop = runsOnApp && seat.runState == .running
         canCopyLandingPrompt = !runsOnApp
+        canPause = false
+        canResume = false
+        canChange = false
+        pausedNote = nil
     }
 }
 
@@ -204,6 +213,15 @@ final class RosterModel {
             do { try await Task.sleep(for: interval) } catch { return }
         }
     }
+
+    // MARK: Pause, Resume and Change
+
+    private(set) var changing: ChangeAgentModel?
+
+    func pause(_ id: UUID) async {}
+    func resume(_ id: UUID) async {}
+    func beginChange(_ id: UUID) {}
+    func cancelChange() {}
 
     // MARK: commands
 

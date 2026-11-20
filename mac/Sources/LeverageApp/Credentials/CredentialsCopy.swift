@@ -12,6 +12,8 @@ enum CredentialsCopy: OwnerFacingCopy {
     case chipReady, chipSignedOut, chipLimit
     case usageReady, usageSignedOut, usageUntil
     case verify, verifying
+    // At its limit, and Sign in again on a signed-out login (HM-45, HM-47).
+    case usageLimitUntil, usageLimitNoTime, signInAgain
 
     // The pop-up's two steps.
     case sheetTitle, stepPick, stepName
@@ -43,6 +45,9 @@ enum CredentialsCopy: OwnerFacingCopy {
         case .usageUntil: "Until {time}."
         case .verify: "Verify"
         case .verifying: "Checking…"
+        case .usageLimitUntil: "At its limit until {time}."
+        case .usageLimitNoTime: "At its limit. {provider} did not say when it is available again."
+        case .signInAgain: "Sign in again"
 
         case .sheetTitle: "Add credential"
         case .stepPick: "Step 1 of 2. Which provider?"

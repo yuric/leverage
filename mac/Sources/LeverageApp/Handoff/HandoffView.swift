@@ -1,16 +1,17 @@
 import SwiftUI
 
-/// The Handoff tab. A placeholder until WP16 builds it (HM-32 to HM-37): the
-/// order of the logins and the PRD's eight sentences.
+/// The Handoff tab (HM-32 to HM-37). Empty until WP16's code commit fills it in.
 struct HandoffView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(HandoffCopy.title.text)
-                .font(.title2.weight(.semibold))
-            Text(HandoffCopy.hint.text)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding()
+        Color.clear
+    }
+}
+
+/// What the tab draws from its model.
+struct HandoffContent: View {
+    let model: HandoffModel
+
+    var body: some View {
+        Color.clear
     }
 }

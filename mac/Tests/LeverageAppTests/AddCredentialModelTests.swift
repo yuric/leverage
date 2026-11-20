@@ -118,7 +118,7 @@ struct AddCredentialModelTests {
         #expect(model.canSignIn)
     }
 
-    @Test("Sign in sends the same credential id every time, the login kind, the provider and the name, with the four open fields null")
+    @Test("Sign in sends the same credential id every time, the login kind, the provider and the name, with no label and no effort")
     func addBody() async {
         let owner = owner(answers: [passing()])
         let model = makeModel(owner)
@@ -132,10 +132,62 @@ struct AddCredentialModelTests {
         #expect(fields["kind"] == .string("login"))
         #expect(fields["provider"] == .string("codex"))
         #expect(fields["name"] == .string("Team"))
-        for field in ["masked_label", "model", "effort", "strength_rank"] {
-            #expect(fields[field] == .null, "\(field)")
-        }
+        #expect(fields["masked_label"] == .null)
+        #expect(fields["effort"] == .null)
         #expect(fields.count == 8)
+    }
+
+    @Test("Add credential sends the catalog's default model for Claude and Grok, and null for Codex and Gemini (HE-5)")
+    func addSendsDefaultModel() async {
+        var sent: [Provider: JSONValue] = [:]
+        for provider in [Provider.claude, .codex, .gemini, .grok] {
+            let owner = owner(answers: [passing()])
+            let model = makeModel(owner)
+            await start(model, provider, name: "Personal")
+            await model.signIn()
+            guard case .object(let fields)? = Fixtures.calls(owner, .addCredential).first?.body else {
+                Issue.record("Add credential was not sent for \(provider)")
+                continue
+            }
+            sent[provider] = fields["model"]
+        }
+        let claude = ProviderCatalog.entry(for: "claude")?.defaultModel?.value
+        let grok = ProviderCatalog.entry(for: "grok")?.defaultModel?.value
+        #expect(claude?.isEmpty == false && grok?.isEmpty == false)
+        #expect(sent[.claude] == claude.map { JSONValue.string($0) })
+        #expect(sent[.grok] == grok.map { JSONValue.string($0) })
+        #expect(sent[.codex] == .null)
+        #expect(sent[.gemini] == .null)
+    }
+
+    @Test("Add credential sends strength rank 1, the agents' default, and no effort, for every provider (HE-5)")
+    func addSendsRankOne() async {
+        for provider in [Provider.claude, .codex, .gemini, .grok] {
+            let owner = owner(answers: [passing()])
+            let model = makeModel(owner)
+            await start(model, provider, name: "Personal")
+            await model.signIn()
+            guard case .object(let fields)? = Fixtures.calls(owner, .addCredential).first?.body else {
+                Issue.record("Add credential was not sent for \(provider)")
+                continue
+            }
+            #expect(fields["strength_rank"] == .number(1), "\(provider)")
+            #expect(fields["effort"] == .null, "\(provider)")
+        }
+    }
+
+    @Test("a Retry sends the same model and rank again")
+    func retryKeepsModel() async throws {
+        let owner = owner(answers: [failing(.testPrompt, .noAnswer), passing()])
+        let model = makeModel(owner)
+        await start(model, .claude)
+        await model.signIn()
+        await model.retry()
+        let bodies = Fixtures.calls(owner, .addCredential).compactMap(\.body)
+        try #require(bodies.count == 2)
+        guard case .object(let first) = bodies[0], case .object(let second) = bodies[1] else { return }
+        #expect(first["model"] == second["model"] && first["model"] != .null)
+        #expect(first["strength_rank"] == second["strength_rank"])
     }
 
     // MARK: the checks
