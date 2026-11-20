@@ -1,5 +1,5 @@
 require "test_helper"
-require_relative "handoff_support"
+require_relative "jobs_support"
 
 # report_signed_out (PRD L684, L694-L698; milestone 3 plan §2.1 rules 4 to
 # 7, HE-9, HE-11, HE-12, HD-10; traces 12 and 14): the helper reports that
@@ -9,7 +9,7 @@ require_relative "handoff_support"
 # credential_limit hold with nothing to end it: that hold gets the "Account
 # signed out" item beside it (HE-11).
 class ReportSignedOutTest < ActiveSupport::TestCase
-  include HandoffSupport
+  include JobsSupport
 
   setup do
     use_scenario(lease_length_seconds: 3600)
@@ -160,14 +160,36 @@ class ReportSignedOutTest < ActiveSupport::TestCase
     assert_equal 1, Event.where(task_id: @task.id, type: "credential.signed_out").count
   end
 
-  test "the refusals of HE-9 apply: a job is 404, another seat is not_holder, a Finishing task invalid_state" do
+  # Milestone 4 plan RD-40: a report that names a job is
+  # report_job_signed_out's; milestone 3's 404 (HE-33) became 422 here.
+  test "the refusals of HE-9 apply: a job is 422, another seat is not_holder, a Finishing task invalid_state" do
     trace_12
     other = scenario.seat(role: "builder", credential: @claude_a)
-    assert_raises(T::NotFound) { report_signed_out(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
+    assert_raises(T::Invalid) { report_signed_out(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
     assert_refused("not_holder", report_signed_out(@claude_a, other, task: @task))
     finisher = scenario.seat(role: "builder", credential: @claude_a)
     assert_refused("invalid_state", report_signed_out(@claude_a, finisher, task: scenario.finishing_task(builder: finisher)))
     assert_equal "active", @claude_a.reload.state
     assert_empty Event.where(workspace_id: scenario.workspace_id, type: "credential.signed_out", subject_id: @claude_a.id)
+  end
+
+  # Milestone 4 plan §2.1 rule 11: as for a limit, the reviewer's pending
+  # pass is cancelled with invalid_state before review.released.
+  test "a reviewer's sign-out with no candidate cancels its pending pass first, with invalid_state" do
+    gemini = scenario.credential(provider: "gemini")
+    reviewer = scenario.seat(role: "reviewer", credential: gemini)
+    task = scenario.task(state: "in_review")
+    review = scenario.review(task, reviewer: reviewer)
+    pending = scenario.pending_transition(task, command: "pass_review", requester: reviewer, params: { "id" => review.id })
+    seen = []
+    written = nil
+    answering(Leverage::PendingTransitions, :of, ->(asked) { pending if asked.id == task.id }) do
+      answering(Leverage::PendingTransitions, :cancel, ->(ctx, row, code) { seen << [ row.id, code, ctx.events.map(&:type) ] }) do
+        written = events_written { assert_completed(report_signed_out(gemini, reviewer, review: review)) }
+      end
+    end
+
+    assert_equal [ [ pending.id, "invalid_state", %w[credential.signed_out] ] ], seen
+    assert_equal %w[credential.signed_out review.released], written.map(&:type).first(2)
   end
 end

@@ -1,5 +1,5 @@
 require "test_helper"
-require_relative "handoff_support"
+require_relative "jobs_support"
 
 # report_limit (PRD L650-L703; milestone 3 plan §2.1 rules 4 to 6, HE-4,
 # HE-8, HE-9, HE-12, HE-13, HE-22, HE-32, HE-33, HD-10; traces 11, 13 and
@@ -10,7 +10,7 @@ require_relative "handoff_support"
 # is held (credential_limit or credential_signed_out, an item only when the
 # owner must act) or the review released.
 class ReportLimitTest < ActiveSupport::TestCase
-  include HandoffSupport
+  include JobsSupport
 
   setup do
     use_scenario(lease_length_seconds: 3600)
@@ -257,11 +257,68 @@ class ReportLimitTest < ActiveSupport::TestCase
   # HE-9: the refusals, in order. A refused report marks no credential
   # and writes no credential event.
 
-  test "a report that names a job is 404, whatever else it names (HE-33)" do
+  # Milestone 4 plan RD-40, §2.1: a report that names a job is
+  # report_job_limit's (the helper's controller picks it by the body), so
+  # this command refuses one as a misrouted request; milestone 3's 404
+  # "until jobs arrive" (HE-33) is gone.
+  test "a report that names a job is report_job_limit's: here it is 422, whatever else it names" do
     trace_11
-    assert_raises(T::NotFound) { report_limit(@claude_a, @builder, job_id: SecureRandom.uuid) }
-    assert_raises(T::NotFound) { report_limit(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
+    assert_raises(T::Invalid) { report_limit(@claude_a, @builder, job_id: SecureRandom.uuid) }
+    assert_raises(T::Invalid) { report_limit(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
     assert_nil @claude_a.reload.limited_since
+  end
+
+  # Milestone 4 plan §2.1 rule 11, §0.1 fact 28: the reviewer's pending pass
+  # is cancelled with invalid_state (PendingTransitions.cancel, WP4's) before
+  # review.released, in Handoff.continue_or_hold.
+  test "a reviewer's limit with no candidate cancels its pending pass first, with invalid_state" do
+    gemini = scenario.credential(provider: "gemini")
+    reviewer = scenario.seat(role: "reviewer", credential: gemini)
+    task = scenario.task(state: "in_review")
+    review = scenario.review(task, reviewer: reviewer)
+    pending = scenario.pending_transition(task, command: "pass_review", requester: reviewer,
+      params: { "id" => review.id, "verdict" => "passed", "notes" => "Made-up notes." })
+    seen = []
+    cancel = ->(ctx, row, code) { seen << [ row.id, code, ctx.events.map(&:type) ] }
+    of = ->(asked) { pending if asked.id == task.id }
+
+    written = nil
+    answering(Leverage::PendingTransitions, :of, of) do
+      answering(Leverage::PendingTransitions, :cancel, cancel) do
+        written = events_written { assert_completed(report_limit(gemini, reviewer, review: review, reset_at: from_now(900))) }
+      end
+    end
+
+    assert_equal [ [ pending.id, "invalid_state", %w[credential.limit_reached] ] ], seen
+    assert_equal %w[credential.limit_reached review.released], written.map(&:type)
+  end
+
+  test "nothing is cancelled when the review goes on on a candidate, or the waiting command is not the reviewer's" do
+    gemini = scenario.credential(provider: "gemini")
+    scenario.credential(provider: "grok")
+    reviewer = scenario.seat(role: "reviewer", credential: gemini)
+    task = scenario.task(state: "in_review")
+    review = scenario.review(task, reviewer: reviewer)
+    pass = scenario.pending_transition(task, command: "pass_review", requester: reviewer, params: { "id" => review.id })
+    cancelled = []
+    answering(Leverage::PendingTransitions, :of, ->(_) { pass }) do
+      answering(Leverage::PendingTransitions, :cancel, ->(*args) { cancelled << args }) do
+        assert_completed(report_limit(gemini, reviewer, review: review, reset_at: from_now(900)))
+      end
+    end
+    assert_empty cancelled, "the review went on on the Grok login"
+
+    lone_login = scenario.credential(provider: "claude")
+    lone_reviewer = scenario.seat(role: "reviewer", credential: lone_login)
+    lone = scenario.task(state: "in_review")
+    lone_review = scenario.review(lone, reviewer: lone_reviewer)
+    owners = scenario.pending_transition(lone, command: "edit_contract", requester: scenario.owner)
+    answering(Leverage::PendingTransitions, :of, ->(_) { owners }) do
+      answering(Leverage::PendingTransitions, :cancel, ->(*args) { cancelled << args }) do
+        assert_completed(report_limit(lone_login, lone_reviewer, review: lone_review, reset_at: from_now(900)))
+      end
+    end
+    assert_empty cancelled, "the owner's waiting command is not the reviewer's"
   end
 
   test "a credential, seat, task or review that is not in the workspace is 404" do
