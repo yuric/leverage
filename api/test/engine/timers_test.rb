@@ -642,29 +642,23 @@ class JobTimersDueTest < CommittingTestCase
     assert_equal [ lease_due, job_due, job_due, job_due ].map(&:to_f), events.map { |event| event.effective_at.to_f }
   end
 
-  test "before a job claim, every queued job past its queue due time is timed out; a claimed one is not" do
-    orchestrator = orchestrator_polled(5)
+  # Claim-next applies the timers of the job the calling seat holds (above)
+  # and does not time out the queued jobs it could claim (WP7 request 3,
+  # declined): apply_claimable knows only the claims that call it.
+  test "apply_claimable takes a task claim or a review claim, and refuses any other kind" do
     _task, queued, = pending_check
-    queue_due = make_queue_due(queued)
-    draft = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog"))
-    make_job_due(draft, :queue)
-    _other, running, = pending_check(started: true, checker: scenario.orchestrator)
-    make_run_due(running)
+    make_queue_due(queued)
+    orchestrator = orchestrator_polled(5)
 
-    written = nil
-    with_writers do
-      written = ActiveRecord::Base.transaction do
-        Leverage::Timers.apply_claimable(scenario.context(request: seat_request("claim_job", orchestrator, "claim")), :job)
+    %i[job jobs tasks].each do |kind|
+      ActiveRecord::Base.transaction(requires_new: true) do
+        ctx = scenario.context(request: seat_request("claim_job", orchestrator, "claim"))
+        error = assert_raises(ArgumentError, kind.inspect) { Leverage::Timers.apply_claimable(ctx, kind) }
+        assert_match "is :task or :review", error.message
+        raise ActiveRecord::Rollback
       end
     end
-
-    assert_equal "timed_out", Job.find(job_of_attempt(queued, 1)).state
-    assert_equal "timed_out", draft.reload.state
-    assert_equal "claimed", job_of(running).state, "a run timeout is the holder's, not the claim's"
-    assert_instant queue_due, Event.where(workspace_id: scenario.workspace_id, type: "job.timed_out")
-      .order(:seq).first.effective_at
-    assert_equal %w[job.timed_out job.requeued check.queued job.timed_out job.requeued], written.map(&:type),
-      "the check's job first: it was due first"
+    assert_equal "queued", Job.find(job_of_attempt(queued, 1)).state
   end
 
   def job_of_attempt(check, number) = RuleCheckAttempt.find_by!(rule_check_id: check.id, attempt_number: number).job_id

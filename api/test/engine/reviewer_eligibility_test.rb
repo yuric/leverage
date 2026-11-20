@@ -297,6 +297,55 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
   end
 
+  # A review lease also ends inside a claim's load (Timers.apply_claimable),
+  # after the timers a command applies first: a claim_review refused
+  # not_eligible commits the lease's end, and so the item it causes.
+  test "a review lease that ends inside a claim_review refused not_eligible opens the item in the same command" do
+    codex = reviewer("codex")
+    scenario.review(@task, reviewer: codex)
+    Leverage::Gating.implementation = ProviderWorld.for(@rule, built_by: { @task.id => %w[claude codex] })
+    scenario.make_due(@review.reload)
+    claude = reviewer("claude")
+
+    before = scenario.workspace.reload.last_seq
+    outcome = nil
+    written = events_written { outcome = seat_command(claude, "claim_review") }
+    assert_equal [ true, "not_eligible" ], [ outcome.refused?, outcome.refusal&.code ]
+    expired = written.find { |event| event.type == "review.lease_expired" }
+    assert expired, written.map(&:type).inspect
+    opened = written.find { |event| event.type == "inbox.opened" }
+    assert opened, "the item is review.lease_expired's side event, not the next sweep's: #{written.map(&:type).inspect}"
+    assert_equal [ "app", nil, expired.id, nil, expired.effective_at ],
+      opened.attributes.values_at("actor_kind", "actor_id", "cause_id", "command_id", "effective_at")
+    assert_equal 1, items(state: "open").count
+    assert_empty reviewer_eligibility_timer, "the sweep finds nothing left to do"
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
+  end
+
+  # The item comes right after the lease's end that causes it, before the
+  # task's job timers due after that lease (Timers.apply_task_timers), so
+  # the task's effective times never go backwards (L120).
+  test "the item a review lease's end causes comes before the task's job timers due after the lease" do
+    codex = reviewer("codex")
+    scenario.review(@task, reviewer: codex)
+    Leverage::Gating.implementation = ProviderWorld.for(@rule, built_by: { @task.id => %w[claude codex] })
+    job = scenario.job(kind: "contract_draft", task: @task)
+    latest = Event.where(workspace_id: scenario.workspace_id, task_id: @task.id).maximum(:effective_at)
+    now = scenario.database_now
+    now = scenario.database_now until now - latest > 0.00001
+    step = ((now - latest) / 3).round(6)
+    scenario.make_due(@review.reload, at: latest + step)
+    job.update_columns(queued_at: latest + (2 * step) - scenario.workspace.reload.check_queue_timeout_seconds)
+
+    before = scenario.workspace.last_seq
+    outcome = nil
+    written = events_written { outcome = owner_command("resume", { "id" => @task.id }) }
+    assert outcome.refused?, "resume on a task with no hold is refused"
+    assert_equal %w[review.lease_expired inbox.opened job.timed_out job.requeued], written.map(&:type)
+    assert_equal written.map(&:effective_at).sort, written.map(&:effective_at), "effective times never go backwards"
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
+  end
+
   test "a reviewer's limit with no allowed candidate releases the review and opens the item as the helper (trace 19, L913)" do
     codex = scenario.credential(provider: "codex")
     seat = scenario.seat(role: "reviewer", credential: codex)
