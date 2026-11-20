@@ -1191,22 +1191,32 @@ class TracesTest < Minitest::Test
     assert_operator jobs, :>=, 2, "trace 19 reports a job's limit with and without a candidate"
   end
 
-  # A check's input hash is a made-up digest of its hook's hashed inputs
-  # (hooks.json hashed_inputs; README, A check's identity), so within a
-  # trace one set of inputs carries one digest, two sets two digests, and
-  # every attempt of a check the digest of its first. The inputs are read
-  # back from the trace as Leverage::HookInputs reads them from the rows:
-  # the request of the command that first writes the check, and the
-  # task's contract version, live criteria, their states and every
-  # evidence attached, in order, before that command. It holds the four
-  # traces of milestone 4; trace 07 gives the two checks of one request
-  # two digests (milestone 4 notes, WP0T's request 3), and widening this
-  # to every trace belongs with that fix.
-  RULE_CHECK_TRACES = %w[16-model-gate-and-draft 17-submit-rule-rerun-and-override
-                         18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs].freeze
-
+  # A check's input hash stands for its hook's hashed inputs (hooks.json
+  # hashed_inputs; README, A check's identity), so within a trace one set
+  # of inputs carries one digest, two sets two digests, and every attempt
+  # of a check the digest of its first. The inputs are read back from the
+  # trace as Leverage::HookInputs reads them from the rows: the request of
+  # the command that first writes the check, and the task's contract
+  # version, live criteria, their states and every evidence attached, in
+  # order, before that command. It holds for every trace.
   def test_one_set_of_hashed_inputs_carries_one_digest
-    RULE_CHECK_TRACES.each { |name| assert_equal [], input_hash_failures(Leverage::Contract.trace(name)), name }
+    NAMES.each { |name| assert_equal [], input_hash_failures(Leverage::Contract.trace(name)), name }
+  end
+
+  # Trace 07's two checks at task.before_ready hash one request, and carry
+  # the engine's own hash of it: Gating.input_hash of the goal, details,
+  # criteria and actions the request sends (Leverage::HookInputs).
+  def test_trace_07_carries_the_real_digest_of_its_request
+    commands = commands_of("07-pending-gate-check-error-override")
+    request = commands.find { |command| command["command"] == "complete_contract" }
+    digests = request["expect"]["events"].select { |event| event["type"].start_with?("check.") }
+      .map { |event| event["payload"]["input_hash"] }
+    body = request["body"]
+    inputs = { "goal" => body["goal"], "details" => body["details"],
+               "criteria" => body["criteria"].map { |criterion| criterion.slice("text", "kind") },
+               "actions" => body["actions"].map { |action| action.slice("kind", "description") } }
+    assert_equal 2, digests.size
+    assert_equal [ Leverage::Gating.input_hash(hook: "task.before_ready", inputs: inputs) ] * 2, digests
   end
 
   def input_hash_failures(trace)
