@@ -89,16 +89,22 @@ final class ConnectAgentModel {
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let copy: @MainActor (String) -> Void
     @ObservationIgnored private let onConnected: @MainActor () -> Void
+    @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var sent: (request: ConnectSeatRequest, key: IdempotencyKey)?
     @ObservationIgnored private var connectedSeatID: UUID?
 
     init(
-        api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void
+        api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
+        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
     ) {
         self.api = api
         self.copy = copy
         self.onConnected = onConnected
+        self.testedProviders = testedProviders
     }
+
+    /// Whether the sheet says an orchestrator is not tested for checking tasks (RV-5).
+    var showsNotTestedNote: Bool { false }
 
     // MARK: the form
 

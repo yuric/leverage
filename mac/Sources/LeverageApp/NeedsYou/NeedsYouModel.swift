@@ -11,6 +11,10 @@ struct NeedsYouRow: Identifiable, Equatable, Sendable {
     let heading: String
     let body: String
     let buttons: [NeedsYouButton]
+    /// The rule the item is about, by its name; nil when it names none or the read could not say.
+    var ruleName: String?
+    /// What the check said, as the checker wrote it: data, never an instruction.
+    var reason: String?
 }
 
 /// The Needs you screen (HM-21, HM-24): the open items from `list_inbox`, a
@@ -41,6 +45,7 @@ final class NeedsYouModel {
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private let openTask: @MainActor (UUID) -> Void
     @ObservationIgnored private let timing: FollowTiming
+    @ObservationIgnored private let openAgents: @MainActor () -> Void
     /// The key of each command sent, kept until the server has answered it.
     @ObservationIgnored private var keys: [String: IdempotencyKey] = [:]
     @ObservationIgnored private var names = NeedsYouNames()
@@ -49,13 +54,28 @@ final class NeedsYouModel {
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
-        openTask: @escaping @MainActor (UUID) -> Void, timing: FollowTiming = .normal
+        openTask: @escaping @MainActor (UUID) -> Void, openAgents: @escaping @MainActor () -> Void = {},
+        timing: FollowTiming = .normal
     ) {
         self.api = api
         self.noteRead = noteRead
         self.openTask = openTask
+        self.openAgents = openAgents
         self.timing = timing
     }
+
+    // MARK: Let it through once, and Turn the rule off
+
+    /// The row whose "Let it through once" is waiting for the owner's reason.
+    private(set) var letThroughRow: UUID?
+    var letThroughReason = ""
+    /// The row whose "Turn the rule off" is waiting for the owner's answer.
+    private(set) var confirmingTurnOff: UUID?
+    var canLetThrough: Bool { false }
+    func dismissLetThrough() {}
+    func confirmLetThrough() async {}
+    func dismissTurnOff() {}
+    func confirmTurnOff() async {}
 
     func isWaitingForSignIn(_ id: UUID) -> Bool { waitingForSignIn.contains(id) }
     /// The line a row shows while Sign in again waits for the owner, or nil:
@@ -144,6 +164,7 @@ final class NeedsYouModel {
         case .allowAnotherTry: await allowAnotherTry(row)
         case .changeTask: if let task = row.taskID { openTask(task) }
         case .cancelTask: confirmingCancel = rowID
+        case .letThroughOnce, .runAgain, .turnRuleOff, .connectAgent: break
         }
     }
 

@@ -763,6 +763,67 @@ struct RosterModelTests {
         }
     }
 
+    // MARK: an orchestrator the eval suite did not cover (RV-5)
+
+    private let note = "Not tested for checking tasks."
+    private let orchestratorID = UUID(uuidString: "99990000-1111-4111-8111-999900001111")!
+
+    private func orchestratorRow(
+        provider: Provider = .claude, model: String? = nil, credential: UUID? = Fixtures.loginID,
+        role: SeatRole = .orchestrator, tested: [Provider]
+    ) async -> RosterRow? {
+        let seat = Fixtures.seat(
+            orchestratorID, name: "Checker", role: role, provider: provider, credential: credential,
+            run: credential == nil ? nil : .running, model: model)
+        let owner = Fixtures.owner(seats: SeatsList(seats: [seat], asOfSeq: 12))
+        let model = RosterModel(
+            api: owner, noteRead: { _ in }, copy: { _ in }, now: { now }, timing: .quick, testedProviders: tested)
+        await model.load()
+        return model.rows.first
+    }
+
+    @Test("an orchestrator on a login of a provider that is not tested says so on its row, and the row says what it is")
+    func rowNoteForAnUntestedProvider() async {
+        let row = await orchestratorRow(tested: [.codex])
+        #expect(row?.notTestedNote == note)
+        #expect(row?.roleLine == "Orchestrator. Running. Waiting for work.")
+        #expect(row?.canStop == true, "nothing is disabled by the note")
+    }
+
+    @Test("an orchestrator on a tested provider, with no model chosen, has no note")
+    func rowNoNoteForATestedProvider() async {
+        let row = await orchestratorRow(tested: [.claude])
+        #expect(row != nil)
+        #expect(row?.notTestedNote == nil)
+    }
+
+    @Test("a model chosen brings the note on a tested provider")
+    func rowNoteForAChosenModel() async {
+        #expect(await orchestratorRow(model: "some-model", tested: [.claude])?.notTestedNote == note)
+        #expect(await orchestratorRow(model: "", tested: [.claude])?.notTestedNote == nil)
+    }
+
+    @Test("an orchestrator that connects on its own has the note whatever its provider")
+    func rowNoteForConnectingOnItsOwn() async {
+        let row = await orchestratorRow(credential: nil, tested: [.claude])
+        #expect(row?.notTestedNote == note)
+        #expect(row?.roleLine == "Orchestrator. Connects on its own.")
+    }
+
+    @Test("with an empty tested list every orchestrator row has the note, and no other role does")
+    func rowNoteOnlyForOrchestrators() async {
+        #expect(await orchestratorRow(tested: [])?.notTestedNote == note)
+        for role in [SeatRole.builder, .reviewer, .planner] {
+            #expect(await orchestratorRow(model: "some-model", role: role, tested: [])?.notTestedNote == nil, "\(role)")
+        }
+    }
+
+    @Test("a planner's row says Planner, like the roster says every other role")
+    func plannerRow() async {
+        let row = await orchestratorRow(role: .planner, tested: [])
+        #expect(row?.roleLine == "Planner. Running. Waiting for work.")
+    }
+
     // MARK: the screen
 
     @Test("the roster draws loaded, empty, failed and with its confirmation, light and dark")
@@ -774,6 +835,14 @@ struct RosterModelTests {
         }
         #expect(draw(loaded, false))
         #expect(draw(loaded, true))
+        let checker = await orchestratorRow(tested: [])
+        #expect(checker?.notTestedNote == note)
+        let checkerModel = RosterModel(
+            api: Fixtures.owner(seats: SeatsList(seats: [Fixtures.seat(orchestratorID, name: "Checker", role: .orchestrator, credential: Fixtures.loginID, run: .running)], asOfSeq: 1)),
+            noteRead: { _ in }, copy: { _ in }, now: { now }, timing: .quick, testedProviders: [])
+        await checkerModel.load()
+        #expect(draw(checkerModel, false))
+        #expect(draw(checkerModel, true))
         let empty = makeModel(Fixtures.owner(seats: SeatsList(seats: [], asOfSeq: 1)))
         await empty.load()
         #expect(draw(empty, false))

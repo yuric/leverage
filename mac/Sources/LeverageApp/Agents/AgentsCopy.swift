@@ -24,6 +24,7 @@ enum AgentsCopy: OwnerFacingCopy {
     case connectTitle, modeRunOnLogin, modeOwn, roleLabel, nameLabel, namePlaceholder, nameRequired
     case loginLabel, noLogins, geminiHidden, providerLabel
     case modelLabel, modelHint, effortLabel, effortHint
+    case notTestedForChecking
     case connectButton, connecting
     case tokenTitle, tokenNote, tokenGone, copy
     case landingTitle, landingNote, landingLoading, landingRetry
@@ -98,6 +99,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .noLogins: "No login has been added yet."
         case .geminiHidden: "Gemini logins can't review yet, so they are not listed."
         case .providerLabel: "Which tool is it?"
+        case .notTestedForChecking: "Not tested."
         case .modelLabel: "Model"
         case .modelHint: "Leave empty to use the tool's own default."
         case .effortLabel: "Effort"

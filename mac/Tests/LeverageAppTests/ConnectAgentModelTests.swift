@@ -103,9 +103,155 @@ struct ConnectAgentModelTests {
         #expect(model.logins.count == 3)
     }
 
-    @Test("only the roles a seat can be given now are offered")
+    @Test("all four roles are offered: Builder, Reviewer, Planner and Orchestrator (MA-10)")
     func roles() {
-        #expect(ConnectAgentModel.roles == [.builder, .reviewer])
+        #expect(ConnectAgentModel.roles == [.builder, .reviewer, .planner, .orchestrator])
+        #expect(ConnectAgentModel.roles.map { AgentsCopy.role($0).text } == ["Builder", "Reviewer", "Planner", "Orchestrator"])
+    }
+
+    // MARK: the planner and the orchestrator (RV-5)
+
+    private let note = "Not tested for checking tasks."
+
+    private func orchestratorModel(
+        tested: [Provider], logins: [CredentialWithReading]? = nil, owner: FakeOwnerAPI? = nil
+    ) async -> ConnectAgentModel {
+        let model = ConnectAgentModel(
+            api: owner ?? self.owner(logins: logins), copy: { _ in }, onConnected: {}, testedProviders: tested)
+        await model.load()
+        model.role = .orchestrator
+        model.name = "Checker"
+        return model
+    }
+
+    @Test("the sentence for an orchestrator the eval suite did not cover is the one RM-1 names")
+    func noteSentence() {
+        #expect(AgentsCopy.notTestedForChecking.text == note)
+    }
+
+    @Test("an orchestrator on a login whose provider is not in the tested list gets the note, and may still connect")
+    func noteForAnUntestedProvider() async {
+        let model = await orchestratorModel(tested: [.codex])
+        #expect(model.chosenProvider == .claude)
+        #expect(model.showsNotTestedNote)
+        #expect(model.canConnect, "nothing is disabled by the note")
+    }
+
+    @Test("an orchestrator on a login whose provider is in the tested list gets no note, until it is moved off it")
+    func noNoteForATestedProvider() async {
+        let model = await orchestratorModel(tested: [.claude])
+        #expect(!model.showsNotTestedNote)
+        model.credentialID = Fixtures.secondLoginID
+        #expect(model.chosenProvider == .codex)
+        #expect(model.showsNotTestedNote)
+        model.credentialID = Fixtures.loginID
+        #expect(!model.showsNotTestedNote)
+    }
+
+    @Test("with an empty tested list every orchestrator on a login gets the note")
+    func emptyList() async {
+        let model = await orchestratorModel(tested: [])
+        #expect(model.showsNotTestedNote)
+        model.credentialID = Fixtures.secondLoginID
+        #expect(model.showsNotTestedNote)
+    }
+
+    @Test("a model chosen by the owner brings the note even on a tested provider; spaces alone do not")
+    func noteForAChosenModel() async {
+        let model = await orchestratorModel(tested: [.claude])
+        model.modelName = "   "
+        #expect(!model.showsNotTestedNote)
+        model.modelName = " some-model "
+        #expect(model.showsNotTestedNote)
+        model.modelName = ""
+        #expect(!model.showsNotTestedNote)
+    }
+
+    @Test("an orchestrator that connects on its own gets the note whatever provider it names")
+    func noteForConnectingOnItsOwn() async {
+        let model = await orchestratorModel(tested: [.claude, .codex, .gemini, .grok])
+        model.mode = .connectsOnItsOwn
+        model.provider = .claude
+        #expect(model.showsNotTestedNote)
+        model.mode = .runOnLogin
+        #expect(!model.showsNotTestedNote)
+    }
+
+    @Test("the note is for the orchestrator only: a builder, a reviewer and a planner never get it")
+    func noNoteForOtherRoles() async {
+        let model = await orchestratorModel(tested: [])
+        model.modelName = "some-model"
+        #expect(model.showsNotTestedNote)
+        for role in [SeatRole.builder, .reviewer, .planner] {
+            model.role = role
+            #expect(!model.showsNotTestedNote, "\(role)")
+            model.mode = .connectsOnItsOwn
+            #expect(!model.showsNotTestedNote, "\(role)")
+            model.mode = .runOnLogin
+        }
+        model.role = .orchestrator
+        #expect(model.showsNotTestedNote)
+    }
+
+    @Test("with no login to pick the note follows only the model and the way it connects")
+    func noteWithNoLogin() async {
+        let model = await orchestratorModel(tested: [], logins: [])
+        #expect(model.chosenProvider == nil)
+        #expect(!model.showsNotTestedNote)
+        model.modelName = "some-model"
+        #expect(model.showsNotTestedNote)
+    }
+
+    @Test("a planner and an orchestrator may pick any login, a Gemini one included, with a model and an effort")
+    func jobRolesPickAnyLogin() async {
+        let list = Fixtures.credentials().credentials + [
+            Fixtures.credential(Fixtures.geminiLoginID, name: "Antigravity", provider: .gemini, position: 3)
+        ]
+        for role in [SeatRole.planner, .orchestrator] {
+            let owner = owner(logins: list, token: nil)
+            let model = await orchestratorModel(tested: [], owner: owner)
+            model.role = role
+            #expect(model.logins.count == 3, "\(role)")
+            #expect(!model.geminiHiddenForReviewer)
+            model.credentialID = Fixtures.geminiLoginID
+            model.modelName = "some-model"
+            model.effort = "high"
+            await model.connect()
+            let fields = body(owner)
+            #expect(fields["role"] == .string(role.rawValue))
+            #expect(fields["provider"] == .string("gemini"))
+            #expect(fields["credential_id"] == .string(Fixtures.geminiLoginID.contractString))
+            #expect(fields["model"] == .string("some-model"))
+            #expect(fields["effort"] == .string("high"))
+            #expect(model.phase == .done)
+        }
+    }
+
+    @Test("a reviewer is still offered no Gemini login, and moving to a job role gives it back")
+    func reviewerStillHidesGemini() async {
+        let list = Fixtures.credentials().credentials + [
+            Fixtures.credential(Fixtures.geminiLoginID, name: "Antigravity", provider: .gemini, position: 3)
+        ]
+        let model = await orchestratorModel(tested: [], logins: list)
+        model.role = .reviewer
+        #expect(model.logins.count == 2)
+        model.role = .orchestrator
+        #expect(model.logins.count == 3)
+    }
+
+    @Test("an orchestrator that connects on its own is connected like a builder: no login, its provider, a token shown once")
+    func orchestratorOnItsOwn() async {
+        let owner = owner()
+        let model = await orchestratorModel(tested: [], owner: owner)
+        model.mode = .connectsOnItsOwn
+        model.provider = .grok
+        await model.connect()
+        let fields = body(owner)
+        #expect(fields["role"] == .string("orchestrator"))
+        #expect(fields["credential_id"] == .null)
+        #expect(fields["provider"] == .string("grok"))
+        #expect(model.phase == .shown)
+        #expect(model.shownToken == Fixtures.madeUpToken)
     }
 
     // MARK: a seat the app runs
@@ -398,5 +544,8 @@ struct ConnectAgentModelTests {
         let none = makeModel(owner(logins: []))
         await none.load()
         #expect(Fixtures.draws(ConnectAgentForm(model: none, cancel: {}, addLogin: {}), width: 480, height: 640))
+        let checker = await orchestratorModel(tested: [])
+        #expect(checker.showsNotTestedNote)
+        #expect(Fixtures.draws(ConnectAgentForm(model: checker, cancel: {}, addLogin: {}), width: 480, height: 640))
     }
 }
