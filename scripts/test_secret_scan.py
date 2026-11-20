@@ -365,6 +365,200 @@ class ReplyFileTests(unittest.TestCase):
         self.assertEqual(code, 2, output)
 
 
+# Task text is content: it belongs in its own rows (tasks, criteria, rule
+# versions, rule checks) and never in an event's payload or a log line
+# (milestone 4 plan RT-8). Each end-to-end test of the rule checks puts
+# marker words of its own in its details, its handoff note, its rule's
+# instruction, its override reason and the stand-in checker's reason; the
+# scan is given those words.
+MARKER_WORD = "zebrafjord7k"
+OTHER_WORD = "quokkaplume3"
+EVENTS_HEADER = ("COPY public.events (id, workspace_id, seq, at, effective_at, type, schema_version, "
+                 "actor_kind, actor_id, project_id, task_id, round, subject_kind, subject_id, cause_id, "
+                 "command_id, payload, created_at, xact_id) FROM stdin;")
+NONCE = "0123456789ab"
+
+
+def event_row(seq, event_type, payload):
+    """One row of the events table as pg_dump --data-only writes it: tab
+    separated, \\N for a null, the payload as jsonb's text."""
+    fields = ["00000000-0000-4000-8000-%012d" % seq, "00000000-0000-4000-8000-000000000001", str(seq),
+              "2026-11-20 10:00:00+00", "2026-11-20 10:00:00+00", event_type, "1", "seat", "\\N", "\\N",
+              "\\N", "\\N", "\\N", "\\N", "\\N", "key-%d" % seq, json.dumps(payload),
+              "2026-11-20 10:00:00+00", "1000"]
+    return "\t".join(fields)
+
+
+def dump(event_rows, tasks_details="Plain details."):
+    """A data-only dump with a tasks table and an events table."""
+    return "\n".join([
+        "--",
+        "-- Data for Name: tasks; Type: TABLE DATA; Schema: public; Owner: -",
+        "--",
+        "COPY public.tasks (id, title, details) FROM stdin;",
+        "00000000-0000-4000-8000-0000000000aa\tA task\t" + tasks_details,
+        "\\.",
+        "",
+        EVENTS_HEADER,
+        *event_rows,
+        "\\.",
+        "",
+    ])
+
+
+class TaskTextTests(unittest.TestCase):
+    """--not-in-events WORD with --events-dump FILE, and --not-in-logs WORD
+    with --logs PATH (plan RT-8, §5.2 step 3): a marker word of a test's
+    task text in an event's payload or in a log line is a hit; the same
+    word in the task's own row is not. A log holds no nonce-shaped marker
+    of a check or draft frame either."""
+
+    def setUp(self):
+        self.scan = Scan()
+        self.addCleanup(self.scan.close)
+        self.logs = self.scan.root / "service-logs"
+        self.logs.mkdir()
+
+    def log(self, name, text):
+        path = self.logs / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def write_dump(self, text):
+        path = self.scan.root / "dump.sql"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def run_words(self, dump_path, *extra):
+        return self.scan.run(
+            "--not-in-events", MARKER_WORD, "--not-in-events", OTHER_WORD, "--events-dump", dump_path,
+            "--not-in-logs", MARKER_WORD, "--not-in-logs", OTHER_WORD, "--logs", self.logs, *extra)
+
+    def test_neither_in_a_payload_nor_in_a_log_passes(self):
+        path = self.write_dump(dump(
+            [event_row(1, "task.created", {"title_length": 6}), event_row(2, "check.finished", {"result": "failed"})],
+            tasks_details=f"Mention {MARKER_WORD} in the details."))
+        self.log("api.log", "Completed 200 OK\nrefused submit_task blocked_by_rule rule=made-up\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 0, output)
+        self.assertIn("2 events", output)
+        self.assertIn("1 log file", output)
+        self.assertIn("no task text found", output)
+
+    def test_a_marker_word_in_an_events_payload_is_a_hit(self):
+        path = self.write_dump(dump([
+            event_row(1, "task.created", {"title_length": 6}),
+            event_row(2, "check.finished", {"result": "failed", "reason": f"It lacks {OTHER_WORD}."}),
+        ]))
+        self.log("api.log", "Completed 200 OK\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 1, output)
+        self.assertIn("dump.sql:10: word 2 of --not-in-events (events.payload, seq 2)", output)
+        self.assertNotIn(OTHER_WORD, output)
+
+    def test_a_marker_word_elsewhere_in_an_events_row_is_not_a_hit(self):
+        # Only the payload is task text's way out; the type and keys are
+        # the server's own words.
+        row = event_row(1, "task.created", {"n": 1}).replace("key-1", f"key-{MARKER_WORD}")
+        path = self.write_dump(dump([row]))
+        self.log("api.log", "Completed 200 OK\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 0, output)
+
+    def test_a_marker_word_in_a_log_line_is_a_hit(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("api.log", "Completed 200 OK\n")
+        self.log("runner.log", f"line one\nwarning: the check said {MARKER_WORD} is missing\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 1, output)
+        self.assertIn("runner.log:2: word 1 of --not-in-logs", output)
+        self.assertNotIn(MARKER_WORD, output)
+
+    def test_a_marker_word_json_escaped_in_a_log_is_a_hit(self):
+        # A word JSON writes differently from its text (ensure_ascii).
+        accented = "z\u00e9brafjord7k"
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("api.log", json.dumps({"params": {"details": f"Find {accented}"}}) + "\n")
+        self.assertNotIn(accented, (self.logs / "api.log").read_text(encoding="utf-8"))
+        code, output = self.scan.run(
+            "--not-in-events", MARKER_WORD, "--events-dump", path, "--not-in-logs", accented, "--logs", self.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("api.log:1: word 1 of --not-in-logs (JSON-escaped)", output)
+
+    def test_a_nonce_shaped_marker_in_a_log_is_a_hit(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        for number, line in enumerate([f"LEVERAGE-VERDICT-{NONCE}: PASSED", f"<<<LEVERAGE-QUOTE-{NONCE} details>>>"]):
+            with self.subTest(line=line):
+                self.log("runner.log", f"the tool answered\n{line}\n")
+                code, output = self.run_words(path)
+                self.assertEqual(code, 1, output)
+                self.assertIn("runner.log:2: nonce-shaped marker", output)
+
+    def test_a_marker_without_twelve_hex_characters_is_not_a_hit(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("runner.log", "LEVERAGE-VERDICT- is the frame's word\nLEVERAGE-QUOTE-0123 short\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 0, output)
+
+    def test_a_nonce_outside_the_logs_is_not_looked_for(self):
+        # The stand-ins' record of each call holds the prompts, nonce and
+        # all: it is scanned for secrets, not for task text.
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("api.log", "Completed 200 OK\n")
+        calls = self.scan.file("calls.jsonl", json.dumps({"argv": [f"LEVERAGE-VERDICT-{NONCE} {MARKER_WORD}"]}) + "\n")
+        code, output = self.run_words(path, "--secrets", self.scan.secrets(PASSWORD), calls)
+        self.assertEqual(code, 0, output)
+
+    def test_the_words_with_the_secrets_add_up(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"reason": MARKER_WORD})]))
+        self.log("helper.log", f"{MARKER_WORD}\n")
+        self.scan.file("api.log", "signed in with " + PASSWORD + "\n")
+        code, output = self.run_words(path, "--secrets", self.scan.secrets(PASSWORD), self.scan.logs)
+        self.assertEqual(code, 1, output)
+        self.assertIn("api.log:1: secret 1", output)
+        self.assertIn("helper.log:1: word 1 of --not-in-logs", output)
+        self.assertIn("dump.sql:9: word 1 of --not-in-events", output)
+        self.assertIn("3 hits", output)
+
+    def test_words_without_a_dump_or_logs_are_refused(self):
+        self.log("api.log", "Completed 200 OK\n")
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        for arguments, missing in ((["--not-in-events", MARKER_WORD, "--logs", self.logs], "--events-dump"),
+                                   (["--not-in-logs", MARKER_WORD, "--events-dump", path], "--logs")):
+            with self.subTest(arguments=arguments):
+                code, output = self.scan.run(*arguments)
+                self.assertEqual(code, 2, output)
+                self.assertIn(f"needs {missing}", output)
+
+    def test_a_dump_with_no_events_table_is_refused(self):
+        path = self.write_dump("COPY public.tasks (id) FROM stdin;\n\\.\n")
+        self.log("api.log", "Completed 200 OK\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 2, output)
+        self.assertIn("no events table", output)
+
+    def test_an_events_table_with_no_payload_column_is_refused(self):
+        path = self.write_dump("COPY public.events (id, seq) FROM stdin;\n1\t1\n\\.\n")
+        self.log("api.log", "Completed 200 OK\n")
+        code, output = self.run_words(path)
+        self.assertEqual(code, 2, output)
+        self.assertIn("no payload column", output)
+
+    def test_a_word_too_short_to_mean_anything_is_refused(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        self.log("api.log", "Completed 200 OK\n")
+        code, output = self.scan.run(
+            "--not-in-events", "short", "--events-dump", path, "--not-in-logs", MARKER_WORD, "--logs", self.logs)
+        self.assertEqual(code, 2, output)
+        self.assertIn("word 1 of --not-in-events is too short", output)
+
+    def test_logs_with_no_file_are_refused(self):
+        path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
+        code, output = self.run_words(path)
+        self.assertEqual(code, 2, output)
+        self.assertIn("no log file", output)
+
+
 if __name__ == "__main__":
     verbosity = 2 if "-v" in sys.argv[1:] else 1
     argv = [arg for arg in sys.argv if arg != "-v"]

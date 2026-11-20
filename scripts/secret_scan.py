@@ -218,6 +218,11 @@ def main(argv):
     parser.add_argument("--secrets", action="append", default=[], metavar="FILE")
     parser.add_argument("--literal", action="append", default=[], metavar="VALUE")
     parser.add_argument("--replies", action="append", default=[], metavar="FOLDER")
+    # Milestone 4 plan RT-8: read, not yet looked for.
+    parser.add_argument("--not-in-events", action="append", default=[], metavar="WORD")
+    parser.add_argument("--events-dump", action="append", default=[], metavar="FILE")
+    parser.add_argument("--not-in-logs", action="append", default=[], metavar="WORD")
+    parser.add_argument("--logs", action="append", default=[], metavar="PATH")
     parser.add_argument("paths", nargs="*", metavar="PATH")
     arguments = parser.parse_args(argv)
     try:
