@@ -191,6 +191,31 @@ class ReportLimitTest < ActiveSupport::TestCase
     assert_nil Event.where(task_id: second.id, type: "credential.limit_reached").sole.payload["reset_at"]
   end
 
+  # Review: a reset time further off than the window it names can last is
+  # not one the provider gave; it is stored as none, which the next
+  # Verify clears (HE-2), so no one forged time parks a login for good.
+  test "a reset time further off than its window can last is stored as none (review)" do
+    observed = from_now(0)
+    {
+      "five_hour" => [ 5.hours, 30.days ], "weekly" => [ 7.days, 60.days ], "per_model" => [ 7.days, 60.days ],
+      "spend" => [ 31.days, 400.days ], nil => [ 31.days, 400.days ]
+    }.each do |window, (inside, beyond)|
+      shared = scenario.credential(provider: "claude")
+      seat = scenario.seat(role: "builder", credential: shared)
+      far = scenario.task(state: "working", builder: seat)
+      assert_completed(report_limit(shared, seat, task: far, window: window, reset_at: observed + beyond, observed_at: observed))
+      assert_nil shared.reload.limited_until, "#{window.inspect}: #{beyond.inspect} is beyond the window"
+      assert shared.limited_since
+      assert_nil Event.where(task_id: far.id, type: "credential.limit_reached").sole.payload["reset_at"]
+
+      kept = scenario.credential(provider: "claude")
+      other = scenario.seat(role: "builder", credential: kept)
+      near = scenario.task(state: "working", builder: other)
+      assert_completed(report_limit(kept, other, task: near, window: window, reset_at: observed + inside, observed_at: observed))
+      assert_in_delta (observed + inside).to_f, kept.reload.limited_until.to_f, 0.000_001, "#{window.inspect}: within"
+    end
+  end
+
   test "a reviewer's limit with a candidate below switches the review, with its model (trace 14, HE-5, HE-41)" do
     gemini = scenario.credential(provider: "gemini")
     grok_x = scenario.credential(provider: "grok", model: "grok-model-1")
