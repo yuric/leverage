@@ -316,8 +316,11 @@ struct TaskLogHandoffTests {
                 taskID: taskID, causeID: cause.id)
             return entries([cause, event])
         }
-        #expect(released(by: cause).last == "The review stopped because Personal reached its limit. Another account will take it.")
-        #expect(released(by: signedOut).last == "The review stopped because Work was signed out. Another account will take it.")
+        // Review: no other account takes it until one is available (L700).
+        #expect(released(by: cause).last
+            == "The review stopped because Personal reached its limit. It waits for a reviewer with an available account.")
+        #expect(released(by: signedOut).last
+            == "The review stopped because Work was signed out. It waits for a reviewer with an available account.")
         #expect(sentence(.reviewReleased, actor: reviewer, actorKind: .seat)
             == "Reviewer One stepped away from the review. Another reviewer will take it.")
     }
@@ -347,12 +350,28 @@ struct TaskLogHandoffTests {
     @Test("moving an idea, changing a contract and an agent paused, resumed or changed each get a sentence")
     func ownerAndAgent() {
         #expect(sentence(.taskPromoted, actorKind: .owner) == "You moved the idea to Backlog.")
-        #expect(sentence(.taskReturned, actorKind: .owner) == "The agent stopped and the task went back to Backlog.")
+        // Review: with no agent holding the task, no agent stopped.
+        #expect(sentence(.taskReturned, actorKind: .owner) == "The task went back to Backlog.")
         #expect(sentence(.taskContractChanged, actorKind: .owner) == "The details were saved.")
         #expect(sentence(.seatPaused, actorKind: .owner, subject: builder, kind: .seat) == "Builder One was paused.")
         #expect(sentence(.seatResumed, actorKind: .owner, subject: builder, kind: .seat) == "Builder One was resumed.")
         #expect(sentence(.seatChanged, actorKind: .owner, subject: builder, kind: .seat) == "Builder One was changed.")
         #expect(sentence(.seatPaused, actorKind: .owner) == "An agent was paused.")
+    }
+
+    @Test("a task changed while an agent held it says the agent stopped; one changed in Ready, or after it was let go, does not")
+    func returnedNamesTheAgentOnlyWhenOneHeldIt() {
+        let claimed = Fixtures.event(.taskClaimed, seq: 2, taskID: taskID, actor: builder, actorKind: .seat)
+        let returned = { (seq: Int) in Fixtures.event(.taskReturned, seq: seq, taskID: taskID, actorKind: .owner) }
+        let released = Fixtures.event(.taskReleased, seq: 4, taskID: taskID, actor: builder, actorKind: .seat)
+        let submitted = Fixtures.event(.taskSubmitted, seq: 4, taskID: taskID, actor: builder, actorKind: .seat)
+        let reviewing = Fixtures.event(.reviewStarted, seq: 5, taskID: taskID, actor: reviewer, actorKind: .seat)
+        #expect(entries([claimed, returned(3)]).last == "The agent stopped and the task went back to Backlog.")
+        #expect(entries([returned(3)]).last == "The task went back to Backlog.")
+        #expect(entries([claimed, released, returned(6)]).last == "The task went back to Backlog.")
+        #expect(entries([claimed, submitted, returned(6)]).last == "The task went back to Backlog.", "no reviewer yet")
+        #expect(entries([claimed, submitted, reviewing, returned(6)]).last
+            == "The agent stopped and the task went back to Backlog.")
     }
 
     // MARK: recovery times

@@ -325,6 +325,29 @@ struct CredentialsModelTests {
         #expect(CredentialsCopy.waitingSignIn.text == "Waiting for you to sign in in the window that opened")
     }
 
+    // Review: Antigravity has no sign-in command, so no window opens.
+    @Test("while Sign in again waits for a Gemini login the row says to sign in to Antigravity, not to a window")
+    func signInAgainWaitsGemini() async {
+        let request = requestID
+        let lines = Locked<[String?]>([])
+        let owner = owner([Fixtures.credential(Fixtures.geminiLoginID, name: "Work", provider: .gemini, state: .signedOut)])
+        let box = Locked<CredentialsModel?>(nil)
+        owner.script {
+            $0.signInAgain = { _, key in Fixtures.plain(.signInAgain, key: key, helperRequest: request) }
+            $0.helperRequest = { _, _, _ in
+                let line = await MainActor.run { box.value?.signInWaitingLine(Fixtures.geminiLoginID) }
+                lines.update { $0.append(line) }
+                return Fixtures.request(request, kind: .openSignIn, state: .finished, result: Fixtures.finished())
+            }
+        }
+        let model = makeModel(owner)
+        box.update { $0 = model }
+        await model.load()
+        await model.signInAgain(Fixtures.geminiLoginID)
+        #expect(lines.value == [CredentialsCopy.waitingGemini.text])
+        #expect(model.signInWaitingLine(Fixtures.geminiLoginID) == nil)
+    }
+
     @Test("a sign-in that fails says which tool and what it did not do, in one line on that row")
     func signInAgainFails() async {
         let request = requestID

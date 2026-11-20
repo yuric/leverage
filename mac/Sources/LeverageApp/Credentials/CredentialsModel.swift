@@ -89,6 +89,7 @@ final class CredentialsModel {
     /// Sign in again is running for that login: the helper opened the
     /// provider's sign-in, and the app waits for the owner (MA-17).
     func isSigningIn(_ id: UUID) -> Bool { signingIn.contains(id) }
+    func signInWaitingLine(_ id: UUID) -> String? { signingIn.contains(id) ? CredentialsCopy.waitingSignIn.text : nil }
 
     /// The line a failed Verify left on that row.
     func failure(for id: UUID) -> String? { failures[id] }

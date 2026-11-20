@@ -241,6 +241,40 @@ struct NeedsYouModelTests {
         #expect(NeedsYouCopy.signInWaiting.text == "Waiting for you to sign in in the window that opened")
     }
 
+    // Review: Antigravity has no sign-in command, so no window opens; the
+    // owner signs in on this Mac and leverage continues on its own.
+    @Test("while Sign in again waits for a Gemini account the row says to sign in to Antigravity, not to a window")
+    func signInAgainGemini() async throws {
+        let gemini = CredentialsList(credentials: [
+            CredentialWithReading(credential: Credential(
+                id: Fixtures.credentialID, provider: .gemini, name: "Work", state: .signedOut, position: 1))
+        ], asOfSeq: 31)
+        let owner = Fixtures.owner(open: Locked([Fixtures.signedOut(seq: 5)]), credentials: gemini)
+        let request = Fixtures.requestID
+        let lines = Locked<[String?]>([])
+        let box = Locked<NeedsYouModel?>(nil)
+        owner.script {
+            $0.signInAgain = { _, key in AgentFixtures.plain(.signInAgain, key: key, helperRequest: request) }
+            $0.helperRequest = { _, _, _ in
+                let line = await MainActor.run { () -> String? in
+                    guard let model = box.value, let id = model.rows.first?.id else { return nil }
+                    return model.signInWaitingLine(id)
+                }
+                lines.update { $0.append(line) }
+                return AgentFixtures.request(
+                    request, kind: .openSignIn, state: .finished, result: AgentFixtures.finished(), updated: 2,
+                    credential: Fixtures.credentialID)
+            }
+        }
+        let model = makeModel(owner)
+        box.value = model
+        await model.load()
+        let id = try #require(model.rows.first?.id)
+        await model.perform(.signInAgain, on: id)
+        #expect(lines.value == ["Sign in to Antigravity on this Mac. leverage continues on its own."])
+        #expect(model.signInWaitingLine(id) == nil)
+    }
+
     @Test("a sign-in that fails says which tool and what it did not do, in one line on that row")
     func signInFails() async throws {
         let owner = owner([Fixtures.signedOut(seq: 5)])

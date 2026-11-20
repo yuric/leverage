@@ -56,6 +56,7 @@ final class NeedsYouModel {
     }
 
     func isWaitingForSignIn(_ id: UUID) -> Bool { waitingForSignIn.contains(id) }
+    func signInWaitingLine(_ id: UUID) -> String? { waitingForSignIn.contains(id) ? NeedsYouCopy.signInWaiting.text : nil }
     func isBusy(_ id: UUID) -> Bool { busy.contains(id) }
     /// The line a command that did not work left on that row.
     func failure(for id: UUID) -> String? { failures[id] }

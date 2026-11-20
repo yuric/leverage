@@ -62,6 +62,45 @@ struct InboxWatcherTests {
         #expect(rig.watcher.openCount == 3)
     }
 
+    // Review: the cursor is kept in the support folder, the log in the
+    // database. After a restore or a lost volume the log's positions start
+    // lower than the stored cursor, and every new item would sit below it.
+
+    @Test("a stored cursor above every position of the log is of another log: every open item is announced")
+    func cursorAboveTheLog() async {
+        let rig = makeRig(open: [Fixtures.signedOut(seq: 5)], stored: 100)
+        await rig.watcher.start()
+        #expect(rig.notifier.posted.value.map(\.title) == ["Claude, Personal is signed out"])
+        #expect(rig.cursor.stored.value == 5)
+    }
+
+    @Test("a stored cursor whose position holds another kind of event is of another log too")
+    func cursorOnAnotherEvent() async {
+        let open = Locked([Fixtures.signedOut(seq: 3)])
+        let owner = Fixtures.owner(open: open)
+        owner.script {
+            $0.events = { after, _, _ in
+                let event = TaskScreenFixtures.event(.taskCreated, seq: 7, taskID: Fixtures.taskID, actorKind: .owner)
+                return EventsPage(events: after < 7 ? [event] : [], nextAfterSeq: after < 7 ? 7 : after)
+            }
+        }
+        let rig = makeRig(open: [Fixtures.signedOut(seq: 3)], stored: 7, owner: owner)
+        await rig.watcher.start()
+        #expect(rig.notifier.posted.value.count == 1)
+        #expect(rig.cursor.stored.value == 3)
+    }
+
+    @Test("a cursor that cannot be checked is kept as it is")
+    func cursorUnchecked() async {
+        let open = Locked([Fixtures.signedOut(seq: 4)])
+        let owner = Fixtures.owner(open: open)
+        owner.script { $0.events = { _, _, _ in throw URLError(.timedOut) } }
+        let rig = makeRig(open: [Fixtures.signedOut(seq: 4)], stored: 5, owner: owner)
+        await rig.watcher.start()
+        #expect(rig.notifier.posted.value.isEmpty)
+        #expect(rig.cursor.stored.value == 5)
+    }
+
     @Test("with no stored cursor every open item is announced, in the order they opened")
     func startWithNoCursor() async {
         let rig = makeRig(open: [Fixtures.pastRound(seq: 9), Fixtures.signedOut(seq: 3), Fixtures.limit(seq: 5)])

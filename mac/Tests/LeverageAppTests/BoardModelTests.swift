@@ -270,6 +270,18 @@ struct BoardModelTests {
         #expect(card?.note == "Claude, Personal is signed out. Sign in again to continue.")
     }
 
+    // Review: the read leaves out the reset time of a signed-out account,
+    // because its reset alone will not make it available.
+    @Test("a limit hold whose account is signed out says so, and never the account's old reset time")
+    func limitHoldOnASignedOutAccount() async {
+        let until = Fixtures.date(19, 18)
+        let card = await accountCard(
+            Fixtures.boardTask(.working, holds: [.credentialLimit], waitingFor: personal),
+            credentials: [Fixtures.credential(personal, state: .signedOut, limitedUntil: until)])
+        #expect(card?.note == "Claude, Personal is signed out. Sign in again to continue.")
+        #expect(card?.note?.contains("resets") == false)
+    }
+
     @Test("a task the owner paused is in Blocked and says it was paused by the owner and from which lane")
     func pausedByTheOwner() async {
         let working = await card(Fixtures.boardTask(.working, holds: [.ownerHold]))

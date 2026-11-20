@@ -61,14 +61,24 @@ struct EditContractModelTests {
         #expect(model.canSave)
     }
 
-    @Test("from Ready, Working and In review it first says what Save does, and from Backlog it says nothing")
+    // Review: no agent holds a Ready task, nor an In review task no reviewer
+    // has taken, so the warning says nothing about an agent stopping.
+    @Test("from Working, and In review with a reviewer, it says the agent stops; from Ready or an untaken review, only Backlog")
     func warning() {
-        for state in [TaskState.ready, .working, .inReview] {
-            #expect(make(owner(), state: state).warning == .editWarning, "\(state)")
-        }
+        #expect(make(owner(), state: .working).warning == .editWarning)
+        #expect(make(owner(), state: .ready).warning == .editWarningNoAgent)
+        #expect(make(owner(), state: .inReview).warning == .editWarningNoAgent, "no reviewer holds the review")
+        let base = page(.inReview)
+        let taken = TaskPage(
+            task: base.task, criteria: base.criteria,
+            reviews: [Review(id: UUID(), taskID: taskID, round: 0, reviewerSeatID: UUID())],
+            reviewerSeatExists: true, asOfSeq: 20)
+        #expect(EditContractModel(page: taken, api: owner(), onSaved: {}).warning == .editWarning)
         #expect(make(owner(), state: .backlog).warning == nil)
         #expect(AddTaskCopy.editWarning.text
             == "The agent stops and the task goes back to Backlog. What has passed stays passed if you leave it as it is.")
+        #expect(AddTaskCopy.editWarningNoAgent.text
+            == "The task goes back to Backlog. What has passed stays passed if you leave it as it is.")
     }
 
     // MARK: Save

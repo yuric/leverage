@@ -87,6 +87,12 @@ enum NeedsYouFixtures {
             $0.listInbox = { after, _ in
                 page(open.value.filter { $0.openedSeq > (after ?? 0) })
             }
+            // The log as far as the open items show it: each one's inbox.opened.
+            $0.events = { after, limit, _ in
+                let events = open.value.filter { $0.openedSeq > after }.sorted { $0.openedSeq < $1.openedSeq }
+                    .prefix(limit ?? 100).map { opened(seq: $0.openedSeq, item: $0.id, kind: $0.kind) }
+                return EventsPage(events: Array(events), nextAfterSeq: events.last?.seq ?? after)
+            }
         }
         return owner
     }
