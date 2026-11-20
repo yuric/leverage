@@ -2,9 +2,11 @@
 """Reads the API's `leverage.command` log lines and prints the speed table.
 
 One line is logged per command (api/lib/leverage/command_log.rb): the wait
-for the workspace lock, the time spent writing events and steps, and the
-whole transition, in milliseconds. This prints, per command and overall,
-the 50th, 95th and 99th percentile of each (milestone 2 plan EN-19, 5.3),
+for the workspace lock, the time spent writing events and steps, the whole
+transition, and (milestone 4, RD-60) the time inside the gate, in
+milliseconds. A line without gate_ms, as milestone 2 wrote it, is counted
+and adds no gate time. This prints, per command and overall, the 50th,
+95th and 99th percentile of each (milestone 2 plan EN-19, 5.3),
 the number of commands, the thread setting and the pool size, and says
 whether the 95th percentile of the event and step writes is within the
 target (20 ms, PRD L821). Nothing is tuned to pass: above the target is
@@ -27,6 +29,7 @@ from dataclasses import dataclass, field
 PREFIX = "leverage.command "
 FIELD = re.compile(r"(\w+)=(\S+)")
 TIMINGS = ("lock_wait_ms", "event_step_ms", "transition_ms")
+GATE = "gate_ms"
 PERCENTILES = (50, 95, 99)
 
 
@@ -46,6 +49,14 @@ def parse_line(text):
         except (KeyError, ValueError):
             return None
         if math.isnan(row[name]) or row[name] < 0:
+            return None
+    row[GATE] = None
+    if GATE in fields:
+        try:
+            row[GATE] = float(fields[GATE])
+        except ValueError:
+            return None
+        if math.isnan(row[GATE]) or row[GATE] < 0:
             return None
     return row
 
@@ -83,14 +94,17 @@ class Group:
     lock_wait: tuple
     event_step: tuple
     transition: tuple
+    gate: tuple
 
 
 def group_of(rows):
+    gated = [r[GATE] for r in rows if r[GATE] is not None]
     return Group(
         count=len(rows),
         lock_wait=tuple(percentile([r["lock_wait_ms"] for r in rows], p) for p in PERCENTILES),
         event_step=tuple(percentile([r["event_step_ms"] for r in rows], p) for p in PERCENTILES),
-        transition=tuple(percentile([r["transition_ms"] for r in rows], p) for p in PERCENTILES))
+        transition=tuple(percentile([r["transition_ms"] for r in rows], p) for p in PERCENTILES),
+        gate=tuple(percentile(gated, p) for p in PERCENTILES))
 
 
 @dataclass
@@ -130,7 +144,7 @@ def cell(value):
 
 def row_text(name, group):
     cells = []
-    for part in (group.lock_wait, group.event_step, group.transition):
+    for part in (group.lock_wait, group.event_step, group.transition, group.gate):
         cells.append(" ".join(cell(v) for v in part))
     return f"{name:<28}{group.count:>7}  " + "   ".join(cells)
 
@@ -151,8 +165,9 @@ def render(summary, args):
     counted = "commands sent by seats" if args.callers == "seat" else "commands of every caller"
     out.append(f"{summary.total} {counted}; milliseconds, nearest-rank percentiles")
     out.append("")
-    head = f"{'':<35}{'lock wait':^23}   {'event+step writes':^23}   {'whole transition':^23}"
-    sub = f"{'command':<28}{'n':>7}  " + "   ".join(["    p50     p95     p99"] * 3)
+    head = (f"{'':<35}{'lock wait':^23}   {'event+step writes':^23}   {'whole transition':^23}"
+            f"   {'time in the gate':^23}")
+    sub = f"{'command':<28}{'n':>7}  " + "   ".join(["    p50     p95     p99"] * 4)
     out += [head, sub, "-" * len(sub)]
     for name, group in summary.by_command.items():
         out.append(row_text(name, group))
