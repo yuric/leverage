@@ -37,7 +37,7 @@ public struct CodexDetector: Detector {
     static let signedOutPhrases = ["401 unauthorized"]
 
     public func outcome(of run: ToolRunRecord, at now: Date) -> RunOutcome {
-        guard run.endedBy == nil else { return .failed }
+        guard run.endedByItself else { return .failed }
         let events = ReplyReading.jsonObjects(in: run.outputText)
         guard !events.isEmpty else {
             return run.exitedZero

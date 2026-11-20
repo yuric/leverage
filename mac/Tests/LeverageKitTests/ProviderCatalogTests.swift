@@ -54,13 +54,13 @@ struct ProviderCatalogTests {
             .documented))
     }
 
-    @Test("Codex: its folder variable, status by exit code, OpenAI's script")
+    @Test("Codex: its folder variable, status by its recorded \"Not logged in\", OpenAI's script")
     func codex() throws {
         let codex = try entry("codex")
         #expect(codex.accountFolderVariable == Evidenced("CODEX_HOME", .probe))
         #expect(codex.environment == Evidenced([], .probe))
         #expect(codex.status == Evidenced(
-            StatusCheck(arguments: ["login", "status"], reading: .exitCode), .probe))
+            StatusCheck(arguments: ["login", "status"], reading: .signedOutText("Not logged in")), .probe))
         #expect(codex.signIn.value.arguments == ["login"])
         #expect(codex.signIn.evidence == .help)
         #expect(codex.installer == Evidenced(

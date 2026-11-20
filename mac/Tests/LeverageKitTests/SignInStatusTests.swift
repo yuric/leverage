@@ -120,7 +120,7 @@ struct SignInStatusTests {
         let replies: [(StatusCheck.Reading, String)] = [
             (.jsonField("loggedIn"),
              #"echo '{"loggedIn": false, "email": "\#(email)", "orgName": "\#(organisation)"}'; exit 1"#),
-            (.exitCode, #"echo "Not logged in (\#(email), \#(organisation))" >&2; exit 1"#),
+            (.signedOutText("Not logged in"), #"echo "Not logged in (\#(email), \#(organisation))" >&2; exit 1"#),
             (.signedOutText("You are not authenticated."),
              #"echo "You are not authenticated. Last account: \#(email) (\#(organisation))""#),
         ]
@@ -209,7 +209,7 @@ struct SignInStatusTests {
         let log = CapturedLog()
         // The short limit is what this test asserts, so it is not scaled.
         let answer = await check(
-            try entry(.exitCode),
+            try entry(.signedOutText("Not logged in")),
             tool: try ownTool(folder, #"echo "Signed in as \#(email) (\#(organisation))"; exec /bin/sleep 30"#),
             environment: [:], log: log, timeLimit: .milliseconds(300))
         #expect(answer == .couldNotTell)
@@ -221,7 +221,7 @@ struct SignInStatusTests {
         let folder = try TemporaryFolder(prefix: "sign-in-status")
         let log = CapturedLog()
         let answer = await check(
-            try entry(.exitCode), tool: folder.path("missing-tool"), environment: [:], log: log)
+            try entry(.signedOutText("Not logged in")), tool: folder.path("missing-tool"), environment: [:], log: log)
         #expect(answer == .couldNotTell)
     }
 

@@ -16,10 +16,10 @@
     ],
     "shows": "a prompt run while Grok is signed out",
     "expect": "signed_out",
-    "follows": "\"You are not authenticated.\", which grok models (grok 1.0.77) printed on this Mac, where Grok is not signed in (status-signed-out.json). grok -p was never run signed out: the exit status and the line on standard error are made up",
+    "follows": "\"You are not authenticated.\", which grok models (grok 1.0.77) printed on this Mac, where Grok is not signed in (status-signed-out.json). grok -p was never run signed out: the exit status, the stream the line is on (standard error, the only stream the detector reads, since standard output is the agent's answer) and the second line are made up",
     "marker": "LVRG-REPLY-0f34b26ccd3c"
   },
   "exit_status": 1,
-  "stdout": "You are not authenticated.\n",
-  "stderr": "Error: run `grok login` to sign in (LVRG-REPLY-0f34b26ccd3c)\n"
+  "stdout": "",
+  "stderr": "You are not authenticated.\nError: run `grok login` to sign in (LVRG-REPLY-0f34b26ccd3c)\n"
 }

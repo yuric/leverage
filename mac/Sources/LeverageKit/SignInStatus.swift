@@ -48,7 +48,7 @@ public enum SignInStatus {
                 answer = .couldNotTell
                 ending = "ended by \(endedBy)"
             } else {
-                answer = reads(check.reading, result) ? .signedIn : .signedOut
+                answer = Self.answer(check.reading, result)
                 ending = "\(result.termination)"
             }
         } catch {
@@ -61,24 +61,28 @@ public enum SignInStatus {
         return answer
     }
 
-    /// What a status command's result says, by the catalog's reading.
+    /// What a status command's result says, by the catalog's reading. A
+    /// sign-out is given only on the tool's own word for it: the Boolean
+    /// false in the JSON field, or the signed-out text. Signed in is the
+    /// Boolean true, or exit 0 without the signed-out text. Anything else (a
+    /// non-zero exit without the text, a crash, output that is not the
+    /// JSON) said nothing either way: it could not tell, which the runner
+    /// reads as no sign-out and the helper's checks as not signed in.
     static func answer(_ reading: StatusCheck.Reading, _ result: SubprocessResult) -> SignInAnswer {
-        reads(reading, result) ? .signedIn : .signedOut
-    }
-
-    /// What a status command's result says, by the catalog's reading.
-    static func reads(_ reading: StatusCheck.Reading, _ result: SubprocessResult) -> Bool {
         switch reading {
         case .jsonField(let field):
             let object = try? JSONDecoder().decode(JSONValue.self, from: result.standardOutput)
-            return object?[field] == .bool(true)
-        case .exitCode:
-            return result.termination == .exited(0)
+            switch object?[field] {
+            case .bool(true): return .signedIn
+            case .bool(false): return .signedOut
+            default: return .couldNotTell
+            }
         case .signedOutText(let text):
             let output = String(decoding: result.standardOutput + result.standardError, as: UTF8.self)
-            return result.termination == .exited(0) && !output.contains(text)
+            if output.contains(text) { return .signedOut }
+            return result.termination == .exited(0) ? .signedIn : .couldNotTell
         case .testPrompt:
-            return false
+            return .noStatusCommand
         }
     }
 }

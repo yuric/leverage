@@ -41,10 +41,8 @@ public struct StatusCheck: Equatable, Sendable {
         /// The output is JSON; this Boolean field says signed in. Nothing
         /// else of the output is kept or logged.
         case jsonField(String)
-        /// Exit code 0 means signed in.
-        case exitCode
-        /// Signed out when the output contains this text (the exit code is
-        /// 0 either way).
+        /// Signed out when the output (either stream) contains this text,
+        /// whatever the exit code; signed in when it exits 0 without it.
         case signedOutText(String)
         /// There is no status command: the answering check (a test prompt)
         /// is the sign-in check.
@@ -177,7 +175,11 @@ public enum ProviderCatalog {
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
             version: Evidenced(["--version"], .probe),
-            status: Evidenced(StatusCheck(arguments: ["login", "status"], reading: .exitCode), .probe),
+            // Signed out, `codex login status` exits 1 and says "Not logged
+            // in" on standard error (replies/codex/status-signed-out.json);
+            // any other failure says nothing either way.
+            status: Evidenced(
+                StatusCheck(arguments: ["login", "status"], reading: .signedOutText("Not logged in")), .probe),
             // `codex login --help` lists --device-auth, and --with-api-key and
             // --with-access-token, which read standard input; not what the
             // plain command does.

@@ -33,7 +33,7 @@ public struct AntigravityDetector: Detector {
     static let signedOutPhrases = ["not signed in", "not authenticated"]
 
     public func outcome(of run: ToolRunRecord, at now: Date) -> RunOutcome {
-        guard run.endedBy == nil else { return .failed }
+        guard run.endedByItself else { return .failed }
         guard let reply = ReplyReading.jsonObjects(in: run.outputText).last else {
             return run.exitedZero
                 ? .failed

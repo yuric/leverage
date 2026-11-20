@@ -30,17 +30,28 @@ enum ReplyReading {
     }
 
     /// The first ISO 8601 time (`2026-11-19T12:00:00Z`, with or without
-    /// fractions of a second, `Z` or an offset) the text states. Nothing is
-    /// estimated (L615): a reply that says "in two hours" states no time.
+    /// fractions of a second, `Z` or an offset) the text states after a
+    /// reset word ("resets", "reset at", "try again at") on the same line.
+    /// A time with no reset word before it, such as a log line's own
+    /// leading timestamp, is no reset time. Nothing is estimated (L615): a
+    /// reply that says "in two hours" states no time.
     static func statedTime(in text: String) -> Date? {
-        guard let regex = try? NSRegularExpression(pattern: isoPattern) else { return nil }
-        let range = NSRange(text.startIndex..., in: text)
-        for match in regex.matches(in: text, range: range) {
-            guard let found = Range(match.range, in: text) else { continue }
-            if let date = parseISO(String(text[found])) { return date }
+        guard let iso = try? NSRegularExpression(pattern: isoPattern),
+            let word = try? NSRegularExpression(pattern: resetWordPattern, options: [.caseInsensitive])
+        else { return nil }
+        for line in text.split(whereSeparator: \.isNewline).map(String.init) {
+            let whole = NSRange(line.startIndex..., in: line)
+            guard let reset = word.firstMatch(in: line, range: whole) else { continue }
+            let after = NSRange(location: reset.range.upperBound, length: whole.length - reset.range.upperBound)
+            for match in iso.matches(in: line, range: after) {
+                guard let found = Range(match.range, in: line) else { continue }
+                if let date = parseISO(String(line[found])) { return date }
+            }
         }
         return nil
     }
+
+    private static let resetWordPattern = #"\b(resets?|try again)\b"#
 
     private static let isoPattern =
         #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})"#
@@ -100,8 +111,15 @@ enum ReplyReading {
 }
 
 extension ToolRunRecord {
-    /// True when the tool ended by itself with exit status 0. A run
-    /// leverage ended (its time limit, a stop) is never read for a limit or
-    /// a sign-out: its output was cut off.
+    /// True when the tool ended by itself with exit status 0.
     var exitedZero: Bool { termination == .exited(0) }
+
+    /// True when the tool exited by itself: leverage did not end it (its
+    /// time limit, a stop) and no signal killed it (a crash, an outside
+    /// kill). Only such a run is read for a limit or a sign-out: any other
+    /// was cut off before it finished its reply.
+    var endedByItself: Bool {
+        guard endedBy == nil, case .exited = termination else { return false }
+        return true
+    }
 }

@@ -239,8 +239,6 @@ enum RealProviderRun {
         case .jsonField(let field):
             let object = try? JSONDecoder().decode(JSONValue.self, from: output.standardOutput)
             return object?[field] == .bool(true)
-        case .exitCode:
-            return output.termination == .exited(0)
         case .signedOutText(let text):
             let said = String(decoding: output.standardOutput + output.standardError, as: UTF8.self)
             return output.termination == .exited(0) && !said.contains(text)

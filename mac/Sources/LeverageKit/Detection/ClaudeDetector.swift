@@ -39,7 +39,7 @@ public struct ClaudeDetector: Detector {
     static let signedOutPhrases = ["not logged in", "please run /login"]
 
     public func outcome(of run: ToolRunRecord, at now: Date) -> RunOutcome {
-        guard run.endedBy == nil else { return .failed }
+        guard run.endedByItself else { return .failed }
         let result = ReplyReading.jsonObjects(in: run.outputText).last { $0["type"] as? String == "result" }
         let errorText: String
         if let result {
