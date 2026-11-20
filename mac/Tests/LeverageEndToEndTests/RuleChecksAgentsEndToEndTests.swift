@@ -65,7 +65,11 @@ struct OrchestratorOfflineEndToEndTests {
                 Expected("check.finished (passed)") { $0.isCheck(.checkFinished, rule: details, result: "passed") },
                 .type(.taskReady) { $0.commandID == added.contractKey.value },
             ])
-            #expect(events.contains { $0.type == .jobClaimed && $0.seq > resolved.seq })
+            // Claimed only once the seat ran again. The sweep's timer may
+            // resolve the item before or after that first claim: the item
+            // closes when the role polls again (L402), not when it claims.
+            #expect(events.filter { $0.type == .jobClaimed }.allSatisfy { $0.seq > opened.seq })
+            #expect(resolved.seq > opened.seq)
             #expect(await world.wholeLog().filter { $0.type == .inboxOpened && $0.string("kind") == "orchestrator_offline" }.count == 1)
 
             try checkKeysAndCauses(await world.wholeLog())
