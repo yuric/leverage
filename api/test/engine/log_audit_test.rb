@@ -63,7 +63,7 @@ class LogAuditTest < ActiveSupport::TestCase
     key = key_of(runner, "$key:t1_complete_2")
     PendingTransition.where(workspace_id: runner.workspace_id, command_key: key).update_all(command_key: "made-up-key")
     found = audit(runner)
-    assert(found.any? { |line| line.include?(key) }, found.inspect)
+    assert(found.any? { |line| line.include?(key) && line.include?("never waited") }, found.inspect)
   end
 
   # RT-4: no task.ready, task.claimed, task.submitted or review.passed
