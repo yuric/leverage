@@ -56,13 +56,13 @@ ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-20 |
 | **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1) and the Core loop (milestone 2) |
-| **Next** | The Handoff milestone (milestone 3): built on `feat/handoff` with every check passing on the owner's Mac; its pull request is not opened yet. Once merged it is not called done until the owner has set the recovery time ceiling |
+| **Next** | The Handoff milestone (milestone 3): built on `feat/handoff` with every check passing on the owner's Mac; its pull request is [#14](https://github.com/yuric/leverage/pull/14). Once merged it is not called done until the owner has set the recovery time ceiling |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 3 handoff | `feat/handoff` | None yet | In review |
+| Milestone 3 handoff | `feat/handoff` | [#14](https://github.com/yuric/leverage/pull/14) | In review |
 
 ## Milestones
 
@@ -76,7 +76,7 @@ the PRD's milestone list. How the build is run locally is in
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
 | 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
-| 3 | Handoff | In review | None yet | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Once merged it is not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
+| 3 | Handoff | In review | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Once merged it is not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Not started | | |
 | 5 | Questions and approvals | Not started | | |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
