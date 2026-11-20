@@ -195,7 +195,7 @@ check("a line with a negative gate time is not a command",
 gated = speed_report.summarise(fixture.rows, caller="seat")
 claim_gate = getattr(gated.by_command["claim"], "gate", None)
 submit_gate = getattr(gated.by_command["submit"], "gate", None)
-overall_gate = getattr(gated, "gate", None)
+overall_gate = gated.overall.gate
 check("the claim gate p50, p95 and p99 are 0.950, 2.500, 2.500",
       claim_gate == (0.95, 2.5, 2.5), str(claim_gate))
 check("the submit gate p50, p95 and p99 are 0.500, 13.000, 13.000",
@@ -217,7 +217,7 @@ check("a line without the gate time is counted, as milestone 2 counted it",
       legacy_sum.by_command["claim"].count == 7, str(legacy_sum.by_command["claim"].count))
 check("and it adds no gate time to the percentiles",
       getattr(legacy_sum.by_command["claim"], "gate", None) == claim_gate
-      and getattr(legacy_sum, "gate", None) == overall_gate,
+      and legacy_sum.overall.gate == overall_gate,
       str(getattr(legacy_sum.by_command["claim"], "gate", None)))
 
 code, out = run_cli(fixture_text)
