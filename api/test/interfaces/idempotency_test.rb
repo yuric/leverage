@@ -72,7 +72,18 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     "report_request_result" => :report_request_result,
     "issue_seat_token" => :issue_seat_token,
     "report_run_started" => :report_run_started,
-    "report_run_stopped" => :report_run_stopped
+    "report_run_stopped" => :report_run_stopped,
+    # Milestone 3 (its plan §1.1, test 5 gains every new mutating call).
+    "report_limit" => :report_limit,
+    "report_signed_out" => :report_signed_out,
+    "sign_in_again" => :sign_in_again,
+    "promote_task" => :promote_task,
+    "edit_contract" => :edit_contract,
+    "hold_task" => :hold_task,
+    "resume_task" => :resume_task,
+    "pause_seat" => :pause_seat,
+    "resume_seat" => :resume_seat,
+    "change_seat" => :change_seat
   }.freeze
 
   # A second case for an operation that runs two commands.
@@ -410,5 +421,55 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     seat = @scenario.seat(role: "builder", credential: @scenario.credential, run_state: "running", wanted_running: true)
     helper_call(ids: { "id" => seat.id }, body: { "credential_id" => seat.credential_id,
                                                   "observed_at" => Time.current.utc.iso8601, "stop_reason" => "finished" })
+  end
+
+  # --- the cases: milestone 3 ----------------------------------------------
+
+  # The helper's two reports about the Working task the builder holds on
+  # its own login, with a second login below it to hand over to.
+  def report_body(task)
+    @scenario.credential(provider: "codex")
+    { "credential_id" => builder_seat.credential_id, "seat_id" => builder_seat.id, "task_id" => task.id,
+      "review_id" => nil, "job_id" => nil, "observed_at" => @scenario.database_now.utc.iso8601(6),
+      "tool_version" => "0.0.0-made-up" }
+  end
+
+  def report_limit
+    body = report_body(working_task).merge("window" => "five_hour",
+      "reset_at" => (@scenario.database_now + 3600).utc.iso8601(6))
+    helper_call(ids: { "id" => builder_seat.credential_id }, body: body)
+  end
+
+  def report_signed_out
+    helper_call(ids: { "id" => builder_seat.credential_id }, body: report_body(working_task))
+  end
+
+  def sign_in_again
+    @scenario.helper
+    owner_call(ids: { "id" => @scenario.credential(state: "signed_out").id })
+  end
+
+  def promote_task = owner_call(ids: { "id" => @scenario.task(state: "imaginarium").id })
+
+  def edit_contract = owner_call(ids: { "id" => @scenario.task(state: "backlog").id }, body: contract_body)
+
+  def hold_task = owner_call(ids: { "id" => @scenario.task(state: "ready").id })
+
+  def resume_task
+    task = @scenario.task(state: "ready")
+    engine("hold", @scenario.owner, { "id" => task.id }, caller_kind: "owner")
+    owner_call(ids: { "id" => task.id })
+  end
+
+  def pause_seat = owner_call(ids: { "id" => builder_seat.id })
+
+  def resume_seat
+    @scenario.pause_seat(builder_seat)
+    owner_call(ids: { "id" => builder_seat.id })
+  end
+
+  def change_seat
+    owner_call(ids: { "id" => builder_seat.id },
+      body: { "name" => "Made-up agent #{SecureRandom.hex(3)}", "model" => nil, "effort" => "high", "strength_rank" => 2 })
   end
 end

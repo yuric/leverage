@@ -12,7 +12,10 @@ require_relative "../support/http_calls"
 # - a seat of the wrong role that holds the very task or review the call
 #   names is refused forbidden;
 # - a seat of the right role that does not hold it is refused not_holder;
-# - a refused call writes nothing and moves nothing.
+# - a refused call writes nothing and moves nothing;
+# - neither a seat's token nor the owner's session reaches a helper call:
+#   each is 401, the two reports of milestone 3 among them (its plan
+#   WP10), and nothing is written.
 class SeatRolesTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
   include HttpCalls
@@ -119,9 +122,51 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     end
   end
 
+  SERVED_HELPER = HttpCalls.served.select { |op| op.fetch("tag") == "helper" }.map { |op| op.fetch("operation_id") }.freeze
+
+  test "a seat's token and the owner's session are 401 on every helper call, and nothing is written" do
+    assert_includes SERVED_HELPER, "report_limit"
+    assert_includes SERVED_HELPER, "report_signed_out"
+    SERVED_HELPER.each do |operation_id|
+      ids = HttpCalls.operation(operation_id).fetch("path").scan(/\{([a-z]+)\}/).flatten.to_h { |name| [ name, SecureRandom.uuid ] }
+      [ token(@builder), token(@reviewer), @scenario.owner_token ].each do |caller_token|
+        unauthenticated(operation_id, caller_token, ids: ids)
+      end
+    end
+  end
+
+  test "the builder's own token, the reviewer's and the owner's session are 401 on the reports about the builder's work" do
+    task = working_task(@builder)
+    @scenario.credential(provider: "codex")
+    report = { "credential_id" => @builder.credential_id, "seat_id" => @builder.id, "task_id" => task.id,
+               "review_id" => nil, "job_id" => nil, "observed_at" => @scenario.database_now.utc.iso8601(6),
+               "tool_version" => "0.0.0-made-up" }
+    bodies = { "report_limit" => report.merge("window" => "five_hour",
+                                             "reset_at" => (@scenario.database_now + 3600).utc.iso8601(6)),
+               "report_signed_out" => report }
+    bodies.each do |operation_id, body|
+      [ token(@builder), token(@reviewer), @scenario.owner_token ].each do |caller_token|
+        unauthenticated(operation_id, caller_token, ids: { "id" => @builder.credential_id }, body: body)
+      end
+    end
+    assert_equal [ "working", @builder.id ], task.reload.values_at(:state, :holder_seat_id)
+    assert_nil Credential.find(@builder.credential_id).limited_since
+    assert_equal "active", Credential.find(@builder.credential_id).state
+  end
+
   private
 
   def token(seat) = @scenario.token_for(seat)
+
+  # Sends the call with a token that is not the helper's: 401, nothing run.
+  def unauthenticated(operation_id, caller_token, ids:, body: nil)
+    before = [ Event.count, Command.count, HelperRequest.count, Hold.count ]
+    call(operation_id, token: caller_token, key: new_key, ids: ids, body: body, check_request: !body.nil?)
+    assert_response :unauthorized, "#{operation_id}: #{response.body}"
+    assert_equal "unauthenticated", response.parsed_body.dig("error", "code"), operation_id
+    assert_response_matches_contract
+    assert_equal before, [ Event.count, Command.count, HelperRequest.count, Hold.count ], operation_id
+  end
 
   def counts = [ Event.count, Command.where.not(outcome: "refused").count, Task.pluck(:state, :holder_seat_id).sort_by(&:to_s) ]
 
