@@ -17,17 +17,28 @@ for:
   or more URL-safe base64 characters (IN-18). What the redaction leaves,
   `lvs_[removed]`, is not one;
 - a bearer header's value of 16 characters or more, whatever the case of
-  "Bearer".
+  "Bearer";
+- with --replies FOLDER, a provider tool's reply (milestone 3 plan HD-8,
+  §5.2): every reply file's marker (meta.marker), and every line of its
+  outputs (stdout, stderr) that is at least 40 characters long. A line
+  that holds a reset placeholder (@RESET_AT_ISO@, "@RESET_AT_EPOCH@") is
+  looked for in its pieces around the placeholders that are that long,
+  because the stand-ins replace the placeholder when they play the reply.
+  A shorter line, such as "{" or "ready", is in every log and is not
+  looked for. A reply must appear nowhere but in the stand-ins' own folder,
+  so that folder is never one of the paths scanned.
 
 A hit is printed as "<file>:<line>: <what>", where <what> says which listed
 secret it was (by its number in its file) or which shape matched. The secret
 itself is never printed. Exit 0 when nothing is found, 1 on any hit, 2 when
 the scan could not be made: no path, a missing path, no file to scan, no
-secret to look for, or a secret shorter than 8 characters (a shorter one
-leaves a base64 piece too short to look for at one of the offsets).
+secret to look for, a secret shorter than 8 characters (a shorter one
+leaves a base64 piece too short to look for at one of the offsets), or a
+replies folder with no reply file or a reply file with no marker.
 
 Usage:
-  python3 -I scripts/secret_scan.py [--secrets FILE]... [--literal VALUE]... PATH...
+  python3 -I scripts/secret_scan.py [--secrets FILE]... [--literal VALUE]...
+      [--replies FOLDER]... PATH...
 
 Standard library only.
 """
@@ -50,13 +61,49 @@ SHAPES = [
 # secret the scan takes is looked for in base64 at all three.
 SHORTEST = 8
 SHORTEST_BASE64 = 8
+# The shortest line of a reply file's outputs that is looked for (§5.2).
+LONGEST_COMMON_LINE = 39
+# What the stand-ins replace when they play a reply (provider_tool.py).
+PLACEHOLDERS = re.compile(r'"@RESET_AT_EPOCH@"|@RESET_AT_ISO@')
 
 
 class Refused(Exception):
     """The scan could not be made."""
 
 
-def read_secrets(files, literals):
+def read_replies(folders):
+    """[(label, value)] for every reply file under the folders: its marker,
+    and each piece of 40 characters or more of each line of its outputs."""
+    found = []
+    for folder in folders:
+        if not os.path.isdir(folder):
+            raise Refused(f"no such replies folder: {folder}")
+        files = []
+        for place, folders_below, names in os.walk(folder):
+            folders_below.sort()
+            files.extend(os.path.join(place, name) for name in sorted(names) if name.endswith(".json"))
+        if not files:
+            raise Refused(f"no reply file in {folder}")
+        for path in files:
+            name = os.path.relpath(path, folder)
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    reply = json.load(handle)
+                marker = reply["meta"]["marker"]
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise Refused(f"cannot read the reply file {name}: {error}") from error
+            if not isinstance(marker, str) or not marker:
+                raise Refused(f"the reply file {name} has no marker")
+            found.append((f"marker of {name}", marker))
+            for stream in ("stdout", "stderr"):
+                for number, line in enumerate((reply.get(stream) or "").splitlines(), start=1):
+                    for piece in PLACEHOLDERS.split(line):
+                        if len(piece.strip()) > LONGEST_COMMON_LINE:
+                            found.append((f"{stream} line {number} of {name}", piece))
+    return found
+
+
+def read_secrets(files, literals, replies=()):
     """[(label, bytes)] for every secret to look for."""
     secrets = []
     for path in files:
@@ -74,6 +121,7 @@ def read_secrets(files, literals):
             secrets.append((f"secret {number} of {path}", value))
     for number, value in enumerate(literals, start=1):
         secrets.append((f"literal {number}", value))
+    secrets.extend(replies)
     if not secrets:
         raise Refused("no secret to look for")
     for label, value in secrets:
@@ -168,12 +216,14 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--secrets", action="append", default=[], metavar="FILE")
     parser.add_argument("--literal", action="append", default=[], metavar="VALUE")
+    parser.add_argument("--replies", action="append", default=[], metavar="FOLDER")
     parser.add_argument("paths", nargs="*", metavar="PATH")
     arguments = parser.parse_args(argv)
     try:
         if not arguments.paths:
             raise Refused("no path to scan")
-        secrets = read_secrets(arguments.secrets, arguments.literal)
+        replies = read_replies(arguments.replies)
+        secrets = read_secrets(arguments.secrets, arguments.literal, replies)
         files = files_under(arguments.paths)
     except Refused as refusal:
         print(f"secret_scan: {refusal}", file=sys.stderr)
@@ -188,7 +238,9 @@ def main(argv):
         print(f"secret_scan: {len(files)} files, {total} hits")
         return 1
     listed = len({label.split(" (")[0] for label, _value in secrets})
-    print(f"secret_scan: {len(files)} files, {listed} secrets and {len(SHAPES)} shapes, no secret found")
+    reply_files = len({label for label, _value in replies if label.startswith("marker of ")})
+    also = f", {reply_files} reply files" if reply_files else ""
+    print(f"secret_scan: {len(files)} files, {listed} secrets and {len(SHAPES)} shapes{also}, no secret found")
     return 0
 
 
