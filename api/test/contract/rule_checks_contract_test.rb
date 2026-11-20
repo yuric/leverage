@@ -278,6 +278,20 @@ class RuleChecksContractTest < Minitest::Test
     assert_equal({ "to_be_written_in" => "questions_and_approvals" }, shipped("orchestrator_approves_actions")["instruction"])
   end
 
+  # The server writes each shipped rule's version from Rules::Shipped, which
+  # turns the placeholder into null: every shipped instruction it writes is
+  # one RuleVersion takes, the placeholder object is not, and the schema
+  # says when the instruction is null, as the Mac reads it (an optional
+  # string).
+  def test_a_shipped_instruction_as_written_is_one_rule_version_takes
+    instruction = schemas.dig("RuleVersion", "properties", "instruction")
+    takes = JSONSchemer.schema(instruction)
+    Leverage::Rules::Shipped.all.each { |record| assert takes.valid?(record.instruction), record.key }
+    assert_nil Leverage::Rules::Shipped.find("orchestrator_approves_actions").instruction
+    refute takes.valid?(shipped("orchestrator_approves_actions")["instruction"])
+    assert_match(/null for an app-checked rule.*not written yet/m, instruction["description"].to_s)
+  end
+
   # RD-26: each rule of Settings, Rules with its sentence, its moment,
   # whether it acts, and its counts.
   def test_the_rules_read_carries_the_sentence_moment_and_counts

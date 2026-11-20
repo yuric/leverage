@@ -78,6 +78,40 @@ struct RulesModelTests {
         #expect(ended.state == .signedOut)
     }
 
+    /// The approvals rule as the server sent it after sign-up (track F2's own
+    /// compose project): a model rule whose instruction is not written yet,
+    /// so `null` where shipped_rules.json holds a placeholder object.
+    private static let approvalsAsSent = #"""
+        {"rules": [{"rule": {"id": "88c952ef-3868-4c73-8f36-911d36f37186", "key": "orchestrator_approves_actions",
+        "enabled": true, "current_version": 1}, "version": {"id": "aa094407-5c4e-451a-b539-7a60ee4cf308",
+        "rule_id": "88c952ef-3868-4c73-8f36-911d36f37186", "version": 1, "key": "orchestrator_approves_actions",
+        "name": "The orchestrator approves outward actions itself", "hook": "action.requested",
+        "scope": {"kind": "all_tasks", "project_ids": null, "action_kinds": null}, "kind": "policy", "checker": "model",
+        "on_fail": null, "route": null, "queue_timeout_seconds": null, "run_timeout_seconds": null, "instruction": null,
+        "parameters": {}, "origin": "shipped", "author_kind": "owner", "author_id": "3ebd52d1-ba10-4c7a-ba63-3afc34c7cd75",
+        "created_at": "2026-11-20T17:36:19.508042Z"}, "sentence": null, "moment_name": "before anything goes out",
+        "acts": false, "stats": {"checks": 0, "average_seconds": null, "tokens": 0, "spend": 0.0, "overrides": 0}}]}
+        """#
+
+    @Test("the approvals rule as the server sends it, with no instruction yet, loads as a row with no text")
+    func approvalsRuleWithNoInstruction() async throws {
+        let host = "rules-approvals-as-sent.test"
+        let session = StubURLProtocol.session(host: host, answer: .init(status: 200, json: Self.approvalsAsSent))
+        let client = OwnerClient(baseURL: URL(string: "http://\(host)")!, sessionToken: "lvo_x", session: session)
+        let model = RulesModel(api: client, calendar: Fixtures.utc, locale: Fixtures.usEnglish)
+
+        await model.load()
+
+        #expect(model.state == .loaded)
+        let line = try #require(model.lines.count == 1 ? model.lines.first : nil)
+        #expect(line.name == "The orchestrator approves outward actions itself")
+        #expect(line.whenItRuns == "Before anything goes out")
+        #expect(line.checkedBy == RulesCopy.checkerModel.text)
+        #expect(line.detail.isEmpty)
+        #expect(line.detailIsInstruction)
+        #expect(line.notActing == RulesCopy.notActing.text)
+    }
+
     // MARK: the seven rows and their words (RM-1)
 
     @Test("the seven shipped rules read as the owner's words, one by one")
