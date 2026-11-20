@@ -61,8 +61,10 @@ struct AppShell: View {
             } else {
                 BoardView()
             }
+        case .needsYou: NeedsYouView()
         case .agents: RosterView()
         case .credentials: CredentialsView()
+        case .handoff: HandoffView()
         }
     }
 }

@@ -29,10 +29,10 @@ enum ShellFixtures {
             .repeated(OwnerSessionRepeated(userID: UUID(), createdAt: Date())), key: key, command: command)
     }
 
-    static func health(sweepLate: Bool = false) -> SystemHealth {
+    static func health(sweepLate: Bool = false, backupLate: Bool = false) -> SystemHealth {
         SystemHealth(
             sweepLastRanAt: Date(), sweepLate: sweepLate, helperLastReportedAt: Date(), queuedHelperRequests: 0,
-            readyTasks: 0, waitingReviews: 0)
+            readyTasks: 0, waitingReviews: 0, backupLastRanAt: backupLate ? nil : Date(), backupLate: backupLate)
     }
 
     static func event(seq: Int) -> EventRecord {

@@ -6,7 +6,7 @@ import Observation
 @MainActor
 @Observable
 final class Navigator {
-    enum Place: Equatable, Sendable { case board, agents, credentials }
+    enum Place: Equatable, Sendable { case board, needsYou, agents, credentials, handoff }
 
     private(set) var place: Place = .board
     /// The task whose page is open in the content area (MA-9); nil shows the
@@ -62,6 +62,8 @@ final class ScreenContext {
     let health: HealthLineModel
     let navigator: Navigator
     let runtime: any AppRuntime
+    /// Counts the open Needs you items and announces each new one (HM-29).
+    let inbox: InboxWatcher
 
     init(
         owner: any OwnerAPI, feed: EventFeed, health: HealthLineModel, navigator: Navigator = Navigator(),
@@ -72,5 +74,12 @@ final class ScreenContext {
         self.health = health
         self.navigator = navigator
         self.runtime = runtime
+        self.inbox = InboxWatcher(
+            owner: owner, notifier: runtime.notifier, cursor: runtime.inboxCursor,
+            select: { [navigator] in navigator.show(.needsYou) })
     }
+
+    /// Asks for permission to notify, then watches the inbox until the task
+    /// is cancelled. The shell runs it while the owner is signed in.
+    func startInbox() async {}
 }

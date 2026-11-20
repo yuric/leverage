@@ -33,8 +33,10 @@ struct Toolbar: View {
     private var title: ShellCopy {
         switch context.navigator.place {
         case .board: ShellCopy.tabBoard
+        case .needsYou: ShellCopy.tabNeedsYou
         case .agents: ShellCopy.tabAgents
         case .credentials: ShellCopy.tabCredentials
+        case .handoff: ShellCopy.tabHandoff
         }
     }
 }

@@ -144,7 +144,8 @@ struct CopyTests {
         let names = Set(Self.swiftFiles().map(\.lastPathComponent))
         for expected in [
             "Copy.swift", "ShellCopy.swift", "SignInCopy.swift", "BoardCopy.swift", "AddTaskCopy.swift",
-            "TaskPageCopy.swift", "AgentsCopy.swift", "CredentialsCopy.swift", "RootView.swift", "AppModel.swift",
+            "TaskPageCopy.swift", "AgentsCopy.swift", "CredentialsCopy.swift", "NeedsYouCopy.swift", "HandoffCopy.swift",
+            "RootView.swift", "AppModel.swift",
         ] {
             #expect(names.contains(expected), "\(expected)")
         }
@@ -262,5 +263,51 @@ struct CopyTests {
     func signInSentences() {
         #expect(SignInCopy.createTitle.text == "Create your sign-in")
         #expect(SignInCopy.signInTitle.text == "Sign in")
+    }
+
+    // MARK: the Needs you sentences (HM-24, HM-28, HM-29)
+
+    @Test("the Needs you sentences are the ones HM-24 names")
+    func needsYouSentences() {
+        #expect(NeedsYouCopy.empty.text == "Nothing needs you right now.")
+        #expect(NeedsYouCopy.signedOutHeading.text == "{account} is signed out")
+        #expect(
+            NeedsYouCopy.signedOutBody.text
+                == "{task} stopped because {account} is signed out and no other account can take over. Sign in again to continue.")
+        #expect(NeedsYouCopy.signInAgain.text == "Sign in again")
+        #expect(NeedsYouCopy.signInWaiting.text == "Waiting for you to sign in in the window that opened")
+        #expect(NeedsYouCopy.limitHeading.text == "{account} is at its limit")
+        #expect(
+            NeedsYouCopy.limitBody.text
+                == "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues. If the agent's time on the task runs out first, the task goes back to waiting for any agent.")
+        #expect(NeedsYouCopy.sentBackHeading.text == "{task} was sent back {count} times")
+        #expect(NeedsYouCopy.letItTryOnceMore.text == "Let it try once more")
+        #expect(NeedsYouCopy.changeTask.text == "Change the task")
+        #expect(NeedsYouCopy.cancelTask.text == "Cancel task")
+        #expect(NeedsYouCopy.settledBeforeYouSaw.text == "This was settled before you saw it.")
+        #expect(ShellCopy.tabNeedsYou.text == "Needs you")
+        #expect(ShellCopy.tabHandoff.text == "Handoff")
+        #expect(ShellCopy.healthBackupLate.text == "The daily backup is late")
+    }
+
+    @Test("no Needs you sentence names the owner's email or says a banned word, filled in or not")
+    func needsYouTidy() {
+        for text in NeedsYouCopy.allTexts {
+            #expect(!text.contains("@"), "\(text)")
+            #expect(BannedTerms.found(in: text).isEmpty, "\(text)")
+        }
+    }
+
+    @Test("every placeholder of a Needs you sentence is one the screen fills in")
+    func needsYouPlaceholders() throws {
+        let known: Set<String> = ["account", "task", "provider", "count"]
+        let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
+        for text in NeedsYouCopy.allTexts {
+            let range = NSRange(text.startIndex..., in: text)
+            for match in regex.matches(in: text, range: range) {
+                let name = Range(match.range(at: 1), in: text).map { String(text[$0]) } ?? ""
+                #expect(known.contains(name), "\(name) in \(text)")
+            }
+        }
     }
 }

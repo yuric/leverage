@@ -34,6 +34,9 @@ struct SidePane: View {
         .task { await context.health.run() }
     }
 
+    /// The count on the Needs you tab; nil when nothing is open.
+    static func badge(for count: Int) -> String? { nil }
+
     private func tab(_ place: Navigator.Place, _ copy: ShellCopy, symbol: String) -> some View {
         let selected = context.navigator.place == place
         return Button {

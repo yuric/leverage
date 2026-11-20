@@ -14,3 +14,11 @@ struct NeedsYouView: View {
         .padding()
     }
 }
+
+/// What the screen draws from its model.
+struct NeedsYouContent: View {
+    let model: NeedsYouModel
+    let notificationsAreOff: Bool
+
+    var body: some View { EmptyView() }
+}
