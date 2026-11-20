@@ -124,7 +124,7 @@ struct RulesModelTests {
             "Every task needs specific details",
             "Workers ask the orchestrator before they ask you",
             "A different provider reviews every task",
-            "Two failed reviews move a task to a stronger model",
+            "Repeated failed reviews move a task to a stronger model",
             "Projects pause when they reach their budget",
             "The orchestrator approves outward actions itself",
         ])
@@ -169,7 +169,7 @@ struct RulesModelTests {
     func switchAndScope() throws {
         let result = try line(row(enabled: false, scope: .checkerDecides))
         #expect(!result.isOn)
-        #expect(result.appliesTo == "The checker decides")
+        #expect(result.appliesTo == "The agent that checks decides")
         let projects = try line(row(scope: RuleScope(kind: .namedProjects, projectIDs: [])))
         #expect(projects.appliesTo == "Named projects")
         let actions = try line(row(scope: RuleScope(kind: .actionKinds, actionKinds: [.pay])))

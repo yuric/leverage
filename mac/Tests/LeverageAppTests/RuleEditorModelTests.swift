@@ -99,7 +99,9 @@ struct RuleEditorModelTests {
         #expect(rig.done.value == 1)
     }
 
-    @Test("a name already used keeps the sheet open with a sentence, and sending again reuses the key until the form changes")
+    // Review finding 16: the refusal was answered, so sending again is a new
+    // command with a new key (it used to reuse the key and replay the refusal).
+    @Test("a name already used keeps the sheet open with a sentence, and sending again uses a new key")
     func addRefusedKeepsKey() async throws {
         let rig = makeRig(.add)
         rig.owner.script {
@@ -116,7 +118,7 @@ struct RuleEditorModelTests {
         await rig.model.save()
         let keys = rig.owner.calls.compactMap(\.key)
         try #require(keys.count == 2)
-        #expect(keys[0] == keys[1])
+        #expect(keys[0] != keys[1])
         rig.model.name = "Mention a date"
         await rig.model.save()
         #expect(rig.owner.calls.compactMap(\.key).last != keys[0])
@@ -347,6 +349,43 @@ struct RuleEditorModelTests {
         await rig.model.revert()
         #expect(rig.model.failure == .refusalInvalidState)
         #expect(rig.done.value == 0)
+    }
+
+    // Milestone 4 review, finding 16.
+    @Test("after a refusal, Revert, Remove and Save send a new key; after no answer, the same one")
+    func newKeyAfterRefusal() async throws {
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        let shippedRig = makeRig(.change(try shipped("specific_details")))
+        shippedRig.owner.script {
+            $0.revertRule = { _, key in .refused(refusal, key: key.value, command: .revertRule) }
+        }
+        await shippedRig.model.revert()
+        await shippedRig.model.revert()
+        let reverts = shippedRig.owner.calls.filter { $0.operation == .revertRule }.map(\.key)
+        #expect(reverts.count == 2 && reverts[0] != reverts[1])
+
+        let custom = makeRig(.change(Fixtures.row(number: 9, name: "Made up", instruction: "Old", origin: .custom)))
+        let removes = Locked(0)
+        custom.owner.script {
+            $0.removeRule = { _, key in
+                if removes.update({ $0 += 1; return $0 }) == 1 { throw URLError(.timedOut) }
+                return .refused(refusal, key: key.value, command: .removeRule)
+            }
+            $0.saveRule = { _, _, key in .refused(refusal, key: key.value, command: .saveRule) }
+        }
+        await custom.model.remove()
+        await custom.model.remove()
+        await custom.model.remove()
+        let removed = custom.owner.calls.filter { $0.operation == .removeRule }.map(\.key)
+        #expect(removed.count == 3)
+        #expect(removed[0] == removed[1], "no answer: the retry is the same command")
+        #expect(removed[2] != removed[1], "a refusal was answered: a new command")
+
+        custom.model.instruction = "New"
+        await custom.model.save()
+        await custom.model.save()
+        let saves = custom.owner.calls.filter { $0.operation == .saveRule }.map(\.key)
+        #expect(saves.count == 2 && saves[0] != saves[1])
     }
 
     @Test("a Save that does not get through keeps the sheet open, and a 401 says the sign-in ended")

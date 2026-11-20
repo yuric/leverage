@@ -39,6 +39,8 @@ enum JobPrompts {
         "\(quoteOpening(nonce)) \(label)>>>\n\(text)\n\(quoteClosing(nonce))"
     }
 
+    static func neutralised(_ text: String) -> String { text }
+
     /// The check prompt for one rule check: the role file, the rule, the
     /// moment, every piece of task text in its own quote block, and the
     /// closing that asks for the two nonce lines.

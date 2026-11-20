@@ -202,7 +202,7 @@ struct RulesAnswerTests {
                 "rule_id": "e3b9382d-0189-48fd-a8a9-9124a1061391",
                 "version": 1,
                 "key": "escalate_after_failed_reviews",
-                "name": "Two failed reviews move a task to a stronger model",
+                "name": "Repeated failed reviews move a task to a stronger model",
                 "hook": "review.failed",
                 "scope": {
                   "kind": "all_tasks",

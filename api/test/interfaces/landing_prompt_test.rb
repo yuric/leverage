@@ -133,6 +133,40 @@ class LandingPromptTest < CommittingTestCase
     assert_match(/60 minutes/, text_for(@builder))
   end
 
+  # Milestone 4 review, finding 19: an orchestrator or a planner claims
+  # jobs, not tasks. It polls often enough to stay online (PRD L401: it is
+  # offline 90 seconds after its last poll), is told what a job and a
+  # command answer mean, and is not told about a briefing, a lease or a
+  # release it has no call for.
+  { "orchestrator" => "an", "planner" => "a" }.each do |role, article|
+    test "#{article} #{role}'s prompt is about jobs, polls within 90 seconds and has no briefing, lease or release" do
+      seat = scenario.seat(role: role, provider: "codex", name: "Made-up #{role} agent")
+      text = text_for(seat)
+
+      assert_includes text, "connecting as #{article} #{role},"
+      assert_equal 1, response.parsed_body["check_interval_minutes"]
+      assert_match(/every 60 seconds/, text)
+      refute_match(/20 minutes/, text)
+      assert_match(/`job`/, text)
+      assert_match(/`command`/, text)
+      assert_match(/claim_next_job/, text)
+      assert_match(/submit_job_result/, text)
+      assert_match(/get_command/, text)
+      assert_match(/one job at a time/i, text)
+      assert_match(/role file/i, text)
+      refute_match(/briefing/i, text)
+      refute_match(/\blease\b|renew/i, text)
+      refute_match(/release/i, text)
+      refute_match(/`(task|rework|resume|review)`/, text)
+    end
+  end
+
+  test "a builder and a reviewer keep the 20 minutes and their article" do
+    assert_includes text_for(@builder), "connecting as a builder"
+    assert_equal 20, response.parsed_body["check_interval_minutes"]
+    assert_includes text_for(@reviewer), "connecting as a reviewer"
+  end
+
   test "the prompt holds no token and nothing shaped like one" do
     token = scenario.token_for(@builder)
     digest = Leverage::Tokens.digest(token)

@@ -78,6 +78,10 @@ struct CheckJob: Sendable {
 /// never the task's work folder (RD-33), under the job's time limit; a limit
 /// or a sign-out names the job (RD-40).
 enum JobToolRun {
+    static let promptByteLimit = 512 * 1024
+
+    static func tooLong(_ prompt: String) -> String? { nil }
+
     static func run(_ prompt: String, job: UUID, timeLimit: Int, context: FlowContext) async throws
         -> Interruption.Result {
         guard let folder = WorkFolder.makeJobFolder(workRoot: context.workRoot) else {

@@ -662,10 +662,12 @@ struct TaskPageModelTests {
         #expect(timing.rows.map(\.isOpen) == [false, false, false, true])
         #expect(timing.beforeIdeas?.seconds == 600)
         #expect(timing.beforeIdeas?.durationText == "10 minutes")
-        #expect(timing.totalSeconds == 4555)
-        #expect(timing.totalText == "1 hour 15 minutes")
-        let listed = timing.rows.reduce(0) { $0 + $1.seconds } + (timing.beforeIdeas?.seconds ?? 0)
-        #expect(abs(listed - timing.totalSeconds) < 1, "the rows add up to the total")
+        // The total runs from the move to Backlog (PRD rule 7, L282, L321):
+        // the time in Ideas is shown apart, outside it (review finding 23).
+        #expect(timing.totalSeconds == 3955)
+        #expect(timing.totalText == "1 hour 5 minutes")
+        let listed = timing.rows.reduce(0) { $0 + $1.seconds }
+        #expect(abs(listed - timing.totalSeconds) < 1, "the rows alone add up to the total")
     }
 
     @Test("every kind of step has the plain name of the table, and none uses a banned word")
@@ -986,6 +988,59 @@ struct TaskPageModelTests {
         #expect(reruns[0].key == reruns[1].key)
         #expect(reruns[2].key != reruns[1].key)
         #expect(owner.calls.filter { $0.operation == .getTask }.count == 3, "one read first, then one after each that worked")
+    }
+
+    // Milestone 4 review, finding 16: a refusal (409) was answered, so a
+    // press again is a new request with a new key, not a replay of the
+    // stored refusal (PRD L221). Only a request that may not have arrived
+    // keeps its key.
+    @Test("after a refusal, Run it again and Draft the details send a new key")
+    func newKeyAfterRefusal() async throws {
+        let errored = Fixtures.check(result: .error, canOverride: true, canRerun: true)
+        let (model, owner, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.backlog, id: taskID), checks: [errored]))
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        owner.script {
+            $0.rerunCheck = { _, key in .refused(refusal, key: key.value, command: .rerunCheck) }
+            $0.draftContract = { _, key in .refused(refusal, key: key.value, command: .draftContract) }
+        }
+        await model.runAgain(errored.id)
+        #expect(model.actionFailure != nil)
+        await model.runAgain(errored.id)
+        let reruns = try exactly(owner.calls.filter { $0.operation == .rerunCheck }, 2)
+        #expect(reruns[0].key != reruns[1].key)
+
+        await model.draftDetails()
+        await model.draftDetails()
+        let drafts = try exactly(owner.calls.filter { $0.operation == .draftContract }, 2)
+        #expect(drafts[0].key != drafts[1].key)
+    }
+
+    @Test("after a refusal, Let it through once sends a new key for the override and for Complete contract")
+    func letThroughNewKeyAfterRefusal() async throws {
+        let check = failedReadyCheck()
+        let (model, owner, _) = await loaded(storedContractPage(checks: [check]))
+        let refusal = Refusal(code: .invalidState, ruleID: nil, reason: nil)
+        let overrides = Locked(0)
+        owner.script {
+            $0.overrideCheck = { _, _, key in
+                if overrides.update({ $0 += 1; return $0 }) == 1 {
+                    return .refused(refusal, key: key.value, command: .overrideCheck)
+                }
+                return Fixtures.plain(.overrideCheck, key: key)
+            }
+            $0.completeContract = { _, _, key in .refused(refusal, key: key.value, command: .completeContract) }
+        }
+        model.askToLetThrough(check.id)
+        let sheet = try #require(model.letThrough)
+        sheet.reason = "Fine."
+        await sheet.send()
+        #expect(sheet.failure != nil)
+        await sheet.send()
+        await sheet.send()
+        let keys = try exactly(owner.calls.filter { $0.operation == .overrideCheck }.map(\.key), 2)
+        #expect(keys[0] != keys[1])
+        let completes = try exactly(owner.calls.filter { $0.operation == .completeContract }.map(\.key), 2)
+        #expect(completes[0] != completes[1])
     }
 
     @Test("Run it again does nothing for a check that cannot be run again")

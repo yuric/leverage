@@ -295,6 +295,10 @@ class ResultTests(unittest.TestCase):
         self.assertIn("13-fixture-vague-goal-1", text)
         self.assertIn("104 of 270", text)
         self.assertNotIn("The made-up checker says so.", text)
+        # Milestone 4 review, finding 20: the report says whose settings the
+        # tools ran with, so "the tool's default" is not read as a known model.
+        self.assertIn("the Mac user's own settings folders", text)
+        self.assertIn("the model that ran is not known", text)
 
 
 if __name__ == "__main__":

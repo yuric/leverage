@@ -56,6 +56,34 @@ struct CheckJobTests {
             result: .ruleCheck(RuleCheckVerdict(result: .passed, reason: "Fine.")), tokens: 9, spend: 0)))
     }
 
+    // Milestone 4 review, finding 9: a tool gets the prompt as one argument,
+    // and one over the Mac's limit cannot start at all. Such a prompt is
+    // not run, twice or once: the job fails at once with a logged reason.
+    @Test("a prompt over the argument limit starts no tool run, and nothing is sent")
+    func promptTooLong() async throws {
+        let harness = try Harness()
+        let driver = JobFixture.answering("PASSED")
+        let long = String(repeating: "d", count: JobToolRun.promptByteLimit + 1)
+        let material = JobFixture.checkMaterial()
+        let tooLong = CheckMaterial(
+            roleFile: material.roleFile, instruction: material.instruction, moment: material.moment,
+            mayAnswerNotApplicable: material.mayAnswerNotApplicable,
+            contract: CheckContract(
+                title: material.contract.title, goal: material.contract.goal, details: long,
+                criteria: material.contract.criteria),
+            quoted: material.quoted)
+        let end = try await CheckJob(context: harness.context(driver: driver))
+            .run(JobFixture.checkClaim(), input: JobFixture.checkInput(tooLong))
+        #expect(end == .noResult)
+        #expect(driver.runs.isEmpty, "no tool is started with a prompt it cannot take")
+    }
+
+    @Test("a prompt at the argument limit is run")
+    func promptAtTheLimit() {
+        #expect(JobToolRun.tooLong(String(repeating: "d", count: JobToolRun.promptByteLimit)) == nil)
+        #expect(JobToolRun.tooLong(String(repeating: "d", count: JobToolRun.promptByteLimit + 1)) != nil)
+    }
+
     @Test("a second run is made only while time is left before the job's run is due")
     func noTimeForASecondRun() async throws {
         let harness = try Harness()

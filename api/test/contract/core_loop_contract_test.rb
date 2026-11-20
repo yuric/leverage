@@ -106,7 +106,8 @@ class CoreLoopContractTest < Minitest::Test
     %w[401 404].each { |status| assert op["responses"].key?(status), "get_landing_prompt lacks #{status}" }
     prompt = schemas.fetch("LandingPrompt")
     assert_equal %w[check_interval_minutes text], prompt.fetch("required").sort
-    assert_equal 20, prompt.dig("properties", "check_interval_minutes", "const")
+    # 20 for a builder or a reviewer, 1 for an orchestrator or a planner (milestone 4 review, finding 19).
+    assert_equal [ 1, 20 ], prompt.dig("properties", "check_interval_minutes", "enum")
     refused = { "code" => "invalid_state", "rule_id" => nil, "reason" => nil }
     assert validator("Refusal").valid?(refused)
     assert_equal %w[text check_interval_minutes].sort, ColumnsTest::NOT_COLUMNS.fetch("LandingPrompt").sort

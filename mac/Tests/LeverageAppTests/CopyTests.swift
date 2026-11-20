@@ -300,7 +300,8 @@ struct CopyTests {
 
     @Test("every placeholder of a Needs you sentence is one the screen fills in")
     func needsYouPlaceholders() throws {
-        let known: Set<String> = ["account", "task", "provider", "count"]
+        // "time": a reset time, which the offline item names (review finding 22).
+        let known: Set<String> = ["account", "task", "provider", "count", "time"]
         let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
         for text in NeedsYouCopy.allTexts {
             let range = NSRange(text.startIndex..., in: text)
@@ -318,7 +319,12 @@ struct CopyTests {
         #expect(ShellCopy.tabSettings.text == "Settings")
         #expect(RulesCopy.title.text == "Rules")
         #expect(RulesCopy.scopeAllTasks.text == "Every task")
-        #expect(RulesCopy.scopeCheckerDecides.text == "The checker decides")
+        // Review finding 26: the owner's words say "the agent that checks", never "checker".
+        #expect(RulesCopy.scopeCheckerDecides.text == "The agent that checks decides")
+        #expect(RulesCopy.instructionLabel.text == "What the agent checks for")
+        for copy in RulesCopy.allCases {
+            #expect(!copy.text.lowercased().contains("checker"), "\(copy)")
+        }
         #expect(RulesCopy.checkerApp.text == "leverage checks this itself")
         #expect(RulesCopy.checkerModel.text == "An agent checks this")
         #expect(RulesCopy.onFailBlock.text == "Stop the task")

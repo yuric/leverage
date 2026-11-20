@@ -272,6 +272,9 @@ struct NeedsYouModelTests {
             #expect(row.ruleName == Fixtures.ruleName)
             #expect(row.reason == Fixtures.reason)
         }
+        // Review finding 24: the checks ran and did not pass; they did not go unanswered.
+        #expect(model.rows.first?.body == "\(Fixtures.taskTitle) was checked as many times as the rule allows, and it "
+            + "did not pass. It waits until you choose what happens next.")
     }
 
     @Test("No agent may review this: the rule is read from the rules list, and there is no reason")
@@ -356,8 +359,47 @@ struct NeedsYouModelTests {
         let body = model.rows.first?.body ?? ""
         #expect(!body.contains("0"))
         #expect(body.hasPrefix("Checks wait until the agent is back"))
-        #expect(body.contains("The cause is Claude, Personal."))
+        // Review finding 22: the account's state, not only its name (L401).
+        #expect(body.contains("Claude, Personal is signed out. Look at it in Credentials."))
         #expect(!body.contains(Fixtures.madeUpEmail))
+    }
+
+    @Test("the offline item names the account's reset time when it is at its limit until a time (L401)")
+    func offlineLimitedUntil() async {
+        let until = Date().addingTimeInterval(3 * 3600)
+        let credentials = CredentialsList(
+            credentials: [
+                CredentialWithReading(
+                    credential: Credential(
+                        id: Fixtures.credentialID, provider: .claude, name: "Personal", state: .active,
+                        limitedUntil: until, limitedSince: Date().addingTimeInterval(-60), position: 1))
+            ], asOfSeq: 31)
+        let owner = Fixtures.owner(
+            open: Locked([Fixtures.offline(seq: 5, credential: Fixtures.credentialID)]), credentials: credentials)
+        owner.script { $0.systemHealth = { Self.health(.offline) } }
+        let model = makeModel(owner)
+        await model.load()
+        let time = ResetTime.text(for: until, clock: .system)
+        #expect(model.rows.first?.body.contains("Claude, Personal is at its limit until \(time). Look at it in Credentials.") == true)
+    }
+
+    @Test("the offline item with no agent set up to check says to connect one, not that it will be back")
+    func offlineNotSetUp() async {
+        let owner = Fixtures.ruleOwner(open: Locked([Fixtures.offline(seq: 5, waiting: 2)]))
+        owner.script { $0.systemHealth = { Self.health(.notSetUp) } }
+        let model = makeModel(owner)
+        await model.load()
+        #expect(model.rows.first?.body == "No agent is set up to check tasks. Connect one in Agents.")
+
+        owner.script { $0.systemHealth = { Self.health(.offline) } }
+        await model.load()
+        #expect(model.rows.first?.body.hasPrefix("2 checks are waiting. They start on their own when the agent is back.") == true)
+    }
+
+    nonisolated private static func health(_ orchestrator: OrchestratorState) -> SystemHealth {
+        SystemHealth(
+            sweepLastRanAt: nil, sweepLate: false, helperLastReportedAt: nil, queuedHelperRequests: 0, readyTasks: 0,
+            waitingReviews: 0, orchestrator: orchestrator)
     }
 
     @Test("every sentence of the five items is free of an email and of a banned word, filled in")

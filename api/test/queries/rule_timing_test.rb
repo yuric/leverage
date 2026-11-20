@@ -64,4 +64,19 @@ class RuleTimingQueryTest < ActiveSupport::TestCase
     assert_equal tokens, row.fetch("tokens")
     assert_operator tokens, :>, 0
   end
+
+  # Trace 17: the row held at the re-run limit never ran, and the owner let
+  # it through once (RD-45). It is counted as overridden, not as
+  # unfinished, which it would read as forever (milestone 4 review,
+  # finding 14).
+  test "trace 17: a row held at the re-run limit and overridden counts as overridden, not unfinished" do
+    runner = run_trace("17-submit-rule-rerun-and-override")
+    held = RuleCheck.where(workspace_id: runner.workspace_id, result: nil).where.not(overridden_at: nil).sole
+    rule = Rule.find(held.rule_id)
+
+    row = R.call(runner.workspace_id, rule_id: rule.id, as_of: Time.current).sole
+
+    assert_not row.fetch("results").key?("unfinished"), row.fetch("results").inspect
+    assert_equal 1, row.fetch("results").fetch("overridden")
+  end
 end
