@@ -33,10 +33,12 @@ class GoldenTracesTest < ActiveSupport::TestCase
     # run whole in milestone 4, when the engine and the twenty new commands
     # are in. 16 runs its add_task, which names a project; its Complete
     # contract meets a model gate that NoRules does not plan. 17 and 18
-    # start with add_rule.
+    # start with add_rule, and 19, whose workspace has no rule, with
+    # install_shipped_rules (milestone 4 plan RD-2).
     "16-model-gate-and-draft" => [ 4, 1 ],
     "17-submit-rule-rerun-and-override" => [ 4, 0 ],
-    "18-claim-gate-done-gate-and-ends" => [ 4, 0 ]
+    "18-claim-gate-done-gate-and-ends" => [ 4, 0 ],
+    "19-provider-rule-offline-and-jobs" => [ 4, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
@@ -77,14 +79,19 @@ class GoldenTracesTest < ActiveSupport::TestCase
   end
 
   # Written for the traces of milestone 1, which wait for a later milestone
-  # than 3 (milestone 3 plan HT-6).
+  # than 3 (milestone 3 plan HT-6). A trace whose workspace has no rule
+  # starts with the one-time write of the shipped rules instead (milestone
+  # 4 plan RD-2, RT-1: trace 19).
   test "the first command of every NOT_YET trace of a later milestone than 3 is one milestone 2 cannot run as written" do
     NOT_YET.each do |name, (milestone, _prefix)|
       next if milestone <= 3
 
-      first = self.class.trace(name).fetch("commands").first
+      trace = self.class.trace(name)
+      first = trace.fetch("commands").first
       if Leverage::Transitions::Table.include?(first.fetch("command"))
         assert first.fetch("body")["project_id"], "#{name}: its first command could run, so its prefix is not 0"
+      elsif Array(trace.fetch("setup")["rules"]).empty?
+        assert_equal "install_shipped_rules", first.fetch("command"), name
       else
         assert_equal "add_rule", first.fetch("command"), name
       end
