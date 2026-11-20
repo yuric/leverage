@@ -28,7 +28,12 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "05-limit-handoff" => [ 5, 0 ],
     "06-signed-out-hold-verify" => [ 5, 0 ],
     "07-pending-gate-check-error-override" => [ 5, 0 ],
-    "08-lease-expiry-and-cancel" => [ 5, 0 ]
+    "08-lease-expiry-and-cancel" => [ 5, 0 ],
+    # The rule checks milestone's four (milestone 4 plan RT-1, RT-6). They
+    # run whole in milestone 4, when the engine and the twenty new commands
+    # are in. 16 runs its add_task, which names a project; its Complete
+    # contract meets a model gate that NoRules does not plan.
+    "16-model-gate-and-draft" => [ 4, 1 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
