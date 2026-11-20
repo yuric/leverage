@@ -30,11 +30,13 @@ class HandoffTest < ActiveSupport::TestCase
     end
   end
 
-  # A login just verified: active, signed in, no limit with no reset time.
-  def verify(credential)
-    credential.update!(state: "active", last_verified_at: from_now(0))
+  # A login just verified inside the command: active, signed in, no limit
+  # with no reset time (HE-2, which report_request_result writes), and its
+  # credential.verified.
+  def verify(ctx, credential)
+    credential.update!(state: "active", last_verified_at: ctx.at)
     credential.update!(limited_since: nil) if credential.limited_until.nil?
-    scenario.append("credential.verified", subject: credential, actor_id: scenario.helper.id)
+    ctx.emit("credential.verified", subject: credential, payload: {})
   end
 
   # Trace 12's hold: the builder's own login found signed out, a second
@@ -58,7 +60,7 @@ class HandoffTest < ActiveSupport::TestCase
     ensured = runs_ensured do
       written = events_written do
         as_helper do |ctx|
-          verified = verify(@claude_b)
+          verified = verify(ctx, @claude_b)
           H.reevaluate(ctx, verified: @claude_b, cause: verified, choice: "sign_in_again")
         end
       end
@@ -94,7 +96,7 @@ class HandoffTest < ActiveSupport::TestCase
 
     written = events_written do
       as_helper do |ctx|
-        H.reevaluate(ctx, verified: grok_z, cause: verify(grok_z), choice: "sign_in_again")
+        H.reevaluate(ctx, verified: grok_z, cause: verify(ctx, grok_z), choice: "sign_in_again")
       end
     end
 
@@ -118,7 +120,7 @@ class HandoffTest < ActiveSupport::TestCase
     assert_equal [ signed_out.id, task.id ], [ opened.first.cause_id, opened.first.task_id ]
 
     resolved = events_written do
-      as_helper { |ctx| H.reevaluate(ctx, verified: grok_z, cause: verify(grok_z), choice: "sign_in_again") }
+      as_helper { |ctx| H.reevaluate(ctx, verified: grok_z, cause: verify(ctx, grok_z), choice: "sign_in_again") }
     end
     assert_equal [ [ "credential.verified", grok_z.id ], [ "inbox.resolved", item.id ] ], typed(resolved)
     assert_equal({ "choice" => "sign_in_again" }, resolved.last.payload)
@@ -141,7 +143,7 @@ class HandoffTest < ActiveSupport::TestCase
     grok_z = scenario.credential(provider: "grok")
     builder = scenario.seat(role: "builder", credential: grok_z)
     task = scenario.task(state: "working", builder: builder)
-    scenario.limit_credential(grok_z, reset_at: from_now(6000))
+    scenario.limit_credential(grok_z)
     hold = scenario.hold(task, reason: "credential_limit", credential: grok_z, item: false)
     stranger = scenario.credential(provider: "claude")
     stranger.update_columns(position: 0)
@@ -155,8 +157,9 @@ class HandoffTest < ActiveSupport::TestCase
 
   test "tasks: limits the look to those tasks" do
     trace_12
-    verify(@claude_b)
-    written = events_written { as_helper { |ctx| H.reevaluate(ctx, tasks: [ scenario.task(state: "ready") ]) } }
+    @claude_b.update!(state: "active", last_verified_at: from_now(0))
+    ready = scenario.task(state: "ready")
+    written = events_written { as_helper { |ctx| H.reevaluate(ctx, tasks: [ ready ]) } }
 
     assert_empty written
     assert_nil @hold.reload.closed_at

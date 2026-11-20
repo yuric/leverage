@@ -1,13 +1,17 @@
 module Leverage
   module Transitions
     module Entries
-      # claim (PRD Lifecycle L83, L492, L544-L545; milestone 2 plan EN-7,
-      # EN-8, EN-23): a builder seat claims the next eligible Ready task
-      # (Eligibility.next_task) at task.before_claim. The task goes to
-      # Working; the seat is its holder and builder; the task records the
-      # seat's credential; the lease runs one lease length. task.claimed
-      # carries the seat, the credential (null for a seat that connects on
-      # its own) and the model (null when the seat's is empty).
+      # claim (PRD Lifecycle L83, L492, L544-L545, L667, L690; milestone 2
+      # plan EN-7, EN-23; milestone 3 plan HD-4, HE-5): a builder seat
+      # claims the next eligible Ready task (Eligibility.next_task) at
+      # task.before_claim. The task goes to Working; the seat is its holder
+      # and builder; the lease runs one lease length. The task records the
+      # credential that does the work: the seat's first available candidate,
+      # on which Eligibility has checked its run is (HD-4). task.claimed
+      # carries the seat, that credential (null for a seat that connects on
+      # its own) and the model a run on it uses (Candidates.model_for, HE-5:
+      # the seat's within its provider group, the credential's in another;
+      # null when that one is empty).
       #
       # Refused not_eligible when the seat may not claim or nothing is left
       # (RC-50). The claim names no task, so no other refusal can apply:
@@ -20,7 +24,7 @@ module Leverage
           # A builder lease past its due time has ended (EN-14): its timer
           # runs first, so its task is back in Ready and claimable now.
           Timers.apply_claimable(ctx, :task)
-          @task = Eligibility.next_task(@seat)
+          @task = Eligibility.next_task(@seat, at: ctx.at)
         end
 
         def refusals(_ctx)
@@ -34,18 +38,18 @@ module Leverage
         end
 
         def perform(ctx)
+          credential = @seat.credential_id && Candidates.first_available(@seat, @task, ctx.at)
+          model = Candidates.model_for(@seat, credential)
           @task.update!(state: "working", holder_seat_id: @seat.id, builder_seat_id: @seat.id,
-            credential_id: @seat.credential_id, resume_pending_since: nil)
+            credential_id: credential&.id, resume_pending_since: nil)
           Leases.grant(ctx, @task)
-          model = @seat.model.presence
-          ctx.emit("task.claimed", task: @task,
-            payload: { seat_id: @seat.id, credential_id: @seat.credential_id, model: model })
+          ctx.emit("task.claimed", task: @task, payload: { seat_id: @seat.id, credential_id: credential&.id, model: model })
           @result = {
             "task" => self.class.summary(@task.reload),
             "lease" => { "seat_id" => @seat.id, "lease_due_at" => @task.lease_due_at.utc.iso8601(6) },
             "briefing" => Briefing.for(@task, seat: @seat),
             "work_reference" => @task.work_reference,
-            "credential_id" => @seat.credential_id,
+            "credential_id" => credential&.id,
             "model" => model
           }
         end

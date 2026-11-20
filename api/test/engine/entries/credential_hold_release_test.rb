@@ -63,7 +63,10 @@ class CredentialHoldReleaseTest < ActiveSupport::TestCase
     scenario.limit_credential(@claude_a, reset_at: from_now(3600))
     hold = scenario.hold(@task, reason: "credential_limit", credential: @claude_a, item: false)
 
-    written = events_written { assert_completed(release_timer) }
+    written = events_written do
+      assert_completed(release_timer)
+      assert_equal({ "released_task_ids" => [] }, assert_completed(release_timer("task_id" => @task.id)).result)
+    end
 
     assert_empty written
     assert_nil hold.reload.closed_at

@@ -10,11 +10,19 @@ module Leverage
       # and task.reassigned is never written:
       #
       #   builder_free  the previous builder holds nothing (a lease of its
-      #                 past its due time is ended first, by its timer) and
-      #                 is enabled, not paused and not removed: Working again,
+      #                 past its due time is ended first, by its timer), is
+      #                 enabled, not paused and not removed, and, for a seat
+      #                 the app runs, one of its candidates is available for
+      #                 the task (milestone 3 plan HE-14): Working again,
       #                 held by it under a fresh lease (lease_seat_id), which
-      #                 it must acknowledge again (L127);
-      #   builder_busy  the task is Ready with no holder and no builder.
+      #                 it must acknowledge again (L127). The lease starts on
+      #                 the first available candidate (L690, HD-1): when that
+      #                 is not the credential last recorded for the task,
+      #                 credential.switched follows the row's own events,
+      #                 caused by review.failed and written by the app; the
+      #                 seat's run is placed on it (SeatRuns.ensure_run_on);
+      #   builder_busy  the task is Ready with no holder and no builder, and
+      #                 review.failed names the cause of the wait (HE-35).
       #
       # review.failed, criterion.reopened for each named criterion in the
       # contract's order and cost.reported (EN-12) carry the round that
@@ -45,7 +53,7 @@ module Leverage
           # (EN-14): its timer is written first, so builder_free reads it
           # ended whether or not the sweep has run.
           Timers.apply_held_by(ctx, @builder)
-          @free = Eligibility.builder_free?(@builder)
+          @free = Eligibility.builder_free?(@builder, @task, at: ctx.at)
         end
 
         def refusals(_ctx)
@@ -77,10 +85,12 @@ module Leverage
 
           failed = ctx.emit("review.failed", task: @task, subject: @review,
             payload: { failed_criterion_ids: @failed.map(&:id), failed_rule_check_id: nil,
-                       lease_seat_id: @free ? @builder.id : nil, wait_cause: nil })
+                       lease_seat_id: @free ? @builder.id : nil,
+                       wait_cause: @free ? nil : Candidates.wait_cause(@task, ctx.at) })
           @failed.each { |criterion| ctx.emit("criterion.reopened", task: @task, subject: criterion, payload: {}) }
           ctx.emit("cost.reported", task: @task, subject: @review,
             payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
+          place_fresh_lease(ctx, failed) if @free
 
           reached = @task.round + 1
           if reached >= ctx.workspace.maximum_rounds + @task.extra_rounds
@@ -88,6 +98,22 @@ module Leverage
           end
           @task.update!(round: reached)
           @result = nil
+        end
+
+        private
+
+        # HD-1, HE-14: the fresh lease is on the builder's first available
+        # candidate; a switch when it is not the one last recorded.
+        def place_fresh_lease(ctx, failed)
+          return unless @builder.credential_id
+
+          to = Candidates.first_available(@builder, @task, ctx.at)
+          if to.id == @task.credential_id
+            SeatRuns.ensure_run_on(ctx, @builder, to, @task)
+          else
+            from = @task.credential_id && Credential.find_by(id: @task.credential_id, workspace_id: @task.workspace_id)
+            Handoff.switch(ctx, seat: @builder, to: to, from: from, cause: failed, task: @task)
+          end
         end
       end
     end

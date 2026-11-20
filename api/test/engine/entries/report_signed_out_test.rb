@@ -152,7 +152,8 @@ class ReportSignedOutTest < ActiveSupport::TestCase
     other = scenario.seat(role: "builder", credential: @claude_a)
     assert_raises(T::NotFound) { report_signed_out(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
     assert_refused("not_holder", report_signed_out(@claude_a, other, task: @task))
-    assert_refused("invalid_state", report_signed_out(@claude_a, @builder, task: scenario.finishing_task(builder: @builder)))
+    finisher = scenario.seat(role: "builder", credential: @claude_a)
+    assert_refused("invalid_state", report_signed_out(@claude_a, finisher, task: scenario.finishing_task(builder: finisher)))
     assert_equal "active", @claude_a.reload.state
     assert_empty Event.where(workspace_id: scenario.workspace_id, type: "credential.signed_out", subject_id: @claude_a.id)
   end

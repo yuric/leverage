@@ -1,13 +1,15 @@
 module Leverage
   module Transitions
     module Entries
-      # claim_review (PRD Lifecycle L89, L506; milestone 2 plan EN-7, EN-23;
-      # DB-20): a reviewer seat claims the oldest open review it may take
-      # (Eligibility.next_review) at review.assign. The seat becomes the
-      # review's reviewer, the review records the seat's credential, and the
-      # review lease runs one lease length; the task stays In review.
-      # review.started carries the credential and the model (null when the
-      # seat's is empty).
+      # claim_review (PRD Lifecycle L89, L506, L667, L690; milestone 2 plan
+      # EN-7, EN-23; DB-20; milestone 3 plan HD-4, HE-5): a reviewer seat
+      # claims the oldest open review it may take (Eligibility.next_review)
+      # at review.assign. The seat becomes the review's reviewer and the
+      # review lease runs one lease length; the task stays In review. The
+      # review records the credential that does it: the seat's first
+      # available candidate, on which its run is (HD-4). review.started
+      # carries that credential and the model a run on it uses
+      # (Candidates.model_for, HE-5; null when none is set).
       #
       # Refused not_eligible when the seat may not claim or no review is
       # left (RC-50).
@@ -19,7 +21,7 @@ module Leverage
           # A review whose lease is past its due time has no reviewer
           # (EN-14): its timer runs first, so it is claimable now.
           Timers.apply_claimable(ctx, :review)
-          @review = Eligibility.next_review(@seat)
+          @review = Eligibility.next_review(@seat, at: ctx.at)
           @task = @review && Task.find_by!(id: @review.task_id, workspace_id: ctx.workspace.id)
         end
 
@@ -35,18 +37,18 @@ module Leverage
         end
 
         def perform(ctx)
-          @review.update!(reviewer_seat_id: @seat.id, credential_id: @seat.credential_id)
+          credential = @seat.credential_id && Candidates.first_available(@seat, @review, ctx.at)
+          model = Candidates.model_for(@seat, credential)
+          @review.update!(reviewer_seat_id: @seat.id, credential_id: credential&.id)
           Leases.grant(ctx, @review)
-          model = @seat.model.presence
-          ctx.emit("review.started", task: @task, subject: @review,
-            payload: { credential_id: @seat.credential_id, model: model })
+          ctx.emit("review.started", task: @task, subject: @review, payload: { credential_id: credential&.id, model: model })
           @review.reload
           @result = {
             "review" => self.class.summary(@review),
             "lease" => { "seat_id" => @seat.id, "lease_due_at" => @review.lease_due_at.utc.iso8601(6) },
             "briefing" => Briefing.for(@task, seat: @seat, review: @review),
             "work_reference" => @task.work_reference,
-            "credential_id" => @seat.credential_id,
+            "credential_id" => credential&.id,
             "model" => model
           }
         end

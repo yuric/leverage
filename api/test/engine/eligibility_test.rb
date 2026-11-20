@@ -203,7 +203,7 @@ class EligibilityTest < ActiveSupport::TestCase
     assert_nil E.next_task(@builder)
 
     @scenario.run(@builder, on: nil)
-    assert_nil E.next_task(@builder.reload), "a seat with no run"
+    assert_equal task.id, E.next_task(@builder.reload).id, "a token issued before its run was recorded is on its own login"
 
     @scenario.run(@builder)
     assert_equal task.id, E.next_task(@builder.reload).id

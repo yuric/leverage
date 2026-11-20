@@ -28,14 +28,15 @@ class StateTableTest < ActiveSupport::TestCase
 
   StateTableCases.define(self, T::Table::TASK_LOOP) do |kase|
     reason = not_served(kase)
-    skip "not reachable in milestone 2: #{reason}" if reason
+    skip "not reachable before a later milestone: #{reason}" if reason
 
     kase.invalid_state? ? assert_invalid_state(kase) : assert_row(kase)
   end
 
   private
 
-  # Why a case cannot be reached in milestone 2, or nil.
+  # Why a case cannot be reached before a later milestone (milestone 3 serves
+  # no row from Finishing either, its plan HS-3), or nil.
   def not_served(kase)
     return "Finishing needs an outward action (SC-3)" if kase.from == "finishing"
     return "no rule escalates (EN-5)" if kase.guard.include?("escalates")
