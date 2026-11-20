@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; the contract recorded; the Core loop milestone built: the API's transition function, sign-in, the agent and helper calls, the helper, the reference runner and the Mac app, run on the owner's Mac |
+| **Status** | Rules in force; the contract recorded; the Core loop and Handoff milestones built: the API's transition function, sign-in, the agent and helper calls, the helper, the reference runner and the Mac app, run on the owner's Mac; a run that meets a limit or a sign-out continues on the next account; a daily backup |
 | **Last updated** | 2026-11-19 |
 
 This document describes how leverage is built: its components, how they
@@ -308,42 +308,53 @@ flowchart LR
     helper["LeverageHelper"]
     runner["LeverageRunner, one per running seat"]
     tool["The provider's tool"]
+    backups[("backups folder")]
     subgraph docker["Docker containers (project leverage-app)"]
       api["api (Rails)"]
       sweep["sweep"]
+      backup["backup"]
       db[("db (PostgreSQL)")]
     end
   end
   app -- "starts with docker compose" --> docker
   app -- "starts, token in its environment" --> helper
-  helper -- "starts, seat token in its environment" --> runner
+  helper -- "starts, seat token, account and work in its environment" --> runner
+  runner -- "exit code 5 and one line: limit or signed out" --> helper
   runner -- "starts, no leverage token" --> tool
   app -- "HTTP, 127.0.0.1" --> api
   helper -- "HTTP, 127.0.0.1" --> api
   runner -- "HTTP, 127.0.0.1" --> api
   api --> db
   sweep --> db
+  backup --> db
+  backup -- "one dump a day" --> backups
 ```
 
-The Core loop runs on the owner's Mac. The Mac app starts the server's three
+leverage runs on the owner's Mac. The Mac app starts the server's four
 containers through Docker Desktop ([ADR 0004](adr/0004-one-app-bundle-for-the-first-run.md)):
-the API, the sweep that applies due timers, and PostgreSQL. Once the owner
-signs in, the app starts the helper, which polls the server for its
-requests: it adds and verifies logins, installs a provider's tool, and
-starts and stops a `LeverageRunner` for each seat the app runs. A runner
+the API, the sweep that applies due timers, the daily backup
+([ADR 0010](adr/0010-daily-backup-and-restore.md)) and PostgreSQL. Once
+the owner signs in, the app starts the helper, which polls the server for
+its requests: it adds and verifies logins, signs a login in again,
+installs a provider's tool, and starts and stops a `LeverageRunner` for
+each seat the app runs, each on the account the server names. A runner
 claims tasks or reviews over the agent interface and drives the provider's
-tool for each criterion or review; the tool never calls leverage. Every
-change goes through the API's transition function, which appends the event
-log in the same transaction. A seat that connects on its own calls the same
-agent interface with its own token.
+tool for each criterion or review; the tool never calls leverage. When a
+tool run fails because its account reached a limit or is signed out, the
+runner tells the helper in one line, the helper reports it, and the
+server continues the work on the next account in the Handoff order or
+holds it ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)).
+Every change goes through the API's transition function, which appends the
+event log in the same transaction. A seat that connects on its own calls
+the same agent interface with its own token.
 
 ## Components
 
 Seven product units exist: the API and six Swift ones. The roles
 [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) gives them,
 and the units [ADR 0005](adr/0005-code-units-of-the-core-loop.md) adds, are
-built as far as the Core loop milestone; each entry says what the code does
-today.
+built as far as the Handoff milestone, which added no unit and no
+direction; each entry says what the code does today.
 
 ### API
 
@@ -359,6 +370,16 @@ today.
   steps in the same transaction, and stores the outcome. Reads are
   `Leverage::Reads::*`, which write nothing; the owner's reads run in one
   repeatable-read snapshot and carry the log position they saw.
+  `Leverage::Candidates` reads a seat's candidates in the Handoff order and
+  which of them is available; `Leverage::Handoff` is what happens to a
+  piece of work when its account stops or becomes available again (switch
+  to the next candidate, hold the task, release the review, or close a
+  credential hold), and the only caller of `Holds` for the two credential
+  reasons; `SeatRuns.ensure_run_on` asks the helper for a run on the
+  account the work is recorded on
+  ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)).
+  `Leverage::Backup` makes and prunes the daily dumps and restores one
+  ([ADR 0010](adr/0010-daily-backup-and-restore.md)).
 - **Owns:** the PostgreSQL database and the HTTP interface under `/v1`.
 - **Depends on:** PostgreSQL, and the gems in `api/Gemfile`. It depends on
   no other component.
@@ -367,13 +388,17 @@ today.
   `transitions/`, one entry per command in `transitions/entries/`), its
   parts (`event_log.rb`, `workspace_lock.rb`, `idempotency.rb`,
   `steps.rb`, `holds.rb`, `leases.rb`, `timers.rb`, `eligibility.rb`,
-  `briefing.rb`, `tokens.rb`, `seat_runs.rb`), the sweep (`sweep.rb`,
-  `api/bin/sweep`), the reads, `Leverage::Replay` and `Leverage::LogAudit`
-  (run by `bin/rails leverage:verify_log`), and milestone 1's
+  `briefing.rb`, `tokens.rb`, `seat_runs.rb`, `candidates.rb`,
+  `handoff.rb`, `contract_diff.rb`), the sweep (`sweep.rb`,
+  `api/bin/sweep`), the backup (`backup.rb`, `api/bin/backup`,
+  `api/bin/restore`), the reads (among them `reads/inbox.rb` and
+  `reads/recovery_times.rb`), `Leverage::Replay` and `Leverage::LogAudit`
+  (run by `bin/rails leverage:verify_log`; `bin/rails
+  leverage:recovery_times` prints every recovery time), and milestone 1's
   `Leverage::Contract` and `Leverage::Gating`. The role files a briefing
   carries are `api/config/role_files/`, and the landing prompt's template
-  is `api/config/landing_prompt.md.erb`. It runs in the `api` and `sweep`
-  containers that `compose.yaml` describes.
+  is `api/config/landing_prompt.md.erb`. It runs in the `api`, `sweep` and
+  `backup` containers that `compose.yaml` describes.
 
 ### Shared Swift library (LeverageKit)
 
@@ -383,8 +408,16 @@ today.
   `HTTPTransport`; the contract's models; the contract's fixed lists and
   operations in `Generated/Contract.swift`, written by
   `scripts/generate_swift_contract.py`; `Subprocess`, `Log` and
-  `Redaction`; `ProviderCatalog`; `EnvironmentKeys`; and the protocols the
-  app's screens depend on (`AppRuntime`).
+  `Redaction`; `ProviderCatalog` (with the model each tool names as its
+  default, where it names one); `EnvironmentKeys`; and the protocols the
+  app's screens depend on (`AppRuntime`, with `Notifying` and
+  `InboxCursorStoring`). `Detection/` holds one detector per provider,
+  which reads a failed tool run and answers limit (with its window and
+  stated reset time), short rate limit, signed out or failed
+  ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md));
+  `SignInStatus` asks a tool's status command whether an account is
+  signed in and keeps nothing of its output; `RunEndReport` is the one line
+  a runner prints when its account stops.
 - **Owns:** every HTTP call from the Mac side to the API, and the decoding
   of the answers.
 - **Depends on:** Foundation (`FoundationNetworking` where it exists), the C
@@ -403,6 +436,13 @@ today.
   [Providers' tools](#providers-tools)). `LeverageRunner probe` runs one
   test prompt, for the helper's `test_prompt` check. On a stop signal it
   ends the tool's process group, gives back what it holds and exits 0.
+  After a failed tool run of a seat with a credential, `Interruption` asks
+  the provider's detector and, when that settles nothing, `SignInStatus`;
+  it retries a short rate limit after 5, 15 and 45 seconds. On a limit or
+  a sign-out it stops heartbeating, gives back nothing, prints one
+  `RunEndReport` line on standard output and exits 5. Started with work to
+  continue (`LEVERAGE_CONTINUE_TASK_ID` or `LEVERAGE_CONTINUE_REVIEW_ID`),
+  it goes on from that work's first criterion that has not passed.
 - **Owns:** nothing stored. It makes `<work root>/<task id>/` when a task
   names no folder.
 - **Depends on:** LeverageKit.
@@ -417,7 +457,13 @@ today.
   installed, signed in, test prompt), with progress per check; installing
   a provider's tool from its catalog source after the owner confirmed;
   starting a seat's run (seat-token pickup, then `LeverageRunner` with the
-  token in its environment) and stopping it. It never adopts an existing
+  token, the account and the work to continue in its environment) and
+  stopping it; and Sign in again (`SignInAgain`: the provider's own
+  sign-in, then the verify checks). A start for a seat whose run is alive
+  is a hand-over: the new token first, then the old run is stopped, then
+  the new one starts. When a runner exits 5 the helper reads its last line
+  and sends `report_limit` or `report_signed_out`
+  (`InterruptionReporter`). It never adopts an existing
   account folder: Add always starts from a new, empty one. It stops its
   runs and exits when its token answers `401` (exit 3) or when the app that
   started it is gone (`ParentWatch`, in LeverageKit). A runner watches the
@@ -440,8 +486,12 @@ today.
   `docker compose up -d`, the wait for health), `HelperSupervisor` (the
   helper's token and process, its restarts, its stop), `AppLock` (one app
   per support folder), `SessionStore` (`KeychainSessionStore` and
-  `MemorySessionStore`), and `ProcessRunner` for docker's commands.
-- **Owns:** the server folder and the owner's session in the Keychain.
+  `MemorySessionStore`), `ProcessRunner` for docker's commands,
+  `UserNotifier` (macOS notifications through the platform's
+  `UserNotifications`) and `InboxCursorStore` (the last Needs you item
+  announced). `ServerFiles` also makes the backups folder.
+- **Owns:** the server folder, the backups folder, the inbox cursor file
+  and the owner's session in the Keychain.
 - **Depends on:** LeverageKit and Foundation.
 - **Code:** `mac/Sources/LeverageAppServices/`; tests in
   `mac/Tests/LeverageAppServicesTests/`.
@@ -450,17 +500,24 @@ today.
 
 - **Responsibility:** the owner's window. It starts the server and, after
   sign-in, the helper; creates the owner's sign-in on a new installation,
-  signs in and out; and shows the board, the task page with its log, the
-  Add task form, the Agent roster with Connect (and the landing prompt of
-  a seat that connects on its own) and the Credentials list with Add
-  credential. Every owner-facing sentence is a case of a copy catalog,
-  checked against the PRD's banned terms by `CopyTests`. `Live.swift`
-  builds the real services (`LiveSettings`, the support folder's lock);
-  the image tag comes from the bundle's `LeverageAPIImageTag`.
-- **Owns:** nothing stored itself; the services above keep the session.
+  signs in and out; and shows the board (with the Ideas lane), the task
+  page with its log, Change the task, Pause and Continue, the Add task
+  form (with Save as an idea), Needs you, the Agent roster with Connect,
+  Pause, Resume and Change (and the landing prompt of a seat that connects
+  on its own), the Credentials list with Add credential, Sign in again and
+  each login's limit, and the Handoff tab with the order and its eight
+  fixed rules. `InboxWatcher` announces each Needs you item once, through
+  `Notifying`, and keeps the count on the tab. Every owner-facing sentence
+  is a case of a copy catalog, checked against the PRD's banned terms by
+  `CopyTests`. `Live.swift` builds the real services (`LiveSettings`, the
+  support folder's lock, the notifier and the inbox cursor); the image tag
+  comes from the bundle's `LeverageAPIImageTag`.
+- **Owns:** nothing stored itself; the services above keep the session and
+  the inbox cursor.
 - **Depends on:** LeverageKit, LeverageAppServices and SwiftUI.
 - **Code:** `mac/Sources/LeverageApp/` (`Shell/`, `SignIn/`, `Board/`,
-  `AddTask/`, `TaskPage/`, `Agents/`, `Credentials/`, `Design/`); tests in
+  `AddTask/`, `TaskPage/`, `NeedsYou/`, `Agents/`, `Credentials/`,
+  `Handoff/`, `Design/`); tests in
   `mac/Tests/LeverageAppTests/`. `scripts/build_app.sh` assembles
   `dist/Leverage.app` from it, the helper, the runner and
   `mac/Packaging/`.
@@ -469,11 +526,14 @@ today.
 
 `LeverageTestSupport` holds what the Swift tests share: the stand-in tool
 locator, temporary folders, `StubURLProtocol` and in-memory fakes of the
-three API protocols and of the app's runtime. `LeverageEndToEndTests` runs
-the built helper and runner against the real API (`scripts/e2e_core_loop.sh`).
+three API protocols and of the app's runtime, among them `FakeNotifier`
+and `FakeInboxCursorStore`. `LeverageEndToEndTests` runs the built helper
+and runner against the real API (`scripts/e2e_core_loop.sh`, and
+`scripts/e2e_handoff.sh` for the six interrupted runs).
 `mac/Tests/StandIns/` holds the stand-in tools (`claude`, `codex`, `agy`,
-`grok`, an installer and an archive) in Python and shell; it is not a code
-unit.
+`grok`, an installer and an archive) in Python and shell, and under
+`replies/` the provider replies the detectors are tested against and the
+stand-ins play; it is not a code unit.
 
 ### Allowed dependency directions
 
@@ -517,8 +577,11 @@ the first change that needs one chooses it and adds it here.
 |---|---|---|
 | Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code and three timings (`Leverage::CommandLog`); never a header or a body. Logged parameters are filtered for anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
-| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
-| Persistence | Active Record on PostgreSQL. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)). No token is ever written to a file. |
+| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, and the app's `LEVERAGE_NOTIFICATIONS`; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
+| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)), the one number `InboxCursorStore` keeps among them. No token is ever written to a file. |
+| Notifications | None. | `Notifying` in LeverageKit's `AppRuntime`; the real one is `UserNotifier` in LeverageAppServices, on the platform's `UserNotifications`, made only by `UserNotifier.make(bundleURL:environment:)` and only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`; everywhere else, tests included, the form that posts nothing. `InboxWatcher` in LeverageApp is its one caller. |
+| Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
+| How a run ends for a reason | `report_limit` and `report_signed_out` through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
 | Child processes | None. | `Subprocess` in LeverageKit: an absolute program path, an environment built from an allow-list and never the parent's, standard input `/dev/null`, the child in a process group of its own, both outputs read while it runs, and a time limit or stop that sends the group `SIGTERM` and then `SIGKILL`. A provider's tool gets `PATH`, `HOME`, `TMPDIR`, `LANG`, its account-folder variable and, for Claude, `USER` (`ProviderCatalog.toolEnvironment`); the runner gets the helper's `HOME`, `TMPDIR`, `LANG` and `USER`, `PATH=/usr/bin:/bin`, its seat token and the run's inputs; the helper gets `HOME`, `PATH`, `TMPDIR`, `LANG`, `USER`, its token, the API's address and the support folder; docker gets only `HOME` and `PATH`. |
 | Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
 
@@ -527,13 +590,17 @@ the first change that needs one chooses it and adds it here.
 - **Where.** PostgreSQL, in the `db` container, is the only store of the
   workspace. The PRD's [Data model](PRD.md#data-model) is the requirement;
   `api/db/structure.sql` is the schema, built by the migrations in
-  `api/db/migrate/`. It has the 26 tables the Data model names plus
+  `api/db/migrate/`. It has the 27 tables the Data model names plus
   `sessions`, `helper_requests` and `briefing_acknowledgements` (owner
-  sign-in, the helper's requests and briefing acknowledgements), 29 in all,
-  and each but `workspaces` has a `workspace_id` with a foreign key. The
-  Core loop added `helper_requests.params` and `helper_requests.progress`
-  (the non-secret inputs of a request, and per-check progress) and
-  `seats.wanted_running`. CI migrates from zero, with `structure.sql` moved
+  sign-in, the helper's requests and briefing acknowledgements), 30 in all,
+  and each but `workspaces` and `backup_runs` has a `workspace_id` with a
+  foreign key (a dump is of the whole database). The Core loop added
+  `helper_requests.params` and `helper_requests.progress` (the non-secret
+  inputs of a request, and per-check progress) and `seats.wanted_running`.
+  The Handoff milestone added `backup_runs`, `credentials.limited_since`
+  (a limit was reported; `limited_until` is set only with it),
+  `seats.run_credential_id` (the account the seat's current run is on) and
+  `seats.run_stop_reason`. CI migrates from zero, with `structure.sql` moved
   away so the migrations run, and fails when the result differs from the
   committed file. From the Core loop on, migrations only go forward.
 - **Who writes.** Every change goes through `Leverage::Transitions`; the
@@ -556,9 +623,10 @@ the first change that needs one chooses it and adds it here.
     `reviews.reviewer_seat_id` counts only reviews with no verdict.
   - The `leverage_app` role (`NOLOGIN`, kept by the `db:grants` task after
     every task that builds or changes the schema) has `SELECT, INSERT` on
-    `events` and `rule_versions`, `SELECT, INSERT, UPDATE, DELETE` on every
-    other table, and no `TRUNCATE`. Migrations, tests and other commands
-    use the database's owner role.
+    `events` and `rule_versions`, `SELECT` only on `backup_runs`, `SELECT,
+    INSERT, UPDATE, DELETE` on every other table, and no `TRUNCATE`.
+    Migrations, tests, the backup, the restore and other commands use the
+    database's owner role.
 - **What is never stored.** No column holds a token or a password in the
   clear: the only such names are `token_hash` (`sessions`, `helpers`,
   `seats`, a SHA-256 hex digest) and `users.password_digest` (bcrypt). A
@@ -571,8 +639,17 @@ the first change that needs one chooses it and adds it here.
   keychain reference has a column.
 - **How long.** The sweep deletes `commands` rows (the idempotency keys and
   stored outcomes) and `sweep_runs` rows older than 7 days. Nothing else is
-  deleted; the log is kept for good. Nothing backs the database up yet
-  ([DEPLOY.md](DEPLOY.md) says where it is and what destroys it).
+  deleted; the log is kept for good.
+- **Backups.** The `backup` service dumps the whole database once a day
+  (`pg_dump` custom format) into a folder on the host, outside Docker's
+  volumes: the app's `<support folder>/backups`, folder 0700, each file
+  0600. It keeps the newest 14 dumps that its `backup_runs` rows name and
+  never touches another file. A dump holds personal data (the owner's
+  email and password digest, account names, every task's text) and no
+  provider secret. `bin/restore` makes the database again from one dump
+  and passes only if the replay test passes
+  ([ADR 0010](adr/0010-daily-backup-and-restore.md);
+  [DEPLOY.md](DEPLOY.md) says how).
 - **Values.** Closed values are plain `text` columns, checked by the
   application against `api/contract/registry.json`; there is no PostgreSQL
   enum type. Durations that are settings are integer seconds.
@@ -583,9 +660,18 @@ the first change that needs one chooses it and adds it here.
   login's own settings folder, made new by Add and removed when the add
   fails), `tools/<provider>/` (a tool leverage unpacked),
   `work/<task id>/` (a task's folder when it names none), `logs/`
-  (`helper.log` and one `seat-<id>.log` per run) and `app.lock`. A
-  provider's own sign-in lives in that folder or, for a provider with one
-  sign-in for the Mac, where the tool keeps it; leverage never reads it.
+  (`helper.log` and one `seat-<id>.log` per run), `backups/` (the daily
+  dumps, folder 0700), `inbox-cursor` (mode 0600: one number, the `seq` of
+  the last Needs you item the app announced, so that each is announced
+  once across restarts) and `app.lock`. A provider's own sign-in lives in
+  that folder or, for a provider with one sign-in for the Mac, where the
+  tool keeps it; leverage never reads it. The Mac still keeps no token in
+  a file.
+- **Reply files.** `mac/Tests/StandIns/replies/` holds 22 provider replies,
+  each recorded from a tool with no login or made, scrubbed and checked by
+  `scripts/check_reply_fixtures.py`
+  ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md)). They
+  are test data, not shipped in the app.
 
 ## Interfaces
 
@@ -603,12 +689,21 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Expected behavior, end to end | `api/contract/traces/` (ten traces; 09 and 10 are the Core loop's, with no rules) |
+| Expected behavior, end to end | `api/contract/traces/` (fifteen traces; 09 and 10 are the Core loop's and 11 to 15 the Handoff milestone's, all with no rules) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
-The served operations are the Core loop's: 16 agent calls, the owner's
-sign-in, reads and commands, the helper's calls, and `GET /v1/health`. Every
-other operation of the contract answers `404`. The Core loop added six
+The served operations are the Core loop's and eleven the Handoff milestone
+serves: 16 agent calls, the owner's sign-in, reads and commands, the
+helper's calls, and `GET /v1/health`; then the helper's `report_limit` and
+`report_signed_out`, and the owner's `sign_in_again`, `list_inbox`,
+`promote_task`, `edit_contract`, `hold_task`, `resume_task`, `pause_seat`,
+`resume_seat` and `change_seat`. Every other operation of the contract
+answers `404`: among them the job calls, rules, `report_reading`,
+reordering, renaming and removing a credential, API tokens and
+`change_workspace_settings`. A limit or sign-out report that names a job
+answers `404` too. The Handoff milestone added no operation to the
+contract, and changed no shape that is not provisional
+([the contract's README](../api/contract/README.md)). The Core loop added six
 operations to the contract: `get_setup_state` and `create_owner` (the
 first sign-in), `sign_out_owner`, `get_helper_request` (one helper
 request's state and progress, with a long poll), `report_request_progress`
@@ -657,6 +752,18 @@ time limit, and no run gets a flag that skips permissions or sandboxing.
 An installer is downloaded only over HTTPS from a host its catalog entry
 lists.
 
+How a limit and a sign-out are recognised in each tool's failed run is
+[ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md). Every
+limit reply the detectors are written to is made, not observed; which
+replies are recorded and which are made, per provider, is in
+[IMPLEMENTATION.md](IMPLEMENTATION.md#what-the-handoff-milestone-proves-and-how-far). Sign in
+again uses each tool's own sign-in, as Add credential does. Add credential
+sets a login's model to the one its tool names as its default where it
+names one (Claude `claude-opus-5-5` and Grok `grok-4.6`, each seen in a
+run with the agent's whole environment, not the allow-list), and leaves it
+empty for Codex and Antigravity, which name none; empty means the tool's
+own default.
+
 ## Trust boundaries
 
 The Core loop is the first code that crosses the line between the Mac and
@@ -698,6 +805,25 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   model name of at most 128 characters from a fixed character set with no
   `@`. An installer's address must be HTTPS on a host its catalog entry
   lists, also after a redirect.
+- **A tool's output never leaves the runner.** A detector is given a
+  failed run's exit status and outputs in memory only (`ToolRunRecord`,
+  whose description shows sizes, never text) and gives back a kind; only
+  the kind, the window and a stated reset time reach the helper, in the
+  `RunEndReport` line, and the logs say only the kind. A status command
+  prints the account's email, organisation and plan, so `SignInStatus`
+  reads its one signed-in field and keeps, logs and returns nothing else.
+- **The helper's reports are checked against what the seat holds.** A
+  limit or sign-out report must name a credential that is an added login,
+  a seat with a credential, and exactly one task or review; it is refused
+  when the seat does not hold that work, or when the credential is not the
+  one recorded for it. A refused report marks no credential and writes no
+  event.
+- **Reply files are scrubbed and checked.** A recorded reply keeps the
+  tool's wording and loses its session ids, request ids, account folders
+  and the like; `scripts/check_reply_fixtures.py` refuses an email, a token
+  prefix, a real id or a named field with a real value, and the
+  end-to-end secret scan fails if a reply's marker or long line is found
+  outside the stand-ins' folder.
 - **Secrets.** No request, stored outcome, event or log carries a provider
   login, sign-in token, link, code or API token. A provider's tool gets no
   leverage token: its environment is the allow-list above. The helper's
@@ -713,9 +839,16 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   helper's calls are separate operations with separate schemes. In the
   database, migrations run as the owner role, and the server and the sweep
   log in as `leverage_api`, which cannot change the event log; every table
-  but `workspaces` is scoped by `workspace_id`. The server folder's `.env`
-  holds the database passwords and `SECRET_KEY_BASE`, readable only by the
-  owner's Mac account.
+  but `workspaces` and `backup_runs` is scoped by `workspace_id`. The
+  `backup` service connects as the owner role, which every container of
+  the image already holds, and gives the password to `pg_dump` and
+  `pg_restore` in their environment, never in an argument. The server
+  folder's `.env` holds the database passwords and `SECRET_KEY_BASE`,
+  readable only by the owner's Mac account.
+- **Backups hold personal data.** A dump holds the owner's email and
+  password digest, account names and every task's text, and no provider
+  secret. The folder is mode 0700 and each dump 0600 on the Mac; it is not
+  copied off the Mac.
 - **What is not protected.** Agents run as the owner's own Mac account
   (PRD, Risks): a provider's tool can read whatever that account can, and
   leverage gates only what goes through it. A seat that connects on its
@@ -744,6 +877,10 @@ Each choice is recorded in the ADR named beside it.
 | Packaging | One app bundle built on the owner's Mac, ad-hoc signed, that starts the server through Docker Desktop and the helper as its child | [ADR 0004](adr/0004-one-app-bundle-for-the-first-run.md) |
 | Owner sign-in and tokens | `bcrypt` 3.1.22 for the password; opaque prefixed tokens stored as SHA-256; plain HTTP on loopback | [ADR 0006](adr/0006-owner-sign-in-and-tokens.md) |
 | Timers and the database login | A `sweep` service from the API's image, no job runner; long polls by looking again; the server and the sweep log in as `leverage_api` | [ADR 0007](adr/0007-sweep-service-and-database-login-role.md) |
+| Handoff between accounts | A run on one account for its whole life; the server asks the helper for a run on the account the work is recorded on; the runner tells the helper by exit code 5 and one line | [ADR 0008](adr/0008-how-a-run-moves-to-another-account.md) |
+| Limit and sign-out detection | One detector per provider in LeverageKit, written to recorded and made reply files kept under `mac/Tests/StandIns/replies/` | [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md) |
+| Backups | A `backup` service from the API's image: `pg_dump` once a day to a folder on the host, `bin/restore` with the replay test; no new dependency | [ADR 0010](adr/0010-daily-backup-and-restore.md) |
+| Notifications | The platform's `UserNotifications`, a module of macOS, not a dependency to pin | No ADR: nothing is chosen beyond the platform the Mac app already targets |
 
 ## Architecture decision records
 
@@ -785,3 +922,6 @@ Recorded so far:
 - [0005. Code units of the core loop](adr/0005-code-units-of-the-core-loop.md)
 - [0006. Owner sign-in and tokens](adr/0006-owner-sign-in-and-tokens.md)
 - [0007. The sweep service and the database login role](adr/0007-sweep-service-and-database-login-role.md)
+- [0008. How a run moves to another account](adr/0008-how-a-run-moves-to-another-account.md)
+- [0009. Detectors from recorded and made replies](adr/0009-detectors-from-recorded-and-made-replies.md)
+- [0010. Daily backup and restore](adr/0010-daily-backup-and-restore.md)

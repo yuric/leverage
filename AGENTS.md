@@ -5,38 +5,51 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has its contract and the Core loop milestone: an owner can sign
-in, add logins, connect a builder and a reviewer, and take a task from a
-form to Done, on the owner's Mac. That is shown end to end with stand-in
-provider tools; no real provider has run through it yet. The repository holds the documentation,
+leverage has its contract, the Core loop milestone and the Handoff
+milestone: an owner can sign in, add logins, connect a builder and a
+reviewer, and take a task from a form to Done, on the owner's Mac; a run
+that meets a provider limit or a signed-out login continues on the next
+account in the Handoff order, or waits and tells the owner through Needs
+you and a notification; the owner can promote, edit, pause and continue a
+task and pause, resume and change an agent; and the database is backed up
+every day, with a tested restore. That is shown end to end with stand-in
+provider tools; no real provider has run through it yet, and no
+interruption has been shown on a real provider. The repository holds the documentation,
 the research behind its practices, and the scripts and checks that keep
 them consistent, plus:
 
 - `api/`: a Rails application in API mode, with Minitest tests. It serves
   the owner's, the agents' and the helper's calls of the Core loop through
-  one transition function (`api/lib/leverage/transitions.rb`), and runs a
-  timer sweep (`api/bin/sweep`); `bin/rails leverage:verify_log` replays a
-  workspace's log against its tables;
+  one transition function (`api/lib/leverage/transitions.rb`), runs a
+  timer sweep (`api/bin/sweep`) and a daily backup (`api/bin/backup`, with
+  `api/bin/restore`); `bin/rails leverage:verify_log` replays a
+  workspace's log against its tables, and `bin/rails
+  leverage:recovery_times` prints each interrupted run's recovery time;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
   [README](api/contract/README.md); `api/db/`: the migrations and
   `structure.sql` for every table of the Data model;
-- `mac/`: a Swift package with the library LeverageKit, the reference
-  runner LeverageRunner, the helper LeverageHelper, the app's services
-  LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests
-  and stand-in provider tools in `mac/Tests/StandIns/`;
-- `compose.yaml` (the API, the sweep and PostgreSQL in Docker containers on
-  the owner's Mac, the one environment in [docs/DEPLOY.md](docs/DEPLOY.md)),
-  `compose.test.yaml` (lets Docker pick the API's port in automated runs)
-  and `.env.example`;
+- `mac/`: a Swift package with the library LeverageKit (with one limit
+  and sign-out detector per provider), the reference runner
+  LeverageRunner, the helper LeverageHelper, the app's services
+  LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
+  stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
+  they play in `mac/Tests/StandIns/replies/`;
+- `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
+  Docker containers on the owner's Mac, the one environment in
+  [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
+  the API's port in automated runs) and `.env.example`;
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
-  with stand-in tools), `speed_run.sh`, `secret_scan.py`,
+  with stand-in tools), `e2e_handoff.sh` (six runs interrupted by a limit
+  or a sign-out, with stand-in tools), `restore_drill.sh` (a backup
+  restored into an emptied cluster), `speed_run.sh`, `secret_scan.py`,
   `generate_swift_contract.py` and `app_compose.py`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
-  migrations-from-zero check, the import check, the app bundle and the
-  end-to-end run on Linux on every pull request;
+  migrations-from-zero check, the import check, the reply-file check, the
+  app bundle, and on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  `e2e_handoff.sh`) and the restore drill on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract.
 
@@ -162,6 +175,8 @@ python3 -I scripts/generate_swift_contract.py --check  # Swift copy of the contr
 python3 -I scripts/test_generate_swift_contract.py   # self-test of the generator
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
+python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
+python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
@@ -220,6 +235,7 @@ docker compose run --rm --no-deps api bin/rubocop    # style
 docker compose up -d                                 # run the API, the sweep and the database
 curl -s http://127.0.0.1:3000/v1/health              # check it answers
 docker compose exec -T api bin/rails leverage:verify_log  # replay every workspace's log
+docker compose exec -T api bin/rails leverage:recovery_times  # every recovery time
 docker compose down                                  # stop; the data is kept
 ```
 
@@ -272,13 +288,21 @@ else):
 
 ```bash
 scripts/e2e_core_loop.sh                             # the whole loop with stand-in tools
+scripts/e2e_handoff.sh                               # six interrupted runs, one compose project each
+scripts/restore_drill.sh                             # back up, empty the cluster, restore, replay
 scripts/speed_run.sh                                 # 50 seats for 120 s; prints the speed table
 scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, open it, check its server
 ```
 
 Each starts a compose project of its own and removes it, also on failure.
+`e2e_handoff.sh` and `restore_drill.sh` also make a backup folder of their
+own (mode 0777) under `TMPDIR`; they use the image `API_IMAGE_TAG` names
+when it is set. Anything else that starts the `backup` service, or runs
+`bin/backup` or `bin/restore`, exports `LEVERAGE_BACKUP_DIR` to a folder of
+its own first, so that nothing writes into the checkout's `./backups`.
 `smoke_app.sh` uses a support folder and a compose project of its own
-(`leverage-smoke-<pid>`). No automated test calls a real provider: the
+(`leverage-smoke-<pid>`), sets `LEVERAGE_NOTIFICATIONS=off` so that no
+notification permission is asked for, and waits for the first dump. No automated test calls a real provider: the
 tests find the providers' tools only through `LEVERAGE_TOOL_DIR`, on the
 stand-ins. `scripts/real_gemini_through_app.sh` runs only with
 `LEVERAGE_REAL_PROVIDER=gemini` and never in CI.
