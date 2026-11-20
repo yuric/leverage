@@ -381,6 +381,38 @@ class StepTrackerTest < ActiveSupport::TestCase
     assert_equal [ "wait_owner", opened.id, 1 ], open_step(task).values_at(:kind, :opening_event_id, :round)
   end
 
+  # Milestone 4's first version of the tracker (its plan §4, the hand-over
+  # table; §0.1 fact 7): the five check and job events the rule-check
+  # packages write on a task before WP5 teaches the tracker their steps are
+  # handled and change no step yet. WP5 owns this file afterwards and
+  # replaces this case with the steps they open and close.
+  test "the five check and job events are handled and change no step yet" do
+    @scenario = Scenario.new
+    task = @scenario.task(state: "ready")
+    before = open_step(task).attributes
+    seat = @scenario.seat(role: "orchestrator")
+    check_id = SecureRandom.uuid
+    job_id = SecureRandom.uuid
+    check = { hook: "task.before_ready", rule_id: SecureRandom.uuid, rule_version_id: SecureRandom.uuid,
+              subject_kind: nil, subject_id: nil, input_hash: "0" * 64 }
+    in_context(key: nil) do |ctx|
+      ctx.emit("check.queued", task: task, subject_kind: "rule_check", subject_id: check_id,
+        payload: check.merge(attempt_number: 1, job_id: job_id, blocking: true, claimant_seat_id: nil,
+          pending_transition_id: SecureRandom.uuid, action_id: nil))
+      ctx.emit("job.claimed", task: task, subject_kind: "job", subject_id: job_id, actor_kind: "seat", actor_id: seat.id,
+        payload: { credential_id: nil, model: nil })
+      ctx.emit("job.timed_out", task: task, subject_kind: "job", subject_id: job_id, payload: {})
+      ctx.emit("job.withdrawn", task: task, subject_kind: "job", subject_id: job_id, payload: {})
+      ctx.emit("check.finished", task: task, subject_kind: "rule_check", subject_id: check_id,
+        payload: check.merge(result: "withdrawn", effect: nil, wait_cause: nil))
+    end
+
+    assert_equal 5, Event.where(task_id: task.id, type: %w[check.queued check.finished job.claimed job.timed_out
+                                                          job.withdrawn]).count
+    assert_equal before, open_step(task).attributes
+    assert_equal 1, TaskStep.where(task_id: task.id, closed_at: nil).count
+  end
+
   test "an event milestone 2 cannot write raises instead of guessing a step" do
     @scenario = Scenario.new
     task = @scenario.task(state: "ready")

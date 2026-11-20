@@ -49,6 +49,11 @@ module Leverage
         end
       end
 
+      # Empty symbol for the red run (milestone 4 plan WP1).
+      def as_requester(_pending, cause_id:)
+        yield
+      end
+
       # Called by EventLog for each event it inserts.
       def appended(event, seconds)
         @events << event

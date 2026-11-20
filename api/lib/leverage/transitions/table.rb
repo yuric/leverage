@@ -27,10 +27,16 @@ module Leverage
       OWNER_CONTROLS = %w[promote edit_contract hold resume pause_seat resume_seat change_seat].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS).freeze
 
+      # Empty symbols for the red run (milestone 4 plan WP1).
+      PENDING_GROUPS = { "TIMERS" => [].freeze }.freeze
+      PENDING = [].freeze
+
       @overrides = {}
 
       class << self
         def include?(command) = COMMANDS.include?(command.to_s)
+
+        def known?(command) = include?(command)
 
         def class_name(command)
           "Leverage::Transitions::Entries::#{command.to_s.camelize}"

@@ -34,11 +34,13 @@ class SeamsTest < ActionDispatch::IntegrationTest
     Leverage::Http::RouteTable::ROUTES.each_key { |operation_id| assert_includes ids, operation_id }
   end
 
-  # Operations no package of milestone 3 serves (milestone 3 plan HT-6):
-  # jobs and rules (4), the usage readers and reordering (6).
+  # Operations of milestones 5 and 6, which no package of milestone 4
+  # serves (milestone 4 plan §1.2): questions, outward actions and projects
+  # (5), the usage readers and reordering (6). Milestone 4's twelve are
+  # served once WP10 moves them out of RouteTable::PENDING.
   test "later milestones' operations are not served" do
     assert_operator unserved.size, :>, 0
-    %w[claim_next_job add_rule report_reading reorder_credentials].each do |operation_id|
+    %w[ask_question create_project report_reading reorder_credentials].each do |operation_id|
       assert_includes unserved.map { |operation| operation.fetch("operation_id") }, operation_id
     end
   end

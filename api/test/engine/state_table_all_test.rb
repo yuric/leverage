@@ -14,8 +14,11 @@ require_relative "state_table_owner_controls_test"
 # - the six groups are the whole Table of 48, each command in exactly one;
 # - the six test classes cover the Table, each command in exactly one;
 # - the commands the served operations run (Http::RouteTable, the
-#   registry's commands of each operation) are exactly the Table's commands
-#   but the timers;
+#   registry's commands of each operation) are the Table's commands but the
+#   timers, and while milestone 4 is built (its plan RT-6, §0.1 fact 3)
+#   possibly some of its twenty pending ones, which Table.known? answers
+#   for: WP10 serves their operations before WP13 moves the entries into
+#   their groups, and WP13 makes this exact again over the 68;
 # - every row of every command in the Table is the row of some case, and
 #   every case is defined as a test by its class;
 # - the only cases that do not run their row are the rows from Finishing,
@@ -47,14 +50,22 @@ class StateTableAllTest < ActiveSupport::TestCase
     assert_equal T::Table::COMMANDS.sort, commands.sort
   end
 
-  test "the commands the served operations run are the Table's commands but the timers" do
+  test "the commands the served operations run are the Table's commands but the timers, and some pending ones" do
     served = Leverage::Http::RouteTable::ROUTES.keys.flat_map do |operation_id|
       Leverage::Contract.registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }
         .fetch("commands")
     end
-    # read is a read; the two job reports are milestone 4's (HE-33).
-    served = (served - %w[read report_job_limit report_job_signed_out]).uniq
-    assert_equal (T::Table::COMMANDS - T::Table::TIMERS).sort, served.sort
+    # read is a read. approve_action and stop_action run only for an
+    # outward action (milestone 5), through submit_job_result and
+    # override_check once WP10 serves them.
+    served = (served - %w[read approve_action stop_action]).uniq
+    timers = T::Table::TIMERS + T::Table::PENDING_GROUPS.fetch("TIMERS")
+    assert_empty (T::Table::COMMANDS - T::Table::TIMERS) - served, "a command of the Table is run by no served operation"
+    served.each do |command|
+      assert T::Table.known?(command), "#{command} is run by a served operation and has no entry"
+      refute_includes timers, command
+    end
+    assert_empty served - T::Table::COMMANDS - T::Table::PENDING, "a served command is neither in the Table nor pending"
   end
 
   test "every state_machine.json row of a command in the Table is covered by a case" do

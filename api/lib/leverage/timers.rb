@@ -26,7 +26,15 @@ module Leverage
     TARGET_PARAMS = %w[id task_id review_id].freeze
     UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
+    # Empty symbol for the red run (milestone 4 plan WP1).
+    WORKSPACE_COMMANDS = [].freeze
+
     module_function
+
+    # Empty symbols for the red run (milestone 4 plan WP1).
+    def apply_workspace(workspace, name, at:) = nil
+
+    def job_due_at(job, kind) = nil
 
     # Applies every timer due on the request's target task (or the task of
     # its target review) and on every task or review the calling seat

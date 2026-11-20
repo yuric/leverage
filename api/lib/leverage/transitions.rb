@@ -42,6 +42,9 @@ module Leverage
         run(request)
       end
 
+      # Empty symbol for the red run (milestone 4 plan WP1).
+      def run_as(ctx, command, requester:, key:, params:) = nil
+
       # Tests only: answers apply from the stand-in inside the block.
       def with_stand_in(stand_in)
         saved = self.stand_in

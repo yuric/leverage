@@ -73,6 +73,9 @@ module Leverage
         "change_seat" => "v1/owner/seats#change"
       }.freeze
 
+      # Empty symbol for the red run (milestone 4 plan WP1).
+      PENDING = {}.freeze
+
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)

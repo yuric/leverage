@@ -230,11 +230,12 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
-  # add_rule is milestone 4's. promote was the example until milestone 3
-  # gave it an entry (milestone 3 plan HT-6).
+  # ask_question is milestone 5's. promote was the example until milestone
+  # 3 gave it an entry (milestone 3 plan HT-6), add_rule until milestone 4
+  # did (its plan RT-6, §0.1 fact 3).
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "add_rule")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "add_rule").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "ask_question")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "ask_question").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -278,7 +279,9 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
-  # OWNER_CONTROLS, and two timers.
+  # OWNER_CONTROLS, and two timers. Milestone 4's twenty wait in
+  # Table::PENDING (its plan RT-6) and are in no group until WP13 moves
+  # them, which counts the 68 in their groups here.
   test "the table lists its commands in six groups, each a registry command with state-table rows" do
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
                T::Table::OWNER_CONTROLS ]
@@ -294,6 +297,8 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("claim")
     assert T::Table.include?("promote")
     refute T::Table.include?("add_rule")
+    assert T::Table.known?("add_rule")
+    refute T::Table.known?("ask_question")
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do
@@ -332,7 +337,9 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { @scenario.task(state: "finishing") }
   end
 
-  test "Scenario seeds a golden trace's setup with its ids, and refuses rules" do
+  # Milestone 4 (its plan §0.1 fact 10) seeds rules: a custom rule's row
+  # must carry its version fields (scenario_rules_test.rb has the rest).
+  test "Scenario seeds a golden trace's setup with its ids, and refuses a rule it cannot build" do
     binder = Leverage::Contract::TraceBinder.new(start: Time.utc(2026, 11, 19))
     setup = binder.bind(Leverage::Contract.trace("10-leases-no-rules").fetch("setup"))
     scenario = Scenario.new.seed(setup)
@@ -345,7 +352,9 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     setup.fetch("credentials").each { |row| assert_equal row.fetch("position"), Credential.find(row.fetch("id")).position }
     assert_equal setup.dig("users", 0, "id"), scenario.owner.id
     setup.fetch("settings").each { |column, value| assert_equal value, scenario.workspace.reload[column] }
-    assert_raises(ArgumentError) { Scenario.new.seed(setup.merge("rules" => [ { "id" => SecureRandom.uuid } ])) }
+    bare = { "id" => SecureRandom.uuid, "key" => "custom_bare", "origin" => "custom", "enabled" => true,
+             "current_version" => 1, "current_version_id" => SecureRandom.uuid }
+    assert_raises(ArgumentError) { Scenario.new.seed(setup.merge("rules" => [ bare ])) }
   end
 
   private

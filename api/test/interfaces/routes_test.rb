@@ -2,7 +2,9 @@ require "test_helper"
 
 # Routes come from the registry (milestone 2 plan IN-1, §2.1): routes.rb
 # draws one route per Leverage::Http::RouteTable entry, with the registry's
-# method and path, and types no path of its own.
+# method and path, and types no path of its own. While milestone 4 is built
+# its twelve operations wait in RouteTable::PENDING (its plan RT-6), which
+# routes.rb does not draw.
 class RoutesTest < ActiveSupport::TestCase
   RouteTable = Leverage::Http::RouteTable
 
@@ -20,16 +22,26 @@ class RoutesTest < ActiveSupport::TestCase
     get_setup_state create_owner sign_out_owner get_helper_request report_request_progress get_landing_prompt
   ].freeze
 
-  # The eleven operations milestone 3 serves (milestone 3 plan §2.3). They
-  # waited in RouteTable::PENDING until WP7 wrote their controllers (HT-6);
-  # that list is gone (table_groups_test.rb).
+  # The eleven operations milestone 3 serves (milestone 3 plan §2.3).
   MILESTONE_3 = %w[
     report_limit report_signed_out sign_in_again list_inbox promote_task edit_contract hold_task resume_task pause_seat
     resume_seat change_seat
   ].freeze
 
-  # Every operation the table names.
-  def named = RouteTable::ROUTES
+  # The twelve operations milestone 4 serves (milestone 4 plan §2.3). They
+  # wait in RouteTable::PENDING until WP10 writes their controllers and
+  # moves them into ROUTES (RT-6); served and pending are counted together
+  # here, so these tests hold before and after the move. WP13 deletes
+  # PENDING and rewrites what names it.
+  MILESTONE_4 = %w[
+    claim_next_job submit_job_result list_rules add_rule save_rule enable_rule disable_rule revert_rule remove_rule
+    rerun_check override_check draft_contract
+  ].freeze
+
+  def pending = RouteTable.const_defined?(:PENDING, false) ? RouteTable::PENDING : {}
+
+  # Every operation the table names, served or pending.
+  def named = RouteTable::ROUTES.merge(pending)
 
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
@@ -37,8 +49,9 @@ class RoutesTest < ActiveSupport::TestCase
     Rails.application.routes.routes.select(&:name).index_by(&:name)
   end
 
-  test "the served operations are milestone 2's and milestone 3's eleven, each a registry operation" do
-    assert_equal (MILESTONE_2 + MILESTONE_3).sort, named.keys.sort
+  test "the served and pending operations are milestones 2 and 3's and milestone 4's twelve, each a registry operation" do
+    assert_empty RouteTable::ROUTES.keys & pending.keys
+    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4).sort, named.keys.sort
     named.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes(named).each do |route|
       operation = operations.fetch(route.operation_id)
@@ -61,7 +74,7 @@ class RoutesTest < ActiveSupport::TestCase
   end
 
   test "each controller is one of the plans', under v1/agent, v1/owner, v1/helper or the health check" do
-    allowed = %r{\Av1/(agent/(next|commands|tasks|criteria|reviews)|owner/(setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox)|helper/(next|requests|seats|credentials)|health)\z}
+    allowed = %r{\Av1/(agent/(next|commands|tasks|criteria|reviews|jobs)|owner/(setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
     named.each_value { |target| assert_match allowed, target.split("#").first }
   end
 
