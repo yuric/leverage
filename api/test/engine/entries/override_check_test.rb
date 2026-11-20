@@ -149,6 +149,22 @@ class OverrideCheckTest < ActiveSupport::TestCase
     assert_empty open_holds(ready)
   end
 
+  test "Refused for every agent that names no check closes for an override of a failed claim check of its rule, and no other rule's (RD-47)" do
+    rule = scenario.rule(hook: "task.before_claim")
+    other = scenario.rule(hook: "task.before_claim")
+    ready = scenario.task(state: "ready")
+    check = scenario.rule_check(ready, rule: rule, result: "failed", subject: @builder)
+    answered = rule_hold(ready, "claim_gate_failed", rule: rule)
+    kept = rule_hold(ready, "claim_gate_failed", rule: other)
+
+    outcome, _, events = override(check)
+
+    assert_completed(outcome)
+    assert answered.reload.closed_at
+    assert_nil kept.reload.closed_at
+    assert_equal [ rule.id ], events.select { |event| event.type == "hold.closed" }.map { |event| event.payload["rule_id"] }
+  end
+
   test "the waiting command is not gated again while another hold stays open (rule 9)" do
     pending = scenario.pending_transition(@task, command: "submit", requester: @builder, key: "submit-4")
     check = scenario.rule_check(@task, rule: @rule, result: "error", attempts: 2, pending: pending)

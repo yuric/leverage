@@ -1,16 +1,75 @@
 module Leverage
   module Transitions
     module Entries
-      # rerun_check (PRD L423; milestone 4 plan RD-42, RD-43): the owner
-      # runs an errored check again; on an errored claim check it closes the
-      # hold and queues nothing.
+      # rerun_check (PRD L392, L400, L423; milestone 4 plan RD-42, RD-43):
+      # Run it again, for a check that ended in error only.
       #
-      # First version (milestone 4 plan §4, the hand-over table): not built yet.
-      # WP8 writes it.
+      #   rerun_queues          at any hook but before an agent starts it, the
+      #                         check runs again as a new attempt of the same
+      #                         row with a job of its own (Jobs.queue,
+      #                         RuleChecks.new_attempt), with the input its
+      #                         last job had; its check_error hold closes
+      #                         when a result other than error arrives.
+      #   rerun_of_claim_check  an errored claim check has already lapsed its
+      #                         provisional claim: its check_error hold
+      #                         closes (run_again) and nothing is queued, so
+      #                         the next claim checks afresh.
+      #
+      # Any other check, a check of a cancelled task, or an errored claim
+      # check with no hold left to close is invalid_state.
+      #
+      # Params: id (the rule check).
       class RerunCheck < Entry
-        def perform(_ctx)
-          raise NotImplementedError, "#{command} is not built yet"
+        CLAIM_HOOK = "task.before_claim".freeze
+        ERROR = "error".freeze
+        RUN_AGAIN = "run_again".freeze
+        JOB_KIND = "rule_check".freeze
+
+        def load(ctx)
+          @check = RuleCheck.find_by(id: ctx.request.params["id"], workspace_id: ctx.workspace.id) ||
+            raise(NotFound, "No such rule check")
+          @task = @check.task_id && Task.find(@check.task_id)
         end
+
+        def refusals(_ctx)
+          causes = [ state_refusal(nil, [ claim? ? "rerun_of_claim_check" : "rerun_queues" ]) ]
+          causes << invalid_state unless @check.result == ERROR
+          causes << invalid_state if @task.nil? || @task.state == "cancelled"
+          causes << invalid_state if claim? && hold.nil?
+          causes.compact
+        end
+
+        def perform(ctx)
+          if claim?
+            Holds.close(ctx, hold: hold, task: @task, choice: RUN_AGAIN)
+          else
+            version = RuleVersion.find(@check.rule_version_id)
+            job = Jobs.queue(ctx, kind: JOB_KIND, task: @task, target: @check,
+              seat_role: version.checker_role || "orchestrator", input: last_job&.input || {})
+            RuleChecks.new_attempt(ctx, @check, job: job)
+          end
+          @result = nil
+        end
+
+        private
+
+        def claim? = @check.hook == CLAIM_HOOK
+
+        # The open check_error hold of this check: named by it, or, for a
+        # hold that names no check, by its rule.
+        def hold
+          @hold ||= ::Hold.where(workspace_id: @check.workspace_id, task_id: @check.task_id, reason: "check_error",
+            closed_at: nil).order(:opened_at, :id).find do |open|
+              open.rule_check_id == @check.id || (open.rule_check_id.nil? && open.rule_id == @check.rule_id)
+            end
+        end
+
+        def last_job
+          attempt = RuleCheckAttempt.where(rule_check_id: @check.id).where.not(job_id: nil).order(:attempt_number).last
+          attempt && Job.find_by(id: attempt.job_id)
+        end
+
+        def invalid_state = Refusal.new(code: Contract.state_machine.fetch("unlisted_pair_refusal"))
       end
     end
   end

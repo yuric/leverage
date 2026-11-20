@@ -354,6 +354,16 @@ class RuleRecordsTest < ActiveSupport::TestCase
     assert_empty calls.fetch("PendingTransitions.reenter")
   end
 
+  test "a check the owner overrode is settled and is not withdrawn (L423, RD-45)" do
+    in_flight_world
+    @running.update!(overridden_at: scenario.database_now, overridden_by_user_id: scenario.owner.id,
+      override_reason: "Made-up reason.")
+
+    calls = recording({ Leverage::RuleChecks => :withdraw }) { Records.disable(owner_context, @rule) }
+
+    assert_empty calls.fetch("RuleChecks.withdraw")
+  end
+
   test "removing a rule withdraws what it has in flight as turning it off does (L379)" do
     in_flight_world
 

@@ -1,14 +1,28 @@
 module Leverage
   module Transitions
     module Entries
-      # add_rule (PRD L342, L423; milestone 4 plan RD-4, RD-21 to
-      # RD-24): the owner adds a custom rule at one of four moments.
+      # add_rule (PRD L342, L423, L464; milestone 4 plan RD-4, RD-21 to
+      # RD-24): the owner adds a custom rule, a model-checked gate that
+      # blocks, at one of the four moments a task can reach, with
+      # rule.created. Its moment is fixed when it is added (RD-4). "Before
+      # anything goes out" and the scopes "named projects" and "action
+      # kinds" arrive in milestone 5: 422 invalid (RuleRecords.added_version,
+      # checked in load so that nothing is written).
       #
-      # First version (milestone 4 plan §4, the hand-over table): not built yet.
-      # WP8 writes it.
+      # Params: name, instruction, hook, scope (AddRuleRequest).
       class AddRule < Entry
-        def perform(_ctx)
-          raise NotImplementedError, "#{command} is not built yet"
+        FIELDS = %w[name instruction hook scope].freeze
+
+        def load(ctx)
+          @fields = ctx.request.params.slice(*FIELDS)
+          RuleRecords.added_version(@fields)
+        end
+
+        def refusals(_ctx) = [ state_refusal(nil) ].compact
+
+        def perform(ctx)
+          RuleRecords.add(ctx, @fields)
+          @result = nil
         end
       end
     end

@@ -17,8 +17,12 @@ fi
 # Before the server: create or migrate the database as the owner role.
 # db:prepare runs db:grants after it (lib/tasks/db_grants.rake), which also
 # creates leverage_api and sets its password from LEVERAGE_API_DB_PASSWORD.
+# Then every workspace that has no rule gets the seven shipped rules, once,
+# through the transition function (milestone 4 plan RD-2); a workspace that
+# has its rules is left alone.
 if $server; then
   ./bin/rails db:prepare
+  ./bin/rails leverage:install_shipped_rules
 fi
 
 # If running the tests then create or migrate the test database first, so

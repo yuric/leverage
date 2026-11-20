@@ -42,10 +42,11 @@ class StateTableRulesTest < ActiveSupport::TestCase
     assert_nil kase.hook
     assert_empty kase.conditional_events
 
+    command = prepare(kase)
     before = scenario.workspace.reload.last_seq
     outcome = nil
     calls = recording(SEAMS, fakes: { "Jobs.queue" => ->(*, task:, target:, **) { fake_job(task, target) } }) do
-      outcome = run_case(kase)
+      outcome = command.call
     end
     written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
 
@@ -65,27 +66,31 @@ class StateTableRulesTest < ActiveSupport::TestCase
 
   private
 
-  # Builds what the case's row starts from and runs its command.
-  def run_case(kase)
+  # Builds what the case's row starts from; returns what runs its command.
+  def prepare(kase)
     assert_equal [ kase.command == "install_shipped_rules" ? "app" : "owner" ], kase.who
     case kase.command
     when "install_shipped_rules"
-      Leverage::Timers.apply_workspace(scenario.workspace, "install_shipped_rules", at: scenario.database_now)
-    when "add_rule" then owner_command("add_rule", add_body)
+      at = scenario.database_now
+      -> { Leverage::Timers.apply_workspace(scenario.workspace, "install_shipped_rules", at: at) }
+    when "add_rule" then -> { owner_command("add_rule", add_body) }
     when "save_rule" then rule_command(kase, scenario.rule) { |rule| save_body(rule) }
     when "enable_rule" then rule_command(kase, scenario.rule(enabled: false))
     when "disable_rule", "remove_rule" then rule_command(kase, scenario.rule)
     when "revert_rule" then rule_command(kase, scenario.with_shipped_rules.first)
-    when "rerun_check" then owner_command("rerun_check", { "id" => errored_check(kase.guard).id })
+    when "rerun_check"
+      check = errored_check(kase.guard)
+      -> { owner_command("rerun_check", { "id" => check.id }) }
     when "override_check"
-      owner_command("override_check", { "id" => failed_check.id, "reason" => "Made-up reason." })
+      check = failed_check
+      -> { owner_command("override_check", { "id" => check.id, "reason" => "Made-up reason." }) }
     else flunk "no case for #{kase.command}"
     end
   end
 
   def rule_command(kase, rule)
-    body = block_given? ? yield(rule) : {}
-    owner_command(kase.command, body.merge("id" => rule.id))
+    body = (block_given? ? yield(rule) : {}).merge("id" => rule.id)
+    -> { owner_command(kase.command, body) }
   end
 
   def builder = @builder ||= scenario.seat(role: "builder", credential: scenario.credential)

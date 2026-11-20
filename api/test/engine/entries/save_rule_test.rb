@@ -54,6 +54,12 @@ class SaveRuleTest < ActiveSupport::TestCase
     assert_equal 1, @rule.reload.current_version
   end
 
+  test "fields are checked before the rule's state: a removed rule sent fields that do not fit is 422 invalid (IN-13)" do
+    @rule.update!(removed_at: scenario.database_now)
+
+    assert_raises(T::Invalid) { owner_command("save_rule", save_body(@rule, on_fail: nil).merge("id" => @rule.id)) }
+  end
+
   test "a rule of another workspace is 404" do
     other = Scenario.new
     other.owner

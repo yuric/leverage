@@ -55,8 +55,18 @@ class InstallShippedRulesTest < ActiveSupport::TestCase
     assert_equal counts, [ Rule.count, RuleVersion.count, Event.count ]
   end
 
+  # Trace 19's setup has two Gemini logins (gemini_h, gemini_r), which
+  # the schema refuses (index_credentials_one_gemini_login_per_workspace),
+  # so its setup cannot be built as written (in WP8's notes, for the trace's
+  # owner). Its first command needs no login: the copy run here leaves out
+  # the second Gemini login and the seats on it.
   test "trace 19's first command: the seven rule.created on a workspace with none" do
-    runner = TraceRunner.new("19-provider-rule-offline-and-jobs").run(1)
+    name = "19-provider-rule-offline-and-jobs"
+    trace = Leverage::Contract.trace(name).deep_dup
+    setup = trace.fetch("setup")
+    setup["credentials"] = setup.fetch("credentials").reject { |row| row.fetch("id") == "$credential:gemini_r" }
+    setup["seats"] = setup.fetch("seats").reject { |row| row["credential_id"] == "$credential:gemini_r" }
+    runner = TraceRunner.new(name, trace: trace).run(1)
 
     assert_empty runner.failures
     assert_equal 7, Rule.where(workspace_id: runner.workspace_id).count
