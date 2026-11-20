@@ -216,9 +216,23 @@ struct InterruptionReporterTests {
 
         let result = await reporter(rig).report(line, seatID: seat, credentialID: credential, toolVersion: nil)
 
-        #expect(result == .noWorkThenStopped)
+        #expect(result == .unreportableThenStopped)
         #expect(rig.api.calls.map(\.operation) == [.reportRunStopped])
         #expect(rig.calls(.reportRunStopped).first?.body?["stop_reason"]?.stringValue == "signed_out")
+    }
+
+    @Test("a limit with no window cannot be a report either (HE-32): the run's end is reported as a limit")
+    func limitWithNoWindowThenRunStopped() async throws {
+        let rig = try HelperRig()
+        let line = RunEndReport(
+            kind: .limit, window: nil, resetAt: nil, taskID: task, reviewID: nil, toolVersion: nil,
+            observedAt: observed)
+
+        let result = await reporter(rig).report(line, seatID: seat, credentialID: credential, toolVersion: nil)
+
+        #expect(result == .unreportableThenStopped)
+        #expect(rig.api.calls.map(\.operation) == [.reportRunStopped])
+        #expect(rig.calls(.reportRunStopped).first?.body?["stop_reason"]?.stringValue == "limit")
     }
 
     // MARK: Through the launcher

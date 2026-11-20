@@ -17,6 +17,7 @@ final class HelperRuntime: Sendable {
     let log: Log
     let launcher: Launcher
     let checks: AddChecks
+    let signInAgain: SignInAgain
     let installer: ToolInstaller
     private let loopTask = LoopTask()
 
@@ -29,8 +30,9 @@ final class HelperRuntime: Sendable {
         self.timings = timings
         self.log = log
         launcher = Launcher(api: api, settings: settings, timings: timings, log: log)
-        checks = AddChecks(
-            api: api, settings: settings, timings: timings, prober: prober ?? RunnerProbe(timings: timings), log: log)
+        let prober = prober ?? RunnerProbe(timings: timings)
+        checks = AddChecks(api: api, settings: settings, timings: timings, prober: prober, log: log)
+        signInAgain = SignInAgain(api: api, settings: settings, timings: timings, prober: prober, log: log)
         installer = ToolInstaller(settings: settings, timings: timings, fetch: fetch)
     }
 
@@ -43,8 +45,9 @@ final class HelperRuntime: Sendable {
         case .runAddChecks: result = await checks.add(request)
         case .verify: result = await checks.verify(request)
         case .installTool: result = await installer.handle(request)
-        case .openSignIn, .readUsage:
-            // Not used in this milestone (IN-26; usage readers are milestone 6).
+        case .openSignIn: result = await signInAgain.run(request)
+        case .readUsage:
+            // Usage readers are milestone 6's.
             log.warning("\(request.kind.rawValue) is not done by this helper")
             result = HelperRequestResult(outcome: .failed, checks: [], toolVersion: nil)
         }
