@@ -38,7 +38,7 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logSignedOutStopped, logSignedOutFound, logVerified, logSwitched, logSwitchedFrom
     case logWaitingForAccount, logWaitingForSignIn, logOwnerPaused, logAgentPaused
     case logAccountAvailable, logAccountSignedInAgain, logOwnerContinued, logAgentResumed, logWaitsForAccount
-    case logPromoted, logReturned
+    case logPromoted, logReturned, logReturnedNoAgent
     case logInboxSignedOut, logInboxLimit, logInboxPastLimit, logInboxOther, logInboxSettled
     case logChoseTryAgain, logChoseChange, logChoseSignIn
     case logSeatPaused, logSeatResumed, logSeatChanged
@@ -134,6 +134,7 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logWaitsForAccount: "It is waiting for an account to be available."
         case .logPromoted: "You moved the idea to Backlog."
         case .logReturned: "The agent stopped and the task went back to Backlog."
+        case .logReturnedNoAgent: "The task went back to Backlog."
         case .logInboxSignedOut: "An account is signed out. This needs you: sign in again."
         case .logInboxLimit: "An account is at its limit and did not say when it is available again. This needs you."
         case .logInboxPastLimit: "The task was sent back too many times. This needs you."
@@ -146,9 +147,9 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logSeatResumed: "{agent} was resumed."
         case .logSeatChanged: "{agent} was changed."
         case .logReviewStoppedLimit:
-            "The review stopped because {account} reached its limit. Another account will take it."
+            "The review stopped because {account} reached its limit. It waits for a reviewer with an available account."
         case .logReviewStoppedSignedOut:
-            "The review stopped because {account} was signed out. Another account will take it."
+            "The review stopped because {account} was signed out. It waits for a reviewer with an available account."
         case .backAtWork: "Back at work after {duration}."
         case .backAtWorkAtOnce: "Back at work at once."
         case .notBackAtWork: "Not back at work yet."

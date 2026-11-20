@@ -75,10 +75,10 @@ struct NeedsYouRowView: View {
                     .foregroundStyle(Tokens.Palette.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.isWaitingForSignIn(row.id) {
+            if let waiting = model.signInWaitingLine(row.id) {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(NeedsYouCopy.signInWaiting.text)
+                    Text(verbatim: waiting)
                         .font(.system(size: Tokens.FontSize.small))
                         .foregroundStyle(Tokens.Palette.text2)
                 }

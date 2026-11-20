@@ -113,8 +113,8 @@ struct CredentialRowView: View {
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
             }
-            if model.isSigningIn(row.id) {
-                Text(CredentialsCopy.waitingSignIn.text)
+            if let waiting = model.signInWaitingLine(row.id) {
+                Text(verbatim: waiting)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
             }

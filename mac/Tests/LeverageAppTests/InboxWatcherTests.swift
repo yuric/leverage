@@ -215,6 +215,11 @@ struct InboxWatcherTests {
                 asked.update { $0.append((after, wait)) }
                 return Fixtures.page([])
             }
+            // The log holds the cursor's own inbox.opened, so the cursor is of it.
+            $0.events = { after, _, _ in
+                let opened = Fixtures.opened(seq: 7, item: UUID(), kind: .accountSignedOut)
+                return EventsPage(events: after < 7 ? [opened] : [], nextAfterSeq: max(after, 7))
+            }
         }
         let rig = makeRig(stored: 7, wait: 20, owner: owner)
         let run = Task { await rig.watcher.run() }

@@ -9,7 +9,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
     case title, empty, loading
 
     // Account signed out.
-    case signedOutHeading, signedOutBody, signInAgain, signInWaiting
+    case signedOutHeading, signedOutBody, signInAgain, signInWaiting, signInWaitingGemini
     // Limit with no reset time.
     case limitHeading, limitBody
     // Sent back too many times.
@@ -35,6 +35,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
             "{task} stopped because {account} is signed out and no other account can take over. Sign in again to continue."
         case .signInAgain: "Sign in again"
         case .signInWaiting: "Waiting for you to sign in in the window that opened"
+        case .signInWaitingGemini: "Sign in to Antigravity on this Mac. leverage continues on its own."
 
         case .limitHeading: "{account} is at its limit"
         case .limitBody:

@@ -56,7 +56,10 @@ enum CardWording {
         guard limitHold || signedOutHold || task.waitingForCredentialID != nil else { return nil }
         let account = task.waitingForCredentialID.flatMap { accounts[$0] }
         let name = account?.name ?? BoardCopy.anAccount.text
-        if signedOutHold || (!limitHold && account?.isSignedOut == true) {
+        // A signed-out account is waited for by a sign-in whatever the hold:
+        // its reset alone would not make it available, and the read leaves
+        // its reset time out (HE-11).
+        if signedOutHold || account?.isSignedOut == true {
             let sentence = BoardCopy.noteAccountSignedOut.filled(["account": name])
             return AccountWait(note: sentence.prefix(1).uppercased() + sentence.dropFirst(), signedOut: true)
         }

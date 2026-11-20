@@ -32,6 +32,8 @@ final class NeedsYouModel {
     /// The row whose Cancel task is waiting for the owner's answer.
     private(set) var confirmingCancel: UUID?
     private(set) var waitingForSignIn: Set<UUID> = []
+    /// The provider of the account each waiting row signs in to.
+    private var waitingProviders: [UUID: Provider] = [:]
     private(set) var busy: Set<UUID> = []
     private(set) var failures: [UUID: String] = [:]
 
@@ -56,7 +58,12 @@ final class NeedsYouModel {
     }
 
     func isWaitingForSignIn(_ id: UUID) -> Bool { waitingForSignIn.contains(id) }
-    func signInWaitingLine(_ id: UUID) -> String? { waitingForSignIn.contains(id) ? NeedsYouCopy.signInWaiting.text : nil }
+    /// The line a row shows while Sign in again waits for the owner, or nil:
+    /// Antigravity has no sign-in command, so no window opens for Gemini.
+    func signInWaitingLine(_ id: UUID) -> String? {
+        guard waitingForSignIn.contains(id) else { return nil }
+        return (waitingProviders[id] == .gemini ? NeedsYouCopy.signInWaitingGemini : .signInWaiting).text
+    }
     func isBusy(_ id: UUID) -> Bool { busy.contains(id) }
     /// The line a command that did not work left on that row.
     func failure(for id: UUID) -> String? { failures[id] }
@@ -170,7 +177,11 @@ final class NeedsYouModel {
             guard let requestID = outcome.helperRequestID else { return }
             self.keys["signin-\(row.id)"] = nil
             self.waitingForSignIn.insert(row.id)
-            defer { self.waitingForSignIn.remove(row.id) }
+            self.waitingProviders[row.id] = provider
+            defer {
+                self.waitingForSignIn.remove(row.id)
+                self.waitingProviders[row.id] = nil
+            }
             let follower = HelperRequestFollower(api: self.api, timing: self.timing)
             if let request = try await follower.follow(requestID, giveUpAfter: self.timing.giveUpAfter),
                !request.succeeded {

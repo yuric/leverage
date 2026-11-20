@@ -24,13 +24,40 @@ enum TaskLog {
             names.filter { $0.kind == .credential }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         credentials.merge(accounts) { _, read in read }
         let words = Dictionary(criteria.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })
+        let ordered = events.sorted { $0.seq < $1.seq }
         let context = Context(
             seats: seats, credentials: credentials, criteria: words,
             events: Dictionary(events.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
-            recoveryTimes: recoveryTimes, clock: clock)
-        return events.sorted { $0.seq < $1.seq }.map { event in
+            recoveryTimes: recoveryTimes, clock: clock, returnedWhileHeld: returnedWhileHeld(ordered))
+        return ordered.map { event in
             LogEntry(id: event.id, seq: event.seq, at: event.at, text: sentence(for: event, in: context))
         }
+    }
+
+    /// The `task.returned` events written while an agent held the task: a
+    /// builder from its claim (or a fresh lease) until it let the task go,
+    /// submitted it or lost it; a reviewer from the review's start until its
+    /// verdict or its release. Only these stopped an agent: Ready has no
+    /// holder, nor does a review no reviewer has taken.
+    private static func returnedWhileHeld(_ ordered: [EventRecord]) -> Set<UUID> {
+        var builder = false
+        var reviewer = false
+        var held: Set<UUID> = []
+        for event in ordered {
+            switch event.type {
+            case .taskClaimed: builder = true
+            case .taskSubmitted, .taskReleased, .taskLeaseExpired, .taskDone, .taskCancelled: builder = false
+            case .reviewStarted: reviewer = true
+            case .reviewReleased, .reviewLeaseExpired, .reviewPassed, .reviewFailed: reviewer = false
+            case .taskReturned:
+                if builder || reviewer { held.insert(event.id) }
+                builder = false
+                reviewer = false
+            default: break
+            }
+            if case .string = event.payload["lease_seat_id"] { builder = true }
+        }
+        return held
     }
 
     private struct Context {
@@ -40,6 +67,7 @@ enum TaskLog {
         let events: [UUID: EventRecord]
         let recoveryTimes: [RecoveryTime]
         let clock: ResetClock
+        let returnedWhileHeld: Set<UUID>
 
         func agent(_ event: EventRecord) -> String {
             guard event.actorKind == .seat, let id = event.actorID, let name = seats[id] else {
@@ -269,7 +297,8 @@ enum TaskLog {
         case .inboxOpened: return inboxOpenedSentence(event)
         case .inboxResolved: return inboxResolvedSentence(event)
         case .taskPromoted: return TaskPageCopy.logPromoted.text
-        case .taskReturned: return TaskPageCopy.logReturned.text
+        case .taskReturned:
+            return (context.returnedWhileHeld.contains(event.id) ? TaskPageCopy.logReturned : .logReturnedNoAgent).text
         case .seatPaused: return TaskPageCopy.logSeatPaused.filled(["agent": context.agent(named: event.subjectID)])
         case .seatResumed: return TaskPageCopy.logSeatResumed.filled(["agent": context.agent(named: event.subjectID)])
         case .seatChanged: return TaskPageCopy.logSeatChanged.filled(["agent": context.agent(named: event.subjectID)])

@@ -50,7 +50,15 @@ final class EditContractModel {
         taskID = page.task.id
         self.api = api
         self.onSaved = onSaved
-        warning = [.ready, .working, .inReview].contains(page.task.state) ? .editWarning : nil
+        // An agent stops only where one holds the task: a builder in Working,
+        // a reviewer on an In review task's open review. Ready has no holder.
+        let reviewerHolds = page.reviews.contains { $0.reviewerSeatID != nil && $0.verdict == nil }
+        switch page.task.state {
+        case .working: warning = .editWarning
+        case .inReview: warning = reviewerHolds ? .editWarning : .editWarningNoAgent
+        case .ready: warning = .editWarningNoAgent
+        default: warning = nil
+        }
 
         var filled = ContractDraft()
         filled.title = page.task.title

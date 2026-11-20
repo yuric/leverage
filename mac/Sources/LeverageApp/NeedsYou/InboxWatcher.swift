@@ -6,7 +6,9 @@ import Observation
 /// the Needs you tab (HM-27 to HM-31).
 ///
 /// It keeps a cursor, the highest `inbox.opened` position it announced, in
-/// the cursor store, so that it outlives the app (HM-29). At start it reads
+/// the cursor store, so that it outlives the app (HM-29). At start it checks
+/// that the cursor is of this log (a restore or a lost volume makes another
+/// one, whose positions start lower) and otherwise starts again from 0. It reads
 /// the open items: each above the cursor is announced, and with no stored
 /// cursor every open item is. While the app runs it long-polls `list_inbox`
 /// from the cursor, and is handed the events of the shared tail: an
@@ -94,13 +96,41 @@ final class InboxWatcher {
         }
     }
 
-    /// Asks for permission, once, and reads the inbox.
+    /// Asks for permission, once, checks the stored cursor against the log,
+    /// and reads the inbox.
     func start() async {
         if !asked {
             asked = true
             permission = await notifier.requestPermission() ? .given : .notGiven
         }
+        await checkStoredCursor()
         await catchUp()
+    }
+
+    /// The stored cursor is the position of an `inbox.opened` this watcher
+    /// announced. After a restore or a lost volume the log is another one,
+    /// whose positions start lower, so a new item would sit below the cursor
+    /// and never be announced. A cursor the log has no event at or after,
+    /// or whose own position holds another kind of event, is of another log:
+    /// it goes back to 0, so every open item is announced. A log that
+    /// cannot be read keeps the cursor as it is.
+    private func checkStoredCursor() async {
+        let stored = currentCursor()
+        guard stored > 0 else { return }
+        let page: EventsPage
+        do {
+            page = try await owner.events(afterSeq: stored - 1, limit: 1, wait: nil)
+        } catch {
+            return
+        }
+        if let first = page.events.first, first.seq != stored || first.type == .inboxOpened { return }
+        log.info("the stored inbox cursor is not of this log; every open item is announced")
+        cursor = 0
+        do {
+            try store.save(0)
+        } catch {
+            log.warning("the inbox cursor could not be kept: \(error.localizedDescription)")
+        }
     }
 
     /// Shows the shared tail's inbox events to the watcher.
