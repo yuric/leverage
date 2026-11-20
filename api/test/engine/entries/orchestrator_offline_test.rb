@@ -76,7 +76,9 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
       [ opened.subject_kind, opened.subject_id, opened.task_id, opened.project_id, opened.cause_id ]
     assert_equal({ "kind" => "orchestrator_offline" }, opened.payload)
     assert_by_app_at events, orchestrator.last_polled_at + 90
-    assert_equal [ "orchestrator_offline", "workspace", nil, nil, [], "open" ],
+    # About the workspace, by its id: InboxItem.about_id is a required uuid
+    # in openapi.json, and the Mac's InboxItem cannot read a null one.
+    assert_equal [ "orchestrator_offline", "workspace", scenario.workspace_id, nil, [], "open" ],
       [ item.kind, item.about_kind, item.about_id, item.hold_id, item.choices, item.state ]
     assert_equal({ "role" => "orchestrator", "waiting_checks" => 1, "credential_id" => nil }, item.facts)
   end
