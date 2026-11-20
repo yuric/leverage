@@ -212,6 +212,24 @@ class HandoffContractTest < Minitest::Test
     assert_includes page.dig("properties", "names", "description"), "recovery times"
   end
 
+  # HE-15, HE-16: the task read names the account a task waits for, with
+  # the board card's two fields, so the page and the card say the same.
+  def test_the_task_page_names_the_account_a_task_waits_for_as_the_card_does
+    page = schemas.fetch("TaskPage")
+    card = schemas.fetch("BoardTask")
+    %w[waiting_for_credential_id waiting_until].each do |field|
+      assert_includes page.fetch("required"), field
+      assert_equal card.dig("properties", field).except("description"), page.dig("properties", field).except("description"), field
+    end
+    assert_equal %w[string null], page.dig("properties", "waiting_for_credential_id", "type")
+    assert_equal "uuid", page.dig("properties", "waiting_for_credential_id", "format")
+    assert_equal "date-time", page.dig("properties", "waiting_until", "format")
+    assert_includes page.dig("properties", "waiting_for_credential_id", "description"), "HE-15"
+    example = page.fetch("examples").first
+    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, example.fetch("waiting_for_credential_id"))
+    refute_nil example.fetch("waiting_until")
+  end
+
   # HB-4: the health line says when the last backup ran and whether the
   # daily backup is late.
   def test_system_health_carries_the_last_backup_and_whether_it_is_late

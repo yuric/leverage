@@ -450,7 +450,8 @@ struct TaskPageModelTests {
             openedAt: Fixtures.date(19, 9))
         let shared = Locked(Fixtures.page(
             Fixtures.summary(.working, id: taskID, holder: Fixtures.builderID, builder: Fixtures.builderID),
-            holds: [hold], names: names + [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
+            holds: [hold], waitingFor: Fixtures.personalID, waitingUntil: until,
+            names: names + [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
         let owner = ownerShowing(shared)
         owner.script { $0.credentials = { Fixtures.credentials([Fixtures.credential(Fixtures.personalID, limitedUntil: until)]) } }
         let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
@@ -467,7 +468,7 @@ struct TaskPageModelTests {
             id: UUID(), taskID: taskID, reason: .credentialSignedOut, credentialID: Fixtures.personalID,
             openedAt: Fixtures.date(19, 9))
         let shared = Locked(Fixtures.page(
-            Fixtures.summary(.working, id: taskID), holds: [hold],
+            Fixtures.summary(.working, id: taskID), holds: [hold], waitingFor: Fixtures.personalID,
             names: [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
         let owner = ownerShowing(shared)
         owner.script { $0.credentials = { throw URLError(.timedOut) } }
@@ -476,6 +477,74 @@ struct TaskPageModelTests {
         #expect(model.state == .loaded)
         #expect(model.status?.note == "Personal is signed out. Sign in again to continue.")
         #expect(model.status?.statusLine == "Paused, was In progress")
+    }
+
+    // HE-15, HE-16: the read names the account a task waits for when no
+    // hold does, and the page says it in the card's own words.
+
+    private func waitingPage(
+        _ state: TaskState, waitingUntil: Date? = nil, credential: Credential
+    ) async -> (TaskPageModel, FakeOwnerAPI) {
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(state, id: taskID, builder: Fixtures.builderID), waitingFor: Fixtures.personalID,
+            waitingUntil: waitingUntil, names: names))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { Fixtures.credentials([credential]) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        return (model, owner)
+    }
+
+    /// What the board card says for the same read.
+    private func cardContent(_ page: TaskPage?, credential: Credential) throws -> CardContent {
+        let page = try #require(page)
+        let card = BoardTask(
+            task: page.task, blocked: false, holdReasons: [], waitingForCredentialID: page.waitingForCredentialID,
+            waitingUntil: page.waitingUntil)
+        return CardWording.content(
+            for: card, seatNames: [Fixtures.builderID: "Builder One", Fixtures.reviewerID: "Reviewer One"],
+            reviewerSeatExists: page.reviewerSeatExists, accounts: [credential.id: CardAccount(of: credential)],
+            clock: Fixtures.clock())
+    }
+
+    @Test("a Ready task no agent can start because its account is signed out names the account on its page, as its card does")
+    func readyWaitingOnASignedOutAccount() async throws {
+        let credential = Fixtures.credential(Fixtures.personalID, state: .signedOut)
+        let (model, owner) = await waitingPage(.ready, credential: credential)
+        #expect(owner.calls.map(\.operation) == [.getTask, .listCredentials])
+        #expect(model.status?.chip?.text == "Login signed out")
+        #expect(model.status?.note == "Claude, Personal is signed out. Sign in again to continue.")
+        #expect(model.status?.statusLine == "Waiting for a free agent")
+        #expect(model.status == (try cardContent(model.page, credential: credential)))
+    }
+
+    @Test("a task In review no reviewer can start names the limited account and when it resets on its page, as its card does")
+    func inReviewWaitingOnALimit() async throws {
+        let until = Fixtures.date(19, 18)
+        let credential = Fixtures.credential(Fixtures.personalID, limitedUntil: until)
+        let (model, owner) = await waitingPage(.inReview, waitingUntil: until, credential: credential)
+        #expect(owner.calls.map(\.operation) == [.getTask, .listCredentials])
+        #expect(model.status?.chip?.text == "In review")
+        #expect(model.status?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM.")
+        #expect(model.status?.statusLine == "Builder One's work is being reviewed")
+        #expect(model.status == (try cardContent(model.page, credential: credential)))
+    }
+
+    @Test("a hold's reset time comes from the read, so the page says it even when the accounts cannot be read")
+    func holdResetFromTheRead() async {
+        let hold = Hold(
+            id: UUID(), taskID: taskID, reason: .credentialLimit, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let shared = Locked(Fixtures.page(
+            Fixtures.summary(.working, id: taskID, holder: Fixtures.builderID, builder: Fixtures.builderID),
+            holds: [hold], waitingFor: Fixtures.personalID, waitingUntil: Fixtures.date(19, 18),
+            names: names + [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")]))
+        let owner = ownerShowing(shared)
+        owner.script { $0.credentials = { throw URLError(.timedOut) } }
+        let model = TaskPageModel(taskID: taskID, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(model.status?.chip?.text == "No login left")
+        #expect(model.status?.note.map(Fixtures.flat) == "Waiting for Personal, which resets at 6:00 PM.")
     }
 
     @Test("a page with no account in it reads no accounts")

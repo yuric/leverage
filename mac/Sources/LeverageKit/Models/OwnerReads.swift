@@ -174,17 +174,24 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let asOfSeq: Int
     /// The task's recovery times, oldest start first (HE-17, HE-18).
     public let recoveryTimes: [RecoveryTime]
+    /// The account the task waits for, as its board card names it (HE-15, HE-16).
+    public var waitingForCredentialID: UUID? = nil
+    /// When that account resets, as its board card says.
+    public var waitingUntil: Date? = nil
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
-        holds: [Hold] = [], reviews: [Review] = [], inboxItems: [InboxItem] = [], events: [EventRecord] = [],
-        names: [LogName] = [], recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int
+        holds: [Hold] = [], waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, reviews: [Review] = [],
+        inboxItems: [InboxItem] = [], events: [EventRecord] = [], names: [LogName] = [],
+        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int
     ) {
         self.task = task
         self.criteria = criteria
         self.actions = actions
         self.questions = questions
         self.holds = holds
+        self.waitingForCredentialID = waitingForCredentialID
+        self.waitingUntil = waitingUntil
         self.reviews = reviews
         self.inboxItems = inboxItems
         self.events = events

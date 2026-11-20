@@ -354,6 +354,71 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal "Made-up Claude account", names[[ "credential", credential.id ]]
   end
 
+  # HE-15, HE-16: the task page names the account a task waits for exactly
+  # as its board card does, from the same reading.
+  WAITING = %w[waiting_for_credential_id waiting_until].freeze
+
+  def page_and_card(task)
+    page = assert_read("/v1/owner/tasks/#{task.id}")
+    [ page.slice(*WAITING), ready_card(task).slice(*WAITING) ]
+  end
+
+  test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do
+    credential = scenario.credential(name: "Signed-out account")
+    scenario.seat(role: "builder", credential: credential)
+    scenario.sign_out_credential(credential)
+    task = scenario.task(state: "ready")
+
+    page, card = page_and_card(task)
+
+    assert_equal({ "waiting_for_credential_id" => credential.id, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
+  test "the task page names the limited account a task In review waits for and when it resets, as its card does (HE-15)" do
+    credential = scenario.credential(name: "Reviewer account")
+    scenario.seat(role: "reviewer", credential: credential)
+    reset = Time.current.change(usec: 0) + 900
+    scenario.limit_credential(credential, reset_at: reset)
+    task = scenario.task(state: "in_review")
+
+    page, card = page_and_card(task)
+
+    assert_equal credential.id, page["waiting_for_credential_id"]
+    assert_equal reset.iso8601, Time.iso8601(page["waiting_until"]).iso8601
+    assert_equal card, page
+  end
+
+  test "the task page names a credential hold's account, with its reset time only while it is active, as its card does" do
+    limited = scenario.credential(name: "Limited account")
+    reset = Time.current.change(usec: 0) + 3600
+    scenario.limit_credential(limited, reset_at: reset)
+    working = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: limited))
+    scenario.hold(working, reason: "credential_limit", credential: limited)
+    signed_out = scenario.credential(name: "Signed-out account", limited_until: Time.current + 3600)
+    scenario.sign_out_credential(signed_out)
+    stopped = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: signed_out))
+    scenario.hold(stopped, reason: "credential_signed_out", credential: signed_out)
+
+    page, card = page_and_card(working)
+    assert_equal limited.id, page["waiting_for_credential_id"]
+    assert_equal reset.iso8601, Time.iso8601(page["waiting_until"]).iso8601
+    assert_equal card, page
+
+    page, card = page_and_card(stopped)
+    assert_equal({ "waiting_for_credential_id" => signed_out.id, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
+  test "the task page names no account for a task that waits for none" do
+    task = scenario.task(state: "ready")
+
+    page, card = page_and_card(task)
+
+    assert_equal({ "waiting_for_credential_id" => nil, "waiting_until" => nil }, page)
+    assert_equal card, page
+  end
+
   test "the task page carries the task's recovery times, oldest start first (HE-17)" do
     credential = scenario.credential(name: "Made-up Claude account")
     task = scenario.task(state: "ready")

@@ -400,6 +400,18 @@ struct ContractExamplesTests {
         #expect(try example("TaskPage", as: TaskPage.self).recoveryTimes.isEmpty)
     }
 
+    @Test("a task page reads the account its task waits for and when it resets, or none (HE-15, HE-16)")
+    func taskPageWaiting() throws {
+        let read = try example("TaskPage", as: TaskPage.self)
+        #expect(read.waitingForCredentialID == UUID(uuidString: "00000000-0000-4000-8000-000000000314"))
+        #expect(read.waitingUntil == LeverageJSON.date(from: "2026-01-01T00:00:00Z"))
+        var page = try #require(ContractDocument.examples(of: "TaskPage").first?.objectValue)
+        page["waiting_for_credential_id"] = .null
+        page["waiting_until"] = .null
+        let none = try LeverageJSON.decoder().decode(TaskPage.self, from: ContractDocument.data(.object(page)))
+        #expect(none.waitingForCredentialID == nil && none.waitingUntil == nil)
+    }
+
     @Test("the system health reads when the last backup was made and whether it is late")
     func healthBackup() throws {
         let health = try example("SystemHealth", as: SystemHealth.self)

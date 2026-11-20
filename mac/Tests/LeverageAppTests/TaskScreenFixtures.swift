@@ -66,13 +66,16 @@ enum TaskScreenFixtures {
             subjectID: subjectID, payload: payload)
     }
 
+    /// A task read; waitingFor and waitingUntil are what the read says the
+    /// task waits for, as its board card would (HE-15, HE-16).
     static func page(
-        _ task: TaskSummary, criteria: [Criterion] = [], holds: [Hold] = [], events: [EventRecord] = [],
-        names: [LogName] = [], reviewer: Bool = true, asOfSeq: Int = 20
+        _ task: TaskSummary, criteria: [Criterion] = [], holds: [Hold] = [], waitingFor: UUID? = nil,
+        waitingUntil: Date? = nil, events: [EventRecord] = [], names: [LogName] = [], reviewer: Bool = true,
+        asOfSeq: Int = 20
     ) -> TaskPage {
         TaskPage(
-            task: task, criteria: criteria, holds: holds, events: events, names: names, reviewerSeatExists: reviewer,
-            asOfSeq: asOfSeq)
+            task: task, criteria: criteria, holds: holds, waitingForCredentialID: waitingFor, waitingUntil: waitingUntil,
+            events: events, names: names, reviewerSeatExists: reviewer, asOfSeq: asOfSeq)
     }
 
     static func criterion(
