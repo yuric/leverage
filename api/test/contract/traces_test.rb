@@ -960,6 +960,14 @@ class TracesTest < Minitest::Test
     failed = commands.find { |command| command["command"] == "fail_review" }
     assert_includes types.call(failed), "credential.switched", "the fresh lease starts on another login"
     assert failed["expect"]["events"].first["payload"]["lease_seat_id"]
+
+    # HE-17, start by start: [start, seconds], nil when the task was
+    # cancelled before the seat that continues it wrote anything. A switch
+    # in the same command ends one at once; a sign-out found by Verify
+    # (seat_id null) starts none; the reviewer's sign-out ends at the other
+    # reviewer's review.started.
+    assert_equal [ [ 300, 60 ], [ 500, nil ], [ 600, 0 ], [ 700, 0 ], [ 1600, 0 ], [ 1700, 100 ], [ 3800, 0 ], [ 3850, 250 ] ],
+      recovery_times(name), "milestone 3 plan HE-17"
   end
 
   def test_trace_15_uses_each_owner_control
@@ -974,7 +982,14 @@ class TracesTest < Minitest::Test
     assert_includes edits, %w[task.contract_changed task.returned hold.closed inbox.resolved], "an edit answers Past the round limit"
     events = all_events(trace)
     assert events.any? { |event| event["type"] == "inbox.resolved" && event["payload"]["choice"] == "edit_contract" }
-    assert events.any? { |event| event["type"] == "task.released" && event["payload"]["reason"] == "seat_disabled" }
+    released = events.find { |event| event["type"] == "task.released" && event["payload"]["reason"] == "seat_disabled" }
+    assert released, "an agent turned off releases its Working task"
+    # PRD L240 (cause_id: the event that led to this one) and the contract
+    # README's rule for a plain chain: the change that turns the agent off
+    # causes the release, as seat.removed causes remove_seat's (milestone 2
+    # plan IN-40) and seat.paused the seat_paused hold in this trace.
+    changed = events.find { |event| event["type"] == "seat.changed" }
+    assert_equal changed["ref"], released["cause_id"], "task.released is caused by seat.changed"
     assert_equal %w[owner_hold seat_paused rounds_exceeded], events.select { |event| event["type"] == "hold.opened" }.map { |event| event["payload"]["reason"] }
   end
 
