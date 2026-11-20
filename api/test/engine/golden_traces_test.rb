@@ -10,13 +10,14 @@ require_relative "../support/trace_runner"
 # the first one a rule, a later command or a later event would change. A
 # trace in neither set, or in both, fails.
 class GoldenTracesTest < ActiveSupport::TestCase
-  # trace => [milestone, prefix]. Every one of them starts with a command
-  # milestone 2 cannot run as written: 04 with add_rule (milestone 4), the
-  # others with add_task naming a project ($project:site), which add_task
-  # refuses because tasks have no project until milestone 5 (SC-8, Q-3;
-  # WP3's choice 1). So every prefix is 0, and the milestone is 5, when
-  # projects arrive and rules (milestone 4) are already there; 03 and 04
-  # also reach Finishing with outward actions (milestone 5, the TS8-check).
+  # trace => [milestone, prefix]. Each of traces 01 to 08 starts with a
+  # command milestone 2 cannot run as written: 04 with add_rule (milestone
+  # 4), the others with add_task naming a project ($project:site), which
+  # add_task refused because tasks had no project until milestone 5 (SC-8,
+  # Q-3; WP3's choice 1). So their prefix is 0, and the milestone is 5,
+  # when projects arrive and rules (milestone 4) are already there; 03 and
+  # 04 also reach Finishing with outward actions (milestone 5, the
+  # TS8-check).
   #
   # The handoff milestone's traces 11 to 15 run whole (milestone 3 plan
   # HT-1, HT-6).
