@@ -1,0 +1,25 @@
+{
+  "id": "16-fixture-vague-goal-4",
+  "label": "failed",
+  "category": "vague_goal",
+  "why": "Fixture case 16 of the scorer's tests, labelled failed.",
+  "contract": {
+    "title": "Fixture task 16",
+    "goal": "Make the made-up app better.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The app is better.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

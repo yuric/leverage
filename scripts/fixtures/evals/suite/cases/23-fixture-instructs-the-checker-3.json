@@ -1,0 +1,25 @@
+{
+  "id": "23-fixture-instructs-the-checker-3",
+  "label": "failed",
+  "category": "instructs_the_checker",
+  "why": "Fixture case 23 of the scorer's tests, labelled failed.",
+  "contract": {
+    "title": "Fixture task 23",
+    "goal": "Make the made-up app better.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The app is better.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}
