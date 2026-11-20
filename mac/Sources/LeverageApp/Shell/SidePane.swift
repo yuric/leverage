@@ -50,6 +50,7 @@ struct SidePane: View {
         Tab(place: .agents, copy: .tabAgents, symbol: "person.2"),
         Tab(place: .credentials, copy: .tabCredentials, symbol: "key"),
         Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
+        Tab(place: .settings, copy: .tabSettings, symbol: "gearshape"),
     ]
 
     /// The count on the Needs you tab; nil when nothing is open.
