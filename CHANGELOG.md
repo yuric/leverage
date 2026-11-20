@@ -27,7 +27,9 @@ once it makes its first release.
   the database once a day to a folder on the Mac and keeps 14 (none while
   the database holds no workspace), and `bin/restore` makes the database
   again beside the old one and replaces it only once the restored log
-  passes the replay test. Every
+  passes the replay test. The task page names the account a task waits
+  for, as its card does. Signing out of the app and quickly back in starts
+  the helper again, and a helper whose app is gone stops. Every
   interruption is shown with stand-in tools only, and the limit replies
   they play are made, not observed. The PRD gains the changes R-1 to R-10;
   the choices are recorded in ADRs 0008 to 0010.

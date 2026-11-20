@@ -466,9 +466,10 @@ direction; each entry says what the code does today.
   (`InterruptionReporter`). It never adopts an existing
   account folder: Add always starts from a new, empty one. It stops its
   runs and exits when its token answers `401` (exit 3) or when the app that
-  started it is gone (`ParentWatch`, in LeverageKit). A runner watches the
-  helper the same way and stops as on SIGTERM when the helper is gone,
-  also when it was gone before the runner looked (its parent is launchd).
+  started it is gone (`ParentWatch`, in LeverageKit), also when it was
+  gone before the helper looked (its parent is launchd). A runner watches
+  the helper the same way and stops as on SIGTERM when the helper is gone,
+  also when it was gone before the runner looked.
   How long each part of a stop is given is `StopTimings`, in LeverageKit:
   the app waits 16 seconds for the helper, the helper 10 for a runner, and
   a runner 4 to give back what its seat holds.
