@@ -47,6 +47,38 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
       finishing.map { |kase| [ kase.command, kase.guard ] }
   end
 
+  test "the log each owner control writes replays to the tables and passes the log audit (tests 1 and 2)" do
+    reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "codex"))
+    other = scenario.seat(role: "builder", credential: scenario.credential)
+    idea = scenario.task(state: "imaginarium")
+    working = scenario.task(state: "working", builder: @builder, criteria: %w[build build review])
+    first = Criterion.find_by!(task_id: working.id, position: 1)
+    first.update!(state: "passed", passed_at: scenario.database_now)
+    scenario.append("criterion.passed", task: working, subject: first, actor_kind: "seat", actor_id: @builder.id)
+    in_review = scenario.task(state: "in_review")
+    scenario.review(in_review, reviewer: reviewer)
+    released = scenario.task(state: "working", builder: other)
+    after = scenario.workspace.reload.last_seq
+
+    owner_run("promote", "id" => idea.id)
+    owner_run("edit_contract", task_params("edit_contract", idea))
+    owner_run("hold", "id" => working.id)
+    owner_run("resume", "id" => working.id)
+    owner_run("pause_seat", "id" => @builder.id)
+    owner_run("resume_seat", "id" => @builder.id)
+    owner_run("edit_contract", task_params("edit_contract", working).merge("criteria" => [
+      { "text" => "Made-up criterion 1.", "kind" => "build" }, { "text" => "Made-up, changed.", "kind" => "build" },
+      { "text" => "Made-up criterion 3.", "kind" => "review" }
+    ]))
+    owner_run("edit_contract", task_params("edit_contract", in_review))
+    owner_run("change_seat", "id" => other.id, "enabled" => false, "name" => "Made-up off")
+
+    assert_equal "passed", first.reload.state
+    assert_equal "ready", released.reload.state
+    assert_equal [], Leverage::Replay.diff(scenario.workspace_id)
+    assert_equal [], Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   StateTableCases.define(self, COMMANDS) do |kase|
     assert_equal [ "owner" ], kase.who unless kase.invalid_state?
     assert_nil kase.hook

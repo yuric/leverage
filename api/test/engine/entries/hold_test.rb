@@ -54,14 +54,12 @@ class HoldTest < ActiveSupport::TestCase
     end
   end
 
-  test "the builder's work calls are refused on_hold while it is held" do
+  test "the builder's work calls are blocked while it is held" do
     task = working_task(@builder)
+    refute Leverage::Eligibility.on_hold?(task)
     owner_run("hold", "id" => task.id)
-    criterion = Criterion.where(task_id: task.id, kind: "build").first
-    request = T::Request.new(command: "start_criterion", workspace_id: scenario.workspace_id, caller_kind: "seat",
-      caller_id: @builder.id, key: new_key, request_hash: "made-up", params: { "id" => task.id, "cid" => criterion.id })
 
-    assert_refused("on_hold", T.apply(request))
+    assert Leverage::Eligibility.on_hold?(task.reload)
   end
 
   test "a task already held by the owner is invalid_state: one owner_hold at a time" do

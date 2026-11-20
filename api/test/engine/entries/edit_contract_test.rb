@@ -47,7 +47,7 @@ class EditContractTest < ActiveSupport::TestCase
     event = events.sole
     added = criteria_of(task)
     assert_equal [ "task.contract_changed", "owner", scenario.owner.id ], [ event.type, event.actor_kind, event.actor_id ]
-    assert_equal FIELDS, event.payload.keys
+    assert_equal FIELDS.sort, event.payload.keys.sort
     assert_equal({ "contract_version" => 1, "minimum_strength_rank" => nil, "added_criterion_ids" => added.map(&:id),
                    "reset_criterion_ids" => [], "removed_criterion_ids" => [], "added_action_ids" => [],
                    "removed_action_ids" => [] }, event.payload)
@@ -57,7 +57,7 @@ class EditContractTest < ActiveSupport::TestCase
   end
 
   test "in the Backlog with criteria: kept, reset and added by position and kind, and the minimum rank recorded" do
-    task = scenario.task(state: "ready")
+    task = scenario.task(state: "ready", criteria: %w[build build review])
     owner_run("edit_contract", body(task))
     kept, changed, review = criteria_of(task)
     new_body = body(task, { 1 => "The second criterion, changed." }, minimum_strength_rank: 2)
@@ -108,7 +108,7 @@ class EditContractTest < ActiveSupport::TestCase
       Evidence.create!(workspace_id: task.workspace_id, criterion_id: criterion.id, kind: "link",
         value: "https://example.test/made-up-proof", attached_by_seat_id: @builder.id)
     end
-    outcome, events = edit(task, 1 => "The second criterion, changed.")
+    outcome, events = edit(task, { 1 => "The second criterion, changed." })
 
     assert_completed(outcome)
     assert_equal [ second.id ], events.first.payload.fetch("reset_criterion_ids")

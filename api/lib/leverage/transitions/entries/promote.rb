@@ -1,14 +1,24 @@
 module Leverage
   module Transitions
     module Entries
-      # promote (milestone 3 plan HE-24): the owner moves an
-      # idea from the Imaginarium to the Backlog.
+      # promote (PRD Lifecycle L78; milestone 3 plan HE-24): the owner moves
+      # an idea from the Imaginarium to the Backlog; task.promoted is
+      # written, which closes the idea step and opens the contract's. Every
+      # other state has no row: invalid_state. A hold does not stop it, as
+      # it stops only a seat's work (L174).
       #
-      # First version (milestone 3 plan §4, the hand-over table): not built yet.
-      # WP6 writes it.
+      # Params: id (the task).
       class Promote < Entry
-        def perform(_ctx)
-          raise NotImplementedError, "#{command} is not built yet"
+        def load(ctx)
+          @task = Task.find_by(id: ctx.request.params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such task")
+        end
+
+        def refusals(_ctx) = [ state_refusal(@task.state) ].compact
+
+        def perform(ctx)
+          @task.update!(state: "backlog")
+          ctx.emit("task.promoted", task: @task, payload: {})
+          @result = nil
         end
       end
     end
