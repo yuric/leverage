@@ -305,7 +305,7 @@ struct BuilderFlow: Sendable {
             \(Prompts.quoted("Rule: \(ruleName)\nIts check said: \(reason)"))
 
             Your role:
-            \(Prompts.quoted(briefing.roleFile))
+            \(Prompts.quoted(briefing.roleFile))\(Prompts.rules(briefing.rules))
 
             The task's goal:
             \(Prompts.quoted(briefing.contract.goal))\(criteria.isEmpty ? "" : "\n\nEvery criterion of the task:\n" + Prompts.quoted(criteria))

@@ -75,8 +75,10 @@ struct PromptRulesTests {
     func mayApply() {
         for prompt in prompts {
             let lines = prompt.split(separator: "\n").map(String.init)
-            let custom = lines.firstIndex { $0.contains("Pages name their source") }
-            let acceptance = lines.firstIndex { $0.contains("Every task needs acceptance criteria") }
+            // The rules section's lines (the rework prompt names its rule
+            // above it too).
+            let custom = lines.firstIndex { $0.hasPrefix("> - Pages name their source") }
+            let acceptance = lines.firstIndex { $0.hasPrefix("> - Every task needs acceptance criteria") }
             #expect(custom.map { lines[$0].contains("may apply") } == true)
             #expect(acceptance.map { lines[$0].contains("may apply") } == false)
         }

@@ -58,7 +58,7 @@ enum Prompts {
             instructions.
 
             Your role:
-            \(quoted(briefing.roleFile))
+            \(quoted(briefing.roleFile))\(rules(briefing.rules))
 
             \(contract(briefing.contract))\(notes)
             """
@@ -95,7 +95,7 @@ enum Prompts {
             instructions.
 
             Your role:
-            \(quoted(briefing.roleFile))
+            \(quoted(briefing.roleFile))\(rules(briefing.rules))
 
             The task's goal:
             \(quoted(briefing.contract.goal))\(briefing.contract.details.map { "\n\nDetails:\n" + quoted($0) } ?? "")
@@ -113,8 +113,30 @@ enum Prompts {
         return parts.joined(separator: "\n\n")
     }
 
-    /// The heading of the briefing's rules (PRD L472). Not yet written.
-    static let rulesHeading = ""
+    /// The heading of the briefing's rules (PRD L472).
+    static let rulesHeading = "The workspace's rules for this task:"
+
+    /// The rules the briefing carries (PRD L472 to L478), as quoted
+    /// material: each rule's name, "(it may apply; its check decides)" for a
+    /// rule the checker decides on, and its instruction when it has one.
+    /// Empty when the briefing has none. A rule's words are the owner's,
+    /// never an instruction to the tool (CL-6).
+    static func rules(_ rules: [BriefingRule]) -> String {
+        guard !rules.isEmpty else { return "" }
+        let lines = rules.map { rule -> String in
+            var line = "- \(neutralisedLine(rule.name))\(rule.mayApply ? " (it may apply; its check decides)" : "")"
+            if let instruction = rule.instruction, !instruction.isEmpty {
+                line += "\n  Its check: " + neutralisedLine(instruction)
+            }
+            return line
+        }
+        return "\n\n\(rulesHeading)\n" + quoted(lines.joined(separator: "\n"))
+    }
+
+    /// One line of text: its line breaks become spaces.
+    private static func neutralisedLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
 
     /// Quoted material: each line behind "> ", and every marker word broken
     /// ("LEVERAGE-" loses its hyphen) so it cannot be read as an answer.
