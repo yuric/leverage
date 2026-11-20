@@ -207,8 +207,12 @@ class TracesTest < Minitest::Test
       if own.empty?
         quiet_command(command, index, target)
       else
+        # A row's own events that name no task (seat.changed, seat.removed)
+        # count for the task its conditional events move (milestone 3 plan
+        # HE-27: turning a seat off releases its Working task).
+        taskless = own.reject { |event| event["task_id"] }.map { |event| event["type"] }
         matched = own.group_by { |event| event["task_id"] }.map do |task, group|
-          match(index, command_names(command), task, task ? @state[task] : nil, group, target)
+          match(index, command_names(command), task, task ? @state[task] : nil, group, target, task ? taskless : [])
         end
         unless matched.flatten.any? { |row| command_names(command).include?(row["command"]) }
           fail_state(index, "no row of #{command_names(command)} fits the events #{own.map { |event| event["type"] }}")
@@ -266,18 +270,19 @@ class TracesTest < Minitest::Test
     # events must be written; every event written must belong to a matched
     # row or be a side event; the state the events lead to must be the
     # rows' to-state.
-    def match(index, names, task, state, events, target)
+    def match(index, names, task, state, events, target, taskless = [])
       types = events.map { |event| event["type"] }
       fresh = events.any? { |event| event["payload"][LEASE_FIELD] }
       observed = observe(state, events)
       groups = state_rows(names, state).reject { |row| row["refusal"] }.group_by { |row| [ row["command"], row["from"] ] }
-      kept = groups.values.flat_map { |rows| pick(rows, types, fresh, state, observed) }
+      kept = groups.values.flat_map { |rows| pick(rows, types + taskless, fresh, state, observed) }
       allowed = kept.flat_map { |row| row["events"] + (row["conditional_events"] + row["side_events"]).map { |entry| entry["event"] } }.to_set
       stray = types.reject { |type| allowed.include?(type) || @side_types.include?(type) }
       fail_state(index, "#{task.inspect}: no matched row writes #{stray.uniq} (rows: #{kept.map { |row| row["command"] }.uniq})") unless stray.empty?
       if task
         if kept.any? { |row| row["from"] || row["to"] } || observed != state
-          unless kept.any? { |row| (row["from"] || row["to"]) && (row["to"] || row["from"]) == observed }
+          unless kept.any? { |row| (row["from"] || row["to"]) && (row["to"] || row["from"]) == observed } ||
+                 conditional_move?(kept, types, state, observed)
             fail_state(index, "#{task}: the events lead from #{state.inspect} to #{observed.inspect}, which no row of #{names} allows")
           end
         end
@@ -287,6 +292,18 @@ class TracesTest < Minitest::Test
         fail_state(index, "#{task.inspect}: no row of #{names} from #{state.inspect} fits #{types}")
       end
       kept
+    end
+
+    # A row that names no state may move a task only by one of its
+    # conditional events, and only as a row whose own event that is moves it
+    # (change_seat's task.released moves Working to Ready as release does).
+    def conditional_move?(kept, types, state, observed)
+      return false if kept.empty? || kept.any? { |row| row["from"] || row["to"] }
+
+      moves = types & kept.flat_map { |row| row["conditional_events"].map { |entry| entry["event"] } }
+      moves.any? do |type|
+        @rows.values.flatten.any? { |row| !row["refusal"] && row["events"].include?(type) && row["from"] == state && row["to"] == observed }
+      end
     end
 
     def pick(rows, types, fresh, state, observed)
