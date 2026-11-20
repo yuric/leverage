@@ -70,6 +70,18 @@ module Leverage
       end
     end
 
+    # Red-run placeholder (milestone 4 plan WP9): the review claim-next takes
+    # and the reviews it skips. Not built yet.
+    def review_and_skipped(seat, at: Time.current)
+      [ next_review(seat, at: at), [] ]
+    end
+
+    # Red-run placeholder (milestone 4 plan WP9): whether a reviewer seat may
+    # take the review now. Not built yet.
+    def may_review?(_seat, _review, at: Time.current)
+      true
+    end
+
     # Whether the failed review's previous builder is free (state machine
     # guard builder_free): it holds nothing and is enabled, not paused and
     # not removed, and, for a seat the app runs, one of its candidates is

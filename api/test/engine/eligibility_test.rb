@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "provider_world"
 
 # Leverage::Eligibility (PRD L544-L545, L548; milestone 2 plan EN-8, EN-15,
 # EN-23): which seat may claim, the next task and the next review a seat
@@ -260,5 +261,116 @@ class EligibilityTest < ActiveSupport::TestCase
     assert E.on_hold?(task)
     hold.update!(closed_at: @scenario.database_now)
     refute E.on_hold?(task)
+  end
+
+  # --- Milestone 4: the claim order and the provider rule (plan WP9) -----------
+
+  # A failed task.before_claim check of the seat on the task's current
+  # contract version and round, overridden by the owner (L910, RC-23).
+  def overridden_claim_check(task, seat, contract_version: task.contract_version, round: task.round)
+    rule = @claim_rule ||= @scenario.rule(hook: "task.before_claim")
+    inputs = { "contract_version" => contract_version, "seat_id" => seat.id }
+    check = @scenario.rule_check(task, rule: rule, result: "failed", hook: "task.before_claim", round: round, subject: seat,
+      input_hash: Leverage::Gating.input_hash(hook: "task.before_claim", inputs: inputs))
+    check.update!(overridden_at: @scenario.database_now, overridden_by_user_id: @scenario.owner.id,
+      override_reason: "Made-up reason.")
+    check
+  end
+
+  test "claim-next gives first a Ready task on which the seat has an overridden failed claim check of the current inputs (RD-14)" do
+    now = @scenario.database_now
+    high = ready(priority: "high", created_at: now - 300)
+    overridden = ready(priority: "low", created_at: now)
+    overridden_claim_check(overridden, @builder)
+
+    assert_equal overridden.id, E.next_task(@builder).id
+    assert_equal high.id, E.next_task(@scenario.seat(role: "builder")).id, "another seat's override is not this seat's"
+  end
+
+  test "an override of another contract version, another round, or not overridden at all changes nothing (RD-14)" do
+    now = @scenario.database_now
+    first = ready(created_at: now - 300)
+    stale = ready(created_at: now)
+    overridden_claim_check(stale, @builder, contract_version: 0)
+    overridden_claim_check(stale, @builder, round: 3)
+    @scenario.rule_check(stale, rule: @claim_rule, result: "failed", hook: "task.before_claim", subject: @builder,
+      input_hash: Leverage::Gating.input_hash(hook: "task.before_claim",
+        inputs: { "contract_version" => stale.contract_version, "seat_id" => @builder.id }))
+
+    assert_equal first.id, E.next_task(@builder).id
+  end
+
+  # RD-50: the provider the rule is asked about is that of the account the
+  # review would run on: the seat's run's (seats.run_credential_id), or the
+  # seat's own for one that connects on its own.
+  test "the next review asks the provider rule about the provider of the account the seat's run is on (RD-50)" do
+    task = @scenario.task(state: "in_review", builder: @builder)
+    review = Review.find_by!(task_id: task.id)
+    own = @scenario.credential(provider: "claude")
+    below = @scenario.credential(provider: "grok")
+    seat = @scenario.seat(role: "reviewer", credential: own)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
+    @scenario.run(seat, on: below)
+    Leverage::Gating.implementation = ProviderWorld.new
+
+    assert_equal review.id, E.next_review(seat.reload).id
+    assert_nil E.next_review(@scenario.seat(role: "reviewer", provider: "claude")), "one that connects on its own: its own"
+    assert_equal review.id, E.next_review(@scenario.seat(role: "reviewer", provider: "grok")).id
+  end
+
+  test "claim-next names, in order, the reviews before the one it takes that the rule or the claim filter keeps from the seat (RC-50)" do
+    now = @scenario.database_now
+    tasks = [ 300, 200, 100, 50 ].map do |ago|
+      task = @scenario.task(state: "in_review", builder: @builder)
+      Review.where(task_id: task.id).update_all(created_at: now - ago)
+      task
+    end
+    reviews = tasks.map { |task| Review.find_by!(task_id: task.id) }
+    seat = @scenario.seat(role: "reviewer", credential: @scenario.credential(provider: "codex"))
+    built = { tasks[0].id => %w[codex], tasks[1].id => %w[claude], tasks[2].id => %w[claude], tasks[3].id => %w[codex] }
+    Leverage::Gating.implementation = ProviderWorld.new(built_by: built, reviews: { reviews[1].id => tasks[1].id },
+      past_holders: { tasks[1].id => [ seat.id ] })
+
+    review, skipped = E.review_and_skipped(seat)
+    assert_equal reviews[2].id, review.id
+    assert_equal [ reviews[0].id, reviews[1].id ], skipped.map(&:id)
+    assert_equal reviews[2].id, E.next_review(seat).id
+
+    reviews[2].update!(reviewer_seat_id: @scenario.seat(role: "reviewer").id)
+    assert_equal [ nil, [ reviews[0].id, reviews[1].id, reviews[3].id ] ], E.review_and_skipped(seat).then { |taken, left| [ taken, left.map(&:id) ] }
+    assert_equal [ nil, [] ], E.review_and_skipped(@builder), "a seat that may not claim a review skips nothing"
+  end
+
+  test "may_review?: a reviewer that never built the task, enabled, not paused, not removed, on an account the rule allows (RD-51)" do
+    task = @scenario.task(state: "in_review", builder: @builder)
+    review = Review.find_by!(task_id: task.id)
+    Leverage::Gating.implementation = ProviderWorld.new
+    at = @scenario.database_now
+
+    assert E.may_review?(@reviewer, review, at: at), "codex never built it and is allowed"
+    refute E.may_review?(@scenario.seat(role: "reviewer", credential: @scenario.credential(provider: "claude")), review, at: at)
+    refute E.may_review?(@scenario.seat(role: "reviewer", provider: "claude"), review, at: at)
+    assert E.may_review?(@scenario.seat(role: "reviewer", provider: "grok"), review, at: at)
+    refute E.may_review?(@scenario.seat(role: "reviewer", provider: "grok", enabled: false), review, at: at)
+    refute E.may_review?(@scenario.pause_seat(@scenario.seat(role: "reviewer", provider: "grok")), review, at: at)
+    refute E.may_review?(@scenario.remove(@scenario.seat(role: "reviewer", provider: "grok")), review, at: at)
+    refute E.may_review?(@scenario.seat(role: "builder", provider: "grok"), review, at: at)
+
+    @scenario.review(task, reviewer: @reviewer)
+    assert E.may_review?(@reviewer, review, at: at), "a reviewer busy on a review may still review it later"
+
+    limited = @scenario.credential(provider: "codex")
+    waiting = @scenario.seat(role: "reviewer", credential: limited)
+    @scenario.limit_credential(limited, reset_at: at + 3600)
+    refute E.may_review?(waiting.reload, review, at: at), "no account to review on"
+    assert E.may_review?(waiting, review, at: at + 3601)
+  end
+
+  test "may_review?: a reviewer that built the task may not, whatever its provider (L455)" do
+    task = @scenario.task(state: "in_review", builder: @builder)
+    review = Review.find_by!(task_id: task.id)
+    @scenario.append("task.claimed", task: task, actor_kind: "seat", actor_id: @reviewer.id,
+      payload: { seat_id: @reviewer.id, credential_id: @reviewer.credential_id, model: nil })
+    refute E.may_review?(@reviewer, review, at: @scenario.database_now)
   end
 end
