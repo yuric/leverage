@@ -56,6 +56,13 @@ class GateApplicationTest < ActiveSupport::TestCase
     assert_equal Leverage::HookInputs.for(hook: "task.before_claim", task: task, params: {}, seat: @builder), request.inputs
   end
 
+  test "with nothing planned the gate writes nothing: RuleChecks.write is not called" do
+    task = @scenario.task(state: "backlog")
+    calls = spy_on(Leverage::RuleChecks, :write) { assert command("complete_contract", @owner, contract_params(task)).completed? }
+
+    assert_empty calls
+  end
+
   test "at ready to start it asks with the requested contract, not the stored one" do
     gating = Planned.new { evaluation }
     Leverage::Gating.implementation = gating

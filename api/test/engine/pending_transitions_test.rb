@@ -341,6 +341,24 @@ class PendingTransitionsTest < ActiveSupport::TestCase
     end
   end
 
+  test "cancelling a provisional claim keeps a check that ended in error: it is not withdrawn (L392)" do
+    with_jobs do
+      gating(custom_rule("task.before_claim"))
+      task = @scenario.task(state: "ready")
+      command("claim", @builder)
+      check = mine(RuleCheck).sole
+      events = in_command do |ctx|
+        Leverage::RuleChecks.error(ctx, check)
+        P.cancel(ctx, P.of(task), "invalid_state")
+        ctx.events
+      end
+
+      assert_equal %w[check.finished], events.map(&:type)
+      assert_equal "error", check.reload.result
+      assert_equal [ "ready", nil ], task.reload.values_at(:state, :holder_seat_id)
+    end
+  end
+
   test "a cancelled provisional claim lapses its reservation" do
     with_jobs do
       gating(custom_rule("task.before_claim"))
