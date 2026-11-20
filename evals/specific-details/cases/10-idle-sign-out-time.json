@@ -1,0 +1,25 @@
+{
+  "id": "10-idle-sign-out-time",
+  "label": "passed",
+  "category": "short_but_specific",
+  "why": "Short, but it names the setting, the site, the new value and who it is for, and the criterion can be timed.",
+  "contract": {
+    "title": "Sign members out later",
+    "goal": "Raise the idle sign-out time of the Quillmoor members site from 15 to 60 minutes, so members reading long articles stay signed in.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "A member who does nothing for 45 minutes is still signed in.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

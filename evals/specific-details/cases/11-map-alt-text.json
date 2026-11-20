@@ -1,0 +1,25 @@
+{
+  "id": "11-map-alt-text",
+  "label": "passed",
+  "category": "short_but_specific",
+  "why": "Short, but the image, the page, the exact text and its readers are named, and the criterion can be read from the page.",
+  "contract": {
+    "title": "Describe the map",
+    "goal": "Give the map image on the Contact page of the Larkspur Kitchen blog the alt text Map of the Larkspur Kitchen shop, for readers who use a screen reader.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The map image on the Contact page has the alt text Map of the Larkspur Kitchen shop.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

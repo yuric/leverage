@@ -1,0 +1,29 @@
+{
+  "id": "04-backup-log-line",
+  "label": "passed",
+  "category": "specific",
+  "why": "The script and the log file are named, the line's fields are listed, and the criteria say what a run leaves in the log.",
+  "contract": {
+    "title": "Log each nightly backup",
+    "goal": "Change the nightly backup script of the Tallowmere inventory server, scripts/backup.sh, so that every run adds one line to the file /var/log/tallowmere-backup.log.",
+    "details": "The operator needs to see each morning whether last night's backup ran. Each line holds the date, the time the run finished, the size of the archive, and OK or FAILED.",
+    "criteria": [
+      {
+        "text": "After a successful run, the last line of the log holds that day's date, the finishing time, the archive's size and OK.",
+        "kind": "build"
+      },
+      {
+        "text": "When the archive cannot be written, the last line ends with FAILED and the script exits with a status other than 0.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

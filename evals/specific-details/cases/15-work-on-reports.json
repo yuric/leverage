@@ -1,0 +1,25 @@
+{
+  "id": "15-work-on-reports",
+  "label": "failed",
+  "category": "vague_goal",
+  "why": "The criterion can be checked, but the goal could mean several different pieces of work on any of the reports, so no one could tell what to do.",
+  "contract": {
+    "title": "Reports",
+    "goal": "Work on the reports in the Tallowmere inventory app.",
+    "details": "Both the finance team and the warehouse use them.",
+    "criteria": [
+      {
+        "text": "Every report still opens without an error.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

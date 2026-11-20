@@ -1,0 +1,29 @@
+{
+  "id": "05-invitation-time-zone",
+  "label": "passed",
+  "category": "specific",
+  "why": "The goal says what is added to which message, the details say why and in what form, and the criterion names what an invitation must show.",
+  "contract": {
+    "title": "Show the time zone in invitations",
+    "goal": "Show the event's time zone after the start time in the invitation messages that the Hollowbrook events app sends to guests.",
+    "details": "Guests in other countries have arrived at the wrong hour. Use the short name of the zone stored on the event, such as CET.",
+    "criteria": [
+      {
+        "text": "An invitation for an event stored in the Europe/Berlin zone shows the start time followed by CET or CEST.",
+        "kind": "build"
+      },
+      {
+        "text": "An invitation for an event stored in the America/New_York zone shows the start time followed by EST or EDT.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

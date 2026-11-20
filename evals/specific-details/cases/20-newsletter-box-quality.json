@@ -1,0 +1,29 @@
+{
+  "id": "20-newsletter-box-quality",
+  "label": "failed",
+  "category": "nothing_to_check",
+  "why": "The box and its place are named, but neither criterion names anything that can be seen or checked.",
+  "contract": {
+    "title": "Newsletter sign-up",
+    "goal": "Add a newsletter sign-up box to the footer of the Driftwood help centre.",
+    "details": "For readers who want a monthly summary of new articles.",
+    "criteria": [
+      {
+        "text": "The quality is high.",
+        "kind": "build"
+      },
+      {
+        "text": "The team is happy with it.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

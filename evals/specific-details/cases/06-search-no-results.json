@@ -1,0 +1,25 @@
+{
+  "id": "06-search-no-results",
+  "label": "passed",
+  "category": "specific",
+  "why": "What is shown, on which page and when is stated, with what must stay, and the criterion is a search anyone can type.",
+  "contract": {
+    "title": "Say when a search finds nothing",
+    "goal": "On the search results page of the Driftwood help centre, show the message No articles found and a link to the contact form when a search finds no article.",
+    "details": "Today the page is blank and readers think the site is broken. The search box stays at the top of the page so that they can try other words.",
+    "criteria": [
+      {
+        "text": "Searching for zzqqxx shows No articles found and a link to the contact form, with the search box still at the top of the page.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}
