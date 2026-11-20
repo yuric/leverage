@@ -97,9 +97,11 @@ Where two inventories chose differently, the decision names the conflict.
 - **DB-4** `[shape]` The workspace lock is `SELECT … FROM workspaces WHERE
   id = $1 FOR UPDATE` as each writing transaction's first statement; the
   counter is `workspaces.last_seq bigint not null default 0`.
-- **DB-5** `[shape]` `at` is `clock_timestamp()` read once after the lock
-  (writer behaviour, Core loop; the contract fixes the type and records
-  the rule in `README.md`).
+- **DB-5** `[shape]` `at` is `clock_timestamp()` read once after the lock,
+  raised to one microsecond after the `at` of the workspace's last event
+  when the clock reads earlier, so `at` strictly increases across commands
+  (writer behaviour, Core loop, the floor since milestone 4; the contract
+  fixes the type and records the rule in `README.md`).
 - **DB-6** `[shape]` The state rule is a `DEFERRABLE INITIALLY DEFERRED`
   constraint trigger after insert or update of `tasks.state` that requires
   an `events` row for that task written by the current transaction,
@@ -329,11 +331,13 @@ Where two inventories chose differently, the decision names the conflict.
   `action.lease_granted` (P-1), `task.returned_for_rework` and
   `hold.closed` (Offer task again, or Mark action done with approved
   actions left) when their payload's `lease_seat_id` is not null; the
-  provisional holder is set by `check.queued` at `task.before_claim`
-  (`claimant_seat_id`) and cleared by the `check.finished` of the last of
-  the claim's checks still running when one of them is `failed` or
-  `error`, or every one `withdrawn` (the engine decides a pending claim
-  only then; milestone 4 WP20), by a `hold.opened` on the task, and by
+  provisional holder is set by the `check.queued` of a blocking check at
+  `task.before_claim` (`claimant_seat_id`) and cleared by the
+  `check.finished` of the last of the claim's blocking checks still
+  running when one of them is `failed` or `error`, or every one
+  `withdrawn` (the engine decides a pending claim only then; milestone 4
+  WP20); a warn rule's check sets and settles nothing. It is also cleared
+  by a `hold.opened` on the task, and by
   `task.released`; holder cleared by `task.submitted`, `task.released`,
   `task.lease_expired`, `task.returned`, `task.cancelled` and `task.done`.
   Settles D-G48, M-G7, M-G31.

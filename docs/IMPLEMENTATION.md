@@ -580,20 +580,26 @@ with a test that failed first:
   opened. The time a command takes under the workspace lock is now at
   least one microsecond after the workspace's last event (PRD L219, L825),
   and an event a workspace timer writes on a task takes effect no earlier
-  than that task's latest event (L120, L220).
+  than that task's latest event (L120, L220). DB-5 and the contract's
+  README say so.
 - **A rule turned off while its command waits no longer blocks**, even
   when its check had already failed: the engine lets the move through
   (L380, L976) and the log audit now agrees.
 - **Replay holds a provisional claim for its blocking checks only**: a
   warn rule's check never keeps a claim waiting, so the claim ends when
-  its last blocking check fails (DB-43 read that way).
-- **"No reviewer is eligible" opens right after a review lease ends inside
-  a command**, also when that command is then refused, beside the lease
-  timer's events and at their time (SM-42).
-- **Claim-next does not apply the job timers first.** It never hands out a
-  job past its due time, the sweep records the miss within 15 seconds at
-  the due time, and claim-next's state row writes no `job.timed_out`. No
-  requirement or audit rule needs the miss sooner.
+  its last blocking check fails (DB-43 now says so).
+- **"No reviewer is eligible" opens right after a review lease ends**,
+  wherever the lease timer runs: as the sweep's command, or inside another
+  command before its refusals or in a claim's search, also when that
+  command is then refused. The lease timer writes the item next to its
+  own event and at its time, before the task's later timers (SM-42,
+  L120).
+- **Claim-next does not time out the queued jobs it could claim.** It
+  still applies the timers of the job its seat holds, as any seat's
+  command does. It never hands out a job past its due time, the sweep
+  records the miss within 15 seconds at the due time, and claim-next's
+  state row writes no `job.timed_out`. No requirement or audit rule needs
+  the miss sooner.
 
 ## What the Handoff milestone proves, and how far
 

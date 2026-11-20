@@ -192,8 +192,15 @@ authority. How its fields are filled:
   command, so its events carry the helper's key. Events the server writes on
   its own carry none.
 - `at` is the database clock, read once after the workspace lock, and every
-  event of one command shares it. `effective_at` equals `at` except for a
-  timer's events, which carry the due time.
+  event of one command shares it. When the clock reads earlier than one
+  microsecond after the workspace's last event's `at` (it can step back),
+  `at` is that instead, so `at` strictly increases from one command to the
+  next and two commands never share it.
+- `effective_at` equals `at` except for a timer's events, which carry the
+  due time, or the latest `effective_at` of the task's events when that is
+  later. An event a workspace timer writes on a task takes effect no
+  earlier than that task's latest event either. So `effective_at` never
+  decreases within a task.
 
 ## The state table
 
