@@ -149,7 +149,17 @@ enum Prompts {
             .joined(separator: "\n")
     }
 
+    /// The hyphen-minus and the dashes that look like it (U+2010 to U+2015,
+    /// U+2212, U+FE58, U+FE63, U+FF0D): a marker word written with any of
+    /// them reads as one, so each is broken (the second review of the
+    /// milestone 4 review's fixes).
+    static let markerDashes = "-\u{2010}\u{2011}\u{2012}\u{2013}\u{2014}\u{2015}\u{2212}\u{FE58}\u{FE63}\u{FF0D}"
+
+    /// Text with every marker word broken: `LEVERAGE` followed by any of
+    /// `markerDashes`, in any case, becomes `LEVERAGE ` (a space). Any other
+    /// dash in the text is kept.
     static func neutralised(_ text: String) -> String {
-        text.replacingOccurrences(of: "LEVERAGE-", with: "LEVERAGE ", options: .caseInsensitive)
+        text.replacingOccurrences(
+            of: "LEVERAGE[\(markerDashes)]", with: "LEVERAGE ", options: [.regularExpression, .caseInsensitive])
     }
 }

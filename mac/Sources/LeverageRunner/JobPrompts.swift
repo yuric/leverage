@@ -12,8 +12,9 @@ import LeverageKit
 /// text cannot know. The nonce keeps task text from closing its block for
 /// the parsers; for the model reading the prompt, the text inside a block
 /// is also neutralised, so that no line in it can look like a marker
-/// (`<<<` and `LEVERAGE-` are broken, as `Prompts.neutralised` breaks the
-/// marker words in a builder's prompt), and the closing says that only a
+/// (every run of `<` longer than two, and `LEVERAGE` with a hyphen or a
+/// look-alike dash, are broken, as `Prompts.neutralised` breaks the marker
+/// words in a builder's prompt), and the closing says that only a
 /// line with the run's code opens or closes a block (milestone 4 review,
 /// finding 10).
 enum JobPrompts {
@@ -45,11 +46,15 @@ enum JobPrompts {
         "\(quoteOpening(nonce)) \(label)>>>\n\(neutralised(text))\n\(quoteClosing(nonce))"
     }
 
-    /// Task text as it goes inside a block: `<<<` loses its last angle
-    /// bracket's neighbour (`<< <`) and `LEVERAGE-`, in any case, its hyphen,
-    /// so no line can open or close a block, or carry an answer's marker.
+    /// Task text as it goes inside a block: every `<` that follows two
+    /// others gets a space before it, so no run of `<` is longer than two
+    /// (`<<<` becomes `<< <`, and six become `<< < < < <`), and `LEVERAGE`
+    /// followed by a hyphen or a dash that looks like one, in any case, loses
+    /// that dash (`Prompts.neutralised`). So no line can open or close a
+    /// block, or carry an answer's marker, in ASCII or with a look-alike
+    /// dash (milestone 4 review, finding 10, and its second review).
     static func neutralised(_ text: String) -> String {
-        Prompts.neutralised(text).replacingOccurrences(of: "<<<", with: "<< <")
+        Prompts.neutralised(text).replacingOccurrences(of: "(?<=<<)<", with: " <", options: .regularExpression)
     }
 
     /// The sentence that says which lines are markers.

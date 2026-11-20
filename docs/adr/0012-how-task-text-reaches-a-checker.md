@@ -37,12 +37,17 @@ and RD-39.
    A draft's blocks are `title`, `goal`, `details`, `criteria` and
    `brief`, and its answer is one JSON object between
    `LEVERAGE-DRAFT-<nonce>-BEGIN` and `-END`.
-   The text inside a block has its markers broken (`<<<` becomes `<< <`,
-   and `LEVERAGE-`, in any case, loses its hyphen), so no line in it can
-   open or close a block or carry an answer's marker, and the opening of
-   the blocks says that a block opens and closes only on a line that
-   carries the run's code, and that any other line inside one is quoted
-   text. The nonce keeps a forged marker from closing a block for the
+   The text inside a block has its markers broken: every `<` that follows
+   two others gets a space before it, so no run of `<` is longer than two
+   (`<<<` becomes `<< <`), and `LEVERAGE` followed by a hyphen or a dash
+   that looks like one (U+2010 to U+2015, U+2212, U+FE58, U+FE63,
+   U+FF0D), in any case, loses that dash. So no line in it can open or
+   close a block or carry an answer's marker in ASCII or with one of
+   those dashes; a look-alike of another kind (another bracket, a letter
+   from another script) is not broken, and the nonce is what keeps it
+   from counting. The opening of the blocks says that a block opens and
+   closes only on a line that carries the run's code, and that any other
+   line inside one is quoted text. The nonce keeps a forged marker from closing a block for the
    parsers; the broken markers and that sentence keep it from reading as
    one to the model.
 3. **The answer is read only where it carries the nonce.**
@@ -61,7 +66,12 @@ and RD-39.
    it, with the allow-listed environment, and a time limit that ends 10
    seconds before the job's `run_due_at` (RD-34). A prompt over 512 KiB is
    not started: a tool gets its prompt as one argument, which the Mac
-   refuses past 1 MiB, so the job fails at once with a logged reason. Gemini's never adds `--mode plan`, in which `agy`
+   refuses past 1 MiB. The runner starts no tool, logs the reason and
+   sends no result, so the check ends in `error` after its two run
+   timeouts (a draft is dropped after its second). The server's length
+   limits on task text make this rare, not impossible: they count
+   characters, not bytes, and not the evidence rows a task gathers.
+   Gemini's never adds `--mode plan`, in which `agy`
    answered with a plan and not the word. What such a run can reach if an
    instruction in task text got past the frame differs by provider, and
    no more than this is claimed (RD-33):

@@ -16207,7 +16207,7 @@
       "LandingPrompt": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job, because the role counts as offline 90 seconds after its last poll (PRD L401; milestone 4 review, finding 19).",
+        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job: an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
         "properties": {
           "text": {
             "type": "string",

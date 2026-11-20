@@ -1892,14 +1892,24 @@ skeleton's pull request description, as rule AR-004 asks.
         action 2,000, evidence 4,000, an override's reason 2,000, a rule's
         instruction 8,000, a work reference 2,000, and at most 50 criteria,
         actions or failed criteria. A longer body is `422 invalid`; the
-        runner does not start a tool with a prompt over 512 KiB.
-        Alternative: no limit, and a check that cannot start ends in
-        `error` after two timeouts.
+        runner does not start a tool with a prompt over 512 KiB, sends no
+        result, and the check ends in `error` after its two run timeouts.
+        The limits make that rare but do not remove it: they count
+        characters, not bytes, and not the evidence rows a task gathers.
+        The app does not enforce them: an over-long field is refused with
+        the app's general sentence ("Something in that is not valid. Check
+        it and try again."), which names neither the field nor its length.
+        Alternative: no limit, so that any task with a long enough text
+        has checks that end in `error`; or quote only part of the
+        evidence, so that a checker would judge text it never saw.
       - **The landing prompt of an orchestrator or a planner** tells it to
         check for work every 60 seconds, also while it works on a job
         (`check_interval_minutes` 1, where a builder's and a reviewer's
         stay 20), and describes jobs and commands, not a briefing, a lease
-        or a release. Alternative: the 20 minutes of L559 for every seat.
+        or a release. An orchestrator is told that its jobs wait while it
+        is offline; a planner, whose presence is not read, that a draft not
+        claimed or not finished in time is queued once more, then dropped.
+        Alternative: the 20 minutes of L559 for every seat.
       - **A press after a refusal sends a new key** in the app, so it is
         asked again rather than answered with the stored refusal; a
         request with no answer keeps its key. Alternative: keep the key

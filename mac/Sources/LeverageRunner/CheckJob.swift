@@ -44,7 +44,8 @@ struct CheckJob: Sendable {
             let prompt = JobPrompts.check(material: material, nonce: nonce)
             if let reason = JobToolRun.tooLong(prompt) {
                 // The same material makes a prompt as long every time: no
-                // second run is tried.
+                // second run is tried, nothing is sent, and the job runs into
+                // its timeout, like every attempt after it.
                 context.state.toolFailed()
                 context.log.warning("job \(claim.jobID.contractString): \(reason)")
                 break
@@ -89,7 +90,10 @@ enum JobToolRun {
     /// prompt as one argument, and the Mac refuses to start a program whose
     /// arguments and environment pass `ARG_MAX` (1 MiB): a prompt over this
     /// limit would fail to start every time (milestone 4 review, finding 9).
-    /// The server's limits on task text keep a contract well under it.
+    /// The server's limits on task text make such a prompt rare, not
+    /// impossible: they count characters, not bytes, and not the evidence
+    /// rows a task gathers. Over it, no tool starts and no result is sent:
+    /// a check ends in `error` after its two run timeouts.
     static let promptByteLimit = 512 * 1024
 
     /// Why the prompt is not run, or nil when it fits.

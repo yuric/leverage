@@ -134,10 +134,10 @@ class LandingPromptTest < CommittingTestCase
   end
 
   # Milestone 4 review, finding 19: an orchestrator or a planner claims
-  # jobs, not tasks. It polls often enough to stay online (PRD L401: it is
-  # offline 90 seconds after its last poll), is told what a job and a
-  # command answer mean, and is not told about a briefing, a lease or a
-  # release it has no call for.
+  # jobs, not tasks. It polls every minute (an orchestrator is offline 90
+  # seconds after its last poll, PRD L401; a planner's drafts have their
+  # queue timeout), is told what a job and a command answer mean, and is
+  # not told about a briefing, a lease or a release it has no call for.
   { "orchestrator" => "an", "planner" => "a" }.each do |role, article|
     test "#{article} #{role}'s prompt is about jobs, polls within 90 seconds and has no briefing, lease or release" do
       seat = scenario.seat(role: role, provider: "codex", name: "Made-up #{role} agent")
@@ -173,7 +173,7 @@ class LandingPromptTest < CommittingTestCase
 
     planner = text_for(scenario.seat(role: "planner", provider: "codex", name: "Made-up planner agent"))
     refute_match(/offline/i, planner)
-    refute_match(/\bwait\b/i, planner)
+    refute_match(/\bwait\b(?!=)/i, planner, "no job of a planner waits (the URL's wait=0 is a parameter)")
     assert_includes planner,
       "A draft not claimed or not finished in time is queued once more, then dropped, and its task stays in Backlog."
   end

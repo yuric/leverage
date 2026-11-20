@@ -21,10 +21,13 @@ module Leverage
     # L794); the briefing tells the agent what each call is for.
     module LandingPrompt
       CHECK_INTERVAL_MINUTES = 20
-      # An orchestrator or a planner is offline 90 seconds after its last
-      # poll (PRD L401; Leverage::RolePresence::OFFLINE_AFTER), so it checks
-      # for work every minute, also while it works on a job (milestone 4
-      # review, finding 19).
+      # An orchestrator or a planner checks for work every minute, also
+      # while it works on a job (milestone 4 review, finding 19): an
+      # orchestrator is offline 90 seconds after its last poll (PRD L401;
+      # Leverage::RolePresence::OFFLINE_AFTER), and its jobs wait while it
+      # is; a planner's presence is not read, and a draft it does not claim
+      # or finish within the check timeouts is queued once more, then
+      # dropped (JobTimer.draft_miss; the second review of finding 19).
       JOB_CHECK_INTERVAL_MINUTES = 1
       JOB_ROLES = %w[orchestrator planner].freeze
       TEMPLATE = "landing_prompt.md.erb".freeze

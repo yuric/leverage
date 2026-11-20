@@ -58,7 +58,8 @@ struct CheckJobTests {
 
     // Milestone 4 review, finding 9: a tool gets the prompt as one argument,
     // and one over the Mac's limit cannot start at all. Such a prompt is
-    // not run, twice or once: the job fails at once with a logged reason.
+    // not run, twice or once: the reason is logged, no result is sent, and
+    // the job runs into its timeout (the second review of finding 9).
     @Test("a prompt over the argument limit starts no tool run, and nothing is sent")
     func promptTooLong() async throws {
         let harness = try Harness()

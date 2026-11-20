@@ -595,15 +595,23 @@ check result. What it added and changed, each from the milestone 4 plan
   `AddRuleRequest`, `SaveRuleRequest`, `ReturnForReworkRequest`), so a
   longer body is `422 invalid` before any check is queued: a checker's
   tool gets the task text as one argument, which the Mac refuses past
-  1 MiB. `LandingPrompt.check_interval_minutes` is 20, or 1 for an
-  orchestrator or a planner, which counts as offline 90 seconds after its
-  last poll (L401). `enable_rule` may open `claim_gate_failed` again with
-  its item, for a Ready task that three seats failed the rule on (L166,
-  L393). The heartbeat's description says what a provisional claimant's
-  heartbeat answers, and the report calls no longer say a report that
-  names a job is 404. The shipped rule "Two failed reviews move a task to
-  a stronger model" is "Repeated failed reviews move a task to a stronger
-  model" (PRD L443).
+  1 MiB. The limits count characters, not bytes, and not the evidence
+  rows a task gathers, so they make a prompt over the runner's 512 KiB
+  rare, not impossible: such a check starts no tool and ends in `error`
+  after its two run timeouts. `LandingPrompt.check_interval_minutes` is
+  20, or 1 for an orchestrator, which counts as offline 90 seconds after
+  its last poll (L401), and for a planner, whose presence is not read: a
+  draft it does not claim or finish in time is queued once more, then
+  dropped (L399). The `cancel` rows withdraw every check of the task with
+  no result and no override, a warn rule's too, and every queued or
+  claimed job of the task, a contract draft's among them (L207; review
+  finding 6), not only a pending transition's. `enable_rule` may open
+  `claim_gate_failed` again with its item, for a Ready task that three
+  seats failed the rule on (L166, L393). The heartbeat's description says
+  what a provisional claimant's heartbeat answers, and the report calls
+  no longer say a report that names a job is 404. The shipped rule "Two
+  failed reviews move a task to a stronger model" is "Repeated failed
+  reviews move a task to a stronger model" (PRD L443).
 
 Line numbers in the notes this milestone added are those of
 `docs/PRD.md` at the merge of milestone 3, as the plan cites them.
