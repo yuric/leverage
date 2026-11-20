@@ -154,6 +154,13 @@ class Scenario
     end
   end
 
+  def limit_credential(credential, **) = credential
+  def sign_out_credential(credential, **) = credential
+  def hold(_task, **) = Hold.new
+  def pause_seat(seat) = seat
+  def finishing_task(**) = Task.new
+  def run(seat, **) = seat
+
   # Appends one event through EventLog, at the database clock unless at:
   # is given. The actor is the app unless named. Returns the Event.
   def append(type, task: nil, subject: nil, payload: {}, actor_kind: "app", actor_id: nil, cause_id: nil,

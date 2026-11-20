@@ -230,9 +230,11 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
+  # add_rule is milestone 4's; promote has a pending entry from milestone 3
+  # (milestone 3 plan HT-6), which Table.entry_for resolves.
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "promote")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "promote").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "add_rule")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "add_rule").count
   end
 
   test "a workspace that does not exist is not found" do

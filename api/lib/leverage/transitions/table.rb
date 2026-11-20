@@ -22,11 +22,15 @@ module Leverage
         report_request_progress report_request_result report_run_started report_run_stopped
       ].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS).freeze
+      PENDING_GROUPS = {}.freeze
+      PENDING = PENDING_GROUPS.values.flatten.freeze
 
       @overrides = {}
 
       class << self
         def include?(command) = COMMANDS.include?(command.to_s)
+
+        def known?(command) = include?(command)
 
         def class_name(command)
           "Leverage::Transitions::Entries::#{command.to_s.camelize}"

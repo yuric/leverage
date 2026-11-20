@@ -61,6 +61,8 @@ module Leverage
         "report_run_stopped" => "v1/helper/seats#run_stopped"
       }.freeze
 
+      PENDING = {}.freeze
+
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)
@@ -71,9 +73,9 @@ module Leverage
 
       # The served operations, read from the registry. Raises KeyError for
       # a ROUTES key that is not a registry operation.
-      def routes
+      def routes(table = ROUTES)
         operations = Contract.registry.fetch("operations").to_h { |operation| [ operation.fetch("operation_id"), operation ] }
-        ROUTES.map do |operation_id, to|
+        table.map do |operation_id, to|
           operation = operations.fetch(operation_id) { raise KeyError, "#{operation_id} is not a registry operation" }
           Route.new(operation_id: operation_id, verb: operation.fetch("method").downcase,
                     path: operation.fetch("path").gsub(/\{([a-z]+)\}/, ':\1'), to: to)

@@ -22,9 +22,13 @@ module Leverage
     # one, and pauses the task's lease clocks when the reason pauses them.
     # The app opens it unless an actor is named.
     #
+    # item: - true (the default) opens the Needs you item the registry
+    #         names for the reason; false opens none, for a credential_limit
+    #         hold that has a due time (milestone 3 plan §2.1 rule 6, HE-4).
+    #
     # Returns the Hold.
     def open(ctx, task:, reason:, cause_id: nil, facts: {}, rule_id: nil, credential_id: nil, actor_kind: "app",
-             actor_id: nil, round: task.round)
+             actor_id: nil, round: task.round, item: true)
       hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id, reason: reason,
         rule_id: rule_id, credential_id: credential_id, opened_at: ctx.at, opened_by_kind: actor_kind,
         opened_by_id: actor_id)
@@ -68,6 +72,20 @@ module Leverage
       leases_of(task).each { |subject| Leases.restart(ctx, subject) } if remaining.none? { |open| pauses?(open.reason) }
       mark_resume(ctx, task) if remaining.empty?
       hold
+    end
+
+    # Closes the holds bound to the seat that held the task, when the seat
+    # loses it (SM-15; milestone 3 plan §2.1 rule 7): the credential holds
+    # and seat_paused, each with hold.closed carrying wait_cause, then its
+    # inbox.resolved. First version (milestone 3 plan §4, the hand-over
+    # table, WP4 finishes it): closes nothing.
+    #
+    # cause:      - the task.released or task.lease_expired Event.
+    # wait_cause: - the cause of the wait_ready step hold.closed opens.
+    #
+    # Returns the Holds it closed.
+    def close_seat_bound(ctx, task, cause:, wait_cause:)
+      []
     end
 
     # Pauses a lease just granted on a task, or on its review, while a

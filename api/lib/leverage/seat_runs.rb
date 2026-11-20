@@ -11,7 +11,43 @@ module Leverage
   # lease_expired event the log needs; only a live or paused lease is
   # released here.
   module SeatRuns
+    # Where a seat's run belongs now (milestone 3 plan HD-1, HD-4): the
+    # credential, and the work it continues (a Task, a Review or nil).
+    Placement = Data.define(:credential, :work)
+
     module_function
+
+    # The account a seat's run belongs on now, and the work it continues
+    # (HD-1, HD-4). First version (milestone 3 plan §4, the hand-over
+    # table, WP5 finishes it): the seat's own credential (nil for a seat
+    # that connects on its own) and no work.
+    #
+    # Returns a Placement.
+    def placement(seat)
+      credential = seat.credential_id && Credential.find_by(id: seat.credential_id, workspace_id: seat.workspace_id)
+      Placement.new(credential: credential, work: nil)
+    end
+
+    # Queues one start_seat request for the seat on credential, naming the
+    # work to continue, when its run is not on credential or it has no
+    # run, unless an unfinished start_seat for the seat exists (HD-1).
+    # First version: queues nothing.
+    #
+    # work - a Task, a Review or nil.
+    #
+    # Returns the HelperRequest it queued, or nil.
+    def ensure_run_on(ctx, seat, credential, work)
+      nil
+    end
+
+    # Records that the seat's run ended for a limit or a sign-out (HD-3,
+    # HD-10): no run credential, and the reason kept. First version: does
+    # nothing.
+    #
+    # reason - a RunStoppedReport.stop_reason value.
+    def ended_by_interruption(seat, reason)
+      nil
+    end
 
     # A seat's run has stopped, or is treated as stopped (IN-30): run state
     # stopped, the token ended (IN-17), and a review the seat holds released

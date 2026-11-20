@@ -11,8 +11,10 @@ require_relative "state_table_accounts_test"
 #
 # - the four groups are the whole Table, each command in exactly one;
 # - every command an operation serves (Http::RouteTable, the registry's
-#   commands of each operation) is in the Table, and every command of the
-#   Table but the timers is served by an operation;
+#   commands of each operation) has an entry (Table.known?, which also
+#   answers for the entries milestone 3 keeps in Table::PENDING until WP10
+#   moves them, milestone 3 plan HT-6), and every command of the Table but
+#   the timers is served by an operation;
 # - every row of every command in the Table is the row of some case, and
 #   every case is defined as a test by the group's test class.
 class StateTableAllTest < ActiveSupport::TestCase
@@ -31,14 +33,14 @@ class StateTableAllTest < ActiveSupport::TestCase
     assert_equal T::Table::COMMANDS.sort, commands.sort
   end
 
-  test "every command a served operation runs is in the Table, and every command but the timers is served" do
+  test "every command a served operation runs has an entry, and every command but the timers is served" do
     served = Leverage::Http::RouteTable::ROUTES.keys.flat_map do |operation_id|
       Leverage::Contract.registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }
         .fetch("commands")
     end
-    served = (served - %w[read]).uniq
-    served.each { |command| assert T::Table.include?(command), "#{command} is served but has no entry" }
-    assert_equal (T::Table::COMMANDS - T::Table::TIMERS).sort, served.sort
+    served = (served - %w[read report_job_limit report_job_signed_out]).uniq
+    served.each { |command| assert T::Table.known?(command), "#{command} is served but has no entry" }
+    assert_empty (T::Table::COMMANDS - T::Table::TIMERS) - served, "a command of the Table is not served"
   end
 
   test "every state_machine.json row of a command in the Table is covered by a case" do

@@ -34,9 +34,11 @@ class SeamsTest < ActionDispatch::IntegrationTest
     Leverage::Http::RouteTable::ROUTES.each_key { |operation_id| assert_includes ids, operation_id }
   end
 
+  # Operations no package of milestone 3 serves (milestone 3 plan HT-6):
+  # jobs and rules (4), the usage readers and reordering (6).
   test "later milestones' operations are not served" do
     assert_operator unserved.size, :>, 0
-    %w[promote_task claim_next_job report_limit list_inbox add_rule].each do |operation_id|
+    %w[claim_next_job add_rule report_reading reorder_credentials].each do |operation_id|
       assert_includes unserved.map { |operation| operation.fetch("operation_id") }, operation_id
     end
   end

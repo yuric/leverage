@@ -8,7 +8,7 @@ class RoutesTest < ActiveSupport::TestCase
 
   # The operations milestone 2 serves (plan §2.3): 16 agent calls, the
   # health check, 20 owner calls, 5 helper calls, then the six additions.
-  SERVED = %w[
+  MILESTONE_2 = %w[
     get_next get_command claim_next_task get_task_briefing acknowledge_task_briefing heartbeat_task start_criterion
     pass_criterion submit_task release_task claim_next_review heartbeat_review release_review get_review_briefing
     acknowledge_review_briefing give_verdict
@@ -20,15 +20,42 @@ class RoutesTest < ActiveSupport::TestCase
     get_setup_state create_owner sign_out_owner get_helper_request report_request_progress get_landing_prompt
   ].freeze
 
+  # The eleven operations milestone 3 serves (milestone 3 plan §2.3): in
+  # RouteTable::PENDING until WP7 writes their controllers and moves them
+  # into ROUTES (HT-6), so this test counts served and pending together.
+  MILESTONE_3 = %w[
+    report_limit report_signed_out sign_in_again list_inbox promote_task edit_contract hold_task resume_task pause_seat
+    resume_seat change_seat
+  ].freeze
+
+  def pending = RouteTable.const_defined?(:PENDING) ? RouteTable::PENDING : {}
+
+  # Every operation the table names, served or pending.
+  def named = RouteTable::ROUTES.merge(pending)
+
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
   def drawn
     Rails.application.routes.routes.select(&:name).index_by(&:name)
   end
 
-  test "the route table serves exactly milestone 2's operations, each a registry operation" do
-    assert_equal SERVED.sort, RouteTable::ROUTES.keys.sort
-    RouteTable::ROUTES.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
+  test "served and pending together are milestone 2's operations and milestone 3's eleven, each a registry operation" do
+    assert_empty RouteTable::ROUTES.keys & pending.keys
+    assert_equal (MILESTONE_2 + MILESTONE_3).sort, named.keys.sort
+    named.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
+    RouteTable.routes(named).each do |route|
+      operation = operations.fetch(route.operation_id)
+      assert_equal [ operation.fetch("method").downcase, operation.fetch("path").gsub(/\{([a-z]+)\}/, ':\1') ],
+        [ route.verb, route.path ], route.operation_id
+    end
+  end
+
+  test "a pending operation is not served and has no route" do
+    routes = drawn
+    pending.each_key do |operation_id|
+      refute RouteTable.serves?(operation_id), operation_id
+      refute routes.key?(operation_id), operation_id
+    end
   end
 
   test "each served operation is drawn with the registry's method and path, to its controller and action" do
@@ -44,9 +71,9 @@ class RoutesTest < ActiveSupport::TestCase
     end
   end
 
-  test "each controller is one of the plan's, under v1/agent, v1/owner, v1/helper or the health check" do
-    allowed = %r{\Av1/(agent/(next|commands|tasks|criteria|reviews)|owner/(setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health)|helper/(next|requests|seats)|health)\z}
-    RouteTable::ROUTES.each_value { |target| assert_match allowed, target.split("#").first }
+  test "each controller is one of the plans', under v1/agent, v1/owner, v1/helper or the health check" do
+    allowed = %r{\Av1/(agent/(next|commands|tasks|criteria|reviews)|owner/(setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox)|helper/(next|requests|seats|credentials)|health)\z}
+    named.each_value { |target| assert_match allowed, target.split("#").first }
   end
 
   test "routes.rb types no path of the interface" do

@@ -24,6 +24,8 @@ module StateTableCases
     def hook = row&.fetch("hook")
     def builder_lease = row&.fetch("builder_lease")
     def who = row ? row.fetch("who") : []
+    def not_served? = false
+    def expected_refusal = refusal
 
     def name
       from_text = from.nil? ? "no state" : from
