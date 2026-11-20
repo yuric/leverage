@@ -22,18 +22,58 @@ class LogAuditTest < ActiveSupport::TestCase
   def key_of(runner, symbol) = Leverage::Contract::TraceBinder.new(start: Time.current).id(symbol)
 
   # Appends one event as if the command with this key wrote it later.
-  def append_under(runner, key, type, task:, payload: {}, caller: nil)
+  def append_under(runner, key, type, task:, payload: {}, caller: nil, subject: nil)
     request = T::Request.new(command: "audit_test", workspace_id: runner.workspace_id, caller_kind: caller && "seat",
       caller_id: caller, key: key, request_hash: nil, params: {})
     ActiveRecord::Base.transaction(requires_new: true) do
-      runner.scenario.context(request: request).emit(type, task: task, payload: payload)
+      runner.scenario.context(request: request).emit(type, task: task, subject: subject, payload: payload)
     end
   end
 
-  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+  # Milestone 3's traces (its plan HT-1): the reports' rows, the credential
+  # timer's events with no key, the side events of report_request_result
+  # and change_seat (plan §2.3), and the owner's controls.
+  %w[
+    09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
+    13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules 15-owner-controls-no-rules
+  ].each do |name|
     test "the log of trace #{name} passes" do
       assert_empty audit(run_trace(name))
     end
+  end
+
+  # credential.switched is a side event in the registry, but only the rows
+  # that name it may write it (milestone 3 plan §2.3 and WP9): the trace's
+  # last command (pass_review, which ends the task) with a switch appended
+  # in its own group, at its time and under its key, is found; trace 11's
+  # reports and its timer, whose rows name the switch, pass.
+  test "a credential.switched the command's row does not allow is found" do
+    runner = run_trace("11-limit-handoff-no-rules")
+    assert_empty audit(runner)
+    last = Event.where(workspace_id: runner.workspace_id).order(:seq).last
+    task = Task.find(last.task_id)
+    seat = Seat.find_by!(workspace_id: runner.workspace_id, role: "reviewer")
+    request = T::Request.new(command: "audit_test", workspace_id: runner.workspace_id, caller_kind: "seat",
+      caller_id: seat.id, key: last.command_id, request_hash: nil, params: {})
+    ActiveRecord::Base.transaction(requires_new: true) do
+      runner.scenario.context(request: request, at: last.at).emit("credential.switched", task: task,
+        subject: Credential.find(seat.credential_id), actor_kind: "app", actor_id: nil,
+        payload: { from_credential_id: seat.credential_id, model: nil, seat_id: seat.id, review_id: nil, job_id: nil })
+    end
+    found = audit(runner)
+    assert(found.any? { |line| line.include?(last.command_id) && line.include?("credential.switched") }, found.inspect)
+  end
+
+  # A timer's events have no key: the credential hold release (hold.closed,
+  # credential.switched) is read as credential_hold_release, and the same
+  # events as no timer writes them when no credential hold closes.
+  test "events with no key that close a hold no timer closes are found" do
+    runner = run_trace("15-owner-controls-no-rules")
+    hold = Hold.find_by!(workspace_id: runner.workspace_id, reason: "owner_hold")
+    append_under(runner, nil, "hold.closed", task: Task.find(hold.task_id), subject: hold,
+      payload: { reason: "owner_hold", rule_id: nil, credential_id: nil, lease_seat_id: nil, wait_cause: nil })
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("no command") || line.include?("no timer") }, found.inspect)
   end
 
   test "the log of a walk, every event of it written by a command, passes from its first event" do

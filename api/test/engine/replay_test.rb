@@ -20,9 +20,30 @@ class ReplayTest < ActiveSupport::TestCase
 
   def log_diff(runner) = Leverage::Replay.diff(runner.workspace_id)
 
-  %w[09-core-loop-no-rules 10-leases-no-rules].each do |name|
+  # Milestone 3 adds traces 11 to 15 (its plan HT-1): handoffs, credential
+  # holds, their timer, Sign in again, and the owner's controls.
+  %w[
+    09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
+    13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules 15-owner-controls-no-rules
+  ].each do |name|
     test "the log of trace #{name} rebuilds every replay column" do
       assert_empty log_diff(run_trace(name))
+    end
+  end
+
+  # The open set of holds with its reasons, mid-trace: trace 11 after its
+  # second limit (a credential_limit hold waits for the reset), trace 12
+  # after its sign-out (credential_signed_out), trace 15 while an agent is
+  # paused (seat_paused).
+  { "11-limit-handoff-no-rules" => [ 9, "credential_limit" ], "12-signed-out-hold-verify-no-rules" => [ 8, "credential_signed_out" ],
+    "15-owner-controls-no-rules" => [ 10, "seat_paused" ] }.each do |name, (commands, reason)|
+    test "the open #{reason} hold of trace #{name} is rebuilt from the log, and so is every step" do
+      runner = TraceRunner.new(name).run(commands)
+      assert_empty runner.failures, runner.failures.join("\n")
+      holds = Leverage::Replay.project(runner.workspace_id).fetch(:holds)
+      assert_equal [ reason ], holds.values.map { |hold| hold.fetch("reason") }
+      assert_equal Hold.where(workspace_id: runner.workspace_id, closed_at: nil).pluck(:id), holds.keys
+      assert_empty log_diff(runner)
     end
   end
 

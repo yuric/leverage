@@ -32,4 +32,9 @@ namespace :leverage do
     abort "verify_log: the log does not pass" if failed
     puts "verify_log: #{ids.size} workspaces pass"
   end
+
+  # Recovery times (milestone 3 plan HE-18): written by WP9.
+  desc "Print every recovery time, against the ceiling when one is set"
+  task recovery_times: :environment do
+  end
 end

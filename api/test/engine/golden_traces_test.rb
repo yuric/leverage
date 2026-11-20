@@ -18,10 +18,9 @@ class GoldenTracesTest < ActiveSupport::TestCase
   # projects arrive and rules (milestone 4) are already there; 03 and 04
   # also reach Finishing with outward actions (milestone 5, the TS8-check).
   #
-  # The handoff milestone's traces 11 to 15 wait for its own entries
-  # (milestone 3 plan HT-6): each prefix is the commands milestone 2 runs
-  # as written before the first command of milestone 3. Trace 15's is 0,
-  # because milestone 2 refuses Add task into the Imaginarium (SC-4).
+  # The handoff milestone's traces 11 to 15 run whole (milestone 3 plan
+  # HT-1, HT-6): runnable? asks Table.known?, so they run while their
+  # entries still wait in Table::PENDING, before WP10 moves them.
   NOT_YET = {
     "01-happy-path" => [ 5, 0 ],
     "02-failed-review-rework" => [ 5, 0 ],
@@ -30,23 +29,23 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "05-limit-handoff" => [ 5, 0 ],
     "06-signed-out-hold-verify" => [ 5, 0 ],
     "07-pending-gate-check-error-override" => [ 5, 0 ],
-    "08-lease-expiry-and-cancel" => [ 5, 0 ],
-    "11-limit-handoff-no-rules" => [ 3, 7 ],
-    "12-signed-out-hold-verify-no-rules" => [ 3, 7 ],
-    "13-limit-next-signed-out-no-rules" => [ 3, 7 ],
-    "14-handoff-edges-no-rules" => [ 3, 15 ],
-    "15-owner-controls-no-rules" => [ 3, 0 ]
+    "08-lease-expiry-and-cancel" => [ 5, 0 ]
   }.freeze
+
+  # The handoff milestone's five, which run whole (HT-1).
+  HANDOFF = %w[11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules 13-limit-next-signed-out-no-rules
+               14-handoff-edges-no-rules 15-owner-controls-no-rules].freeze
 
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
 
   def self.trace(name) = Leverage::Contract.trace(name)
 
-  # Whole: every command has an entry and the setup has no rule.
+  # Whole: every command has an entry, served or still pending (Table.known?,
+  # milestone 3 plan HT-6), and the setup has no rule.
   def self.runnable?(name)
     trace = trace(name)
     Array(trace.fetch("setup")["rules"]).empty? &&
-      trace.fetch("commands").all? { |command| Leverage::Transitions::Table.include?(command.fetch("command")) }
+      trace.fetch("commands").all? { |command| Leverage::Transitions::Table.known?(command.fetch("command")) }
   end
 
   RUN = NAMES.select { |name| runnable?(name) }.freeze
@@ -56,6 +55,7 @@ class GoldenTracesTest < ActiveSupport::TestCase
     assert_empty RUN & NOT_YET.keys, "a trace that runs whole is still in NOT_YET"
     assert_includes RUN, "09-core-loop-no-rules"
     assert_includes RUN, "10-leases-no-rules"
+    HANDOFF.each { |name| assert_includes RUN, name }
   end
 
   test "each NOT_YET trace names a later milestone and a prefix of commands milestone 2 has" do
@@ -70,9 +70,7 @@ class GoldenTracesTest < ActiveSupport::TestCase
   end
 
   # Written for the traces of milestone 1, which wait for a later milestone
-  # than 3. The handoff milestone's traces (11 to 15) start with add_task
-  # and no project, a command milestone 2 has, so the check does not apply
-  # to them (milestone 3 plan HT-6).
+  # than 3 (milestone 3 plan HT-6).
   test "the first command of every NOT_YET trace of a later milestone than 3 is one milestone 2 cannot run as written" do
     NOT_YET.each do |name, (milestone, _prefix)|
       next if milestone <= 3
@@ -119,6 +117,30 @@ class GoldenTracesTest < ActiveSupport::TestCase
     runner = TraceRunner.new("10-leases-no-rules", trace: trace).run
 
     assert(runner.failures.any? { |failure| failure.include?("lease") }, runner.failures.join("\n"))
+  end
+
+  # A reset time the trace sends is the one the timer's events carry: a
+  # release dated at another time than the reset fails (milestone 3 plan
+  # HE-23, trace 11: due at 2400, swept at 2430).
+  test "a credential hold released at another time than its reset fails the trace" do
+    trace = changed_trace("11-limit-handoff-no-rules")
+    release = trace.fetch("commands").find { |command| command.fetch("command") == "credential_hold_release" }
+    release.dig("expect", "events").each { |event| event["effective_at"] = "@t:2410" }
+    runner = TraceRunner.new("11-limit-handoff-no-rules", trace: trace).run
+
+    assert(runner.failures.any? { |failure| failure.include?("credential_hold_release") }, runner.failures.join("\n"))
+  end
+
+  # A credential_limit hold leaves the lease clock running (L116), so the
+  # runner still checks its arithmetic: trace 14's lease ends one lease
+  # length after the claim, through two limit holds.
+  test "a lease that runs through a credential_limit hold is still checked" do
+    trace = changed_trace("14-handoff-edges-no-rules")
+    expiry = trace.fetch("commands").find { |command| command.fetch("command") == "builder_lease_expiry" }
+    expiry.dig("expect", "events").each { |event| event["effective_at"] = "@t:3610" }
+    runner = TraceRunner.new("14-handoff-edges-no-rules", trace: trace).run
+
+    assert(runner.failures.any? { |failure| failure.include?("lease runs 3590 s") }, runner.failures.join("\n"))
   end
 
   test "an engine whose lease is not one lease length long fails the trace" do

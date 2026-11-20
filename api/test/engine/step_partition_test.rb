@@ -3,17 +3,25 @@ require_relative "../support/walk"
 
 # Step partition (PRD test 2, Steps and timing; milestone 2 plan EN-25):
 # for seeded random command sequences, each task's steps touch end to end
-# and sum to its lifetime. 200 walks of at most 60 steps over the
-# milestone-2 commands and timers (Walk); SEED and WALKS override, and a
-# failure prints the seed and the walk. The same walks also check the
-# replay (test 1) and the log audit (L894), which a random sequence reaches
-# in more corners than a trace.
+# and sum to its lifetime. 200 walks of at most 80 steps over the commands
+# and timers of milestones 2 and 3 (Walk; milestone 3 plan HT-3: the twelve
+# new commands, the credential timer and a credential whose reset time the
+# walk moves); SEED and WALKS override, and a failure prints the seed and
+# the walk. The same walks also check the replay (test 1) and the log audit
+# (L894), which a random sequence reaches in more corners than a trace.
 #
 #   SEED=1 WALKS=1000 bin/rails test test/engine/step_partition_test.rb
 class StepPartitionTest < ActiveSupport::TestCase
   WALKS = Integer(ENV.fetch("WALKS", "200"), 10)
   SEED = Integer(ENV.fetch("SEED") { Random.new_seed.to_s }, 10) % 1_000_000_000
-  STEPS = 60
+  STEPS = 80
+
+  # Milestone 3's commands and timers (its plan HT-3), which the walks must
+  # reach and see completed.
+  HANDOFF = %w[
+    report_limit report_signed_out sign_in_again credential_hold_release seat_run_placement
+    promote edit_contract hold resume pause_seat resume_seat change_seat
+  ].freeze
 
   # The step rows of a task in the order they opened, each with the seq of
   # its opening event (a zero-length step opens and closes at one time).
@@ -76,6 +84,18 @@ class StepPartitionTest < ActiveSupport::TestCase
       assert_empty Leverage::Replay.diff(walk.workspace_id), walk.to_s
       assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
     end
+  end
+
+  test "the walks complete every milestone-3 command and the credential timer, and move a reset" do
+    completed = Set.new
+    moved = false
+    20.times do |number|
+      walk = Walk.new(seed: SEED + 10_000 + number, steps: STEPS).run
+      completed.merge(walk.log.select { |step| step.answer == "completed" }.map(&:command))
+      moved ||= walk.log.any? { |step| step.action == :pass_reset }
+    end
+    assert_empty HANDOFF - completed.to_a, "the walks never completed these"
+    assert moved, "no walk moved a reset time"
   end
 
   test "a walk is the same walk for the same seed" do
