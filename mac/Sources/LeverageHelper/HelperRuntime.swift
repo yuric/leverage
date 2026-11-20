@@ -148,13 +148,21 @@ enum HelperMain {
     }
 }
 
-/// The helper's watch on the app that started it (PK-8).
+/// The helper's watch on the app that started it (PK-8), as a runner's on
+/// its helper (`RunnerParent`).
 enum HelperParent {
-    /// Watches `parent`.
+    /// Watches `parent`. When there is no parent to watch (it is already
+    /// launchd, pid 1: the app died between starting the helper and the
+    /// helper's first lines, since the app starts the helper itself), `onGone`
+    /// is called at once and the answer is nil, so no helper runs on with
+    /// its token unwatched.
     static func watch(
         parent: pid_t = getppid(), interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void
     ) -> ParentWatch? {
-        guard parent > 1 else { return nil }
+        guard parent > 1 else {
+            onGone()
+            return nil
+        }
         let watch = ParentWatch(watching: parent, interval: interval, onGone: onGone)
         watch.start()
         return watch
