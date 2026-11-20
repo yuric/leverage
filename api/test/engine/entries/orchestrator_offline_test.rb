@@ -234,6 +234,18 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     assert hold.reload.closed_at
   end
 
+  test "a hold that names its check is read by that check, not by its rule's latest one" do
+    orchestrator_polled(600)
+    check, hold = errored_check
+    hold.update_columns(rule_check_id: check.id)
+    newer = scenario.rule_check(Task.find(check.task_id), rule: Rule.find(check.rule_id), round: 1)
+    newer.update_columns(updated_at: check.updated_at + 1)
+
+    open_item
+
+    assert_equal 2, item&.facts&.fetch("waiting_checks"), "the errored check held, and the newer one queued"
+  end
+
   test "an errored check whose task item opened stays with the owner while the orchestrator stays online" do
     orchestrator_polled(10)
     _with_item, = errored_check(item: true)
