@@ -242,7 +242,7 @@ To cell "X, once ..." also names the state the task starts from.
 
 ## Golden traces
 
-Traces 01 to 08 run in a workspace with the shipped rules; 09 and 10 run in
+Traces 01 to 08 run in a workspace with the shipped rules; 09 to 15 run in
 a workspace with no rule at all, as the core loop creates it, so their
 `setup.rules` is empty.
 
@@ -446,6 +446,11 @@ What it added, each from the milestone 3 plan:
   per dump, with no `workspace_id`, because a dump is of the whole
   database (HB-4). `db:grants` gives `leverage_app` SELECT alone on
   `backup_runs`; the owner role, which the backup runs as, writes it.
+
+- **Traces 11 to 15**, with no rules (HT-1): `11-limit-handoff-no-rules`
+  (trace 05's commands), `12-signed-out-hold-verify-no-rules` (trace
+  06's), `13-limit-next-signed-out-no-rules`, `14-handoff-edges-no-rules`
+  and `15-owner-controls-no-rules`.
 
 `readers.json` is unchanged: every login reader stays provisional, with
 `capture.limit` and `capture.sign_out` at `none`. `WorkspaceSettings` is
