@@ -15,11 +15,16 @@ and `stderr`. The check fails, naming the file, on:
   reset time; outputs that are not text, an exit status that is no number;
 - an email address, a token prefix (leverage's lvs_, lvh_, lvo_, IN-18, and
   the providers' common ones), a bearer value, a path into a user's home
-  folder, or an id that is not a placeholder (a UUID, a request id, a run
-  of 16 or more hex digits, unless every digit is 0), anywhere in the file;
+  folder (/Users/<name>, /home/<name> or ~<name>), or an id that is not a
+  placeholder (a UUID, a request id, a run of 16 or more hex digits, unless
+  every digit is 0), anywhere in the file: in its raw text, in every string
+  of the decoded file, and in every string of the JSON the outputs hold, so
+  that a JSON escape (\\/ for /, \\u0040 for @) hides nothing;
 - one of the fields a real reply carries account details in
-  (`inventory-mac.md` section 2) with a value that is not empty, null,
-  `<scrubbed>` or the file's marker;
+  (`inventory-mac.md` section 2), or any field whose name has one of the
+  words email, plan, org, organization, organisation, account, tier or
+  subscription in it, with a value that is not empty, null, `<scrubbed>`
+  or the file's marker;
 - a marker not of the form LVRG-REPLY-<12 hex digits>, one missing from
   both outputs, or one used by two files.
 
@@ -66,7 +71,10 @@ TOKENS = [
     ("a JSON web token", re.compile(r"(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
     ("a bearer value", re.compile(r"(?i)\bbearer\s+(?!or\b|and\b|token\b)[A-Za-z0-9._~+/-]{16,}")),
 ]
-HOME_PATH = re.compile(r"(/Users/|/home/)(?!Shared\b)[^/\s\"']+")
+HOME_PATH = re.compile(r"(/Users/|/home/)(?!Shared\b)[^/\s\"']+|(?<![\w/~])~[A-Za-z0-9._-]+/")
+# The words of a field's name that mark it as an account's detail, whatever
+# else the name holds (plan_type, rateLimitTier, organization_name, orgUuid).
+NAMED_WORDS = {"email", "plan", "org", "organization", "organisation", "account", "tier", "subscription"}
 UUID = re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 REQUEST_ID = re.compile(r"\breq_[0-9A-Za-z]{8,}")
 HEX_RUN = re.compile(r"(?i)(?<![0-9a-z])[0-9a-f]{16,}(?![0-9a-z])")
@@ -120,11 +128,51 @@ def scrubbed(value, marker):
     return isinstance(value, str) and bool(UUID.fullmatch(value)) and placeholder_id(value)
 
 
+def key_words(key):
+    """The lower-case words of a field's name: snake_case, kebab-case and camelCase."""
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", key)
+    return {word.lower() for word in re.split(r"[^A-Za-z0-9]+", spaced) if word}
+
+
+def named_field(key):
+    return key in NAMED_FIELDS or bool(key_words(key) & NAMED_WORDS)
+
+
+def strings_in(value):
+    """Every string in a decoded JSON value, its keys among them."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, inner in value.items():
+            yield key
+            yield from strings_in(inner)
+    elif isinstance(value, list):
+        for inner in value:
+            yield from strings_in(inner)
+
+
+def decoded_problems(reply):
+    """text_problems over every string of the decoded reply and of the JSON
+    its outputs hold, which no JSON escape hides."""
+    found = []
+    texts = list(strings_in(reply))
+    for name in ("stdout", "stderr"):
+        output = reply.get(name)
+        if isinstance(output, str):
+            for value in json_values(output):
+                texts.extend(strings_in(value))
+    for text in texts:
+        for problem in text_problems(text):
+            if problem not in found:
+                found.append(problem)
+    return found
+
+
 def named_field_problems(value, marker):
     problems = []
     if isinstance(value, dict):
         for key, inner in value.items():
-            if key in NAMED_FIELDS and not scrubbed(inner, marker):
+            if named_field(key) and not scrubbed(inner, marker):
                 problems.append(f"the field {key} holds a value; scrub it to {SCRUBBED!r}")
             problems.extend(named_field_problems(inner, marker))
     elif isinstance(value, list):
@@ -144,6 +192,7 @@ def file_problems(path, provider_folder):
     if not isinstance(reply, dict):
         return ["is not a JSON object"], None
     problems = text_problems(raw)
+    problems.extend(problem for problem in decoded_problems(reply) if problem not in problems)
     meta = reply.get("meta")
     if not isinstance(meta, dict):
         return problems + ["has no meta"], None
