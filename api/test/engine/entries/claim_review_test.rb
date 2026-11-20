@@ -161,7 +161,8 @@ class ClaimReviewTest < ActiveSupport::TestCase
     seat = @scenario.seat(role: "reviewer", credential: own)
     @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
     @scenario.run(seat, on: below)
-    Leverage::Gating.implementation = ProviderWorld.new
+    # The rule's row, which the briefing the claim answers with reads.
+    Leverage::Gating.implementation = ProviderWorld.for(@scenario.rule(key: "different_provider_review", origin: "shipped"))
 
     result = apply(seat).result
     assert_equal [ below.id, "grok-model-1" ], result.values_at("credential_id", "model")
