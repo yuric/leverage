@@ -484,9 +484,10 @@ class OpenapiTest < Minitest::Test
       "Criterion" => %w[task_id position text kind state passed_at],
       "Review" => %w[task_id round reviewer_seat_id lease_due_at verdict failed_criteria notes],
       "Question" => %w[task_id text assumption blocking outcome answer basis],
-      "Seat" => %w[name provider model effort role strength_rank credential_id enabled paused last_polled_at],
-      "Credential" => %w[kind provider name masked_label plan account_email state limited_until position model effort
-        strength_rank last_verified_at],
+      "Seat" => %w[name provider model effort role strength_rank credential_id enabled paused last_polled_at
+        run_credential_id run_stop_reason],
+      "Credential" => %w[kind provider name masked_label plan account_email state limited_until limited_since position
+        model effort strength_rank last_verified_at],
       "Project" => %w[name goal budget spent paused],
       "InboxItem" => %w[kind about_kind about_id hold_id credential_id choices facts state opened_at resolved_at],
       "HelperRequest" => %w[kind seat_id credential_id state requested_at picked_up_at finished_at result params progress],

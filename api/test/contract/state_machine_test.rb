@@ -13,8 +13,9 @@ class StateMachineTest < Minitest::Test
                           hold.closed action.waived].freeze
   HOLDER_CLEARING_EVENTS = %w[task.submitted task.released task.lease_expired task.returned task.cancelled].freeze
   # The commands that close a credential hold and let the run go on (L118,
-  # L694-L697): each may start the run on another credential.
-  CREDENTIAL_HOLD_RELEASES = %w[credential_hold_release report_reading report_request_result].freeze
+  # L694-L697): each may start the run on another credential. A change of
+  # the seat's credential is one of them (milestone 3 plan HE-10, HE-27).
+  CREDENTIAL_HOLD_RELEASES = %w[credential_hold_release report_reading report_request_result change_seat].freeze
   CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
 
   def machine = Leverage::Contract.state_machine
@@ -292,12 +293,16 @@ class StateMachineTest < Minitest::Test
   end
 
   # L146, L148: only a change that disables the seat takes its task away.
+  # A change of the seat's credential may also close its credential hold
+  # and resume the task (milestone 3 plan HE-10, HE-27): those side events,
+  # and the SM-42 re-evaluation, are the only others.
   def test_a_seat_change_releases_and_withdraws_only_when_it_disables_the_seat
     row = rows.find { |candidate| candidate["command"] == "change_seat" }
     released = row["conditional_events"].find { |entry| entry["event"] == "task.released" }
     assert_equal "disables_seat_holding_working_task", released["when"]
     row["side_events"].each do |entry|
       next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
+      next if %w[hold.closed credential.switched inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")
 
       assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
     end

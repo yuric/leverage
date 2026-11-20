@@ -60,9 +60,11 @@ class SchemaTest < ActiveSupport::TestCase
     SQL
   end
 
+  # The Handoff milestone adds backup_runs (PRD, Data model; milestone 3
+  # plan HB-4).
   test "the database has exactly the tables of the Data model and the three the plan adds" do
     assert_equal ExpectedSchema::TABLES.keys.sort, public_tables.sort
-    assert_equal 29, ExpectedSchema::TABLES.size
+    assert_equal 30, ExpectedSchema::TABLES.size
   end
 
   ExpectedSchema::TABLES.each do |table, expected|
@@ -89,11 +91,24 @@ class SchemaTest < ActiveSupport::TestCase
     assert_equal [ [ "credentials", true, true, "{position,workspace_id}" ] ], deferrable
   end
 
-  test "every table but workspaces has workspace_id uuid not null with a foreign key (C8)" do
-    public_tables.without("workspaces").each do |table|
+  test "every table but workspaces and backup_runs has workspace_id uuid not null with a foreign key (C8)" do
+    public_tables.without(*ExpectedSchema::NOT_OWNED).each do |table|
       assert_equal [ "uuid", false, nil ], columns_of(table)["workspace_id"], table
       assert_includes foreign_keys_of(table), [ "workspace_id", "workspaces", :restrict ], table
     end
+  end
+
+  # Milestone 3 plan HB-4: a dump is of the whole database and the first
+  # is made before any workspace exists; each file is recorded once.
+  test "backup_runs has no workspace and records each dump's file once" do
+    assert_includes public_tables, "backup_runs"
+    assert_nil columns_of("backup_runs")["workspace_id"]
+    ran_at = Time.current
+    insert("backup_runs", ran_at: ran_at, file_name: "leverage-made-up.dump", bytes: 1)
+    assert_rejected(ActiveRecord::RecordNotUnique) do
+      insert("backup_runs", ran_at: ran_at, file_name: "leverage-made-up.dump", bytes: 2)
+    end
+    assert_accepted { insert("backup_runs", ran_at: ran_at, file_name: "leverage-made-up-2.dump", bytes: 5_000_000_000) }
   end
 
   test "no column name could hold a secret, except the hashes (C20, C23)" do

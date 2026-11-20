@@ -20,6 +20,7 @@ module ExpectedSchema
   def self.uuid(null: false) = col("uuid", null: null)
   def self.text(null: false, default: nil) = col("text", null: null, default: default)
   def self.int(null: false, default: nil) = col("integer", null: null, default: default)
+  def self.bigint(null: false) = col("bigint", null: null)
   def self.bool(default) = col("boolean", default: default)
   def self.time(null: true) = col(TZ, null: null)
   def self.jsonb(null: false, default: nil) = col("jsonb", null: null, default: default)
@@ -82,6 +83,9 @@ module ExpectedSchema
         "account_email" => text(null: true),
         "state" => text(default: "'active'::text"),
         "limited_until" => time,
+        # Milestone 3 plan HE-3: a limit was reported; limited_until says
+        # when it ends, if the provider said.
+        "limited_since" => time,
         "position" => int,
         "model" => text(null: true),
         "effort" => text(null: true),
@@ -132,7 +136,11 @@ module ExpectedSchema
         "last_polled_at" => time,
         "run_state" => text(null: true),
         "removed_at" => time,
-        "wanted_running" => bool("false")
+        "wanted_running" => bool("false"),
+        # Milestone 3 plan HD-3: the credential the seat's current token was
+        # issued for (no foreign key, as DB-10), and why its last run ended.
+        "run_credential_id" => uuid(null: true),
+        "run_stop_reason" => text(null: true)
       ).merge(STAMPS),
       indexes: [ idx("workspace_id"), idx("credential_id"), idx("token_hash", unique: true) ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("credential_id", "credentials") ]
@@ -612,8 +620,24 @@ module ExpectedSchema
       ).merge(CREATED),
       indexes: [ idx("workspace_id", "ran_at") ],
       foreign_keys: [ fk("workspace_id", "workspaces") ]
+    },
+    # Milestone 3 plan HB-4: one row per dump. A dump is of the whole
+    # database and the first is made before any workspace exists, so the
+    # table has no workspace_id.
+    "backup_runs" => {
+      columns: ID.merge(
+        "ran_at" => time(null: false),
+        "file_name" => text,
+        "bytes" => bigint
+      ).merge(CREATED),
+      indexes: [ idx("file_name", unique: true), idx("ran_at") ],
+      foreign_keys: []
     }
   }.freeze
+
+  # The tables with no workspace_id: the workspaces themselves, and the
+  # record of the database's backups (milestone 3 plan HB-4).
+  NOT_OWNED = %w[workspaces backup_runs].freeze
 
   # Rails' own bookkeeping tables, not part of the Data model.
   RAILS_TABLES = %w[schema_migrations ar_internal_metadata].freeze

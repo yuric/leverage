@@ -3,14 +3,17 @@ require_relative "rows"
 
 # db:grants (lib/tasks/db_grants.rake) creates the leverage_app role and
 # grants it, from information_schema, SELECT and INSERT on the append-only
-# tables and SELECT, INSERT, UPDATE and DELETE on every other table, never
-# TRUNCATE (PRD, Data model; C1, DB-7). It runs after db:prepare,
+# tables, SELECT alone on the read-only ones (backup_runs, which the owner
+# role's backup writes: milestone 3 plan HB-4) and SELECT, INSERT, UPDATE
+# and DELETE on every other table, never TRUNCATE (PRD, Data model; C1,
+# DB-7). It runs after db:prepare,
 # db:schema:load and db:migrate, and test_helper runs it on each parallel
 # worker's database.
 class GrantsTest < ActiveSupport::TestCase
   include DbRows
 
   APPEND_ONLY = %w[events rule_versions].freeze
+  READ_ONLY = %w[backup_runs].freeze
   READ_WRITE = %w[DELETE INSERT SELECT UPDATE].freeze
 
   def grants
@@ -28,7 +31,13 @@ class GrantsTest < ActiveSupport::TestCase
   end
 
   def expected_grants(table_names)
-    table_names.to_h { |table| [ table, APPEND_ONLY.include?(table) ? %w[INSERT SELECT] : READ_WRITE ] }
+    table_names.to_h do |table|
+      rights = if APPEND_ONLY.include?(table) then %w[INSERT SELECT]
+      elsif READ_ONLY.include?(table) then %w[SELECT]
+      else READ_WRITE
+      end
+      [ table, rights ]
+    end
   end
 
   def run_grants
@@ -92,6 +101,16 @@ class GrantsTest < ActiveSupport::TestCase
     db.execute("CREATE TABLE made_up_later (id uuid PRIMARY KEY)")
     run_grants
     assert_equal READ_WRITE, grants["made_up_later"]
+  end
+
+  # Milestone 3 plan HB-4: the application's role reads when the last
+  # backup ran and writes nothing of it.
+  test "leverage_app may only read backup_runs, even after rights granted by hand" do
+    run_grants
+    assert_equal %w[SELECT], grants["backup_runs"]
+    db.execute("GRANT INSERT, UPDATE, DELETE, TRUNCATE ON backup_runs TO leverage_app")
+    run_grants
+    assert_equal %w[SELECT], grants["backup_runs"]
   end
 
   test "rights granted by hand beyond the rule are taken back" do
