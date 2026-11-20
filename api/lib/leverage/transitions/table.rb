@@ -29,6 +29,8 @@ module Leverage
         report_request_progress report_request_result report_run_started report_run_stopped
       ].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS).freeze
+      HANDOFF = [].freeze
+      OWNER_CONTROLS = [].freeze
 
       # Milestone 3's entries by the group WP10 moves each into: two new
       # groups, and two timers for TIMERS (milestone 3 plan §2.1).

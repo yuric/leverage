@@ -20,18 +20,16 @@ class RoutesTest < ActiveSupport::TestCase
     get_setup_state create_owner sign_out_owner get_helper_request report_request_progress get_landing_prompt
   ].freeze
 
-  # The eleven operations milestone 3 serves (milestone 3 plan §2.3): in
-  # RouteTable::PENDING until WP7 writes their controllers and moves them
-  # into ROUTES (HT-6), so this test counts served and pending together.
+  # The eleven operations milestone 3 serves (milestone 3 plan §2.3). They
+  # waited in RouteTable::PENDING until WP7 wrote their controllers (HT-6);
+  # that list is gone (table_groups_test.rb).
   MILESTONE_3 = %w[
     report_limit report_signed_out sign_in_again list_inbox promote_task edit_contract hold_task resume_task pause_seat
     resume_seat change_seat
   ].freeze
 
-  def pending = RouteTable.const_defined?(:PENDING) ? RouteTable::PENDING : {}
-
-  # Every operation the table names, served or pending.
-  def named = RouteTable::ROUTES.merge(pending)
+  # Every operation the table names.
+  def named = RouteTable::ROUTES
 
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
@@ -39,22 +37,13 @@ class RoutesTest < ActiveSupport::TestCase
     Rails.application.routes.routes.select(&:name).index_by(&:name)
   end
 
-  test "served and pending together are milestone 2's operations and milestone 3's eleven, each a registry operation" do
-    assert_empty RouteTable::ROUTES.keys & pending.keys
+  test "the served operations are milestone 2's and milestone 3's eleven, each a registry operation" do
     assert_equal (MILESTONE_2 + MILESTONE_3).sort, named.keys.sort
     named.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes(named).each do |route|
       operation = operations.fetch(route.operation_id)
       assert_equal [ operation.fetch("method").downcase, operation.fetch("path").gsub(/\{([a-z]+)\}/, ':\1') ],
         [ route.verb, route.path ], route.operation_id
-    end
-  end
-
-  test "a pending operation is not served and has no route" do
-    routes = drawn
-    pending.each_key do |operation_id|
-      refute RouteTable.serves?(operation_id), operation_id
-      refute routes.key?(operation_id), operation_id
     end
   end
 

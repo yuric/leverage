@@ -11,10 +11,9 @@ require_relative "entries/accounts_support"
 # (test/engine/entries/); side events that need rules or later milestones
 # are not written (SC-11).
 #
-# Milestone 3 (plan HT-2) adds the rows of sign_in_again (the credentials
-# group) and of the seat_run_placement timer (the timers group), which
-# Table::PENDING holds until WP10 moves them: neither reads or changes a
-# task state, and neither writes an event.
+# Milestone 3 (plan HT-2) adds the rows of sign_in_again (Table::HANDOFF)
+# and of the seat_run_placement timer (Table::TIMERS): neither reads or
+# changes a task state, and neither writes an event.
 class StateTableAccountsTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -82,10 +81,10 @@ class StateTableAccountsTest < ActiveSupport::TestCase
     end
   end
 
-  test "sign_in_again and seat_run_placement have entries and wait in Table::PENDING for their groups" do
-    assert_equal %w[sign_in_again], T::Table::PENDING_GROUPS.fetch("HANDOFF") & HANDOFF_ACCOUNTS
-    assert_equal %w[seat_run_placement], T::Table::PENDING_GROUPS.fetch("TIMERS") & HANDOFF_ACCOUNTS
-    HANDOFF_ACCOUNTS.each { |command| assert T::Table.known?(command), command }
+  test "sign_in_again is in Table::HANDOFF and seat_run_placement in Table::TIMERS" do
+    assert_equal %w[sign_in_again], T::Table::HANDOFF & HANDOFF_ACCOUNTS
+    assert_equal %w[seat_run_placement], T::Table::TIMERS & HANDOFF_ACCOUNTS
+    HANDOFF_ACCOUNTS.each { |command| assert T::Table.include?(command), command }
   end
 
   StateTableCases.define(self, HANDOFF_ACCOUNTS) do |kase|

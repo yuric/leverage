@@ -19,10 +19,7 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
   # (test/engine/entries/change_seat_test.rb).
   CONDITIONAL = { "change_seat" => { "task.released" => "disables_seat_holding_working_task" } }.freeze
 
-  def self.group
-    table = Leverage::Transitions::Table
-    table.const_defined?(:OWNER_CONTROLS) ? table::OWNER_CONTROLS : table::PENDING_GROUPS.fetch("OWNER_CONTROLS")
-  end
+  def self.group = Leverage::Transitions::Table::OWNER_CONTROLS
 
   setup do
     use_scenario

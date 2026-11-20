@@ -19,8 +19,7 @@ class GoldenTracesTest < ActiveSupport::TestCase
   # also reach Finishing with outward actions (milestone 5, the TS8-check).
   #
   # The handoff milestone's traces 11 to 15 run whole (milestone 3 plan
-  # HT-1, HT-6): runnable? asks Table.known?, so they run while their
-  # entries still wait in Table::PENDING, before WP10 moves them.
+  # HT-1, HT-6).
   NOT_YET = {
     "01-happy-path" => [ 5, 0 ],
     "02-failed-review-rework" => [ 5, 0 ],
@@ -40,12 +39,12 @@ class GoldenTracesTest < ActiveSupport::TestCase
 
   def self.trace(name) = Leverage::Contract.trace(name)
 
-  # Whole: every command has an entry, served or still pending (Table.known?,
-  # milestone 3 plan HT-6), and the setup has no rule.
+  # Whole: every command has an entry (Table.include?) and the setup has no
+  # rule.
   def self.runnable?(name)
     trace = trace(name)
     Array(trace.fetch("setup")["rules"]).empty? &&
-      trace.fetch("commands").all? { |command| Leverage::Transitions::Table.known?(command.fetch("command")) }
+      trace.fetch("commands").all? { |command| Leverage::Transitions::Table.include?(command.fetch("command")) }
   end
 
   RUN = NAMES.select { |name| runnable?(name) }.freeze
