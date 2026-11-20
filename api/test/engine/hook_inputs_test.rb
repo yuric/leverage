@@ -61,15 +61,16 @@ class HookInputsTest < ActiveSupport::TestCase
   end
 
   # Trace 07's Complete contract: the inputs are the requested contract,
-  # not the stored one (rule 1), and the hash of those inputs is the vector
-  # below, worked out by hand from the request's text as CanonicalJson
-  # writes it (keys sorted, no whitespace, UTF-8). The trace's own two
-  # input_hash values are made-up digests (api/contract/README.md, Golden
-  # traces), and differ from each other though both checks hash the same
-  # inputs, so neither can be reproduced (WP1's notes).
+  # not the stored one (rule 1). Its two checks at task.before_ready carry
+  # the engine's own hash of those inputs (api/contract/README.md, A
+  # check's identity), one digest in every event that names them, and that
+  # is what Gating.input_hash gives for what HookInputs reads.
   test "task.before_ready hashes trace 07's requested contract, not the stored one" do
-    request = Leverage::Contract.trace("07-pending-gate-check-error-override").fetch("commands")
-      .find { |command| command.fetch("command") == "complete_contract" }.fetch("body")
+    trace = Leverage::Contract.trace("07-pending-gate-check-error-override")
+    request = trace.fetch("commands").find { |command| command.fetch("command") == "complete_contract" }.fetch("body")
+    digests = trace.fetch("commands").flat_map { |command| command.fetch("expect").fetch("events") }
+      .map { |event| event.fetch("payload") }.select { |payload| payload["hook"] == "task.before_ready" }
+      .map { |payload| payload.fetch("input_hash") }
     task = @scenario.task(state: "backlog", goal: "A stored goal that is not hashed.")
 
     inputs = HookInputs.for(hook: "task.before_ready", task: task, params: request)
@@ -78,8 +79,8 @@ class HookInputsTest < ActiveSupport::TestCase
                    "criteria" => [ { "text" => "Criterion build of task 1 holds.", "kind" => "build" },
                                    { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
                    "actions" => [] }, inputs)
-    assert_equal "578f048013f786dd0ef32f119f154f1e2aaf56b28a9cf8de8ca1b2f5092bfd17",
-      Leverage::Gating.input_hash(hook: "task.before_ready", inputs: inputs)
+    assert_equal 4, digests.size, "the four check events of its two checks name task.before_ready"
+    assert_equal [ Leverage::Gating.input_hash(hook: "task.before_ready", inputs: inputs) ], digests.uniq
   end
 
   test "task.before_ready keeps only text and kind of a criterion, kind and description of an action, in order" do
