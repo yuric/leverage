@@ -144,6 +144,14 @@
       "type": "object",
       "minProperties": 1,
       "propertyNames": {"$ref": "#/$defs/name"},
+      "properties": {
+        "orchestrator_tested_providers": {
+          "description": "The login providers whose tool's default model has a passing result in the eval suite (milestone 4 plan RV-5). Empty until the suite has been run; it refuses nothing.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/name"}
+        }
+      },
       "additionalProperties": {"$ref": "#/$defs/names"}
     }
   },

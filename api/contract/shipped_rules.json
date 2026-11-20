@@ -34,7 +34,7 @@
       "route": "owner",
       "checker_function": null,
       "parameters": {},
-      "instruction": {"to_be_written_in": "rule_checks"},
+      "instruction": "A task has specific details when someone who has never seen it could do it, and a reviewer could tell done from not done, from its goal, its details and its acceptance criteria alone. Pass it when all three hold: the goal says what is to be made or changed, and where; the goal or the details say who or what it is for, or what it must include or avoid; and at least one acceptance criterion names something that can be seen or checked. Fail it when the goal could mean several different pieces of work, when it only says that something should be better, fixed or updated without saying what, or when no criterion can be checked. Do not fail a task for being short, for its style, or for leaving out what its criteria do not need. Do not judge whether the task is worth doing.",
       "checker_role": "orchestrator",
       "queue_timeout_seconds": null,
       "run_timeout_seconds": null,

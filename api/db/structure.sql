@@ -375,7 +375,8 @@ CREATE TABLE public.jobs (
     spend numeric(14,6),
     credential_id uuid,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    attempt_number integer DEFAULT 1 NOT NULL
 );
 
 
@@ -395,7 +396,10 @@ CREATE TABLE public.pending_transitions (
     state text DEFAULT 'pending'::text NOT NULL,
     reasons jsonb,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    params jsonb,
+    CONSTRAINT pending_transitions_params_hold_no_token CHECK (((params IS NULL) OR (NOT jsonb_path_exists(params, '$.**?(@.type() == "object").keyvalue()?(@."key" like_regex "(^|_)token$" flag "i")'::jsonpath)))),
+    CONSTRAINT pending_transitions_params_only_while_pending CHECK (((params IS NULL) OR (state = 'pending'::text)))
 );
 
 
@@ -2380,6 +2384,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261120094700'),
 ('20261120011824'),
 ('20261119182802'),
 ('20261119162424'),

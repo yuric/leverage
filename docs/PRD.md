@@ -104,6 +104,7 @@ Each forward move names the hook where rules run. A failed review loops back to 
 | Hold and resume | Any | Unchanged | Owner or the app | None | `hold.opened`, `hold.closed` |
 | Report a limit or a sign-out | Working, Finishing, or In review while a reviewer holds the review | Unchanged | The helper, acting as the app | None | `credential.limit_reached` or `credential.signed_out`, then `credential.switched` when the work is handed off. When no candidate is available: `hold.opened`, with `inbox.opened` when the owner must act, or `review.released` for a review |
 | Cancel | Any except Done | Cancelled | Owner | None | `task.cancelled` |
+| Write the shipped rules | None | Unchanged | The app | None | `rule.created` |
 
 Saving the Add task form is two commands in a row: Add task, then Complete contract.
 

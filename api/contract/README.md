@@ -462,3 +462,99 @@ One field is named after its column, not as the plan wrote it: the plan's
 `Seat.running_on_credential_id` is `Seat.run_credential_id`, because a
 JSON field is the Data model's column name (see Names) and
 `columns_test.rb` holds every field of `Seat` to a column of `seats`.
+
+## What the Rule checks milestone added
+
+The Rule checks milestone serves twelve operations that were already in
+the contract (`claim_next_job`, `submit_job_result`, `list_rules`,
+`add_rule`, `save_rule`, `enable_rule`, `disable_rule`, `revert_rule`,
+`remove_rule`, `rerun_check`, `override_check`, `draft_contract`), and
+milestone 3's `report_limit` and `report_signed_out` now also take a
+report that names a job. It adds no event type, hold reason, refusal or
+check result. What it added and changed, each from the milestone 4 plan
+(section 2.3), those that touch what was not provisional first:
+
+- **The shipped instruction.** `shipped_rules.json` gives "Every task
+  needs specific details" its instruction (RV-2). The placeholder
+  `to_be_written_in` stays only for the rule that approves outward
+  actions, and `meta/shipped_rules.schema.json` takes a string there.
+- **One command and its Lifecycle row**, `install_shipped_rules` (RD-2):
+  a registry `commands` entry, the `CommandName` enum, and a
+  `state_machine.json` group with `source: prd` that copies the PRD's
+  row "Write the shipped rules": actor `app`, no key, `rule.created` for
+  each shipped rule, and the re-evaluation of "No reviewer is eligible"
+  (SM-42). No operation runs it: `bin/rails
+  leverage:install_shipped_rules` applies it before the server starts to
+  each workspace with no `rules` row. SM-33, the shipped rules'
+  `rule.created` as a workspace's first events, holds for workspaces
+  created from this milestone on; an older workspace gets them from this
+  command, after its earlier events.
+- **`create_owner`'s row** writes `rule.created` for each shipped rule,
+  with the owner as actor and the command's key (L434, RD-1). Its note no
+  longer says the workspace starts with no rule.
+- **Two guards**, `rerun_queues` and `rerun_of_claim_check`, one family
+  (`rerun_target`) on `rerun_check`: an errored check at
+  `task.before_claim` has already lapsed its provisional claim, so Run it
+  again closes its `check_error` hold and queues nothing (RD-42).
+- **Side events on rows that exist.** `claim_review` may write
+  `check.finished`, the provider rule's `applied` row with effect
+  `refused` for a review claim-next skips (RD-12). `disable_rule` and
+  `remove_rule` close `rerun_limit` too, resolve the items of the holds
+  they close, and say that a waiting command whose last check they
+  withdraw completes in place under its requester's key (RD-45).
+  `override_check`'s note says the same of the check held at the re-run
+  limit; `submit_job_result` may open `rerun_limit` (a planner's
+  contract, RE-6); `orchestrator_offline` says when its item opens and
+  that only errored checks are queued again (RD-16, RD-19).
+- **A waiting command ended from outside** (plan section 2.1, rule 11).
+  `release_review`, `review_lease_expiry`, `report_run_stopped`,
+  `issue_helper_token` (which treats a running seat's run as stopped) and
+  the reviewer rows of `report_limit` and `report_signed_out` with no
+  candidate left withdraw the checks and jobs of a pending pass and close
+  the `check_error` and `rerun_limit` holds they opened; `pause_seat`
+  withdraws a provisional claim's check and job; the builder's `release`
+  from Working, `change_seat` and `remove_seat` close `rerun_limit` too.
+  `timers.json`'s `review_lease_expiry` gains the same events.
+  `get_command`'s description says which of RC-17's three codes each
+  ending gives; RC-17 is unchanged.
+- **`steps.json`**: `wait_review` closes and opens again at the provider
+  rule's `check.finished`, so the new step names the rule as its cause
+  (RD-11).
+- **Job shapes**: `ClaimJobResult.run_due_at` (RD-34);
+  `RuleCheckJobInput.material`, a `CheckMaterial` (the role file, the
+  instruction, the moment, whether "not applicable" is allowed, the
+  contract as a `CheckContract`, and the other task text as a list of
+  `QuotedText`), and `ContractDraftJobInput.material`, a `DraftMaterial`
+  (RD-30, RD-31, RD-37); `RuleCheckJobResult.reason` at most 500
+  characters (RD-31). `claim_next_job` and `submit_job_result` say what a
+  seat that already holds a job gets and what a late result answers
+  (RD-40, RD-41).
+- **Descriptions**: `BriefingRule.instruction` holds an app rule's
+  sentence (RD-62); `BriefingResponse.review_notes` carries a rule's
+  name and reason after a failed check at "when the review has passed"
+  (RD-38).
+- **A registry list**, `lists.orchestrator_tested_providers`: the login
+  providers whose tool's default model passed the eval suite (RV-5).
+  It is empty until the suite has been run, and it refuses nothing;
+  `meta/registry.schema.json` lets it be empty.
+- **`needs_you.json`**: the `orchestrator_offline` item opens only while
+  a check waits (RD-16); `facts.waiting_checks` is the count now (RD-18);
+  `facts.role` keeps `planner`, which is never written (RD-20).
+- **Provisional reads**: `RuleWithVersion` gains `sentence`,
+  `moment_name`, `acts` and `stats` (a `RuleStats`, RD-26); `TaskPage`
+  gains `steps` (a list of `TaskStep`), `lifetime_seconds`, `as_of`,
+  `rule_checks` (a list of `TaskRuleCheck`, each with its
+  `RuleCheckAttempt` list), `pending` (a `PendingCommand` or null) and
+  `draft`; `BoardTask` gains `checking` and `check_reason`;
+  `SystemHealth` gains `waiting_checks`, and its `orchestrator` keeps its
+  three values with a new description (RD-17, RD-18).
+- **Schema**: one migration adds `pending_transitions.params`, the
+  request a pending transition completes with, with checks that it is
+  null unless the state is `pending` and that it holds no token key
+  (RE-2), and `jobs.attempt_number`, integer, 1 by default (DB-31).
+- **Gating**: `PlannedHold.rule_check_id` may be an index into
+  `Evaluation#checks`, as `Failure.rule_check_ref` already may. No
+  signature changed.
+
+Line numbers in the notes this milestone added are those of
+`docs/PRD.md` at the merge of milestone 3, as the plan cites them.
