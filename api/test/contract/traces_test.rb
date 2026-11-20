@@ -1166,7 +1166,125 @@ class TracesTest < Minitest::Test
     assert commands.any? { |command| command["command"] == "rerun_check" }
     offline = commands.select { |command| command["command"] == "orchestrator_offline" }
     assert_equal [ %w[inbox.opened], %w[inbox.resolved check.queued job.queued] ], offline.map { |command| types(command) }, "RD-16, RD-19"
-    jobs = commands.select { |command| command["command"] == "report_limit" && command["body"]["job_id"] }
+    jobs = commands.select { |command| command["command"] == "report_job_limit" }
     assert_equal [ %w[credential.limit_reached credential.switched], %w[credential.limit_reached] ], jobs.map { |command| types(command) }, "RD-40"
+  end
+
+  # A helper report runs the rows of the work it names, as a verdict runs
+  # pass_review or fail_review (README, The state table): one that names a
+  # job runs report_job_limit or report_job_signed_out (milestone 4 plan
+  # section 2.1, the twenty entries; the controller picks it from the
+  # body), and one that names none runs milestone 3's report_limit or
+  # report_signed_out, which answer 404 for a job (HE-33).
+  def test_a_report_that_names_a_job_runs_the_job_report
+    jobs = 0
+    traces.each do |name, trace|
+      trace["commands"].each_with_index do |command, index|
+        next unless %w[report_limit report_signed_out].include?(command["operation_id"])
+
+        job = command["body"]["job_id"]
+        expected = job ? command["operation_id"].sub("report_", "report_job_") : command["operation_id"]
+        assert_equal expected, command["command"], "#{name} command #{index + 1}"
+        jobs += 1 if job
+      end
+    end
+    assert_operator jobs, :>=, 2, "trace 19 reports a job's limit with and without a candidate"
+  end
+
+  # A check's input hash is a made-up digest of its hook's hashed inputs
+  # (hooks.json hashed_inputs; README, A check's identity), so within a
+  # trace one set of inputs carries one digest, two sets two digests, and
+  # every attempt of a check the digest of its first. The inputs are read
+  # back from the trace as Leverage::HookInputs reads them from the rows:
+  # the request of the command that first writes the check, and the
+  # task's contract version, live criteria, their states and every
+  # evidence attached, in order, before that command. It holds the four
+  # traces of milestone 4; trace 07 gives the two checks of one request
+  # two digests (milestone 4 notes, WP0T's request 3), and widening this
+  # to every trace belongs with that fix.
+  RULE_CHECK_TRACES = %w[16-model-gate-and-draft 17-submit-rule-rerun-and-override
+                         18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs].freeze
+
+  def test_one_set_of_hashed_inputs_carries_one_digest
+    RULE_CHECK_TRACES.each { |name| assert_equal [], input_hash_failures(Leverage::Contract.trace(name)), name }
+  end
+
+  def input_hash_failures(trace)
+    requests = trace["commands"].select { |command| command["key"] }.to_h { |command| [ command["key"], command ] }
+    rows = TaskRows.new
+    first = {}
+    digests = Hash.new { |hash, key| hash[key] = Set.new }
+    inputs = Hash.new { |hash, key| hash[key] = Set.new }
+    failures = []
+    trace["commands"].each_with_index do |command, index|
+      command["expect"]["events"].select { |event| %w[check.queued check.finished].include?(event["type"]) }.each do |event|
+        check = event["subject_id"]
+        digest = event["payload"]["input_hash"]
+        if first.key?(check)
+          failures << "command #{index + 1}: #{check} carries another digest than its first" unless first[check] == digest
+          next
+        end
+        first[check] = digest
+        request = requests[event["command_id"]] or next
+        hashed = rows.hashed_inputs(event, request["body"]) or next
+        digests[hashed] << digest
+        inputs[[ event["payload"]["hook"], digest ]] << hashed
+      end
+      rows.apply(command)
+    end
+    digests.each { |hashed, set| failures << "#{hashed.first}: one set of inputs carries #{set.size} digests" if set.size > 1 }
+    inputs.each { |(hook, digest), set| failures << "#{hook}: #{digest[0, 8]} is the digest of #{set.size} sets of inputs" if set.size > 1 }
+    failures
+  end
+
+  # What the trace has written so far of each task's contract version,
+  # criteria and evidence: the rows HookInputs hashes.
+  class TaskRows
+    def initialize
+      @version = {}
+      @criteria = Hash.new { |hash, key| hash[key] = [] }
+      @states = {}
+      @evidence = Hash.new { |hash, key| hash[key] = [] }
+    end
+
+    # [hook, inputs] for the check event's hook, as the request body and
+    # the rows before its command give them; nil for a hook not read here.
+    def hashed_inputs(event, body)
+      payload = event["payload"]
+      task = event["task_id"]
+      inputs = case payload["hook"]
+      when "task.before_ready" then contract(body["result"] || body)
+      when "task.before_claim" then [ @version[task], payload["subject_id"] ]
+      when "task.before_submit"
+        [ @version[task], @criteria[task].map { |id| [ id, @states[id], @evidence[id] ] }, body["handoff_note"] ]
+      when "task.before_done"
+        [ @version[task], body["verdict"], body["notes"], @criteria[task].reject { |id| @evidence[id].empty? }.map { |id| [ id, @evidence[id] ] } ]
+      when "review.assign" then [ payload["subject_id"] ]
+      end
+      inputs && [ payload["hook"], inputs ]
+    end
+
+    def apply(command)
+      command["expect"]["events"].each do |event|
+        payload = event["payload"]
+        task = event["task_id"]
+        case event["type"]
+        when "task.contract_changed"
+          @version[task] = payload["contract_version"]
+          @criteria[task] = @criteria[task] - payload["removed_criterion_ids"] + payload["added_criterion_ids"]
+          (payload["added_criterion_ids"] + payload["reset_criterion_ids"]).each { |id| @states[id] = "open" }
+        when "criterion.passed" then @states[event["subject_id"]] = "passed"
+        when "criterion.reopened" then @states[event["subject_id"]] = "open"
+        when "evidence.attached" then @evidence[payload["criterion_id"]] << [ payload["kind"], command["body"].dig("evidence", "value") ]
+        end
+      end
+    end
+
+    private
+
+    def contract(body)
+      [ body["goal"], body["details"], Array(body["criteria"]).map { |criterion| criterion.values_at("text", "kind") },
+        Array(body["actions"]).map { |action| action.values_at("kind", "description") } ]
+    end
   end
 end
