@@ -98,7 +98,7 @@ class ClaimJobTest < ActiveSupport::TestCase
     end
 
     assert_empty written
-    assert_equal "queued", Job.sole.state
+    assert_equal "queued", Job.where(workspace_id: scenario.workspace_id).sole.state
   end
 
   test "a seat the app runs whose logins are all limited claims nothing (RD-40: it stops claiming jobs)" do

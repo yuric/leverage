@@ -23,7 +23,9 @@ class RemoveRuleTest < ActiveSupport::TestCase
     end
 
     refute_nil rule.reload.removed_at
-    assert_equal [ "rule.removed" ], written_by(key).map(&:type)
+    # The check in flight is withdrawn (check.finished) and its job with it
+    # (job.withdrawn), after the row's own event (L379; WP8's choice 11).
+    assert_equal %w[rule.removed check.finished job.withdrawn], written_by(key).map(&:type)
     assert_equal [ check.id ], calls.fetch("RuleChecks.withdraw").map { |call| call.arguments[1].id }
     assert_equal [ pending.id ], calls.fetch("PendingTransitions.reenter").map { |call| call.arguments[1].id }
   end

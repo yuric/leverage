@@ -47,7 +47,7 @@ class DraftContractTest < ActiveSupport::TestCase
       task = scenario.task(state: state)
       assert_refused("invalid_state", draft(task))
     end
-    assert_equal 0, Job.count
+    assert_equal 0, Job.where(workspace_id: scenario.workspace_id).count
   end
 
   test "while a draft of the task is queued or claimed it is invalid_state; after it ends, a new one is queued (RD-37)" do
@@ -56,12 +56,13 @@ class DraftContractTest < ActiveSupport::TestCase
     assert_refused("invalid_state", draft(task))
 
     planner = scenario.planner(provider: "claude")
-    Job.sole.update!(state: "claimed", claimed_by_seat_id: planner.id, claimed_at: scenario.database_now)
+    mine = Job.where(workspace_id: scenario.workspace_id)
+    mine.sole.update!(state: "claimed", claimed_by_seat_id: planner.id, claimed_at: scenario.database_now)
     assert_refused("invalid_state", draft(task))
 
-    Job.sole.update!(state: "timed_out")
+    mine.sole.update!(state: "timed_out")
     assert_completed(draft(task))
-    assert_equal %w[queued timed_out], Job.order(:state).pluck(:state).sort
+    assert_equal %w[queued timed_out], mine.order(:state).pluck(:state).sort
   end
 
   test "another task's draft does not stop this one" do

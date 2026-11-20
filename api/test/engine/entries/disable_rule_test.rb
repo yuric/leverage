@@ -61,8 +61,12 @@ class DisableRuleTest < ActiveSupport::TestCase
 
     assert_equal [ held.id ], calls.fetch("RuleChecks.withdraw").map { |call| call.arguments[1].id }
     assert_empty calls.fetch("Jobs.withdraw"), "the row held at the limit has no job"
-    assert_equal %w[rule.disabled hold.closed inbox.resolved], written_by(key).map(&:type)
-    assert_equal "rerun_limit", written_by(key)[1].payload.fetch("reason")
+    # The withdrawn row's check.finished (RuleChecks.withdraw writes it for
+    # the row held at the limit too: WP8's request 2, milestone 4 plan
+    # rule 11), then its hold.
+    assert_equal %w[rule.disabled check.finished hold.closed inbox.resolved], written_by(key).map(&:type)
+    assert_equal "withdrawn", written_by(key)[1].payload.fetch("result")
+    assert_equal "rerun_limit", written_by(key)[2].payload.fetch("reason")
     reentry = calls.fetch("PendingTransitions.reenter").sole
     assert_equal [ pending.id, Trigger.new(kind: :rule_switched_off, rule_check_id: held.id) ],
       [ reentry.arguments[1].id, reentry.arguments[2] ]

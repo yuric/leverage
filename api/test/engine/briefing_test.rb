@@ -24,14 +24,15 @@ class BriefingTest < ActiveSupport::TestCase
       review_id: review&.id, lease_event_id: lease.id, briefing_hash: hash, acknowledged_at: @scenario.database_now)
   end
 
-  test "the role files are the builder's and the reviewer's texts, versioned by the release" do
+  # Four role files from milestone 4 (L470, milestone 4 plan RD-61): the
+  # planner's and the orchestrator's join the builder's and the reviewer's.
+  test "the role files are the four roles' texts, versioned by the release" do
     assert_equal Leverage::VERSION, Leverage::RoleFiles.version
-    %w[builder reviewer].each do |role|
-      text = Leverage::RoleFiles.text(role)
-      assert_equal Rails.root.join("config/role_files/#{role}.md").read, text
-      assert_match(/evidence/i, text)
+    %w[builder reviewer planner orchestrator].each do |role|
+      assert_equal Rails.root.join("config/role_files/#{role}.md").read, Leverage::RoleFiles.text(role)
     end
-    assert_raises(ArgumentError) { Leverage::RoleFiles.text("planner") }
+    %w[builder reviewer].each { |role| assert_match(/evidence/i, Leverage::RoleFiles.text(role)) }
+    assert_raises(ArgumentError) { Leverage::RoleFiles.text("owner") }
   end
 
   test "the hash is SHA-256 over the parts brief, role file and contract, then the rules" do

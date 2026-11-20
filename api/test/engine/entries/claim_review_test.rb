@@ -11,7 +11,7 @@ class ClaimReviewTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
   # Records the hooks gating is asked at.
-  class Recording < Leverage::Gating::NoRules
+  class Recording < Leverage::Rules::Engine
     attr_reader :hooks
 
     def initialize
@@ -26,7 +26,7 @@ class ClaimReviewTest < ActiveSupport::TestCase
   end
 
   # Records the requests gating is asked.
-  class RecordingRequests < Leverage::Gating::NoRules
+  class RecordingRequests < Leverage::Rules::Engine
     attr_reader :requests
 
     def initialize
@@ -175,7 +175,9 @@ class ClaimReviewTest < ActiveSupport::TestCase
     seat = @scenario.seat(role: "reviewer", credential: own)
     @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
     @scenario.run(seat, on: below)
-    Leverage::Gating.implementation = ProviderWorld.new
+    # The rule's row, which the skip row RuleChecks.write records names
+    # (rule_checks.rule_id is a foreign key).
+    Leverage::Gating.implementation = ProviderWorld.for(@scenario.rule(key: "different_provider_review", origin: "shipped"))
 
     assert_equal "not_eligible", apply(seat).refusal.code
     assert_nil @review.reload.reviewer_seat_id

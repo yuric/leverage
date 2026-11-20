@@ -130,17 +130,26 @@ class SubmitJobResultTest < ActiveSupport::TestCase
     assert_raises(T::Invalid) { submit_result(@planner, draft, PASSED) }
   end
 
+  # Trace 16's workspace has the shipped rules, so the planner's Complete
+  # contract meets "Every task needs specific details", a model gate at
+  # task.before_ready, and this call answers pending (RE-6): its own
+  # job.finished and cost.reported, then the gate's events under its key.
   test "trace 16 command 11: a draft's result runs Complete contract as the planner, with this call's key (RE-6)" do
+    scenario.with_shipped_rules
     task, job = claimed_draft(work_reference: "~/work/notes")
     task.update!(minimum_strength_rank: 2, budget_cap: 7.5)
     key = new_key
     written = nil
+    outcome = nil
     calls = spy_on(T, :run_as) do
-      written = events_written { assert_completed(submit_result(@planner, job, draft_result, tokens: 900, key: key)) }
+      written = events_written { outcome = submit_result(@planner, job, draft_result, tokens: 900, key: key) }
     end
 
+    assert_equal :pending, outcome.outcome
     assert_equal [ [ "job.finished", job.id ], [ "cost.reported", job.id ] ],
-      written.map { |event| [ event.type, event.subject_id ] }
+      written.first(2).map { |event| [ event.type, event.subject_id ] }
+    assert_equal %w[check.finished check.queued job.queued], written.drop(2).map(&:type)
+    assert_equal [ key ], written.map(&:command_id).uniq
     call = calls.sole
     assert_equal "complete_contract", call.arguments[1]
     assert_equal [ @planner.id, key ], [ call.keywords[:requester].id, call.keywords[:key] ]
@@ -199,7 +208,12 @@ class SubmitJobResultTest < ActiveSupport::TestCase
       [ timed_out, withdrawn, late ].each { |job| assert_refused("invalid_state", submit_result(@orchestrator, job, PASSED)) }
     end
 
-    assert_empty written
+    # Nothing of its own. Timers run first (L118, test 7): the late job's
+    # run timeout, due before the result, is applied by the app with no key
+    # and commits with the refusal (WP7's request 5).
+    assert_empty written.reject { |event| event.actor_kind == "app" && event.command_id.nil? }
+    assert_equal %w[job.timed_out job.requeued check.queued], written.map(&:type)
+    assert_equal [ late.id, late.id ], written.first(2).map(&:subject_id)
   end
 
   test "a cancelled task's job is task_cancelled; another seat's is not_holder; a job of another workspace is 404" do

@@ -108,11 +108,13 @@ class OverrideCheckTest < ActiveSupport::TestCase
 
     assert_completed(outcome)
     assert_stored_override(calls, check)
-    assert_equal %w[hold.closed inbox.resolved], events.map(&:type)
+    # check.overridden first, as RuleChecks.override writes it (trace 07,
+    # event 12), then the hold it answers.
+    assert_equal %w[check.overridden hold.closed inbox.resolved], events.map(&:type)
     assert_equal({ "reason" => "check_error", "rule_id" => @rule.id, "credential_id" => nil, "lease_seat_id" => nil,
-                   "wait_cause" => nil }, events.first.payload)
+                   "wait_cause" => nil }, events.second.payload)
     assert_equal({ "choice" => "override_once" }, events.last.payload)
-    assert_equal [ [ "owner", scenario.owner.id ] ] * 2, events.map { |event| [ event.actor_kind, event.actor_id ] }
+    assert_equal [ [ "owner", scenario.owner.id ] ] * 3, events.map { |event| [ event.actor_kind, event.actor_id ] }
     reentry = calls.fetch("PendingTransitions.reenter").sole
     assert_equal [ pending.id, Trigger.new(kind: :check_overridden, rule_check_id: check.id) ],
       [ reentry.arguments[1].id, reentry.arguments[2] ]
@@ -130,7 +132,9 @@ class OverrideCheckTest < ActiveSupport::TestCase
 
     assert_completed(outcome)
     assert_stored_override(calls, held)
-    assert_equal [ [ "hold.closed", "rerun_limit" ], [ "inbox.resolved", nil ] ], events.map { |event| [ event.type, event.payload["reason"] ] }
+    # check.overridden first (trace 17, event 52), then the hold it answers.
+    assert_equal [ [ "check.overridden", nil ], [ "hold.closed", "rerun_limit" ], [ "inbox.resolved", nil ] ],
+      events.map { |event| [ event.type, event.payload["reason"] ] }
     assert_equal "override_once", events.last.payload.fetch("choice")
     assert_equal [ pending.id ], calls.fetch("PendingTransitions.reenter").map { |call| call.arguments[1].id }
   end
@@ -145,7 +149,8 @@ class OverrideCheckTest < ActiveSupport::TestCase
 
     assert_completed(outcome)
     assert_stored_override(calls, check)
-    assert_equal [ [ "hold.closed", "claim_gate_failed" ], [ "inbox.resolved", nil ] ], events.map { |event| [ event.type, event.payload["reason"] ] }
+    assert_equal [ [ "check.overridden", nil ], [ "hold.closed", "claim_gate_failed" ], [ "inbox.resolved", nil ] ],
+      events.map { |event| [ event.type, event.payload["reason"] ] }
     assert_empty open_holds(ready)
   end
 
