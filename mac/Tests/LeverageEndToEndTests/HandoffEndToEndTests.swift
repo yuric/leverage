@@ -125,9 +125,10 @@ struct LimitWaitEndToEndTests {
     func testWaitsForTheReset() async throws {
         try await withHandoffWorld("limit-wait") { world in
             let reviewerLogin = UUID(), one = UUID()
+            let resetIn = 30
             try world.tools.write(scenario: StandInScenario(reviews: [.init()], directives: [
                 .reply("claude/run-limit-five-hour.json", tool: "claude", account: world.accountFolder(one),
-                       onPrompt: 2, resetInSeconds: 12, times: 1),
+                       onPrompt: 2, resetInSeconds: resetIn, times: 1),
             ]))
             _ = try await world.addLogin(.codex, name: "Reviewer", id: reviewerLogin)
             _ = try await world.addLogin(.claude, name: "One", id: one)
@@ -145,19 +146,21 @@ struct LimitWaitEndToEndTests {
             #expect(held.id("credential_id") == one)
 
             // While it waits: no Needs you item, and the card names One and
-            // the time it resets (HM-40). The reset comes 12 s after the
-            // stand-in's reply, and the sweep may close the hold first on a
-            // slow machine: the card is checked only when the hold was still
-            // open after the board was read, so the board was read while it
-            // waited (review).
+            // the time it resets (HM-40). The reset comes resetIn seconds
+            // after the stand-in's reply, long enough for the board to be
+            // read while the hold is open. A hold already closed after the
+            // board was read means the card was read after the reset, and
+            // is a failure, never a check passed over (second review).
             let card = try await world.owner.board().tasks.first { $0.task.id == task }
             let stillHeld = try await world.owner.task(id: task).holds.contains {
                 $0.id == held.subjectID && $0.closedAt == nil
             }
-            if stillHeld {
-                #expect(card?.waitingForCredentialID == one, "the card names the login it waits for")
-                #expect(card?.waitingUntil != nil, "the card names the time")
-            }
+            #expect(stillHeld, """
+                the hold closed before the board was read, \(resetIn) s after the reply: \
+                the card was not read while it waited
+                """)
+            #expect(card?.waitingForCredentialID == one, "the card names the login it waits for")
+            #expect(card?.waitingUntil != nil, "the card names the time")
             let items = try await world.owner.listInbox(afterSeq: nil, wait: nil).items
             #expect(!items.contains { $0.aboutID == task || $0.credentialID == one }, "no Needs you item: \(items)")
 
