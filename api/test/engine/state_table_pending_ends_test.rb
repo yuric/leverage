@@ -101,7 +101,7 @@ class StateTablePendingEndsTest < ActiveSupport::TestCase
 
   test "the builder's lease ends under a pending submit: lease_expired, first, at the lease's due time by the app" do
     task, pending = waiting("working")
-    due = scenario.database_now - 5
+    due = scenario.database_now
     scenario.make_due(task, at: due)
     outcome = nil
     calls = with_pending(pending) do
@@ -117,7 +117,7 @@ class StateTablePendingEndsTest < ActiveSupport::TestCase
 
   test "the lease ending inside the holder's own command gives the timer's time and actor, not the command's" do
     task, pending = waiting("working")
-    due = scenario.database_now - 5
+    due = scenario.database_now
     scenario.make_due(task, at: due)
     outcome = nil
     calls = with_pending(pending) { outcome, = seat_run("heartbeat", @builder, "id" => task.id) }

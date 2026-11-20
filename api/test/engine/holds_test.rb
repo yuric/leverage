@@ -368,7 +368,7 @@ class HoldsTest < ActiveSupport::TestCase
       open = TaskStep.find_by!(task_id: task.id, closed_at: nil)
       assert_equal [ step, opened.id ], [ open.kind, open.opening_event_id ],
         "the hold opens its own step, a new wait_contract row for contract_incomplete too (SM-24)"
-      assert_equal item, InboxItem.find_by(hold_id: hold.id)&.kind
+      item ? assert_equal(item, InboxItem.find_by(hold_id: hold.id)&.kind) : assert_not(InboxItem.exists?(hold_id: hold.id))
     end
   end
 
