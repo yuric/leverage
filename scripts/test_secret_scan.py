@@ -271,6 +271,97 @@ class SecretScanTests(unittest.TestCase):
         self.assertEqual(code, 2, output)
 
 
+# Made-up reply files in the shape of mac/Tests/StandIns/replies (milestone 3
+# plan HD-8): each names its marker, and its outputs hold the lines a tool's
+# reply would. The scan looks for every marker and for every line of an
+# output that is 40 characters or longer; a shorter line, such as "{" or
+# "ready", is in every log and is not looked for.
+MARKER = "LVRG-REPLY-0123456789ab"
+LONG_LINE = '{"type":"result","is_error":true,"result":"Made-up limit reply for the scan"}'
+PLACEHOLDER_LINE = ('{"error":"Made-up five-hour window reached, it comes back at @RESET_AT_ISO@ '
+                    'and not one second before that time"}')
+SHORT_LINE = "ready"
+
+
+def reply_file(marker=MARKER, stdout=LONG_LINE + "\n", stderr=SHORT_LINE + "\n"):
+    return json.dumps({
+        "meta": {"provider": "claude", "kind": "run", "basis": "invented", "marker": marker},
+        "exit_status": 1, "stdout": stdout, "stderr": stderr,
+    })
+
+
+class ReplyFileTests(unittest.TestCase):
+    """--replies FOLDER: a tool's reply must appear nowhere but in the
+    stand-ins' own folder (plan §5.2, step 3)."""
+
+    def setUp(self):
+        self.scan = Scan()
+        self.addCleanup(self.scan.close)
+        self.replies = self.scan.root / "replies" / "claude"
+        self.replies.mkdir(parents=True)
+        (self.replies / "run-limit.json").write_text(reply_file(), encoding="utf-8")
+
+    def run_scan(self):
+        return self.scan.run(
+            "--secrets", self.scan.secrets(PASSWORD), "--replies", self.scan.root / "replies", self.scan.logs)
+
+    def test_a_marker_found_is_a_hit_named_by_its_reply_file(self):
+        self.scan.file("runner.log", f"run ended: {MARKER}\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 1, output)
+        self.assertIn("runner.log:1: marker of claude/run-limit.json", output)
+        self.assertNotIn(MARKER, output)
+
+    def test_a_long_line_of_a_reply_found_is_a_hit(self):
+        self.scan.file("helper.log", "first\nthe tool said " + LONG_LINE + "\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 1, output)
+        self.assertIn("helper.log:2: stdout line 1 of claude/run-limit.json", output)
+        self.assertNotIn(LONG_LINE, output)
+
+    def test_a_long_line_is_found_json_escaped(self):
+        self.scan.file("dump.sql", json.dumps({"note": LONG_LINE}) + "\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 1, output)
+        self.assertIn("dump.sql:1: stdout line 1 of claude/run-limit.json (JSON-escaped)", output)
+
+    def test_a_short_common_line_of_a_reply_is_not_a_hit(self):
+        self.scan.file("runner.log", f"{SHORT_LINE}\n{{\n}}\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 0, output)
+        self.assertIn("no secret found", output)
+
+    def test_the_long_pieces_around_a_reset_placeholder_are_looked_for(self):
+        (self.replies / "run-limit.json").write_text(
+            reply_file(stdout=PLACEHOLDER_LINE + "\n"), encoding="utf-8")
+        played = PLACEHOLDER_LINE.replace("@RESET_AT_ISO@", "2026-11-19T18:00:00Z")
+        self.scan.file("runner.log", played + "\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 1, output)
+        self.assertIn("runner.log:1: stdout line 1 of claude/run-limit.json", output)
+
+    def test_every_reply_file_of_the_stand_ins_is_read(self):
+        stand_ins = HERE.parent / "mac" / "Tests" / "StandIns" / "replies"
+        self.scan.file("clean.log", "nothing here\n")
+        code, output = self.scan.run("--secrets", self.scan.secrets(PASSWORD), "--replies", stand_ins, self.scan.logs)
+        self.assertEqual(code, 0, output)
+        markers = sum(1 for _ in stand_ins.rglob("*.json"))
+        self.assertIn(f"{markers} reply files", output)
+
+    def test_a_reply_file_with_no_marker_is_refused(self):
+        (self.replies / "run-limit.json").write_text(reply_file(marker=""), encoding="utf-8")
+        self.scan.file("clean.log", "nothing here\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 2, output)
+        self.assertIn("no marker", output)
+
+    def test_a_replies_folder_with_no_reply_file_is_refused(self):
+        (self.replies / "run-limit.json").unlink()
+        self.scan.file("clean.log", "nothing here\n")
+        code, output = self.run_scan()
+        self.assertEqual(code, 2, output)
+
+
 if __name__ == "__main__":
     verbosity = 2 if "-v" in sys.argv[1:] else 1
     argv = [arg for arg in sys.argv if arg != "-v"]
