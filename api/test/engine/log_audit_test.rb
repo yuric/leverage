@@ -93,6 +93,18 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
+  # Found by the walks (seed 460): a sign-out a run reports may leave
+  # another task's credential_limit hold with no due time and no item, and
+  # opens "Account signed out" there (HE-11, plan §2.3): the row's side
+  # event, on a task other than the report's own.
+  test "a sign-out that opens Account signed out on another task's hold passes" do
+    walk = Walk.new(seed: 460, steps: 80).run
+    other = Event.where(workspace_id: walk.workspace_id).group_by(&:command_id)
+      .any? { |key, events| key && events.first.type == "credential.signed_out" && events.map(&:task_id).compact.uniq.size > 1 }
+    assert other, "seed 460 no longer reaches it:\n#{walk}"
+    assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
+  end
+
   # A timer's events have no key: the credential hold release (hold.closed,
   # credential.switched) is read as credential_hold_release, and the same
   # events as no timer writes them when no credential hold closes.
