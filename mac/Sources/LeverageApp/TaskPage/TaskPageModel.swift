@@ -55,6 +55,8 @@ final class TaskPageModel {
     private(set) var isBusy = false
     /// Why the last button did not work.
     private(set) var actionFailure: ShellCopy?
+    /// The error of the last command that failed, which says whether its key is kept.
+    @ObservationIgnored private var lastError: (any Error)?
     private(set) var isConfirmingCancel = false
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -243,6 +245,8 @@ final class TaskPageModel {
         if sent {
             rerunKeys[checkID] = nil
             await load()
+        } else if !keyIsKept {
+            rerunKeys[checkID] = nil
         }
     }
 
@@ -255,6 +259,8 @@ final class TaskPageModel {
         if sent {
             draftKey = nil
             await load()
+        } else if !keyIsKept {
+            draftKey = nil
         }
     }
 
@@ -266,6 +272,8 @@ final class TaskPageModel {
         if moved {
             promoteKey = nil
             await load()
+        } else if !keyIsKept {
+            promoteKey = nil
         }
     }
 
@@ -277,6 +285,8 @@ final class TaskPageModel {
         if paused {
             holdKey = nil
             await load()
+        } else if !keyIsKept {
+            holdKey = nil
         }
     }
 
@@ -288,6 +298,8 @@ final class TaskPageModel {
         if resumed {
             resumeKey = nil
             await load()
+        } else if !keyIsKept {
+            resumeKey = nil
         }
     }
 
@@ -433,13 +445,19 @@ final class TaskPageModel {
         guard !isBusy else { return false }
         isBusy = true
         actionFailure = nil
+        lastError = nil
         defer { isBusy = false }
         do {
             try await command()
             return true
         } catch {
+            lastError = error
             actionFailure = ShellCopy.sentence(for: error)
             return false
         }
     }
+
+    /// Whether the last command that failed keeps its key for the next press
+    /// (`IdempotencyKey.isKept(after:)`): not after a refusal.
+    private var keyIsKept: Bool { lastError.map(IdempotencyKey.isKept(after:)) ?? true }
 }

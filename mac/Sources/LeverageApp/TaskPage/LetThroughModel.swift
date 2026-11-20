@@ -10,7 +10,7 @@ import Observation
 /// the contract the task has, as the owner: an override completes nothing by
 /// itself (RD-48). Each command keeps its key until it works, so pressing the
 /// button again sends the same command; a changed reason is a new body and gets
-/// a new key. If the override worked and Complete contract did not, the next
+/// a new key, and so does a press after a refusal. If the override worked and Complete contract did not, the next
 /// press sends only Complete contract.
 @MainActor
 @Observable
@@ -102,6 +102,11 @@ final class LetThroughModel {
             state = .saved
             onDone()
         } catch {
+            // A refusal was answered: the next press is a new command with a
+            // new key (review finding 16); a request with no answer keeps its key.
+            if !IdempotencyKey.isKept(after: error) {
+                if overridden { completeKey = nil } else { overrideKey = nil }
+            }
             state = .failed(ShellCopy.sentence(for: error))
         }
     }

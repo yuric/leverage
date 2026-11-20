@@ -42,6 +42,13 @@ struct CheckJob: Sendable {
             }
             let nonce = JobPrompts.makeNonce()
             let prompt = JobPrompts.check(material: material, nonce: nonce)
+            if let reason = JobToolRun.tooLong(prompt) {
+                // The same material makes a prompt as long every time: no
+                // second run is tried.
+                context.state.toolFailed()
+                context.log.warning("job \(claim.jobID.contractString): \(reason)")
+                break
+            }
             switch try await JobToolRun.run(prompt, job: claim.jobID, timeLimit: limit, context: context) {
             case .answered(let answer):
                 tokens += answer.tokens
@@ -78,12 +85,23 @@ struct CheckJob: Sendable {
 /// never the task's work folder (RD-33), under the job's time limit; a limit
 /// or a sign-out names the job (RD-40).
 enum JobToolRun {
+    /// The most bytes of prompt a tool run is started with. A tool gets the
+    /// prompt as one argument, and the Mac refuses to start a program whose
+    /// arguments and environment pass `ARG_MAX` (1 MiB): a prompt over this
+    /// limit would fail to start every time (milestone 4 review, finding 9).
+    /// The server's limits on task text keep a contract well under it.
     static let promptByteLimit = 512 * 1024
 
-    static func tooLong(_ prompt: String) -> String? { nil }
+    /// Why the prompt is not run, or nil when it fits.
+    static func tooLong(_ prompt: String) -> String? {
+        let bytes = prompt.utf8.count
+        guard bytes > promptByteLimit else { return nil }
+        return "the prompt is \(bytes) bytes, over the \(promptByteLimit) a tool's argument may hold"
+    }
 
     static func run(_ prompt: String, job: UUID, timeLimit: Int, context: FlowContext) async throws
         -> Interruption.Result {
+        if let reason = tooLong(prompt) { return .failed(.couldNotStart(reason)) }
         guard let folder = WorkFolder.makeJobFolder(workRoot: context.workRoot) else {
             return .failed(.couldNotStart("no folder for the job's run"))
         }

@@ -587,6 +587,23 @@ check result. What it added and changed, each from the milestone 4 plan
 - **Gating**: `PlannedHold.rule_check_id` may be an index into
   `Evaluation#checks`, as `Failure.rule_check_ref` already may. No
   signature changed.
+- **After the milestone's adversarial review**: every task-text field of
+  the requests has a `maxLength` and every list of them a `maxItems`
+  (`CompleteContractRequest`, `AddTaskRequest`, `CriterionInput`,
+  `ActionInput`, `SubmitTaskRequest`, `GiveVerdictRequest`,
+  `PassCriterionRequest`'s evidence, `OverrideCheckRequest`,
+  `AddRuleRequest`, `SaveRuleRequest`, `ReturnForReworkRequest`), so a
+  longer body is `422 invalid` before any check is queued: a checker's
+  tool gets the task text as one argument, which the Mac refuses past
+  1 MiB. `LandingPrompt.check_interval_minutes` is 20, or 1 for an
+  orchestrator or a planner, which counts as offline 90 seconds after its
+  last poll (L401). `enable_rule` may open `claim_gate_failed` again with
+  its item, for a Ready task that three seats failed the rule on (L166,
+  L393). The heartbeat's description says what a provisional claimant's
+  heartbeat answers, and the report calls no longer say a report that
+  names a job is 404. The shipped rule "Two failed reviews move a task to
+  a stronger model" is "Repeated failed reviews move a task to a stronger
+  model" (PRD L443).
 
 Line numbers in the notes this milestone added are those of
 `docs/PRD.md` at the merge of milestone 3, as the plan cites them.

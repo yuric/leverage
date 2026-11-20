@@ -5,7 +5,7 @@
     "PRD Rework and escalation: a failed review adds one to the round, reopens the failed criterion and gives the free previous builder a fresh lease (review.failed carries lease_seat_id, plan SM-7).",
     "PRD Steps and timing, the step table sentence: review.failed opens wait_builder, task.briefing_acknowledged closes it and opens rework, task.submitted closes rework.",
     "Plan SM-42: No reviewer is eligible opens beside task.submitted while only the builder's provider has a reviewer, and resolves in the connect_seat command that adds a reviewer of another provider.",
-    "PRD Shipped rules: Two failed reviews move a task to a stronger model writes no rule check row after one failure, because it does not change the outcome (How a transition is gated, step 7)."
+    "PRD Shipped rules: Repeated failed reviews move a task to a stronger model writes no rule check row after one failure, because it does not change the outcome (How a transition is gated, step 7)."
   ],
   "setup": {
     "settings": {},

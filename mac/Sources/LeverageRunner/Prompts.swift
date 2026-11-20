@@ -139,10 +139,12 @@ enum Prompts {
     }
 
     /// Quoted material: each line behind "> ", and every marker word broken
-    /// ("LEVERAGE-" loses its hyphen) so it cannot be read as an answer.
+    /// ("LEVERAGE-" loses its hyphen) so it cannot be read as an answer. A
+    /// line ends at any line break (LF, CR, CRLF, U+2028, U+2029...), so
+    /// every line keeps its quote mark (milestone 4 review, finding 11).
     static func quoted(_ text: String) -> String {
         neutralised(text)
-            .split(separator: "\n", omittingEmptySubsequences: false)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
             .map { "> \($0)" }
             .joined(separator: "\n")
     }

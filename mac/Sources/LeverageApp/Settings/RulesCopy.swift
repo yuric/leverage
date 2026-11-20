@@ -50,7 +50,7 @@ enum RulesCopy: OwnerFacingCopy {
         case .turnOff: "Turn off {name}"
 
         case .scopeAllTasks: "Every task"
-        case .scopeCheckerDecides: "The checker decides"
+        case .scopeCheckerDecides: "The agent that checks decides"
         case .scopeNamedProjects: "Named projects"
         case .scopeActionKinds: "Tasks that end in some outward actions"
         case .checkerApp: "leverage checks this itself"
@@ -74,7 +74,7 @@ enum RulesCopy: OwnerFacingCopy {
         case .changeTitle: "Change a rule"
         case .nameLabel: "Name"
         case .namePlaceholder: "What the rule asks for, in a few words"
-        case .instructionLabel: "What the checker looks for"
+        case .instructionLabel: "What the agent checks for"
         case .instructionPlaceholder: "Say when a task passes and when it does not."
         case .momentLabel: "When it runs"
         case .scopeLabel: "Applies to"

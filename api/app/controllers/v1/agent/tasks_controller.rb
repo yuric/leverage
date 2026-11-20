@@ -11,21 +11,18 @@ module V1
 
       # GET /v1/tasks/{id}/briefing: the briefing the holder reads, the work
       # reference, and the notes of the task's failed reviews (Q-9), which
-      # are outside the hash like the work reference. A task the seat does
-      # not hold, or holds no longer, is 404: the seat may read only what
-      # the Roles table gives it (L918).
+      # are outside the hash like the work reference; a review a rule
+      # failed carries the rule's name and the check's reason after the
+      # reviewer's notes (Briefing.review_notes, RD-38). A task the seat does
+      # not hold in Working, or holds no longer, is 404: the seat may read
+      # only what the Roles table gives it (L918), and a provisional
+      # claimant, which holds a Ready task with no lease, gets no briefing
+      # until its claim gate passes (L392, RE-5).
       def briefing
-        task = Task.where(id: uuid_param!(:id), workspace_id: current_seat.workspace_id, holder_seat_id: current_seat.id)
-          .where(Leverage::Reads::NextItem::LIVE).take || raise(NotFound, "No such task")
+        task = Task.where(id: uuid_param!(:id), workspace_id: current_seat.workspace_id, holder_seat_id: current_seat.id,
+          state: "working").where(Leverage::Reads::NextItem::LIVE).take || raise(NotFound, "No such task")
         render json: { briefing: Leverage::Briefing.build(task, current_seat), work_reference: task.work_reference,
-                       review_notes: review_notes(task) }
-      end
-
-      private
-
-      def review_notes(task)
-        Review.where(task_id: task.id, verdict: "failed").order(:round)
-          .map { |review| { review_id: review.id, round: review.round, notes: review.notes } }
+                       review_notes: Leverage::Briefing.review_notes(task) }
       end
     end
   end

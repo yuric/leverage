@@ -79,7 +79,8 @@ tries, each limited to 120 seconds.
 LEVERAGE_EVAL=specific-details LEVERAGE_TOOL_DIR=<a copy of mac/Tests/StandIns>/bin \
   scripts/eval_rule.sh specific-details --out <folder>
 
-# On the real tools already signed in on this Mac (the managing agent only):
+# On the real tools already signed in on this Mac (the maintainer, or the
+# managing agent of a delegated run, only):
 LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
 ```
 
@@ -87,6 +88,11 @@ The script refuses (exit 2) when `CI` is set, when `LEVERAGE_EVAL` is not
 the suite, or unless exactly one of `LEVERAGE_TOOL_DIR` and
 `LEVERAGE_EVAL_REAL=1` is set. On the real path it signs in to nothing and
 reads no account folder: each tool uses the sign-in it already holds.
+Without `--account-folder`, Claude Code and Codex then read the Mac user's
+own settings folders (`~/.claude`, and `~/.codex` unless
+`LEVERAGE_EVAL_CODEX_HOME` names another), not a folder leverage made for a
+seat, so a model, a setting or a memory file set there may apply, and the
+model that ran is not known. The runs in `RESULTS.md` were made that way.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.

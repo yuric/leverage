@@ -15,7 +15,14 @@ module Leverage
       #
       # Refused not_eligible when the seat may not claim or nothing is left
       # (RC-50). The claim names no task, so no other refusal can apply:
-      # the task it picks is Ready, unheld and held by nobody.
+      # the task it picks is Ready, unheld and held by nobody. A claim that
+      # waited on its check is gated again when the check settles; by then
+      # the seat may have been paused, or its run's login limited or signed
+      # out, so it is refused not_eligible unless the seat is still enabled,
+      # not paused and not removed, and placed for the task (HD-4;
+      # Eligibility.placed_for?, not may_claim?, which the reservation
+      # itself makes false). Re-entry reads that as invalid_state and the
+      # reservation lapses (milestone 4 review, finding 7).
       #
       # Result: ClaimTaskResult.
       #
@@ -33,6 +40,7 @@ module Leverage
           reserved = PendingTransitions.for_request(ctx.request)
           if reserved && reserved.command == command
             @task = Task.find_by!(id: reserved.task_id, workspace_id: ctx.workspace.id)
+            @reserved = true
             return
           end
 
@@ -42,8 +50,9 @@ module Leverage
           @task = Eligibility.next_task(@seat, at: ctx.at)
         end
 
-        def refusals(_ctx)
+        def refusals(ctx)
           return [ "not_eligible" ] unless @task
+          return [ "not_eligible" ] if @reserved && !still_eligible?(ctx)
 
           [ state_refusal(@task.state) ].compact
         end
@@ -73,6 +82,12 @@ module Leverage
             "credential_id" => credential&.id,
             "model" => model
           }
+        end
+
+        # The reserving seat may still claim the task it reserved.
+        def still_eligible?(ctx)
+          @seat.reload
+          @seat.enabled && !@seat.paused && @seat.removed_at.nil? && Eligibility.placed_for?(@seat, @task, ctx.at)
         end
 
         # A task row in the contract's TaskSummary shape.

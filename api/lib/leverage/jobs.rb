@@ -155,12 +155,18 @@ module Leverage
     end
 
     # The oldest queued job of the seat's kinds whose queue time has not
-    # run out, of a task the seat never claimed as a builder.
+    # run out, of a task the seat never claimed as a builder and that is
+    # not cancelled (cancel withdraws a task's jobs, L207; this only makes
+    # sure one left queued is never handed out). A Done task's jobs are
+    # still handed out: a warn rule's check at task.before_done runs after
+    # the pass completed (RC-16).
     def claimable(seat, at)
       Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role)
-        .where.not(task_id: built_by(seat)).or(queued_without_task(seat))
+        .where.not(task_id: built_by(seat)).where.not(task_id: cancelled_tasks(seat.workspace_id)).or(queued_without_task(seat))
         .order(:queued_at, :id).find { |job| !due?(job, :queue, at) }
     end
+
+    def cancelled_tasks(workspace_id) = Task.where(workspace_id: workspace_id, state: "cancelled").select(:id)
 
     # A queued job with no task, which no past holder can be kept from.
     def queued_without_task(seat)
@@ -196,7 +202,7 @@ module Leverage
       ctx.emit(type, subject: job, payload: payload, **fields)
     end
 
-    private_class_method :active?, :placed?, :claimable, :queued_without_task, :kinds_for, :built_by, :task_of, :event_fields,
+    private_class_method :active?, :placed?, :claimable, :cancelled_tasks, :queued_without_task, :kinds_for, :built_by, :task_of, :event_fields,
       :emit
   end
 end

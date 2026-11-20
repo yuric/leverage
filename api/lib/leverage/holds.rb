@@ -68,16 +68,30 @@ module Leverage
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id,
                                        rule_check_id: (rule_check_id if NAMES_CHECK.include?(reason)) })
-      needs_you = needs_you_item(reason)
-      if needs_you && item
-        inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
-          about_id: task.id, hold_id: hold.id, credential_id: credential_id, facts: facts, opened_at: ctx.at,
-          choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
-        ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: opened.id, actor_kind: actor_kind,
-          actor_id: actor_id, payload: { kind: inbox.kind })
+      if item
+        open_item(ctx, hold, task: task, facts: facts, cause_id: opened.id, actor_kind: actor_kind, actor_id: actor_id,
+          round: round)
       end
       leases_of(task).each { |subject| Leases.pause(ctx, subject) } if pauses?(reason)
       hold
+    end
+
+    # Opens the Needs you item the registry names for an open hold's
+    # reason (inbox.opened, with cause_id as its cause), unless it has one
+    # open: what Holds.open does with item: true, and what a check_error
+    # hold opened while the orchestrator was offline gets when its check
+    # ends in error again while the orchestrator is online (SM-39, L400;
+    # PendingTransitions). Returns the InboxItem, or nil when none opened.
+    def open_item(ctx, hold, task:, facts: {}, cause_id: nil, actor_kind: "app", actor_id: nil, round: task.round, **as)
+      needs_you = needs_you_item(hold.reason)
+      return nil if needs_you.nil? || InboxItem.where(hold_id: hold.id, state: "open").exists?
+
+      inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
+        about_id: task.id, hold_id: hold.id, credential_id: hold.credential_id, facts: facts, opened_at: ctx.at,
+        choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
+      ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: cause_id, actor_kind: actor_kind,
+        actor_id: actor_id, payload: { kind: inbox.kind }, **as)
+      inbox
     end
 
     # Closes a hold and resolves its open Needs you item with the owner's

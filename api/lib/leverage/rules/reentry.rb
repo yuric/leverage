@@ -17,11 +17,15 @@ module Leverage
     #   2. A frozen rule switched off or removed since no longer blocks: its
     #      check is withdrawn by the command that turned it off (L379). A
     #      rule saved since keeps its frozen version's result.
-    #   3. A blocking check with no result keeps it :keep_pending.
-    #   4. A blocking check that ended in error keeps it :keep_pending under
-    #      a check_error hold, planned once (rule 10); at task.before_claim
-    #      the provisional claim lapses instead (:cancel) and the hold still
-    #      opens, naming the errored check, which is not withdrawn (L392).
+    #   3. A blocking check that ended in error keeps it :keep_pending under
+    #      a check_error hold, planned once (rule 10), as soon as the error
+    #      is recorded, though another blocking check still runs (the Holds
+    #      table, L163: the hold opens when a blocking check ends in error,
+    #      so the lease pauses then); at task.before_claim the provisional
+    #      claim lapses instead (:cancel), the checks still running are
+    #      withdrawn, and the hold still opens, naming the errored check,
+    #      which is not withdrawn (L392).
+    #   4. A blocking check with no result keeps it :keep_pending.
     #   5. Any other open hold keeps it :keep_pending until the last hold
     #      lifts (L378). The check_error and rerun_limit holds of the
     #      transition's own checks are not such holds: they close with the
@@ -106,14 +110,18 @@ module Leverage
       # Steps 3 to 7 over [entry, row] pairs of the blocking gates.
       def decide(task, hook, subject, gates, own_check_ids, hold_open: true)
         gates = gates.reject { |_, row| row.overridden_at }
-        return decision(:keep_pending) if gates.any? { |_, row| row.result.nil? }
-
+        running = gates.select { |_, row| row.result.nil? }
         errored = gates.select { |_, row| row.result == "error" }
         unless errored.empty?
           holds = errored.reject { |_, row| open_hold?(task, "check_error", row.id) }
             .map { |entry, row| Gating::PlannedHold.new(reason: "check_error", rule_id: entry.rule.id, rule_check_id: row.id) }
-          return decision(hook == CLAIM_HOOK ? :cancel : :keep_pending, holds_to_open: holds)
+          if hook == CLAIM_HOOK
+            return decision(:cancel, holds_to_open: holds, checks_to_withdraw: running.map { |_, row| row.id })
+          end
+
+          return decision(:keep_pending, holds_to_open: holds)
         end
+        return decision(:keep_pending) unless running.empty?
         return decision(:keep_pending) if hold_open && held?(task, own_check_ids)
 
         failed = gates.select { |_, row| row.result == "failed" }

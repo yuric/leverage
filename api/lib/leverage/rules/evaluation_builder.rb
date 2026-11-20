@@ -28,6 +28,9 @@ module Leverage
     #      blocking gate makes the outcome pending (L366); a warn gate does
     #      not (RC-16). The run on a fourth distinct input plans the row
     #      with no job and a rerun_limit hold naming it, and waits (RD-45).
+    #      A stored row met again is counted the same way: a retry of an
+    #      input already run passes (RerunLimit.reached?), but a row held
+    #      at the limit and then withdrawn never ran, and is held again.
     #
     # At action.requested the gates come first, and the approval policy is
     # planned only once every gate has a result and none failed; while a
@@ -112,16 +115,16 @@ module Leverage
         when :applied then @effects << effect(entry, row.effect) if row.effect
         when :failed then fail!(entry, row.id, row.reason)
         when :running then @pending ||= blocking?(entry.version)
-        else fresh(entry, rerun: !row.nil?)
+        else fresh(entry)
         end
       end
 
-      def fresh(entry, rerun:)
+      def fresh(entry)
         version = entry.version
         if Scope.coverage(version, @task, @request.inputs) == :not_covered
           plan(entry, result: "not_applicable") unless quiet_policy?(version)
         elsif version.checker == "model"
-          plan_model(entry, rerun)
+          plan_model(entry)
         elsif version.kind == "policy"
           plan_app_policy(entry)
         else
@@ -129,9 +132,9 @@ module Leverage
         end
       end
 
-      def plan_model(entry, rerun)
+      def plan_model(entry)
         version = entry.version
-        if blocking?(version) && !rerun && rerun_limit?(entry)
+        if blocking?(version) && rerun_limit?(entry)
           ref = plan(entry, result: nil)
           @holds << Gating::PlannedHold.new(reason: "rerun_limit", rule_id: entry.rule.id, rule_check_id: ref)
           @pending = true

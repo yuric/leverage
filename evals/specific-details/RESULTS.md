@@ -16,6 +16,8 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 | codex | codex | codex-cli 0.169.0 | the tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
 | gemini | agy | 1.5.13 | the tool's default | 2026-11-20 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
 
+"The tool's default" means no model was passed. Claude Code and Codex, run on the sign-in they hold, with no account folder leverage made (`--account-folder`), read the Mac user's own settings folders (`~/.claude`, and `~/.codex` unless `LEVERAGE_EVAL_CODEX_HOME` names another), not a folder leverage made for a seat: a model, a setting or a memory file set there may have applied, and the model that ran is not known.
+
 ## Runs on real tools
 
 72 of 270 tool runs made in all; a model gets 3 full runs and 90 tool runs.

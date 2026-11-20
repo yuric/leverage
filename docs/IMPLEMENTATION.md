@@ -796,7 +796,11 @@ with a test that failed first:
   Antigravity's ran as a seat the helper started
   ([Measurements](#measurements)).
 - **The eval suite's reach is narrow.** It ran each tool's default model
-  at the version on the owner's Mac, on 24 made-up cases labelled by an
+  at the version on the owner's Mac (Claude Code and Codex with the Mac
+  user's own settings folders, so the model they ran is not known), and
+  with the check prompt as it was before the review's fix to its frame
+  (finding 10: markers in task text broken, and one sentence added), which
+  was not run again on a real tool. It ran on 24 made-up cases labelled by an
   agent, one run each. All three models scored 24 of 24, so the suite does
   not tell them apart and says nothing about harder cases. It does not
   cover Grok, an instruction the owner edits, a model the owner chooses
@@ -1045,7 +1049,10 @@ the work waited and the time ends at the continuing agent's first event.
 
 ### The eval suite of "Every task needs specific details"
 
-No supported model missed the bar. The managing agent ran
+No supported model missed the bar. No CI check enforces the bar: CI's
+`check_evals.py` step fails on results that do not agree with the cases,
+the instruction, the registry list or the runs, and prints a missed bar as
+`MISS` without failing (RV-6), so the pull request says so first. The managing agent ran
 `LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh
 specific-details` once, on 2026-11-20, after the script's self-tests and
 its run against the stand-ins (in which the stand-ins, which pass every
@@ -1053,7 +1060,10 @@ check, missed the bar, as they should). The sign-in checks showed Claude
 Code and Codex (its default account) signed in; Grok's tool is not signed
 in on the owner's Mac, so it was not run. Each tool ran at its default
 model ("the tool's default": none names its model in a check's answer),
-on the sign-in it holds, with no second Codex account. One run per model,
+on the sign-in it holds, with no second Codex account. Claude Code and
+Codex ran with the Mac user's own settings folders, not a folder leverage
+made for a seat, so a model, a setting or a memory file set there may have
+applied, and the model they ran is not known. One run per model,
 exit 0, 72 tool runs and no second try; the bar is at least 21 of 24
 correct, at most 1 wrongly passed, no instructed pass and no leak
 ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
@@ -1853,6 +1863,52 @@ skeleton's pull request description, as rule AR-004 asks.
       asks you when it cannot.") is the next milestone's behaviour; the
       plan's "Checks tasks against your rules." was not built. The mockup
       is not edited.
+    - **Decided in answer to the milestone's adversarial review:**
+      - **PRD L367** (How a transition is gated, step 6): a blocking check
+        that ends in `error` holds the task with `check_error` at once,
+        also while another check still runs, as the Holds table's
+        "Opened when" says. Alternative: wait until every check has a
+        result, as step 6 read before.
+      - **PRD L443**: the shipped rule "Two failed reviews move a task to
+        a stronger model" is renamed "Repeated failed reviews move a task
+        to a stronger model", because its threshold can be changed and its
+        name cannot (L344). Alternative: let a shipped rule's name be
+        changed.
+      - **PRD L467**: a custom rule blocks when it is added, and like any
+        gate the owner may set it to `warn` (L338, L937; trace 17 does).
+        Alternative: refuse `warn` on a custom rule, which trace 17 would
+        then have to drop.
+      - **PRD L827**: the Speed row says the app-checked rules were on and
+        "Every task needs specific details" off, as measured.
+      - **PRD L369** (every rule check row writes `check.finished`): a row
+        held at the re-run limit that the owner lets through never ran and
+        writes none, as the contract's README says; the rule timing read
+        counts it as `overridden`, not `unfinished`. Alternative: write
+        `check.finished` withdrawn at the override, which changes trace
+        17. Listed with WP0T's review item 1 above.
+      - **Task text has length limits** in the contract (`maxLength`,
+        `maxItems`): a title or a rule's name 300 characters, a goal 4,000,
+        details, a handoff note and review notes 20,000, a criterion or an
+        action 2,000, evidence 4,000, an override's reason 2,000, a rule's
+        instruction 8,000, a work reference 2,000, and at most 50 criteria,
+        actions or failed criteria. A longer body is `422 invalid`; the
+        runner does not start a tool with a prompt over 512 KiB.
+        Alternative: no limit, and a check that cannot start ends in
+        `error` after two timeouts.
+      - **The landing prompt of an orchestrator or a planner** tells it to
+        check for work every 60 seconds, also while it works on a job
+        (`check_interval_minutes` 1, where a builder's and a reviewer's
+        stay 20), and describes jobs and commands, not a briefing, a lease
+        or a release. Alternative: the 20 minutes of L559 for every seat.
+      - **A press after a refusal sends a new key** in the app, so it is
+        asked again rather than answered with the stored refusal; a
+        request with no answer keeps its key. Alternative: keep the key
+        until the command works.
+      - **The eval suite was not run again** after the check prompt's
+        frame changed (finding 10); a case whose details forge a closing
+        marker was not added, because the suite is fixed at 24 cases with
+        recorded results and a run on real tools is the managing agent's
+        or the maintainer's. Alternative: run it again before the merge.
     - **Also for the owner to know:** after the upgrade a builder and a
       reviewer on one provider no longer review each other's work until a
       second provider is connected or the provider rule is turned off

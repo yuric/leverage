@@ -18,7 +18,8 @@ enum NeedsYouCopy: OwnerFacingCopy {
     // The five items of the rule checks.
     case refusedHeading, refusedBody, rerunHeading, rerunBody, couldNotRunHeading, couldNotRunBody
     case noReviewerHeading, noReviewerBody
-    case offlineHeading, offlineBodyOne, offlineBodyMany, offlineBodyNone, offlineCause
+    case offlineHeading, offlineBodyOne, offlineBodyMany, offlineBodyNone, offlineBodyNotSetUp, offlineCause,
+        offlineCauseSignedOut, offlineCauseLimitUntil
     case ruleLabel, reasonLabel
     case letThroughOnce, runAgain, turnRuleOff, connectAgent
     case letThroughQuestion, letThroughPlaceholder, letThroughConfirm, turnOffQuestion, turnOffConfirm, goBack
@@ -62,7 +63,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
             "A rule turned away every agent that could build {task}. It waits until you choose what happens next."
         case .rerunHeading: "Checked too many times"
         case .rerunBody:
-            "{task} was checked as many times as the rule allows without an answer. It waits until you choose what happens next."
+            "{task} was checked as many times as the rule allows, and it did not pass. It waits until you choose what happens next."
         case .couldNotRunHeading: "A check could not run"
         case .couldNotRunBody:
             "A check on {task} could not run, so the task waits. Run it again, let it through, or turn the rule off."
@@ -73,7 +74,10 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .offlineBodyOne: "{count} check is waiting. It starts on its own when the agent is back."
         case .offlineBodyMany: "{count} checks are waiting. They start on their own when the agent is back."
         case .offlineBodyNone: "Checks wait until the agent is back, and then start on their own."
+        case .offlineBodyNotSetUp: "No agent is set up to check tasks. Connect one in Agents."
         case .offlineCause: "The cause is {account}. Look at it in Credentials."
+        case .offlineCauseSignedOut: "{account} is signed out. Look at it in Credentials."
+        case .offlineCauseLimitUntil: "{account} is at its limit until {time}. Look at it in Credentials."
         case .ruleLabel: "Rule"
         case .reasonLabel: "Reason"
         case .letThroughOnce: "Let it through once"

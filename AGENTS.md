@@ -17,7 +17,8 @@ the seven shipped rules and the owner's own rules gate a task's moves,
 checked in the server or by the orchestrator agent, with Settings, a
 Timing section and a rule checklist in the app. That is shown end to end
 with stand-in provider tools. Real providers have run through it only in
-the maintainer's developer checks: one Gemini build to Done through the
+developer checks run by the maintainer or the managing agent of a
+delegated run: one Gemini build to Done through the
 app, and an orchestrator on each of Claude Code, Codex and Antigravity
 checking two contracts; no real reviewer or planner has, and no
 interruption has been shown on a real provider. The repository holds the documentation,
@@ -346,15 +347,16 @@ driver's flags only. Its self-test runs in the `e2e` job with stand-in
 tools.
 
 The eval suite's run and the real rule checks reach real tools too, and
-are run by the maintainer only, never in CI, each with its switch set by
-hand (`LEVERAGE_EVAL_REAL=1`, `LEVERAGE_REAL_PROVIDER`):
+are run only by the maintainer or the managing agent of a delegated run,
+never in CI, each with its switch set by hand (`LEVERAGE_EVAL_REAL=1`,
+`LEVERAGE_REAL_PROVIDER`):
 
 ```bash
 LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
 LEVERAGE_REAL_PROVIDER=claude scripts/real_rule_check.sh claude   # or codex, gemini; gemini --through-app
 ```
 
-An agent never sets either switch. Against the stand-ins, with
+No other agent sets either switch. Against the stand-ins, with
 `LEVERAGE_TOOL_DIR` on a copy of `mac/Tests/StandIns/bin` and the switch
 unset, anyone may run both (`eval_rule.sh` also needs `--out <folder>`).
 How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).

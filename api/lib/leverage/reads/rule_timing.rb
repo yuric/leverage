@@ -28,7 +28,8 @@ module Leverage
     # - the wait_review steps that name the rule as their cause (RD-11).
     #
     # Tokens and spend are its jobs' results (L317). Its rows are counted
-    # by result, a row with none yet as "unfinished" (L318), and its
+    # by result, a row with none yet as "unfinished" (L318), the row held
+    # at the re-run limit and overridden as "overridden", and its
     # overrides by overridden_at. A removed rule is answered too: its checks
     # still ran. Ids and figures only: no rule text, which is the owner's.
     module RuleTiming
@@ -103,8 +104,15 @@ module Leverage
           "average_run_seconds" => (number(runs.sum(0r) / runs.size) if runs.any?),
           "held_up_seconds" => number(held), "tokens" => mine.sum { |attempt| attempt.tokens.to_i },
           "spend" => number(mine.sum(0r) { |attempt| attempt.spend.to_r }),
-          "results" => checks.group_by { |check| check.result || "unfinished" }.transform_values(&:size),
+          "results" => checks.group_by { |check| result_of(check) }.transform_values(&:size),
           "overrides" => checks.count(&:overridden_at) }
+      end
+
+      # A row's result as counted: its result, else "overridden" for the
+      # row held at the re-run limit that the owner let through (it never
+      # ran and never gets one; RD-45), else "unfinished" (L318).
+      def result_of(check)
+        check.result || (check.overridden_at ? "overridden" : "unfinished")
       end
 
       # rule_id => Rational seconds the rule held tasks up (L316).

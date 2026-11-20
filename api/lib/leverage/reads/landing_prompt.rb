@@ -21,6 +21,12 @@ module Leverage
     # L794); the briefing tells the agent what each call is for.
     module LandingPrompt
       CHECK_INTERVAL_MINUTES = 20
+      # An orchestrator or a planner is offline 90 seconds after its last
+      # poll (PRD L401; Leverage::RolePresence::OFFLINE_AFTER), so it checks
+      # for work every minute, also while it works on a job (milestone 4
+      # review, finding 19).
+      JOB_CHECK_INTERVAL_MINUTES = 1
+      JOB_ROLES = %w[orchestrator planner].freeze
       TEMPLATE = "landing_prompt.md.erb".freeze
 
       # The seat is one the app runs, which needs no prompt (409 invalid_state).
@@ -43,8 +49,16 @@ module Leverage
         def heartbeat_call = calls.find { |call| call.id.start_with?("heartbeat_") }
         def release_call = calls.find { |call| call.id.start_with?("release_") }
         def claim_call = calls.find { |call| call.id.start_with?("claim_next_") }
+        def command_call = calls.find { |call| call.id == "get_command" }
+        def submit_job_call = calls.find { |call| call.id == "submit_job_result" }
+        # An orchestrator or a planner: it claims jobs, and has no briefing,
+        # no lease and no release.
+        def job_role? = JOB_ROLES.include?(role)
         # What the role holds one of at a time.
-        def unit = role == "reviewer" ? "review" : "task"
+        def unit = job_role? ? "job" : (role == "reviewer" ? "review" : "task")
+        def article = role.match?(/\A[aeiou]/) ? "an" : "a"
+        # How often it checks for work, in words.
+        def check_interval = job_role? ? "60 seconds" : "#{check_interval_minutes} minutes"
         def get_binding = binding
       end
 
@@ -63,13 +77,15 @@ module Leverage
           raise UnusableAddress, "The address cannot be used in a command" unless ADDRESS.match?(base_url)
 
           lease_seconds = Workspace.where(id: workspace_id).pick(:lease_length_seconds)
-          { text: render(page(seat, base_url, lease_seconds)), check_interval_minutes: CHECK_INTERVAL_MINUTES }
+          page = page(seat, base_url, lease_seconds)
+          { text: render(page), check_interval_minutes: page.check_interval_minutes }
         end
       end
 
       def page(seat, base_url, lease_seconds)
         Page.new(seat_name: seat.name, role: seat.role, base_url: base_url, calls: calls_for(seat.role),
-          lease: duration(lease_seconds), check_interval_minutes: CHECK_INTERVAL_MINUTES)
+          lease: duration(lease_seconds),
+          check_interval_minutes: JOB_ROLES.include?(seat.role) ? JOB_CHECK_INTERVAL_MINUTES : CHECK_INTERVAL_MINUTES)
       end
 
       # The calls the role may make that the server serves, in the order

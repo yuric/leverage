@@ -187,7 +187,8 @@ module Leverage
     # when its run is on its first candidate available at at for the work
     # (nil asks rule 2 only). Its run is on the credential its token was
     # issued for, or its own for a token issued before that was recorded
-    # (SeatRuns.run_credential_id, HD-3).
+    # (SeatRuns.run_credential_id, HD-3). Public: a provisional claim asks
+    # it again when its check settles (Entries::Claim).
     def placed_for?(seat, work, at)
       return true unless seat.credential_id
 
@@ -278,7 +279,7 @@ module Leverage
       false
     end
 
-    private_class_method :lost_task_refusal, :lost_review_refusal, :holds_anything?, :placed_for?, :open_reviews,
+    private_class_method :lost_task_refusal, :lost_review_refusal, :holds_anything?, :open_reviews,
       :review_provider, :overridden_claim_task_ids, :claim_hash, :open_hold_task_ids, :built_by, :held_when_cancelled?,
       :reviewed_when_cancelled?
   end

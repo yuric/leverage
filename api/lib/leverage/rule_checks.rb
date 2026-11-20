@@ -172,16 +172,35 @@ module Leverage
         action_id: (check.subject_id if check.subject_kind == ACTION)), **as)
     end
 
+    # The request fields a check's material is built from (JobInputs): the
+    # requested contract at ready to start, the handoff note, the review
+    # notes.
+    REQUEST_FIELDS = %w[title goal details criteria handoff_note notes].freeze
+
     # RC-33's rule check input; the hook's inputs from the waiting
-    # command's stored request (RE-2), else the command's own.
+    # command's stored request (RE-2), else the earlier attempt's stored
+    # request (a re-run), else the command's own. The request fields the
+    # material needs are stored with it (params): a warn rule's check has
+    # no command waiting on it, or its transition's request is emptied
+    # when a blocking check settles the move first, and JobInputs still
+    # hands the checker what the request held (milestone 4 review, finding
+    # 8). The job's input is a row, never an event.
     def job_input(ctx, check, task, number)
       pending = check.pending_transition_id && PendingTransition.find_by(id: check.pending_transition_id)
-      params = pending&.params || ctx.request.params
+      params = pending&.params.presence || stored_params(check) || ctx.request.params
       inputs = HookInputs.for(hook: check.hook, task: task, params: params,
         seat: (Seat.find(check.subject_id) if check.subject_kind == "seat"),
         review: (Review.find(check.subject_id) if check.subject_kind == "review"))
       { rule_check_id: check.id, attempt_number: number, rule_version_id: check.rule_version_id, hook: check.hook,
-        task_id: task&.id, project_id: task&.project_id, inputs: inputs }.deep_stringify_keys
+        task_id: task&.id, project_id: task&.project_id, inputs: inputs,
+        params: params.to_h.stringify_keys.slice(*REQUEST_FIELDS) }.deep_stringify_keys
+    end
+
+    # The request an earlier attempt of the check stored on its job, or
+    # nil.
+    def stored_params(check)
+      job_ids = RuleCheckAttempt.where(rule_check_id: check.id).where.not(job_id: nil).order(:attempt_number).pluck(:job_id)
+      Job.where(id: job_ids).order(:attempt_number).map { |job| job.input.to_h["params"] }.compact.last.presence
     end
 
     def attempt(ctx, check, job:, started:, finished:, queued_at: nil, **_as)
@@ -263,7 +282,7 @@ module Leverage
         .order(:seq).last
     end
 
-    private_class_method :row_for, :emit_queued, :job_input, :attempt, :end_attempt, :time_of, :next_attempt_number, :latest_attempt, :emit_finished,
+    private_class_method :row_for, :emit_queued, :job_input, :stored_params, :attempt, :end_attempt, :time_of, :next_attempt_number, :latest_attempt, :emit_finished,
       :wait_cause, :payload, :claimant, :emit, :task_of, :last_event
   end
 end

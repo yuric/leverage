@@ -161,7 +161,8 @@ final class RuleEditorModel {
 
     /// Add rule, or Save rule. A key is kept while its command has not worked,
     /// so pressing again sends the same command, and dropped when the form
-    /// changes, because the server refuses one key with two bodies.
+    /// changes, because the server refuses one key with two bodies, and when
+    /// the server answered with a refusal (`IdempotencyKey.isKept(after:)`).
     func save() async {
         guard canSave else { return }
         state = .sending
@@ -180,6 +181,10 @@ final class RuleEditorModel {
             }
             finish()
         } catch {
+            if !IdempotencyKey.isKept(after: error) {
+                lastAdd = nil
+                lastSave = nil
+            }
             state = .failed(ShellCopy.sentence(for: error))
         }
     }
@@ -194,6 +199,7 @@ final class RuleEditorModel {
             _ = try await api.revertRule(ruleID: row.rule.id, key: key).completedResult()
             finish()
         } catch {
+            if !IdempotencyKey.isKept(after: error) { revertKey = nil }
             state = .failed(ShellCopy.sentence(for: error))
         }
     }
@@ -208,6 +214,7 @@ final class RuleEditorModel {
             _ = try await api.removeRule(ruleID: row.rule.id, key: key).completedResult()
             finish()
         } catch {
+            if !IdempotencyKey.isKept(after: error) { removeKey = nil }
             state = .failed(ShellCopy.sentence(for: error))
         }
     }

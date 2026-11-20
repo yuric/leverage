@@ -36,7 +36,19 @@ once it makes its first release.
   24 cases, which Claude Code, Codex and Antigravity each passed at their
   default model. The server's request log now keeps no text but ids. The
   PRD gains the changes S-1 to S-14; the choices are recorded in ADRs 0011
-  to 0013.
+  to 0013. After an adversarial review of the milestone: a waiting submit
+  or pass completes when its rule is turned off, removed or saved; the
+  re-run limit holds across a release; a check that cannot run while the
+  orchestrator is online always opens its item, at once, beside another
+  running check; turning a rule on again holds a task every agent was
+  turned away from; cancelling a task withdraws all its checks and jobs; a
+  waiting claim lapses for an agent that may no longer claim; a "note it"
+  rule's check judges what the request held; task text has length limits;
+  a checker's prompt breaks markers planted in task text; a builder sent
+  back by a rule's check reads the rule and its reason; an agent that
+  claims jobs is told to check for work every minute; a press after a
+  refusal sends a new request; and the Needs you and Timing wording is
+  plainer.
 - Added handoff: work continues on the next account when one reaches its
   limit or is signed out, Needs you with notifications, the Handoff tab,
   pausing and editing tasks and agents, and a daily backup. The PRD's

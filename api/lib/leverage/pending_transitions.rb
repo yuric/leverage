@@ -27,6 +27,12 @@ module Leverage
     # Refusals that do not end a waiting command at re-entry: a hold leaves
     # it running (L378, RE-4), and the task answers pending to its holder.
     KEEP_RUNNING = %w[on_hold pending].freeze
+    # Refusals a waiting command is not met with again at re-entry: it was
+    # sent on the briefing it had, and its holder cannot acknowledge again
+    # while it waits (acknowledge_briefing is not allowed while pending).
+    # A rule turned off, removed or saved changes the briefing, and the
+    # transition still completes if nothing else blocks it (L379).
+    IGNORED_AT_REENTRY = %w[briefing_not_acknowledged briefing_changed].freeze
     # The hooks whose command a pending transition stores (rules 6, 7).
     GATE_HOOKS = %w[task.before_ready task.before_claim task.before_submit task.before_done].freeze
 
@@ -78,6 +84,7 @@ module Leverage
         open_holds(ctx, pending, decision.holds_to_open, **as)
       when :keep_pending then open_holds(ctx, pending, decision.holds_to_open, **as)
       end
+      open_missing_error_item(ctx, pending, trigger, **as) if %i[keep_pending cancel].include?(decision.action)
       decision
     end
 
@@ -203,7 +210,8 @@ module Leverage
     # --- private -------------------------------------------------------------
 
     # The code of a refusal the stored command meets now, as its requester,
-    # or nil (rule 9). A hold and the pending answer itself do not count.
+    # or nil (rule 9). A hold, the pending answer itself and the briefing
+    # (IGNORED_AT_REENTRY) do not count.
     def refused_now(ctx, pending)
       codes = nil
       ctx.as_requester(pending, cause_id: nil) do
@@ -211,7 +219,7 @@ module Leverage
         entry.load(ctx)
         codes = entry.refusals(ctx).map { |refusal| refusal.is_a?(Transitions::Refusal) ? refusal.code : refusal.to_s }
       end
-      Transitions::Precedence.first(codes - KEEP_RUNNING)&.code
+      Transitions::Precedence.first(codes - KEEP_RUNNING - IGNORED_AT_REENTRY)&.code
     rescue Transitions::NotFound, Transitions::Invalid
       "invalid_state"
     end
@@ -270,6 +278,29 @@ module Leverage
 
         Transitions::Gate.open_hold(ctx, task, hold, check_id: hold.rule_check_id, **as)
       end
+    end
+
+    # A check that has just ended in error (the trigger's check) while the
+    # orchestrator is online gets its "A check could not run" item (L400)
+    # when its check_error hold is already open with none: the hold was
+    # opened while the orchestrator was offline, which opens no item
+    # (SM-39), and the orchestrator's return queued the check again. The
+    # item opens by the app, with the check's check.finished of this
+    # command as cause, as Gate.open_hold opens it; with it open, the
+    # orchestrator_offline timer leaves the check with the owner.
+    def open_missing_error_item(ctx, pending, trigger, **as)
+      return unless trigger.kind == :check_timed_out && trigger.rule_check_id
+      return unless RolePresence.online?(ctx.workspace, "orchestrator", ctx.at)
+
+      check = RuleCheck.find_by(id: trigger.rule_check_id, pending_transition_id: pending.id, result: "error", overridden_at: nil)
+      hold = check && Hold.find_by(workspace_id: pending.workspace_id, task_id: pending.task_id, reason: "check_error",
+        rule_check_id: check.id, closed_at: nil)
+      return unless hold
+
+      cause = ctx.events.reverse.find { |event| event.type == "check.finished" && event.subject_id == check.id }
+      fields = { actor_kind: "app", actor_id: nil }.merge(RuleChecks.event_fields(as))
+      Holds.open_item(ctx, hold, task: Task.find(pending.task_id), facts: { rule_id: check.rule_id, rule_check_id: check.id },
+        cause_id: cause&.id, **fields)
     end
 
     # The choice a check's own hold's item is resolved with when the check
@@ -331,7 +362,8 @@ module Leverage
         Review.where(workspace_id: workspace_id, id: ids).pluck(:task_id)
     end
 
-    private_class_method :refused_now, :loaded_entry, :close_settled_holds, :cause_of, :settle, :lapse_claim, :open_holds, :close_own_holds,
+    private_class_method :refused_now, :loaded_entry, :close_settled_holds, :cause_of, :settle, :lapse_claim, :open_holds,
+      :open_missing_error_item, :close_own_holds,
       :waiting_tasks, :named_task_ids
   end
 end

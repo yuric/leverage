@@ -314,7 +314,7 @@
       "post": {
         "operationId": "heartbeat_task",
         "summary": "Renews the lease.",
-        "description": "Writes no event. After the lease's due time it is refused with `lease_expired`.",
+        "description": "Writes no event. After the lease's due time it is refused with `lease_expired`. `lease_due_at` is the lease's due time; while a hold pauses the lease it is the time the lease would be due if its clock ran from now, and a provisional claimant's heartbeat (the claim waits on a check, so the seat holds the Ready task with no lease) grants nothing and answers the time a lease would be due if one ran from now (milestone 4 plan SM-14, RE-5).",
         "tags": [
           "agent"
         ],
@@ -7010,7 +7010,7 @@
       "post": {
         "operationId": "report_limit",
         "summary": "Reports that a run hit a provider limit.",
-        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_limit, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8). Until jobs arrive, a report that names a job answers 404 (milestone 3 plan HE-33).",
+        "description": "Writes `credential.limit_reached` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_limit, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8).",
         "tags": [
           "helper"
         ],
@@ -7092,7 +7092,7 @@
       "post": {
         "operationId": "report_signed_out",
         "summary": "Reports that a login was found signed out.",
-        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_signed_out, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8). Until jobs arrive, a report that names a job answers 404 (milestone 3 plan HE-33).",
+        "description": "Writes `credential.signed_out` and, when a candidate below is available, `credential.switched`; the events carry this call's Idempotency-Key as `command_id`. With `job_id` set it runs report_job_signed_out, which reads no task state; with no candidate the job is left to its run timeout. It answers `completed`, and its `result` is null: the helper learns what to do next from get_helper_next (milestone 3 plan HE-8).",
         "tags": [
           "helper"
         ],
@@ -9282,7 +9282,8 @@
               },
               "value": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 4000
               }
             },
             "required": [
@@ -9380,13 +9381,15 @@
         "additionalProperties": false,
         "properties": {
           "handoff_note": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "work_reference": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 2000
           }
         },
         "required": [
@@ -9441,10 +9444,12 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "The criteria that failed; empty on a pass."
+            "description": "The criteria that failed; empty on a pass.",
+            "maxItems": 50
           },
           "notes": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "tokens": {
             "type": "integer",
@@ -9701,7 +9706,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 2000
           },
           "minimum_strength_rank": {
             "type": [
@@ -10085,7 +10091,8 @@
         "properties": {
           "text": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2000
           },
           "kind": {
             "type": "string",
@@ -10121,7 +10128,8 @@
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -10142,30 +10150,35 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "goal": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           },
           "details": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 20000
           },
           "criteria": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CriterionInput"
             },
-            "minItems": 1
+            "minItems": 1,
+            "maxItems": 50
           },
           "actions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActionInput"
-            }
+            },
+            "maxItems": 50
           },
           "minimum_strength_rank": {
             "type": [
@@ -10185,7 +10198,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 2000
           }
         },
         "required": [
@@ -10232,7 +10246,8 @@
             "items": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "maxItems": 50
           }
         },
         "required": [
@@ -10421,29 +10436,34 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "goal": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           },
           "details": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 20000
           },
           "criteria": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CriterionInput"
-            }
+            },
+            "maxItems": 50
           },
           "actions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActionInput"
-            }
+            },
+            "maxItems": 50
           },
           "project_id": {
             "type": [
@@ -10464,7 +10484,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 2000
           },
           "state": {
             "type": "string",
@@ -10610,7 +10631,8 @@
         "properties": {
           "reason": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -10904,11 +10926,13 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "instruction": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 8000
           },
           "hook": {
             "type": "string",
@@ -10954,13 +10978,15 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "instruction": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 8000
           },
           "parameters": {
             "type": [
@@ -16181,7 +16207,7 @@
       "LandingPrompt": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work when it has none.",
+        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job, because the role counts as offline 90 seconds after its last poll (PRD L401; milestone 4 review, finding 19).",
         "properties": {
           "text": {
             "type": "string",
@@ -16189,7 +16215,10 @@
           },
           "check_interval_minutes": {
             "type": "integer",
-            "const": 20
+            "enum": [
+              1,
+              20
+            ]
           }
         },
         "required": [

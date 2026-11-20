@@ -42,8 +42,9 @@ struct CheckRowContent: Identifiable, Equatable, Sendable {
 
 extension TaskPageModel {
     /// The Timing section, or nil when the read carries no steps. The time before
-    /// the task left Ideas is listed apart; the rows and that time add up to
-    /// the total, which is the page's lifetime (RD-28).
+    /// the task left Ideas is listed apart, outside the total: the total runs
+    /// from the move to Backlog, as the reports measure a task (PRD rule 7,
+    /// L282, L321), so the rows alone add up to it (review finding 23).
     var timing: TimingContent? {
         guard let page, !page.steps.isEmpty else { return nil }
         var rows: [TimingRow] = []
@@ -58,9 +59,9 @@ extension TaskPageModel {
             rows.append(Self.timingRow(index, step.kind, step.seconds, open: step.closedAt == nil))
         }
         let beforeIdeas = ideaIndex.map { Self.timingRow($0, .idea, ideaSeconds, open: false) }
+        let total = max(page.lifetimeSeconds - ideaSeconds, 0)
         return TimingContent(
-            rows: rows, beforeIdeas: beforeIdeas, totalSeconds: page.lifetimeSeconds,
-            totalText: Self.duration(page.lifetimeSeconds))
+            rows: rows, beforeIdeas: beforeIdeas, totalSeconds: total, totalText: Self.duration(total))
     }
 
     private static func timingRow(_ index: Int, _ kind: StepKind, _ seconds: Double, open: Bool) -> TimingRow {

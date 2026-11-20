@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The task page's Timing section: each step's time in order, the time before
-/// the task left Ideas apart, and the total, which is the task's lifetime
-/// (RD-28).
+/// The task page's Timing section: each step's time in order, the total from
+/// the move to Backlog, and the time before the task left Ideas apart, after
+/// the total (RD-28; PRD rule 7).
 struct TimingSection: View {
     let timing: TimingContent
 
@@ -15,11 +15,11 @@ struct TimingSection: View {
                 ForEach(timing.rows) { row in
                     line(row.name, time: row.durationText, open: row.isOpen)
                 }
+                Divider()
+                line(TaskPageCopy.timingTotal.text, time: timing.totalText, open: false, bold: true)
                 if let ideas = timing.beforeIdeas {
                     line(TaskPageCopy.timingBeforeIdeas.text, time: ideas.durationText, open: false)
                 }
-                Divider()
-                line(TaskPageCopy.timingTotal.text, time: timing.totalText, open: false, bold: true)
             }
         }
         .accessibilityElement(children: .contain)

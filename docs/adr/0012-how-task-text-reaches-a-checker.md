@@ -37,6 +37,14 @@ and RD-39.
    A draft's blocks are `title`, `goal`, `details`, `criteria` and
    `brief`, and its answer is one JSON object between
    `LEVERAGE-DRAFT-<nonce>-BEGIN` and `-END`.
+   The text inside a block has its markers broken (`<<<` becomes `<< <`,
+   and `LEVERAGE-`, in any case, loses its hyphen), so no line in it can
+   open or close a block or carry an answer's marker, and the opening of
+   the blocks says that a block opens and closes only on a line that
+   carries the run's code, and that any other line inside one is quoted
+   text. The nonce keeps a forged marker from closing a block for the
+   parsers; the broken markers and that sentence keep it from reading as
+   one to the model.
 3. **The answer is read only where it carries the nonce.**
    `VerdictParser` reads only lines with the run's nonce, takes exactly
    one verdict line and at most one reason line, and drops everything
@@ -46,10 +54,14 @@ and RD-39.
    back the stored work reference, minimum strength and budget cap, which
    the server keeps whatever a result says (RD-37).
 4. **The check run.** The drivers' check mode (`ToolPurpose.check`), as
-   milestone 2 merged it for the answering check, in a new empty folder
-   made for the run and removed after it, with the allow-listed
-   environment, and a time limit that ends 10 seconds before the job's
-   `run_due_at` (RD-34). Gemini's never adds `--mode plan`, in which `agy`
+   milestone 2 merged it for the answering check, with the seat's model
+   and effort added when the seat sets them (`--model` and `--effort` for
+   Claude and Antigravity, `-m` for Codex and Grok; `help`, never run in
+   check mode), in a new empty folder made for the run and removed after
+   it, with the allow-listed environment, and a time limit that ends 10
+   seconds before the job's `run_due_at` (RD-34). A prompt over 512 KiB is
+   not started: a tool gets its prompt as one argument, which the Mac
+   refuses past 1 MiB, so the job fails at once with a logged reason. Gemini's never adds `--mode plan`, in which `agy`
    answered with a plan and not the word. What such a run can reach if an
    instruction in task text got past the frame differs by provider, and
    no more than this is claimed (RD-33):

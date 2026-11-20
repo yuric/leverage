@@ -844,6 +844,15 @@ tool's default model (`probe`); Grok's has never run.
 | Gemini | `agy -p <prompt> --output-format json --print-timeout <n>s`, never `--mode plan` | `probe` |
 | Grok | `grok -p <prompt> --cwd <empty folder>` | `help` |
 
+A job's run also passes the seat's model and effort when the seat sets
+them (`--model` and `--effort` for Claude and Antigravity, `-m` for Codex
+and Grok), at the `help` level: every check that has run so far ran with
+no model set, so these flags have never run in check mode. A prompt over
+512 KiB is not started, because a tool gets its prompt as one argument and
+the Mac starts no program whose arguments pass 1 MiB; the job fails at
+once with the reason in the runner's log, and the server's length limits
+on task text keep a contract well under it.
+
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.
 No installer and no sign-in command has been run by an agent. The tool's
@@ -909,20 +918,15 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
 - **Task text reaches a checker only as material**
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
   check's or a draft's prompt every piece of task text, the contract
-  included, is inside a block marked with a nonce made for that run, and
-  the verdict is read only from lines that carry the nonce; anything else
-  the tool prints is dropped unlogged. A rule's instruction is the owner's
+  included, is inside a block marked with a nonce made for that run, with
+  every marker in the text broken so that no line in it looks like one,
+  and the verdict is read only from lines that carry the nonce; anything
+  else the tool prints is dropped unlogged. A rule's instruction is the owner's
   text and stands outside the blocks, as the checker's instruction. A
-  checker's run starts in a new empty folder, which is not a wall: what it
-  can reach if an instruction in task text got past the frame is this, and
-  no more is claimed:
-
-  | Provider | The check run | What it can reach | Evidence |
-  | --- | --- | --- | --- |
-  | Claude | `--tools ""` | Nothing: the model has no tools | `probe` |
-  | Codex | `--sandbox read-only`, started in the empty folder | It cannot write, but it can run read-only commands, and so read any file the Mac user can read, the task's work folder included. The empty folder is only where it starts | The flag `probe`; its reach as the tool's help describes it, not tried here |
-  | Gemini | The answering check, without `--mode plan` (in that mode agy answered with a plan, not the word) | Not observed | The command `probe`; its tool permissions never observed |
-  | Grok | `grok -p <prompt> --cwd <empty folder>` | Not observed | `help`; never run |
+  checker's run starts in a new empty folder, which is not a wall. What a
+  checker's run can reach if an instruction in task text got past the
+  frame differs by provider; ADR 0012, decision 4, says what is claimed for
+  each.
 
   A checker's reason is at most 500 characters, stays in its row, and
   reaches a builder's tool only as quoted material. A refused command's

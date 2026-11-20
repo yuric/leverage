@@ -155,6 +155,7 @@ final class NeedsYouModel {
             }
             let page = try await api.listInbox(afterSeq: nil, wait: nil)
             let open = page.items.filter { $0.state == .open }.sorted { $0.openedSeq < $1.openedSeq }
+            names = await names.checkingOrchestrator(for: open, from: api)
             let notes = try await readRuleNotes(for: open)
             guard mine == generation else { return }
             (checkNotes, ruleNames) = notes

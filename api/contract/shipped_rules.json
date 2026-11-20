@@ -86,7 +86,7 @@
     },
     {
       "key": "escalate_after_failed_reviews",
-      "name": "Two failed reviews move a task to a stronger model",
+      "name": "Repeated failed reviews move a task to a stronger model",
       "prd_checker": "App. Parameter: threshold, default 2.",
       "prd_when_off": "Rework returns to the same builder.",
       "hook": "review.failed",

@@ -6,6 +6,12 @@ import LeverageKit
 struct NeedsYouNames: Sendable {
     var tasks: [UUID: String] = [:]
     var credentials: [UUID: Credential] = [:]
+    /// Whether an agent is set up to check tasks: false only when the health
+    /// read says none is (`not_set_up`), so the offline item does not talk
+    /// of an agent coming back (review finding 27).
+    var orchestratorSetUp = true
+    /// The clock a reset time is written with.
+    var clock: ResetClock = .system
 
     /// The task's title, or "A task" when the board did not say.
     func taskTitle(_ id: UUID?) -> String {
@@ -19,6 +25,30 @@ struct NeedsYouNames: Sendable {
     }
 
     func provider(of id: UUID?) -> Provider? { id.flatMap { credentials[$0]?.provider } }
+
+    /// The sentence that names the account the Orchestrator offline item
+    /// says is the cause, with what holds it back (L401): signed out, at its
+    /// limit until a time, or, when neither is known, the account alone.
+    func offlineCause(_ id: UUID) -> String {
+        let account = accountName(id)
+        guard let credential = credentials[id] else { return NeedsYouCopy.offlineCause.filled(["account": account]) }
+        if credential.state == .signedOut { return NeedsYouCopy.offlineCauseSignedOut.filled(["account": account]) }
+        if credential.isLimited(at: clock.now()), let until = credential.limitedUntil {
+            return NeedsYouCopy.offlineCauseLimitUntil.filled(
+                ["account": account, "time": ResetTime.text(for: until, clock: clock)])
+        }
+        return NeedsYouCopy.offlineCause.filled(["account": account])
+    }
+
+    /// The names, and whether an agent is set up to check tasks when one of
+    /// the items is the Orchestrator offline item (read from the health
+    /// line only then; a read that fails keeps the "is back" wording).
+    func checkingOrchestrator(for items: [InboxItem], from owner: any OwnerAPI) async -> NeedsYouNames {
+        guard items.contains(where: { $0.kind == .orchestratorOffline }) else { return self }
+        var names = self
+        if let health = try? await owner.systemHealth() { names.orchestratorSetUp = health.orchestrator != .notSetUp }
+        return names
+    }
 
     /// Reads the board and the credentials, in that order, so that the lower
     /// of their two positions is a point the events tail can start from
@@ -119,6 +149,7 @@ enum NeedsYouWords {
         case .checkCouldNotRun: return NeedsYouCopy.couldNotRunBody.filled(["task": task])
         case .noReviewerEligible: return NeedsYouCopy.noReviewerBody.filled(["task": task])
         case .orchestratorOffline:
+            guard names.orchestratorSetUp else { return NeedsYouCopy.offlineBodyNotSetUp.text }
             let waiting = item.waitingChecks ?? 0
             var lines: [String] = []
             if waiting == 1 {
@@ -128,7 +159,7 @@ enum NeedsYouWords {
             } else {
                 lines.append(NeedsYouCopy.offlineBodyNone.text)
             }
-            if credential != nil { lines.append(NeedsYouCopy.offlineCause.filled(["account": account])) }
+            if let credential { lines.append(names.offlineCause(credential)) }
             return lines.joined(separator: " ")
         default: return ""
         }

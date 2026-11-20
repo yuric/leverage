@@ -5,6 +5,11 @@ module Leverage
   # material, built when the job is claimed from the rows, never stored in
   # an event. Reads only.
   #
+  # A rule check's request is the waiting command's stored one, else the
+  # one stored on its job when it was queued (RuleChecks.job_input: a warn
+  # rule's check, or one whose move another check settled first), and its
+  # inputs are those stored on the job, which its hash was taken over.
+  #
   # A rule check's material is everything its checker needs: the
   # orchestrator's role file, the frozen rule version's instruction, the
   # moment (hooks.json), whether "not applicable" is an answer (a "let the
@@ -44,7 +49,7 @@ module Leverage
       version = RuleVersion.find_by!(id: check.rule_version_id, workspace_id: job.workspace_id)
       pending = check.pending_transition_id &&
         PendingTransition.find_by(id: check.pending_transition_id, workspace_id: job.workspace_id)
-      params = pending&.params || {}
+      params = pending&.params.presence || job.input.to_h["params"] || {}
       seat = check.subject_kind == "seat" ? Seat.find_by(id: check.subject_id, workspace_id: job.workspace_id) : nil
       review = check.subject_kind == "review" ? Review.find_by(id: check.subject_id, workspace_id: job.workspace_id) : nil
       if seat.nil? && pending&.requester_kind == "seat"
@@ -53,7 +58,8 @@ module Leverage
       {
         "rule_check_id" => check.id, "attempt_number" => attempt_number(job, check), "rule_version_id" => version.id,
         "hook" => check.hook, "task_id" => task.id, "project_id" => task.project_id,
-        "inputs" => HookInputs.for(hook: check.hook, task: task, params: params, seat: seat, review: review),
+        "inputs" => job.input.to_h["inputs"].presence ||
+          HookInputs.for(hook: check.hook, task: task, params: params, seat: seat, review: review),
         "material" => {
           "role_file" => RoleFiles.text("orchestrator"), "instruction" => version.instruction.to_s,
           "moment" => moment(check.hook), "may_answer_not_applicable" => version.scope_kind == "checker_decides",
