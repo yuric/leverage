@@ -87,6 +87,7 @@ check "CI is set to anything" 2 CI=1 "${stand_in[@]}" -- specific-details --out 
 check "no LEVERAGE_EVAL" 2 "LEVERAGE_TOOL_DIR=$standins/bin" -- specific-details --out "$work/out"
 check "LEVERAGE_EVAL but neither LEVERAGE_TOOL_DIR nor LEVERAGE_EVAL_REAL" 2 \
   LEVERAGE_EVAL=specific-details -- specific-details --out "$work/out"
+check "LEVERAGE_EVAL, neither switch and no --out" 2 LEVERAGE_EVAL=specific-details -- specific-details
 check "LEVERAGE_EVAL names another suite" 2 LEVERAGE_EVAL=approvals "LEVERAGE_TOOL_DIR=$standins/bin" -- \
   specific-details --out "$work/out"
 check "the argument names another suite" 2 "${stand_in[@]}" -- approvals --out "$work/out"

@@ -237,11 +237,19 @@ struct EvalRunTests {
         #expect(try setup.results().map { Self.string($0["verdict"]) } == ["passed"])
     }
 
-    @Test("a tool missing from LEVERAGE_TOOL_DIR is not looked for anywhere else")
+    @Test("a tool missing from LEVERAGE_TOOL_DIR is not looked for anywhere else, PATH included")
     func missingTool() async throws {
         let setup = try Setup()
+        let elsewhere = try setup.folder.folder("elsewhere")
+        try FileManager.default.copyItem(at: setup.tools.tool("claude"), to: elsewhere.appendingPathComponent("claude"))
         try FileManager.default.removeItem(at: setup.tools.tool("claude"))
-        #expect(await setup.run() == 1)
+        let home = try setup.folder.folder("home")
+        try FileManager.default.createDirectory(
+            at: home.appendingPathComponent(".local/bin"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(
+            at: elsewhere.appendingPathComponent("claude"), to: home.appendingPathComponent(".local/bin/claude"))
+        #expect(await setup.run(environment: setup.environment(["PATH": elsewhere.path, "HOME": home.path])) == 1)
+        #expect(try setup.tools.calls().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: setup.out.path))
     }
 
@@ -258,13 +266,18 @@ struct EvalRunTests {
         ("with a LEVERAGE_TOOL_DIR that is not absolute", ["LEVERAGE_TOOL_DIR": "StandIns/bin"]),
     ]
 
+    /// Each refusal is asked with an inputs file that does not exist: were a
+    /// guard broken, the run would stop at the inputs (exit 1) before any
+    /// tool is looked for, so no test can reach a real tool on the real path.
     @Test("it refuses to start, with exit 2, and starts no tool", arguments: 0..<refusals.count)
     func refuses(index: Int) async throws {
         let (name, changes) = Self.refusals[index]
         let setup = try Setup()
         var environment = setup.environment()
         for (key, value) in changes { environment[key] = value }
-        #expect(await setup.run(environment: environment) == 2, "\(name)")
+        var arguments = setup.arguments()
+        arguments[1] = setup.folder.path("no-such-inputs.json").path
+        #expect(await setup.run(arguments, environment: environment) == 2, "\(name)")
         #expect(try setup.tools.calls().isEmpty, "\(name)")
         #expect(!FileManager.default.fileExists(atPath: setup.out.path), "\(name)")
     }

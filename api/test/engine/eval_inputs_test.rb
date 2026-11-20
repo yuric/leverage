@@ -47,16 +47,18 @@ class EvalInputsTest < ActiveSupport::TestCase
 
   setup do
     use_scenario
-    @orchestrator = scenario.orchestrator(credential: scenario.credential(provider: "codex", model: nil),
-      model: "codex-model-1")
     @rule = scenario.rule(key: "specific_details", origin: "shipped")
   end
 
-  # What claim_job hands the orchestrator for a Backlog task whose Complete
-  # contract with this contract waits on the shipped rule's check.
+  # What claim_job hands an orchestrator for a Backlog task whose Complete
+  # contract with this contract waits on the shipped rule's check. Each
+  # claim is a new orchestrator's: a seat that holds a job gets that job
+  # again (RD-40).
   def claimed_input(contract)
     _task, _pending, check = waiting_contract(@rule, body: contract)
-    outcome = assert_completed(claim_job(@orchestrator))
+    orchestrator = scenario.orchestrator(credential: scenario.credential(provider: "codex", model: nil),
+      model: "codex-model-1")
+    outcome = assert_completed(claim_job(orchestrator))
     assert_equal job_of(check).id, outcome.result.fetch("job_id")
     outcome.result.fetch("input")
   end

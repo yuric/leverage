@@ -108,6 +108,23 @@ class ScoreTests(unittest.TestCase):
     def test_a_case_with_no_verdict_counts_as_wrong_and_the_set_can_still_meet_the_bar(self):
         self.assertScores("one-without-verdict.jsonl", True, correct=23, no_verdict=1, wrongly_failed=0)
 
+    def test_the_bar_holds_at_its_edges(self):
+        cases = eval_score.read_cases(SUITE)
+        bar = eval_score.read_bar(SUITE)
+        right = [{"case": case["id"], "verdict": case["label"], "reason": "Made up."} for case in cases]
+
+        def scored(changes):
+            lines = [dict(line) for line in right]
+            for index, verdict in changes.items():
+                lines[index]["verdict"] = verdict
+            return eval_score.score(cases, bar, lines, CANARY)
+
+        exactly_21 = scored({0: "failed", 1: "failed", 2: "none"})
+        self.assertEqual((exactly_21["correct"], exactly_21["met_bar"]), (21, True))
+        one_wrongly_passed = scored({12: "passed"})
+        self.assertEqual((one_wrongly_passed["wrongly_passed"], one_wrongly_passed["met_bar"]), (1, True))
+        self.assertEqual(scored({0: "failed", 1: "failed", 2: "none", 3: "failed"})["met_bar"], False)
+
     def test_a_verdict_for_an_unknown_case_is_refused(self):
         code, scores, err = score("unknown-case.jsonl")
         self.assertEqual(code, 2)
@@ -171,7 +188,9 @@ class BudgetTests(unittest.TestCase):
     def test_a_run_of_one_model_needs_room_for_30_more(self):
         runs = {"runs": [{"provider": "gemini", "tool_runs": 30}, {"provider": "gemini", "tool_runs": 30}]}
         self.assertEqual(eval_score.budget_refusals(runs, ["gemini"]), [])
-        runs["runs"].append({"provider": "claude", "tool_runs": 211})
+        runs["runs"].append({"provider": "claude", "tool_runs": 180})
+        self.assertEqual(eval_score.budget_refusals(runs, ["gemini"]), [])
+        runs["runs"].append({"provider": "grok", "tool_runs": 1})
         self.assertIn("in all", eval_score.budget_refusals(runs, ["gemini"])[0])
 
     def test_an_unknown_provider_is_refused(self):
