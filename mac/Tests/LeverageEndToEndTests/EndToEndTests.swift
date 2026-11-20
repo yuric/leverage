@@ -27,6 +27,9 @@ extension LeverageEndToEnd {
             try tools.write(scenario: StandInScenario(reviews: [.init(fail: [2], notes: "Not yet."), .init()]))
             let work = try folder.folder("work")
             let owner = try await EndToEnd.owner()
+            // RT-2: the loop with no rule in the way; the second class on the
+            // same owner finds them off and changes nothing.
+            try await owner.turnShippedRulesOff()
             try folder.record(secrets: [
                 EndToEnd.ownerPassword, owner.transport.token ?? "",
                 StandIns.statusEmail, StandIns.statusOrganisation,
@@ -112,6 +115,9 @@ extension LeverageEndToEnd {
             try tools.write(scenario: StandInScenario(reviews: [.init()], gateFile: "gate"))
             let work = try folder.folder("work")
             let owner = try await EndToEnd.owner()
+            // RT-2: the loop with no rule in the way; the second class on the
+            // same owner finds them off and changes nothing.
+            try await owner.turnShippedRulesOff()
             try folder.record(secrets: [
                 EndToEnd.ownerPassword, owner.transport.token ?? "",
                 StandIns.statusEmail, StandIns.statusOrganisation,

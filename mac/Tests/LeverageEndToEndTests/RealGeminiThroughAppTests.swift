@@ -34,6 +34,9 @@ struct RealGeminiThroughAppTests {
         let tools = try StandIns.copy(into: folder.url)
         let work = try folder.folder("work")
         let owner = try await EndToEnd.owner()
+        // RT-2: the builder's check with no rule in the way (no orchestrator
+        // runs here to check the contract).
+        try await owner.turnShippedRulesOff()
         try folder.record(secrets: [EndToEnd.ownerPassword, owner.transport.token ?? ""].filter { !$0.isEmpty })
 
         guard let helperToken = try await owner.issueHelperToken(

@@ -324,6 +324,31 @@ extension OwnerClient {
         return request
     }
 
+    /// Milestone 4 plan RT-2: the tests of milestones 2 and 3 keep proving
+    /// the loop and handoff with no rule in the way. Creating the owner now
+    /// writes the seven shipped rules, on; this sends `disable_rule` for each
+    /// of them that is on, and leaves one that is off alone, so a second
+    /// class signed in to the same owner changes nothing. It is called once
+    /// the owner exists, never inside `EndToEnd.owner()`, which the
+    /// rule-check tests share. Returns how many it turned off.
+    @discardableResult
+    func turnShippedRulesOff() async throws -> Int {
+        let shipped = try await listRules().rules.filter { $0.version.origin == .shipped }
+        guard shipped.count == 7 else {
+            throw EndToEndFailure("the owner has \(shipped.count) shipped rules, not the seven")
+        }
+        var turnedOff = 0
+        for row in shipped where row.rule.enabled {
+            _ = try await disableRule(ruleID: row.rule.id, key: IdempotencyKey()).completedResult()
+            turnedOff += 1
+        }
+        let after = try await listRules().rules.filter { $0.version.origin == .shipped }
+        guard after.allSatisfy({ !$0.rule.enabled }) else {
+            throw EndToEndFailure("a shipped rule is still on after disable_rule")
+        }
+        return turnedOff
+    }
+
     func connect(_ name: String, role: SeatRole, login: UUID) async throws -> UUID {
         let outcome = try await connectSeat(
             ConnectSeatRequest(name: name, role: role, credentialID: login), key: IdempotencyKey())
