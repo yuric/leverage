@@ -10808,7 +10808,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "A model-checked rule's instruction; null for an app-checked rule, and for a shipped model rule whose instruction is not written yet (shipped_rules.json's placeholder `to_be_written_in`, which is never sent)."
           },
           "parameters": {
             "type": [

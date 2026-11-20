@@ -498,6 +498,9 @@ check result. What it added and changed, each from the milestone 4 plan
   needs specific details" its instruction (RV-2). The placeholder
   `to_be_written_in` stays only for the rule that approves outward
   actions, and `meta/shipped_rules.schema.json` takes a string there.
+  The server writes that rule's version with no instruction, so
+  `list_rules` sends `null` there, as `RuleVersion` says; it never sends
+  the placeholder.
 - **One command and its Lifecycle row**, `install_shipped_rules` (RD-2):
   a registry `commands` entry, the `CommandName` enum, and a
   `state_machine.json` group with `source: prd` that copies the PRD's

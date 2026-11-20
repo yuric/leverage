@@ -73,7 +73,9 @@ public struct RuleVersion: Codable, Equatable, Sendable {
     public let route: RuleRoute?
     public let queueTimeoutSeconds: Int?
     public let runTimeoutSeconds: Int?
-    /// A model-checked rule's instruction; nil for an app-checked rule.
+    /// A model-checked rule's instruction; nil for an app-checked rule, and
+    /// for a shipped model rule whose instruction is not written yet (the
+    /// approvals rule, whose instruction milestone 5 writes).
     public let instruction: String?
     public let parameters: [String: JSONValue]?
     public let origin: RuleOrigin
