@@ -1,6 +1,6 @@
 module Leverage
   # The sweep (PRD L118, L404, L822; timers.json trigger; milestone 2 plan
-  # EN-22): a second program from the API's image, bin/sweep, that applies
+  # EN-22; milestone 3 plan HD-4, HE-23): a second program from the API's image, bin/sweep, that applies
   # the due task timers to tasks no command has touched and fires the
   # workspace timers, through the same entries a command applies first. It
   # is not a timer and writes no event of its own: each workspace's run
@@ -35,15 +35,20 @@ module Leverage
       count
     end
 
-    # Applies the due lease timers of one workspace, batch by batch, purges
-    # its old command keys when purge is true, and records the run. Returns
-    # the SweepRun.
+    # Applies the due task timers of one workspace, batch by batch: the
+    # credential hold release first (a hold due before its task's lease;
+    # milestone 3 plan rule 8, HE-23), then the two leases, whose end closes
+    # a credential hold due later. Then it fires seat_run_placement, which
+    # runs on every sweep (HD-4), purges the old command keys when purge is
+    # true, and records the run. Returns the SweepRun.
     def sweep_workspace(workspace_id, purge: false, batch: BATCH)
       touched = []
+      touched += repeat(workspace_id, Timers::CREDENTIAL_HOLD, "released_task_ids", batch)
       touched += repeat(workspace_id, Timers::BUILDER_LEASE, "expired_task_ids", batch)
       expired_reviews = repeat(workspace_id, Timers::REVIEW_LEASE, "expired_review_ids", batch)
       touched += Review.where(id: expired_reviews).pluck(:task_id) unless expired_reviews.empty?
-      fired = 0
+      timer(workspace_id, Timers::SEAT_RUN_PLACEMENT)
+      fired = 1
       if purge
         loop { break unless timer(workspace_id, "command_key_retention", "limit" => batch * 10).result.fetch("more") }
         fired += 1
@@ -89,14 +94,14 @@ module Leverage
         caller_id: nil, key: nil, request_hash: nil, params: params))
     end
 
-    # Runs a lease timer until a batch comes back short; returns the ids it
-    # expired. No lock is taken when nothing is due.
+    # Runs a task timer until a batch comes back short; returns the ids its
+    # result lists in field. No lock is taken when nothing is due.
     def repeat(workspace_id, command, field, batch)
       ids = []
       while due?(workspace_id, command)
-        expired = timer(workspace_id, command, "limit" => batch).result.fetch(field)
-        ids.concat(expired)
-        break if expired.size < batch
+        done = Array((timer(workspace_id, command, "limit" => batch).result || {})[field])
+        ids.concat(done)
+        break if done.size < batch
       end
       ids
     end
@@ -107,10 +112,10 @@ module Leverage
       at = database_now
       states = Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
         .select { |row| row.fetch("command") == command }.map { |row| row.fetch("from") }
-      if command == Timers::BUILDER_LEASE
-        Timers.due_tasks(workspace_id, at, states, limit: 1).any?
-      else
-        Timers.due_reviews(workspace_id, at, states, limit: 1).any?
+      case command
+      when Timers::BUILDER_LEASE then Timers.due_tasks(workspace_id, at, states, limit: 1).any?
+      when Timers::CREDENTIAL_HOLD then Timers.due_credential_holds(workspace_id, at, states, limit: 1).any?
+      else Timers.due_reviews(workspace_id, at, states, limit: 1).any?
       end
     end
 

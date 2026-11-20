@@ -15,6 +15,9 @@ module Leverage
   # hold.opened and hold.closed).
   module Holds
     PAUSES = "pauses".freeze
+    # The reasons bound to the seat that holds the task: they close when it
+    # loses the task (SM-15; state_machine.json, release's holds_closed).
+    SEAT_BOUND = %w[seat_paused credential_limit credential_signed_out].freeze
 
     module_function
 
@@ -47,9 +50,16 @@ module Leverage
     end
 
     # Closes a hold and resolves its open Needs you item with the owner's
-    # choice (nil when it closes on its own). The request's caller closes
-    # it unless an actor is named. lease_seat_id names the builder the
-    # closing gives a fresh lease, if any.
+    # choice (nil when it closes on its own; HE-29 says when it is set).
+    # The request's caller closes it unless an actor is named. lease_seat_id
+    # names the builder the closing gives a fresh lease, if any.
+    #
+    # effective_at:, command_id: - what the events carry: a timer closes at
+    #   its due time with no key (traces 11 and 14). The rows change at
+    #   ctx.at, the command's time, as every other row does.
+    # A block is given the hold.closed Event before the items are resolved,
+    # so a handoff writes credential.switched between them (milestone 3
+    # plan §2.1 rule 7).
     #
     # When no pausing hold is left open, the task's lease clocks run again;
     # when no hold at all is left open on a task a seat holds, and the task
@@ -61,13 +71,14 @@ module Leverage
               actor_kind: ctx.actor.first, actor_id: ctx.actor.last, round: task.round, effective_at: ctx.at,
               command_id: ctx.request.key)
       hold.update!(closed_at: ctx.at, closed_by_kind: actor_kind, closed_by_id: actor_id)
-      ctx.emit("hold.closed", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
-        actor_id: actor_id, payload: { reason: hold.reason, rule_id: hold.rule_id, credential_id: hold.credential_id,
-                                       lease_seat_id: lease_seat_id, wait_cause: wait_cause })
+      as = { actor_kind: actor_kind, actor_id: actor_id, effective_at: effective_at, command_id: command_id }
+      closed = ctx.emit("hold.closed", task: task, round: round, subject: hold, cause_id: cause_id, **as,
+        payload: { reason: hold.reason, rule_id: hold.rule_id, credential_id: hold.credential_id,
+                   lease_seat_id: lease_seat_id, wait_cause: wait_cause })
+      yield closed if block_given?
       InboxItem.where(hold_id: hold.id, state: "open").order(:opened_at).each do |inbox|
         inbox.update!(state: "resolved", resolved_by_kind: actor_kind, resolved_by_id: actor_id, resolved_at: ctx.at)
-        ctx.emit("inbox.resolved", task: task, round: round, subject: inbox, actor_kind: actor_kind, actor_id: actor_id,
-          payload: { choice: choice })
+        ctx.emit("inbox.resolved", task: task, round: round, subject: inbox, **as, payload: { choice: choice })
       end
       remaining = open_holds(task)
       leases_of(task).each { |subject| Leases.restart(ctx, subject) } if remaining.none? { |open| pauses?(open.reason) }
@@ -76,17 +87,29 @@ module Leverage
     end
 
     # Closes the holds bound to the seat that held the task, when the seat
-    # loses it (SM-15; milestone 3 plan §2.1 rule 7): the credential holds
-    # and seat_paused, each with hold.closed carrying wait_cause, then its
-    # inbox.resolved. First version (milestone 3 plan §4, the hand-over
-    # table, WP4 finishes it): closes nothing.
+    # loses it (SM-15; milestone 3 plan §2.1 rule 7): seat_paused,
+    # credential_limit and credential_signed_out, oldest first, each
+    # hold.closed then its inbox.resolved, after the event that took the
+    # task. They carry that event's actor, effective time and key, and no
+    # cause (trace 14, the lease's end). wait_cause goes on the last
+    # hold.closed when it leaves the task with no hold, because the
+    # wait_ready step opens there (steps.json, derived rule 3); otherwise
+    # every hold.closed carries null.
     #
     # cause:      - the task.released or task.lease_expired Event.
-    # wait_cause: - the cause of the wait_ready step hold.closed opens.
+    # wait_cause: - the cause of the wait_ready step (Candidates.wait_cause,
+    #               HE-35), or nil.
     #
     # Returns the Holds it closed.
     def close_seat_bound(ctx, task, cause:, wait_cause:)
-      []
+      open = open_holds(task)
+      bound = open.select { |hold| SEAT_BOUND.include?(hold.reason) }
+      last_of_all = bound.size == open.size
+      bound.each_with_index.map do |hold, index|
+        close(ctx, hold: hold, task: task, wait_cause: (wait_cause if last_of_all && index == bound.size - 1),
+          actor_kind: cause.actor_kind, actor_id: cause.actor_id, effective_at: cause.effective_at,
+          command_id: cause.command_id)
+      end
     end
 
     # Pauses a lease just granted on a task, or on its review, while a

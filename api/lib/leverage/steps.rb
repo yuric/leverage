@@ -25,6 +25,16 @@ module Leverage
   #   given it.
   # - During rework, criterion.started and criterion.passed open no step
   #   (EN-10); the reviewer's acknowledgement opens none (EN-27).
+  # - criterion.started opens a new build row (SM-25), also for the
+  #   criterion the open row already names: a run that continues work after
+  #   a handoff announces its criterion again (milestone 3 plan HD-9,
+  #   traces 13 and 14). In one command it changes the row in place.
+  # - The seat responsible (L278, rule 4): the builder's working steps,
+  #   review, and the two waits that are the holder's (wait_seat, wait_limit)
+  #   name a seat; the other waiting steps name none.
+  # - wait_ready's cause is fixed when it opens (rule 8): from the
+  #   wait_cause of the event that opens it, which is hold.closed when the
+  #   task left its seat under a seat-bound hold (milestone 3 plan HE-35).
   module Steps
     # An event that steps.json says opens or closes a step, but that no
     # milestone-2 command writes (jobs, checks, outward actions, escalation,
@@ -51,8 +61,11 @@ module Leverage
     ].freeze
 
     # Which seat a working step names (L278): the builder's steps name the
-    # builder, review the reviewer; waiting steps name none.
+    # builder, review the reviewer; waiting steps name none but these.
     BUILDER_STEPS = %w[briefing build finish rework wait_builder].freeze
+    # The waiting steps of a hold bound to the seat that holds the task:
+    # they name that seat (traces 11, 14 and 15).
+    HOLDER_WAITS = %w[wait_seat wait_limit].freeze
 
     module_function
 
@@ -75,7 +88,8 @@ module Leverage
         work = fold(event, criteria)
         criteria.observe(event)
       end
-      move(open, desired(advance(work, event, criteria), after, event), event)
+      wanted = desired(advance(work, event, criteria), after, event, open)
+      move(open, wanted, event, again: announced_again?(open, wanted, event))
     end
 
     # The step the task would have after event with no hold.
@@ -175,20 +189,43 @@ module Leverage
 
     # The step to have open after the event: none once the task has ended,
     # the oldest open hold's while any is open, otherwise the work's.
-    def desired(work, holds, event)
+    #
+    # The seat a holder's wait names is the one that holds the task; in the
+    # command where it loses the task, between task.released or
+    # task.lease_expired and the hold.closed that follows (SM-15), the task
+    # has none, and the open step keeps the seat it opened with (rule 8).
+    def desired(work, holds, event, open = nil)
       return nil if work == ENDED || work.nil?
-      return work if holds.empty?
+      return opened_at_hold_closed(work, event) if holds.empty?
 
       oldest = holds.first
       kind = hold_step(oldest.fetch(:reason))
+      seat_id = work.seat_id || (open.seat_id if open&.kind == kind)
       subject =
         case kind
         when "wait_owner" then [ "hold", oldest.fetch(:id) ]
         when "wait_limit" then [ "credential", oldest.fetch(:credential_id) ]
-        when "wait_seat" then [ "seat", work.seat_id ]
+        when "wait_seat" then [ "seat", seat_id ]
         else [ nil, nil ]
         end
-      step(kind, subject: subject, round: [ work.round, event.round ].max)
+      step(kind, subject: subject, seat_id: seat_id, round: [ work.round, event.round ].max)
+    end
+
+    # The last hold lifting opens the step the task's state calls for; a
+    # wait_ready that opens there takes the cause hold.closed carries
+    # (HE-35), not the one of the event that sent the task to Ready under
+    # the hold.
+    def opened_at_hold_closed(work, event)
+      return work unless event.type == "hold.closed" && work.kind == "wait_ready"
+
+      work.with(cause_kind: wait_cause(event.payload || {}))
+    end
+
+    # Whether criterion.started announces, in a later command, the criterion
+    # the open build row already names: a new row all the same (SM-25).
+    def announced_again?(open, wanted, event)
+      event.type == "criterion.started" && open&.kind == "build" && wanted&.kind == "build" &&
+        open.subject_id == event.subject_id && wanted.subject_id == event.subject_id
     end
 
     # The criterion back-fill (rule 5, L279): a criterion passes while the
@@ -201,9 +238,9 @@ module Leverage
       open.update!(subject_kind: "criterion", subject_id: event.subject_id)
     end
 
-    def move(open, wanted, event)
+    def move(open, wanted, event, again: false)
       return if open.nil? && wanted.nil?
-      return if open && wanted && same?(open, wanted)
+      return if open && wanted && same?(open, wanted) && !(again && !same_command?(open, event))
 
       if open && wanted && same_command?(open, event)
         open.update!(row(wanted, event).merge(round: [ open.round, wanted.round ].max))
@@ -245,7 +282,7 @@ module Leverage
 
     # A Work for a step kind.
     def step(kind, round:, subject: [ nil, nil ], seat_id: nil, cause_kind: nil)
-      seat_id = nil unless BUILDER_STEPS.include?(kind) || kind == "review"
+      seat_id = nil unless BUILDER_STEPS.include?(kind) || HOLDER_WAITS.include?(kind) || kind == "review"
       Work.new(kind: kind, subject_kind: subject.first, subject_id: subject.last, seat_id: seat_id, round: round,
         cause_kind: cause_kind)
     end

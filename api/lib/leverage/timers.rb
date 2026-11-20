@@ -3,16 +3,23 @@ module Leverage
   # seat or a workspace, applied each through its own entry before a
   # command's own work (milestone 2 plan §2.1 step 3, EN-14, EN-17).
   #
-  # Milestone 2 has the two lease timers and command_key_retention. The
-  # task timers of later milestones (check and job timeouts, the credential
-  # hold release) arrive with their entries; the workspace timers are fired
-  # by the sweep (Sweep), never by a command.
+  # Milestone 2 has the two lease timers and command_key_retention;
+  # milestone 3 adds the credential hold release (a task timer, due as rule
+  # 8 of its plan's §2.1 and HE-23 say) and seat_run_placement (a workspace
+  # timer, HD-4). The task timers of later milestones (check and job
+  # timeouts) arrive with their entries; the workspace timers are fired by
+  # the sweep (Sweep), never by a command.
   module Timers
     # The task timers a command applies first, by the subject whose due
     # time they read (timers.json).
     BUILDER_LEASE = "builder_lease_expiry".freeze
     REVIEW_LEASE = "review_lease_expiry".freeze
     CREDENTIAL_HOLD = "credential_hold_release".freeze
+    # The workspace timer the sweep fires on every run (HD-4).
+    SEAT_RUN_PLACEMENT = "seat_run_placement".freeze
+    # The hold reasons the credential timer closes (state_machine.json,
+    # credential_hold_release's holds_closed).
+    CREDENTIAL_REASONS = %w[credential_limit credential_signed_out].freeze
 
     # The params a path or a body names a task or a review by: /v1/tasks/{id}
     # and /v1/owner/tasks/{id} name a task, /v1/reviews/{id} a review.
@@ -24,17 +31,27 @@ module Leverage
     # Applies every timer due on the request's target task (or the task of
     # its target review) and on every task or review the calling seat
     # holds, with effective_at the due time, actor app, no command_id, and
-    # seq before the command's own events. A timer's own command (the
-    # sweep's) applies itself and gets nothing here, and so does a command
-    # with no workspace yet (create_owner).
+    # seq before the command's own events: the leases, and the credential
+    # hold release (test 7, whoever the caller is). A timer's own command
+    # (the sweep's) applies itself and gets nothing here, and so does a
+    # command with no workspace yet (create_owner).
     #
     # ctx - the command's Transitions::Context.
     #
     # Returns the Events it wrote.
     def apply_due(ctx)
-      return [] if ctx.workspace.nil? || Transitions::Table::TIMERS.include?(ctx.request.command)
+      return [] if ctx.workspace.nil? || timer_command?(ctx.request.command)
 
-      apply_lease_timers(ctx, due_candidates(ctx))
+      apply_task_timers(ctx, due_candidates(ctx))
+    end
+
+    # Whether the command is a timer's own: Table::TIMERS, and the two
+    # timers of milestone 3 while they wait in Table::PENDING (its plan,
+    # HT-6), which WP10 moves into TIMERS.
+    def timer_command?(command)
+      table = Transitions::Table
+      pending = table.const_defined?(:PENDING_GROUPS, false) ? table::PENDING_GROUPS.fetch("TIMERS", []) : []
+      table::TIMERS.include?(command) || pending.include?(command)
     end
 
     # Applies the due lease timers on every task and review a seat holds,
@@ -50,7 +67,28 @@ module Leverage
       held_reviews = Review.where(workspace_id: workspace_id, reviewer_seat_id: seat.id, verdict: nil).select(:task_id)
       tasks = Task.where(workspace_id: workspace_id, holder_seat_id: seat.id)
         .or(Task.where(workspace_id: workspace_id, id: held_reviews)).order(:id).to_a
-      apply_lease_timers(ctx, tasks)
+      apply_task_timers(ctx, tasks)
+    end
+
+    # Runs the task timers due on each task, each in the order of its due
+    # time, so effective times never go backwards: the credential hold
+    # release when it is due no later than the builder's lease, then the
+    # lease (whose end closes a credential hold still open, SM-15); then
+    # the review lease timer of each of their due reviews. Returns the
+    # Events written.
+    def apply_task_timers(ctx, tasks)
+      written = ctx.events.size
+      tasks.each do |task|
+        if credential_hold_first?(task, ctx.at)
+          apply(ctx, Transitions::Table.entry_for(CREDENTIAL_HOLD).new(CREDENTIAL_HOLD, targets: [ task ]))
+          task = Task.find(task.id)
+        end
+        apply(ctx, Transitions::Entries::BuilderLeaseExpiry.new(BUILDER_LEASE, targets: [ task ])) if Leases.due?(task, ctx.at)
+      end
+      due_reviews_of(ctx, tasks.map(&:id)).each do |review|
+        apply(ctx, Transitions::Entries::ReviewLeaseExpiry.new(REVIEW_LEASE, targets: [ review ]))
+      end
+      ctx.events.drop(written)
     end
 
     # Applies the due lease timers a claim would otherwise find in its way:
@@ -152,16 +190,71 @@ module Leverage
       latest && latest > due_at ? latest : due_at
     end
 
-    # Empty symbols for WP4's red run (milestone 3 plan WP4).
-    def credential_hold(_task) = nil
+    # --- the credential hold release (milestone 3 plan §2.1 rules 7, 8) ---
 
-    def credential_hold_due_at(_task) = nil
+    # The task's oldest open credential hold (credential_limit or
+    # credential_signed_out), or nil.
+    def credential_hold(task)
+      Holds.open_holds(task).find { |hold| CREDENTIAL_REASONS.include?(hold.reason) }
+    end
 
-    def credential_hold_due?(_task, _at) = false
+    # Rule 8 (HE-23): the due time of the task's credential hold, or nil
+    # when it has none or none of its seat's candidates has a reset time.
+    # It is read from the credentials as they are now, as of the task's last
+    # effective time: the time the task has waited since. At once (that
+    # time) when one of the seat's candidates that may take the task was
+    # available then; otherwise the earliest reset among its signed-in
+    # candidates, never before that time. A candidate whose reset has passed
+    # since is not "available at once": the hold was due at its reset
+    # (trace 11: due at 2400, swept at 2430). Nothing is stored, so a change
+    # of credentials needs no write (timers.json).
+    #
+    # The seat is the one that holds the task: a credential hold is bound to
+    # it and closes when it loses the task (SM-15).
+    def credential_hold_due_at(task)
+      return nil unless task.holder_seat_id && credential_hold(task)
 
-    def credential_hold_effective_at(_task) = nil
+      seat = Seat.find_by(id: task.holder_seat_id, workspace_id: task.workspace_id)
+      last = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at)
+      seat && last && Candidates.due_at(seat, task, last)
+    end
 
-    def due_credential_holds(_workspace_id, _at, _from_states, limit:) = []
+    # Whether the task's credential hold is due at at.
+    def credential_hold_due?(task, at)
+      due = credential_hold_due_at(task)
+      !due.nil? && due <= at
+    end
+
+    # The time the release's events carry: the due time, never before the
+    # task's latest event (effective_at).
+    def credential_hold_effective_at(task)
+      due = credential_hold_due_at(task)
+      due && effective_at(task, due)
+    end
+
+    # Whether a command applies the credential timer before the builder's
+    # lease timer: its hold is due at at, and no later than a lease that is
+    # also due. A lease due earlier ends first and its end closes the hold.
+    def credential_hold_first?(task, at)
+      due = credential_hold_due_at(task)
+      return false unless due && due <= at
+
+      !Leases.due?(task, at) || due <= task.lease_due_at
+    end
+
+    # The tasks of a workspace in from_states whose credential hold is due
+    # at at, oldest due first, at most limit of them: what the sweep's run
+    # of the credential timer takes. A task whose builder lease is due
+    # earlier than its hold is left to the lease timer, which closes the
+    # hold. Read in batches; the due time is computed for each.
+    def due_credential_holds(workspace_id, at, from_states, limit:)
+      held = Hold.where(workspace_id: workspace_id, closed_at: nil, reason: CREDENTIAL_REASONS).select(:task_id)
+      due = []
+      Task.where(workspace_id: workspace_id, state: from_states, id: held).find_each(batch_size: 100) do |task|
+        due << [ credential_hold_due_at(task), task ] if credential_hold_first?(task, at)
+      end
+      due.sort_by { |time, task| [ time, task.id ] }.first(limit).map(&:last)
+    end
 
     def target_ids(params)
       TARGET_PARAMS.filter_map { |name| params[name] }.select { |value| value.is_a?(String) && UUID.match?(value) }.uniq

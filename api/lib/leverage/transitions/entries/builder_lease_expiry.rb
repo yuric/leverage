@@ -20,9 +20,16 @@ module Leverage
       #
       # Result: expired_task_ids, the tasks whose lease it ended.
       #
-      # The row's side events cannot occur in milestone 2: nothing pending
-      # (rules, milestone 4), no seat-bound hold (milestone 3), no Finishing
-      # task (milestone 5). Finishing has its row and no way to reach it.
+      # A seat-bound hold (seat_paused, credential_limit: their lease clock
+      # runs) closes after task.lease_expired, at the same due time, by the
+      # app (Holds.close_seat_bound, SM-15). The wait_ready step that opens
+      # has the cause of HE-35 (Candidates.wait_cause, asked at the due time
+      # once the seat holds nothing): on task.lease_expired when the task
+      # had no hold, else on the hold.closed that leaves it with none
+      # (milestone 3 plan §2.1, changed entries; trace 14). The row's other
+      # side events cannot occur yet: nothing pending (rules, milestone 4),
+      # no Finishing task (milestone 5). Finishing has its row and no way to
+      # reach it.
       class BuilderLeaseExpiry < Entry
         BATCH = 100
 
@@ -64,12 +71,15 @@ module Leverage
         def expire(ctx, task)
           row = state_row(task.state)
           effective_at = Timers.effective_at(task, task.lease_due_at)
+          held = Holds.held?(task)
           Leases.end_lease(ctx, task)
           to = row.fetch("to") || task.state
           builder = to == "ready" ? { builder_seat_id: nil } : {}
           task.update!(state: to, holder_seat_id: nil, resume_pending_since: nil, **builder)
-          ctx.emit("task.lease_expired", task: task, payload: { wait_cause: nil }, actor_kind: "app", actor_id: nil,
-            command_id: nil, effective_at: effective_at)
+          wait_cause = Candidates.wait_cause(task, effective_at) if to == "ready"
+          expired = ctx.emit("task.lease_expired", task: task, payload: { wait_cause: (wait_cause unless held) },
+            actor_kind: "app", actor_id: nil, command_id: nil, effective_at: effective_at)
+          Holds.close_seat_bound(ctx, task, cause: expired, wait_cause: wait_cause)
         end
 
         def from_states = rows.map { |row| row.fetch("from") }

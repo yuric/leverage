@@ -240,9 +240,10 @@ class SweepTest < ActiveSupport::TestCase
   end
 
   test "a credential hold whose task's lease is due first is left to the lease, which closes it" do
+    task, hold, = held_task(reset_at: @scenario.database_now + 3600)
     lease_due = @scenario.database_now
-    task, hold, = held_task
     @scenario.make_due(task, at: lease_due)
+    Credential.find(hold.credential_id).update!(limited_until: @scenario.database_now)
 
     with_handoff_timers { S.sweep_workspace(@scenario.workspace_id) }
 
