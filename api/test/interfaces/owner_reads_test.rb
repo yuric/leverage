@@ -586,7 +586,7 @@ class OwnerReadsTest < CommittingTestCase
 
   test "the health line carries the newest backup's time and is not late within 26 hours (HB-4)" do
     backup(scenario.database_now - 30 * 3600)
-    newest = scenario.database_now - 25 * 3600
+    newest = scenario.database_now - 26 * 3600 + 60
     backup(newest)
 
     body = assert_read("/v1/owner/health")
@@ -596,7 +596,7 @@ class OwnerReadsTest < CommittingTestCase
   end
 
   test "the backup is late when the newest is older than 26 hours (HB-4)" do
-    backup(scenario.database_now - 27 * 3600)
+    backup(scenario.database_now - 26 * 3600 - 60)
 
     body = assert_read("/v1/owner/health")
 

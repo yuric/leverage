@@ -32,6 +32,13 @@ module V1
         run_command("remove_seat", params: checked_body("remove_seat").merge("id" => uuid_param!(:id)))
       end
 
+      # The owner's seat controls of milestone 3 (plan HE-27): pause and
+      # resume a seat, and change its name, model, effort, strength rank,
+      # login, role or whether it is on.
+      def pause = control("pause_seat")
+      def resume = control("resume_seat")
+      def change = control("change_seat")
+
       # The text the owner pastes into an agent that connects on its own. A
       # seat the app runs needs none: 409 with a Refusal. It never holds the
       # seat's token.
@@ -44,6 +51,13 @@ module V1
         render json: Leverage::Transitions::Refusal.new(code: "invalid_state").to_h, status: :conflict
       rescue Leverage::Reads::LandingPrompt::UnusableAddress
         raise Malformed, "The address this request came in on cannot be put in a command"
+      end
+
+      private
+
+      # The operation's id is also its command's name, as for the calls above.
+      def control(command)
+        run_command(command, params: checked_body(command).merge("id" => uuid_param!(:id)))
       end
     end
   end

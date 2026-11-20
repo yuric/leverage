@@ -3,7 +3,9 @@ module Leverage
     # One task's page (get_task; milestone 2 plan MA-20, MA-29, IN-35): the
     # contract, the criteria with their evidence, the actions and questions,
     # every hold, the reviews, the open Needs you items, the task's events in
-    # seq order for its log, and the names that log needs. One snapshot, so
+    # seq order for its log, the names that log needs and its recovery times
+    # (milestone 3 plan HE-17, which RecoveryTimes computes from the events
+    # alone). One snapshot, so
     # the page and as_of_seq are one moment of the log.
     module TaskPage
       UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
@@ -38,6 +40,7 @@ module Leverage
           inbox_items: Board.inbox_items(items),
           events: events.map { |event| Shapes.event(event) },
           names: names(workspace_id, task, reviews, events),
+          recovery_times: RecoveryTimes.call(workspace_id, task_id: task.id),
           reviewer_seat_exists: Board.reviewer_seat?(workspace_id),
           as_of_seq: as_of_seq }
       end

@@ -1,10 +1,10 @@
 module Leverage
   module Http
-    # The operations milestone 2 serves, each to its controller and action
-    # (milestone 2 plan §2.1, §2.3, IN-1). config/routes.rb draws one route
-    # per entry with the registry's method and path, so no path is typed
-    # anywhere else; every other registry operation has no route and
-    # answers 404 (test/interfaces/seams_test.rb).
+    # The operations served, each to its controller and action (milestone 2
+    # plan §2.1, §2.3, IN-1; milestone 3's eleven are the last entries).
+    # config/routes.rb draws one route per entry with the registry's method
+    # and path, so no path is typed anywhere else; every other registry
+    # operation has no route and answers 404 (test/interfaces/seams_test.rb).
     module RouteTable
       ROUTES = {
         # Agent: the sixteen calls of plan §2.3.
@@ -58,14 +58,8 @@ module Leverage
         "report_request_result" => "v1/helper/requests#result",
         "issue_seat_token" => "v1/helper/seats#seat_token",
         "report_run_started" => "v1/helper/seats#run_started",
-        "report_run_stopped" => "v1/helper/seats#run_stopped"
-      }.freeze
-
-      # The eleven operations milestone 3 serves (its plan §2.3, HT-6), each
-      # to the controller and action WP7 writes. They are not in ROUTES, so
-      # serves?, routes.rb and every test that walks the served operations
-      # leave them out (they answer 404) until WP7 moves them into ROUTES.
-      PENDING = {
+        "report_run_stopped" => "v1/helper/seats#run_stopped",
+        # Milestone 3's eleven (its plan §2.3, HT-6).
         "report_limit" => "v1/helper/credentials#limit_reached",
         "report_signed_out" => "v1/helper/credentials#signed_out",
         "sign_in_again" => "v1/owner/credentials#sign_in",
@@ -87,9 +81,9 @@ module Leverage
 
       def serves?(operation_id) = ROUTES.key?(operation_id)
 
-      # The served operations, read from the registry; or those of table
-      # (PENDING, in a test). Raises KeyError for a key that is not a
-      # registry operation.
+      # The served operations, read from the registry; or those of table (a
+      # test's own). Raises KeyError for a key that is not a registry
+      # operation.
       def routes(table = ROUTES)
         operations = Contract.registry.fetch("operations").to_h { |operation| [ operation.fetch("operation_id"), operation ] }
         table.map do |operation_id, to|
