@@ -5,11 +5,11 @@ enum AddTaskCopy: OwnerFacingCopy {
     case sheetTitle
     case titleLabel, titlePlaceholder
     case goalLabel, goalPlaceholder, goalHint
-    case criteriaLabel, criteriaPlaceholder, criteriaHint
+    case criteriaLabel, criteriaPlaceholder, criteriaHint, criteriaHintRuleOn
     case detailsLabel, detailsPlaceholder
     case priorityLabel, priorityLow, priorityNormal, priorityHigh
     case workLabel, workPlaceholder, workHint
-    case footnote
+    case footnote, footnoteProviderRule
     case cancel, save, saving, saveAsIdea, ideaKeepsNoCriteria
     case changeTaskTitle, saveChanges, saveAndSend, editWarning, editWarningNoAgent
     case savedNotSent
@@ -28,6 +28,7 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .criteriaLabel: "How will you know it is done?"
         case .criteriaPlaceholder: "Totals match the sum of the lines to the cent"
         case .criteriaHint: "One thing to check on each line."
+        case .criteriaHintRuleOn: "Leave this empty and the task waits in Backlog until you fill it in."
         case .detailsLabel: "Who is it for, and what must it include or avoid?"
         case .detailsPlaceholder: "Optional"
         case .priorityLabel: "Priority"
@@ -38,6 +39,7 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .workPlaceholder: "A folder on this Mac, or a link"
         case .workHint: "Optional. leverage does not open it. Don't put sign-in details here."
         case .footnote: "An agent that did not build it reviews the work before it counts as done."
+        case .footnoteProviderRule: "An agent from another provider reviews the work before it counts as done."
         case .cancel: "Cancel"
         case .save: "Save task"
         case .saving: "Saving…"

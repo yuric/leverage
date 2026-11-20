@@ -41,20 +41,131 @@ struct CheckRowContent: Identifiable, Equatable, Sendable {
 }
 
 extension TaskPageModel {
-    /// The Timing section, or nil when the read carries no steps.
-    var timing: TimingContent? { nil }
+    /// The Timing section, or nil when the read carries no steps. The time before
+    /// the task left Ideas is listed apart; the rows and that time add up to
+    /// the total, which is the page's lifetime (RD-28).
+    var timing: TimingContent? {
+        guard let page, !page.steps.isEmpty else { return nil }
+        var rows: [TimingRow] = []
+        var ideaSeconds = 0.0
+        var ideaIndex: Int?
+        for (index, step) in page.steps.enumerated() {
+            if step.kind == .idea {
+                ideaSeconds += step.seconds
+                ideaIndex = ideaIndex ?? index
+                continue
+            }
+            rows.append(Self.timingRow(index, step.kind, step.seconds, open: step.closedAt == nil))
+        }
+        let beforeIdeas = ideaIndex.map { Self.timingRow($0, .idea, ideaSeconds, open: false) }
+        return TimingContent(
+            rows: rows, beforeIdeas: beforeIdeas, totalSeconds: page.lifetimeSeconds,
+            totalText: Self.duration(page.lifetimeSeconds))
+    }
 
-    /// The checklist, one line for each check in order of creation.
-    var checks: [CheckRowContent] { [] }
+    private static func timingRow(_ index: Int, _ kind: StepKind, _ seconds: Double, open: Bool) -> TimingRow {
+        TimingRow(
+            id: index, kind: kind, name: TaskPageCopy.stepName(kind).text, seconds: seconds,
+            durationText: duration(seconds), isOpen: open)
+    }
 
-    /// What the page says while a command waits for its checks.
-    var pendingLine: String? { nil }
+    private static func duration(_ seconds: Double) -> String {
+        DurationWords.text(seconds: Int(seconds.rounded()))
+    }
 
-    var draftState: DraftState { .none }
+    /// The checklist, one line for each check in order of creation, those that
+    /// did not apply and the policies greyed (RD-28, RD-49).
+    var checks: [CheckRowContent] {
+        guard let page else { return [] }
+        return page.ruleChecks.map { row in
+            let overridden = row.overriddenAt != nil
+            let time: String? = (row.queueSeconds == nil && row.runSeconds == nil)
+                ? nil : Self.duration((row.queueSeconds ?? 0) + (row.runSeconds ?? 0))
+            let onFail: String? = switch row.onFail {
+            case .block: TaskPageCopy.onFailBlock.text
+            case .warn: TaskPageCopy.onFailWarn.text
+            case nil: nil
+            }
+            var overrideText: String?
+            if overridden {
+                let why = row.overrideReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                overrideText = why.isEmpty
+                    ? TaskPageCopy.youLetItThrough.text : TaskPageCopy.youLetItThroughWhy.filled(["reason": why])
+            }
+            return CheckRowContent(
+                id: row.id, ruleName: row.ruleName, momentText: row.momentName, resultText: Self.resultText(row),
+                reason: row.reason, timeText: time,
+                wordingText: TaskPageCopy.wordingOf.filled(["date": Self.dateText(row.versionSavedAt, clock: clock)]),
+                checkerText: (row.checker == .app ? TaskPageCopy.checkerApp : .checkerModel).text,
+                onFailText: onFail, overrideText: overrideText,
+                isGreyed: row.result == .notApplicable || row.result == .withdrawn || row.onFail == nil,
+                canLetThrough: row.canOverride && !overridden, canRunAgain: row.canRerun && !overridden)
+        }
+    }
+
+    private static func resultText(_ row: RuleCheckRow) -> String {
+        switch row.result {
+        case .passed: TaskPageCopy.checkPassed.text
+        case .failed: TaskPageCopy.checkFailed.text
+        case .notApplicable: TaskPageCopy.checkNotApplicable.text
+        case .applied: TaskPageCopy.checkApplied.text
+        case .error: TaskPageCopy.checkError.text
+        case .withdrawn: TaskPageCopy.checkWithdrawn.text
+        // A check with no result is running, or is the one held at the re-run limit, which waits for the owner.
+        case nil: (row.canOverride ? TaskPageCopy.checkTooManyTimes : TaskPageCopy.checkBeingChecked).text
+        }
+    }
+
+    /// The day a rule's wording was saved: the Mac's short date, in the card's calendar.
+    private static func dateText(_ date: Date, clock: ResetClock) -> String {
+        let calendar = clock.calendar
+        return date.formatted(
+            Date.FormatStyle(
+                date: .abbreviated, time: .omitted, locale: clock.locale, calendar: calendar,
+                timeZone: calendar.timeZone))
+    }
+
+    /// What the page says while a command waits for its checks, naming the
+    /// rules it waits on when the page lists them (RD-29).
+    var pendingLine: String? {
+        guard let page, let pending = page.pending else { return nil }
+        var names: [String] = []
+        for id in pending.waitingOnRuleIDs {
+            guard let name = page.ruleChecks.first(where: { $0.ruleID == id })?.ruleName, !names.contains(name) else {
+                continue
+            }
+            names.append(name)
+        }
+        if names.isEmpty { return TaskPageCopy.beingChecked.text }
+        return TaskPageCopy.beingCheckedBy.filled(["rules": names.joined(separator: ", ")])
+    }
+
+    /// The reason of the last failed check that keeps a task's contract
+    /// incomplete, while that hold is open and the owner has not let it through.
+    var contractCheckReason: String? {
+        guard let page, openHolds.contains(where: { $0.reason == .contractIncomplete }) else { return nil }
+        let reason = page.ruleChecks.last {
+            $0.hook == .taskBeforeReady && $0.result == .failed && $0.overriddenAt == nil
+                && !($0.reason ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }?.reason
+        return reason
+    }
+
+    var draftState: DraftState { page?.draft ?? .none }
 
     /// What the page says of a contract draft that is under way or was not written.
-    var draftLine: String? { nil }
+    var draftLine: String? {
+        switch draftState {
+        case .none: nil
+        case .queued: TaskPageCopy.draftQueued.text
+        case .writing: TaskPageCopy.draftWriting.text
+        case .notWritten: TaskPageCopy.draftNotWritten.text
+        }
+    }
 
     /// Draft the details: a Backlog task with no draft under way and no check running.
-    var canDraftDetails: Bool { false }
+    var canDraftDetails: Bool {
+        guard let page, page.task.state == .backlog, page.pending == nil, !isBusy else { return false }
+        return draftState == .none || draftState == .notWritten
+    }
 }

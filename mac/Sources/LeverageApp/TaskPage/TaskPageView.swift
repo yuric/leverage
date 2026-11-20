@@ -77,6 +77,13 @@ struct TaskPageContent: View {
                 EditContractSheet(model: editor, cancel: { model.endEditing() })
             }
         }
+        .sheet(
+            isPresented: Binding(get: { model.letThrough != nil }, set: { if !$0 { model.dismissLetThrough() } })
+        ) {
+            if let sheet = model.letThrough {
+                LetThroughSheet(model: sheet, cancel: { model.dismissLetThrough() })
+            }
+        }
         .confirmationDialog(
             TaskPageCopy.cancelQuestion.text,
             isPresented: Binding(get: { model.isConfirmingCancel }, set: { if !$0 { model.dismissCancel() } }),
@@ -103,6 +110,7 @@ struct TaskPageBody: View {
                     .foregroundStyle(Tokens.Tone.stop.foreground)
             }
             header
+            if let line = model.pendingLine { noteBox(line) }
             actions
             if model.needsRoundDecision { roundDecision }
             if let failure = model.actionFailure {
@@ -112,7 +120,9 @@ struct TaskPageBody: View {
             }
             if model.showsContractForm { contractForm } else { contract }
             criteria
+            if !model.checks.isEmpty { RuleChecklist(model: model) }
             work
+            if let timing = model.timing { TimingSection(timing: timing) }
             log
         }
     }
@@ -252,10 +262,18 @@ struct TaskPageBody: View {
                 TextField(AddTaskCopy.workPlaceholder.text, text: $model.draft.workReference)
                     .textFieldStyle(.roundedBorder)
             }
+            if let line = model.draftLine {
+                Text(verbatim: line)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
+            }
             HStack(spacing: 10) {
                 Button(TaskPageCopy.sendToAgents.text) { Task { await model.sendToAgents() } }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!model.canSend)
+                if model.canDraftDetails {
+                    Button(TaskPageCopy.draftDetails.text) { Task { await model.draftDetails() } }
+                }
                 if model.isBusy {
                     ProgressView().controlSize(.small)
                     Text(TaskPageCopy.sending.text)

@@ -69,10 +69,12 @@ final class TaskPageModel {
     @ObservationIgnored private var promoteKey: IdempotencyKey?
     @ObservationIgnored private var holdKey: IdempotencyKey?
     @ObservationIgnored private var resumeKey: IdempotencyKey?
+    @ObservationIgnored private var rerunKeys: [UUID: IdempotencyKey] = [:]
+    @ObservationIgnored private var draftKey: IdempotencyKey?
     @ObservationIgnored private var accounts: [UUID: CardAccount] = [:]
     @ObservationIgnored private var accountNames: [UUID: String] = [:]
 
-    @ObservationIgnored private let clock: ResetClock
+    @ObservationIgnored let clock: ResetClock
     /// Opened from Needs you's Change the task: the first read opens the
     /// editor (HM-24, HM-49).
     @ObservationIgnored private var editOnOpen: Bool
@@ -134,7 +136,8 @@ final class TaskPageModel {
         let holds = openHolds
         let card = BoardTask(
             task: page.task, blocked: !holds.isEmpty, holdReasons: holds.map(\.reason),
-            waitingForCredentialID: page.waitingForCredentialID, waitingUntil: page.waitingUntil)
+            waitingForCredentialID: page.waitingForCredentialID, waitingUntil: page.waitingUntil,
+            checking: page.pending != nil && holds.isEmpty, checkReason: contractCheckReason)
         return CardWording.content(
             for: card, seatNames: seatNames, reviewerSeatExists: page.reviewerSeatExists, accounts: cardAccounts,
             clock: clock)
@@ -164,7 +167,7 @@ final class TaskPageModel {
         guard let page else { return [] }
         return TaskLog.entries(
             events: page.events, names: page.names, criteria: page.criteria, recoveryTimes: page.recoveryTimes,
-            accounts: accountNames, clock: clock)
+            accounts: accountNames, ruleChecks: page.ruleChecks, clock: clock)
     }
 
     // MARK: what the owner can do
@@ -172,7 +175,8 @@ final class TaskPageModel {
     /// A task left in Backlog shows its form, filled in (MA-16).
     var showsContractForm: Bool { page?.task.state == .backlog }
 
-    var canSend: Bool { showsContractForm && !isBusy && !draft.trimmedTitle.isEmpty }
+    /// A task whose command waits for its checks is not sent again (RD-27).
+    var canSend: Bool { showsContractForm && !isBusy && page?.pending == nil && !draft.trimmedTitle.isEmpty }
 
     /// A task paused at the round limit offers two choices (MA-29).
     var needsRoundDecision: Bool {
@@ -215,15 +219,44 @@ final class TaskPageModel {
     /// The sheet that asks why a check is let through, while it is open.
     private(set) var letThrough: LetThroughModel?
 
-    func askToLetThrough(_ checkID: UUID) {}
+    /// Let it through once: opens the sheet that asks why, for a check the page says can be let through.
+    func askToLetThrough(_ checkID: UUID) {
+        guard let page, let check = page.ruleChecks.first(where: { $0.id == checkID }),
+            check.canOverride, check.overriddenAt == nil
+        else { return }
+        letThrough = LetThroughModel(
+            check: check, page: page, api: api,
+            onDone: { [weak self] in
+                self?.letThrough = nil
+                Task { await self?.load() }
+            })
+    }
 
     func dismissLetThrough() { letThrough = nil }
 
-    /// Run it again, for an errored check.
-    func runAgain(_ checkID: UUID) async {}
+    /// Run it again, for an errored check: the same command is sent again until it works.
+    func runAgain(_ checkID: UUID) async {
+        guard checks.first(where: { $0.id == checkID })?.canRunAgain == true else { return }
+        let key = rerunKeys[checkID] ?? IdempotencyKey()
+        rerunKeys[checkID] = key
+        let sent = await run { try await self.api.rerunCheck(checkID: checkID, key: key).acceptedWhilePending() }
+        if sent {
+            rerunKeys[checkID] = nil
+            await load()
+        }
+    }
 
     /// Draft the details: a planner writes the contract of a Backlog task.
-    func draftDetails() async {}
+    func draftDetails() async {
+        guard canDraftDetails else { return }
+        let key = draftKey ?? IdempotencyKey()
+        draftKey = key
+        let sent = await run { try await self.api.draftContract(taskID: self.taskID, key: key).acceptedWhilePending() }
+        if sent {
+            draftKey = nil
+            await load()
+        }
+    }
 
     func moveToBacklog() async {
         guard canMoveToBacklog else { return }
@@ -356,7 +389,7 @@ final class TaskPageModel {
         sendKey = key
         let request = draft.completeRequest()
         let sent = await run {
-            _ = try await self.api.completeContract(taskID: self.taskID, request, key: key).completedResult()
+            try await self.api.completeContract(taskID: self.taskID, request, key: key).acceptedWhilePending()
         }
         if sent {
             sendKey = nil

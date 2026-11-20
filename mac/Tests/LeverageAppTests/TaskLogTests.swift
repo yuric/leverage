@@ -158,7 +158,7 @@ struct TaskLogTests {
     @Test("an event the task page has no sentence for yet reads as a general one")
     func fallback() {
         #expect(sentence(event(.questionAsked, actor: builder)) == "The task was updated.")
-        #expect(sentence(event(.checkQueued, actorKind: .app)) == "The task was updated.")
+        #expect(sentence(event(.actionRequested, actorKind: .app)) == "The task was updated.")
     }
 
     @Test("every event type gets a sentence in plain words, with nothing of the engine's showing")

@@ -14,6 +14,7 @@ struct AddTaskSheet: View {
             AddTaskModel(api: context.owner, onSaved: { navigator.finishAddTask() })
         }
         AddTaskForm(model: model, cancel: { navigator.isAddTaskPresented = false })
+            .task { await model.loadRules() }
     }
 }
 
@@ -85,7 +86,7 @@ struct AddTaskForm: View {
                 AddTaskFields(model: model)
                     .padding(.trailing, 6)
             }
-            Text(AddTaskCopy.footnote.text)
+            Text(model.footnote.text)
                 .font(.system(size: Tokens.FontSize.small))
                 .foregroundStyle(Tokens.Palette.text2)
                 .padding(.top, 12)
@@ -151,7 +152,7 @@ struct AddTaskFields: View {
                     TextField(AddTaskCopy.goalPlaceholder.text, text: $model.goal)
                         .textFieldStyle(.roundedBorder)
                 }
-                FormField(label: AddTaskCopy.criteriaLabel.text, hint: AddTaskCopy.criteriaHint.text) {
+                FormField(label: AddTaskCopy.criteriaLabel.text, hint: model.criteriaHint.text) {
                     PlaceholderEditor(text: $model.criteriaText, placeholder: AddTaskCopy.criteriaPlaceholder.text)
                 }
                 FormField(label: AddTaskCopy.detailsLabel.text) {

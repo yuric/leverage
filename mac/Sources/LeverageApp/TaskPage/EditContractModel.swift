@@ -107,7 +107,7 @@ final class EditContractModel {
             if thenComplete {
                 let key = completeKey ?? IdempotencyKey()
                 completeKey = key
-                _ = try await api.completeContract(taskID: taskID, request, key: key).completedResult()
+                try await api.completeContract(taskID: taskID, request, key: key).acceptedWhilePending()
             }
             state = .saved
             onSaved()

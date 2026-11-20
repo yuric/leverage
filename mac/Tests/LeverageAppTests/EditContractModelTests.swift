@@ -166,6 +166,17 @@ struct EditContractModelTests {
         #expect(saved.value == 1)
     }
 
+    @Test("a Complete contract that is pending, because a check is looking at the details, closes the editor (RD-27)")
+    func completePending() async throws {
+        let owner = owner(complete: { _, _, key in .pending(key: key.value, command: .completeContract) })
+        let saved = Locked(0)
+        let model = make(owner, saved: saved)
+        await model.saveAndSend()
+        #expect(model.state == .saved)
+        #expect(model.failure == nil)
+        #expect(saved.value == 1)
+    }
+
     @Test("when Complete contract fails the edit stays saved, and Retry sends only Complete contract, same key")
     func completeFails() async throws {
         let attempts = Locked(0)
