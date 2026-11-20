@@ -435,7 +435,9 @@ What it added, each from the milestone 3 plan:
   start request's run continues (HD-1); in the provisional reads,
   `Credential.limited_since` (HE-3), `Seat.run_credential_id` and
   `Seat.run_stop_reason` (HD-3, HD-10), `TaskPage.recovery_times`, a
-  list of `RecoveryTime` (HE-17, HE-18), and
+  list of `RecoveryTime` (HE-17, HE-18),
+  `TaskPage.waiting_for_credential_id` and `waiting_until`, the board
+  card's two fields for the same task (HE-15, HE-16), and
   `SystemHealth.backup_last_ran_at` and `backup_late` (HB-4). The
   command `seat_run_placement` joins the `CommandName` enum.
 - **Schema**: one migration adds `credentials.limited_since` with a check
