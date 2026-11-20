@@ -22,10 +22,11 @@ module Leverage
   # again); cleared by task.submitted, task.released, task.lease_expired,
   # task.returned, task.cancelled and task.done. A provisional claim (RE-5)
   # sets the holder with the check.queued of its task.before_claim check
-  # (claimant_seat_id) and clears it with that check's failed or errored
-  # check.finished, with the withdrawal of the last of its checks that runs
-  # (a rule turned off leaves the claim waiting on its other checks, L379),
-  # and with a hold.opened on the task, while the task is still Ready. The builder is set by
+  # (claimant_seat_id) and clears it when the last of its checks still
+  # running has its result and one of them failed or erred, or every one
+  # was withdrawn (a rule turned off leaves the claim waiting on its other
+  # checks, L379; the engine decides only then), and with a hold.opened on
+  # the task, while the task is still Ready. The builder is set by
   # task.claimed and cleared when the task returns to Ready or Backlog or is
   # cancelled. The minimum strength rank and the contract version are set
   # by task.contract_changed, which carries both (the rank is null for
@@ -71,7 +72,7 @@ module Leverage
     CLAIM_HOOK = "task.before_claim".freeze
     LEASE_FIELD = "lease_seat_id".freeze
     # Projection keys that are not replay columns.
-    INTERNAL = %w[provisional].freeze
+    INTERNAL = %w[provisional provisional_failed].freeze
     # A provisional claim becomes the claim, or ends with the holder.
     ENDS_PROVISIONAL = %w[task.claimed task.released task.cancelled].freeze
     BATCH = 1_000
@@ -188,7 +189,10 @@ module Leverage
         task["round"] += 1
       end
       task["holder_seat_id"] = payload[LEASE_FIELD] if payload[LEASE_FIELD]
-      task.delete("provisional") if ENDS_PROVISIONAL.include?(event.type)
+      if ENDS_PROVISIONAL.include?(event.type)
+        task.delete("provisional")
+        task.delete("provisional_failed")
+      end
     end
 
     # --- rules and rule checks -------------------------------------------------
@@ -235,21 +239,28 @@ module Leverage
       (task["provisional"] ||= Set.new) << check_id
     end
 
-    # A claim check's result (DB-43): a failure or an error ends the
-    # provisional claim; a withdrawal ends it when no other check of it
-    # runs (a rule turned off leaves the claim waiting on the others, L379);
-    # a pass leaves it waiting on the others, or task.claimed follows.
+    # A claim check's result (DB-43). The engine decides a pending claim
+    # only once none of its checks is still running (Rules::Reentry, steps
+    # 3 and 6), so the claimant holds the Ready task until then: when the
+    # last running check of the claim has its result, a failure or an error
+    # among them ends the provisional claim, and so does every one of them
+    # withdrawn (a rule turned off leaves the claim waiting on the others,
+    # L379); otherwise task.claimed follows.
     def settle_claim_check(task, payload, check_id)
       return unless task && payload["hook"] == CLAIM_HOOK && task["provisional"]
 
       result = payload.fetch("result")
       task["provisional"].delete(check_id)
-      lapse(task) if %w[failed error].include?(result) || (result == "withdrawn" && task["provisional"].empty?)
+      task["provisional_failed"] = true if %w[failed error].include?(result)
+      return unless task["provisional"].empty?
+
+      lapse(task) if task.delete("provisional_failed") || result == "withdrawn"
     end
 
     # The provisional claim lapses (DB-43): its check failed, erred or was
     # withdrawn, or a hold opened on the task.
     def lapse(task)
+      task.delete("provisional_failed") if task
       return unless task && task["state"] == "ready" && task.delete("provisional")
 
       task["holder_seat_id"] = nil

@@ -330,8 +330,10 @@ Where two inventories chose differently, the decision names the conflict.
   `hold.closed` (Offer task again, or Mark action done with approved
   actions left) when their payload's `lease_seat_id` is not null; the
   provisional holder is set by `check.queued` at `task.before_claim`
-  (`claimant_seat_id`) and cleared by that check's `check.finished` with
-  `failed`, `error` or `withdrawn`, by a `hold.opened` on the task, and by
+  (`claimant_seat_id`) and cleared by the `check.finished` of the last of
+  the claim's checks still running when one of them is `failed` or
+  `error`, or every one `withdrawn` (the engine decides a pending claim
+  only then; milestone 4 WP20), by a `hold.opened` on the task, and by
   `task.released`; holder cleared by `task.submitted`, `task.released`,
   `task.lease_expired`, `task.returned`, `task.cancelled` and `task.done`.
   Settles D-G48, M-G7, M-G31.
