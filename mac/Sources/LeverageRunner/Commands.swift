@@ -80,6 +80,8 @@ struct FlowContext: Sendable {
     let state: RunnerState
     let workRoot: URL
     let home: String
+    /// What a failed tool run means for the account (HD-5).
+    let interruption: Interruption
 
     /// Sends one command with a key of its own. A network failure sends it
     /// again with the same key, after a pause of at most 2 seconds, for as
@@ -170,6 +172,7 @@ final class RunnerState: @unchecked Sendable {
     private let lock = NSLock()
     private var heldNow: Held = .nothing
     private var failures = 0
+    private var stoppedAccount: RunEndReport?
 
     var held: Held { lock.withLock { heldNow } }
     func hold(_ held: Held) { lock.withLock { heldNow = held } }
@@ -178,4 +181,8 @@ final class RunnerState: @unchecked Sendable {
     var consecutiveToolFailures: Int { lock.withLock { failures } }
     func toolAnswered() { lock.withLock { failures = 0 } }
     func toolFailed() { lock.withLock { failures += 1 } }
+
+    /// The report of the account that stopped, once a flow found it (HD-6).
+    var accountStop: RunEndReport? { lock.withLock { stoppedAccount } }
+    func accountStopped(_ report: RunEndReport) { lock.withLock { stoppedAccount = report } }
 }

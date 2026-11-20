@@ -20,6 +20,13 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     /// The provider is not run in this role: agy's plan mode did not answer a
     /// plain prompt in WP11's step 0, so it cannot review (CL-8).
     case reviewerNotOffered(Provider)
+    /// The variable does not hold an id.
+    case notAnIdentifier(String)
+    /// Both a task and a review to continue.
+    case twoWorksToContinue
+    /// Work the seat's role does not do: a task for a reviewer, a review
+    /// for a builder.
+    case workNotForRole(String)
 
     var description: String {
         switch self {
@@ -32,6 +39,10 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
         case .accountFolderMissing(let path): "the account folder \(path) does not exist"
         case .invalidTimeout(let value): "\(EnvironmentKeys.toolTimeoutSeconds) is not a positive number: \(value)"
         case .reviewerNotOffered(let provider): "\(provider.rawValue) is not offered as a reviewer yet"
+        case .notAnIdentifier(let name): "\(name) is not an id"
+        case .twoWorksToContinue:
+            "\(EnvironmentKeys.continueTaskID) and \(EnvironmentKeys.continueReviewID) are both set"
+        case .workNotForRole(let name): "\(name) is not work for this seat's role"
         }
     }
 }
@@ -129,6 +140,11 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
     let tool: ToolConfiguration
     /// Where a task with no work reference gets its folder (CL-7).
     let workRoot: URL
+    /// The credential the run is on; nil for a seat that connects on its
+    /// own, whose runs detect nothing (HM-19).
+    let credentialID: UUID?
+    /// The work the run is started to continue (HD-9).
+    let continuing: WorkToContinue?
 
     init(environment: [String: String]) throws {
         guard let token = environment[EnvironmentKeys.seatToken], !token.isEmpty else {
@@ -155,6 +171,8 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
             workRoot = URL(fileURLWithPath: tool.supportFolder, isDirectory: true)
                 .appendingPathComponent("work", isDirectory: true)
         }
+        credentialID = nil
+        continuing = nil
     }
 
     /// Whether a provider's read-only mode answers a plain prompt, so that it

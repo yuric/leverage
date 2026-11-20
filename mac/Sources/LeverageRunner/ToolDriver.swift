@@ -41,11 +41,32 @@ enum ToolFailure: Error, Equatable, Sendable, CustomStringConvertible {
     }
 }
 
-/// Runs one prompt in a folder and returns the answer, or throws a
-/// `ToolFailure`; cancelling the calling task ends the tool and everything
-/// it started, and throws `CancellationError`.
+/// How one tool run ended: the answer, or the failure with the run's record
+/// when the tool ran at all. The record goes to `Interruption` and to
+/// nobody else (plan §2.2): it is never logged, kept or sent.
+enum ToolRun: Equatable, Sendable {
+    case answered(ToolAnswer)
+    /// The record is nil when the tool did not start.
+    case failed(ToolFailure, ToolRunRecord?)
+}
+
+/// Runs one prompt in a folder. `execute` gives the answer or the failure
+/// with its record; cancelling the calling task ends the tool and
+/// everything it started, and throws `CancellationError`, the one error it
+/// throws.
 protocol ToolDriver: Sendable {
-    func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer
+    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun
+}
+
+extension ToolDriver {
+    /// The answer, or the failure thrown as a `ToolFailure` (the probe's
+    /// and milestone 2's form).
+    func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer {
+        switch try await execute(prompt: prompt, in: folder, purpose: purpose) {
+        case .answered(let answer): return answer
+        case .failed(let failure, _): throw failure
+        }
+    }
 }
 
 /// What one run of a provider's tool is given.
@@ -130,6 +151,14 @@ struct ProcessToolDriver: ToolDriver {
         }
         self.tool = tool
         self.shape = shape
+    }
+
+    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
+        do {
+            return .answered(try await run(prompt: prompt, in: folder, purpose: purpose))
+        } catch let failure as ToolFailure {
+            return .failed(failure, nil)
+        }
     }
 
     func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer {

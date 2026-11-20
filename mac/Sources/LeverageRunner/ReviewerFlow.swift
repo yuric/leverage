@@ -20,7 +20,7 @@ struct ReviewerFlow: Sendable {
     }
 
     /// Goes on with a review this seat holds whose briefing changed.
-    func continueReview(_ reviewID: UUID) async throws -> FlowEnd {
+    func continueReview(_ reviewID: UUID, acknowledgement: Acknowledgement = .always) async throws -> FlowEnd {
         try await work(reviewID, start: nil, leaseDue: nil)
     }
 

@@ -173,6 +173,50 @@ struct RunnerConfigurationTests {
         #expect(tool.toolEnvironment.keys.allSatisfy { !$0.hasPrefix("LEVERAGE_") })
     }
 
+    // MARK: Milestone 3's inputs (plan §2.4, HD-9, HM-19)
+
+    @Test("the credential the run is on is read; absent, the run has none")
+    func credential() throws {
+        let id = UUID()
+        var values = environment()
+        values["LEVERAGE_CREDENTIAL_ID"] = id.contractString
+        #expect(try RunnerConfiguration(environment: values).credentialID == id)
+        #expect(try RunnerConfiguration(environment: environment()).credentialID == nil)
+        values["LEVERAGE_CREDENTIAL_ID"] = ""
+        #expect(try RunnerConfiguration(environment: values).credentialID == nil)
+    }
+
+    @Test("a credential that is not an id is refused")
+    func credentialNotAnID() {
+        #expect(refusal { $0["LEVERAGE_CREDENTIAL_ID"] = "cred-1" } == .notAnIdentifier("LEVERAGE_CREDENTIAL_ID"))
+    }
+
+    @Test("a builder reads the task to continue, a reviewer the review; neither, nothing")
+    func continuing() throws {
+        let taskID = UUID()
+        let reviewID = UUID()
+        var builder = environment()
+        builder["LEVERAGE_CONTINUE_TASK_ID"] = taskID.contractString
+        #expect(try RunnerConfiguration(environment: builder).continuing == .task(taskID))
+        var reviewer = environment(role: "reviewer")
+        reviewer["LEVERAGE_CONTINUE_REVIEW_ID"] = reviewID.contractString
+        #expect(try RunnerConfiguration(environment: reviewer).continuing == .review(reviewID))
+        #expect(try RunnerConfiguration(environment: environment()).continuing == nil)
+    }
+
+    @Test("both works to continue, work of the other role, or a value that is not an id is refused")
+    func continuingRefused() {
+        let id = UUID().contractString
+        #expect(refusal {
+            $0["LEVERAGE_CONTINUE_TASK_ID"] = id
+            $0["LEVERAGE_CONTINUE_REVIEW_ID"] = UUID().contractString
+        } == .twoWorksToContinue)
+        #expect(refusal { $0["LEVERAGE_CONTINUE_REVIEW_ID"] = id } == .workNotForRole("LEVERAGE_CONTINUE_REVIEW_ID"))
+        #expect(refusal({ $0["LEVERAGE_CONTINUE_TASK_ID"] = id }, base: environment(role: "reviewer"))
+                == .workNotForRole("LEVERAGE_CONTINUE_TASK_ID"))
+        #expect(refusal { $0["LEVERAGE_CONTINUE_TASK_ID"] = "task-1" } == .notAnIdentifier("LEVERAGE_CONTINUE_TASK_ID"))
+    }
+
     @Test("the probe needs no seat token and no role")
     func probeConfiguration() throws {
         var values = environment()

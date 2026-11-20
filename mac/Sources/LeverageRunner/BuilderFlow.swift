@@ -13,6 +13,20 @@ enum FlowEnd: Equatable, Sendable {
     /// The lease or the task is gone (`lease_expired`, `task_cancelled`,
     /// `not_holder`): nothing to release.
     case ended
+    /// The account stopped (a limit or a sign-out): nothing is released,
+    /// and the run ends with this report (HD-6).
+    case accountStopped(RunEndReport)
+}
+
+/// When a flow acknowledges the briefing.
+enum Acknowledgement: Sendable {
+    /// Before the first criterion, as milestone 2 does after a claim, a
+    /// rework, a resume and a changed briefing.
+    case always
+    /// Only once a call is refused `briefing_not_acknowledged` or
+    /// `briefing_changed`: a run started to continue work whose lease did
+    /// not change (HD-9).
+    case whenAsked
 }
 
 /// A builder's work on one task: claim (or a rework, a resume, a changed
@@ -45,7 +59,7 @@ struct BuilderFlow: Sendable {
 
     /// Goes on with a task this seat holds (`rework`, `resume`,
     /// `briefing_changed`), from its briefing.
-    func continueTask(_ taskID: UUID) async throws -> FlowEnd {
+    func continueTask(_ taskID: UUID, acknowledgement: Acknowledgement = .always) async throws -> FlowEnd {
         try await work(taskID, start: nil, leaseDue: nil)
     }
 

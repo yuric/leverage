@@ -16,6 +16,15 @@ enum RunnerExit: Int32, Sendable {
     case unauthenticated = 3
     /// Three failed tool runs in a row (CL-22).
     case toolFailures = 4
+    /// The account stopped: a limit or a sign-out. The report line is on
+    /// standard output (HD-6).
+    case accountStopped = 5
+}
+
+/// The work a run is started to continue (HD-1, HD-9).
+enum WorkToContinue: Equatable, Sendable {
+    case task(UUID)
+    case review(UUID)
 }
 
 /// The loop's timing. Nothing in it sleeps longer than 2 seconds between
@@ -62,15 +71,22 @@ final class RunnerLoop: @unchecked Sendable {
     private let lock = NSLock()
     private var stopping = false
     private var working: Task<RunnerExit, Never>?
+    private let continuing: WorkToContinue?
 
     init(
         role: SeatRole, api: any AgentAPI, driver: any ToolDriver, workRoot: URL, home: String,
-        timing: RunnerTiming = .standard, log: Log
+        timing: RunnerTiming = .standard, interruption: Interruption? = nil, continuing: WorkToContinue? = nil,
+        log: Log
     ) {
         self.role = role
+        self.continuing = continuing
         context = FlowContext(
-            api: api, driver: driver, timing: timing, log: log, state: RunnerState(), workRoot: workRoot, home: home)
+            api: api, driver: driver, timing: timing, log: log, state: RunnerState(), workRoot: workRoot, home: home,
+            interruption: interruption ?? Interruption(provider: .claude, hasCredential: false))
     }
+
+    /// The report of the account that stopped, when `run()` returned 5.
+    var endReport: RunEndReport? { nil }
 
     /// Runs until stopped, unauthenticated, or three tool runs failed in a
     /// row; returns the exit code.
