@@ -2,6 +2,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "rake"
+require_relative "support/connection_budget"
 
 # The owner's password is hashed at bcrypt's lowest cost in tests, so
 # Scenario's owner does not cost a quarter of a second each time.
