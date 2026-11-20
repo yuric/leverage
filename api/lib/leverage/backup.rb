@@ -21,14 +21,20 @@ module Leverage
   #
   # A restore (bin/restore) makes the database again from a dump: it
   # refuses a database whose events table holds a row unless replace is
-  # given, drops and creates the database, runs pg_restore into it with no
+  # given, checks that pg_restore can read the dump's list, creates a
+  # staging database beside it, runs pg_restore into that with no
   # --create and no --clean, and with --no-owner (pg_dump ignores
   # --no-owner for an archive format, so the dump keeps each object's
   # owner and the restore drops it: a new cluster may lack that role), gives the roles their rights again
   # (db:grants: a dump of one database holds no role) and runs
-  # leverage:verify_log. One path, whatever was there before.
+  # leverage:verify_log there. Only then is the database dropped and the
+  # staging database renamed to its name, so a dump that cannot be
+  # restored leaves the database as it was. One path, whatever was there
+  # before.
   module Backup
-    # bin/backup looks when it starts and then every 15 minutes (HB-3).
+    # bin/backup looks when it starts and then every 15 minutes (HB-3);
+    # while the database holds no workspace it makes no dump and looks
+    # again every 30 seconds, so the first dump follows the owner's sign-up.
     LOOK_EVERY = 15 * 60
     EMPTY_LOOK_EVERY = 30
     EVERY_HOURS = 24
@@ -41,6 +47,9 @@ module Leverage
     MAINTENANCE_DATABASE = "postgres".freeze
     DUMP_FLAGS = %w[--format=custom --no-owner --no-privileges].freeze
     RESTORE_FLAGS = %w[--no-owner --no-privileges --exit-on-error].freeze
+    # A restore is made into <database>_restoring_<hex> first, and takes
+    # the database's name only once it has passed the replay test.
+    STAGING = "_restoring_".freeze
 
     class Failed < StandardError; end
     # A restore that would replace a log, without replace.
@@ -72,13 +81,17 @@ module Leverage
 
     module_function
 
-    # Whether no backup_runs row is newer than every_hours, by the
-    # database's clock.
+    # Whether the database holds something to keep and no backup_runs row
+    # is newer than every_hours, by the database's clock. A database with
+    # no workspace (a new one, as after the volume was lost) is never
+    # dumped: its dump would become the newest file in the folder, beside
+    # the dumps of the log that was lost.
     def due?(every_hours: EVERY_HOURS)
-      !BackupRun.where("ran_at > ?", database_now - every_hours.to_f.hours).exists?
+      !empty? && !BackupRun.where("ran_at > ?", database_now - every_hours.to_f.hours).exists?
     end
 
-    def empty? = false
+    # Whether the database holds no workspace yet: no owner has signed up.
+    def empty? = !Workspace.exists?
 
     # One backup. Returns its BackupRun, or nil when it failed (logged).
     def run(folder: FOLDER, keep: KEEP, target: nil, spawner: SPAWN, log: nil)
@@ -123,8 +136,9 @@ module Leverage
       end
     end
 
-    # bin/backup: a look when it starts and then every look_every seconds,
-    # until stop answers true; a backup at each look where one is due. A
+    # bin/backup: a look when it starts and then every look_every seconds
+    # (every EMPTY_LOOK_EVERY while the database holds no workspace), until
+    # stop answers true; a backup at each look where one is due. A
     # look that fails is logged and the next one runs on time. The sleeper,
     # stop and the module are parameters, so the loop is tested without
     # waiting.
@@ -133,12 +147,17 @@ module Leverage
       log ||= method(:log_error)
       sleeper ||= ->(seconds) { pause(seconds, stop) }
       until stop.call
+        wait = look_every
         begin
-          backup.run(folder: folder, keep: keep, log: log) if backup.due?(every_hours: every_hours)
+          if backup.empty?
+            wait = [ EMPTY_LOOK_EVERY, look_every ].min
+          elsif backup.due?(every_hours: every_hours)
+            backup.run(folder: folder, keep: keep, log: log)
+          end
         rescue StandardError => error
           log.call("#{LOG} look failed folder=#{folder} error=#{error.class} message=#{error.message.inspect}")
         end
-        sleeper.call(look_every) unless stop.call
+        sleeper.call(wait) unless stop.call
       end
     end
 
@@ -155,16 +174,45 @@ module Leverage
                        "To replace it with the dump, run bin/restore again with --replace."
       end
 
+      tool!(target, spawner, "pg_restore", "--list", file)
+      staging = target.with(database: "#{target.database}#{STAGING}#{SecureRandom.hex(4)}")
+      restore_into(staging, file, workspace_id, spawner)
       drop_database(target, spawner: spawner)
-      tool!(target, spawner, "createdb", *target.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
-        target.database)
-      tool!(target, spawner, "pg_restore", *RESTORE_FLAGS, *target.connection_args, "--dbname", target.database, file)
-      connected_to(target) do
+      rename_database(target, from: staging.database)
+      target
+    end
+
+    # Makes staging from the dump, gives the roles their rights and runs
+    # the replay test there. On any failure staging is dropped and the
+    # target was never touched.
+    def restore_into(staging, file, workspace_id, spawner)
+      tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
+        staging.database)
+      tool!(staging, spawner, "pg_restore", *RESTORE_FLAGS, *staging.connection_args, "--dbname", staging.database,
+        file)
+      connected_to(staging) do
         load_tasks
         DbGrants.apply(ActiveRecord::Base.lease_connection)
         verify!(workspace_id)
       end
-      target
+    rescue Failed
+      begin
+        drop_database(staging, spawner: spawner)
+      rescue Failed
+        nil
+      end
+      raise
+    end
+
+    # Gives the database from its name the target's, over the maintenance
+    # database.
+    def rename_database(target, from:)
+      with_pg(target, MAINTENANCE_DATABASE) do |pg|
+        pg.exec("ALTER DATABASE #{pg.quote_ident(from)} RENAME TO #{pg.quote_ident(target.database)}")
+      end
+    rescue Failed => error
+      raise Failed, "the restored database #{from} could not take the name #{target.database} " \
+                    "(rename it by hand): #{error.message}"
     end
 
     def drop_database(target, spawner: SPAWN)

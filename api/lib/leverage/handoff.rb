@@ -57,8 +57,9 @@ module Leverage
 
     # Rule 6: with a next candidate (Candidates.next_after), switch; with
     # none, a task's hold or a review's release (review.released caused by
-    # cause). The hold is credential_signed_out when any candidate is
-    # signed out, naming the first in the seat's order (HE-12), else
+    # cause). The hold is credential_signed_out when a candidate that rule
+    # 3 keeps for the task is signed out, naming the first in the seat's
+    # order (HE-12; one the task passes over could not end the hold), else
     # credential_limit naming the candidate that resets first, or the
     # stopped credential when none has a reset time (HE-13). Its item opens
     # only when the owner must act: the reason is credential_signed_out or
@@ -149,7 +150,7 @@ module Leverage
     # --- rule 6 ---------------------------------------------------------------
 
     def hold(ctx, seat, task, stopped, cause)
-      signed_out = Candidates.for(seat).find { |credential| credential.state == "signed_out" }
+      signed_out = Candidates.signed_out_for(seat, task)
       resets = Candidates.earliest_reset(seat, task, ctx.at)
       named = signed_out || resets || stopped
       reason = signed_out ? "credential_signed_out" : "credential_limit"
@@ -186,7 +187,10 @@ module Leverage
     end
 
     # A hold whose holder has an available candidate closes; else an
-    # "Account signed out" item naming the verified account is resolved.
+    # "Account signed out" item naming the verified account is resolved,
+    # and a hold that is then left with no item and no due time gets the
+    # item for what still blocks it (open_blocker_item), so it never waits
+    # with nothing to end it.
     def look_again(ctx, open, task, seat, cause:, verified:, choice:)
       to = Candidates.first_available(seat, task, ctx.at)
       if to
@@ -194,6 +198,26 @@ module Leverage
       elsif verified
         InboxItem.where(hold_id: open.id, state: "open", kind: ACCOUNT_SIGNED_OUT, credential_id: verified.id)
           .order(:opened_at).each { |item| resolve(ctx, item, task, choice) }
+        open_blocker_item(ctx, open, task, seat, cause)
+      end
+    end
+
+    # The item a credential hold with no open item and no due time needs:
+    # "Account signed out" naming the first signed-out candidate rule 3
+    # keeps for the task, else "Limit with no reset time" naming the first
+    # such candidate limited with no reset time. No hold event: the hold
+    # keeps its reason.
+    def open_blocker_item(ctx, open, task, seat, cause)
+      return if InboxItem.where(hold_id: open.id, state: "open").exists?
+
+      last = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
+      return if Candidates.due_at(seat, task, last)
+
+      signed_out = Candidates.signed_out_for(seat, task)
+      if signed_out
+        open_item(ctx, open, task, "credential_signed_out", signed_out, cause)
+      elsif (limited = Candidates.limited_with_no_reset_for(seat, task, ctx.at))
+        open_item(ctx, open, task, "credential_limit", limited, cause)
       end
     end
 
@@ -217,21 +241,28 @@ module Leverage
     end
 
     # HE-11: the "Account signed out" item beside a credential_limit hold
-    # that the sign-out of signed_out, one of its seat's candidates, has
-    # left with no due time and no open item. No hold event: the hold keeps
-    # its reason, and the lease keeps running.
+    # that the sign-out of signed_out, one of its seat's candidates that
+    # rule 3 keeps for the task, has left with no due time and no open
+    # item. No hold event: the hold keeps its reason, and the lease keeps
+    # running.
     def open_signed_out_item(ctx, open, task, seat, signed_out, cause)
       return unless open.reason == "credential_limit"
-      return unless Candidates.for(seat).any? { |credential| credential.id == signed_out.id }
+      return unless Candidates.kept_for?(seat, signed_out, task)
       return if InboxItem.where(hold_id: open.id, state: "open").exists?
 
       last = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
       return if Candidates.due_at(seat, task, last)
 
-      choices = Holds.needs_you_item("credential_signed_out").fetch("choices").map { |entry| entry.fetch("choice") }
-      item = InboxItem.create!(workspace_id: task.workspace_id, kind: ACCOUNT_SIGNED_OUT, about_kind: "task",
-        about_id: task.id, hold_id: open.id, credential_id: signed_out.id, facts: { credential_id: signed_out.id },
-        opened_at: ctx.at, choices: choices)
+      open_item(ctx, open, task, "credential_signed_out", signed_out, cause)
+    end
+
+    # Opens, beside an open hold, the Needs you item the registry gives
+    # reason, naming credential, with inbox.opened caused by cause.
+    def open_item(ctx, open, task, reason, credential, cause)
+      needs_you = Holds.needs_you_item(reason)
+      item = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
+        about_id: task.id, hold_id: open.id, credential_id: credential.id, facts: { credential_id: credential.id },
+        opened_at: ctx.at, choices: needs_you.fetch("choices").map { |entry| entry.fetch("choice") })
       actor_kind, actor_id = ctx.actor
       ctx.emit("inbox.opened", task: task, subject: item, cause_id: cause&.id, actor_kind: actor_kind, actor_id: actor_id,
         payload: { kind: item.kind })
@@ -270,7 +301,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :hold, :each_open_hold, :look_again, :go_on, :open_signed_out_item, :resolve, :switch_as,
-      :app_actor, :ctx_actor
+    private_class_method :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
+      :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end

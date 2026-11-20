@@ -31,6 +31,9 @@ module Leverage
       # milestone 5), checks and jobs (milestone 4) or No reviewer is
       # eligible (SM-42, milestone 4) and are not written.
       #
+      # A request that changes no field (an empty body, or every field set
+      # to what it is) completes with no event and changes nothing.
+      #
       # A removed or unknown seat is 404. Result: helper_request_id, the
       # stop_seat request when one was queued, else null.
       #
@@ -63,7 +66,13 @@ module Leverage
         def perform(ctx)
           turning_off = @params["enabled"] == false && @seat.enabled
           login_changes = @login && @login.id != @seat.credential_id
-          @seat.update!(changes.merge(turning_off ? { wanted_running: false } : {}))
+          values = changes
+          if values.all? { |column, value| @seat.public_send(column) == value }
+            @result = { "helper_request_id" => nil }
+            return
+          end
+
+          @seat.update!(values.merge(turning_off ? { wanted_running: false } : {}))
           changed = ctx.emit("seat.changed", subject: @seat, payload: {})
           stop = turn_off(ctx, changed) if turning_off
           look_again(ctx, changed) if login_changes

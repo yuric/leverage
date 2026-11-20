@@ -20,8 +20,10 @@ module Leverage
       #   lease_expired, task_cancelled, not_holder  as for the seat's own
       #                 calls, when the seat does not hold the work;
       #   invalid_state no row for the task's state that is served (no row
-      #                 from Finishing is, HS-3), or the credential reported
-      #                 is not the one recorded for the work.
+      #                 from Finishing is, HS-3), the credential reported is
+      #                 not the one recorded for the work, or the task
+      #                 already waits on a credential hold (no run is on it,
+      #                 HE-21: the report is stale).
       #
       # A refused report marks no credential and writes no event.
       #
@@ -56,6 +58,7 @@ module Leverage
           codes << state_refusal(@on.state, guards(ctx))
           codes << Refusal.new(code: "invalid_state") if NOT_SERVED_FROM.include?(@on.state)
           codes << Refusal.new(code: "invalid_state") unless (@review || @task).credential_id == @credential.id
+          codes << Refusal.new(code: "invalid_state") if held?
           codes.compact
         end
 
@@ -68,6 +71,13 @@ module Leverage
         end
 
         private
+
+        # Whether the task already waits on a credential hold: no run is
+        # on it then (HE-21), so a report about it is stale, and a second
+        # one would write the interruption and open the hold again.
+        def held?
+          @task && Holds.open_holds(@task).any? { |hold| Handoff::CREDENTIAL_REASONS.include?(hold.reason) }
+        end
 
         # What a sign-out adds after the work has moved (ReportSignedOut).
         def after_hand_over(_ctx, _first); end

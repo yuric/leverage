@@ -75,11 +75,15 @@ services:
   # switches roles only for the server and the sweep. The dumps go to a
   # folder on the host, outside Docker's volumes, so that losing the db
   # volume does not take them with it; LEVERAGE_BACKUP_DIR names it. The
-  # maintainer's restore runs here too: bin/restore (docs/DEPLOY.md).
+  # maintainer's restore runs here too: bin/restore (docs/DEPLOY.md). It
+  # never connects as the login role, so it is given neither that role's
+  # URL nor its password (.env's value is overridden with nothing).
   backup:
     <<: *api
     environment:
       <<: *api-environment
+      API_DATABASE_URL: ""
+      LEVERAGE_API_DB_PASSWORD: ""
       BACKUP_DIR: /backups
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
       BACKUP_EVERY_HOURS: ${BACKUP_EVERY_HOURS:-24}

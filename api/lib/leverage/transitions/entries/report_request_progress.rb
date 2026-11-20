@@ -2,7 +2,8 @@ module Leverage
   module Transitions
     module Entries
       # report_request_progress (milestone 2 plan IN-23): one check's state
-      # while a run_add_checks or verify request runs. helper_requests.
+      # while a run_add_checks, verify or open_sign_in (Sign in again,
+      # milestone 3 plan MA-17) request runs. helper_requests.
       # progress keeps each check's latest report, in the order the checks
       # were first reported, and updated_at becomes the command's time, which
       # the app's long poll on get_helper_request compares. No event: the
@@ -16,7 +17,7 @@ module Leverage
       #
       # Params: "id" (the request), "check", "state", "failure", "install".
       class ReportRequestProgress < Entry
-        KINDS = %w[run_add_checks verify].freeze
+        KINDS = %w[run_add_checks verify open_sign_in].freeze
         UNFINISHED = %w[queued picked_up].freeze
         INSTALL_STATES = %w[waiting_for_install failed].freeze
 

@@ -81,14 +81,39 @@ module Leverage
       reset && [ reset.limited_until, last ].max
     end
 
-    # Whether any of the seat's candidates is signed out (rule 6: the
-    # hold's reason is then credential_signed_out).
-    def any_signed_out?(seat, _work = nil)
-      self.for(seat).any? { |credential| credential.state == "signed_out" }
+    # Whether any of the seat's candidates that rule 3 keeps for work is
+    # signed out (rule 6: the hold's reason is then credential_signed_out).
+    # With no work, every candidate counts.
+    def any_signed_out?(seat, work = nil)
+      !signed_out_for(seat, work).nil?
     end
 
-    def signed_out_for(seat, _work)
-      self.for(seat).find { |credential| credential.state == "signed_out" }
+    # Whether credential is one of the seat's candidates and rule 3 keeps
+    # it for work.
+    def kept_for?(seat, credential, work)
+      self.for(seat).any? { |candidate| candidate.id == credential.id } && passes_for_work?(seat, credential, work)
+    end
+
+    # The first signed-in candidate rule 3 keeps for work that is limited
+    # at at with no reset time: what a credential hold with no due time
+    # waits for when no candidate is signed out (HE-13).
+    #
+    # Returns the Credential, or nil.
+    def limited_with_no_reset_for(seat, work, at)
+      self.for(seat).find do |credential|
+        credential.state == "active" && credential.limited?(at) && credential.limited_until.nil? &&
+          passes_for_work?(seat, credential, work)
+      end
+    end
+
+    # The first of the seat's candidates, in order, that is signed out and
+    # that rule 3 keeps for work: the login a credential_signed_out hold
+    # names (HE-12). A login the work passes over is never one: signing it
+    # in would not let the work go on (PRD L670).
+    #
+    # Returns the Credential, or nil.
+    def signed_out_for(seat, work)
+      self.for(seat).find { |credential| credential.state == "signed_out" && passes_for_work?(seat, credential, work) }
     end
 
     # HE-5: the model a run of the seat on credential uses. Within the
@@ -112,16 +137,16 @@ module Leverage
     # HE-35: the cause of a wait_ready step that opens now for task:
     # "credential_limit" when at least one builder seat would be eligible
     # for the task if accounts were left out, none of those seats has an
-    # available candidate for it, and none of their candidates is signed
-    # out; else nil. A seat that connects on its own always counts as
-    # having one. Callers ask after their own rows are written, so a seat
-    # that has just let the task go holds nothing.
+    # available candidate for it, and none of their candidates that rule 3
+    # keeps for it is signed out; else nil. A seat that connects on its own
+    # always counts as having one. Callers ask after their own rows are
+    # written, so a seat that has just let the task go holds nothing.
     def wait_cause(task, at)
       seats = Seat.where(workspace_id: task.workspace_id, role: "builder", enabled: true, paused: false, removed_at: nil)
         .order(:created_at, :id).select { |seat| eligible_but_for_accounts?(seat, task) }
       return nil if seats.empty?
       return nil if seats.any? { |seat| seat.credential_id.nil? || first_available(seat, task, at) }
-      return nil if seats.any? { |seat| any_signed_out?(seat) }
+      return nil if seats.any? { |seat| any_signed_out?(seat, task) }
 
       "credential_limit"
     end

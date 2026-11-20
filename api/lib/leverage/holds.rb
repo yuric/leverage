@@ -7,7 +7,7 @@ module Leverage
   # task and the reviewer's on its open review, through Leases.pause (a
   # paused lease has no due time and keeps the time it had left, so no
   # timer can end it). When the last pausing hold closes, both clocks run
-  # again from the command's time with the time they had left, and when the
+  # again from the hold's effective close with the time they had left, and when the
   # last hold of any reason closes on a task a seat holds, the seat's next
   # GET /v1/next answers resume (tasks.resume_pending_since, EN-31).
   #
@@ -61,7 +61,9 @@ module Leverage
     # so a handoff writes credential.switched between them (milestone 3
     # plan §2.1 rule 7).
     #
-    # When no pausing hold is left open, the task's lease clocks run again;
+    # When no pausing hold is left open, the task's lease clocks run again,
+    # from effective_at (a timer's close gives the lease no time for the
+    # sweep's delay);
     # when no hold at all is left open on a task a seat holds, and the task
     # has not ended in this command (Cancel writes task.cancelled first,
     # EN-30), resume_pending_since is set to the command's time.
@@ -81,7 +83,9 @@ module Leverage
         ctx.emit("inbox.resolved", task: task, round: round, subject: inbox, **as, payload: { choice: choice })
       end
       remaining = open_holds(task)
-      leases_of(task).each { |subject| Leases.restart(ctx, subject) } if remaining.none? { |open| pauses?(open.reason) }
+      if remaining.none? { |open| pauses?(open.reason) }
+        leases_of(task).each { |subject| Leases.restart(ctx, subject, at: effective_at) }
+      end
       mark_resume(ctx, task) if remaining.empty?
       hold
     end
