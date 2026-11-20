@@ -1901,7 +1901,9 @@ skeleton's pull request description, as rule AR-004 asks.
         it and try again."), which names neither the field nor its length.
         Alternative: no limit, so that any task with a long enough text
         has checks that end in `error`; or quote only part of the
-        evidence, so that a checker would judge text it never saw.
+        evidence, so that a checker would judge text it never saw; and,
+        in the app, the limits generated into `Contract.swift` with Save
+        turned off and a sentence that names the field.
       - **The landing prompt of an orchestrator or a planner** tells it to
         check for work every 60 seconds, also while it works on a job
         (`check_interval_minutes` 1, where a builder's and a reviewer's
