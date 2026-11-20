@@ -627,7 +627,9 @@ the first change that needs one chooses it and adds it here.
     `events` and `rule_versions`, `SELECT` only on `backup_runs`, `SELECT,
     INSERT, UPDATE, DELETE` on every other table, and no `TRUNCATE`.
     Migrations, tests, the backup, the restore and other commands use the
-    database's owner role.
+    database's owner role. Runs of `db:grants` go one at a time across the
+    cluster, under an advisory lock taken in the `postgres` database, since
+    two at once fail with "tuple concurrently updated".
 - **What is never stored.** No column holds a token or a password in the
   clear: the only such names are `token_hash` (`sessions`, `helpers`,
   `seats`, a SHA-256 hex digest) and `users.password_digest` (bcrypt). A

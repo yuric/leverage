@@ -465,6 +465,12 @@ Where the build differs from the plan, or settles what it left open:
   older run recorded; the stand-in plays the recorded reply.
 - **The helper adds a run to its registry before watching it**, which
   fixes a milestone-2 race when a run ends at once.
+- **`db:grants` runs one at a time across the cluster**, under an advisory
+  lock taken in the `postgres` database. Milestone 2's lock was taken in
+  each run's own database, so two runs on two databases (restores in
+  parallel test workers, or the server's start beside a test run) both
+  set `leverage_api`'s password and the second failed with "tuple
+  concurrently updated"; two runs on one database collided on its grants.
 - **The traces' setup** gives signed-out logins a verification time and
   seats no run credential; the trace runner and eligibility fill both in.
 - **Each package committed its own work** by explicit path, the red tests
