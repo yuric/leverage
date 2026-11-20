@@ -43,7 +43,9 @@ module Leverage
   # touch several tasks. Any other touches its own task (its first event's),
   # and beside it only the side events a row writes on another task: the
   # "Account signed out" item a sign-out opens on another task's
-  # credential_limit hold (HE-11, OTHER_TASK).
+  # credential_limit hold (HE-11, OTHER_TASK), and the provider rule's
+  # applied rows review claim-next writes on the tasks of the reviews it
+  # skips (RC-50, RD-12; OTHER_TASK_OF).
   #
   # Milestone 4 (its plan RE-3, RT-4):
   #
@@ -84,6 +86,10 @@ module Leverage
     CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
     ROW_ONLY = %w[credential.switched].freeze
     OTHER_TASK = %w[inbox.opened].freeze
+    # A command's events on other tasks than its own, by command: review
+    # claim-next records the provider rule's applied row for each review it
+    # skips, on that review's task (RC-50, RD-12).
+    OTHER_TASK_OF = { "claim_review" => %w[check.finished] }.freeze
     TERMINAL = %w[task.done task.cancelled].freeze
     REFUSED_MAY_WRITE = /\A(check|hold|inbox|job)\./
     # What a command writes when it is sent and then waits (RE-3).
@@ -285,9 +291,12 @@ module Leverage
       stateless = named.any? && named.none? { |row| row.fetch("from") || row.fetch("to") }
       others = []
       if tasks.size > 1 && !stateless
-        own = events.first.task_id
+        allowed = OTHER_TASK + OTHER_TASK_OF.fetch(name, [])
+        # The command's own task is that of its first event that is not one
+        # it may write on another task.
+        own = (events.find { |event| event.task_id && !allowed.include?(event.type) } || events.first).task_id
         others = events.select { |event| event.task_id && event.task_id != own }
-        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| OTHER_TASK.include?(event.type) }
+        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| allowed.include?(event.type) }
 
         events -= others
         tasks = [ own ]
