@@ -161,6 +161,12 @@ def main():
     cases.check("backup keeps its bind mount of the host's backup folder",
                 any("${LEVERAGE_BACKUP_DIR" in line and ":/backups" in line for line in backup), backup)
 
+    # Review: the backup runs as the owner role and never as the login
+    # role, so it is given neither that role's URL nor its password, which
+    # .env (env_file) would otherwise give every service of the image.
+    cases.check("backup overrides the login role's URL and password with nothing",
+                '      API_DATABASE_URL: ""' in backup and '      LEVERAGE_API_DB_PASSWORD: ""' in backup, backup)
+
     no_api = original.replace("\n  api:\n", "\n  web:\n", 1)
     code, messages, output = run(no_api)
     cases.check("a compose file without an api service fails and names it",
