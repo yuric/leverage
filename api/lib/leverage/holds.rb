@@ -42,6 +42,8 @@ module Leverage
     # result, its rule turned off, the transition cancelled) and gates the
     # transition again itself, with the check as the trigger.
     CHECK_HOLDS = %w[check_error rerun_limit].freeze
+    # The holds whose hold.opened names their rule check (DB-49).
+    NAMES_CHECK = %w[check_error claim_gate_failed rerun_limit].freeze
 
     module_function
 
@@ -52,16 +54,20 @@ module Leverage
     # item: - true (the default) opens the Needs you item the registry
     #         names for the reason; false opens none, for a credential_limit
     #         hold that has a due time (milestone 3 plan §2.1 rule 6, HE-4).
+    # rule_check_id: - the rule check a rule's hold is about: on the row,
+    #         and in hold.opened for the reasons of NAMES_CHECK, null for
+    #         the others (DB-49).
     #
     # Returns the Hold.
     def open(ctx, task:, reason:, cause_id: nil, facts: {}, rule_id: nil, credential_id: nil, actor_kind: "app",
-             actor_id: nil, round: task.round, item: true)
+             actor_id: nil, round: task.round, item: true, rule_check_id: nil)
       lapse_provisional_claim(ctx, task)
       hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id, reason: reason,
-        rule_id: rule_id, credential_id: credential_id, opened_at: ctx.at, opened_by_kind: actor_kind,
-        opened_by_id: actor_id)
+        rule_id: rule_id, credential_id: credential_id, rule_check_id: rule_check_id, opened_at: ctx.at,
+        opened_by_kind: actor_kind, opened_by_id: actor_id)
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
-        actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id })
+        actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id,
+                                       rule_check_id: (rule_check_id if NAMES_CHECK.include?(reason)) })
       needs_you = needs_you_item(reason)
       if needs_you && item
         inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",

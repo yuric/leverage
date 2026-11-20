@@ -1,4 +1,5 @@
 require "bigdecimal"
+require "set"
 
 module Leverage
   # The replay (PRD "What the replay test rebuilds" and test 1; DB-43,
@@ -21,9 +22,10 @@ module Leverage
   # again); cleared by task.submitted, task.released, task.lease_expired,
   # task.returned, task.cancelled and task.done. A provisional claim (RE-5)
   # sets the holder with the check.queued of its task.before_claim check
-  # (claimant_seat_id) and clears it with that check's failed, errored or
-  # withdrawn check.finished and with a hold.opened on the task, while the
-  # task is still Ready. The builder is set by
+  # (claimant_seat_id) and clears it with that check's failed or errored
+  # check.finished, with the withdrawal of the last of its checks that runs
+  # (a rule turned off leaves the claim waiting on its other checks, L379),
+  # and with a hold.opened on the task, while the task is still Ready. The builder is set by
   # task.claimed and cleared when the task returns to Ready or Backlog or is
   # cancelled. The minimum strength rank and the contract version are set
   # by task.contract_changed, which carries both (the rank is null for
@@ -43,7 +45,8 @@ module Leverage
   # Rules (milestone 4): rule.created sets enabled and the current version
   # (version 1), rule.changed and rule.reverted the current version,
   # rule.enabled and rule.disabled the switch; rule.removed changes no
-  # replay column. Rule checks: a check.queued makes the row, or runs it
+  # replay column. Rule checks: a hold.opened that names a check makes its
+  # row when nothing has (DB-49); a check.queued makes the row, or runs it
   # again (DB-25: the result goes back to none); check.finished sets the
   # result (an app check's row is made by it, as it has no check.queued);
   # check.overridden sets who and when, from its actor and its time (the
@@ -66,7 +69,6 @@ module Leverage
     ].freeze
     UNSUPPORTED = /\A(action\.|task\.reassigned\z|task\.returned_for_rework\z)/
     CLAIM_HOOK = "task.before_claim".freeze
-    LAPSES = %w[failed error withdrawn].freeze
     LEASE_FIELD = "lease_seat_id".freeze
     # Projection keys that are not replay columns.
     INTERNAL = %w[provisional].freeze
@@ -137,6 +139,7 @@ module Leverage
         spend(projection, event, payload)
       when "hold.opened"
         projection[:holds][event.subject_id] = { "reason" => payload.fetch("reason") }
+        held_check(projection, payload["rule_check_id"])
         lapse(task)
       when "hold.closed"
         projection[:holds].delete(event.subject_id)
@@ -206,19 +209,42 @@ module Leverage
       case event.type
       when "check.queued"
         row["result"] = nil
-        provisional(task, payload)
+        provisional(task, payload, event.subject_id)
       when "check.finished"
         row["result"] = payload.fetch("result")
-        lapse(task) if payload["hook"] == CLAIM_HOOK && LAPSES.include?(payload.fetch("result"))
+        settle_claim_check(task, payload, event.subject_id)
       when "check.overridden" then row.merge!("overridden_by_user_id" => event.actor_id, "overridden_at" => event.at)
       end
     end
 
-    # A provisional claim's claimant holds the Ready task (RE-5, DB-43).
-    def provisional(task, payload)
+    # The check a rule's hold names (DB-49): the row held at the re-run
+    # limit has no other event before it is let through or withdrawn
+    # (RD-45), so its hold.opened makes it, with no result.
+    def held_check(projection, check_id)
+      return unless check_id
+
+      projection[:rule_checks][check_id] ||= { "result" => nil, "overridden_by_user_id" => nil, "overridden_at" => nil }
+    end
+
+    # A provisional claim's claimant holds the Ready task (RE-5, DB-43),
+    # while its claim checks run.
+    def provisional(task, payload, check_id)
       return unless task && payload["hook"] == CLAIM_HOOK && payload["claimant_seat_id"]
 
-      task.merge!("holder_seat_id" => payload.fetch("claimant_seat_id"), "provisional" => true)
+      task["holder_seat_id"] = payload.fetch("claimant_seat_id")
+      (task["provisional"] ||= Set.new) << check_id
+    end
+
+    # A claim check's result (DB-43): a failure or an error ends the
+    # provisional claim; a withdrawal ends it when no other check of it
+    # runs (a rule turned off leaves the claim waiting on the others, L379);
+    # a pass leaves it waiting on the others, or task.claimed follows.
+    def settle_claim_check(task, payload, check_id)
+      return unless task && payload["hook"] == CLAIM_HOOK && task["provisional"]
+
+      result = payload.fetch("result")
+      task["provisional"].delete(check_id)
+      lapse(task) if %w[failed error].include?(result) || (result == "withdrawn" && task["provisional"].empty?)
     end
 
     # The provisional claim lapses (DB-43): its check failed, erred or was

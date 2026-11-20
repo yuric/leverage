@@ -175,7 +175,7 @@ one file for each number in the type's `schema_versions`. Every file follows
 handles every listed version. Old events are never rewritten. Until the
 first release of leverage no log holds an event a released build wrote, so
 a version may still change in place; each such change is recorded in
-[decisions.md](decisions.md) (DB-48 is the first).
+[decisions.md](decisions.md) (DB-48 is the first, DB-49 the second).
 
 ## The event record
 

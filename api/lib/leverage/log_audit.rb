@@ -99,6 +99,11 @@ module Leverage
     GATED = { "complete_contract" => [ "task.ready", "task.before_ready" ], "claim" => [ "task.claimed", "task.before_claim" ],
               "submit" => [ "task.submitted", "task.before_submit" ], "pass_review" => [ "review.passed", "task.before_done" ] }.freeze
     CLEARED = %w[passed not_applicable withdrawn].freeze
+    # A command that runs another entry as its requester inside it (RE-6:
+    # a planner's draft result is Complete contract): its events are its
+    # own row's and, on the task, the other entry's.
+    RUN_AS = { "submit_job_result" => "complete_contract" }.freeze
+    OWN_ONLY = %w[job. cost.reported].freeze
     LEASE_FIELD = "lease_seat_id".freeze
 
     Group = Data.define(:command_id, :at, :events)
@@ -148,7 +153,8 @@ module Leverage
       return findings + completion(group, pending, states, label) if pending && !first
       return findings + later_without_pending(group, row, states, label) if !first && row&.outcome != "refused"
 
-      if row&.outcome == "refused" || (pending && row && row.command == pending.command)
+      ran_now = pending && row && row.command != pending.command
+      if (row&.outcome == "refused" && !ran_now) || (pending && row && row.command == pending.command)
         allowed = row&.outcome == "refused" ? REFUSED_MAY_WRITE : WAITING_MAY_WRITE
         own = group.events.map(&:type).grep_v(allowed)
         advance(group.events, states)
@@ -163,6 +169,12 @@ module Leverage
 
     def named(label, names, events, states)
       problems = names.map { |name| match(name, events, states) }
+      names.filter_map { |name| RUN_AS[name] && [ name, RUN_AS[name] ] }.each do |own, other|
+        mine, theirs = events.partition { |event| event.type.start_with?(*OWN_ONLY) }
+        next if theirs.empty?
+
+        problems << match(own, mine, states) + match(other, theirs, states)
+      end
       advance(events, states)
       best = problems.min_by(&:size)
       best.empty? ? [] : [ "#{label}: #{names.join(" or ")} #{best.join("; ")}" ]
@@ -390,6 +402,8 @@ module Leverage
 
     def gate_findings(group, row, pending, audit, label)
       command = pending&.command || row&.command
+      other = RUN_AS[command]
+      command = other if other && group.events.any? { |event| event.type == GATED.fetch(other).first }
       move, hook = GATED[command]
       return [] unless move
 

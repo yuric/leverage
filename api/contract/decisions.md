@@ -357,6 +357,17 @@ Where two inventories chose differently, the decision names the conflict.
   no build of leverage has been released, so no log holds a `v1` event
   without it. Every golden trace's `task.contract_changed` gained
   `"minimum_strength_rank": null`, the value its command sends.
+- **DB-49** `[shape]` Added by the Rule checks milestone (its plan
+  RD-45; WP0T's request 2, settled by WP12). `hold.opened` carries
+  `rule_check_id`, the rule check the hold is about, for the reasons
+  `check_error`, `claim_gate_failed` and `rerun_limit`, and null for every
+  other reason. The check held at the re-run limit is planned
+  with no attempt and no job, so no `check.*` event names it until it is
+  let through or withdrawn: without the field the replay meets a
+  `rule_checks` row the log does not make (L369, test 1). The field was
+  added to `v1` in place, as DB-48's was: no released build wrote the
+  event. Every golden trace's `hold.opened` gained it; traces 07, 17, 18
+  and 19 name the check on those holds.
 
 ## State machine (SM)
 
