@@ -51,7 +51,7 @@ module Leverage
     # (check.started, by the seat). Returns the Event.
     def start(ctx, check, job:, seat:, **as)
       attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id, job_id: job.id)
-      attempt.update!(started_at: ctx.at, checker_seat_id: seat.id)
+      attempt.update!(started_at: time_of(ctx, as), checker_seat_id: seat.id)
       emit(ctx, "check.started", check, { attempt_number: attempt.attempt_number }, **as)
     end
 
@@ -60,7 +60,7 @@ module Leverage
     # on the row only. Returns the Event.
     def finish(ctx, check, result:, reason:, tokens: nil, spend: nil, **as)
       check.update!(result: result, reason: reason)
-      latest_attempt(check)&.update!(finished_at: ctx.at, tokens: tokens, spend: spend)
+      latest_attempt(check)&.update!(finished_at: time_of(ctx, as), tokens: tokens, spend: spend)
       emit_finished(ctx, check, task_of(check), **as)
     end
 
@@ -68,7 +68,7 @@ module Leverage
     # result error). Returns the Event.
     def error(ctx, check, **as)
       check.update!(result: "error")
-      end_attempt(ctx, check)
+      end_attempt(ctx, check, as)
       emit_finished(ctx, check, task_of(check), **as)
     end
 
@@ -77,7 +77,7 @@ module Leverage
     # job is the caller's to withdraw (Jobs.withdraw). Returns the Event.
     def withdraw(ctx, check, **as)
       check.update!(result: "withdrawn")
-      end_attempt(ctx, check)
+      end_attempt(ctx, check, as)
       emit_finished(ctx, check, task_of(check), **as)
     end
 
@@ -190,10 +190,15 @@ module Leverage
         started_at: (ctx.at if started), finished_at: (ctx.at if finished))
     end
 
-    def end_attempt(ctx, check)
+    def end_attempt(ctx, check, as)
       attempt = latest_attempt(check)
-      attempt.update!(finished_at: ctx.at) if attempt && attempt.finished_at.nil?
+      attempt.update!(finished_at: time_of(ctx, as)) if attempt && attempt.finished_at.nil?
     end
+
+    # The time an attempt starts or ends: the event's effective time, which
+    # is a timer's due time inside a timer (L315: an attempt that timed out
+    # ended at its timeout, as its job did).
+    def time_of(ctx, as) = as[:effective_at] || ctx.effective_at
 
     def next_attempt_number(check)
       (RuleCheckAttempt.where(rule_check_id: check.id).maximum(:attempt_number) || 0) + 1
@@ -258,7 +263,7 @@ module Leverage
         .order(:seq).last
     end
 
-    private_class_method :row_for, :emit_queued, :job_input, :attempt, :end_attempt, :next_attempt_number, :latest_attempt, :emit_finished,
+    private_class_method :row_for, :emit_queued, :job_input, :attempt, :end_attempt, :time_of, :next_attempt_number, :latest_attempt, :emit_finished,
       :wait_cause, :payload, :claimant, :emit, :task_of, :last_event
   end
 end
