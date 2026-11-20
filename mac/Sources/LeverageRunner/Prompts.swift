@@ -113,6 +113,9 @@ enum Prompts {
         return parts.joined(separator: "\n\n")
     }
 
+    /// The heading of the briefing's rules (PRD L472). Not yet written.
+    static let rulesHeading = ""
+
     /// Quoted material: each line behind "> ", and every marker word broken
     /// ("LEVERAGE-" loses its hyphen) so it cannot be read as an answer.
     static func quoted(_ text: String) -> String {
