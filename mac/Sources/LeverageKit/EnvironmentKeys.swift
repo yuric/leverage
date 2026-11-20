@@ -38,6 +38,9 @@ public enum EnvironmentKeys {
     /// Set to `1` only by `scripts/real_provider_run.sh`: lets the runner
     /// start Claude or Codex with no account folder of leverage's own.
     public static let devToolLogin = "LEVERAGE_DEV_TOOL_LOGIN"
+    public static let credentialID = ""
+    public static let continueTaskID = ""
+    public static let continueReviewID = ""
 
     // Read by the app, and the support folder by the helper too.
 
@@ -47,6 +50,7 @@ public enum EnvironmentKeys {
     public static let composeProject = "LEVERAGE_COMPOSE_PROJECT"
     /// `memory` keeps the owner's session out of the Keychain.
     public static let sessionStore = "LEVERAGE_SESSION_STORE"
+    public static let notifications = ""
 
     // Read by tests.
 

@@ -156,6 +156,18 @@ struct ProviderCatalogTests {
         #expect(Evidence.allCases.filter(\.isProven) == [.probe])
     }
 
+    @Test("the default model each tool itself named, with how it is known; none for Codex and Antigravity")
+    func defaultModel() throws {
+        // Claude's is the one key of `modelUsage` in the reply to the
+        // inventory's "ready" prompt, run with no --model; Grok's is the
+        // "Default model" line of `grok models`. Both ran on this Mac on
+        // 2026-11-19 with the agent's whole environment (plan HE-5, §0 fact 30).
+        #expect(try entry("claude").defaultModel == Evidenced("claude-opus-5-5", .probeFullEnvironment))
+        #expect(try entry("grok").defaultModel == Evidenced("grok-4.6", .probeFullEnvironment))
+        #expect(try entry("codex").defaultModel == nil)
+        #expect(try entry("gemini").defaultModel == nil)
+    }
+
     @Test("Claude and Antigravity take an effort; Codex and Grok are given none (their drivers pass none)")
     func effort() {
         #expect(ProviderCatalog.takesEffort(.claude))

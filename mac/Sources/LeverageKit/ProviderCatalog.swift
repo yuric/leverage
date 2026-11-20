@@ -134,6 +134,7 @@ public struct ProviderEntry: Equatable, Sendable {
     /// The variables the tool gets besides `ProviderCatalog.baseEnvironment`
     /// and its account folder variable, each without a secret (CL-10).
     public let environment: Evidenced<[String]>
+    public let defaultModel: Evidenced<String>?
 }
 
 /// Per login provider: names, commands, installer and environment, each
@@ -164,7 +165,8 @@ public enum ProviderCatalog {
                 .documented),
             // Without USER, `claude auth status` answers signed out on this
             // Mac: the tool finds its login by the user's name.
-            environment: Evidenced([EnvironmentKeys.user], .probe)),
+            environment: Evidenced([EnvironmentKeys.user], .probe),
+            defaultModel: nil),
         ProviderEntry(
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
@@ -183,7 +185,8 @@ public enum ProviderCatalog {
                     kind: .script(shell: "/bin/sh"), url: URL(string: "https://chatgpt.com/codex/install.sh")!,
                     allowedHosts: ["chatgpt.com"]),
                 .documented),
-            environment: Evidenced([], .probe)),
+            environment: Evidenced([], .probe),
+            defaultModel: nil),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
             // One sign-in for the Mac: the PRD states it, and `agy --help`
@@ -200,7 +203,8 @@ public enum ProviderCatalog {
                     url: URL(string: "https://antigravity.google/cli/install.sh")!,
                     allowedHosts: ["antigravity.google"]),
                 .documented),
-            environment: Evidenced([], .probe)),
+            environment: Evidenced([], .probe),
+            defaultModel: nil),
         ProviderEntry(
             id: "grok", displayName: "Grok", toolDisplayName: "Grok Build", toolName: "grok",
             // How Grok Build keeps an account is not known; it is treated as
@@ -218,7 +222,8 @@ public enum ProviderCatalog {
             // The vendor's pages answered 403 and 404 again on 2026-11-19.
             installer: Evidenced(nil, .unverified),
             // Grok is not signed in on this Mac, so no prompt has run.
-            environment: Evidenced([], .unverified)),
+            environment: Evidenced([], .unverified),
+            defaultModel: nil),
     ]
 
     public static func entry(for id: String) -> ProviderEntry? {
