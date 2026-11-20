@@ -134,6 +134,10 @@ public struct ProviderEntry: Equatable, Sendable {
     /// The variables the tool gets besides `ProviderCatalog.baseEnvironment`
     /// and its account folder variable, each without a secret (CL-10).
     public let environment: Evidenced<[String]>
+    /// The model the tool itself named as its default on this Mac, with how
+    /// that is known; nil where it names none (plan HE-5). Add credential
+    /// sends it as the credential's model. It goes stale when the provider
+    /// retires the model.
     public let defaultModel: Evidenced<String>?
 }
 
@@ -166,7 +170,9 @@ public enum ProviderCatalog {
             // Without USER, `claude auth status` answers signed out on this
             // Mac: the tool finds its login by the user's name.
             environment: Evidenced([EnvironmentKeys.user], .probe),
-            defaultModel: nil),
+            // The one key of `modelUsage` in the reply to the inventory's
+            // "ready" prompt, run with no --model (inventory-providers.md §6).
+            defaultModel: Evidenced("claude-opus-5-5", .probeFullEnvironment)),
         ProviderEntry(
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
@@ -186,6 +192,7 @@ public enum ProviderCatalog {
                     allowedHosts: ["chatgpt.com"]),
                 .documented),
             environment: Evidenced([], .probe),
+            // No reply Codex gave on this Mac names its default model.
             defaultModel: nil),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
@@ -204,6 +211,7 @@ public enum ProviderCatalog {
                     allowedHosts: ["antigravity.google"]),
                 .documented),
             environment: Evidenced([], .probe),
+            // No reply Antigravity gave on this Mac names its default model.
             defaultModel: nil),
         ProviderEntry(
             id: "grok", displayName: "Grok", toolDisplayName: "Grok Build", toolName: "grok",
@@ -223,7 +231,9 @@ public enum ProviderCatalog {
             installer: Evidenced(nil, .unverified),
             // Grok is not signed in on this Mac, so no prompt has run.
             environment: Evidenced([], .unverified),
-            defaultModel: nil),
+            // `grok models` printed "Default model: grok-4.6", signed out
+            // (inventory-providers.md §4 and §5).
+            defaultModel: Evidenced("grok-4.6", .probeFullEnvironment)),
     ]
 
     public static func entry(for id: String) -> ProviderEntry? {

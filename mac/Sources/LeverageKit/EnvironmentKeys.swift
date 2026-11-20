@@ -38,9 +38,13 @@ public enum EnvironmentKeys {
     /// Set to `1` only by `scripts/real_provider_run.sh`: lets the runner
     /// start Claude or Codex with no account folder of leverage's own.
     public static let devToolLogin = "LEVERAGE_DEV_TOOL_LOGIN"
-    public static let credentialID = ""
-    public static let continueTaskID = ""
-    public static let continueReviewID = ""
+    /// The credential this run is on. Absent for a seat that connects on
+    /// its own, and then nothing is detected (plan HM-19).
+    public static let credentialID = "LEVERAGE_CREDENTIAL_ID"
+    /// The work to continue at start, from the `start_seat` request's
+    /// `params`; at most one of the two is set (plan HD-1, HD-9).
+    public static let continueTaskID = "LEVERAGE_CONTINUE_TASK_ID"
+    public static let continueReviewID = "LEVERAGE_CONTINUE_REVIEW_ID"
 
     // Read by the app, and the support folder by the helper too.
 
@@ -50,7 +54,9 @@ public enum EnvironmentKeys {
     public static let composeProject = "LEVERAGE_COMPOSE_PROJECT"
     /// `memory` keeps the owner's session out of the Keychain.
     public static let sessionStore = "LEVERAGE_SESSION_STORE"
-    public static let notifications = ""
+    /// `off` keeps the app from asking for or posting a notification. Set
+    /// by the smoke run and by nothing else (plan HM-27).
+    public static let notifications = "LEVERAGE_NOTIFICATIONS"
 
     // Read by tests.
 
