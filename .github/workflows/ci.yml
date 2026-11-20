@@ -187,8 +187,8 @@ jobs:
   # (milestone 4 plan RV-1 to RV-6): its scorer, its check and the guards of
   # its run script, none of which reaches a provider; then the check that
   # the committed results meet the bar for each supported model. The
-  # results are written by the managing agent's eval run (plan §5.3); until
-  # that commit the last step fails and says which model has no result.
+  # results are written by the managing agent's eval run (plan §5.3), never
+  # in CI.
   evals:
     name: Eval suite
     runs-on: ubuntu-24.04
