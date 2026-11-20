@@ -25,7 +25,7 @@ module Leverage
       #                           (its poll, or its account's reset), and
       #                           in the same run every errored check held
       #                           with check_error gets a new attempt
-      #                           (Jobs.queue, RuleChecks.new_attempt) but an
+      #                           (RuleChecks.queue_attempt) but an
       #                           errored task.before_claim check, whose hold
       #                           only closes (RC-37, L392). A check still
       #                           queued keeps its job and its timers
@@ -84,7 +84,7 @@ module Leverage
           returning.each do |hold, check, _has_item|
             task = Task.find(hold.task_id)
             Timers.as_timer(ctx, command, Timers.effective_at(task, came_back)) do |timer_ctx|
-              check.hook == CLAIM_HOOK ? close(timer_ctx, hold, task) : run_again(timer_ctx, check, task)
+              check.hook == CLAIM_HOOK ? close(timer_ctx, hold, task) : run_again(timer_ctx, check)
             end
           end
         end
@@ -100,15 +100,12 @@ module Leverage
           Holds.close(ctx, hold: hold, task: task, effective_at: ctx.effective_at, command_id: nil)
         end
 
-        # A new attempt of the errored check, with the input its last job
-        # had; its job runs the attempt after the last (Jobs.queue's
-        # attempt_number).
-        def run_again(ctx, check, task)
-          last = RuleCheckAttempt.where(rule_check_id: check.id).order(:attempt_number).last
-          input = (last&.job_id && Job.find_by(id: last.job_id)&.input) || {}
-          job = Jobs.queue(ctx, kind: "rule_check", task: task, target: check, seat_role: ROLE, input: input,
-            attempt_number: (last&.attempt_number || 0) + 1)
-          RuleChecks.new_attempt(ctx, check, job: job)
+        # A new attempt of the errored check on a job of its own, written
+        # by RuleChecks.queue_attempt in the traces' order (check.queued
+        # naming the job, then job.queued; trace 19, command 31), as Run it
+        # again writes it.
+        def run_again(ctx, check)
+          RuleChecks.queue_attempt(ctx, check, seat_role: ROLE)
         end
 
         # The open check_error holds whose check ended in error, oldest
