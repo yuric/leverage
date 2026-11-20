@@ -86,6 +86,53 @@ struct ParentWatchTests {
         #expect(rig.calls(.reportRunStopped).first?.body?["stop_reason"]?.stringValue == "stopped")
     }
 
+    @Test("the helper watches the app that started it, and stops once when the app is gone")
+    func helperWatchesItsParent() async throws {
+        let app = try startSleeper()
+        let gone = Flag()
+        let watch = try #require(HelperParent.watch(parent: app.processID, interval: .milliseconds(50)) { gone.set() })
+        defer { watch.cancel() }
+
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(gone.all.isEmpty)
+
+        app.stop()
+        _ = await app.wait()
+        #expect(await eventually { gone.all.count == 1 })
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(gone.all.count == 1)
+    }
+
+    @Test("a helper whose app was gone before it looked (its parent is already launchd) stops at once")
+    func helperParentAlreadyGone() {
+        for parent: pid_t in [1, 0] {
+            let gone = Flag()
+            #expect(HelperParent.watch(parent: parent) { gone.set() } == nil)
+            #expect(gone.all.count == 1, "parent \(parent)")
+        }
+    }
+
+    @Test("a helper whose app was gone before it looked ends its request loop with the stopped code")
+    func helperParentAlreadyGoneEndsTheLoop() async throws {
+        let rig = try HelperRig()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
+        let stopped = Flag()
+        let watch = HelperParent.watch(parent: 1) {
+            Task {
+                await runtime.shutdown()
+                stopped.set()
+            }
+        }
+        defer { watch?.cancel() }
+
+        let running = Task { await runtime.run() }
+        let stoppedByTheWatch = await eventually { stopped.all.count == 1 }
+        #expect(stoppedByTheWatch)
+        // Otherwise the loop would run until the suite's time limit.
+        if !stoppedByTheWatch { await runtime.shutdown() }
+        #expect(await running.value == HelperExitCode.stopped)
+    }
+
     @Test("after shutdown the request loop ends and the helper's run answers the stopped code")
     func shutdownEndsTheLoop() async throws {
         let rig = try HelperRig()

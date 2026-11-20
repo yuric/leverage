@@ -133,14 +133,9 @@ enum HelperMain {
             source.resume()
             signals.append(source)
         }
-        var watch: ParentWatch?
-        let parent = getppid()
-        if parent > 1 {
-            watch = ParentWatch(watching: parent) {
-                log.warning("the app that started the helper is gone; stopping")
-                stopping.begin()
-            }
-            watch?.start()
+        let watch = HelperParent.watch {
+            log.warning("the app that started the helper is gone; stopping")
+            stopping.begin()
         }
 
         log.info("started, version \(leverageMacVersion)")
@@ -150,6 +145,19 @@ enum HelperMain {
         for source in signals { source.cancel() }
         log.info("stopped")
         return code
+    }
+}
+
+/// The helper's watch on the app that started it (PK-8).
+enum HelperParent {
+    /// Watches `parent`.
+    static func watch(
+        parent: pid_t = getppid(), interval: Duration = .seconds(2), onGone: @escaping @Sendable () -> Void
+    ) -> ParentWatch? {
+        guard parent > 1 else { return nil }
+        let watch = ParentWatch(watching: parent, interval: interval, onGone: onGone)
+        watch.start()
+        return watch
     }
 }
 
