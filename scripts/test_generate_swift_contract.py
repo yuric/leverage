@@ -23,6 +23,7 @@ ROOT = HERE.parent
 SCRIPT = HERE / "generate_swift_contract.py"
 REGISTRY = ROOT / "api" / "contract" / "registry.json"
 OPENAPI = ROOT / "api" / "contract" / "openapi.json"
+HOOKS = ROOT / "api" / "contract" / "hooks.json"
 OUTPUT = ROOT / "mac" / "Sources" / "LeverageKit" / "Generated" / "Contract.swift"
 VERBOSE = "-v" in sys.argv[1:]
 
@@ -31,20 +32,22 @@ def load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def run(registry, openapi, *arguments, output_text=None):
+def run(registry, openapi, *arguments, output_text=None, hooks=None):
     """Run the generator on the given objects; return (code, output, Swift)."""
     with tempfile.TemporaryDirectory() as folder:
         registry_path = Path(folder) / "registry.json"
         openapi_path = Path(folder) / "openapi.json"
+        hooks_path = Path(folder) / "hooks.json"
         output_path = Path(folder) / "Contract.swift"
         registry_path.write_text(json.dumps(registry), encoding="utf-8")
         openapi_path.write_text(json.dumps(openapi), encoding="utf-8")
+        hooks_path.write_text(json.dumps(hooks if hooks is not None else load(HOOKS)), encoding="utf-8")
         if output_text is not None:
             output_path.write_text(output_text, encoding="utf-8")
         result = subprocess.run(
             [sys.executable, "-I", str(SCRIPT),
              "--registry", str(registry_path), "--openapi", str(openapi_path),
-             "--output", str(output_path), *arguments],
+             "--hooks", str(hooks_path), "--output", str(output_path), *arguments],
             capture_output=True, text=True, check=False)
         swift = output_path.read_text(encoding="utf-8") if output_path.exists() else None
     return result.returncode, result.stdout + result.stderr, swift
@@ -182,6 +185,103 @@ def main():
     doctored["lists"]["task_states"].append("Not Snake")
     code, out, _ = run(doctored, openapi)
     cases.check("a value that is not snake case fails", code == 1 and "Not Snake" in out, out)
+
+    # The Rule checks milestone's additions (milestone 4 plan section 2.2):
+    # the hooks and their moment names, a list that names providers, and the
+    # closed values of the new shapes.
+    for line in [
+        "public enum RuleHook: String, Codable, CaseIterable, Sendable {",
+        '    case taskBeforeReady = "task.before_ready"',
+        '    case costReported = "cost.reported"',
+        '        case .taskBeforeReady: return "when a task is ready to start"',
+        '        case .taskBeforeDone: return "when the review has passed"',
+        '        case .costReported: return "when spending is reported"',
+        "    public var isCustomAllowed: Bool {",
+        "        case .taskBeforeClaim: return true",
+        "        case .reviewAssign: return false",
+        "public enum ContractLists {",
+        "    public static let orchestratorTestedProviders: [Provider] = []",
+        "public enum CheckVerdict: String, Codable, CaseIterable, Sendable {",
+        '    case notApplicable = "not_applicable"',
+        "public enum DraftState: String, Codable, CaseIterable, Sendable {",
+        '    case notWritten = "not_written"',
+        "public enum JobKind: String, Codable, CaseIterable, Sendable {",
+        '    case contractDraft = "contract_draft"',
+        "public enum QuotedLabel: String, Codable, CaseIterable, Sendable {",
+        '    case handoffNote = "handoff_note"',
+        "public enum RuleEffect: String, Codable, CaseIterable, Sendable {",
+        '    case passedToOwner = "passed_to_owner"',
+        '    case installShippedRules = "install_shipped_rules"',
+    ]:
+        cases.check(f"writes {line.strip()!r}", line in swift, line)
+    cases.check("a list that names no value is no enum", "enum OrchestratorTestedProvider" not in swift)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["orchestrator_tested_providers"] = ["claude", "gemini"]
+    code, out, new_swift = run(doctored, openapi)
+    cases.check("a list of providers is written as providers, in its order",
+                code == 0 and "orchestratorTestedProviders: [Provider] = [.claude, .gemini]" in (new_swift or ""), out)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["orchestrator_tested_providers"] = ["claude", "no_such_provider"]
+    code, out, _ = run(doctored, openapi)
+    cases.check("a provider the registry does not know fails and names it",
+                code == 1 and "no_such_provider" in out, out)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["orchestrator_tested_providers"] = ["claude_api"]
+    code, out, _ = run(doctored, openapi)
+    cases.check("a provider that is not a login fails and names it",
+                code == 1 and "claude_api" in out and "login" in out, out)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["orchestrator_tested_providers"] = ["claude", "claude"]
+    code, out, _ = run(doctored, openapi)
+    cases.check("a provider listed twice fails", code == 1 and "twice" in out, out)
+
+    hooks = load(HOOKS)
+    doctored_hooks = copy.deepcopy(hooks)
+    doctored_hooks["hooks"][0]["moment_name"] = "when a task is about to start"
+    code, out, new_swift = run(registry, openapi, hooks=doctored_hooks)
+    cases.check("a changed moment name is written",
+                code == 0 and 'case .taskBeforeReady: return "when a task is about to start"' in (new_swift or ""), out)
+    code, out, _ = run(registry, openapi, "--check", output_text=committed, hooks=doctored_hooks)
+    cases.check("--check fails when a moment name changed", code == 1, out)
+
+    doctored_hooks = copy.deepcopy(hooks)
+    del doctored_hooks["hooks"][1]["moment_name"]
+    code, out, _ = run(registry, openapi, hooks=doctored_hooks)
+    cases.check("a hook with no moment name fails and names it",
+                code == 1 and "task.before_claim" in out and "moment_name" in out, out)
+
+    doctored_hooks = copy.deepcopy(hooks)
+    doctored_hooks["hooks"] = doctored_hooks["hooks"][1:]
+    code, out, _ = run(registry, openapi, hooks=doctored_hooks)
+    cases.check("a registry hook that hooks.json lacks fails and names it",
+                code == 1 and "task.before_ready" in out, out)
+
+    doctored_hooks = copy.deepcopy(hooks)
+    doctored_hooks["hooks"].append(dict(doctored_hooks["hooks"][0], hook="task.after_done"))
+    code, out, _ = run(registry, openapi, hooks=doctored_hooks)
+    cases.check("a hook that only hooks.json names fails and names it",
+                code == 1 and "task.after_done" in out, out)
+
+    doctored_hooks = copy.deepcopy(hooks)
+    doctored_hooks["hooks"][1]["moment_name"] = doctored_hooks["hooks"][0]["moment_name"]
+    code, out, _ = run(registry, openapi, hooks=doctored_hooks)
+    cases.check("two hooks with one moment name fail", code == 1 and "moment" in out, out)
+
+    doctored = copy.deepcopy(registry)
+    doctored["custom_rule_hooks"].append("review.assign")
+    code, out, new_swift = run(doctored, openapi)
+    cases.check("a hook the registry lets an owner's rule use is custom",
+                code == 0 and "        case .reviewAssign: return true" in (new_swift or ""), out)
+
+    doctored = copy.deepcopy(registry)
+    doctored["custom_rule_hooks"].append("task.after_done")
+    code, out, _ = run(doctored, openapi)
+    cases.check("a custom hook that is no hook fails and names it",
+                code == 1 and "task.after_done" in out, out)
 
     print(f"{cases.count - len(cases.failures)}/{cases.count} cases passed")
     return 1 if cases.failures else 0
