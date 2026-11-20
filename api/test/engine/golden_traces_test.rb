@@ -17,6 +17,11 @@ class GoldenTracesTest < ActiveSupport::TestCase
   # WP3's choice 1). So every prefix is 0, and the milestone is 5, when
   # projects arrive and rules (milestone 4) are already there; 03 and 04
   # also reach Finishing with outward actions (milestone 5, the TS8-check).
+  #
+  # The handoff milestone's traces 11 to 15 wait for its own entries
+  # (milestone 3 plan HT-6): each prefix is the commands milestone 2 runs
+  # as written before the first command of milestone 3. Trace 15's is 0,
+  # because milestone 2 refuses Add task into the Imaginarium (SC-4).
   NOT_YET = {
     "01-happy-path" => [ 5, 0 ],
     "02-failed-review-rework" => [ 5, 0 ],
@@ -25,7 +30,8 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "05-limit-handoff" => [ 5, 0 ],
     "06-signed-out-hold-verify" => [ 5, 0 ],
     "07-pending-gate-check-error-override" => [ 5, 0 ],
-    "08-lease-expiry-and-cancel" => [ 5, 0 ]
+    "08-lease-expiry-and-cancel" => [ 5, 0 ],
+    "11-limit-handoff-no-rules" => [ 3, 7 ]
   }.freeze
 
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
@@ -60,8 +66,9 @@ class GoldenTracesTest < ActiveSupport::TestCase
   end
 
   # Written for the traces of milestone 1, which wait for a later milestone
-  # than 3. The handoff milestone's traces (11 to 15) start with commands
-  # milestone 2 runs, so their prefixes are not 0 (milestone 3 plan HT-6).
+  # than 3. The handoff milestone's traces (11 to 15) start with add_task
+  # and no project, a command milestone 2 has, so the check does not apply
+  # to them (milestone 3 plan HT-6).
   test "the first command of every NOT_YET trace of a later milestone than 3 is one milestone 2 cannot run as written" do
     NOT_YET.each do |name, (milestone, _prefix)|
       next if milestone <= 3
