@@ -134,4 +134,35 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         try await transport.command(
             .installTool, path: ["provider": provider.rawValue], body: InstallToolRequest(), key: key)
     }
+
+    // Stubs of the red commit: each is replaced by the real call.
+    public func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage {
+        throw LeverageClientError.invalidBody
+    }
+    public func promoteTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func editContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func holdTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func resumeTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func pauseSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func resumeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func changeSeat(seatID: UUID, _ request: ChangeSeatRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
 }

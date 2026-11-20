@@ -46,4 +46,14 @@ public struct HelperClient: HelperAPI {
         -> PlainOutcome {
         try await transport.command(.reportRunStopped, path: ["id": seatID.contractString], body: report, key: key)
     }
+
+    // Stubs of the red commit: each is replaced by the real call.
+    public func reportLimit(credentialID: UUID, _ report: LimitReport, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+    public func reportSignedOut(credentialID: UUID, _ report: SignOutReport, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
 }

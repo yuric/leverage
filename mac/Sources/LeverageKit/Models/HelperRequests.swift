@@ -10,6 +10,8 @@ public struct HelperRequestParams: Codable, Equatable, Sendable {
     public let model: String?
     /// The seat's effort; nil for the tool's default.
     public let effort: String?
+    public var taskID: UUID? { nil }
+    public var reviewID: UUID? { nil }
 
     public init(
         provider: Provider? = nil, credentialKind: CredentialKind? = nil, role: SeatRole? = nil,

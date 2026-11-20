@@ -17,6 +17,8 @@ public struct Credential: Codable, Equatable, Sendable {
     public let effort: String?
     public let strengthRank: Int?
     public let lastVerifiedAt: Date?
+    /// When a limit was reported for it; nil when it is not limited.
+    public var limitedSince: Date? { nil }
 
     public init(
         id: UUID, kind: CredentialKind = .login, provider: Provider, name: String, maskedLabel: String? = nil,

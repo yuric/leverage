@@ -172,6 +172,7 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let names: [LogName]
     public let reviewerSeatExists: Bool
     public let asOfSeq: Int
+    public var recoveryTimes: [RecoveryTime] { [] }
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
@@ -216,6 +217,8 @@ public struct Seat: Codable, Equatable, Sendable {
     public let runState: SeatRunState?
     public let removedAt: Date?
     public let wantedRunning: Bool
+    public var runCredentialID: UUID? { nil }
+    public var runStopReason: RunStopReason? { nil }
 
     public init(
         id: UUID, name: String, provider: Provider, model: String? = nil, effort: String? = nil, role: SeatRole,
@@ -275,6 +278,8 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     public let readyTasks: Int
     public let waitingReviews: Int
     public let orchestrator: OrchestratorState
+    public var backupLastRanAt: Date? { nil }
+    public var backupLate: Bool { false }
 
     public init(
         sweepLastRanAt: Date?, sweepLate: Bool, helperLastReportedAt: Date?, queuedHelperRequests: Int,

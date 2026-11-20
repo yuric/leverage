@@ -22,5 +22,7 @@ enum CopyCatalogs {
         TaskPageCopy.self,
         AgentsCopy.self,
         CredentialsCopy.self,
+        NeedsYouCopy.self,
+        HandoffCopy.self,
     ]
 }

@@ -9,12 +9,16 @@ public final class FakeAppRuntime: AppRuntime, @unchecked Sendable {
     public let fakeServer = FakeServer()
     public let fakeHelper = FakeHelper()
     public let fakeSessions = FakeSessionStore()
+    public let fakeNotifier = FakeNotifier()
+    public let fakeInboxCursor = FakeInboxCursorStore()
 
     public init() {}
 
     public var server: any ServerSupervising { fakeServer }
     public var helper: any HelperSupervising { fakeHelper }
     public var sessions: any SessionStoring { fakeSessions }
+    public var notifier: any Notifying { fakeNotifier }
+    public var inboxCursor: any InboxCursorStoring { fakeInboxCursor }
 }
 
 /// A value shared between the test and the code under test, behind a lock.

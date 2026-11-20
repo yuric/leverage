@@ -22,4 +22,10 @@ public protocol HelperAPI: Sendable {
     /// `report_run_stopped`.
     func reportRunStopped(seatID: UUID, _ report: RunStoppedReport, key: IdempotencyKey) async throws
         -> PlainOutcome
+    /// `report_limit`: a run of this credential's account hit a limit (HD-10).
+    /// The answer carries no result (HE-8).
+    func reportLimit(credentialID: UUID, _ report: LimitReport, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `report_signed_out`: a run found this credential's login signed out.
+    func reportSignedOut(credentialID: UUID, _ report: SignOutReport, key: IdempotencyKey) async throws
+        -> PlainOutcome
 }

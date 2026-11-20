@@ -407,3 +407,40 @@ public struct RunStoppedReport: Encodable, Equatable, Sendable {
         try container.encode(stopReason, forKey: .stopReason)
     }
 }
+
+/// One field of `ChangeSeatRequest`: left as it is, set, or (where the
+/// field allows it) cleared to null, which for `model` and `effort` is the
+/// tool's default.
+public enum Setting<Value: Equatable & Sendable>: Equatable, Sendable {
+    case keep
+    case set(Value)
+    case clear
+}
+
+/// `ChangeSeatRequest` (HE-27, HM-51): only the fields the owner changed are
+/// sent.
+public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
+    public var name: String?
+    public var role: SeatRole?
+    public var model: Setting<String>
+    public var effort: Setting<String>
+    public var strengthRank: Setting<Int>
+    public var credentialID: Setting<UUID>
+    public var enabled: Bool?
+
+    public init(
+        name: String? = nil, role: SeatRole? = nil, model: Setting<String> = .keep,
+        effort: Setting<String> = .keep, strengthRank: Setting<Int> = .keep,
+        credentialID: Setting<UUID> = .keep, enabled: Bool? = nil
+    ) {
+        self.name = name
+        self.role = role
+        self.model = model
+        self.effort = effort
+        self.strengthRank = strengthRank
+        self.credentialID = credentialID
+        self.enabled = enabled
+    }
+
+    public func encode(to encoder: any Encoder) throws {}
+}

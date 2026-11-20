@@ -40,6 +40,9 @@ public protocol OwnerAPI: Sendable {
     /// `get_landing_prompt`: for a seat that connects on its own; a seat
     /// the app runs throws `LeverageClientError.refused` (`invalid_state`).
     func landingPrompt(seatID: UUID) async throws -> LandingPrompt
+    /// `list_inbox`: the open Needs you items whose `inbox.opened` is after
+    /// `afterSeq`; with `wait`, a long poll that answers when one opens.
+    func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage
 
     // Tasks.
 
@@ -52,6 +55,15 @@ public protocol OwnerAPI: Sendable {
     func cancelTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `allow_another_round`.
     func allowAnotherRound(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `promote_task`: an idea moves to Backlog (HM-45: "Move to Backlog").
+    func promoteTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `edit_contract`: the form's values sent again (HM-49).
+    func editContract(taskID: UUID, _ request: CompleteContractRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `hold_task`: "Pause this task" (HM-45).
+    func holdTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `resume_task`: "Continue this task" (HM-45).
+    func resumeTask(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
 
     // Seats.
 
@@ -64,6 +76,13 @@ public protocol OwnerAPI: Sendable {
     func stopSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `remove_seat`.
     func removeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `pause_seat`.
+    func pauseSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `resume_seat`.
+    func resumeSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `change_seat`: only the fields the request sets change (HM-51).
+    func changeSeat(seatID: UUID, _ request: ChangeSeatRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
 
     // The helper and credentials.
 
@@ -74,6 +93,9 @@ public protocol OwnerAPI: Sendable {
         -> CommandOutcome<AddCredentialResult>
     /// `verify_credential`; the result's `helperRequestID` is the request to follow.
     func verifyCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `sign_in_again`; the result's `helperRequestID` is the request to
+    /// follow (HE-36). Refused for anything but an added login.
+    func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `install_tool`, after the owner confirmed.
     func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome
 }
