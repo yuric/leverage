@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../gate_support"
 
 # Submit (PRD Lifecycle L88, L120, L502; DB-13, DB-20): every builder
 # criterion passed with evidence, the builder submits with a handoff note
@@ -149,5 +150,40 @@ class SubmitTest < ActiveSupport::TestCase
     assert_equal "Done; the links show each criterion.", review.reload.handoff_note
     assert_equal review.id, written.sole.subject_id
     assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+  end
+end
+
+# Submit at its gate (milestone 4 plan §2.1 rules 6 and 7, RE-2, RE-7).
+class SubmitGatedTest < ActiveSupport::TestCase
+  include GateSupport
+
+  setup do
+    @scenario = Scenario.new
+    @builder = @scenario.seat(role: "builder", credential: @scenario.credential)
+  end
+
+  test "a submit that waits keeps its request whole; the task stays Working, held by the builder" do
+    with_jobs do
+      gating(custom_rule("task.before_submit"))
+      task = ready_to_submit(@builder)
+      params = submit_params(task, note: "Made-up note that names the tests.")
+
+      assert_equal :pending, command("submit", @builder, params).outcome
+      assert_equal params, Leverage::PendingTransitions.of(task).params
+      assert_equal [ "working", @builder.id ], task.reload.values_at(:state, :holder_seat_id)
+      assert_not Review.exists?(task_id: task.id)
+    end
+  end
+
+  test "a refused submit commits its failed check row and check.finished under its key (RE-7)" do
+    rule = app_rule("task.before_submit")
+    gating([ rule, { app_result: "failed", reason: "Made-up reason." } ])
+    task = ready_to_submit(@builder)
+    outcome = command("submit", @builder, submit_params(task))
+
+    assert outcome.refused?
+    assert_equal [ "failed", "Made-up reason." ], mine(RuleCheck).sole.values_at(:result, :reason)
+    assert_equal [ [ "check.finished", "seat", @builder.id ] ], written.map { |event| [ event.type, event.actor_kind, event.actor_id ] }
+    assert_equal "refused", Command.find_by!(key: @key).outcome
   end
 end

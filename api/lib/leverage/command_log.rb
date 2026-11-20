@@ -12,11 +12,11 @@ module Leverage
 
     module_function
 
-    def write(request, outcome, lock_wait:, writes:, total:)
+    def write(request, outcome, lock_wait:, writes:, total:, gate: 0.0)
       Rails.logger.info(line(request, outcome, lock_wait: lock_wait, writes: writes, total: total))
     end
 
-    def line(request, outcome, lock_wait:, writes:, total:)
+    def line(request, outcome, lock_wait:, writes:, total:, gate: 0.0)
       caller = request.by_app? ? "app" : "#{request.caller_kind}:#{request.caller_id || "-"}"
       [ PREFIX, "command=#{request.command}", "caller=#{caller}", "key=#{request.key || "-"}",
         "outcome=#{outcome.outcome}", "refusal=#{outcome.refusal&.code || "-"}", "lock_wait_ms=#{ms(lock_wait)}",

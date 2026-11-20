@@ -8,8 +8,9 @@ require_relative "entries/call_spy"
 # - Transitions.run_as(ctx, command, requester:, key:, params:): how one
 #   command runs another entry as someone else inside its own transaction
 #   (a planner's draft result runs Complete contract as the planner, with
-#   the result call's key). Its first version does nothing and answers
-#   :completed.
+#   the result call's key). WP4 wrote it: the entry's refusals, gate and
+#   perform as the requester (pending_transitions_test.rb holds the gate's
+#   part).
 # - After a command's perform, ReviewerEligibility.after_command(ctx,
 #   entry) is called once, with the entry (WP9 fills the method; trace 02's
 #   replay needs the call).
@@ -47,14 +48,28 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
       T.method(:run_as).parameters
   end
 
-  test "run_as's first version writes nothing and answers :completed" do
+  test "run_as performs the named entry as the requester, with its key, inside the caller's transaction" do
     planner = @scenario.seat(role: "planner")
     task = @scenario.task(state: "backlog")
     ctx = @scenario.context
     answer = T.run_as(ctx, "complete_contract", requester: planner, key: "k-planner-result",
-      params: { "id" => task.id, "title" => "Made-up title" })
+      params: { "id" => task.id, "title" => "Made-up title", "goal" => "Made-up goal.",
+                "criteria" => [ { "text" => "Made-up.", "kind" => "build" }, { "text" => "Agreed.", "kind" => "review" } ],
+                "actions" => [] })
 
     assert_equal :completed, answer
+    assert_equal %w[task.contract_changed task.ready], ctx.events.map(&:type)
+    ctx.events.each { |event| assert_equal [ "seat", planner.id, "k-planner-result" ], [ event.actor_kind, event.actor_id, event.command_id ] }
+    assert_equal "app", ctx.actor.first, "the caller comes back after it"
+    assert_equal 0, Command.where(key: "k-planner-result").count, "the caller's command stores the row, not run_as"
+  end
+
+  test "run_as answers refused when the entry refuses, and writes nothing" do
+    ctx = @scenario.context
+    answer = T.run_as(ctx, "complete_contract", requester: @scenario.seat(role: "planner"), key: "k-late",
+      params: { "id" => @scenario.task(state: "ready").id, "criteria" => [ { "text" => "Agreed.", "kind" => "review" } ] })
+
+    assert_equal :refused, answer
     assert_empty ctx.events
   end
 

@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../gate_support"
 
 # Claim (PRD Lifecycle L83, L492, L544-L545; milestone 2 plan EN-7, EN-8,
 # EN-23): a builder seat claims the next eligible Ready task at
@@ -159,5 +160,40 @@ class ClaimTest < ActiveSupport::TestCase
     @scenario.limit_credential(second, reset_at: @scenario.database_now + 3600)
     @scenario.run(other, on: codex)
     assert_equal [ codex.id, nil ], apply(other).result.values_at("credential_id", "model")
+  end
+end
+
+# Claim at its gate (milestone 4 plan §2.1, RE-5, SM-14, RC-18): a model
+# check makes the claim provisional; a failed gate refuses it.
+class ClaimGatedTest < ActiveSupport::TestCase
+  include GateSupport
+
+  setup do
+    @scenario = Scenario.new
+    @builder = @scenario.seat(role: "builder", credential: @scenario.credential)
+  end
+
+  test "a claim that waits holds the Ready task with no lease, no task.claimed and no briefing" do
+    with_jobs do
+      gating(custom_rule("task.before_claim"))
+      task = @scenario.task(state: "ready")
+      outcome = command("claim", @builder)
+
+      assert_equal [ :pending, nil ], [ outcome.outcome, outcome.result ]
+      assert_equal [ "ready", @builder.id, nil ], task.reload.values_at(:state, :holder_seat_id, :lease_due_at)
+      assert_not Event.exists?(task_id: task.id, type: "task.claimed")
+      assert_equal({}, Leverage::PendingTransitions.of(task).params)
+    end
+  end
+
+  test "a failed claim gate refuses blocked_by_rule with the rule and the reason, and the task stays Ready" do
+    rule = app_rule("task.before_claim")
+    gating([ rule, { app_result: "failed", reason: "Made-up reason." } ])
+    task = @scenario.task(state: "ready")
+    refusal = command("claim", @builder).refusal
+
+    assert_equal [ "blocked_by_rule", rule.id, "Made-up reason." ], [ refusal.code, refusal.rule_id, refusal.reason ]
+    assert_equal [ "ready", nil ], task.reload.values_at(:state, :holder_seat_id)
+    assert_equal [ "seat", @builder.id ], mine(RuleCheck).sole.values_at(:subject_kind, :subject_id)
   end
 end

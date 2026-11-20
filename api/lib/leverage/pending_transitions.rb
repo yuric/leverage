@@ -13,6 +13,9 @@ module Leverage
   # First version (milestone 4 plan §4, the hand-over table): every call
   # does nothing and answers nil. WP4 writes it.
   module PendingTransitions
+    # RC-17: the codes a waiting command ended from outside reads.
+    ENDING_CODES = %w[task_cancelled lease_expired invalid_state].freeze
+
     module_function
 
     # Stores entry's command as pending (Gate, when evaluation is :pending):
@@ -25,7 +28,7 @@ module Leverage
     # Gates the transition again on trigger, a Gating::Trigger (step 6,
     # rule 9), and completes, refuses, cancels or keeps it pending. Returns
     # the Gating::Decision.
-    def reenter(ctx, pending, trigger)
+    def reenter(ctx, pending, trigger, **_as)
       nil
     end
 
@@ -42,7 +45,7 @@ module Leverage
 
     # Ends the waiting command from outside (rule 11): code is one of
     # RC-17's three (task_cancelled, lease_expired, invalid_state).
-    def cancel(ctx, pending, code)
+    def cancel(ctx, pending, code, **_as)
       nil
     end
 

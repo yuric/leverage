@@ -28,20 +28,25 @@ class StateTableTest < ActiveSupport::TestCase
 
   StateTableCases.define(self, T::Table::TASK_LOOP) do |kase|
     reason = not_served(kase)
-    skip "not reachable before a later milestone: #{reason}" if reason
+    skip reason if reason
 
     kase.invalid_state? ? assert_invalid_state(kase) : assert_row(kase)
   end
 
   private
 
-  # Why a case cannot be reached before a later milestone (milestone 3 serves
-  # no row from Finishing either, its plan HS-3), or nil.
+  # Why a case is skipped, or nil: a row a later milestone reaches
+  # (milestone 3 serves no row from Finishing either, its plan HS-3), or,
+  # until milestone 4's WP12 brings WP5's release in and removes it, the
+  # release of a provisional claim (milestone 4 plan §4, WP4).
   def not_served(kase)
-    return "Finishing needs an outward action (SC-3)" if kase.from == "finishing"
-    return "no rule escalates (EN-5)" if kase.guard.include?("escalates")
-    return "an outward action (SC-3)" if kase.guard.include?("has_outward_action")
-    return "a provisional claim needs a model check at task.before_claim (EN-5)" if kase.command == "release" && kase.from == "ready" && !kase.invalid_state?
+    return "not reachable before milestone 5: Finishing needs an outward action (SC-3)" if kase.from == "finishing"
+    return "not reachable before milestone 5: no rule escalates (RD-8)" if kase.guard.include?("escalates")
+    return "not reachable before milestone 5: an outward action (SC-3)" if kase.guard.include?("has_outward_action")
+    if kase.command == "release" && kase.from == "ready" && !kase.invalid_state?
+      return "milestone 4's WP5 builds the release of a provisional claim; WP12 removes this skip " \
+             "(state_table_pending_ends_test.rb holds the row)"
+    end
 
     nil
   end

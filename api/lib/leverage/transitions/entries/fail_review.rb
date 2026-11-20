@@ -56,6 +56,9 @@ module Leverage
           @free = Eligibility.builder_free?(@builder, @task, at: ctx.at)
         end
 
+        # A pass whose gate failed (empty until WP4's code).
+        def load_for_gate(_ctx, review:, seat:, check:); end
+
         def refusals(_ctx)
           codes = Eligibility.review_refusals(@review, @seat)
           codes << state_refusal(@task.state, [ "does_not_escalate", @free ? "builder_free" : "builder_busy" ])

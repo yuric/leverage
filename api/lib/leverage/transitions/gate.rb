@@ -28,6 +28,9 @@ module Leverage
         evaluation
       end
 
+      # Opens a hold a rule check causes (empty until WP4's code).
+      def open_hold(_ctx, _task, _planned, check_id:, cause_id: nil, **_as) = nil
+
       def apply(evaluation, hook)
         raise Unsupported, "#{hook}: a pending transition needs rules (milestone 4)" if evaluation.outcome == :pending
 

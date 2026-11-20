@@ -14,46 +14,52 @@ module Leverage
     # (rules 5 and 6), under pending when the command waits. Returns the
     # RuleCheck rows in the order of evaluation.checks, so a PlannedJob's
     # rule_check_ref and a PlannedHold's index find theirs.
-    def write(ctx, evaluation, task:, pending: nil)
+    def write(ctx, evaluation, task:, pending: nil, **_as)
       []
     end
 
     # The attempt that job runs has started: seat claimed it
     # (check.started).
-    def start(ctx, check, job:, seat:)
+    def start(ctx, check, job:, seat:, **_as)
       nil
     end
 
     # The attempt finished with a checker's result, its reason, and the
     # tokens and spend it reported (check.finished). Returns the Event.
-    def finish(ctx, check, result:, reason:, tokens: nil, spend: nil)
+    def finish(ctx, check, result:, reason:, tokens: nil, spend: nil, **_as)
       nil
     end
 
     # The check ends in error after its second miss (check.finished,
     # result error). Returns the Event.
-    def error(ctx, check)
+    def error(ctx, check, **_as)
       nil
     end
 
     # The check is withdrawn: its rule was turned off or removed, or its
     # waiting command was ended (check.finished, result withdrawn).
     # Returns the Event.
-    def withdraw(ctx, check)
+    def withdraw(ctx, check, **_as)
       nil
     end
 
     # The owner lets the check through once, with who, when and why
     # (check.overridden, L423). Returns the Event.
-    def override(ctx, check, user:, reason:)
+    def override(ctx, check, user:, reason:, **_as)
       nil
     end
 
     # A new attempt of the check, run by job (check.queued): after a miss,
     # a re-run, or the orchestrator's return. Returns the
     # RuleCheckAttempt.
-    def new_attempt(ctx, check, job:)
+    def new_attempt(ctx, check, job:, **_as)
       nil
     end
+
+    # The check's latest check.finished, or nil (empty until WP4's code).
+    def last_finished(_check) = nil
+
+    # The event columns a writer was given (empty until WP4's code).
+    def event_fields(_as) = {}
   end
 end
