@@ -9,7 +9,7 @@ class GateApplicationTest < ActiveSupport::TestCase
   include GateSupport
 
   # Answers one Evaluation a test gives it, built from the request.
-  class Planned < Leverage::Gating::NoRules
+  class Planned < Leverage::Rules::Engine
     attr_reader :requests
 
     def initialize(&plan)

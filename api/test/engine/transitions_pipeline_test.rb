@@ -49,7 +49,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   # Records the gating calls it is asked.
-  class RecordingGating < Leverage::Gating::NoRules
+  class RecordingGating < Leverage::Rules::Engine
     attr_reader :requests
 
     def initialize
@@ -64,7 +64,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   # A gating answer milestone 2 cannot apply.
-  class PendingGating < Leverage::Gating::NoRules
+  class PendingGating < Leverage::Rules::Engine
     def evaluate(_request)
       Leverage::Gating::Evaluation.new(outcome: :pending, frozen_rule_version_ids: [], checks: [], jobs: [], failures: [],
         warnings: [], effects: [], holds_to_open: [])

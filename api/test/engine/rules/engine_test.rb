@@ -4,8 +4,11 @@ module Leverage
   module Rules
     # Rules::Engine (milestone 4 plan §2.1, RE-1, RT-2): the Leverage::Gating
     # implementation, seven calls each passed to the file of rules/ that
-    # owns it. With no rule row it answers as Gating::NoRules did, so the
-    # rule-free loop of milestones 2 and 3 is unchanged on it.
+    # owns it. With no rule row it answers as milestone 2's rule-free
+    # gating did (Gating::NoRules, deleted when the engine became the
+    # production gating), so the rule-free loop of milestones 2 and 3 is
+    # unchanged on it. Its parameters are the interface's, as the other
+    # implementation, Gating::StandIn, has them.
     class EngineTest < ActiveSupport::TestCase
       include TestSupport
 
@@ -23,7 +26,7 @@ module Leverage
       end
 
       test "it answers the seven calls of the gating interface with the interface's parameters" do
-        reference = Leverage::Gating::NoRules
+        reference = Leverage::Gating::StandIn
         CALLS.each do |call|
           assert_equal reference.instance_method(call).parameters, Engine.instance_method(call).parameters, call
         end

@@ -8,7 +8,7 @@ class CompleteContractTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
   # Records the hooks gating is asked at.
-  class Recording < Leverage::Gating::NoRules
+  class Recording < Leverage::Rules::Engine
     attr_reader :hooks
 
     def initialize

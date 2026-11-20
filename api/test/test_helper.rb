@@ -22,11 +22,11 @@ module ActiveSupport
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
 
-    # The production gating for milestone 2 (config/initializers/
+    # The production gating, the rules engine (config/initializers/
     # leverage_gating.rb), set again before each test: the gating
     # conformance suite unsets the implementation after each of its tests,
     # and it runs in the same process.
-    setup { Leverage::Gating.implementation = Leverage::Gating::NoRules.new }
+    setup { Leverage::Gating.implementation = Leverage::Rules::Engine.new }
 
     # Fires the deferred state trigger (C7) before the test's transaction is
     # rolled back, so a test that changes tasks.state without an event for

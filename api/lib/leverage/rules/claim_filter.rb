@@ -14,7 +14,8 @@ module Leverage
     #
     # The tasks a seat ever held are left out of its reviews by Eligibility
     # itself (L455): that is built-in behaviour, not a rule, so a workspace
-    # with no rule skips nothing here, as Gating::NoRules did (RT-2).
+    # with no rule skips nothing here, as milestone 2's rule-free gating
+    # did (RT-2).
     module ClaimFilter
       HOOK = "task.before_claim".freeze
 

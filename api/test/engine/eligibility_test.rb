@@ -8,7 +8,7 @@ class EligibilityTest < ActiveSupport::TestCase
   E = Leverage::Eligibility
 
   # A gating that filters given tasks and reviews out of a claim.
-  class Filtering < Leverage::Gating::NoRules
+  class Filtering < Leverage::Rules::Engine
     def initialize(tasks: [], reviews: [])
       super()
       @tasks = tasks
@@ -126,7 +126,7 @@ class EligibilityTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = Filtering.new(reviews: [ review.id ])
     assert_nil E.next_review(@reviewer)
 
-    Leverage::Gating.implementation = Leverage::Gating::NoRules.new
+    Leverage::Gating.implementation = Leverage::Rules::Engine.new
     @scenario.append("task.claimed", task: task, actor_kind: "seat", actor_id: @reviewer.id,
       payload: { seat_id: @reviewer.id, credential_id: nil, model: nil })
     assert_nil E.next_review(@reviewer)

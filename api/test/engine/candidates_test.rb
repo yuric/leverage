@@ -16,7 +16,7 @@ class CandidatesTest < ActiveSupport::TestCase
   C = Leverage::Candidates
 
   # A gating whose provider rule refuses the given providers.
-  class Refusing < Leverage::Gating::NoRules
+  class Refusing < Leverage::Rules::Engine
     def initialize(*providers)
       super()
       @providers = providers
@@ -26,7 +26,7 @@ class CandidatesTest < ActiveSupport::TestCase
   end
 
   # A gating that filters given tasks out of one seat's claims.
-  class Filtering < Leverage::Gating::NoRules
+  class Filtering < Leverage::Rules::Engine
     def initialize(seat, tasks)
       super()
       @seat_id = seat.id
@@ -505,7 +505,7 @@ class CandidatesTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = Filtering.new(alone, [ task.id ])
 
     assert_equal "credential_limit", C.wait_cause(task, @now)
-    Leverage::Gating.implementation = Leverage::Gating::NoRules.new
+    Leverage::Gating.implementation = Leverage::Rules::Engine.new
     assert_nil C.wait_cause(task, @now)
   end
 
