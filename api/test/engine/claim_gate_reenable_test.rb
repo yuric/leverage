@@ -42,8 +42,9 @@ class ClaimGateReenableTest < ActiveSupport::TestCase
 
   test "turning on a rule with fewer than three failing seats opens nothing" do
     other = scenario.task(state: "ready")
+    first = RuleCheck.find_by!(task_id: @task.id, subject_id: @seats.first.id)
+    assert_completed(owner_command("override_check", { "id" => first.id, "reason" => "A made-up reason." }))
     assert_completed(owner_command("disable_rule", { "id" => @rule.id }))
-    RuleCheck.where(task_id: @task.id, subject_id: @seats.first.id).update_all(overridden_at: scenario.database_now)
 
     assert_completed(owner_command("enable_rule", { "id" => @rule.id }))
 

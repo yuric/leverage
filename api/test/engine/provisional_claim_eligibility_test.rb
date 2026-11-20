@@ -23,6 +23,7 @@ class ProvisionalClaimEligibilityTest < ActiveSupport::TestCase
   end
 
   def assert_lapsed
+    start = scenario.workspace.reload.last_seq
     answer_next(@orchestrator, PASSED)
 
     row = command_row(@builder, @key)
@@ -30,6 +31,10 @@ class ProvisionalClaimEligibilityTest < ActiveSupport::TestCase
     @task.reload
     assert_equal [ "ready", nil, nil ], [ @task.state, @task.holder_seat_id, @task.builder_seat_id ]
     assert_empty Event.where(workspace_id: scenario.workspace_id, task_id: @task.id, type: "task.claimed")
+    # The log rebuilds the lapse: the claim's checks passed and no
+    # task.claimed followed in that command (DB-43).
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: start)
   end
 
   test "the claim completes when the seat may still claim" do
@@ -38,6 +43,7 @@ class ProvisionalClaimEligibilityTest < ActiveSupport::TestCase
     assert_equal "completed", command_row(@builder, @key).outcome
     assert_equal [ "working", @builder.id, @login.id ], @task.reload.attributes.values_at("state", "holder_seat_id",
       "credential_id")
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
   end
 
   test "the seat's only login limited while the claim waits refuses it invalid_state" do

@@ -9,6 +9,16 @@ require_relative "jobs_support"
 module GatedFlowSupport
   include JobsSupport
 
+  # After every test that passed, the log rebuilds the replay columns of
+  # what it did (DB-43, DB-44): each fix here writes what the replay reads.
+  def self.included(base)
+    base.teardown do
+      if scenario && passed?
+        assert_empty Leverage::Replay.diff(scenario.workspace_id), "the log rebuilds the tables"
+      end
+    end
+  end
+
   FAILED = { "result" => "failed", "reason" => "The made-up note names no test." }.freeze
   PASSED = { "result" => "passed", "reason" => "The made-up note names the tests." }.freeze
 
