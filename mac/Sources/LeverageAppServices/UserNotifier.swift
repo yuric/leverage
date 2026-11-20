@@ -16,6 +16,15 @@ public final class UserNotifier: Notifying {
         SilentNotifier.shared
     }
 
+    /// What a notification carries so a click can name its item.
+    static func userInfo(for notification: OwnerNotification) -> [String: String] { [:] }
+
+    /// The item a clicked notification's `userInfo` names, or nil.
+    static func itemID(from userInfo: [AnyHashable: Any]) -> UUID? { nil }
+
+    /// Hands a click's item to the handler `onClick` set.
+    func deliverClick(userInfo: [AnyHashable: Any]) {}
+
     public func requestPermission() async -> Bool { false }
     public func isPermitted() async -> Bool { false }
     public func post(_ notification: OwnerNotification) async {}

@@ -40,11 +40,15 @@ public struct ServerFiles: Sendable {
 
     public init(supportFolder: URL) {
         folder = supportFolder.appendingPathComponent("server", isDirectory: true)
+        backupsFolder = supportFolder.appendingPathComponent("backups", isDirectory: true)
     }
 
     public init(supportFolder: SupportFolder) {
         self.init(supportFolder: supportFolder.url)
     }
+
+    /// `<support folder>/backups`: where the daily dump is written (HB-2).
+    public let backupsFolder: URL
 
     var composeFile: URL { folder.appendingPathComponent("compose.yaml") }
     var envFile: URL { folder.appendingPathComponent(".env") }
