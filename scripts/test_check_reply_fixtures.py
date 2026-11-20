@@ -151,6 +151,43 @@ class CheckReplyFixtures(unittest.TestCase):
         self.put(reply)
         self.assert_fails("a path naming a user's home folder")
 
+    # Review: what the raw text hides behind JSON escapes, and the fields
+    # a real reply carries a plan or an organisation in.
+
+    def test_an_escaped_email_or_home_path_fails(self):
+        # The raw file holds the value only in its JSON escapes: \\/ for /
+        # and \\u0040 for @, which a reader of the decoded reply sees whole.
+        for escaped, why in (("config at \\/Users\\/someone\\/.claude", "an escaped home path"),
+                             ("written by someone\\u0040example.com", "an escaped email")):
+            with self.subTest(why=why):
+                reply = clean_reply()
+                reply["stderr"] = "PLACEHOLDER\n"
+                raw = json.dumps(reply, indent=2).replace("PLACEHOLDER", escaped)
+                self.assertNotIn("/Users/", raw)
+                self.assertNotIn("@example.com", raw)
+                self.put(reply, raw=raw)
+                self.assert_fails(why)
+
+    def test_a_plan_or_organisation_field_with_a_value_fails(self):
+        for field, value in (("plan", "max"), ("plan_type", "pro"), ("planType", "team"),
+                             ("rate_limit_tier", "default_claude_max_20x"), ("subscription", "pro"),
+                             ("organization_name", "Some Company"), ("orgUuid", "org-made-up"),
+                             ("accountUuid", "acct-made-up"), ("account_email", "someone"),
+                             ("billingTier", "made-up")):
+            with self.subTest(field=field):
+                reply = clean_reply()
+                body = json.loads(reply["stdout"])
+                body[field] = value
+                reply["stdout"] = json.dumps(body) + "\n"
+                self.put(reply)
+                self.assert_fails(f"the field {field} with a value")
+
+    def test_a_home_folder_named_with_a_tilde_fails(self):
+        reply = clean_reply()
+        reply["stderr"] = "could not read ~someone/.config/tool\n"
+        self.put(reply)
+        self.assert_fails("a home folder named as ~user")
+
     def test_no_meta_fails(self):
         reply = clean_reply()
         del reply["meta"]
