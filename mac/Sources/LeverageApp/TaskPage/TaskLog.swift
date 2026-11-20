@@ -20,22 +20,50 @@ enum TaskLog {
     ) -> [LogEntry] {
         let seats = Dictionary(
             names.filter { $0.kind == .seat }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        var credentials = Dictionary(
+            names.filter { $0.kind == .credential }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        credentials.merge(accounts) { _, read in read }
         let words = Dictionary(criteria.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })
+        let context = Context(
+            seats: seats, credentials: credentials, criteria: words,
+            events: Dictionary(events.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
+            recoveryTimes: recoveryTimes, clock: clock)
         return events.sorted { $0.seq < $1.seq }.map { event in
-            let context = Context(seats: seats, criteria: words)
-            return LogEntry(id: event.id, seq: event.seq, at: event.at, text: sentence(for: event, in: context))
+            LogEntry(id: event.id, seq: event.seq, at: event.at, text: sentence(for: event, in: context))
         }
     }
 
     private struct Context {
         let seats: [UUID: String]
+        let credentials: [UUID: String]
         let criteria: [UUID: String]
+        let events: [UUID: EventRecord]
+        let recoveryTimes: [RecoveryTime]
+        let clock: ResetClock
 
         func agent(_ event: EventRecord) -> String {
             guard event.actorKind == .seat, let id = event.actorID, let name = seats[id] else {
                 return TaskPageCopy.anAgent.text
             }
             return name
+        }
+
+        /// The agent a payload or a subject names, or "An agent".
+        func agent(named id: UUID?) -> String {
+            id.flatMap { seats[$0] } ?? TaskPageCopy.anAgent.text
+        }
+
+        /// The account with this id as the owner knows it, or "an account".
+        func account(_ id: UUID?) -> String {
+            id.flatMap { credentials[$0] } ?? BoardCopy.anAccount.text
+        }
+
+        func uuid(_ event: EventRecord, _ key: String) -> UUID? {
+            event.payload[key]?.stringValue.flatMap(UUID.init(uuidString:))
+        }
+
+        func credentialID(_ event: EventRecord) -> UUID? {
+            event.subjectKind == .credential ? event.subjectID : uuid(event, "credential_id")
         }
 
         func criterionID(_ event: EventRecord) -> UUID? {
@@ -55,9 +83,129 @@ enum TaskLog {
                 .compactMap { criteria[$0] }
                 .map { "“\($0)”" }
         }
+
+        /// The recovery time that starts at this interruption: the same kind,
+        /// account and review, and the same moment.
+        func recovery(for event: EventRecord) -> RecoveryTime? {
+            let kind: RecoveryKind = event.type == .credentialLimitReached ? .limit : .signedOut
+            let review = uuid(event, "review_id")
+            return recoveryTimes.first {
+                $0.kind == kind && $0.credentialID == credentialID(event) && $0.reviewID == review
+                    && abs($0.startedAt.timeIntervalSince(event.effectiveAt)) < 1
+            }
+        }
     }
 
+    /// The event's sentence, with what the task waits for after it (a wait
+    /// cause the event carries) and how long the work was stopped (an
+    /// interruption that ended).
     private static func sentence(for event: EventRecord, in context: Context) -> String {
+        var text = baseSentence(for: event, in: context)
+        if event.payload["wait_cause"]?.stringValue == "credential_limit" {
+            text += " " + TaskPageCopy.logWaitsForAccount.text
+        }
+        if event.type == .credentialLimitReached || event.type == .credentialSignedOut,
+            let recovery = context.recovery(for: event)
+        {
+            text += " " + recoveryWords(recovery)
+        }
+        return text
+    }
+
+    private static func recoveryWords(_ recovery: RecoveryTime) -> String {
+        switch recovery.endedBy {
+        case .handoff: return TaskPageCopy.backAtWorkAtOnce.text
+        case .seatEvent:
+            guard let seconds = recovery.seconds else { return TaskPageCopy.backAtWork.filled(["duration": "a while"]) }
+            if seconds == 0 { return TaskPageCopy.backAtWorkAtOnce.text }
+            return TaskPageCopy.backAtWork.filled(["duration": DurationWords.text(seconds: seconds)])
+        case .notRecovered: return TaskPageCopy.endedBeforeBackAtWork.text
+        case nil: return TaskPageCopy.notBackAtWork.text
+        }
+    }
+
+    private static func resetTime(_ event: EventRecord, _ context: Context) -> String? {
+        guard let text = event.payload["reset_at"]?.stringValue, let date = parse(text) else { return nil }
+        return ResetTime.text(for: date, clock: context.clock)
+    }
+
+    private static func parse(_ text: String) -> Date? {
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return plain.date(from: text) ?? fractional.date(from: text)
+    }
+
+    private static func limitSentence(_ event: EventRecord, _ context: Context) -> String {
+        let account = capitalised(context.account(context.credentialID(event)))
+        var text: String
+        switch event.payload["window"]?.stringValue.flatMap(LimitWindow.init(rawValue:)) {
+        case .fiveHour: text = TaskPageCopy.logLimitReachedIn.filled(["account": account, "window": "five-hour"])
+        case .weekly: text = TaskPageCopy.logLimitReachedIn.filled(["account": account, "window": "weekly"])
+        case .spend: text = TaskPageCopy.logLimitReachedIn.filled(["account": account, "window": "spending"])
+        case .perModel: text = TaskPageCopy.logLimitReachedModel.filled(["account": account])
+        case nil: text = TaskPageCopy.logLimitReached.filled(["account": account])
+        }
+        if let time = resetTime(event, context) { text += " " + TaskPageCopy.logLimitResets.filled(["time": time]) }
+        return text
+    }
+
+    private static func holdOpenedSentence(_ event: EventRecord, _ context: Context) -> String {
+        let account = context.account(context.uuid(event, "credential_id"))
+        switch event.payload["reason"]?.stringValue.flatMap(HoldReason.init(rawValue:)) {
+        case .roundsExceeded: return TaskPageCopy.logPausedAtLimit.text
+        case .credentialLimit: return TaskPageCopy.logWaitingForAccount.filled(["account": account])
+        case .credentialSignedOut: return TaskPageCopy.logWaitingForSignIn.filled(["account": account])
+        case .ownerHold: return TaskPageCopy.logOwnerPaused.text
+        case .seatPaused: return TaskPageCopy.logAgentPaused.text
+        default: return TaskPageCopy.logPaused.text
+        }
+    }
+
+    private static func holdClosedSentence(_ event: EventRecord, _ context: Context) -> String {
+        let account = capitalised(context.account(context.uuid(event, "credential_id")))
+        switch event.payload["reason"]?.stringValue.flatMap(HoldReason.init(rawValue:)) {
+        case .credentialLimit: return TaskPageCopy.logAccountAvailable.filled(["account": account])
+        case .credentialSignedOut: return TaskPageCopy.logAccountSignedInAgain.filled(["account": account])
+        case .ownerHold: return TaskPageCopy.logOwnerContinued.text
+        case .seatPaused: return TaskPageCopy.logAgentResumed.text
+        default: return TaskPageCopy.logNoLongerPaused.text
+        }
+    }
+
+    private static func inboxOpenedSentence(_ event: EventRecord) -> String {
+        switch event.payload["kind"]?.stringValue.flatMap(NeedsYouItem.init(rawValue:)) {
+        case .accountSignedOut: return TaskPageCopy.logInboxSignedOut.text
+        case .limitWithNoResetTime: return TaskPageCopy.logInboxLimit.text
+        case .pastRoundLimit: return TaskPageCopy.logInboxPastLimit.text
+        default: return TaskPageCopy.logInboxOther.text
+        }
+    }
+
+    private static func inboxResolvedSentence(_ event: EventRecord) -> String {
+        switch event.payload["choice"]?.stringValue.flatMap(InboxChoice.init(rawValue:)) {
+        case .allowAnotherRound: return TaskPageCopy.logChoseTryAgain.text
+        case .editContract: return TaskPageCopy.logChoseChange.text
+        case .cancel: return TaskPageCopy.logCancelled.text
+        case .signInAgain: return TaskPageCopy.logChoseSignIn.text
+        default: return TaskPageCopy.logInboxSettled.text
+        }
+    }
+
+    private static func reviewReleasedSentence(_ event: EventRecord, _ context: Context, agent: [String: String]) -> String {
+        guard let cause = event.causeID.flatMap({ context.events[$0] }) else {
+            return TaskPageCopy.logReviewReleased.filled(agent)
+        }
+        let account = context.account(context.credentialID(cause))
+        switch cause.type {
+        case .credentialLimitReached: return TaskPageCopy.logReviewStoppedLimit.filled(["account": account])
+        case .credentialSignedOut: return TaskPageCopy.logReviewStoppedSignedOut.filled(["account": account])
+        default: return TaskPageCopy.logReviewReleased.filled(agent)
+        }
+    }
+
+    private static func baseSentence(for event: EventRecord, in context: Context) -> String {
         let agent = ["agent": context.agent(event)]
         switch event.type {
         case .taskCreated: return TaskPageCopy.logCreated.text
@@ -77,7 +225,7 @@ enum TaskLog {
             return copy.filled(agent.merging(["criterion": context.criterion(event)]) { $1 })
         case .taskSubmitted: return TaskPageCopy.logSubmitted.filled(agent)
         case .reviewStarted: return TaskPageCopy.logReviewStarted.filled(agent)
-        case .reviewReleased: return TaskPageCopy.logReviewReleased.filled(agent)
+        case .reviewReleased: return reviewReleasedSentence(event, context, agent: agent)
         case .reviewLeaseExpired: return TaskPageCopy.logReviewLeaseExpired.text
         case .reviewPassed: return TaskPageCopy.logReviewPassed.filled(agent)
         case .reviewFailed:
@@ -100,10 +248,31 @@ enum TaskLog {
             }
             return copy.filled(agent)
         case .taskLeaseExpired: return TaskPageCopy.logLeaseExpired.text
-        case .holdOpened:
-            let reason = event.payload["reason"]?.stringValue.flatMap(HoldReason.init(rawValue:))
-            return reason == .roundsExceeded ? TaskPageCopy.logPausedAtLimit.text : TaskPageCopy.logPaused.text
-        case .holdClosed: return TaskPageCopy.logNoLongerPaused.text
+        case .holdOpened: return holdOpenedSentence(event, context)
+        case .holdClosed: return holdClosedSentence(event, context)
+        case .credentialLimitReached: return limitSentence(event, context)
+        case .credentialSignedOut:
+            let account = capitalised(context.account(context.credentialID(event)))
+            guard let seat = context.uuid(event, "seat_id") else {
+                return TaskPageCopy.logSignedOutFound.filled(["account": account])
+            }
+            return TaskPageCopy.logSignedOutStopped.filled(["account": account, "agent": context.agent(named: seat)])
+        case .credentialVerified:
+            return TaskPageCopy.logVerified.filled(["account": capitalised(context.account(context.credentialID(event)))])
+        case .credentialSwitched:
+            let seat = context.agent(named: context.uuid(event, "seat_id"))
+            let account = context.account(context.credentialID(event))
+            guard let from = context.uuid(event, "from_credential_id") else {
+                return TaskPageCopy.logSwitched.filled(["agent": seat, "account": account])
+            }
+            return TaskPageCopy.logSwitchedFrom.filled(["agent": seat, "account": account, "from": context.account(from)])
+        case .inboxOpened: return inboxOpenedSentence(event)
+        case .inboxResolved: return inboxResolvedSentence(event)
+        case .taskPromoted: return TaskPageCopy.logPromoted.text
+        case .taskReturned: return TaskPageCopy.logReturned.text
+        case .seatPaused: return TaskPageCopy.logSeatPaused.filled(["agent": context.agent(named: event.subjectID)])
+        case .seatResumed: return TaskPageCopy.logSeatResumed.filled(["agent": context.agent(named: event.subjectID)])
+        case .seatChanged: return TaskPageCopy.logSeatChanged.filled(["agent": context.agent(named: event.subjectID)])
         default: return TaskPageCopy.logUpdated.text
         }
     }

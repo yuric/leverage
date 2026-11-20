@@ -69,10 +69,10 @@ enum BoardCopy: OwnerFacingCopy {
         case .chipLoginSignedOut: "Login signed out"
 
         case .noteNoReviewer: "No reviewer agent is connected. Connect one in Agents."
-        case .noteWaitingForAccount: "Not yet"
-        case .noteWaitingForAccountNoTime: "Not yet"
-        case .noteAccountSignedOut: "Not yet"
-        case .anAccount: "Not yet"
+        case .noteWaitingForAccount: "Waiting for {account}, which resets at {time}."
+        case .noteWaitingForAccountNoTime: "Waiting for {account}. It did not say when it is available again."
+        case .noteAccountSignedOut: "{account} is signed out. Sign in again to continue."
+        case .anAccount: "an account"
         }
     }
 

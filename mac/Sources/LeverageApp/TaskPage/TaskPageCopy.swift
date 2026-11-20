@@ -32,12 +32,17 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logReleasedUnable, logReleasedNotSuited, logReleasedStopping, logReleasedSwitchedOff
     case logReleasedRemoved, logReleasedOther, logLeaseExpired
     case logPausedAtLimit, logPaused, logNoLongerPaused, logUpdated
-    case logLimitReached, logLimitReachedIn, logLimitResets, logSignedOutStopped, logSignedOutFound, logSwitched
-    case logSwitchedFrom, logVerified, logWaitingForAccount, logWaitingForAccountToSignIn, logOwnerPaused
-    case logAgentPaused, logAccountAvailable, logAccountSignedInAgain, logOwnerContinued, logAgentResumed
-    case logWaitsForAccount, logPromoted, logReturned, logInboxSignedOut, logInboxLimit, logInboxPastLimit
-    case logInboxOther, logInboxSettled, logChoseTryAgain, logChoseChange, logChoseSignIn, logSeatPaused
-    case logSeatResumed, logSeatChanged, logReviewStoppedLimit, logReviewStoppedSignedOut
+
+    // The log's sentences for an interruption, a handoff, a wait and a continuation (HM-43).
+    case logLimitReached, logLimitReachedIn, logLimitReachedModel, logLimitResets
+    case logSignedOutStopped, logSignedOutFound, logVerified, logSwitched, logSwitchedFrom
+    case logWaitingForAccount, logWaitingForSignIn, logOwnerPaused, logAgentPaused
+    case logAccountAvailable, logAccountSignedInAgain, logOwnerContinued, logAgentResumed, logWaitsForAccount
+    case logPromoted, logReturned
+    case logInboxSignedOut, logInboxLimit, logInboxPastLimit, logInboxOther, logInboxSettled
+    case logChoseTryAgain, logChoseChange, logChoseSignIn
+    case logSeatPaused, logSeatResumed, logSeatChanged
+    case logReviewStoppedLimit, logReviewStoppedSignedOut
     case backAtWork, backAtWorkAtOnce, notBackAtWork, endedBeforeBackAtWork
 
     var text: String {
@@ -104,15 +109,50 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logPaused: "The task was paused."
         case .logNoLongerPaused: "The task is no longer paused."
         case .logUpdated: "The task was updated."
-        case .logLimitReached, .logLimitReachedIn, .logLimitResets, .logSignedOutStopped, .logSignedOutFound,
-            .logSwitched, .logSwitchedFrom, .logVerified, .logWaitingForAccount, .logWaitingForAccountToSignIn,
-            .logOwnerPaused, .logAgentPaused, .logAccountAvailable, .logAccountSignedInAgain, .logOwnerContinued,
-            .logAgentResumed, .logWaitsForAccount, .logPromoted, .logReturned, .logInboxSignedOut, .logInboxLimit,
-            .logInboxPastLimit, .logInboxOther, .logInboxSettled, .logChoseTryAgain, .logChoseChange,
-            .logChoseSignIn, .logSeatPaused, .logSeatResumed, .logSeatChanged, .logReviewStoppedLimit,
-            .logReviewStoppedSignedOut, .backAtWork, .backAtWorkAtOnce, .notBackAtWork, .endedBeforeBackAtWork:
-            "Not yet"
-        case .moveToBacklog, .pauseTask, .continueTask, .changeTask: "Not yet"
+        case .moveToBacklog: "Move to Backlog"
+        case .pauseTask: "Pause this task"
+        case .continueTask: "Continue this task"
+        case .changeTask: "Change the task"
+
+        case .logLimitReached: "{account} reached its limit."
+        case .logLimitReachedIn: "{account} reached its {window} limit."
+        case .logLimitReachedModel: "{account} reached its limit for one model."
+        case .logLimitResets: "It resets at {time}."
+        case .logSignedOutStopped: "{account} was signed out, so {agent} stopped."
+        case .logSignedOutFound: "{account} was found signed out when it was checked."
+        case .logVerified: "{account} was signed in again."
+        case .logSwitched: "{agent} went on with {account} from the saved work."
+        case .logSwitchedFrom: "{agent} moved from {from} to {account} and went on from the saved work."
+        case .logWaitingForAccount: "The task is waiting for {account} to be available again."
+        case .logWaitingForSignIn: "The task is paused until {account} is signed in again."
+        case .logOwnerPaused: "You paused the task."
+        case .logAgentPaused: "The agent working on the task was paused, so it is waiting."
+        case .logAccountAvailable: "{account} is available again, so the task goes on."
+        case .logAccountSignedInAgain: "{account} is signed in again, so the task goes on."
+        case .logOwnerContinued: "You continued the task."
+        case .logAgentResumed: "The agent was resumed, so the task goes on."
+        case .logWaitsForAccount: "It is waiting for an account to be available."
+        case .logPromoted: "You moved the idea to Backlog."
+        case .logReturned: "The agent stopped and the task went back to Backlog."
+        case .logInboxSignedOut: "An account is signed out. This needs you: sign in again."
+        case .logInboxLimit: "An account is at its limit and did not say when it is available again. This needs you."
+        case .logInboxPastLimit: "The task was sent back too many times. This needs you."
+        case .logInboxOther: "This needs you."
+        case .logInboxSettled: "That no longer needs you."
+        case .logChoseTryAgain: "You let it try once more."
+        case .logChoseChange: "You changed the task."
+        case .logChoseSignIn: "You signed in again."
+        case .logSeatPaused: "{agent} was paused."
+        case .logSeatResumed: "{agent} was resumed."
+        case .logSeatChanged: "{agent} was changed."
+        case .logReviewStoppedLimit:
+            "The review stopped because {account} reached its limit. Another account will take it."
+        case .logReviewStoppedSignedOut:
+            "The review stopped because {account} was signed out. Another account will take it."
+        case .backAtWork: "Back at work after {duration}."
+        case .backAtWorkAtOnce: "Back at work at once."
+        case .notBackAtWork: "Not back at work yet."
+        case .endedBeforeBackAtWork: "The task ended before the work started again."
         }
     }
 }

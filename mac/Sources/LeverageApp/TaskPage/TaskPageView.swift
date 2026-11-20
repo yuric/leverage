@@ -69,6 +69,13 @@ struct TaskPageContent: View {
                 .padding(.trailing, 6)
                 .padding(.bottom, 12)
         }
+        .sheet(
+            isPresented: Binding(get: { model.editor != nil }, set: { if !$0 { model.endEditing() } })
+        ) {
+            if let editor = model.editor {
+                EditContractSheet(model: editor, cancel: { model.endEditing() })
+            }
+        }
         .confirmationDialog(
             TaskPageCopy.cancelQuestion.text,
             isPresented: Binding(get: { model.isConfirmingCancel }, set: { if !$0 { model.dismissCancel() } }),
@@ -95,6 +102,7 @@ struct TaskPageBody: View {
                     .foregroundStyle(Tokens.Tone.stop.foreground)
             }
             header
+            actions
             if model.needsRoundDecision { roundDecision }
             if let failure = model.actionFailure {
                 Text(verbatim: failure.text)
@@ -137,6 +145,30 @@ struct TaskPageBody: View {
         }
     }
 
+    /// What the owner can do with the task besides cancelling it (HM-45, HM-49).
+    @ViewBuilder
+    private var actions: some View {
+        if model.canMoveToBacklog || model.canChangeTask || model.canPause || model.canContinue {
+            HStack(spacing: 10) {
+                if model.canMoveToBacklog {
+                    Button(TaskPageCopy.moveToBacklog.text) { Task { await model.moveToBacklog() } }
+                        .buttonStyle(PrimaryButtonStyle())
+                }
+                if model.canChangeTask {
+                    Button(TaskPageCopy.changeTask.text) { model.beginEditing() }
+                }
+                if model.canPause {
+                    Button(TaskPageCopy.pauseTask.text) { Task { await model.pauseTask() } }
+                }
+                if model.canContinue {
+                    Button(TaskPageCopy.continueTask.text) { Task { await model.continueTask() } }
+                        .buttonStyle(PrimaryButtonStyle())
+                }
+                if model.isBusy { ProgressView().controlSize(.small) }
+            }
+        }
+    }
+
     private func noteBox(_ text: String) -> some View {
         Text(verbatim: text)
             .font(.system(size: Tokens.FontSize.small))
@@ -153,6 +185,9 @@ struct TaskPageBody: View {
             HStack(spacing: 10) {
                 Button(TaskPageCopy.allowOneMoreTry.text) { Task { await model.allowAnotherRound() } }
                     .buttonStyle(PrimaryButtonStyle())
+                if model.canChangeTask {
+                    Button(TaskPageCopy.changeTask.text) { model.beginEditing() }
+                }
                 Button(TaskPageCopy.cancelTask.text, role: .destructive) { model.askToCancel() }
                 if model.isBusy { ProgressView().controlSize(.small) }
             }

@@ -19,10 +19,12 @@ struct CriterionRow: Identifiable, Equatable, Sendable {
     let evidence: [EvidenceRow]
 }
 
-/// One task's page (L799, MA-9, MA-29): the contract, the criteria with their
-/// evidence, where the work is, the log, and what the owner can do: Send to
-/// agents for a task left in Backlog (MA-16), Allow one more try and Cancel task
-/// for a task paused at the limit, and Cancel task for any task not finished.
+/// One task's page (L799, MA-9, MA-29, HM-43 to HM-49): the contract, the
+/// criteria with their evidence, where the work is, the log, and what the owner
+/// can do: Send to agents for a task left in Backlog (MA-16), Move to Backlog
+/// for an idea, Change the task, Pause this task and Continue this task, Allow
+/// one more try and Cancel task for a task paused at the limit, and Cancel task
+/// for any task not finished.
 ///
 /// A command's key is kept until it works, so Retry sends the same command and
 /// a repeat writes nothing twice (IN-9). The form of a Backlog task is not
@@ -64,6 +66,11 @@ final class TaskPageModel {
     @ObservationIgnored private var sendKey: IdempotencyKey?
     @ObservationIgnored private var allowKey: IdempotencyKey?
     @ObservationIgnored private var cancelKey: IdempotencyKey?
+    @ObservationIgnored private var promoteKey: IdempotencyKey?
+    @ObservationIgnored private var holdKey: IdempotencyKey?
+    @ObservationIgnored private var resumeKey: IdempotencyKey?
+    @ObservationIgnored private var accounts: [UUID: CardAccount] = [:]
+    @ObservationIgnored private var accountNames: [UUID: String] = [:]
 
     @ObservationIgnored private let clock: ResetClock
 
@@ -102,15 +109,29 @@ final class TaskPageModel {
 
     private var openHolds: [Hold] { page?.holds.filter { $0.closedAt == nil } ?? [] }
 
+    /// The names of the accounts the page can say: the read's own names, and
+    /// where the accounts could be read, the provider and name as the owner knows them.
+    private var cardAccounts: [UUID: CardAccount] {
+        guard let page else { return [:] }
+        var known = Dictionary(
+            page.names.filter { $0.kind == .credential }.map { ($0.id, CardAccount(name: $0.name)) },
+            uniquingKeysWith: { first, _ in first })
+        known.merge(accounts) { _, read in read }
+        return known
+    }
+
     /// The card's words for this task, from the read.
     var status: CardContent? {
         guard let page else { return nil }
         let holds = openHolds
         let waiting = holds.first { $0.credentialID != nil }
+        let account = waiting?.credentialID.flatMap { cardAccounts[$0] }
         let card = BoardTask(
             task: page.task, blocked: !holds.isEmpty, holdReasons: holds.map(\.reason),
-            waitingForCredentialID: waiting?.credentialID)
-        return CardWording.content(for: card, seatNames: seatNames, reviewerSeatExists: page.reviewerSeatExists)
+            waitingForCredentialID: waiting?.credentialID, waitingUntil: account?.limitedUntil)
+        return CardWording.content(
+            for: card, seatNames: seatNames, reviewerSeatExists: page.reviewerSeatExists, accounts: cardAccounts,
+            clock: clock)
     }
 
     var criteria: [CriterionRow] {
@@ -135,7 +156,9 @@ final class TaskPageModel {
 
     var log: [LogEntry] {
         guard let page else { return [] }
-        return TaskLog.entries(events: page.events, names: page.names, criteria: page.criteria)
+        return TaskLog.entries(
+            events: page.events, names: page.names, criteria: page.criteria, recoveryTimes: page.recoveryTimes,
+            accounts: accountNames, clock: clock)
     }
 
     // MARK: what the owner can do
@@ -157,17 +180,78 @@ final class TaskPageModel {
         return state != .done && state != .cancelled && !isBusy
     }
 
-    var canMoveToBacklog: Bool { false }
-    var canPause: Bool { false }
-    var canContinue: Bool { false }
-    var canChangeTask: Bool { false }
+    /// An idea moves to Backlog (HM-45).
+    var canMoveToBacklog: Bool { page?.task.state == .imaginarium && !isBusy }
+
+    /// Pause this task: every state it can be paused from, while it is not already
+    /// paused by the owner (HE-24). Finishing is left out: no task is in it yet (HS-3).
+    var canPause: Bool {
+        guard let state = page?.task.state, !isBusy else { return false }
+        return [.backlog, .ready, .working, .inReview].contains(state) && !hasOwnerPause
+    }
+
+    /// Continue this task: only while the owner's own pause is open.
+    var canContinue: Bool {
+        guard let state = page?.task.state, state != .done, state != .cancelled, !isBusy else { return false }
+        return hasOwnerPause
+    }
+
+    private var hasOwnerPause: Bool { openHolds.contains { $0.reason == .ownerHold } }
+
+    /// Change the task: the contract editor, for a task an agent may be working on.
+    /// A Backlog task shows its form instead (MA-16), and an idea moves first.
+    var canChangeTask: Bool {
+        guard let state = page?.task.state else { return false }
+        return [.ready, .working, .inReview].contains(state)
+    }
+
     private(set) var editor: EditContractModel?
 
-    func moveToBacklog() async {}
-    func pauseTask() async {}
-    func continueTask() async {}
-    func beginEditing() {}
-    func endEditing() {}
+    func moveToBacklog() async {
+        guard canMoveToBacklog else { return }
+        let key = promoteKey ?? IdempotencyKey()
+        promoteKey = key
+        let moved = await run { _ = try await self.api.promoteTask(taskID: self.taskID, key: key).completedResult() }
+        if moved {
+            promoteKey = nil
+            await load()
+        }
+    }
+
+    func pauseTask() async {
+        guard canPause else { return }
+        let key = holdKey ?? IdempotencyKey()
+        holdKey = key
+        let paused = await run { _ = try await self.api.holdTask(taskID: self.taskID, key: key).completedResult() }
+        if paused {
+            holdKey = nil
+            await load()
+        }
+    }
+
+    func continueTask() async {
+        guard canContinue else { return }
+        let key = resumeKey ?? IdempotencyKey()
+        resumeKey = key
+        let resumed = await run { _ = try await self.api.resumeTask(taskID: self.taskID, key: key).completedResult() }
+        if resumed {
+            resumeKey = nil
+            await load()
+        }
+    }
+
+    /// Opens the editor, filled in with the task's contract (HM-49).
+    func beginEditing() {
+        guard canChangeTask, let page else { return }
+        editor = EditContractModel(
+            page: page, api: api,
+            onSaved: { [weak self] in
+                self?.editor = nil
+                Task { await self?.load() }
+            })
+    }
+
+    func endEditing() { editor = nil }
 
     // MARK: reading
 
@@ -176,11 +260,29 @@ final class TaskPageModel {
         let mine = generation
         do {
             let read = try await api.task(id: taskID)
+            var position = read.asOfSeq
+            var readAccounts = accounts
+            if read.names.contains(where: { $0.kind == .credential }) || read.holds.contains(where: { $0.credentialID != nil }) {
+                // The provider and the reset time are a nicety: the page still names the account without them.
+                do {
+                    let list = try await api.credentials()
+                    readAccounts = Dictionary(
+                        list.credentials.map { ($0.credential.id, CardAccount(of: $0.credential)) },
+                        uniquingKeysWith: { first, _ in first })
+                    position = min(position, list.asOfSeq)
+                } catch let error as TransportError where error.code == .unauthenticated {
+                    throw error
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {}
+            }
             guard mine == generation else { return }
+            accounts = readAccounts
+            accountNames = readAccounts.mapValues(\.name)
             page = read
             prefillIfUntouched(from: read)
             state = .loaded
-            noteRead(read.asOfSeq)
+            noteRead(position)
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {

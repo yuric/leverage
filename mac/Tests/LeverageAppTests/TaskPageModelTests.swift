@@ -629,4 +629,47 @@ struct TaskPageRenderTests {
         await failed.load()
         #expect(draws(TaskPageContent(model: failed)))
     }
+
+    @Test("the page draws with its new actions, the editor and a log with a handoff in it, light and dark")
+    func handoffDraws() async {
+        let id = UUID()
+        let hold = Hold(
+            id: UUID(), taskID: id, reason: .credentialLimit, credentialID: Fixtures.personalID,
+            openedAt: Fixtures.date(19, 9))
+        let events = [
+            Fixtures.event(.taskCreated, seq: 1, taskID: id, actorKind: .owner),
+            Fixtures.event(
+                .credentialLimitReached, seq: 2, taskID: id, actorKind: .app, subjectKind: .credential,
+                subjectID: Fixtures.personalID, payload: ["window": .string("weekly")]),
+        ]
+        let page = Fixtures.page(
+            Fixtures.summary(.working, id: id, details: "For finance."),
+            criteria: [Fixtures.criterion("Totals match", taskID: id)], holds: [hold], events: events,
+            names: [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")])
+        let owner = FakeOwnerAPI()
+        owner.script {
+            $0.task = { _ in page }
+            $0.credentials = { Fixtures.credentials([Fixtures.credential(Fixtures.personalID, limitedUntil: Fixtures.date(19, 18))]) }
+        }
+        let model = TaskPageModel(taskID: id, api: owner, noteRead: { _ in }, clock: Fixtures.clock())
+        await model.load()
+        #expect(model.canPause && model.canChangeTask)
+        #expect(draws(TaskPageBody(model: model)))
+        #expect(draws(TaskPageBody(model: model).environment(\.colorScheme, .dark)))
+        model.beginEditing()
+        let editor = try? #require(model.editor)
+        if let editor {
+            #expect(draws(EditContractSheet(model: editor, cancel: {})))
+            #expect(draws(EditContractSheet(model: editor, cancel: {}).environment(\.colorScheme, .dark)))
+        }
+        let idea = TaskPageModel(
+            taskID: id, api: { () -> FakeOwnerAPI in
+                let owner = FakeOwnerAPI()
+                owner.script { $0.task = { _ in Fixtures.page(Fixtures.summary(.imaginarium, id: id)) } }
+                return owner
+            }(), noteRead: { _ in })
+        await idea.load()
+        #expect(idea.canMoveToBacklog)
+        #expect(draws(TaskPageBody(model: idea)))
+    }
 }
