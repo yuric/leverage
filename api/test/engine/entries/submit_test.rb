@@ -117,4 +117,37 @@ class SubmitTest < ActiveSupport::TestCase
     assert_raises(T::Invalid) { submit(work_reference: "https://made-up-user:made-up-pass@example.test/repo") }
     assert_equal "working", @task.reload.state
   end
+
+  # milestone 3 plan HE-25 (ii), WP6's request 1: an edit from In review
+  # keeps the round and its review row (no verdict, no reviewer), so the
+  # next submit in that round takes that row again rather than making a
+  # second one for the same round.
+  test "after an edit from In review, the next submit in the round takes the round's open review again" do
+    acknowledge
+    pass_all
+    assert submit.completed?
+    review = Review.find_by!(task_id: @task.id, verdict: nil)
+    contract = { "id" => @task.id, "title" => @task.title, "goal" => @task.goal, "details" => nil,
+                 "criteria" => [ { "text" => "Made-up criterion 1, changed.", "kind" => "build" },
+                                 { "text" => "Made-up criterion 2.", "kind" => "review" } ],
+                 "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
+    owner = ->(command) do
+      T.apply(T::Request.new(command: command, workspace_id: @scenario.workspace_id, caller_kind: "owner",
+        caller_id: @scenario.owner.id, key: "key-#{SecureRandom.hex(6)}", request_hash: "a" * 64, params: contract))
+    end
+    assert owner.call("edit_contract").completed?
+    assert owner.call("complete_contract").completed?
+    assert apply("claim", {}).completed?
+    @task.reload
+    @criteria = Criterion.where(task_id: @task.id, kind: "build", removed_at: nil).order(:position).to_a
+    acknowledge
+    pass_all
+
+    outcome = submit
+    assert outcome.completed?, outcome.refusal&.code
+    assert_equal [ review.id ], Review.where(task_id: @task.id).pluck(:id)
+    assert_equal "Done; the links show each criterion.", review.reload.handoff_note
+    assert_equal review.id, written.sole.subject_id
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+  end
 end
