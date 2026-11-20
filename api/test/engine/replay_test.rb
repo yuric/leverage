@@ -155,4 +155,31 @@ class ReplayTest < ActiveSupport::TestCase
     found = Leverage::Replay.diff(scenario.workspace_id)
     assert(found.any? { |line| line.include?("tasks #{ranked.id} minimum_strength_rank") }, found.inspect)
   end
+
+  # Found by the walks of milestone 3 (seed 36 of SEED=1): an edit removes
+  # a builder criterion the tracker counted when another passed, so the
+  # criteria a step decision read must be those of the log as of the event
+  # (task.contract_changed's added and removed ids), not the rows as they
+  # are at the replay.
+  test "an edit that removes a criterion does not change the steps the replay rebuilds before it" do
+    scenario = Scenario.new
+    builder = scenario.seat(role: "builder")
+    task = scenario.task(state: "working", builder: builder, criteria: %w[build build review])
+    first, = Criterion.where(task_id: task.id, kind: "build").order(:position).to_a
+    seat_call = lambda do |command, params|
+      T.apply(T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "seat",
+        caller_id: builder.id, key: "k-#{SecureRandom.hex(6)}", request_hash: "a" * 64, params: params))
+    end
+    assert seat_call.call("acknowledge_briefing", "id" => task.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(task.reload, builder)).completed?
+    assert seat_call.call("pass_criterion", "id" => task.id, "cid" => first.id,
+      "evidence" => { "kind" => "link", "value" => "https://example.test/work/1" }).completed?
+    edit = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+             "criteria" => [ { "text" => first.text, "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ],
+             "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
+    assert T.apply(T::Request.new(command: "edit_contract", workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: "k-edit", request_hash: "b" * 64, params: edit)).completed?
+
+    assert_empty log_diff(Struct.new(:workspace_id).new(scenario.workspace_id))
+  end
 end
