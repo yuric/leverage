@@ -93,18 +93,20 @@ class TableGroupsTest < ActiveSupport::TestCase
     assert_equal "Leverage::Transitions::Entries::ReportLimit", Table.entry_for("report_limit").name
   end
 
-  test "a pending timer's entry does nothing; a pending command's entry is not built yet" do
-    scenario = Scenario.new
-    ctx = scenario.context
+  # WP3, WP5 and WP6 built the twelve entries (their notes); WP1's first
+  # versions are gone, so this pins that none is left a stub, and that the
+  # two timers write nothing in a workspace where nothing is due.
+  test "no pending entry is a stub any more; a pending timer writes nothing when nothing is due" do
+    ctx = Scenario.new.context(request: T::Request.new(command: "credential_hold_release",
+      workspace_id: nil, caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: {}))
     pending.each do |command|
+      source = File.read(Table.entry_for(command).instance_method(:perform).source_location.first)
+      refute_match(/NotImplementedError/, source, command)
+      next unless NEW_TIMERS.include?(command)
+
       entry = Table.entry_for(command).new
-      if NEW_TIMERS.include?(command)
-        entry.perform(ctx)
-        assert_nil entry.result, command
-      else
-        error = assert_raises(NotImplementedError, command) { entry.perform(ctx) }
-        assert_match(/not built yet/, error.message)
-      end
+      entry.load(ctx)
+      entry.perform(ctx)
     end
     assert_empty ctx.events
   end
@@ -161,7 +163,8 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   # --- The first versions of the seams other packages finish --------------------
 
-  test "Handoff has its four methods with their final arguments, and each does nothing" do
+  # WP3 built them; reevaluate answers the events it wrote (none here).
+  test "Handoff has its four methods with their final arguments, and reevaluate writes nothing in an empty workspace" do
     handoff = Leverage::Handoff
     expected = {
       interrupt: [ [ :req, :ctx ], [ :keyreq, :credential ], [ :keyreq, :seat ], [ :keyreq, :kind ], [ :key, :task ],
@@ -174,7 +177,7 @@ class TableGroupsTest < ActiveSupport::TestCase
                 [ :key, :task ], [ :key, :review ] ]
     }
     expected.each { |name, parameters| assert_equal parameters, handoff.method(name).parameters, name }
-    assert_nil handoff.reevaluate(Scenario.new.context)
+    assert_equal [], handoff.reevaluate(Scenario.new.context)
   end
 
   test "SeatRuns has placement, ensure_run_on and ended_by_interruption; placement answers the seat's own credential" do
