@@ -69,6 +69,11 @@ class CoreLoopContractTest < Minitest::Test
       assert sm.fetch("commands").any? { |entry| entry["command"] == command }, "#{command} has no commands entry"
       rows = derived.flat_map { |group| group["rows"] }.select { |row| row["command"] == command }
       assert_equal 1, rows.size, "#{command}: one derived row"
+      # Milestone 4 plan RD-2 and SM-33: from the Rule checks milestone on,
+      # creating the workspace writes the shipped rules' rule.created
+      # (RuleChecksContractTest holds that row).
+      next if command == "create_owner"
+
       assert_equal [], rows.first["events"], command
       assert_equal [], rows.first["conditional_events"], command
     end

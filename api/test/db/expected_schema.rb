@@ -388,7 +388,10 @@ module ExpectedSchema
         "requester_id" => uuid,
         "frozen_rule_version_ids" => col("uuid[]", default: "'{}'::uuid[]"),
         "state" => text(default: "'pending'::text"),
-        "reasons" => jsonb(null: true)
+        "reasons" => jsonb(null: true),
+        # The request the transition completes with, kept only while it is
+        # pending (milestone 4 plan RE-2; PRD, Data model).
+        "params" => jsonb(null: true)
       ).merge(STAMPS),
       indexes: [
         idx("workspace_id"),
@@ -414,7 +417,10 @@ module ExpectedSchema
         "result" => jsonb(null: true),
         "tokens" => col("bigint", null: true),
         "spend" => money,
-        "credential_id" => uuid(null: true)
+        "credential_id" => uuid(null: true),
+        # Which try of its check or draft the job is: a draft's second miss
+        # must know it is the second (DB-31, milestone 4 plan §2.3).
+        "attempt_number" => int(default: "1")
       ).merge(STAMPS),
       indexes: [ idx("workspace_id"), idx("task_id"), idx("project_id"), idx("claimed_by_seat_id") ],
       foreign_keys: [

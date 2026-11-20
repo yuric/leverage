@@ -310,11 +310,13 @@ class OpenapiTest < Minitest::Test
     assert_empty enum_of("QuestionJobResult", "outcome") - registry.dig("lists", "question_outcomes")
     assert_equal %w[record decision], enum_of("QuestionJobResult", "basis")
     assert_equal %w[approve stop pass_to_owner], enum_of("ApprovalJobResult", "decision")
-    assert_equal %w[rule_check_id attempt_number rule_version_id hook task_id project_id inputs].sort,
+    # Milestone 4 plan RD-30: each input also carries the material its seat
+    # needs, built when the job is claimed.
+    assert_equal %w[rule_check_id attempt_number rule_version_id hook task_id project_id inputs material].sort,
       schemas.fetch("RuleCheckJobInput").fetch("required").sort
     assert_equal %w[question_id task_id project_id].sort, schemas.fetch("QuestionJobInput").fetch("required").sort
     assert_equal %w[action_id rule_check_id task_id project_id].sort, schemas.fetch("ApprovalJobInput").fetch("required").sort
-    assert_equal %w[task_id project_id brief_version].sort, schemas.fetch("ContractDraftJobInput").fetch("required").sort
+    assert_equal %w[task_id project_id brief_version material].sort, schemas.fetch("ContractDraftJobInput").fetch("required").sort
     assert_equal registry["hooks"], enum_of("RuleCheckJobInput", "hook")
     assert_equal %w[result tokens spend].sort, schemas.fetch("JobResultRequest").fetch("required").sort
     assert_equal({ "$ref" => "#/components/schemas/JobResultRequest" }, request_schema("submit_job_result"))
