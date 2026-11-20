@@ -59,8 +59,13 @@ class GoldenTracesTest < ActiveSupport::TestCase
     end
   end
 
-  test "the first command of every NOT_YET trace is one milestone 2 cannot run as written" do
-    NOT_YET.each_key do |name|
+  # Written for the traces of milestone 1, which wait for a later milestone
+  # than 3. The handoff milestone's traces (11 to 15) start with commands
+  # milestone 2 runs, so their prefixes are not 0 (milestone 3 plan HT-6).
+  test "the first command of every NOT_YET trace of a later milestone than 3 is one milestone 2 cannot run as written" do
+    NOT_YET.each do |name, (milestone, _prefix)|
+      next if milestone <= 3
+
       first = self.class.trace(name).fetch("commands").first
       if Leverage::Transitions::Table.include?(first.fetch("command"))
         assert first.fetch("body")["project_id"], "#{name}: its first command could run, so its prefix is not 0"
