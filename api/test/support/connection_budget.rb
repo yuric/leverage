@@ -28,24 +28,40 @@ module ConnectionBudget
 
   module_function
 
+  # The lock heavy takes: a file every worker of the run opens, in the
+  # container's temporary folder. The kernel lets it go when a worker dies.
+  LOCK = File.join(Dir.tmpdir, "leverage-test-heavy.lock")
+
   # The number of workers the suite runs with: PARALLEL_WORKERS, else one
-  # per processor.
+  # per processor, at most MAXIMUM_WORKERS.
   def workers
-    ENV["PARALLEL_WORKERS"] ? Integer(ENV["PARALLEL_WORKERS"], 10) : Etc.nprocessors
+    return Integer(ENV["PARALLEL_WORKERS"], 10) if ENV["PARALLEL_WORKERS"]
+
+    Etc.nprocessors.clamp(1, MAXIMUM_WORKERS)
   end
 
   # The connections the suite may hold at once with this many workers:
-  # every worker may be inside a test with threads.
+  # one worker inside heavy, every other at LIGHT, and the parent.
   def need(workers)
-    (workers * HEAVY) + PARENT
+    ((workers - 1) * LIGHT) + HEAVY + PARENT
   end
 
-  # Runs the block, which may hold up to HEAVY connections at once.
-  # threads is how many it starts, each with a connection of its own.
-  # Returns the block's value.
+  # Runs the block, which may hold up to HEAVY connections at once, while
+  # no other worker of the run is inside heavy, and then closes the
+  # connections its threads left idle in the pool (the pool keeps them
+  # open otherwise, and the worker would go on holding them). threads is
+  # how many it starts, each with a connection of its own. Returns the
+  # block's value.
   def heavy(threads)
     raise ArgumentError, "#{threads} threads and the test's own connection pass HEAVY (#{HEAVY})" if threads + 1 > HEAVY
 
-    yield
+    File.open(LOCK, File::RDWR | File::CREAT, 0o600) do |file|
+      file.flock(File::LOCK_EX)
+      begin
+        yield
+      ensure
+        ActiveRecord::Base.connection_pool.flush!
+      end
+    end
   end
 end

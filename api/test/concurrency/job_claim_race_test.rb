@@ -26,24 +26,27 @@ class JobClaimRaceTest < CommittingTestCase
   JOBS = 10
 
   # Runs the block on one thread per item, each on a connection of its
-  # own, released together once all are ready. Returns the blocks' values.
+  # own, released together once all are ready, inside ConnectionBudget.heavy.
+  # Returns the blocks' values.
   def at_once(items)
     pool = ActiveRecord::Base.connection_pool
     assert_operator pool.size, :>, items.size, "the pool (DB_POOL) must hold every claimer and the test"
-    ready = Concurrent::CountDownLatch.new(items.size)
-    go = Concurrent::CountDownLatch.new(1)
-    threads = items.map do |item|
-      Thread.new do
-        pool.with_connection do
-          ready.count_down
-          go.wait
-          yield item
+    ConnectionBudget.heavy(items.size) do
+      ready = Concurrent::CountDownLatch.new(items.size)
+      go = Concurrent::CountDownLatch.new(1)
+      threads = items.map do |item|
+        Thread.new do
+          pool.with_connection do
+            ready.count_down
+            go.wait
+            yield item
+          end
         end
       end
+      ready.wait(30)
+      go.count_down
+      threads.map(&:value)
     end
-    ready.wait(30)
-    go.count_down
-    threads.map(&:value)
   end
 
   def claim_job(seat)

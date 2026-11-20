@@ -10,8 +10,10 @@ ActiveModel::SecurePassword.min_cost = true
 
 module ActiveSupport
   class TestCase
-    # Run tests in parallel with specified workers
-    parallelize(workers: :number_of_processors)
+    # Run tests in parallel: one worker per processor, at most eight,
+    # PARALLEL_WORKERS overriding (ConnectionBudget: every worker shares
+    # one PostgreSQL server and its max_connections).
+    parallelize(workers: ConnectionBudget.workers)
 
     # Each worker's database is loaded from db/structure.sql, which holds no
     # grants (pg_dump --no-privileges), and no rake task runs for it: grant
