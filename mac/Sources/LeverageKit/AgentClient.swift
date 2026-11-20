@@ -93,11 +93,11 @@ public struct AgentClient: AgentAPI {
     }
 
     public func claimNextJob(key: IdempotencyKey) async throws -> CommandOutcome<JobClaim> {
-        throw LeverageClientError.invalidBody
+        try await transport.command(.claimNextJob, key: key)
     }
 
     public func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
         -> PlainOutcome {
-        throw LeverageClientError.invalidBody
+        try await transport.command(.submitJobResult, path: ["id": jobID.contractString], body: request, key: key)
     }
 }

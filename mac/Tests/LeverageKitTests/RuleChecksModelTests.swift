@@ -32,7 +32,8 @@ struct RuleChecksModelTests {
         let list = try example("RulesList", as: RulesList.self)
         let row = try #require(list.rules.first)
         #expect(row.rule.key == "example" && row.rule.currentVersion == 1 && !row.rule.enabled)
-        #expect(row.version.ruleID == row.rule.id && row.version.scope.kind == .allTasks)
+        #expect(row.version.version == 1 && row.version.scope.kind == .allTasks && row.version.origin == .shipped
+                && row.version.scope.projectIDs?.count == 1 && row.version.scope.actionKinds == [.publish])
         #expect(row.version.hook == .taskBeforeReady && row.momentName == RuleHook.taskBeforeReady.momentName)
         #expect(row.sentence == nil && row.acts)
         #expect(row.stats == RuleStats(checks: 4, averageSeconds: 31.5, tokens: 5120, spend: 0, overrides: 1))

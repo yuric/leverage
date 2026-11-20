@@ -73,6 +73,11 @@ public struct CheckMaterial: Codable, Equatable, Sendable {
         self.quoted = quoted
     }
 
+    enum CodingKeys: String, CodingKey {
+        case instruction, moment, contract, quoted
+        case roleFile = "role_file"
+        case mayAnswerNotApplicable = "may_answer_not_applicable"
+    }
 }
 
 /// `RuleCheckJobInput`: one rule-check job.
@@ -101,6 +106,14 @@ public struct RuleCheckJobInput: Codable, Equatable, Sendable {
         self.material = material
     }
 
+    enum CodingKeys: String, CodingKey {
+        case hook, inputs, material
+        case ruleCheckID = "rule_check_id"
+        case attemptNumber = "attempt_number"
+        case ruleVersionID = "rule_version_id"
+        case taskID = "task_id"
+        case projectID = "project_id"
+    }
 }
 
 /// `DraftMaterial`: everything a planner needs (RD-30, RD-37): the task's
@@ -137,6 +150,13 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
         self.brief = brief
     }
 
+    enum CodingKeys: String, CodingKey {
+        case title, goal, details, criteria, brief
+        case roleFile = "role_file"
+        case workReference = "work_reference"
+        case minimumStrengthRank = "minimum_strength_rank"
+        case budgetCap = "budget_cap"
+    }
 }
 
 /// `ContractDraftJobInput`: one contract-draft job.
@@ -153,6 +173,12 @@ public struct ContractDraftJobInput: Codable, Equatable, Sendable {
         self.material = material
     }
 
+    enum CodingKeys: String, CodingKey {
+        case material
+        case taskID = "task_id"
+        case projectID = "project_id"
+        case briefVersion = "brief_version"
+    }
 }
 
 /// A job's input, by its kind. Questions and approvals are milestone 5's:
@@ -191,11 +217,40 @@ public struct JobClaim: Codable, Equatable, Sendable {
         self.runDueAt = runDueAt
     }
 
-    public init(from decoder: any Decoder) throws {
-        throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not built"))
+    enum CodingKeys: String, CodingKey {
+        case kind, input, model
+        case jobID = "job_id"
+        case credentialID = "credential_id"
+        case runDueAt = "run_due_at"
     }
 
-    public func encode(to encoder: any Encoder) throws {}
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        jobID = try container.decode(UUID.self, forKey: .jobID)
+        kind = try container.decode(JobKind.self, forKey: .kind)
+        switch kind {
+        case .ruleCheck: input = .ruleCheck(try container.decode(RuleCheckJobInput.self, forKey: .input))
+        case .contractDraft: input = .contractDraft(try container.decode(ContractDraftJobInput.self, forKey: .input))
+        case .question, .approval: input = .other(kind, try container.decode(JSONValue.self, forKey: .input))
+        }
+        credentialID = try container.decodeIfPresent(UUID.self, forKey: .credentialID)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        runDueAt = try container.decode(Date.self, forKey: .runDueAt)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(jobID, forKey: .jobID)
+        try container.encode(kind, forKey: .kind)
+        switch input {
+        case .ruleCheck(let value): try container.encode(value, forKey: .input)
+        case .contractDraft(let value): try container.encode(value, forKey: .input)
+        case .other(_, let value): try container.encode(value, forKey: .input)
+        }
+        try container.encode(credentialID, forKey: .credentialID)
+        try container.encode(model, forKey: .model)
+        try container.encode(runDueAt, forKey: .runDueAt)
+    }
 }
 
 /// `DraftContractResult`: what Draft the details answers: the planner job it
@@ -207,6 +262,9 @@ public struct DraftContractResult: Codable, Equatable, Sendable {
         self.jobID = jobID
     }
 
+    enum CodingKeys: String, CodingKey {
+        case jobID = "job_id"
+    }
 }
 
 /// `RuleCheckJobResult`: a checker's answer. `not_applicable` only for a
@@ -255,4 +313,7 @@ public struct JobResultRequest: Encodable, Equatable, Sendable {
         self.spend = spend
     }
 
+    enum CodingKeys: String, CodingKey {
+        case result, tokens, spend
+    }
 }

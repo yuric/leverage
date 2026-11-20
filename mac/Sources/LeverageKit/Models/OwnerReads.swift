@@ -26,10 +26,10 @@ public struct BoardTask: Codable, Equatable, Sendable {
     /// The task's open Needs you item, if any (MA-29).
     public let inboxItem: InboxItem?
     /// A transition of the task is pending and no hold is open (RD-27).
-    public var checking: Bool = false
+    public let checking: Bool
     /// The reason of the failed check behind an open `contract_incomplete`
     /// hold, or nil (RD-27). Text a model wrote: shown as data.
-    public var checkReason: String? = nil
+    public let checkReason: String?
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
@@ -42,14 +42,17 @@ public struct BoardTask: Codable, Equatable, Sendable {
         self.waitingForCredentialID = waitingForCredentialID
         self.waitingUntil = waitingUntil
         self.inboxItem = inboxItem
+        self.checking = checking
+        self.checkReason = checkReason
     }
 
     enum CodingKeys: String, CodingKey {
-        case task, blocked
+        case task, blocked, checking
         case holdReasons = "hold_reasons"
         case waitingForCredentialID = "waiting_for_credential_id"
         case waitingUntil = "waiting_until"
         case inboxItem = "inbox_item"
+        case checkReason = "check_reason"
     }
 }
 
@@ -186,17 +189,17 @@ public struct TaskPage: Codable, Equatable, Sendable {
     /// When that account resets, as its board card says.
     public let waitingUntil: Date?
     /// The task's steps in order, from `task_steps` (RD-24).
-    public var steps: [TaskStepRow] = []
+    public let steps: [TaskStepRow]
     /// The task's lifetime to `asOf`: the sum of its steps' seconds.
-    public var lifetimeSeconds: Double = 0
+    public let lifetimeSeconds: Double
     /// The database time the open step and the lifetime are measured to.
-    public var asOf: Date = Date(timeIntervalSince1970: 0)
+    public let asOf: Date
     /// The task's rule checks in order of creation (RD-28).
-    public var ruleChecks: [RuleCheckRow] = []
+    public let ruleChecks: [RuleCheckRow]
     /// The waiting command and what it waits on, or nil.
-    public var pending: PendingState? = nil
+    public let pending: PendingState?
     /// Where a contract draft stands (RD-37).
-    public var draft: DraftState = .none
+    public let draft: DraftState
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
@@ -220,10 +223,19 @@ public struct TaskPage: Codable, Equatable, Sendable {
         self.recoveryTimes = recoveryTimes
         self.reviewerSeatExists = reviewerSeatExists
         self.asOfSeq = asOfSeq
+        self.steps = steps
+        self.lifetimeSeconds = lifetimeSeconds
+        self.asOf = asOf
+        self.ruleChecks = ruleChecks
+        self.pending = pending
+        self.draft = draft
     }
 
     enum CodingKeys: String, CodingKey {
-        case task, criteria, actions, questions, holds, reviews, events, names
+        case task, criteria, actions, questions, holds, reviews, events, names, steps, pending, draft
+        case lifetimeSeconds = "lifetime_seconds"
+        case asOf = "as_of"
+        case ruleChecks = "rule_checks"
         case inboxItems = "inbox_items"
         case waitingForCredentialID = "waiting_for_credential_id"
         case waitingUntil = "waiting_until"
@@ -326,7 +338,7 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     public let backupLate: Bool
     /// Rule checks queued and not claimed, plus those held with
     /// `check_error`, counted at each read (RD-18).
-    public var waitingChecks: Int = 0
+    public let waitingChecks: Int
 
     public init(
         sweepLastRanAt: Date?, sweepLate: Bool, helperLastReportedAt: Date?, queuedHelperRequests: Int,
@@ -342,6 +354,7 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         self.orchestrator = orchestrator
         self.backupLastRanAt = backupLastRanAt
         self.backupLate = backupLate
+        self.waitingChecks = waitingChecks
     }
 
     enum CodingKeys: String, CodingKey {
@@ -354,6 +367,7 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         case waitingReviews = "waiting_reviews"
         case backupLastRanAt = "backup_last_ran_at"
         case backupLate = "backup_late"
+        case waitingChecks = "waiting_checks"
     }
 }
 

@@ -18,6 +18,10 @@ public struct RuleRecord: Codable, Equatable, Sendable {
         self.currentVersion = currentVersion
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, key, enabled
+        case currentVersion = "current_version"
+    }
 }
 
 /// `RuleScope`: which tasks a rule applies to. `named_projects` uses
@@ -40,6 +44,18 @@ public struct RuleScope: Codable, Equatable, Sendable {
     /// "The checker decides".
     public static let checkerDecides = RuleScope(kind: .checkerDecides)
 
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case projectIDs = "project_ids"
+        case actionKinds = "action_kinds"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(projectIDs?.map { $0.contractString }, forKey: .projectIDs)
+        try container.encode(actionKinds, forKey: .actionKinds)
+    }
 }
 
 /// `RuleVersion`: an immutable version of a rule. `enabled` lives on the rule.
@@ -93,6 +109,16 @@ public struct RuleVersion: Codable, Equatable, Sendable {
         self.createdAt = createdAt
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, version, key, name, hook, scope, kind, checker, route, instruction, parameters, origin
+        case ruleID = "rule_id"
+        case onFail = "on_fail"
+        case queueTimeoutSeconds = "queue_timeout_seconds"
+        case runTimeoutSeconds = "run_timeout_seconds"
+        case authorKind = "author_kind"
+        case authorID = "author_id"
+        case createdAt = "created_at"
+    }
 }
 
 /// `RuleStats`: how a rule has run (RD-26).
@@ -114,6 +140,10 @@ public struct RuleStats: Codable, Equatable, Sendable {
         self.overrides = overrides
     }
 
+    enum CodingKeys: String, CodingKey {
+        case checks, tokens, spend, overrides
+        case averageSeconds = "average_seconds"
+    }
 }
 
 /// `RuleWithVersion`: one row of the Rules screen.
@@ -141,6 +171,10 @@ public struct RuleRow: Codable, Equatable, Sendable {
         self.stats = stats
     }
 
+    enum CodingKeys: String, CodingKey {
+        case rule, version, sentence, acts, stats
+        case momentName = "moment_name"
+    }
 }
 
 /// `RulesList`: `GET /v1/owner/rules`.
@@ -194,6 +228,24 @@ public struct SaveRuleRequest: Encodable, Equatable, Sendable {
         self.runTimeoutSeconds = runTimeoutSeconds
     }
 
+    enum CodingKeys: String, CodingKey {
+        case name, instruction, parameters, scope, route
+        case onFail = "on_fail"
+        case queueTimeoutSeconds = "queue_timeout_seconds"
+        case runTimeoutSeconds = "run_timeout_seconds"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(instruction, forKey: .instruction)
+        try container.encode(parameters, forKey: .parameters)
+        try container.encode(scope, forKey: .scope)
+        try container.encode(onFail, forKey: .onFail)
+        try container.encode(route, forKey: .route)
+        try container.encode(queueTimeoutSeconds, forKey: .queueTimeoutSeconds)
+        try container.encode(runTimeoutSeconds, forKey: .runTimeoutSeconds)
+    }
 }
 
 /// `OverrideCheckRequest`: why the owner lets one check through once. It is

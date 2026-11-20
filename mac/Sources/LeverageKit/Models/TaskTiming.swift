@@ -17,6 +17,12 @@ public struct CheckAttempt: Codable, Equatable, Sendable {
         self.finishedAt = finishedAt
     }
 
+    enum CodingKeys: String, CodingKey {
+        case attemptNumber = "attempt_number"
+        case queuedAt = "queued_at"
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
 }
 
 /// `TaskRuleCheck`: one rule check of the task, with the rule version it ran
@@ -80,6 +86,22 @@ public struct RuleCheckRow: Codable, Equatable, Sendable {
         self.canRerun = canRerun
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, version, hook, round, checker, result, effect, reason, attempts
+        case ruleID = "rule_id"
+        case ruleName = "rule_name"
+        case ruleVersionID = "rule_version_id"
+        case versionSavedAt = "version_saved_at"
+        case momentName = "moment_name"
+        case onFail = "on_fail"
+        case queueSeconds = "queue_seconds"
+        case runSeconds = "run_seconds"
+        case overriddenAt = "overridden_at"
+        case overriddenByUserID = "overridden_by_user_id"
+        case overrideReason = "override_reason"
+        case canOverride = "can_override"
+        case canRerun = "can_rerun"
+    }
 }
 
 /// `TaskStep`: one step of a task's timeline, in order. `seconds` is
@@ -115,6 +137,17 @@ public struct TaskStepRow: Codable, Equatable, Sendable {
         self.causeRuleID = causeRuleID
     }
 
+    enum CodingKeys: String, CodingKey {
+        case kind, round, seconds
+        case stepClass = "step_class"
+        case openedAt = "opened_at"
+        case closedAt = "closed_at"
+        case subjectKind = "subject_kind"
+        case subjectID = "subject_id"
+        case seatID = "seat_id"
+        case causeKind = "cause_kind"
+        case causeRuleID = "cause_rule_id"
+    }
 }
 
 /// `PendingCommand`: the task's waiting command, the rules it waits on, and
@@ -130,4 +163,8 @@ public struct PendingState: Codable, Equatable, Sendable {
         self.waitingOnRuleIDs = waitingOnRuleIDs
     }
 
+    enum CodingKeys: String, CodingKey {
+        case command, since
+        case waitingOnRuleIDs = "waiting_on_rule_ids"
+    }
 }
