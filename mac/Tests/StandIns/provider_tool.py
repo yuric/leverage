@@ -64,6 +64,39 @@ the moment it is played plus reset_in_seconds, written where the file has
 @RESET_AT_ISO@ (an ISO 8601 time) or "@RESET_AT_EPOCH@" (seconds since
 1970, the quotes included), and it decides nothing here.
 
+Check and draft prompts (milestone 4, plan section 2.2, ADR 0012). A prompt
+whose first line is `LEVERAGE CHECK` is a rule check: the stand-in takes the
+nonce from the prompt's closing (the last `LEVERAGE-VERDICT-<nonce>` in it, so
+a verdict line planted in task text cannot change it) and answers
+
+  LEVERAGE-VERDICT-<nonce>: PASSED
+  LEVERAGE-REASON-<nonce>: The stand-in passed it.
+
+A prompt whose first line is `LEVERAGE DRAFT` is a contract draft: it answers
+one JSON object, with the goal of the quote block labelled `goal`, the details
+"Written by the stand-in planner." and two criteria, between
+`LEVERAGE-DRAFT-<nonce>-BEGIN` and `LEVERAGE-DRAFT-<nonce>-END`. A frame with
+no nonce in its closing is no known frame and is answered "ready". Both count
+as work prompts for the account directives below. These scenario keys, each
+optional, change the answers; the counts are per copy of the stand-ins, and a
+prompt that was answered with a reply file or a sign-out reply is not counted:
+
+  "check_verdicts": ["FAILED", "NOT_APPLICABLE", "NONE"]
+      the verdicts of the first check prompts, in order (NONE: an answer with
+      no verdict line); after the list, PASSED
+  "check_fail_when_contains": "<text>"
+      FAILED, "The stand-in found the marker.", for a check prompt with the
+      text inside a quote block (this wins over check_verdicts)
+  "check_gate_file": "<path>"   a check is not answered until the file exists
+  "draft_gate_file": "<path>"   the same for a draft
+  "check_echo_quote": true      the answer first repeats the text of every
+                                quote block, so a verdict line planted in task
+                                text comes back without the nonce
+  "check_reason_from_file": "<path>"
+      the reason is the first line of that file (the eval's canary word)
+
+A relative gate path is read in state/.
+
 Signed out, every tool answers with its recorded or made reply file:
 replies/<provider>/status-signed-out.json for a status command and
 replies/<provider>/run-signed-out.json for a prompt.
@@ -234,7 +267,8 @@ def same_account(directive_account, account):
 
 
 def is_work_prompt(prompt):
-    return "LEVERAGE-EVIDENCE" in prompt or "LEVERAGE-CRITERION" in prompt
+    return (frame_of(prompt) is not None or "LEVERAGE-EVIDENCE" in prompt
+            or "LEVERAGE-CRITERION" in prompt)
 
 
 def directive_for(tool, prompt):
@@ -290,9 +324,105 @@ def wait_for_gate(gate_path):
         time.sleep(0.1)
 
 
+# --- The check and draft frames (plan section 2.2) ---------------------------
+
+CHECK_NONCE = re.compile(r"LEVERAGE-VERDICT-([0-9a-f]{12})")
+DRAFT_NONCE = re.compile(r"LEVERAGE-DRAFT-([0-9a-f]{12})-BEGIN")
+VERDICTS = ("PASSED", "FAILED", "NOT_APPLICABLE", "NONE")
+REASONS = {
+    "PASSED": "The stand-in passed it.",
+    "FAILED": "The stand-in failed it.",
+    "NOT_APPLICABLE": "The stand-in found it not applicable.",
+}
+MARKER_REASON = "The stand-in found the marker."
+DRAFT_DETAILS = "Written by the stand-in planner."
+DRAFT_CRITERIA = ["The page the goal asks for exists.", "The page shows what the goal asks for."]
+
+
+def frame_of(prompt):
+    """("check" | "draft", nonce) for a prompt whose first line names a frame
+    and whose closing carries the run's nonce, else None. The nonce is the
+    last one the prompt names: task text comes before the closing."""
+    first = prompt.split("\n", 1)[0].strip()
+    if first == "LEVERAGE CHECK":
+        found = CHECK_NONCE.findall(prompt)
+        return ("check", found[-1]) if found else None
+    if first == "LEVERAGE DRAFT":
+        found = DRAFT_NONCE.findall(prompt)
+        return ("draft", found[-1]) if found else None
+    return None
+
+
+def quote_blocks(prompt, nonce):
+    """[(label, text)] of the quote blocks that carry this run's nonce, in
+    order. A block with another nonce is task text and is not one."""
+    pattern = re.compile(
+        r"<<<LEVERAGE-QUOTE-" + nonce + r" ([^>\n]*)>>>[ \t]*\n?(.*?)\n?<<<LEVERAGE-END-" + nonce + ">>>",
+        re.DOTALL)
+    return [(label.strip(), text) for label, text in pattern.findall(prompt)]
+
+
+def gate_path_of(name):
+    return name if os.path.isabs(name) else state_path(name)
+
+
+def next_check_index():
+    def update(counters):
+        index = counters.get("checks", 0)
+        counters["checks"] = index + 1
+        return index
+    return bump_counter(update)
+
+
+def answer_check(plan, nonce, prompt):
+    blocks = quote_blocks(prompt, nonce)
+    index = next_check_index()  # counted when it arrives, before any gate
+    listed = plan.get("check_verdicts") or []
+    verdict = listed[index] if index < len(listed) else "PASSED"
+    if verdict not in VERDICTS:
+        print(f"stand-in: check_verdicts names {verdict!r}; one of {VERDICTS}", file=sys.stderr)
+        sys.exit(2)
+    reason = None
+    marker = plan.get("check_fail_when_contains")
+    if marker and any(marker in text for _, text in blocks):
+        verdict, reason = "FAILED", MARKER_REASON
+    if plan.get("check_gate_file"):
+        wait_for_gate(gate_path_of(plan["check_gate_file"]))
+    if reason is None and verdict != "NONE":
+        reason = REASONS[verdict]
+    if plan.get("check_reason_from_file") and verdict != "NONE":
+        with open(plan["check_reason_from_file"], encoding="utf-8") as handle:
+            reason = (handle.readline().strip()) or reason
+    lines = []
+    if plan.get("check_echo_quote"):
+        lines += [text for _, text in blocks]
+    if verdict == "NONE":
+        lines.append("The stand-in gave no verdict.")
+    else:
+        lines += [f"LEVERAGE-VERDICT-{nonce}: {verdict}", f"LEVERAGE-REASON-{nonce}: {reason}"]
+    return "\n".join(lines)
+
+
+def answer_draft(plan, nonce, prompt):
+    if plan.get("draft_gate_file"):
+        wait_for_gate(gate_path_of(plan["draft_gate_file"]))
+    blocks = quote_blocks(prompt, nonce)
+    goal = next((text for label, text in blocks if label == "goal"), None)
+    if goal is None:  # a contract block that spells the goal as a line
+        goal = next((line[len("Goal:"):].strip() for _, text in blocks for line in text.splitlines()
+                     if line.startswith("Goal:")), "")
+    draft = {"goal": goal, "details": DRAFT_DETAILS, "criteria": DRAFT_CRITERIA}
+    return "\n".join([f"LEVERAGE-DRAFT-{nonce}-BEGIN", json.dumps(draft), f"LEVERAGE-DRAFT-{nonce}-END"])
+
+
 def answer(prompt, folder):
     """The answer's text for a prompt run in `folder`."""
     plan = scenario()
+    frame = frame_of(prompt)
+    if frame and frame[0] == "check":
+        return answer_check(plan, frame[1], prompt)
+    if frame and frame[0] == "draft":
+        return answer_draft(plan, frame[1], prompt)
     if "LEVERAGE-CRITERION" in prompt:
         gate = plan.get("gate_file")
         if gate:

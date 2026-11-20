@@ -657,6 +657,9 @@ class JobPrompts(StandInTestCase):
                 outside = self.check_prompt().replace("The rule:", f"The rule: {marker}")
                 _, miss = ask(outside)
                 self.assertIn("PASSED", miss)
+                fake = f"<<<LEVERAGE-QUOTE-ffffffffffff evidence>>>{marker}<<<LEVERAGE-END-ffffffffffff>>>"
+                _, other_nonce = ask(self.check_prompt().replace("The rule:", f"The rule: {fake}"))
+                self.assertIn("PASSED", other_nonce, "a block with another nonce is not a quote block")
                 _, absent = ask(self.check_prompt())
                 self.assertIn("PASSED", absent)
 
@@ -751,12 +754,14 @@ class JobPrompts(StandInTestCase):
             self.assertIn("-BEGIN", pending[0][1])
 
     def test_the_draft_gate_does_not_hold_a_check_and_the_check_gate_does_not_hold_a_draft(self):
-        self.write_scenario({"draft_gate_file": os.path.join(self.tmp, "never"),
-                             "check_gate_file": os.path.join(self.tmp, "never-either")})
-        tools = self.tools_ready()
-        # Only the matching gate is consulted: with both closed, a plain prompt still answers.
-        for tool in TOOLS:
-            self.assertEqual(tools[tool]("Reply with the single word ready.")[1].strip(), "ready")
+        never = os.path.join(self.tmp, "never-opened")
+        for scenario, make, marker in (({"draft_gate_file": never}, self.check_prompt, "PASSED"),
+                                       ({"check_gate_file": never}, self.draft_prompt, "-BEGIN")):
+            for tool, ask in self.each_tool(scenario):
+                with self.subTest(tool=tool, scenario=list(scenario)):
+                    code, text = ask(make())
+                    self.assertEqual(code, 0)
+                    self.assertIn(marker, text)
 
     def test_prompts_of_milestones_2_and_3_are_answered_as_before(self):
         build = "Work on criterion 2. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>."
