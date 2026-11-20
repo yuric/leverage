@@ -366,6 +366,21 @@ class EligibilityTest < ActiveSupport::TestCase
     assert E.may_review?(waiting, review, at: at + 3601)
   end
 
+  test "may_review?: the account its run belongs on must be one rule 3 keeps for the review (a minimum strength rank)" do
+    task = @scenario.task(state: "in_review", builder: @builder)
+    task.update_columns(minimum_strength_rank: 2)
+    review = Review.find_by!(task_id: task.id)
+    Leverage::Gating.implementation = ProviderWorld.new
+    own = @scenario.credential(provider: "codex")
+    @scenario.credential(provider: "grok", strength_rank: 1)
+    seat = @scenario.seat(role: "reviewer", credential: own, strength_rank: 2)
+    at = @scenario.database_now
+    @scenario.limit_credential(own, reset_at: at + 3600)
+
+    refute E.may_review?(seat.reload, review, at: at), "its run belongs on a weaker login of another provider group"
+    assert E.may_review?(seat, review, at: at + 3601)
+  end
+
   test "may_review?: a reviewer that built the task may not, whatever its provider (L455)" do
     task = @scenario.task(state: "in_review", builder: @builder)
     review = Review.find_by!(task_id: task.id)

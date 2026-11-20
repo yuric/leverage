@@ -14,15 +14,32 @@ module Leverage
       # Refused not_eligible when the seat may not claim or no review is
       # left (RC-50).
       #
+      # The hook is about the seat: its subject is the seat and the seat's
+      # id is what it hashes (hooks.json). Claim-next skips a review the
+      # provider rule keeps from the seat (Eligibility.review_and_skipped,
+      # which reads the account the review would run on, milestone 4 plan
+      # RD-50). For each review it skips before the one it takes, or before
+      # it finds none, gating is asked at review.assign about this seat on
+      # that review's task, and what it plans (the applied row with effect
+      # refused, RC-15) is written by RuleChecks, check.finished with it:
+      # the row's side event, which the waiting step takes as its cause
+      # (RD-11). It is written in load, so a claim refused not_eligible
+      # commits it too (RD-12, RE-7), and once per reviewer and round: a
+      # review that already has a review.assign row for this seat in this
+      # round is not asked about again.
+      #
       # Result: ClaimReviewResult, with the reviewer's briefing.
       class ClaimReview < Entry
+        HOOK = "review.assign".freeze
+
         def load(ctx)
           @seat = Seat.find_by(id: ctx.request.caller_id, workspace_id: ctx.workspace.id) || raise(NotFound, "No such seat")
           # A review whose lease is past its due time has no reviewer
           # (EN-14): its timer runs first, so it is claimable now.
           Timers.apply_claimable(ctx, :review)
-          @review = Eligibility.next_review(@seat, at: ctx.at)
+          @review, skipped = Eligibility.review_and_skipped(@seat, at: ctx.at)
           @task = @review && Task.find_by!(id: @review.task_id, workspace_id: ctx.workspace.id)
+          skipped.each { |review| record_skip(ctx, review) }
         end
 
         def refusals(_ctx)
@@ -32,8 +49,8 @@ module Leverage
         end
 
         def gate_request_fields(_ctx)
-          super.merge(task_id: @task.id, project_id: @task.project_id, round: @task.round, subject_kind: "review",
-            subject_id: @review.id)
+          { task_id: @task.id, project_id: @task.project_id, round: @task.round, subject_kind: "seat", subject_id: @seat.id,
+            inputs: HookInputs.for(hook: HOOK, task: @task, params: {}, seat: @seat) }
         end
 
         def perform(ctx)
@@ -60,6 +77,24 @@ module Leverage
             "reviewer_seat_id" => review.reviewer_seat_id, "lease_due_at" => review.lease_due_at&.utc&.iso8601(6),
             "verdict" => review.verdict, "failed_criteria" => Array(review.failed_criteria), "notes" => review.notes
           }
+        end
+
+        private
+
+        # Asks gating at review.assign about the seat on a review it skips,
+        # and has the plan written, unless this seat already has a row there
+        # in the review's round.
+        def record_skip(ctx, review)
+          task = Task.find_by!(id: review.task_id, workspace_id: ctx.workspace.id)
+          return if RuleCheck.exists?(workspace_id: ctx.workspace.id, task_id: task.id, hook: HOOK, round: review.round,
+            subject_kind: "seat", subject_id: @seat.id)
+
+          kind, id = ctx.actor
+          request = Gating::Request.new(workspace_id: ctx.workspace.id, task_id: task.id, project_id: task.project_id,
+            hook: HOOK, round: review.round, subject_kind: "seat", subject_id: @seat.id, requester_kind: kind,
+            requester_id: id, command_key: ctx.request.key, inputs: HookInputs.for(hook: HOOK, task: task, params: {}, seat: @seat))
+          evaluation = Gating.evaluate(request)
+          RuleChecks.write(ctx, evaluation, task: task) unless evaluation.checks.empty?
         end
       end
     end

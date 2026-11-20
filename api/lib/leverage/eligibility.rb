@@ -1,11 +1,13 @@
 module Leverage
   # Who may act on what (PRD L456, L544-L548; milestone 2 plan EN-8, EN-15,
-  # EN-23; RC-50; milestone 3 plan HD-4, HE-14): whether a seat may claim,
-  # the next task and the next review a seat gets, whether a failed review's
-  # builder is free, and the refusals that say a seat may not act on a task
-  # or a review. It reads and writes nothing else; the claims call it under
-  # the workspace lock with the command's time, so what it picks is what
-  # they take, and GET /v1/next calls it outside one, at the time it reads.
+  # EN-23; RC-50; milestone 3 plan HD-4, HE-14; milestone 4 plan RD-12,
+  # RD-14, RD-50, RD-51): whether a seat may claim, the next task and the
+  # next review a seat gets with the reviews claim-next skips, whether a
+  # reviewer may take a review, whether a failed review's builder is free,
+  # and the refusals that say a seat may not act on a task or a review. It
+  # reads and writes nothing else; the claims call it under the workspace
+  # lock with the command's time, so what it picks is what they take, and
+  # GET /v1/next calls it outside one, at the time it reads.
   #
   # A seat the app runs claims only where its run is placed (HD-4): one of
   # its candidates is available for the work (Candidates, rules 1 to 3) and
@@ -14,6 +16,7 @@ module Leverage
   # that connects on its own has no candidates and no run the app places.
   module Eligibility
     PRIORITY_ORDER = Arel.sql("CASE tasks.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END")
+    CLAIM_HOOK = "task.before_claim".freeze
 
     module_function
 
@@ -37,6 +40,11 @@ module Leverage
     # no minimum strength rank above the seat's, a running project, and not
     # filtered out by gating (RC-19); and, for a seat the app runs, a task
     # it is placed for (HD-4). nil too when the seat may not claim.
+    #
+    # Before that order comes a task on which the seat has a failed claim
+    # check the owner overrode, on the task's current inputs (milestone 4
+    # plan RD-14), so the override does what L910 says: the task proceeds
+    # on the seat's next request.
     def next_task(seat, at: Time.current)
       return nil unless may_claim?(seat, :task, at: at)
 
@@ -46,40 +54,73 @@ module Leverage
         .where("tasks.minimum_strength_rank IS NULL OR tasks.minimum_strength_rank <= ?", seat.strength_rank)
         .where("tasks.project_id IS NULL OR tasks.project_id NOT IN (SELECT id FROM projects WHERE paused)")
       scope = scope.where.not(id: excluded) unless excluded.empty?
-      scope.order(PRIORITY_ORDER, :created_at, :id).find { |task| placed_for?(seat, task, at) }
+      tasks = scope.order(PRIORITY_ORDER, :created_at, :id).to_a
+      overridden = overridden_claim_task_ids(seat, tasks)
+      first, rest = tasks.partition { |task| overridden.include?(task.id) }
+      (first + rest).find { |task| placed_for?(seat, task, at) }
     end
 
     # The open review the seat would claim now, or nil: the oldest
     # (reviews.created_at, then id, EN-23) with no reviewer, on a task In
     # review with no open hold, of the task's current round, that the seat
-    # never built (L455, read from task.claimed), whose provider gating
-    # allows, not filtered out by gating (RC-50), and, for a seat the app
-    # runs, one it is placed for (HD-4). nil too when the seat may not
-    # claim.
+    # never built (L455, read from task.claimed), that the claim filter
+    # does not leave out (RC-50), whose provider the provider rule allows,
+    # and, for a seat the app runs, one it is placed for (HD-4). nil too
+    # when the seat may not claim.
+    #
+    # The provider asked about is that of the account the review would run
+    # on (milestone 4 plan RD-50, L451): for a seat the app runs, the
+    # credential its run is on (SeatRuns.run_credential_id), which is the
+    # one the claim records; for a seat that connects on its own, its own.
     def next_review(seat, at: Time.current)
-      return nil unless may_claim?(seat, :review, at: at)
+      review_and_skipped(seat, at: at).first
+    end
+
+    # What review claim-next does for the seat, as [review, skipped]: the
+    # review next_review takes (or nil), and, in claim order, the open
+    # reviews before it (all of them when none is taken) that it passed
+    # over because the claim filter leaves them out or the provider rule
+    # refuses the seat's account: those the provider rule keeps from a seat
+    # that is otherwise eligible (L297, RC-50, milestone 4 plan RD-12). A
+    # review the seat built, and one it is not placed for, is passed over
+    # for another reason and is not among them. [nil, []] when the seat may
+    # not claim.
+    def review_and_skipped(seat, at: Time.current)
+      return [ nil, [] ] unless may_claim?(seat, :review, at: at)
 
       excluded = Gating.claimable_filter(seat_id: seat.id, kind: :review).excluded_review_ids
-      scope = Review.joins("JOIN tasks ON tasks.id = reviews.task_id AND tasks.round = reviews.round")
-        .where(workspace_id: seat.workspace_id, verdict: nil, reviewer_seat_id: nil, tasks: { state: "in_review" })
-        .where.not(task_id: open_hold_task_ids(seat.workspace_id))
-        .where.not(task_id: built_by(seat))
-      scope = scope.where.not(id: excluded) unless excluded.empty?
-      scope.order("reviews.created_at", "reviews.id").find do |review|
-        Gating.provider_allowed?(task_id: review.task_id, provider: seat.provider) && placed_for?(seat, review, at)
+      provider = review_provider(seat)
+      skipped = []
+      open_reviews(seat).each do |review|
+        if excluded.include?(review.id) || !Gating.provider_allowed?(task_id: review.task_id, provider: provider)
+          skipped << review
+        elsif placed_for?(seat, review, at)
+          return [ review, skipped ]
+        end
       end
+      [ nil, skipped ]
     end
 
-    # Red-run placeholder (milestone 4 plan WP9): the review claim-next takes
-    # and the reviews it skips. Not built yet.
-    def review_and_skipped(seat, at: Time.current)
-      [ next_review(seat, at: at), [] ]
-    end
+    # Whether the seat may take the review now, whatever it holds and
+    # whatever hold is on the task (milestone 4 plan RD-51, SM-42): a
+    # reviewer seat, enabled, not paused and not removed, that never built
+    # the task (L455), whose review would run on an account the provider
+    # rule allows. For a seat the app runs that is the account its run
+    # belongs on (Candidates rule 2, HD-4: its first available candidate),
+    # which must also be the first one rule 3 keeps for the review: a seat
+    # whose accounts are all limited or signed out has none, and one whose
+    # run belongs on an account of a provider that built the task is never
+    # placed for it. A seat that connects on its own reviews on its own
+    # provider. The rule's answer is Gating's (provider_allowed?, HE-41),
+    # always yes while the rule is off.
+    def may_review?(seat, review, at: Time.current)
+      return false unless seat && seat.role == "reviewer" && seat.enabled && !seat.paused && seat.removed_at.nil?
+      return false if built_by(seat).where(task_id: review.task_id).exists?
+      return Gating.provider_allowed?(task_id: review.task_id, provider: seat.provider) unless seat.credential_id
 
-    # Red-run placeholder (milestone 4 plan WP9): whether a reviewer seat may
-    # take the review now. Not built yet.
-    def may_review?(_seat, _review, at: Time.current)
-      true
+      account = Candidates.first_available(seat, nil, at)
+      !account.nil? && Gating.provider_allowed?(task_id: review.task_id, provider: account.provider) &&
+        Candidates.first_available(seat, review, at)&.id == account.id
     end
 
     # Whether the failed review's previous builder is free (state machine
@@ -154,6 +195,43 @@ module Leverage
       !first.nil? && SeatRuns.run_credential_id(seat) == first.id
     end
 
+    # The open reviews a reviewer seat may be offered, in claim order
+    # (EN-23): no reviewer and no verdict, of the task's current round, on a
+    # task In review with no open hold, that the seat never built (L455).
+    def open_reviews(seat)
+      Review.joins("JOIN tasks ON tasks.id = reviews.task_id AND tasks.round = reviews.round")
+        .where(workspace_id: seat.workspace_id, verdict: nil, reviewer_seat_id: nil, tasks: { state: "in_review" })
+        .where.not(task_id: open_hold_task_ids(seat.workspace_id))
+        .where.not(task_id: built_by(seat))
+        .order("reviews.created_at", "reviews.id")
+    end
+
+    # RD-50: the provider of the account the seat's review would run on now.
+    def review_provider(seat)
+      return seat.provider unless seat.credential_id
+
+      Credential.find_by(id: SeatRuns.run_credential_id(seat), workspace_id: seat.workspace_id)&.provider || seat.provider
+    end
+
+    # RD-14: the ids of those tasks on which the seat has a failed
+    # task.before_claim check of the task's current round that the owner
+    # overrode, whose input hash is that of the task's current contract
+    # version and this seat (hooks.json: the two inputs the hook hashes).
+    def overridden_claim_task_ids(seat, tasks)
+      return [] if tasks.empty?
+
+      by_id = tasks.index_by(&:id)
+      RuleCheck.where(workspace_id: seat.workspace_id, task_id: by_id.keys, hook: CLAIM_HOOK, subject_kind: "seat",
+        subject_id: seat.id, result: "failed").where.not(overridden_at: nil)
+        .pluck(:task_id, :round, :input_hash)
+        .select { |task_id, round, input_hash| round == by_id[task_id].round && input_hash == claim_hash(by_id[task_id], seat) }
+        .map(&:first)
+    end
+
+    def claim_hash(task, seat)
+      Gating.input_hash(hook: CLAIM_HOOK, inputs: HookInputs.for(hook: CLAIM_HOOK, task: task, params: {}, seat: seat))
+    end
+
     def open_hold_task_ids(workspace_id)
       Hold.where(workspace_id: workspace_id, closed_at: nil).select(:task_id)
     end
@@ -200,7 +278,8 @@ module Leverage
       false
     end
 
-    private_class_method :lost_task_refusal, :lost_review_refusal, :holds_anything?, :placed_for?, :open_hold_task_ids, :built_by,
-      :held_when_cancelled?, :reviewed_when_cancelled?
+    private_class_method :lost_task_refusal, :lost_review_refusal, :holds_anything?, :placed_for?, :open_reviews,
+      :review_provider, :overridden_claim_task_ids, :claim_hash, :open_hold_task_ids, :built_by, :held_when_cancelled?,
+      :reviewed_when_cancelled?
   end
 end

@@ -145,7 +145,9 @@ class StateTableReviewAssignTest < ActiveSupport::TestCase
     assert_equal expected.map { |event| event["type"] }, written.map(&:type)
     expected.zip(written).each do |event, row|
       FIELDS.each do |field|
-        assert_equal bind(event[field], symbols), row.public_send(field), "#{event["ref"]} #{field}"
+        expected_value = bind(event[field], symbols)
+        actual = row.public_send(field)
+        expected_value.nil? ? assert_nil(actual, "#{event["ref"]} #{field}") : assert_equal(expected_value, actual, "#{event["ref"]} #{field}")
       end
       assert_equal row.at, row.effective_at, event["ref"] if event["effective_at"] == event["at"]
     end
