@@ -68,7 +68,7 @@ class RolePresenceTest < ActiveSupport::TestCase
 
   test "no seat of the role at all is offline (RD-16), since the workspace began" do
     refute online?
-    assert_instant @scenario.workspace.created_at, P.offline_since(@scenario.workspace, "orchestrator", @now)
+    assert_instant @scenario.workspace.reload.created_at, P.offline_since(@scenario.workspace, "orchestrator", @now)
     assert_nil P.cause_credential(@scenario.workspace, "orchestrator", @now)
   end
 
