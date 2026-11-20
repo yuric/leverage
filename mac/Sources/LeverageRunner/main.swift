@@ -6,7 +6,9 @@ import LeverageKit
 // add flow's answering check. It reads its environment, builds the loop,
 // and turns SIGTERM or SIGINT into a stop: the tool is ended, what the seat
 // holds is given back, and it exits 0 (CL-23). The helper that started it
-// going away (a crash, SIGKILL) is the same stop (RunnerParent, PK-8).
+// going away (a crash, SIGKILL) is the same stop (RunnerParent, PK-8). When
+// the account stops (a limit or a sign-out) it exits 5 and prints one
+// report line on standard output, for the helper to send (HD-5, HD-6).
 
 let environment = ProcessInfo.processInfo.environment
 
@@ -42,7 +44,9 @@ do {
 let loop = RunnerLoop(
     role: configuration.role,
     api: AgentClient(baseURL: configuration.apiBaseURL, seatToken: configuration.seatToken),
-    driver: driver, workRoot: configuration.workRoot, home: configuration.tool.home, log: log)
+    driver: driver, workRoot: configuration.workRoot, home: configuration.tool.home,
+    interruption: .runner(tool: configuration.tool, credentialID: configuration.credentialID, log: log),
+    continuing: configuration.continuing, log: log)
 
 let stopSignals = loop.stopOnSignals([SIGTERM, SIGINT])
 let parentWatch = RunnerParent.watch { [loop] in
@@ -54,4 +58,5 @@ log.info("started: \(configuration)")
 let code = await loop.run()
 parentWatch?.cancel()
 stopSignals.forEach { $0.cancel() }
-exit(code)
+// Code 5: the report line, the runner's one line on standard output (HD-6).
+exit(RunnerEnd.finish(code: code, report: loop.endReport, log: log, write: RunnerEnd.standardOutput))

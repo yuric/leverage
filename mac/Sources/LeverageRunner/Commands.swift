@@ -17,6 +17,8 @@ enum Sent<Result: Sendable>: Sendable {
 enum Read<Value: Sendable>: Sendable {
     case value(Value)
     case refused(RefusalCode)
+    /// `404`: the work is gone, or was never the seat's (HD-9).
+    case gone
     case failed
 }
 
@@ -44,6 +46,11 @@ enum RefusalAction: Equatable {
         case .leaseExpired, .taskCancelled, .notHolder: self = .end
         default: self = .release
         }
+    }
+
+    /// Whether the refusal asks for the briefing to be acknowledged (HD-9).
+    static func asksForAcknowledgement(_ code: RefusalCode) -> Bool {
+        code == .briefingNotAcknowledged || code == .briefingChanged
     }
 }
 
@@ -135,6 +142,7 @@ struct FlowContext: Sendable {
                 case .retry: try await Task.sleep(for: timing.errorPause)
                 case .fatal:
                     log.error("\(name) failed: \(Self.describe(error))")
+                    if let transport = error as? TransportError, transport.code == .notFound { return .gone }
                     return .failed
                 }
             }

@@ -19,30 +19,39 @@ struct ReviewerFlow: Sendable {
         return try await work(claim.review.id, start: start, leaseDue: claim.lease.leaseDueAt)
     }
 
-    /// Goes on with a review this seat holds whose briefing changed.
+    /// Goes on with a review this seat holds, from its briefing: on
+    /// `briefing_changed` acknowledging it first, and at the start of a run
+    /// that continues the review only when asked (HD-9).
     func continueReview(_ reviewID: UUID, acknowledgement: Acknowledgement = .always) async throws -> FlowEnd {
-        try await work(reviewID, start: nil, leaseDue: nil)
+        try await work(reviewID, start: nil, leaseDue: nil, acknowledgement: acknowledgement)
     }
 
-    private func work(_ reviewID: UUID, start: BriefingResponse?, leaseDue: Date?) async throws -> FlowEnd {
+    private func work(
+        _ reviewID: UUID, start: BriefingResponse?, leaseDue: Date?, acknowledgement: Acknowledgement = .always
+    ) async throws -> FlowEnd {
         context.state.hold(.review(reviewID))
         let end = try await Heartbeat.around(.review(reviewID), leaseDue: leaseDue, context: context) {
-            try await steps(reviewID, start: start)
+            try await steps(reviewID, start: start, acknowledgement: acknowledgement)
         }
         if end != .paused { context.state.hold(.nothing) }
-        context.log.info("review \(reviewID.contractString): \(end)")
+        if case .accountStopped(let report) = end { context.state.accountStopped(report) }
+        context.log.info("review \(reviewID.contractString): \(end.name)")
         return end
     }
 
     private enum Step {
         case end(FlowEnd)
-        case restart
+        /// Read the briefing again; `acknowledge` when the refusal asked for
+        /// an acknowledgement.
+        case restart(acknowledge: Bool)
     }
 
-    private func steps(_ reviewID: UUID, start: BriefingResponse?) async throws -> FlowEnd {
+    private func steps(_ reviewID: UUID, start: BriefingResponse?, acknowledgement: Acknowledgement) async throws
+        -> FlowEnd {
         let api = context.api
         var briefing = start
         var restarts = 0
+        var acknowledge = acknowledgement == .always
         while true {
             let current: BriefingResponse
             if let briefing {
@@ -55,19 +64,22 @@ struct ReviewerFlow: Sendable {
                 case .refused(let code):
                     switch try await answer(code, reviewID) {
                     case .end(let end): return end
-                    case .restart:
+                    case .restart(let asked):
+                        acknowledge = acknowledge || asked
                         restarts += 1
                         if restarts > BuilderFlow.maximumRestarts { return try await release(reviewID) }
                         try await Task.sleep(for: context.timing.errorPause)
                         continue
                     }
+                case .gone: return .ended
                 case .failed: return try await release(reviewID)
                 }
             }
-            switch try await attempt(reviewID, current) {
+            switch try await attempt(reviewID, current, acknowledge: acknowledge) {
             case .end(let end):
                 return end
-            case .restart:
+            case .restart(let asked):
+                acknowledge = acknowledge || asked
                 restarts += 1
                 if restarts > BuilderFlow.maximumRestarts { return try await release(reviewID) }
                 briefing = nil
@@ -75,26 +87,33 @@ struct ReviewerFlow: Sendable {
         }
     }
 
-    private func attempt(_ reviewID: UUID, _ response: BriefingResponse) async throws -> Step {
+    private func attempt(_ reviewID: UUID, _ response: BriefingResponse, acknowledge: Bool) async throws -> Step {
         let api = context.api
         guard let folder = WorkFolder.reviewer(reference: response.workReference, home: context.home) else {
             context.log.warning("review \(reviewID.contractString): its work reference is not a local folder")
             return .end(try await release(reviewID))
         }
         let hash = response.briefing.hash
-        if let step = try await check(context.command("acknowledge_review_briefing", {
+        if acknowledge, let step = try await check(context.command("acknowledge_review_briefing", {
             try await api.acknowledgeReviewBriefing(reviewID: reviewID, briefingHash: hash, key: $0)
         }), reviewID) { return step }
 
         let numbered = Prompts.builderCriteria(of: response.briefing.contract.criteria)
         let prompt = Prompts.reviewer(briefing: response.briefing, folder: folder)
         let answer: ToolAnswer
-        do {
-            answer = try await context.driver.run(prompt: prompt, in: folder, purpose: .review)
-        } catch let failure as ToolFailure {
+        let driver = context.driver
+        switch try await context.interruption.run(for: .review(reviewID), {
+            try await driver.execute(prompt: prompt, in: folder, purpose: .review)
+        }) {
+        case .answered(let answered):
+            answer = answered
+        case .failed(let failure):
             context.state.toolFailed()
             context.log.warning("review \(reviewID.contractString): \(failure)")
             return .end(try await release(reviewID))
+        case .accountStopped(let report):
+            context.log.warning("review \(reviewID.contractString): the account stopped (\(report.kind.rawValue))")
+            return .end(.accountStopped(report))
         }
         guard let review = AnswerParser.reviewer(answer.text, expecting: numbered.map(\.number)) else {
             context.state.toolFailed()
@@ -126,7 +145,7 @@ struct ReviewerFlow: Sendable {
 
     private func answer(_ code: RefusalCode, _ reviewID: UUID) async throws -> Step {
         switch RefusalAction(code) {
-        case .restart: return .restart
+        case .restart: return .restart(acknowledge: RefusalAction.asksForAcknowledgement(code))
         case .pause: return .end(.paused)
         case .end: return .end(.ended)
         case .release: return .end(try await release(reviewID))

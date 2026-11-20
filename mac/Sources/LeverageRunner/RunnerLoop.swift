@@ -86,10 +86,11 @@ final class RunnerLoop: @unchecked Sendable {
     }
 
     /// The report of the account that stopped, when `run()` returned 5.
-    var endReport: RunEndReport? { nil }
+    var endReport: RunEndReport? { context.state.accountStop }
 
-    /// Runs until stopped, unauthenticated, or three tool runs failed in a
-    /// row; returns the exit code.
+    /// Continues the work it was started with, if any, then runs until
+    /// stopped, unauthenticated, three tool runs failed in a row, or the
+    /// account stopped; returns the exit code.
     func run() async -> Int32 {
         let task = Task { await loop() }
         let stopped = lock.withLock {
@@ -128,6 +129,15 @@ final class RunnerLoop: @unchecked Sendable {
         let api = context.api
         let builder = BuilderFlow(context: context)
         let reviewer = ReviewerFlow(context: context)
+        if let continuing {
+            let settled = await settle {
+                switch continuing {
+                case .task(let id): _ = try await builder.continueTask(id, acknowledgement: .whenAsked)
+                case .review(let id): _ = try await reviewer.continueReview(id, acknowledgement: .whenAsked)
+                }
+            }
+            if let exit = settled { return exit }
+        }
         while true {
             if Task.isCancelled { return .stopped }
             let item: NextItem
@@ -144,25 +154,40 @@ final class RunnerLoop: @unchecked Sendable {
                     continue
                 }
             }
-            do {
+            let settled = await settle {
                 let acted = try await act(on: item, builder: builder, reviewer: reviewer)
                 // A `none` that came back at once, from a server that did not
                 // hold the long poll, is not asked again at once either.
                 let hurried = item.kind == .none && context.timing.nextWait > 0
                     && ContinuousClock.now - asked < .seconds(1)
                 if !acted || hurried { try await Task.sleep(for: context.timing.idlePause) }
-            } catch RunnerStop.unauthenticated {
-                return .unauthenticated
-            } catch {
-                if case .cancelled = CallError(error) { return .stopped }
-                context.log.error("the flow failed: \(FlowContext.describe(error))")
-                try? await Task.sleep(for: context.timing.errorPause)
             }
-            if context.state.consecutiveToolFailures >= 3 {
-                context.log.error("three tool runs in a row failed")
-                return .toolFailures
-            }
+            if let exit = settled { return exit }
         }
+    }
+
+    /// Runs one step of the loop and says whether the run ends: on a `401`,
+    /// a stop, an account that stopped (HD-6) or three failed tool runs in a
+    /// row (CL-22). Any other error is logged and paused after.
+    private func settle(_ step: () async throws -> Void) async -> RunnerExit? {
+        do {
+            try await step()
+        } catch RunnerStop.unauthenticated {
+            return .unauthenticated
+        } catch {
+            if case .cancelled = CallError(error) { return .stopped }
+            context.log.error("the flow failed: \(FlowContext.describe(error))")
+            try? await Task.sleep(for: context.timing.errorPause)
+        }
+        if context.state.accountStop != nil {
+            context.log.warning("the account stopped; the run ends and the helper reports it")
+            return .accountStopped
+        }
+        if context.state.consecutiveToolFailures >= 3 {
+            context.log.error("three tool runs in a row failed")
+            return .toolFailures
+        }
+        return nil
     }
 
     /// Acts on one item; false when there was nothing to do with it.

@@ -171,8 +171,30 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
             workRoot = URL(fileURLWithPath: tool.supportFolder, isDirectory: true)
                 .appendingPathComponent("work", isDirectory: true)
         }
-        credentialID = nil
-        continuing = nil
+        credentialID = try Self.identifier(EnvironmentKeys.credentialID, in: environment)
+        let task = try Self.identifier(EnvironmentKeys.continueTaskID, in: environment)
+        let review = try Self.identifier(EnvironmentKeys.continueReviewID, in: environment)
+        switch (task, review) {
+        case (nil, nil):
+            continuing = nil
+        case (let task?, nil):
+            guard role == .builder else { throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueTaskID) }
+            continuing = .task(task)
+        case (nil, let review?):
+            guard role == .reviewer else {
+                throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueReviewID)
+            }
+            continuing = .review(review)
+        case (_?, _?):
+            throw RunnerConfigurationError.twoWorksToContinue
+        }
+    }
+
+    /// The id a variable holds; nil when it is absent or empty.
+    private static func identifier(_ name: String, in environment: [String: String]) throws -> UUID? {
+        guard let text = environment[name]?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        guard let id = UUID(uuidString: text) else { throw RunnerConfigurationError.notAnIdentifier(name) }
+        return id
     }
 
     /// Whether a provider's read-only mode answers a plain prompt, so that it
@@ -185,7 +207,15 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
 
     var description: String {
         "RunnerConfiguration(api: \(apiBaseURL.absoluteString), role: \(role.rawValue), "
-            + "provider: \(tool.provider.rawValue), seat token: [removed])"
+            + "provider: \(tool.provider.rawValue), credential: \(credentialID?.contractString ?? "none"), "
+            + "continuing: \(continuing.map(Self.describe) ?? "nothing"), seat token: [removed])"
+    }
+
+    private static func describe(_ work: WorkToContinue) -> String {
+        switch work {
+        case .task(let id): "task \(id.contractString)"
+        case .review(let id): "review \(id.contractString)"
+        }
     }
 
     var debugDescription: String { description }

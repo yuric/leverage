@@ -17,7 +17,8 @@ struct ToolAnswer: Equatable, Sendable {
     let tokens: Int
 }
 
-/// How a tool run failed. Every failure is a release (CL-22); the tool's
+/// How a tool run failed. A failure is a release (CL-22) unless
+/// `Interruption` reads the run as a limit or a sign-out (HD-5); the tool's
 /// own output is never kept or logged, only this.
 enum ToolFailure: Error, Equatable, Sendable, CustomStringConvertible {
     case couldNotStart(String)
@@ -154,14 +155,6 @@ struct ProcessToolDriver: ToolDriver {
     }
 
     func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
-        do {
-            return .answered(try await run(prompt: prompt, in: folder, purpose: purpose))
-        } catch let failure as ToolFailure {
-            return .failed(failure, nil)
-        }
-    }
-
-    func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer {
         // Codex writes its last message to a file of its own, kept outside the
         // work folder and removed after the run.
         var scratch: URL?
@@ -173,7 +166,7 @@ struct ProcessToolDriver: ToolDriver {
                 try FileManager.default.createDirectory(
                     at: made, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             } catch {
-                throw ToolFailure.couldNotStart("no folder for the tool's answer")
+                return .failed(.couldNotStart("no folder for the tool's answer"), nil)
             }
             scratch = made
         }
@@ -193,17 +186,22 @@ struct ProcessToolDriver: ToolDriver {
         do {
             result = try await Subprocess.run(request)
         } catch let error as SubprocessError {
-            throw ToolFailure.couldNotStart(Self.reason(error))
+            return .failed(.couldNotStart(Self.reason(error)), nil)
         }
         if Task.isCancelled || result.endedBy == .stop { throw CancellationError() }
-        if result.endedBy == .timeLimit { throw ToolFailure.timedOut }
+        let record = ToolRunRecord(result)
+        if result.endedBy == .timeLimit { return .failed(.timedOut, record) }
         switch result.termination {
-        case .signaled(let signal): throw ToolFailure.signaled(signal)
-        case .exited(let code) where code != 0: throw ToolFailure.exited(code)
+        case .signaled(let signal): return .failed(.signaled(signal), record)
+        case .exited(let code) where code != 0: return .failed(.exited(code), record)
         case .exited: break
         }
         let written = outputFile.flatMap { try? Data(contentsOf: $0) }
-        return try shape.read(standardOutput: result.standardOutput, outputFile: written)
+        do {
+            return .answered(try shape.read(standardOutput: result.standardOutput, outputFile: written))
+        } catch let failure as ToolFailure {
+            return .failed(failure, record)
+        }
     }
 
     private static func reason(_ error: SubprocessError) -> String {
