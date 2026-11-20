@@ -70,7 +70,8 @@ module Leverage
   # The gate (RT-4, test 4): no task.ready, task.claimed, task.submitted or
   # review.passed is written by a command that had, at its hook, an
   # enabled blocking gate in its frozen set (the pending transition's, or
-  # the rules on at that point of the log) without a rule check row of
+  # the rules on at that point of the log; a frozen rule turned off or
+  # removed before the move is not enabled) without a rule check row of
   # that version, hook, round and subject that passed, did not apply, was
   # withdrawn or was overridden.
   #
@@ -425,11 +426,16 @@ module Leverage
       end
     end
 
-    # The rule versions the command was asked with: its pending
-    # transition's, or the rules on at this point of the log.
+    # The rule versions the command was asked with whose rules are on at
+    # this point of the log: its pending transition's (a frozen rule
+    # turned off or removed since no longer blocks, L380, L976, even when
+    # its check had already failed), or the rules on now. A frozen rule
+    # the log never created (a test's setup) counts as on.
     def frozen(pending, audit)
-      ids = pending ? pending.frozen_rule_version_ids : audit.fetch(:rules).values.select { |rule| rule[:enabled] }.pluck(:version_id)
-      RuleVersion.where(id: ids).to_a
+      rules = audit.fetch(:rules)
+      return RuleVersion.where(id: rules.values.select { |rule| rule[:enabled] }.pluck(:version_id)).to_a unless pending
+
+      RuleVersion.where(id: pending.frozen_rule_version_ids).to_a.reject { |version| rules[version.rule_id]&.fetch(:enabled) == false }
     end
 
     def blocking_gate?(version, hook)
