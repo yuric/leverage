@@ -535,6 +535,27 @@ after "resets", "reset at" or "try again at"; and ADR 0010, the health
 read's comment and the Grok row of the detection table say what the code
 and the reply file say.
 
+After that review, a crashed test run left a fake helper running, which
+led to three fixes in the app's helper supervisor, each with a test that
+failed first. A stop waits for every helper an earlier stop asked to stop,
+so a quit that follows a Sign out does not leave first. A start while a
+stop still waits for the helper waits for it too and then starts a new
+one, so Sign out then Sign in at once leaves a helper running. The state
+reads stopped from the moment a stop begins. The fake helper ends with
+the test process that started it. A third review then found the
+following, each fixed with a test that failed first:
+
+- **A stop during a waiting start starts nothing.** No test covered it
+  before; a start whose wait a stop overtakes returns stopped and issues
+  no token.
+- **A helper whose app was gone before it looked stops at once.** The
+  helper watched the app only when its parent was not launchd, so an app
+  that died between starting the helper and the helper's first lines left
+  a helper running with its token. It now stops as when the app goes
+  later, as a runner does when its helper was gone first.
+- **The contract README lists the task page's two waiting fields** among
+  the milestone's additions.
+
 ## What the Handoff milestone proves, and how far
 
 - **Every interruption is played by stand-in tools.** No agent signed in,
@@ -1275,6 +1296,15 @@ skeleton's pull request description, as rule AR-004 asks.
       - The Needs you button "Let it try once more" and the task page's
         "Allow one more try" are two labels for one command. Alternative:
         one label.
+      - The app's helper supervisor: a start while a stop still waits for
+        the helper waits for it to end and then starts a new one, and a
+        stop waits for every helper an earlier stop asked to stop.
+        Alternative: refuse a start until the stop has ended, which leaves
+        no helper after Sign out then Sign in at once.
+      - A helper whose parent is already launchd when it starts (the app
+        died before the helper looked) stops at once, as a runner does.
+        Alternative: the app passes its own process id to the helper,
+        which watches that process.
     - **Also for the owner to know:** an account limited with no reset
       time needs a Verify; a review that waits only for an account has no
       Needs you item until the Rule checks milestone; a handoff that ends
