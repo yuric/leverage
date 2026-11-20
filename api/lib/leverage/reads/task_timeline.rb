@@ -25,7 +25,7 @@ module Leverage
       # as_of: - the time the open step is measured to; nil is the
       #          database's clock.
       def call(workspace_id, task_id, as_of: nil)
-        as_of ||= ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
+        as_of ||= database_now
         TaskStep.where(workspace_id: workspace_id, task_id: task_id).order(ORDER).map { |step| shape(step, as_of) }
       end
 
@@ -39,6 +39,13 @@ module Leverage
           closed_at: Shapes.time(step.closed_at), seconds: seconds(step.opened_at, step.closed_at || as_of),
           subject_kind: step.subject_kind, subject_id: step.subject_id, seat_id: step.seat_id,
           cause_kind: step.cause_kind, cause_rule_id: step.cause_rule_id }
+      end
+
+      # The database's clock now, read past the query cache: a cached
+      # reading from earlier in the request could be older than a step this
+      # read sees open.
+      def database_now
+        ActiveRecord::Base.uncached { ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()") }
       end
 
       # The seconds from one time to another, to the microsecond, never

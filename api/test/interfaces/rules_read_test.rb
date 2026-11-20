@@ -242,10 +242,10 @@ class RuleTimingReadTest < CommittingTestCase
     noted = scenario.rule(on_fail: "warn")
     task = working_task
     pending = scenario.pending_transition(task, command: "submit", requester: Seat.find(task.holder_seat_id))
-    last = scenario.rule_check(task, rule: rule, result: "error", pending: pending)
-    attempts(last).sole.update_columns(queued_at: at(0), started_at: at(10), finished_at: at(100))
     earlier = scenario.rule_check(task, rule: beside, result: "passed", pending: pending)
     attempts(earlier).sole.update_columns(queued_at: at(0), started_at: at(5), finished_at: at(60))
+    last = scenario.rule_check(task, rule: rule, result: "error", pending: pending)
+    attempts(last).sole.update_columns(queued_at: at(0), started_at: at(10), finished_at: at(100))
     warned = scenario.rule_check(task, rule: noted, result: "failed", pending: pending)
     attempts(warned).sole.update_columns(queued_at: at(0), started_at: at(1), finished_at: at(500))
     owner_hold = hold_row(task, reason: "owner_hold", rule: beside)

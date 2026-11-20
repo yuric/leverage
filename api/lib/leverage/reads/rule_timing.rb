@@ -164,7 +164,7 @@ module Leverage
 
       def step_seconds(step, as_of) = span(step.opened_at, step.closed_at || as_of)
 
-      def database_now = ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
+      def database_now = TaskTimeline.database_now
     end
   end
 end

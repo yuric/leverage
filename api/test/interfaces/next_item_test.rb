@@ -304,7 +304,7 @@ class NextItemTest < ActiveSupport::TestCase
   end
 
   test "a command still pending, one already read, one not marked notify, and another seat's are not told" do
-    unread(@builder, outcome: "pending", result: nil, notify: false)
+    unread(@builder, outcome: "pending", result: nil)
     unread(@builder, read_at: @scenario.database_now)
     unread(@builder, notify: false)
     unread(@reviewer)

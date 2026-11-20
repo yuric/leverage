@@ -62,7 +62,7 @@ module Leverage
           .order(:opened_at, :id).to_a
         holds = Hold.where(task_id: task.id).order(:opened_at, :id).to_a
         waiting = Board.waiting(workspace_id, [ task ], { task.id => holds.select { |hold| hold.closed_at.nil? } })
-        as_of = ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
+        as_of = TaskTimeline.database_now
         steps = TaskTimeline.call(workspace_id, task.id, as_of: as_of)
 
         { task: Shapes.task_summary(task),
