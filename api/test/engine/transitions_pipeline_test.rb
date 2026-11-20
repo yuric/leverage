@@ -279,13 +279,15 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
-  # OWNER_CONTROLS, and two timers. Milestone 4's twenty wait in
-  # Table::PENDING (its plan RT-6) and are in no group until WP13 moves
-  # them, which counts the 68 in their groups here.
-  test "the table lists its commands in six groups, each a registry command with state-table rows" do
+  # OWNER_CONTROLS, and two timers; milestone 4 (its plan §2.1, RT-6) three
+  # groups, RULES, CHECKS and JOBS, and six timers: 68 commands in nine
+  # groups. Its twenty waited in Table::PENDING while they were built, and
+  # that list and Table.known? are gone.
+  test "the table lists its commands in nine groups, each a registry command with state-table rows" do
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
-               T::Table::OWNER_CONTROLS ]
-    assert_equal [ 17, 5, 4, 12, 3, 7 ], groups.map(&:size)
+               T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS ]
+    assert_equal [ 17, 11, 4, 12, 3, 7, 7, 2, 5 ], groups.map(&:size)
+    assert_equal 68, T::Table::COMMANDS.size
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
@@ -296,9 +298,10 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_equal "Leverage::Transitions::Entries::AllowAnotherRound", T::Table.class_name("allow_another_round")
     assert T::Table.include?("claim")
     assert T::Table.include?("promote")
-    refute T::Table.include?("add_rule")
-    assert T::Table.known?("add_rule")
-    refute T::Table.known?("ask_question")
+    assert T::Table.include?("add_rule")
+    refute T::Table.include?("ask_question")
+    refute T::Table.respond_to?(:known?)
+    refute T::Table.const_defined?(:PENDING, false)
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

@@ -5,20 +5,23 @@ require_relative "state_table_sign_in_test"
 require_relative "state_table_accounts_test"
 require_relative "state_table_handoff_test"
 require_relative "state_table_owner_controls_test"
+require_relative "state_table_rules_test"
+require_relative "state_table_jobs_test"
+require_relative "state_table_reviewer_eligibility_test"
 
 # Test 3 (PRD L836) over the whole of Transitions::Table (milestone 2 plan
-# EN-2, WP17; milestone 3 plan HT-2, HS-3). Each state-table test class
-# runs one case per state_machine.json row or invalid_state pair for its
-# commands; this file proves that together they leave nothing out:
+# EN-2, WP17; milestone 3 plan HT-2, HS-3; milestone 4 plan RT-5, WP13).
+# Each state-table test class runs one case per state_machine.json row or
+# invalid_state pair for its commands; this file proves that together they
+# leave nothing out:
 #
-# - the six groups are the whole Table of 48, each command in exactly one;
-# - the six test classes cover the Table, each command in exactly one;
+# - the nine groups are the whole Table of 68, each command in exactly one;
+# - the nine test classes cover the Table, each command in exactly one;
 # - the commands the served operations run (Http::RouteTable, the
-#   registry's commands of each operation) are the Table's commands but the
-#   timers, and while milestone 4 is built (its plan RT-6, §0.1 fact 3)
-#   possibly some of its twenty pending ones, which Table.known? answers
-#   for: WP10 serves their operations before WP13 moves the entries into
-#   their groups, and WP13 makes this exact again over the 68;
+#   registry's commands of each operation) are exactly the Table's
+#   commands but those the app alone runs: the timers, and the one-time
+#   write of the shipped rules (milestone 4 plan RD-2), whose every row is
+#   the app's;
 # - every row of every command in the Table is the row of some case, and
 #   every case is defined as a test by its class;
 # - the only cases that do not run their row are the rows from Finishing,
@@ -26,46 +29,51 @@ require_relative "state_table_owner_controls_test"
 class StateTableAllTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
-  TABLE_GROUPS = %i[TASK_LOOP TIMERS SIGN_IN ACCOUNTS HANDOFF OWNER_CONTROLS].freeze
+  TABLE_GROUPS = %i[TASK_LOOP TIMERS SIGN_IN ACCOUNTS HANDOFF OWNER_CONTROLS RULES CHECKS JOBS].freeze
 
   CLASSES = {
     StateTableTest => T::Table::TASK_LOOP,
-    StateTableTimersTest => StateTableTimersTest::COMMANDS,
+    StateTableTimersTest => StateTableTimersTest::COMMANDS + StateTableTimersTest::NEW_COMMANDS,
     StateTableSignInTest => T::Table::SIGN_IN,
     StateTableAccountsTest => T::Table::ACCOUNTS + StateTableAccountsTest::HANDOFF_ACCOUNTS,
     StateTableHandoffTest => StateTableHandoffTest::COMMANDS,
-    StateTableOwnerControlsTest => StateTableOwnerControlsTest::COMMANDS
+    StateTableOwnerControlsTest => StateTableOwnerControlsTest::COMMANDS,
+    StateTableRulesTest => StateTableRulesTest.commands,
+    StateTableJobsTest => StateTableJobsTest::COMMANDS,
+    StateTableReviewerEligibilityTest => StateTableReviewerEligibilityTest::COMMANDS
   }.freeze
 
-  test "the six groups are the whole Table of 48, each command in exactly one" do
+  # The commands whose every state_machine.json row is the app's: no
+  # operation runs them.
+  def app_only = T::Table::COMMANDS.select { |command| StateTableCases.rows(command).all? { |row| row.fetch("who") == %w[app] } }
+
+  test "the nine groups are the whole Table of 68, each command in exactly one" do
     commands = TABLE_GROUPS.flat_map { |group| T::Table.const_get(group) }
     assert_equal commands.uniq, commands, "a command is in two groups"
     assert_equal T::Table::COMMANDS.sort, commands.sort
-    assert_equal 48, commands.size
+    assert_equal 68, commands.size
   end
 
-  test "the six state-table test classes cover the Table, each command in exactly one" do
+  test "the nine state-table test classes cover the Table, each command in exactly one" do
     commands = CLASSES.values.flatten
     assert_equal commands.uniq, commands, "a command is walked by two classes"
     assert_equal T::Table::COMMANDS.sort, commands.sort
   end
 
-  test "the commands the served operations run are the Table's commands but the timers, and some pending ones" do
+  test "the app alone runs the timers and the one-time write of the shipped rules" do
+    assert_equal (T::Table::TIMERS + %w[install_shipped_rules]).sort, app_only.sort
+  end
+
+  test "the commands the served operations run are exactly the Table's commands but those the app alone runs" do
     served = Leverage::Http::RouteTable::ROUTES.keys.flat_map do |operation_id|
       Leverage::Contract.registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }
         .fetch("commands")
     end
     # read is a read. approve_action and stop_action run only for an
     # outward action (milestone 5), through submit_job_result and
-    # override_check once WP10 serves them.
+    # override_check.
     served = (served - %w[read approve_action stop_action]).uniq
-    timers = T::Table::TIMERS + T::Table::PENDING_GROUPS.fetch("TIMERS")
-    assert_empty (T::Table::COMMANDS - T::Table::TIMERS) - served, "a command of the Table is run by no served operation"
-    served.each do |command|
-      assert T::Table.known?(command), "#{command} is run by a served operation and has no entry"
-      refute_includes timers, command
-    end
-    assert_empty served - T::Table::COMMANDS - T::Table::PENDING, "a served command is neither in the Table nor pending"
+    assert_equal (T::Table::COMMANDS - app_only).sort, served.sort
   end
 
   test "every state_machine.json row of a command in the Table is covered by a case" do

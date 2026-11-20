@@ -2,9 +2,9 @@ require "test_helper"
 
 # Routes come from the registry (milestone 2 plan IN-1, §2.1): routes.rb
 # draws one route per Leverage::Http::RouteTable entry, with the registry's
-# method and path, and types no path of its own. While milestone 4 is built
-# its twelve operations wait in RouteTable::PENDING (its plan RT-6), which
-# routes.rb does not draw.
+# method and path, and types no path of its own. Milestone 4's twelve
+# operations waited in RouteTable::PENDING while they were built (its plan
+# RT-6); WP10 served them and WP13 deleted the list.
 class RoutesTest < ActiveSupport::TestCase
   RouteTable = Leverage::Http::RouteTable
 
@@ -28,20 +28,14 @@ class RoutesTest < ActiveSupport::TestCase
     resume_seat change_seat
   ].freeze
 
-  # The twelve operations milestone 4 serves (milestone 4 plan §2.3). They
-  # wait in RouteTable::PENDING until WP10 writes their controllers and
-  # moves them into ROUTES (RT-6); served and pending are counted together
-  # here, so these tests hold before and after the move. WP13 deletes
-  # PENDING and rewrites what names it.
+  # The twelve operations milestone 4 serves (milestone 4 plan §2.3).
   MILESTONE_4 = %w[
     claim_next_job submit_job_result list_rules add_rule save_rule enable_rule disable_rule revert_rule remove_rule
     rerun_check override_check draft_contract
   ].freeze
 
-  def pending = RouteTable.const_defined?(:PENDING, false) ? RouteTable::PENDING : {}
-
-  # Every operation the table names, served or pending.
-  def named = RouteTable::ROUTES.merge(pending)
+  # Every operation the table names.
+  def named = RouteTable::ROUTES
 
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
@@ -49,8 +43,8 @@ class RoutesTest < ActiveSupport::TestCase
     Rails.application.routes.routes.select(&:name).index_by(&:name)
   end
 
-  test "the served and pending operations are milestones 2 and 3's and milestone 4's twelve, each a registry operation" do
-    assert_empty RouteTable::ROUTES.keys & pending.keys
+  test "the served operations are milestones 2 and 3's and milestone 4's twelve, each a registry operation" do
+    refute RouteTable.const_defined?(:PENDING, false), "RouteTable::PENDING is gone (RT-6)"
     assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4).sort, named.keys.sort
     named.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes(named).each do |route|

@@ -17,7 +17,8 @@ require_relative "entries/job_timers_support"
 # miss it is. The writers they call are other packages' (WP4, WP6), so the
 # events here come from JobTimersSupport's stand-ins, which write what the
 # rows name: these cases prove which writers each row calls, and the whole
-# table with the real writers is WP13's. reviewer_eligibility is WP9's.
+# table with the real writers is WP13's. reviewer_eligibility's case is
+# in state_table_reviewer_eligibility_test.rb.
 class StateTableTimersTest < ActiveSupport::TestCase
   include JobTimersSupport
 
@@ -102,8 +103,10 @@ class StateTableTimersTest < ActiveSupport::TestCase
                   contract_draft_job_run_timeout].freeze
   NEW_COMMANDS = (JOB_TIMERS + %w[orchestrator_offline]).freeze
 
-  test "milestone 4's timers are the pending TIMERS group but WP9's reviewer_eligibility" do
-    assert_equal NEW_COMMANDS, T::Table::PENDING_GROUPS.fetch("TIMERS") - %w[reviewer_eligibility]
+  # reviewer_eligibility's case is in state_table_reviewer_eligibility_test.rb
+  # (WP13), and state_table_all_test.rb proves each is walked once.
+  test "milestone 4's timers are the last six of TIMERS but reviewer_eligibility" do
+    assert_equal NEW_COMMANDS, T::Table::TIMERS.last(6) - %w[reviewer_eligibility]
   end
 
   # The job a row's case times out, at its due time: a check's attempt (the

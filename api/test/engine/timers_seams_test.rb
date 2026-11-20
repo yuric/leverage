@@ -90,10 +90,10 @@ class TimersSeamsTest < ActiveSupport::TestCase
     end
   end
 
-  test "timer_command? answers for every timer of timers.json, the pending six among them" do
+  test "timer_command? answers for every timer of timers.json, the Table's eleven among them" do
     names = Leverage::Contract.timers.fetch("timers").map { |timer| timer.fetch("timer") }
     names.each { |name| assert Timers.timer_command?(name), name }
-    (T::Table::TIMERS + T::Table::PENDING_GROUPS.fetch("TIMERS")).each { |name| assert Timers.timer_command?(name), name }
+    T::Table::TIMERS.each { |name| assert Timers.timer_command?(name), name }
     %w[add_task claim install_shipped_rules].each { |name| refute Timers.timer_command?(name), name }
   end
 

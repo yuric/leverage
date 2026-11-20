@@ -1,18 +1,21 @@
 require "test_helper"
 require_relative "../support/http_calls"
 
-# No seat reaches outside the Roles table (PRD Roles, L548, L823, L918;
-# milestone 2 plan WP17), over HTTP through the real entries, for the two
-# roles milestone 2 connects:
+# No seat reaches outside the Roles table (PRD Roles, L548, L823, L918,
+# L921; milestone 2 plan WP17; milestone 4 plan WP13), over HTTP through
+# the real entries, for the four roles: the builder and the reviewer of
+# milestone 2, and milestone 4's two job roles, the orchestrator and the
+# planner:
 #
 # - every served agent operation is in the Roles table of a role, and a
-#   seat of the other role is refused it: a claim is not_eligible, a read
+#   seat of another role is refused it: a claim is not_eligible, a read
 #   is 404, any other call is refused by a cause that ranks no lower than
 #   forbidden (L548: lease_expired, task_cancelled, not_holder, forbidden);
 # - a seat of the wrong role that holds the very task or review the call
 #   names is refused forbidden;
 # - a seat of the right role that does not hold it is refused not_holder;
 # - a refused call writes nothing and moves nothing;
+# - Connect offers the four roles (milestone 4 plan §0.1 fact 12, RV-5);
 # - neither a seat's token nor the owner's session reaches a helper call:
 #   each is 401, the two reports of milestone 3 among them (its plan
 #   WP10), and nothing is written.
@@ -31,6 +34,10 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   TASK_CALLS = %w[acknowledge_task_briefing heartbeat_task start_criterion pass_criterion submit_task release_task].freeze
   REVIEW_CALLS = %w[heartbeat_review release_review acknowledge_review_briefing give_verdict].freeze
   CLAIMS = { "builder" => "claim_next_task", "reviewer" => "claim_next_review" }.freeze
+  # The two job roles' calls (roles.json): a claim, and a result about the
+  # job the seat holds.
+  JOB_CALLS = %w[claim_next_job submit_job_result].freeze
+  JOB_ROLES = %w[orchestrator planner].freeze
   READS = { "get_task_briefing" => :task, "get_review_briefing" => :review }.freeze
 
   # Ranked no lower than forbidden in L548's order.
@@ -43,13 +50,65 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   end
 
   test "every served agent operation is in the Roles table, and each role's served calls are covered here" do
+    assert_equal %w[builder orchestrator planner reviewer], ROLES.keys.sort
     SERVED_AGENT.each do |operation_id|
-      assert(%w[builder reviewer].any? { |role| ROLES.fetch(role).include?(operation_id) }, operation_id)
+      assert(ROLES.keys.any? { |role| ROLES.fetch(role).include?(operation_id) }, operation_id)
     end
-    covered = TASK_CALLS + REVIEW_CALLS + CLAIMS.values + READS.keys + %w[get_next get_command]
+    covered = TASK_CALLS + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS + %w[get_next get_command]
     assert_equal SERVED_AGENT.sort, covered.sort
     TASK_CALLS.each { |operation_id| refute_includes ROLES.fetch("reviewer"), operation_id }
     REVIEW_CALLS.each { |operation_id| refute_includes ROLES.fetch("builder"), operation_id }
+    JOB_ROLES.each do |role|
+      assert_equal (JOB_CALLS + %w[get_next get_command]).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
+    end
+    JOB_CALLS.each { |operation_id| %w[builder reviewer].each { |role| refute_includes ROLES.fetch(role), operation_id } }
+  end
+
+  test "a builder or a reviewer cannot claim a job, and a job role cannot claim a task or a review: not_eligible" do
+    waiting_job
+    ready = @scenario.task(state: "ready")
+    in_review = @scenario.task(state: "in_review")
+    [ @builder, @reviewer ].each { |seat| refused("claim_next_job", seat, codes: %w[not_eligible]) }
+    job_seats.each_value do |seat|
+      refused("claim_next_task", seat, codes: %w[not_eligible])
+      refused("claim_next_review", seat, codes: %w[not_eligible])
+    end
+    assert_equal "ready", ready.reload.state
+    assert_nil Review.find_by(task_id: in_review.id).reviewer_seat_id
+    assert_equal [ "queued" ], Job.where(workspace_id: @scenario.workspace_id).pluck(:state)
+  end
+
+  test "submit_job_result: a seat of another role is refused, one of the right role not_holder, a holder of the wrong role forbidden" do
+    job = claimed_job(job_seats.fetch("orchestrator"))
+    body = { "result" => { "result" => "passed", "reason" => "Made-up reason." }, "tokens" => 0, "spend" => 0 }
+    [ @builder, @reviewer, job_seats.fetch("planner") ].each do |seat|
+      refused("submit_job_result", seat, ids: { "id" => job.id }, body: body, codes: HOLDER_CAUSES)
+    end
+    other = @scenario.orchestrator(credential: @scenario.credential(provider: "grok"))
+    refused("submit_job_result", other, ids: { "id" => job.id }, body: body, codes: %w[not_holder])
+
+    held = @scenario.job(kind: "rule_check", task: @scenario.task(state: "backlog"), state: "claimed", seat: @builder)
+    refused("submit_job_result", @builder, ids: { "id" => held.id }, body: body, codes: %w[forbidden])
+    assert_equal "claimed", job.reload.state
+  end
+
+  test "a job role is refused every task and review call: on another's work, and forbidden on work it holds" do
+    orchestrator = job_seats.fetch("orchestrator")
+    task = working_task(@builder)
+    TASK_CALLS.each do |operation_id|
+      refused(operation_id, orchestrator, ids: task_ids(operation_id, task), body: task_body(operation_id, task),
+        codes: HOLDER_CAUSES)
+    end
+    review = open_review_of(@scenario.task(state: "in_review"), @reviewer)
+    REVIEW_CALLS.each do |operation_id|
+      refused(operation_id, orchestrator, ids: { "id" => review.id }, body: review_body(operation_id, review),
+        codes: HOLDER_CAUSES)
+    end
+    held = working_task(orchestrator, acknowledge: false)
+    TASK_CALLS.each do |operation_id|
+      refused(operation_id, orchestrator, ids: task_ids(operation_id, held), body: task_body(operation_id, held),
+        codes: %w[forbidden])
+    end
   end
 
   test "a reviewer cannot claim a task and a builder cannot claim a review: not_eligible, nothing written" do
@@ -111,14 +170,20 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Connect offers builder and reviewer only: a planner or an orchestrator seat is 422 and nothing is written" do
-    %w[planner orchestrator].each do |role|
-      before = counts
+  # Milestone 4 (its plan §0.1 fact 12, RV-5): Connect offers the four
+  # roles; a planner or an orchestrator connects as a builder does, on its
+  # own or on a login, with no rule on its provider or model.
+  test "Connect offers the four roles: a planner or an orchestrator connects like a builder" do
+    login = @scenario.credential(provider: "grok")
+    { "planner" => nil, "orchestrator" => login.id }.each do |role, credential_id|
       call("connect_seat", token: @scenario.owner_token, key: new_key,
-        body: { "name" => "Made-up #{role}", "role" => role, "provider" => "codex" })
-      assert_response :unprocessable_entity
+        body: { "name" => "Made-up #{role}", "role" => role, "provider" => (credential_id ? nil : "codex"),
+                "model" => nil, "effort" => nil, "strength_rank" => nil, "credential_id" => credential_id })
+      assert_response :ok, response.body
       assert_response_matches_contract
-      assert_equal before, counts
+      assert_equal "completed", response.parsed_body.fetch("outcome")
+      seat = Seat.find(response.parsed_body.dig("result", "seat_id"))
+      assert_equal [ role, credential_id ], [ seat.role, seat.credential_id ]
     end
   end
 
@@ -157,6 +222,34 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   private
 
   def token(seat) = @scenario.token_for(seat)
+
+  # An orchestrator on a Codex login and a planner on a Claude login.
+  def job_seats
+    @job_seats ||= { "orchestrator" => @scenario.orchestrator(credential: @scenario.credential(provider: "codex")),
+                     "planner" => @scenario.planner(credential: @scenario.credential(provider: "claude")) }
+  end
+
+  # A rule check waiting in the queue: a Complete contract under a blocking
+  # model rule at "ready to start" waits for it (RD-30, RE-2).
+  def waiting_job
+    rule = @scenario.rule(hook: "task.before_ready", route: "owner")
+    task = @scenario.task(state: "backlog")
+    params = { "id" => task.id, "title" => task.title, "goal" => "Made-up goal.", "details" => "Made-up details.",
+               "criteria" => [ { "text" => "Made-up criterion.", "kind" => "build" },
+                               { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
+               "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => "~/work/made-up" }
+    outcome = T.apply(T::Request.new(command: "complete_contract", workspace_id: @scenario.workspace_id, caller_kind: "owner",
+      caller_id: @scenario.owner.id, key: new_key("setup"), request_hash: SecureRandom.hex(32), params: params))
+    assert_equal :pending, outcome.outcome, "setup complete_contract waits for #{rule.key}'s check"
+    Job.find_by!(workspace_id: @scenario.workspace_id, target_kind: "rule_check", state: "queued")
+  end
+
+  # The waiting job, claimed by seat.
+  def claimed_job(seat)
+    job = waiting_job
+    engine("claim_job", seat, {})
+    job.reload
+  end
 
   # Sends the call with a token that is not the helper's: 401, nothing run.
   def unauthenticated(operation_id, caller_token, ids:, body: nil)

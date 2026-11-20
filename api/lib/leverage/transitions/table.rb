@@ -35,6 +35,10 @@ module Leverage
       HANDOFF = %w[report_limit report_signed_out sign_in_again].freeze
       OWNER_CONTROLS = %w[promote edit_contract hold resume pause_seat resume_seat change_seat].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS).freeze
+      # Milestone 4's three groups, empty until WP13 moves the twenty in.
+      RULES = [].freeze
+      CHECKS = [].freeze
+      JOBS = [].freeze
 
       # Milestone 4's entries by the group WP13 moves each into: three new
       # groups, and six timers for TIMERS (milestone 4 plan §2.1).

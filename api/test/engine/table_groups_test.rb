@@ -1,26 +1,22 @@
 require "test_helper"
 
-# The table of entries while milestone 4 is built (milestone 4 plan RT-6,
-# §2.1, §0.1 fact 3), as milestone 3 built its own (its plan HT-6): the
-# twenty new entries wait in Transitions::Table::PENDING, which
-# Table.entry_for, Table.known? and Table.with_entries read and
-# Table.include?, Table::COMMANDS and every walk of the table do not; the
-# twelve new operations wait in Http::RouteTable::PENDING, out of ROUTES.
-# Served and pending are counted together, so these tests hold before and
-# after WP10 moves the operations. WP13 moves the entries into their
-# groups, deletes both PENDING lists and rewrites what names them here.
+# The table of entries after milestone 4 (milestone 4 plan RT-6, §2.1, §0.1
+# fact 3): the twenty new entries waited in Transitions::Table::PENDING,
+# and the twelve new operations in Http::RouteTable::PENDING, while the
+# packages that wrote them worked, as milestone 3's did (its HT-6); WP10
+# moved the operations into ROUTES and WP13 the entries into their groups,
+# and both PENDING lists are gone, with PENDING_GROUPS and Table.known?.
 #
-# It also pins the first versions of the seams the other packages of
-# milestone 4 finish (the hand-over table of plan §4): their names and
-# required arguments. A package may add an optional argument; a required
-# one, or a new name, is a change to the seam and is written in the notes.
-# And it keeps milestone 3's pins of the seams that milestone finished.
+# It also pins the seams the other packages of milestone 4 finished (the
+# hand-over table of plan §4): their names and required arguments, and
+# what each answers when nothing waits. And it keeps milestone 3's pins of
+# the seams that milestone finished.
 class TableGroupsTest < ActiveSupport::TestCase
   T = Leverage::Transitions
   Table = T::Table
   RouteTable = Leverage::Http::RouteTable
 
-  # Milestone 4's twenty entries by the group each moves into (plan §2.1).
+  # Milestone 4's twenty entries by their group (plan §2.1).
   NEW_COMMANDS = {
     "RULES" => %w[add_rule save_rule enable_rule disable_rule revert_rule remove_rule install_shipped_rules],
     "CHECKS" => %w[rerun_check override_check],
@@ -47,7 +43,7 @@ class TableGroupsTest < ActiveSupport::TestCase
     "draft_contract" => "v1/owner/tasks#draft_contract"
   }.freeze
 
-  # Milestone 3's twelve, now in their groups (milestone 3 plan HT-6).
+  # Milestone 3's twelve, in their groups (milestone 3 plan HT-6).
   MILESTONE_3 = {
     "HANDOFF" => %w[report_limit report_signed_out sign_in_again],
     "OWNER_CONTROLS" => %w[promote edit_contract hold resume pause_seat resume_seat change_seat]
@@ -55,18 +51,19 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   def registry = Leverage::Contract.registry
 
-  def pending = Table.const_defined?(:PENDING, false) ? Table::PENDING : []
-
-  def pending_groups = Table.const_defined?(:PENDING_GROUPS, false) ? Table::PENDING_GROUPS : {}
-
-  def pending_operations = RouteTable.const_defined?(:PENDING, false) ? RouteTable::PENDING : {}
-
   def required(method) = method.parameters.select { |kind, _name| %i[req keyreq].include?(kind) }
 
   # --- Transitions::Table --------------------------------------------------------
 
-  test "served and pending together are 68 commands, no name twice, each a registry command with rows" do
-    all = Table::COMMANDS + pending
+  test "neither table keeps a PENDING list, and Table answers only include? (RT-6)" do
+    refute Table.const_defined?(:PENDING, false), "Transitions::Table::PENDING is gone"
+    refute Table.const_defined?(:PENDING_GROUPS, false), "Transitions::Table::PENDING_GROUPS is gone"
+    refute RouteTable.const_defined?(:PENDING, false), "Http::RouteTable::PENDING is gone"
+    refute Table.respond_to?(:known?), "known? answered for pending names; include? is the one question again"
+  end
+
+  test "the table is 68 commands, no name twice, each a registry command with rows" do
+    all = Table::COMMANDS
     with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
       .map { |row| row.fetch("command") }
 
@@ -78,38 +75,36 @@ class TableGroupsTest < ActiveSupport::TestCase
     end
   end
 
-  test "the twenty new commands are served or pending, and each pending one names the group it moves into" do
-    twenty = NEW_COMMANDS.values.flatten
-    assert_equal 20, twenty.size
-    assert_equal twenty.sort, (twenty & (Table::COMMANDS + pending)).sort
-    assert_equal pending.sort, pending_groups.values.flatten.sort
-    pending_groups.each do |group, commands|
-      assert_empty commands - NEW_COMMANDS.fetch(group), group
+  test "the twenty new commands are each in the group the plan names" do
+    assert_equal NEW_COMMANDS.fetch("RULES"), Table::RULES
+    assert_equal NEW_COMMANDS.fetch("CHECKS"), Table::CHECKS
+    assert_equal NEW_COMMANDS.fetch("JOBS"), Table::JOBS
+    assert_equal NEW_TIMERS, Table::TIMERS.last(6)
+    NEW_COMMANDS.each do |group, commands|
+      assert_empty commands - Table.const_get(group), group
     end
   end
 
-  test "entry_for and known? find a pending name; include? and COMMANDS do not" do
-    assert_operator pending.size, :>, 0
-    pending.each do |command|
-      assert Table.known?(command), command
-      refute Table.include?(command), command
-      refute_includes Table::COMMANDS, command
+  test "entry_for finds each new command, which include? and COMMANDS answer for" do
+    NEW_COMMANDS.values.flatten.each do |command|
+      assert Table.include?(command), command
+      assert_includes Table::COMMANDS, command
       assert_equal Table.class_name(command), Table.entry_for(command).name
       assert_equal command, Table.entry_for(command).command
       assert_operator Table.entry_for(command), :<, T::Entry
     end
   end
 
-  test "a served name is known, and a later milestone's name is neither known nor found" do
-    assert Table.known?("claim")
-    assert Table.known?(:claim)
-    refute Table.known?("ask_question")
+  test "a served name is included, and a later milestone's name is neither included nor found" do
+    assert Table.include?("claim")
+    assert Table.include?(:claim)
+    assert Table.include?("add_rule")
     refute Table.include?("ask_question")
     assert_raises(Table::UnknownCommand) { Table.entry_for("ask_question") }
     assert_raises(Table::UnknownCommand) { Table.with_entries("ask_question" => T::Entry) { flunk "ran" } }
   end
 
-  test "with_entries accepts a pending name" do
+  test "with_entries accepts a new name" do
     replacement = Class.new(T::Entry)
     Table.with_entries("add_rule" => replacement) do
       assert_equal replacement, Table.entry_for("add_rule")
@@ -117,15 +112,14 @@ class TableGroupsTest < ActiveSupport::TestCase
     assert_equal "Leverage::Transitions::Entries::AddRule", Table.entry_for("add_rule").name
   end
 
-  # The first versions (plan §4, the hand-over table) are all finished
-  # (WP1's request 2, settled by WP12): no pending entry is a stub, and a
-  # pending timer run in a workspace with nothing due writes nothing. WP13
-  # rewrites this file when it moves the twenty into their groups.
-  test "every pending entry is built: none is a stub, and a timer with nothing due writes nothing" do
+  # WP3 to WP9 built the twenty entries (their notes); WP1's first versions
+  # are gone, so this pins that none is left a stub, and that the six new
+  # timers write nothing in a workspace where nothing is due.
+  test "no new entry is a stub; a new timer writes nothing when nothing is due" do
     ctx = Scenario.new.context
-    pending.each do |command|
+    NEW_COMMANDS.values.flatten.each do |command|
       source = Rails.root.join("lib/leverage/transitions/entries/#{command}.rb").read
-      refute_match(/not built yet/, source, command)
+      refute_match(/not built yet|NotImplementedError/, source, command)
       next unless NEW_TIMERS.include?(command)
 
       entry = Table.entry_for(command).new
@@ -174,39 +168,39 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   # --- Http::RouteTable -------------------------------------------------------------
 
-  test "served and pending operations are disjoint, and the twelve are one or the other" do
-    assert_empty RouteTable::ROUTES.keys & pending_operations.keys
-    assert_equal NEW_OPERATIONS.keys.sort, (NEW_OPERATIONS.keys & (RouteTable::ROUTES.keys + pending_operations.keys)).sort
+  test "the twelve new operations are served, each by its controller and action" do
     NEW_OPERATIONS.each do |operation_id, target|
-      assert_equal target, RouteTable::ROUTES[operation_id] || pending_operations[operation_id], operation_id
-    end
-  end
-
-  test "a pending operation is not served, and its route reads the registry's method and path" do
-    routes = RouteTable.routes(pending_operations).index_by(&:operation_id)
-    pending_operations.each_key do |operation_id|
-      refute RouteTable.serves?(operation_id), operation_id
-      operation = registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }
-      assert_equal [ operation.fetch("method").downcase, operation.fetch("path").gsub(/\{([a-z]+)\}/, ':\1') ],
-        [ routes.fetch(operation_id).verb, routes.fetch(operation_id).path ]
+      assert RouteTable.serves?(operation_id), operation_id
+      assert_equal target, RouteTable::ROUTES[operation_id], operation_id
     end
   end
 
   # submit_job_result and override_check also name approve_action and
-  # stop_action, which run only for an outward action (milestone 5).
-  test "the commands of the twelve operations are the new commands but the timers, a read, or milestone 5's" do
+  # stop_action, which run only for an outward action (milestone 5). The
+  # timers and install_shipped_rules are the app's own: no operation runs
+  # them; the two job reports run through milestone 3's two report routes.
+  test "the commands of the twelve operations are the new commands of the table, Complete contract, a read, or milestone 5's" do
     commands = NEW_OPERATIONS.keys.flat_map do |operation_id|
       registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }.fetch("commands")
     end.uniq
-    known = commands.select { |command| Table.known?(command) }
+    known = commands.select { |command| Table.include?(command) }
 
     assert_equal (NEW_COMMANDS.values.flatten - NEW_TIMERS - %w[install_shipped_rules report_job_limit
-                                                               report_job_signed_out]).sort.push("complete_contract").sort,
+                                                               report_job_signed_out]).push("complete_contract").sort,
       known.sort
     assert_equal %w[approve_action read stop_action], (commands - known).sort
   end
 
-  # --- The first versions of milestone 4's seams (plan §4, hand-over table) -------
+  test "milestone 3's two report routes also run the two job reports" do
+    %w[report_limit report_signed_out].zip(%w[report_job_limit report_job_signed_out]).each do |operation_id, job_command|
+      commands = registry.fetch("operations").find { |op| op.fetch("operation_id") == operation_id }.fetch("commands")
+      assert RouteTable.serves?(operation_id), operation_id
+      assert_includes commands, job_command
+      assert Table.include?(job_command), job_command
+    end
+  end
+
+  # --- Milestone 4's seams, finished (plan §4, hand-over table) -------------------
 
   test "PendingTransitions, RuleChecks and Jobs have their names and required arguments" do
     expected = {
