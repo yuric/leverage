@@ -499,6 +499,14 @@ class JobTimersDueTest < CommittingTestCase
 
   E = TimerTestEntries
 
+  # The jobs a case commits stay in the worker's database, where a test
+  # that counts every job (Job.sole) would meet them: the case removes its
+  # own workspace's jobs and their attempts afterwards. Its events stay.
+  teardown do
+    RuleCheckAttempt.where(workspace_id: scenario.workspace_id).delete_all
+    Job.where(workspace_id: scenario.workspace_id).delete_all
+  end
+
   # A job result: path id is the job. Refused invalid_state for a job that
   # is no longer claimed (RD-41).
   class ResultCall < Leverage::Transitions::Entry
