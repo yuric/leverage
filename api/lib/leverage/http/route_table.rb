@@ -1,7 +1,8 @@
 module Leverage
   module Http
     # The operations served, each to its controller and action (milestone 2
-    # plan §2.1, §2.3, IN-1; milestone 3's eleven are the last entries).
+    # plan §2.1, §2.3, IN-1; milestone 3's eleven and milestone 4's twelve
+    # are the last entries).
     # config/routes.rb draws one route per entry with the registry's method
     # and path, so no path is typed anywhere else; every other registry
     # operation has no route and answers 404 (test/interfaces/seams_test.rb).
@@ -70,15 +71,8 @@ module Leverage
         "resume_task" => "v1/owner/tasks#resume",
         "pause_seat" => "v1/owner/seats#pause",
         "resume_seat" => "v1/owner/seats#resume",
-        "change_seat" => "v1/owner/seats#change"
-      }.freeze
-
-      # The twelve operations milestone 4 serves (its plan §2.3, RT-6), each
-      # to the controller and action WP10 writes. They are not in ROUTES, so
-      # serves?, routes.rb and every test that walks the served operations
-      # leave them out (they answer 404) until WP10 moves them into ROUTES
-      # and leaves this list empty; WP13 deletes it.
-      PENDING = {
+        "change_seat" => "v1/owner/seats#change",
+        # Milestone 4's twelve (its plan §2.3, RT-6).
         "claim_next_job" => "v1/agent/jobs#claim_next",
         "submit_job_result" => "v1/agent/jobs#result",
         "list_rules" => "v1/owner/rules#index",
@@ -92,6 +86,11 @@ module Leverage
         "override_check" => "v1/owner/rule_checks#override",
         "draft_contract" => "v1/owner/tasks#draft_contract"
       }.freeze
+
+      # The twelve operations milestone 4 serves (its plan §2.3, RT-6) are in
+      # ROUTES, drawn like every other. WP13 deletes this empty list and the
+      # test that names it.
+      PENDING = {}.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
