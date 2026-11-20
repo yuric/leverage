@@ -400,6 +400,7 @@ class PendingTransitionsTest < ActiveSupport::TestCase
   end
 
   test "an errored check keeps the transition pending and opens check_error with its item, naming the check" do
+    @scenario.orchestrator(last_polled_at: @scenario.database_now) # online: the task item opens (SM-39)
     with_jobs do
       task, pending, check, = pending_submit
       in_command do |ctx|
@@ -434,6 +435,7 @@ class PendingTransitionsTest < ActiveSupport::TestCase
       rule = custom_rule("task.before_ready", route: "owner")
       gating(rule)
       task = @scenario.task(state: "backlog")
+      orchestrator = @scenario.orchestrator(last_polled_at: @scenario.database_now) # online: the item opens
       command("complete_contract", @owner, contract_params(task))
       key = @key
       pending = P.of(task)
@@ -445,7 +447,7 @@ class PendingTransitionsTest < ActiveSupport::TestCase
       in_command { |ctx| Leverage::RuleChecks.queue_attempt(ctx, check) }
 
       events = in_command(request: T::Request.new(command: "submit_job_result", workspace_id: @scenario.workspace_id,
-        caller_kind: "seat", caller_id: @scenario.orchestrator.id, key: "k-result", request_hash: nil, params: {})) do |ctx|
+        caller_kind: "seat", caller_id: orchestrator.id, key: "k-result", request_hash: nil, params: {})) do |ctx|
         Leverage::RuleChecks.finish(ctx, check, result: "passed", reason: "Made-up reason.")
         P.reenter(ctx, pending, trigger(:check_finished, check))
         ctx.events

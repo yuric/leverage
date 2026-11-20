@@ -160,20 +160,16 @@ class GateApplicationTest < ActiveSupport::TestCase
     task = ready_to_submit(@builder)
     check = @scenario.rule_check(task, rule: rule, result: "error")
     planned = Leverage::Gating::PlannedHold.new(reason: "check_error", rule_id: rule.id, rule_check_id: check.id)
-    presence = Leverage::RolePresence.method(:online?)
-    Leverage::RolePresence.define_singleton_method(:online?) { |*| false }
     ActiveRecord::Base.transaction(requires_new: true) { T::Gate.open_hold(@scenario.context, task, planned, check_id: check.id) }
-    assert_not mine(InboxItem).exists?
+    assert_not mine(InboxItem).exists?, "no orchestrator has polled: offline"
 
-    Leverage::RolePresence.define_singleton_method(:online?, presence)
+    @scenario.orchestrator(last_polled_at: @scenario.database_now)
     second = @scenario.rule_check(@scenario.task(state: "working", builder: @scenario.seat(role: "builder")), rule: rule,
       result: "error")
     ActiveRecord::Base.transaction(requires_new: true) do
       T::Gate.open_hold(@scenario.context, Task.find(second.task_id), planned.with(rule_check_id: second.id), check_id: second.id)
     end
     assert_equal "check_could_not_run", mine(InboxItem).sole.kind
-  ensure
-    Leverage::RolePresence.define_singleton_method(:online?, presence) if presence
   end
 
   test "an evaluation that waits with no task to wait on, or defers policies, is an error, not a silent pass" do
