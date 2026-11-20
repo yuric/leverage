@@ -161,6 +161,23 @@ class LandingPromptTest < CommittingTestCase
     end
   end
 
+  # The second review of the milestone 4 review's fixes: only the
+  # orchestrator's presence is read (RolePresence, PRD L401), so only its
+  # jobs wait while it is offline. A planner's draft has its two timeouts
+  # whatever the planner does: missed once it is queued again, missed twice
+  # it ends and its task stays in Backlog (JobTimer.draft_miss).
+  test "an orchestrator is told its jobs wait while it is offline; a planner that a draft not claimed in time is dropped" do
+    orchestrator = text_for(scenario.seat(role: "orchestrator", provider: "codex", name: "Made-up orchestrator agent"))
+    assert_includes orchestrator, "leverage counts you offline 90 seconds after your last check, and the jobs wait while you are."
+    refute_includes orchestrator, "dropped"
+
+    planner = text_for(scenario.seat(role: "planner", provider: "codex", name: "Made-up planner agent"))
+    refute_match(/offline/i, planner)
+    refute_match(/\bwait\b/i, planner)
+    assert_includes planner,
+      "A draft not claimed or not finished in time is queued once more, then dropped, and its task stays in Backlog."
+  end
+
   test "a builder and a reviewer keep the 20 minutes and their article" do
     assert_includes text_for(@builder), "connecting as a builder"
     assert_equal 20, response.parsed_body["check_interval_minutes"]
