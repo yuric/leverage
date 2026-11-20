@@ -167,7 +167,7 @@ module Leverage
           pending = PendingTransitions.store(ctx, entry, evaluation, ctx.request.params.to_h, task: task)
           entry.wait(ctx, pending) if entry.respond_to?(:wait)
         end
-        checks = RuleChecks.write(ctx, evaluation, task: task, pending: pending)
+        checks = evaluation.checks.empty? ? [] : RuleChecks.write(ctx, evaluation, task: task, pending: pending)
         open_planned(ctx, task, evaluation.holds_to_open, checks)
         Result.new(evaluation: evaluation, checks: checks, pending: pending)
       end

@@ -123,10 +123,13 @@ module Leverage
 
     # The checks of a pending transition that have not settled it: no
     # result yet, or an error not overridden (which keeps it pending under
-    # check_error). What a cancellation withdraws (rule 11, L367).
+    # check_error). What a cancellation withdraws (rule 11, L367). A
+    # provisional claim's errored check is kept: the claim lapses and the
+    # check stays in error under its check_error hold (L392).
     def unsettled(pending)
+      results = pending.command == "claim" ? [ nil ] : [ nil, "error" ]
       RuleCheck.where(workspace_id: pending.workspace_id, pending_transition_id: pending.id, overridden_at: nil)
-        .where(result: [ nil, "error" ]).order(:created_at, :id).to_a
+        .where(result: results).order(:created_at, :id).to_a
     end
 
     # The job of the check's latest attempt that is still queued or
