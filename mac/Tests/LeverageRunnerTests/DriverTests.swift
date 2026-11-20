@@ -257,7 +257,8 @@ struct DriverTests {
 
     // MARK: A job's check run (milestone 4, plan section 2.2, RD-33, RD-34)
 
-    static let forbidden = ["--mode", "plan", "acceptEdits", "accept-edits", "workspace-write", "--permission-mode"]
+    /// What only a build or a review passes: an editing or planning mode.
+    static let forbidden = ["--mode", "plan", "acceptEdits", "accept-edits", "workspace-write"]
 
     /// The merged check arguments, with the job's time limit where the tool
     /// takes one (`agy --print-timeout`).
@@ -309,19 +310,22 @@ struct DriverTests {
         try setup.signIn(test)
         try setup.tools.write(scenario: StandInScenario(gateFile: "never-opened"))
         let started = ContinuousClock.now
-        await #expect(throws: ToolFailure.timedOut) {
-            _ = try await setup.driver(test, timeout: 30).execute(ToolRunRequest(
-                prompt: Self.reviewPrompt, folder: setup.work, purpose: .check, timeLimitSeconds: 1))
+        let ran = try await setup.driver(test, timeout: 30).execute(ToolRunRequest(
+            prompt: Self.reviewPrompt, folder: setup.work, purpose: .check, timeLimitSeconds: 1))
+        guard case .failed(.timedOut, _) = ran else {
+            Issue.record("expected the run to time out, got \(ran)")
+            return
         }
         #expect(ContinuousClock.now - started < .seconds(15), "the job's one second, not the configuration's 30")
         // A job's limit longer than the configuration's is the configuration's.
         let gemini = Self.cases[2]
         try setup.signIn(gemini)
-        _ = try await setup.driver(gemini, timeout: 7).execute(ToolRunRequest(
+        let answered = try await setup.driver(gemini, timeout: 60).execute(ToolRunRequest(
             prompt: Prompts.ready, folder: setup.work, purpose: .check, timeLimitSeconds: 600))
+        #expect(answered == .answered(ToolAnswer(text: "ready\n", tokens: gemini.tokens)))
         let argv = try setup.lastCall().argv
         let index = try #require(argv.firstIndex(of: "--print-timeout"))
-        #expect(argv.dropFirst(index + 1).first == "7s")
+        #expect(argv.dropFirst(index + 1).first == "60s")
     }
 
     @Test("the provider's shape is chosen by the provider")

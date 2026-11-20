@@ -4,7 +4,8 @@ import LeverageKit
 /// What a tool run is for. It decides what the tool may do (CL-8): a build
 /// may edit files in its folder, a review and the answering check may not.
 enum ToolPurpose: String, Sendable, CaseIterable {
-    /// The answering check of the add flow and of `LeverageRunner probe`.
+    /// The answering check of the add flow and of `LeverageRunner probe`,
+    /// and a job's run (milestone 4): read-only, no `--mode plan`.
     case check
     case build
     case review
@@ -105,7 +106,7 @@ struct ShapeInput: Sendable {
     let prompt: String
     let folder: String
     let purpose: ToolPurpose
-    /// Nil for the check, which runs on the tool's defaults.
+    /// Nil for the probe's check, which runs on the tool's defaults.
     let model: String?
     let effort: String?
     /// Where the tool writes its last message, for a tool that does.
@@ -204,18 +205,20 @@ struct ProcessToolDriver: ToolDriver {
         defer { if let scratch { try? FileManager.default.removeItem(at: scratch) } }
         let outputFile = scratch?.appendingPathComponent("last-message.txt")
 
-        let seat = purpose != .check
+        let seat = request.seatModel
+        // A caller's limit (a job's, RD-34) only ever shortens the run.
+        let seconds = max(1, min(request.timeLimitSeconds ?? tool.timeoutSeconds, tool.timeoutSeconds))
         let input = ShapeInput(
             prompt: prompt, folder: folder.path, purpose: purpose,
             model: seat ? tool.model : nil, effort: seat ? tool.effort : nil,
-            outputFile: outputFile?.path, timeoutSeconds: tool.timeoutSeconds)
-        let request = SubprocessRequest(
+            outputFile: outputFile?.path, timeoutSeconds: seconds)
+        let subprocess = SubprocessRequest(
             executable: tool.toolPath, arguments: shape.arguments(input), environment: tool.toolEnvironment,
-            workingDirectory: folder.path, timeLimit: .seconds(tool.timeoutSeconds))
+            workingDirectory: folder.path, timeLimit: .seconds(seconds))
 
         let result: SubprocessResult
         do {
-            result = try await Subprocess.run(request)
+            result = try await Subprocess.run(subprocess)
         } catch let error as SubprocessError {
             return .failed(.couldNotStart(Self.reason(error)), nil)
         }

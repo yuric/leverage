@@ -63,7 +63,8 @@ struct RunnerTiming: Sendable {
 /// `GET /v1/next` to an action, for one seat (plan §2.2). A builder claims
 /// a task, and goes on with the one it holds on `rework`, `resume` and
 /// `briefing_changed`; a reviewer claims a review, and goes on with it on
-/// `briefing_changed`. `stop()` ends the tool and the flow, gives back what
+/// `briefing_changed`; a planner or an orchestrator claims a job (milestone
+/// 4, `JobFlow`); any seat reads a `command` item's outcome once. `stop()` ends the tool and the flow, gives back what
 /// the seat holds and makes `run()` return 0 (CL-23).
 final class RunnerLoop: @unchecked Sendable {
     /// How long a stop waits to give back what the seat holds. The tool is
@@ -136,6 +137,7 @@ final class RunnerLoop: @unchecked Sendable {
         let api = context.api
         let builder = BuilderFlow(context: context)
         let reviewer = ReviewerFlow(context: context)
+        let jobs = JobFlow(context: context)
         if let continuing {
             let settled = await settle {
                 switch continuing {
@@ -162,7 +164,7 @@ final class RunnerLoop: @unchecked Sendable {
                 }
             }
             let settled = await settle {
-                let acted = try await act(on: item, builder: builder, reviewer: reviewer)
+                let acted = try await act(on: item, builder: builder, reviewer: reviewer, jobs: jobs)
                 // A `none` that came back at once, from a server that did not
                 // hold the long poll, is not asked again at once either.
                 let hurried = item.kind == .none && context.timing.nextWait > 0
@@ -198,10 +200,21 @@ final class RunnerLoop: @unchecked Sendable {
     }
 
     /// Acts on one item; false when there was nothing to do with it.
-    private func act(on item: NextItem, builder: BuilderFlow, reviewer: ReviewerFlow) async throws -> Bool {
+    private func act(on item: NextItem, builder: BuilderFlow, reviewer: ReviewerFlow, jobs: JobFlow) async throws
+        -> Bool {
         switch (role, item.kind) {
         case (_, .none):
             return true
+        case (_, .command):
+            // A command of this seat whose outcome changed after the seat
+            // stopped waiting on it (a planner's contract, a refused submit
+            // the owner let through): reading it once clears the item.
+            guard let id = item.id, let key = IdempotencyKey(id) else { return false }
+            let api = context.api
+            _ = try await context.read("get_command") { try await api.command(key: key) }
+            return true
+        case (.planner, .job), (.orchestrator, .job):
+            return try await jobs.claim() != nil
         case (.builder, .task):
             return try await builder.claim() != nil
         case (.builder, .rework), (.builder, .resume), (.builder, .briefingChanged):

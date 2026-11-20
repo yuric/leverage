@@ -52,9 +52,22 @@ enum WorkFolder {
     /// A new empty folder for one tool run of a job, under `<work root>/jobs/`,
     /// which the caller removes with `removeJobFolder` after the run (RD-33).
     /// Nil when it cannot be made.
-    static func makeJobFolder(workRoot: URL) -> URL? { nil }
+    static func makeJobFolder(workRoot: URL) -> URL? {
+        let folder = workRoot.appendingPathComponent("jobs", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(
+                at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        } catch {
+            return nil
+        }
+        return URL(fileURLWithPath: folder.path, isDirectory: true)
+    }
 
-    static func removeJobFolder(_ folder: URL) {}
+    /// Removes a job's folder and whatever a tool left in it.
+    static func removeJobFolder(_ folder: URL) {
+        try? FileManager.default.removeItem(at: folder)
+    }
 
     static func reviewer(reference: String?, home: String) -> URL? {
         let given = reference?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

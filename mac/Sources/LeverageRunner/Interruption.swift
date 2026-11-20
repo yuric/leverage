@@ -132,18 +132,19 @@ struct Interruption: Sendable {
     static func report(_ outcome: RunOutcome, of subject: InterruptedWork, at observedAt: Date) -> RunEndReport {
         let taskID: UUID?
         let reviewID: UUID?
+        let jobID: UUID?
         switch subject {
-        case .task(let id): (taskID, reviewID) = (id, nil)
-        case .review(let id): (taskID, reviewID) = (nil, id)
-        case .job: (taskID, reviewID) = (nil, nil)
+        case .task(let id): (taskID, reviewID, jobID) = (id, nil, nil)
+        case .review(let id): (taskID, reviewID, jobID) = (nil, id, nil)
+        case .job(let id): (taskID, reviewID, jobID) = (nil, nil, id)
         }
         if case .limit(let window, let resetAt) = outcome {
             return RunEndReport(
-                kind: .limit, window: window, resetAt: resetAt, taskID: taskID, reviewID: reviewID, toolVersion: nil,
-                observedAt: observedAt)
+                kind: .limit, window: window, resetAt: resetAt, taskID: taskID, reviewID: reviewID, jobID: jobID,
+                toolVersion: nil, observedAt: observedAt)
         }
         return RunEndReport(
-            kind: .signedOut, window: nil, resetAt: nil, taskID: taskID, reviewID: reviewID, toolVersion: nil,
-            observedAt: observedAt)
+            kind: .signedOut, window: nil, resetAt: nil, taskID: taskID, reviewID: reviewID, jobID: jobID,
+            toolVersion: nil, observedAt: observedAt)
     }
 }
