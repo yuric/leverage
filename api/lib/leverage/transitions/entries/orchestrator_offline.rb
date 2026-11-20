@@ -68,7 +68,7 @@ module Leverage
           effective = [ RolePresence.offline_since(ctx.workspace, ROLE, ctx.at), since ].max
           cause = RolePresence.cause_credential(ctx.workspace, ROLE, ctx.at)
           Timers.as_timer(ctx, command, effective) do |timer_ctx|
-            inbox = InboxItem.create!(workspace_id: ctx.workspace.id, kind: ITEM, about_kind: "workspace", about_id: nil,
+            inbox = InboxItem.create!(workspace_id: ctx.workspace.id, kind: ITEM, about_kind: "workspace", about_id: ctx.workspace.id,
               credential_id: cause&.id, choices: [], opened_at: ctx.at,
               facts: { role: ROLE, waiting_checks: waiting_count(ctx.workspace.id), credential_id: cause&.id })
             timer_ctx.emit("inbox.opened", subject: inbox, payload: { kind: ITEM })
