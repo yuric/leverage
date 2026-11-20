@@ -23,7 +23,7 @@ class OneWriterTest < ActiveSupport::TestCase
   ].freeze
 
   # The folders of the third line, which only read (milestone 4 plan §2).
-  READ_ONLY_RULES = [].freeze
+  READ_ONLY_RULES = [ "lib/leverage/rules" ].freeze
 
   def self.code_lines(text)
     text.each_line.with_index(1).reject { |line, _| line.strip.start_with?("#") }
