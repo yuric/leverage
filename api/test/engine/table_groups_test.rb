@@ -75,7 +75,8 @@ class TableGroupsTest < ActiveSupport::TestCase
   test "each pending command has its named entry class" do
     assert Table.const_defined?(:PENDING, false)
     Table::PENDING.each do |command|
-      entry = Table.entry_for(command)
+      assert_raises(Table::UnknownCommand) { Table.entry_for(command) }
+      entry = Table.entry_for(command, allow_pending: true)
       assert entry, "no class for #{command}"
       assert_equal command, entry.command
       assert_operator entry, :<, T::Entry
@@ -129,10 +130,10 @@ class TableGroupsTest < ActiveSupport::TestCase
   test "with_entries accepts a pending command during the engine build" do
     replacement = Class.new(T::Entry)
     Table.with_entries("ask_question" => replacement) do
-      assert_equal replacement, Table.entry_for("ask_question")
+      assert_equal replacement, Table.entry_for("ask_question", allow_pending: true)
       refute Table.include?("ask_question")
     end
-    assert_equal Table.class_name("ask_question"), Table.entry_for("ask_question").name
+    assert_equal Table.class_name("ask_question"), Table.entry_for("ask_question", allow_pending: true).name
   end
 
   test "with_entries accepts a new name" do
