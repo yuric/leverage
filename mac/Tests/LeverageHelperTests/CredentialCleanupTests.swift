@@ -33,6 +33,63 @@ struct CredentialCleanupTests {
         #expect(FileManager.default.fileExists(atPath: external.path))
     }
 
+    @Test("confirmed removal cleans the earlier private account folder and acknowledges completion")
+    func removesLegacyFolder() async throws {
+        let rig = try HelperRig()
+        let id = UUID()
+        let other = UUID()
+        let files = FileManager.default
+        let account = try rig.folders.createFresh(for: id)
+        let sibling = try rig.folders.createFresh(for: other)
+        try files.createSymbolicLink(at: account.appendingPathComponent("linked"), withDestinationURL: sibling)
+        let queue = rig.support.appendingPathComponent("pending-removals")
+        try files.createDirectory(at: queue, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let receipt = queue.appendingPathComponent(id.contractString)
+        try Data().write(to: receipt)
+        let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: MemoryTokenVault(),
+                                        requests: RunningRequests(), log: quietLog)
+        await cleanup.forget(id)
+        await cleanup.forget(id)
+        #expect(!files.fileExists(atPath: account.path))
+        #expect(!files.fileExists(atPath: receipt.path))
+        #expect(files.fileExists(atPath: sibling.path))
+    }
+
+    @Test("confirmed removal preserves a linked account, linked root, mismatched marker and shared legacy folder")
+    func preservesUnownedDirectories() async throws {
+        for kind in ["account link", "root link", "wrong marker", "shared folder", "shared root"] {
+            let rig = try HelperRig()
+            let id = UUID()
+            let files = FileManager.default
+            let account = try rig.folders.createFresh(for: id)
+            let queue = rig.support.appendingPathComponent("pending-removals")
+            try files.createDirectory(at: queue, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            try Data().write(to: queue.appendingPathComponent(id.contractString))
+            var target = account
+            switch kind {
+            case "account link":
+                target = rig.folder.url.appendingPathComponent("outside")
+                try files.moveItem(at: account, to: target)
+                try files.createSymbolicLink(at: account, withDestinationURL: target)
+            case "root link":
+                let outside = rig.folder.url.appendingPathComponent("outside")
+                target = outside.appendingPathComponent(id.contractString)
+                try files.moveItem(at: rig.folders.root, to: outside)
+                try files.createSymbolicLink(at: rig.folders.root, withDestinationURL: outside)
+            case "wrong marker":
+                try Data("another folder".utf8).write(to: target.appendingPathComponent(".leverage-owned"))
+            case "shared folder":
+                try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: account.path)
+            default:
+                try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: rig.folders.root.path)
+            }
+            let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: MemoryTokenVault(),
+                                            requests: RunningRequests(), log: quietLog)
+            await cleanup.forget(id)
+            #expect(files.fileExists(atPath: target.path), "\(kind)")
+        }
+    }
+
     @Test("forget lets an active sign-in child finish with its account folder still present")
     func waitsForSignInChild() async throws {
         let rig = try HelperRig()

@@ -167,6 +167,27 @@ struct HelperSupervisorTests {
         await fake.expectNothingLeft()
     }
 
+    @Test("confirmed removal survives relaunch and a pipe write until the helper acknowledges it")
+    func replaysConfirmedRemoval() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [3], input: .recorded)
+        let id = UUID()
+        let first = supervisor(fake)
+        await #expect(throws: HelperSendError.notRunning) { try await first.send(.forget(credentialID: id)) }
+        let receipt = fake.support.appendingPathComponent("pending-removals/\(id.contractString)")
+        #expect(FileManager.default.fileExists(atPath: receipt.path))
+        let next = supervisor(fake)
+        _ = await next.start(apiBaseURL: apiURL, issuer: issuer([]))
+        #expect(await eventually {
+            fake.inputLines(ofRun: 2).contains { line in
+                guard case .forget(let received) = try? LocalHelperMessage.decodeLine(line) else { return false }
+                return received == id
+            }
+        })
+        #expect(FileManager.default.fileExists(atPath: receipt.path))
+        await next.stop()
+        await fake.expectNothingLeft()
+    }
+
     @Test("sending without a running helper throws before start and after stop")
     func refusesSendWithoutHelper() async throws {
         let fake = try FakeHelperProgram(exitCodes: [])
