@@ -84,7 +84,7 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       { op: "resume_project", path: "#{project}/resume", ids: project_ids },
       { op: "change_budget", path: "#{project}/budget", ids: project_ids, body: { "budget" => nil } },
       { op: "delete_project_content", command: "delete_content", path: "#{project}/delete-content",
-        ids: project_ids.merge("subject_kind" => "project") },
+        ids: { "project_id" => @project_id } },
       { op: "change_task_priority", path: "#{task}/priority", ids: task_ids, body: { "priority" => "high" } },
       { op: "change_task_project", path: "#{task}/project", ids: task_ids, body: { "project_id" => @project_id } },
       { op: "change_task_cap", path: "#{task}/cap", ids: task_ids, body: { "budget_cap" => 12.50 } },
@@ -92,7 +92,7 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       { op: "offer_task_again", path: "#{task}/offer-again", ids: task_ids },
       { op: "grant_access", path: "#{task}/grant-access", ids: task_ids },
       { op: "delete_task_content", command: "delete_content", path: "#{task}/delete-content",
-        ids: task_ids.merge("subject_kind" => "task") },
+        ids: { "task_id" => @task_id } },
       { op: "answer_question", path: "#{question}/answer", ids: { "id" => @question_id }, body: { "answer" => "Use the sample." } },
       { op: "overturn_answer", path: "#{question}/overturn", ids: { "id" => @question_id } },
       { op: "approve_action", path: "#{action}/approve", ids: action_ids },
@@ -294,7 +294,7 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
   end
 
   test "an id that is not a UUID names nothing: 404 not_found" do
-    calls.select { |call| call[:ids]&.key?("id") }.each do |call|
+    calls.select { |call| call.fetch(:ids, {}).keys.intersect?(%w[id task_id project_id]) }.each do |call|
       path = call[:path].sub(/[0-9a-f-]{36}/, "not-an-id")
       with_stand_in { send_call(call.merge(path: path)) }
       assert_transport_error :not_found, "not_found"
