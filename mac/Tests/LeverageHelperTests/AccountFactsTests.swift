@@ -113,6 +113,18 @@ struct AccountFactsTests {
         #expect(signedOut.email == nil)
     }
 
+    @Test("account fact bounds use the same Unicode character counts as the API")
+    func unicodeFieldBounds() {
+        let component = "e\u{0301}"
+        let plan = String(repeating: component, count: 21)
+        let email = String(repeating: component, count: 128)
+        let facts = AccountFacts.claudeStatus(Data("""
+            {"loggedIn":true,"subscriptionType":"\(plan)","email":"\(email)"}
+            """.utf8))
+        #expect(facts.plan == nil)
+        #expect(facts.email == nil)
+    }
+
     private func verify(_ provider: Provider, credential: UUID, rig: HelperRig, log: Log) async -> HelperRequestResult {
         let checks = AddChecks(
             api: rig.api, settings: rig.settings, timings: fastTimings, prober: FixedPrompt(answer: true),
