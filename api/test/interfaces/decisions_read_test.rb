@@ -96,11 +96,25 @@ class DecisionsReadTest < CommittingTestCase
     assert_equal event.at, Time.iso8601(row.fetch("overturned_at"))
   end
 
+  test "a removed action definition leaves its original approval in the list" do
+    task = scenario.finishing_task(actions: [ {} ])
+    action = Action.where(task_id: task.id).sole
+    granted = approve(task, action, scenario.orchestrator)
+    action_event("action.withdrawn", task, action, actor_kind: "owner", actor_id: scenario.owner.id)
+    action.destroy!
+
+    rows = decisions
+    assert_equal 1, rows.length
+    row = rows.sole
+    assert_equal [ action.id, granted.actor_id, nil, false ], row.values_at("action_id", "seat_id", "action_state", "undoable")
+    assert_equal granted.at, Time.iso8601(row.fetch("decided_at"))
+  end
+
   private
 
   def decisions
     body = JSON.parse(JSON.generate(Leverage::Reads::Decisions.call(scenario.workspace_id)))
-    assert_matches_component("DecisionsList", body)
+    assert_empty contract_errors("#/components/schemas/DecisionsList", body)
     body.fetch("decisions")
   end
 
