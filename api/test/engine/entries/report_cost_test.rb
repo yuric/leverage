@@ -12,7 +12,8 @@ class ReportCostTest < ActiveSupport::TestCase
   end
 
   test "a different builder cannot report cost on the holder's task" do
-    events = events_written { assert_refused("not_holder", seat_command(own_seat, "report_cost", @params)) }
+    other = own_seat
+    events = events_written { assert_refused("not_holder", seat_command(other, "report_cost", @params)) }
 
     assert_empty events
   end

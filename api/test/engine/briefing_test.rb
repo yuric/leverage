@@ -217,7 +217,6 @@ class BriefingTest < ActiveSupport::TestCase
   end
 
   test "the project brief is in position order and only its holder has to acknowledge the edit" do
-    @scenario.owner
     project = @scenario.project(brief: [ { kind: "rule", text: "Made-up sample rule." },
       { kind: "lesson", text: "Made-up sample lesson." } ])
     @task.update!(project_id: project.id)
@@ -244,18 +243,19 @@ class BriefingTest < ActiveSupport::TestCase
   end
 
   test "the briefing has the action states and current answers without hashing their progress" do
-    task = @scenario.finishing_task(builder: @builder, actions: [
+    builder = @scenario.seat
+    task = @scenario.finishing_task(builder: builder, actions: [
       { kind: "send", description: "Send the sample.", state: "approved" },
       { kind: "publish", description: "Publish the sample.", state: "started" }
     ])
-    initial_hash = B.hash_for(task, seat: @builder)
+    initial_hash = B.hash_for(task, seat: builder)
     @scenario.question(task, outcome: "open", text: "Unanswered example?")
     @scenario.question(task, outcome: "overturned", text: "Overturned example?")
     @scenario.question(task, outcome: "answered", text: "Where is the sample?", answer: "In the example folder.")
     other = @scenario.task(state: "working")
     @scenario.question(other, outcome: "answered", text: "Unrelated example?")
 
-    briefing = B.for(task, seat: @builder)
+    briefing = B.for(task, seat: builder)
 
     assert_matches_component("Briefing", briefing)
     assert_equal [ [ "send", "approved", 1 ], [ "publish", "started", 2 ] ],
@@ -265,5 +265,4 @@ class BriefingTest < ActiveSupport::TestCase
       briefing.fetch("answers")
     assert_equal initial_hash, briefing.fetch("hash")
   end
-
 end

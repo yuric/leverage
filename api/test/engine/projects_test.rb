@@ -95,6 +95,29 @@ class ProjectsTest < ActiveSupport::TestCase
     assert_equal 1, InboxItem.where(about_id: @project.id, state: "open").count
   end
 
+  test "a resumed review that reports cost can pause the project again before other holds close" do
+    reviewer = own_seat(role: "reviewer")
+    reviewed = scenario.task(state: "in_review", project: @project)
+    review = scenario.review(reviewed, reviewer: reviewer)
+    params = { "id" => review.id, "verdict" => "passed", "notes" => "Made-up notes.",
+               "failed_criteria" => [], "tokens" => 20, "spend" => 1 }
+    pending = scenario.pending_transition(reviewed, command: "pass_review", requester: reviewer, params: params)
+    builder = own_seat
+    working = scenario.task(state: "working", builder: builder, project: @project)
+    pause_policy(transitions: { pending.id => { checks: [] } })
+    assert_completed(seat_command(builder, "report_cost", { "id" => working.id, "tokens" => 10, "spend" => 5 }))
+
+    events = events_written { assert_completed(owner_command("resume_project", { "id" => @project.id })) }
+
+    assert_equal %w[project.resumed hold.closed review.passed task.done cost.reported check.finished project.paused],
+      types(events)
+    assert_equal "completed", pending.reload.state
+    assert @project.reload.paused
+    assert_equal "project_paused", open_hold(working).reason
+    assert_nil working.reload.lease_due_at
+    assert_equal 1, InboxItem.where(about_id: @project.id, state: "open").count
+  end
+
   test "moving into and out of a paused project changes the hold but leaves spend where reported" do
     builder = own_seat
     task = scenario.task(state: "working", builder: builder, project: @project)
@@ -200,7 +223,7 @@ class ProjectsTest < ActiveSupport::TestCase
 
     assert_equal({ "priority" => "high", "project_id" => @project.id, "budget_cap" => 2 }, events.sole.payload)
     claim = assert_completed(seat_command(builder, "claim"))
-    assert_equal second.id, claim.result.fetch("task_id")
+    assert_equal second.id, claim.result.fetch("task").fetch("id")
     assert_equal "ready", first.reload.state
   end
 
@@ -215,12 +238,12 @@ class ProjectsTest < ActiveSupport::TestCase
     [ builder, task ]
   end
 
-  def pause_policy
+  def pause_policy(transitions: {})
     rule = scenario.rule(hook: "cost.reported", kind: "policy", checker: "app", checker_function: "pause_project_at_budget")
     Leverage::Gating.implementation = Leverage::Gating::StandIn.new(rules: [
       { id: rule.id, version_id: scenario.current_version(rule).id, version: 1, hook: "cost.reported", kind: "policy",
         checker: "app", enabled: true, effect: "project_paused" }
-    ])
+    ], transitions: transitions)
     rule
   end
 
