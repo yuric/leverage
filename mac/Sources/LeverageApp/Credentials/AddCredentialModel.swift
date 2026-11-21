@@ -47,6 +47,9 @@ final class AddCredentialModel {
     private(set) var step: Step = .pickProvider
     private(set) var providers: [ProviderChoice] = []
     private(set) var provider: Provider?
+    var token = ""
+    var canAddToken: Bool { false }
+    func addToken() async {}
     var name = "" {
         didSet { if name != oldValue { nameLine = nil } }
     }
@@ -76,7 +79,7 @@ final class AddCredentialModel {
 
     init(
         api: any OwnerAPI, credentialID: UUID = UUID(), onAdded: @escaping @MainActor () -> Void,
-        timing: FollowTiming = .normal
+        timing: FollowTiming = .normal, helper: any HelperSupervising = UnavailableRuntime().helper
     ) {
         self.api = api
         self.credentialID = credentialID
