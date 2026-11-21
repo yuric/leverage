@@ -39,7 +39,7 @@ module Leverage
     # Runs under the workspace lock, so a concurrent first call has either
     # committed its row or not started. Raises KeyReused when the row's hash
     # differs.
-    def find(request, at:)
+    def find(request, at: nil)
       return nil if request.by_app? || request.caller_id.nil?
 
       row = Command.find_by(caller_kind: request.caller_kind, caller_id: request.caller_id, key: request.key)
