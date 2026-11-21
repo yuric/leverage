@@ -442,6 +442,30 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     assert_equal event(occupied, "task.released").id, event(task, "action.lease_granted").cause_id
   end
 
+  test "offer resolves the unconfirmed action without a lease while an approval is overturned" do
+    @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+    task = pass_review("send")
+    action = Action.find_by!(task_id: task.id)
+    job = seat("claim_job", @orchestrator).result.fetch("job_id")
+    assert seat("submit_job_result", @orchestrator, "id" => job, "tokens" => 0, "spend" => 0,
+      "result" => { "decision" => "approve", "reason" => "Sample approval" }).completed?
+    acknowledge(task)
+    assert action_call("start_action", task, action).completed?
+    assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
+    unconfirmed = Hold.find_by!(task_id: task.id, reason: "action_unconfirmed", closed_at: nil)
+    assert owner("overturn_approval", action).completed?
+    assert_equal "stopped", action.reload.state
+
+    assert owner("offer_task_again", task).completed?
+
+    assert_equal [ "action_stopped" ], Leverage::Holds.open_holds(task).map(&:reason)
+    assert_nil task.reload.holder_seat_id
+    assert_nil task.lease_due_at
+    closed = Event.find_by!(workspace_id: @scenario.workspace_id, type: "hold.closed", subject_id: unconfirmed.id)
+    assert_nil closed.payload.fetch("lease_seat_id")
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+  end
+
   test "offer after re-enabling a retained builder replaces its lease and requires a new briefing" do
     task, first, = two_approved_actions
     acknowledge(task)
