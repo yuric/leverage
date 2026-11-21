@@ -415,6 +415,24 @@ class DecisionScoreTests(unittest.TestCase):
         self.assertIn("360 tool runs in all", err)
 
 
+    def test_both_case_hashes_are_required_before_a_real_run(self):
+        config = eval_score.read_bar(self.suite)
+        for held_out, subset in ((False, config), (True, config["held_out"])):
+            subset["cases_sha256"] = eval_score.cases_sha256(eval_score.read_cases(self.suite, held_out))
+        (self.suite / "bar.json").write_text(json.dumps(config), encoding="utf-8")
+        self.assertEqual(run("verify-cases", self.suite)[0], 0)
+        for folder in ("cases", "held_out"):
+            with self.subTest(folder=folder):
+                path = next((self.suite / folder).glob("*.json"))
+                original = eval_score.read_json(path)
+                path.write_text(json.dumps(dict(original, why="Changed since freezing.")), encoding="utf-8")
+                code, _, err = run("verify-cases", self.suite)
+                self.assertEqual(code, 2, err)
+                name = "main" if folder == "cases" else "held-out"
+                self.assertIn(f"{name} case set does not match the frozen hash", err)
+                path.write_text(json.dumps(original, indent=4), encoding="utf-8")
+                self.assertEqual(run("verify-cases", self.suite)[0], 0)
+
     def test_held_out_waits_for_final_wording_and_runs_only_once(self):
         role = self.suite / "role.md"
         role.write_text("The made-up final role wording.", encoding="utf-8")
