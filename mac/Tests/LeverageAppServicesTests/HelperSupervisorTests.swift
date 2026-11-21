@@ -103,12 +103,13 @@ struct HelperSupervisorTests {
         let token = "\(credentialTokenMarker)facedeadbeef\r\nmade-up tail"
 
         #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
-        #expect(await eventually { fake.log.contains("fake helper run 1") })
+        let helperReady = await eventually { fake.log.contains("fake helper run 1") }
+        #expect(helperReady)
         do {
             try await helper.send(.token(credentialID: id, token: token))
             #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
         } catch {
-            Issue.record("send failed while the helper was running: \(error)")
+            Issue.record("token send failed while the helper was running")
         }
         await helper.stop()
 
@@ -124,11 +125,17 @@ struct HelperSupervisorTests {
         }
         let arguments = fake.arguments(ofRun: 1)
         let environment = fake.environment(ofRun: 1)
-        #expect(!arguments.isEmpty)
-        #expect(environment["HOME"] != nil)
-        #expect(fake.log.contains("fake helper run 1"))
-        #expect(entries.value.contains { $0.contains("the helper started") })
-        let launchedAndLogged = [arguments, fake.log] + Array(environment.values) + entries.value
+        let helperLog = fake.log
+        let recordedLaunch = !arguments.isEmpty && environment["HOME"] != nil
+        let loggedStart = helperLog.contains("fake helper run 1") && entries.value.contains {
+            $0.contains("the helper started")
+        }
+        #expect(recordedLaunch)
+        #expect(loggedStart)
+        let launch = [arguments] + Array(environment.values)
+        let leakedID = launch.contains { $0.localizedCaseInsensitiveContains(id.uuidString) }
+        #expect(!leakedID)
+        let launchedAndLogged = launch + [helperLog] + entries.value
         let leakedToken = launchedAndLogged.contains { $0.contains(credentialTokenMarker) }
         #expect(!leakedToken)
         await fake.expectNothingLeft()
@@ -188,35 +195,36 @@ struct HelperSupervisorTests {
         await fake.expectNothingLeft()
     }
 
-    @Test("a cancelled caller does not send a message or stop the shared helper")
+    @Test("a cancelled caller can send cleanup without stopping the shared helper")
     func cancelledSendLeavesHelperRunning() async throws {
         let fake = try FakeHelperProgram(exitCodes: [], input: .recorded)
         let helper = supervisor(fake)
-        let id = UUID()
+        let first = UUID()
+        let second = UUID()
 
         #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
         #expect(await eventually { fake.log.contains("fake helper run 1") })
         let cancelled = Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            try await helper.send(.forget(credentialID: UUID()))
+            try await helper.send(.forget(credentialID: first))
         }
-        await #expect(throws: CancellationError.self) { try await cancelled.value }
-        #expect(fake.isRunning(run: 1))
         do {
-            try await helper.send(.forget(credentialID: id))
-            #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
+            try await cancelled.value
+            try await helper.send(.forget(credentialID: second))
+            #expect(await eventually { fake.inputLines(ofRun: 1).count >= 2 || fake.runs > 1 })
         } catch {
-            Issue.record("send failed after the cancelled call: \(error)")
+            Issue.record("send failed in the cancellation test: \(error)")
         }
+        #expect(fake.isRunning(run: 1))
         await helper.stop()
         #expect(fake.runs == 1)
         let lines = fake.inputLines(ofRun: 1)
-        #expect(lines.count == 1)
-        if case .forget(let received) = lines.first.flatMap({ try? LocalHelperMessage.decodeLine($0) }) {
-            #expect(received == id)
-        } else {
-            Issue.record("the helper did not receive the later forget message")
+        #expect(lines.count == 2)
+        let ids = lines.compactMap { line -> UUID? in
+            guard case .forget(let id) = try? LocalHelperMessage.decodeLine(line) else { return nil }
+            return id
         }
+        #expect(ids == [first, second])
         await fake.expectNothingLeft()
     }
 
