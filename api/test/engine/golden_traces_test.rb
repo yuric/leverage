@@ -22,7 +22,8 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "04-two-actions-custom-rule" => [ 5, 0 ],
     "20-questions-and-access" => [ 5, 0 ],
     "21-money-projects-escalation" => [ 5, 0 ],
-    "22-finishing-edges" => [ 5, 0 ]
+    "22-finishing-edges" => [ 5, 0 ],
+    "23-owner-housekeeping" => [ 5, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
