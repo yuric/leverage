@@ -239,6 +239,51 @@ struct DecidedModelTests {
         #expect(model.effect(for: recorded) == "Recorded. Publishing had already happened, so nothing changed.")
     }
 
+    @Test("A superseded approval has its own row and cannot undo the current approval")
+    func supersededApprovalCannotUndoCurrentApproval() async {
+        let latest = decision(.approval, time: 2, state: .approved)
+        let older = decision(
+            .approval, time: 1, undoable: false, state: .approved, actionID: latest.actionID, taskID: latest.taskID)
+        let owner = owner(Locked([older, latest]))
+        let model = DecidedModel(api: owner)
+        await model.load()
+
+        #expect(model.rows == [latest, older])
+        #expect(older.decidedRowID != latest.decidedRowID)
+        model.requestUndo(older)
+        #expect(model.confirming == nil)
+        await model.confirmUndo()
+        #expect(commands(owner).isEmpty)
+
+        model.dismissUndo()
+        model.requestUndo(latest)
+        #expect(model.confirming == latest)
+    }
+
+    @Test("Only the latest approval of a completed action can record an objection")
+    func recordObjectionOnlyForLatestApproval() async {
+        let latest = decision(.approval, time: 2, undoable: false, state: .done, started: true)
+        let older = decision(
+            .approval, time: 1, undoable: false, state: .done, actionID: latest.actionID, taskID: latest.taskID)
+        let owner = owner(Locked([older, latest]))
+        owner.script { script in
+            script.board = { TaskScreenFixtures.board([TaskScreenFixtures.boardTask(.done, id: latest.taskID)]) }
+        }
+        let model = DecidedModel(api: owner)
+        await model.load()
+
+        #expect(!model.canRecordObjection(older))
+        #expect(model.canRecordObjection(latest))
+        model.requestUndo(older)
+        #expect(model.confirming == nil)
+        await model.confirmUndo()
+        #expect(commands(owner).isEmpty)
+
+        model.dismissUndo()
+        model.requestUndo(latest)
+        #expect(model.confirming == latest)
+    }
+
     private func owner(_ decisions: Locked<[Decision]>) -> FakeOwnerAPI {
         let owner = FakeOwnerAPI()
         owner.script { script in
@@ -256,12 +301,13 @@ struct DecidedModelTests {
 
     private func decision(
         _ kind: DecisionKind, time: TimeInterval, undoable: Bool = true,
-        outcome: String? = nil, state: ActionState? = nil, started: Bool = false
+        outcome: String? = nil, state: ActionState? = nil, started: Bool = false,
+        actionID: UUID? = nil, taskID: UUID = UUID()
     ) -> Decision {
         Decision(
-            questionID: kind == .question ? UUID() : nil, actionID: kind == .approval ? UUID() : nil,
+            questionID: kind == .question ? UUID() : nil, actionID: kind == .approval ? actionID ?? UUID() : nil,
             decidedAt: Date(timeIntervalSince1970: time), undoable: undoable, kind: kind,
-            taskID: UUID(), taskTitle: "Fix the invoice", seatID: UUID(),
+            taskID: taskID, taskTitle: "Fix the invoice", seatID: UUID(),
             summary: kind == .approval ? "Publish the invoice" : "Which label goes on the invoice?",
             outcome: outcome, actionState: state, started: started)
     }
