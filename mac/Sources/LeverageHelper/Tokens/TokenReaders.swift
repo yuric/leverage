@@ -3,11 +3,7 @@ import LeverageKit
 
 enum TokenReaders {
     static func responseHeaders(for provider: Provider) -> [String] {
-        switch provider {
-        case .claudeApi: ["anthropic-ratelimit-requests-remaining"]
-        case .openaiApi: ["x-ratelimit-remaining-requests"]
-        default: []
-        }
+        ProviderCatalog.tokenEntry(for: provider)?.responseHeaders.value ?? []
     }
 
     static func read(provider: Provider, status: Int, headers: [String: String], body: Data) -> UsageReading {

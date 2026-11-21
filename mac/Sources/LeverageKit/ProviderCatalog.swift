@@ -157,7 +157,8 @@ public struct TokenProviderEntry: Equatable, Sendable {
     public let method: Evidenced<String>
     public let authentication: Evidenced<TokenAuthentication>
     public let extraHeaders: Evidenced<[String: String]>
-    public var responseHeaders: Evidenced<[String]> { Evidenced([], .documented) }
+    /// Only these documented header names may reach the reader.
+    public let responseHeaders: Evidenced<[String]>
 }
 
 /// Where login usage figures come from. Arguments describe the proposed
@@ -179,8 +180,10 @@ public enum ProviderCatalog {
     // authentication and fixed headers against the vendors' documentation.
     public static let tokenEntries: [TokenProviderEntry] = [
         token(.claudeApi, "Claude API", "https://api.anthropic.com/v1/models", bearer,
-              extraHeaders: ["anthropic-version": "2026-10-21"]),
-        token(.openaiApi, "OpenAI API", "https://api.openai.com/v1/models", bearer),
+              extraHeaders: ["anthropic-version": "2026-10-21"],
+              responseHeaders: ["anthropic-ratelimit-requests-remaining"]),
+        token(.openaiApi, "OpenAI API", "https://api.openai.com/v1/models", bearer,
+              responseHeaders: ["x-ratelimit-remaining-requests"]),
         token(.geminiApi, "Gemini API", "https://generativelanguage.googleapis.com/v1beta/models",
               TokenAuthentication(header: "x-goog-api-key", scheme: nil)),
         token(.grokApi, "Grok API", "https://api.x.ai/v1/api-key", bearer),
@@ -193,14 +196,15 @@ public enum ProviderCatalog {
 
     private static func token(
         _ provider: Provider, _ name: String, _ address: String, _ authentication: TokenAuthentication,
-        extraHeaders: [String: String] = [:]
+        extraHeaders: [String: String] = [:], responseHeaders: [String] = []
     ) -> TokenProviderEntry {
         TokenProviderEntry(
             provider: provider, displayName: name,
             url: Evidenced(URL(string: address)!, .documented),
             method: Evidenced("GET", .prd),
             authentication: Evidenced(authentication, .documented),
-            extraHeaders: Evidenced(extraHeaders, .documented))
+            extraHeaders: Evidenced(extraHeaders, .documented),
+            responseHeaders: Evidenced(responseHeaders, .documented))
     }
 
     public static func loginUsage(for provider: Provider) -> LoginUsageSource? {

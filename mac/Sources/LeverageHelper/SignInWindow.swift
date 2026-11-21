@@ -15,8 +15,8 @@ struct SignInWindow: Sendable {
     let timings: HelperTimings
 
     /// True once `look` says signed in; false when the wait ends first or
-    /// the task is cancelled. Any sign-in command still running then is
-    /// ended.
+    /// the task is cancelled. The sign-in child is reaped before returning,
+    /// so the caller can remove its account folder.
     func waitForSignIn(
         _ entry: ProviderEntry, tool: LocatedTool, accountFolder: URL?,
         look: @Sendable () async -> Bool
@@ -28,7 +28,6 @@ struct SignInWindow: Sendable {
                 environment: locator.toolEnvironment(entry, toolPath: tool.path, accountFolder: accountFolder),
                 timeLimit: timings.waitAtMost, gracePeriod: .seconds(2), maximumOutputBytes: 64 << 10))
         }
-        defer { window?.stop() }
 
         let every: Duration
         if case .testPrompt = entry.status.value.reading {
@@ -36,7 +35,12 @@ struct SignInWindow: Sendable {
         } else {
             every = timings.lookEvery
         }
-        return await Waiting.until(every: every, atMost: timings.waitAtMost, look)
+        let signedIn = await Waiting.until(every: every, atMost: timings.waitAtMost, look)
+        if let window {
+            window.stop()
+            _ = await window.wait()
+        }
+        return signedIn
     }
 }
 
