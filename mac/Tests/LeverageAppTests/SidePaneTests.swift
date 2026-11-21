@@ -1,4 +1,6 @@
 import Foundation
+import LeverageKit
+import LeverageTestSupport
 import Testing
 
 @testable import LeverageApp
@@ -54,5 +56,28 @@ struct SidePaneTests {
         #expect(navigator.place == .board)
         #expect(navigator.openTaskID == nil)
         #expect(navigator.boardFilter.projectID == nil)
+    }
+
+    @Test("the pane's projects read and the owner's action calls observe session expiry")
+    func newCallsObserveSessionExpiry() async {
+        let base = FakeOwnerAPI()
+        let expired = TransportError(code: .unauthenticated, message: "made-up expiry")
+        base.script {
+            $0.listProjects = { throw expired }
+            $0.waiveAction = { _, _ in throw expired }
+        }
+        var notifications = 0
+        let owner: any OwnerAPI = SessionGuard(base: base, onUnauthenticated: { notifications += 1 })
+        let actionID = UUID()
+        let key = IdempotencyKey()
+
+        await #expect(throws: expired) { try await owner.listProjects() }
+        await #expect(throws: expired) { try await owner.waiveAction(actionID: actionID, key: key) }
+
+        #expect(notifications == 2)
+        #expect(base.calls == [
+            FakeCall(.listProjects),
+            FakeCall(.waiveAction, path: ["id": actionID.contractString], key: key),
+        ])
     }
 }

@@ -132,7 +132,8 @@ struct QuestionsAndApprovalsClientTests {
             let expected = try #require(ContractDocument.examples(of: component).first)
             let body = try #require(sent.body)
             #expect(sent.header("Content-Type") == "application/json")
-            #expect(try JSONDecoder().decode(JSONValue.self, from: body) == expected)
+            let matchesContract = try JSONDecoder().decode(JSONValue.self, from: body) == expected
+            #expect(matchesContract)
         } else {
             #expect(sent.body == nil || sent.body?.isEmpty == true)
         }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The owner's calls, one method per operation milestone 2 serves. The
+/// The owner's calls, one method per served operation. The
 /// app's view models take `any OwnerAPI`: `OwnerClient` sends them over
 /// HTTP, and LeverageTestSupport's `FakeOwnerAPI` answers them in memory.
 ///
@@ -123,6 +123,66 @@ public protocol OwnerAPI: Sendable {
     /// `draft_contract`: "Draft the details"; the result is the planner job
     /// it queued.
     func draftContract(taskID: UUID, key: IdempotencyKey) async throws -> CommandOutcome<DraftContractResult>
+
+    // Questions and approvals, projects, and workspace settings.
+
+    /// `list_decisions`.
+    func listDecisions() async throws -> DecisionsList
+    /// `list_projects`.
+    func listProjects() async throws -> ProjectsList
+    /// `create_project`.
+    func createProject(_ request: CreateProjectRequest, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `edit_brief`.
+    func editBrief(projectID: UUID, _ request: EditBriefRequest, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `pause_project`.
+    func pauseProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `resume_project`.
+    func resumeProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `delete_project_content`.
+    func deleteProjectContent(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `change_budget`.
+    func changeBudget(projectID: UUID, _ request: ChangeBudgetRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `change_task_priority`.
+    func changeTaskPriority(taskID: UUID, _ request: ChangeTaskPriorityRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `change_task_project`.
+    func changeTaskProject(taskID: UUID, _ request: ChangeTaskProjectRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `change_task_cap`.
+    func changeTaskCap(taskID: UUID, _ request: ChangeTaskCapRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `return_for_rework`.
+    func returnForRework(taskID: UUID, _ request: ReturnForReworkRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `offer_task_again`.
+    func offerTaskAgain(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `grant_access`.
+    func grantAccess(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `delete_task_content`.
+    func deleteTaskContent(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `answer_question`.
+    func answerQuestion(questionID: UUID, _ request: AnswerQuestionRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `overturn_answer`.
+    func overturnAnswer(questionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `approve_action`.
+    func approveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `stop_action`.
+    func stopAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `waive_action`.
+    func waiveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `mark_action_done`.
+    func markActionDone(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `overturn_approval`.
+    func overturnApproval(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `change_workspace_settings`.
+    func changeWorkspaceSettings(_ request: ChangeWorkspaceSettingsRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<WorkspaceSettings>
+    /// `get_workspace_settings`.
+    func workspaceSettings() async throws -> WorkspaceSettings
+    /// `get_landing_prompt` in the selected connection form.
+    func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt
 }
 
 extension OwnerAPI {

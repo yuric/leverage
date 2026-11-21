@@ -1,0 +1,2 @@
+@MainActor
+final class ProjectDetailModel {}

@@ -2,20 +2,22 @@ import Foundation
 import LeverageKit
 
 /// One call a fake API was asked to make: the operation, its path
-/// parameters as the HTTP client would fill them, its key, and its body as
+/// parameters as the HTTP client would fill them, its query, key, and body as
 /// JSON (what the HTTP client would send).
 public struct FakeCall: Equatable, Sendable {
     public let operation: ContractOperation
     public let path: [String: String]
+    public let query: [String: String]
     public let key: IdempotencyKey?
     public let body: JSONValue?
 
     public init(
         _ operation: ContractOperation, path: [String: String] = [:], key: IdempotencyKey? = nil,
-        body: JSONValue? = nil
+        body: JSONValue? = nil, query: [String: String] = [:]
     ) {
         self.operation = operation
         self.path = path
+        self.query = query
         self.key = key
         self.body = body
     }
@@ -147,6 +149,80 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         public var draftContract: @Sendable (UUID, IdempotencyKey) async throws
             -> CommandOutcome<DraftContractResult> = { _, _ in throw FakeAPIError.notScripted(.draftContract) }
 
+        public var listDecisions: @Sendable () async throws -> DecisionsList = {
+            throw FakeAPIError.notScripted(.listDecisions)
+        }
+        public var listProjects: @Sendable () async throws -> ProjectsList = {
+            throw FakeAPIError.notScripted(.listProjects)
+        }
+        public var createProject: @Sendable (CreateProjectRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.createProject)
+        }
+        public var editBrief: @Sendable (UUID, EditBriefRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.editBrief)
+        }
+        public var pauseProject: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.pauseProject)
+        }
+        public var resumeProject: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.resumeProject)
+        }
+        public var deleteProjectContent: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.deleteProjectContent)
+        }
+        public var changeBudget: @Sendable (UUID, ChangeBudgetRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.changeBudget)
+        }
+        public var changeTaskPriority: @Sendable (UUID, ChangeTaskPriorityRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.changeTaskPriority)
+        }
+        public var changeTaskProject: @Sendable (UUID, ChangeTaskProjectRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.changeTaskProject)
+        }
+        public var changeTaskCap: @Sendable (UUID, ChangeTaskCapRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.changeTaskCap)
+        }
+        public var returnForRework: @Sendable (UUID, ReturnForReworkRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.returnForRework)
+        }
+        public var offerTaskAgain: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.offerTaskAgain)
+        }
+        public var grantAccess: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.grantAccess)
+        }
+        public var deleteTaskContent: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.deleteTaskContent)
+        }
+        public var answerQuestion: @Sendable (UUID, AnswerQuestionRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.answerQuestion)
+        }
+        public var overturnAnswer: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.overturnAnswer)
+        }
+        public var approveAction: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.approveAction)
+        }
+        public var stopAction: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.stopAction)
+        }
+        public var waiveAction: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.waiveAction)
+        }
+        public var markActionDone: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.markActionDone)
+        }
+        public var overturnApproval: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _ in throw FakeAPIError.notScripted(.overturnApproval)
+        }
+        public var changeWorkspaceSettings: @Sendable (ChangeWorkspaceSettingsRequest, IdempotencyKey) async throws -> CommandOutcome<WorkspaceSettings> = {
+            _, _ in throw FakeAPIError.notScripted(.changeWorkspaceSettings)
+        }
+        public var workspaceSettings: @Sendable () async throws -> WorkspaceSettings = {
+            throw FakeAPIError.notScripted(.getWorkspaceSettings)
+        }
+        public var landingPromptForConnection: (@Sendable (UUID, LandingPromptConnection) async throws -> LandingPrompt)?
+
         public init() {}
     }
 
@@ -162,9 +238,9 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     private func record(
         _ operation: ContractOperation, _ path: [String: String] = [:], key: IdempotencyKey? = nil,
-        body: (any Encodable)? = nil
+        body: (any Encodable)? = nil, query: [String: String] = [:]
     ) -> Answers {
-        state.record(FakeCall(operation, path: path, key: key, body: body.flatMap { FakeCall.json($0) }))
+        state.record(FakeCall(operation, path: path, key: key, body: body.flatMap { FakeCall.json($0) }, query: query))
     }
 
     private static func id(_ uuid: UUID) -> [String: String] { ["id": uuid.contractString] }
@@ -359,5 +435,122 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
     public func draftContract(taskID: UUID, key: IdempotencyKey) async throws
         -> CommandOutcome<DraftContractResult> {
         try await record(.draftContract, Self.id(taskID), key: key).draftContract(taskID, key)
+    }
+
+    public func listDecisions() async throws -> DecisionsList {
+        try await record(.listDecisions).listDecisions()
+    }
+
+    public func listProjects() async throws -> ProjectsList {
+        try await record(.listProjects).listProjects()
+    }
+
+    public func createProject(_ request: CreateProjectRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.createProject, key: key, body: request).createProject(request, key)
+    }
+
+    public func editBrief(projectID: UUID, _ request: EditBriefRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.editBrief, Self.id(projectID), key: key, body: request).editBrief(projectID, request, key)
+    }
+
+    public func pauseProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.pauseProject, Self.id(projectID), key: key).pauseProject(projectID, key)
+    }
+
+    public func resumeProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.resumeProject, Self.id(projectID), key: key).resumeProject(projectID, key)
+    }
+
+    public func deleteProjectContent(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.deleteProjectContent, Self.id(projectID), key: key).deleteProjectContent(projectID, key)
+    }
+
+    public func changeBudget(projectID: UUID, _ request: ChangeBudgetRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.changeBudget, Self.id(projectID), key: key, body: request)
+            .changeBudget(projectID, request, key)
+    }
+
+    public func changeTaskPriority(taskID: UUID, _ request: ChangeTaskPriorityRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.changeTaskPriority, Self.id(taskID), key: key, body: request)
+            .changeTaskPriority(taskID, request, key)
+    }
+
+    public func changeTaskProject(taskID: UUID, _ request: ChangeTaskProjectRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.changeTaskProject, Self.id(taskID), key: key, body: request)
+            .changeTaskProject(taskID, request, key)
+    }
+
+    public func changeTaskCap(taskID: UUID, _ request: ChangeTaskCapRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.changeTaskCap, Self.id(taskID), key: key, body: request)
+            .changeTaskCap(taskID, request, key)
+    }
+
+    public func returnForRework(taskID: UUID, _ request: ReturnForReworkRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.returnForRework, Self.id(taskID), key: key, body: request)
+            .returnForRework(taskID, request, key)
+    }
+
+    public func offerTaskAgain(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.offerTaskAgain, Self.id(taskID), key: key).offerTaskAgain(taskID, key)
+    }
+
+    public func grantAccess(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.grantAccess, Self.id(taskID), key: key).grantAccess(taskID, key)
+    }
+
+    public func deleteTaskContent(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.deleteTaskContent, Self.id(taskID), key: key).deleteTaskContent(taskID, key)
+    }
+
+    public func answerQuestion(questionID: UUID, _ request: AnswerQuestionRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.answerQuestion, Self.id(questionID), key: key, body: request)
+            .answerQuestion(questionID, request, key)
+    }
+
+    public func overturnAnswer(questionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.overturnAnswer, Self.id(questionID), key: key).overturnAnswer(questionID, key)
+    }
+
+    public func approveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.approveAction, Self.id(actionID), key: key).approveAction(actionID, key)
+    }
+
+    public func stopAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.stopAction, Self.id(actionID), key: key).stopAction(actionID, key)
+    }
+
+    public func waiveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.waiveAction, Self.id(actionID), key: key).waiveAction(actionID, key)
+    }
+
+    public func markActionDone(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.markActionDone, Self.id(actionID), key: key).markActionDone(actionID, key)
+    }
+
+    public func overturnApproval(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.overturnApproval, Self.id(actionID), key: key).overturnApproval(actionID, key)
+    }
+
+    public func changeWorkspaceSettings(_ request: ChangeWorkspaceSettingsRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<WorkspaceSettings> {
+        try await record(.changeWorkspaceSettings, key: key, body: request).changeWorkspaceSettings(request, key)
+    }
+
+    public func workspaceSettings() async throws -> WorkspaceSettings {
+        try await record(.getWorkspaceSettings).workspaceSettings()
+    }
+
+    public func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt {
+        let answers = record(.getLandingPrompt, Self.id(seatID), query: ["connection": connection.rawValue])
+        if let answer = answers.landingPromptForConnection { return try await answer(seatID, connection) }
+        guard connection == .http else { throw FakeAPIError.notScripted(.getLandingPrompt) }
+        return try await answers.landingPrompt(seatID)
     }
 }

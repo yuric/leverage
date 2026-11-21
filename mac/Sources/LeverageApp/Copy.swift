@@ -25,5 +25,9 @@ enum CopyCatalogs {
         NeedsYouCopy.self,
         HandoffCopy.self,
         RulesCopy.self,
+        DecidedCopy.self,
+        ActivityCopy.self,
+        ProjectsCopy.self,
+        WorkspaceSettingsCopy.self,
     ]
 }

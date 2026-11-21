@@ -7,7 +7,8 @@ import LeverageKit
 enum ShellCopy: OwnerFacingCopy {
     // The app and its window.
     case appName
-    case tabBoard, tabNeedsYou, tabAgents, tabCredentials, tabHandoff, tabSettings
+    case tabBoard, tabNeedsYou, tabDecided, tabActivity, tabAgents, tabCredentials, tabHandoff, tabSettings
+    case projects, allProjects, manageProjects, manageProjectsAccessibility
     case addTask, backToBoard, signOut
 
     // The health line at the foot of the pane (MA-23).
@@ -41,10 +42,16 @@ enum ShellCopy: OwnerFacingCopy {
         case .appName: "leverage"
         case .tabBoard: "Board"
         case .tabNeedsYou: "Needs you"
+        case .tabDecided: DecidedCopy.title.text
+        case .tabActivity: ActivityCopy.title.text
         case .tabAgents: "Agents"
         case .tabCredentials: "Credentials"
         case .tabHandoff: "Handoff"
         case .tabSettings: "Settings"
+        case .projects: ProjectsCopy.title.text
+        case .allProjects: "All projects"
+        case .manageProjects: "Manage"
+        case .manageProjectsAccessibility: "Manage projects"
         case .addTask: "Add task"
         case .backToBoard: "Back to the board"
         case .signOut: "Sign out"

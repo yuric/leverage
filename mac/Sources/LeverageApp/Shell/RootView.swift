@@ -63,11 +63,17 @@ struct AppShell: View {
                 BoardView()
             }
         case .needsYou: NeedsYouView()
+        case .decided: DecidedView()
+        case .activity: ActivityView()
         case .agents: RosterView()
         case .credentials: CredentialsView()
         case .handoff: HandoffView()
-        case .settings: RulesView()
-        case .decided, .activity, .projects: EmptyView()
+        case .settings:
+            TabView {
+                RulesView().tabItem { Text(RulesCopy.title.text) }
+                WorkspaceSettingsView().tabItem { Text(WorkspaceSettingsCopy.title.text) }
+            }
+        case .projects: ProjectsView()
         }
     }
 }
