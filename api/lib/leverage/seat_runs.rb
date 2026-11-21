@@ -277,12 +277,14 @@ module Leverage
       released
     end
 
-    # Losing an enabled builder seat holds both its current Finishing
-    # task and any that wait for it. A held task keeps the holder and the
-    # hold pauses its lease (L147, AP-19).
+    # Include tasks under a hold so lifting that hold cannot leave an
+    # approved action waiting for a seat that is gone (L147, AP-19).
+    # Finishing opens a hold only when approved work remains.
     def hold_finishing_tasks(ctx, seat, cause:)
-      held = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "finishing").to_a
-      (held + Finishing.waiting_for(seat)).uniq.each do |task|
+      finishing = Task.where(workspace_id: seat.workspace_id, state: "finishing")
+      held = finishing.where(holder_seat_id: seat.id)
+      assigned = finishing.where(holder_seat_id: nil, builder_seat_id: seat.id)
+      held.or(assigned).order(:created_at, :id).each do |task|
         Finishing.lose_builder(ctx, task, cause: cause)
       end
     end
