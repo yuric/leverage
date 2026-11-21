@@ -7,7 +7,8 @@ module Leverage
     #
     # For each rule of the frozen set (Catalog), in Catalog's order:
     #
-    #   1. A stored result for the same identity is used first
+    #   1. A stored result for the same identity is reused while its fixed
+    #      scope still applies
     #      (StoredResults): passed, not applicable or overridden plans
     #      nothing; failed is a failure that names the stored row; a
     #      policy's applied row gives its effect again; an error or a
@@ -49,7 +50,7 @@ module Leverage
       # reenter_action plans once an action's gates have cleared.
       #
       # Returns [checks, jobs, effects].
-      def self.policies(request) = new(request).policies
+      def self.policies(request, entries:) = new(request).policies(entries)
 
       def initialize(request)
         @request = request
@@ -85,9 +86,8 @@ module Leverage
           failures: @failures, warnings: @warnings, effects: @effects, holds_to_open: @holds, deferred_rule_ids: deferred)
       end
 
-      def policies
+      def policies(entries)
         hook!
-        entries = Catalog.at(@request.workspace_id, @request.hook).select { |entry| entry.version.kind == "policy" }
         prepare unless entries.empty?
         entries.each { |entry| plan_rule(entry) }
         [ @checks, @jobs, @effects ]
@@ -109,7 +109,17 @@ module Leverage
       end
 
       def plan_rule(entry)
-        row = StoredResults.find(**identity(entry.version))
+        version = entry.version
+        row = StoredResults.find(**identity(version))
+        unless covered?(version)
+          plan(entry, result: "not_applicable") unless row || quiet_policy?(version)
+          return
+        end
+        # Fixed scopes can change independently of the hashed inputs.
+        return fresh(entry) if row&.result == "not_applicable" && %w[named_projects action_kinds].include?(version.scope_kind)
+        # A final approval timeout has already passed the decision to the owner (AE-15).
+        return if approval_policy?(version) && row&.result == "error"
+
         case StoredResults.use(row)
         when :passed, :cleared then nil
         when :applied then @effects << effect(entry, row.effect) if row.effect
@@ -121,9 +131,7 @@ module Leverage
 
       def fresh(entry)
         version = entry.version
-        if !covered?(version)
-          plan(entry, result: "not_applicable") unless quiet_policy?(version)
-        elsif version.checker == "model"
+        if version.checker == "model"
           plan_model(entry)
         elsif version.kind == "policy"
           plan_app_policy(entry)
@@ -132,7 +140,11 @@ module Leverage
         end
       end
 
-      def covered?(version) = Scope.covers?(version, @task, @request.inputs)
+      def covered?(version)
+        Scope.covers?(version, @task, @request.inputs, project_id: @request.project_id)
+      end
+
+      def approval_policy?(version) = version.hook == ACTION_HOOK && version.kind == "policy"
 
       def plan_model(entry)
         version = entry.version

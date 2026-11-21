@@ -35,16 +35,19 @@ module Leverage
       end
 
       def failed_task_ids(seat)
-        blocking = Catalog.at(seat.workspace_id, HOOK).select { |entry| entry.version.on_fail == "block" }
-          .map { |entry| entry.version.id }
+        blocking = Catalog.at(seat.workspace_id, HOOK).map(&:version)
+          .select { |version| version.on_fail == "block" }.index_by(&:id)
         return [] if blocking.empty?
 
         rows = RuleCheck.where(workspace_id: seat.workspace_id, hook: HOOK, subject_kind: "seat", subject_id: seat.id,
-          result: "failed", overridden_at: nil, rule_version_id: blocking).pluck(:task_id, :round, :input_hash)
+          result: "failed", overridden_at: nil, rule_version_id: blocking.keys)
+          .pluck(:task_id, :round, :input_hash, :rule_version_id)
         tasks = Task.where(id: rows.map(&:first)).index_by(&:id)
-        rows.filter_map do |task_id, round, input_hash|
+        rows.filter_map do |task_id, round, input_hash, version_id|
           task = tasks[task_id]
-          task_id if task && round == task.round && input_hash == ClaimGate.hash_for(task, seat.id)
+          next unless task && round == task.round && input_hash == ClaimGate.hash_for(task, seat.id)
+
+          task_id if Scope.covers?(blocking.fetch(version_id), task)
         end.uniq
       end
 

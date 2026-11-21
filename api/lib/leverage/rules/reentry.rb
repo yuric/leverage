@@ -103,7 +103,12 @@ module Leverage
         waiting = decide(task, ACTION_HOOK, made, gates, rows.map(&:id), hold_open: false)
         return waiting unless waiting.action == :complete
 
-        checks, jobs, = EvaluationBuilder.policies(request)
+        requested = Event.where(workspace_id: task.workspace_id, task_id: task.id, subject_kind: "action",
+          subject_id: made.id, type: ACTION_HOOK).order(:seq).last
+        return waiting unless requested
+
+        checks, jobs, = EvaluationBuilder.policies(request.with(project_id: requested.project_id),
+          entries: Catalog.action_policies(requested))
         decision(:complete, checks: checks, jobs: jobs)
       end
 
