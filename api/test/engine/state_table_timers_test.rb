@@ -155,4 +155,38 @@ class StateTableTimersTest < ActiveSupport::TestCase
       assert_equal "timed_out", job.reload.state
     end
   end
+
+  StateTableCases.define(self, %w[question_job_queue_timeout question_job_run_timeout]) do |kase|
+    run = kase.command == "question_job_run_timeout"
+    second = kase.guard == %w[second_miss]
+    task = scenario.task(state: "working")
+    [ true, false ].each do |blocking|
+      question = scenario.question(task, blocking: blocking)
+      job = scenario.job(kind: "question", task: task, target: question, state: run ? "claimed" : "queued",
+        seat: (scenario.orchestrator if run), attempt_number: second ? 2 : 1)
+      kind = run ? :run : :queue
+      make_job_due(job, kind)
+      due_at = Leverage::Timers.effective_at(task, Leverage::Timers.job_due_at(job.reload, kind))
+      before = last_seq
+      outcome = timer(kase.command, "job_id" => job.id)
+      written = events_after(before)
+
+      assert outcome.completed?
+      assert_equal kase.events + (second ? (blocking ? %w[hold.opened inbox.opened] : %w[inbox.opened]) : []), written.map(&:type)
+      assert_equal [ job.id ], outcome.result.fetch("timed_out_job_ids")
+      assert_equal "timed_out", job.reload.state
+      assert_equal({ [ "app", nil, due_at ] => written.size }, written.map { |event|
+        [ event.actor_kind, event.command_id, event.effective_at ]
+      }.tally)
+      if second
+        assert_equal "passed_on", question.reload.outcome
+        assert_equal({ "question_id" => question.id }, InboxItem.find(written.last.subject_id).facts)
+        assert_empty Job.where(target_id: question.id, state: "queued")
+      else
+        retry_job = Job.find_by!(target_id: question.id, state: "queued")
+        assert_equal [ 2, due_at, job.input ], retry_job.attributes.values_at("attempt_number", "queued_at", "input")
+        assert_equal "open", question.reload.outcome
+      end
+    end
+  end
 end

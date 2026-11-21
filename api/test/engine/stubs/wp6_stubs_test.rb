@@ -48,16 +48,14 @@ class WP6StubsTest < ActiveSupport::TestCase
     stub = "Leverage::JobInputs::Question".safe_constantize
     assert stub, "Leverage::JobInputs::Question is defined"
     assert_respond_to stub, :call
-    error = assert_raises(NotImplementedError) { stub.call(nil, nil) }
-    assert_equal "not built yet", error.message
+    assert_nil stub.call(nil, nil)
   end
 
   test "JobResults::Question.check_shape provides its handoff answer" do
     stub = "Leverage::JobResults::Question".safe_constantize
     assert stub, "Leverage::JobResults::Question is defined"
     assert_respond_to stub, :check_shape
-    error = assert_raises(NotImplementedError) { stub.check_shape(nil, nil) }
-    assert_equal "not built yet", error.message
+    assert_nil stub.check_shape(nil, nil)
   end
 
   test "JobResults::Question.refusals provides its handoff answer" do
@@ -71,8 +69,7 @@ class WP6StubsTest < ActiveSupport::TestCase
     stub = "Leverage::JobResults::Question".safe_constantize
     assert stub, "Leverage::JobResults::Question is defined"
     assert_respond_to stub, :perform
-    error = assert_raises(NotImplementedError) { stub.perform(nil, nil, nil, seat: nil, answer: nil, tokens: nil, spend: nil) }
-    assert_equal "not built yet", error.message
+    assert_nil stub.perform(nil, nil, nil, seat: nil, answer: nil, tokens: nil, spend: nil)
   end
 
   %w[question_job_queue_timeout question_job_run_timeout].each do |command|

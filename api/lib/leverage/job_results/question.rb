@@ -3,15 +3,11 @@ module Leverage
     module Question
       module_function
 
-      def check_shape(_job, _answer)
-        raise NotImplementedError, "not built yet"
-      end
+      def check_shape(_job, _answer); end
 
       def refusals(_task) = []
 
-      def perform(_ctx, _job, _task, seat:, answer:, tokens:, spend:)
-        raise NotImplementedError, "not built yet"
-      end
+      def perform(_ctx, _job, _task, seat:, answer:, tokens:, spend:); end
     end
   end
 end

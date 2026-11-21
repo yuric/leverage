@@ -3,7 +3,7 @@ module Leverage
     module MarkQuestionRead
       module_function
 
-      def call(_question) = nil
+      def call(_question, seat: nil) = nil
     end
   end
 end

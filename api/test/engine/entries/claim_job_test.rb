@@ -108,4 +108,37 @@ class ClaimJobTest < ActiveSupport::TestCase
 
     assert_refused("not_eligible", claim_job(@orchestrator))
   end
+
+  test "claiming an approval job starts its check attempt" do
+    task = scenario.task(state: "working", actions: [ { kind: "publish", description: "Publish the sample." } ])
+    action = Action.find_by!(task_id: task.id)
+    check = scenario.rule_check(task, rule: model_rule(hook: "action.requested"), subject: action, attempts: 0)
+    request = Leverage::Transitions::Request.new(command: "request_action", workspace_id: scenario.workspace_id,
+      caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
+    attempt = Leverage::RuleChecks.queue_attempt(scenario.context(request: request), check, kind: "approval")
+    job = Job.find(attempt.job_id)
+    outcome = nil
+    calls = answering(Leverage::JobInputs::Approval, :call, ->(*) { {} }) do
+      outcome = assert_completed(claim_job(@orchestrator))
+    end
+
+    assert_equal [ job.id, "approval" ], outcome.result.values_at("job_id", "kind")
+    assert_equal job.id, calls.sole.arguments.first.id
+    assert_equal @orchestrator.id, RuleCheckAttempt.find_by!(job_id: job.id).checker_seat_id
+    assert Event.exists?(workspace_id: scenario.workspace_id, type: "check.started", subject_id: check.id)
+    assert_equal (job.reload.claimed_at + 300).utc.iso8601(6), outcome.result.fetch("run_due_at")
+  end
+
+  test "a seat that built a task cannot claim its question job after becoming an orchestrator" do
+    former_builder = own_seat
+    task = scenario.task(state: "working", builder: former_builder)
+    assert_completed(seat_command(former_builder, "release", { "id" => task.id, "reason" => "unable_to_continue" }))
+    former_builder.update!(role: "orchestrator")
+    question = scenario.question(task)
+    job = scenario.job(kind: "question", task: task, target: question)
+
+    assert_refused("not_eligible", claim_job(former_builder))
+    assert_equal "queued", job.reload.state
+    assert_equal job.id, assert_completed(claim_job(@orchestrator)).result.fetch("job_id")
+  end
 end

@@ -3,9 +3,7 @@ module Leverage
     module Question
       module_function
 
-      def call(_job, _task)
-        raise NotImplementedError, "not built yet"
-      end
+      def call(_job, _task) = nil
     end
   end
 end
