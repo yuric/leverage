@@ -159,6 +159,8 @@ module Leverage
         end
 
         def limit_hold(seat, task)
+          return [ nil, nil ] if Candidates.first_available(seat, task, @now)
+
           reset = Candidates.earliest_reset(seat, task, @now)
           return [ reset.id, reset.limited_until ] if reset
 
