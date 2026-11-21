@@ -74,4 +74,17 @@ class WP6StubsTest < ActiveSupport::TestCase
     error = assert_raises(NotImplementedError) { stub.perform(nil, nil, nil, seat: nil, answer: nil, tokens: nil, spend: nil) }
     assert_equal "not built yet", error.message
   end
+
+  %w[question_job_queue_timeout question_job_run_timeout].each do |command|
+    test "#{command} runs without a registered timer while pending" do
+      scenario = Scenario.new
+      before = scenario.workspace.reload.last_seq
+      outcome = nil
+
+      assert_nothing_raised { outcome = Leverage::Sweep.timer(scenario.workspace_id, command) }
+
+      assert outcome.completed?
+      assert_equal before, scenario.workspace.reload.last_seq
+    end
+  end
 end
