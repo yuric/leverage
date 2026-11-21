@@ -56,6 +56,18 @@ class FinishingTest < ActiveSupport::TestCase
     assert_equal [ "action_unconfirmed" ], Leverage::Holds.open_holds(task).map(&:reason)
   end
 
+  test "a close carrying a lease replaces the holder's earlier lease" do
+    task = @scenario.finishing_task(builder: @builder, actions: [ { kind: "send", state: "approved" } ])
+    ctx = @scenario.context
+    hold = F.lose_builder(ctx, task, cause: nil)
+    Leverage::Holds.close(ctx, hold: hold, task: task, lease_seat_id: @builder.id) do |event|
+      F.settle(ctx, task, by: event)
+    end
+    assert_equal @builder.id, task.reload.holder_seat_id
+    assert_in_delta ctx.at + ctx.workspace.lease_length_seconds, task.lease_due_at, 0.000001
+    assert_nil task.resume_pending_since
+  end
+
   private
 
   def waiting_task

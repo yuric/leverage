@@ -27,6 +27,10 @@ class StateTableFinishingTest < ActiveSupport::TestCase
         assert task.lease_due_at
         assert_equal @builder.id, events.find { |event| kase.events.include?(event.type) }.payload.fetch("lease_seat_id")
       end
+      if kase.guard.include?("builder_busy")
+        assert_nil task.holder_seat_id
+        assert_nil events.find { |event| event.type == "action.approved" }.payload.fetch("lease_seat_id")
+      end
       assert_nil task.holder_seat_id if kase.to == "done"
     end
   end
@@ -51,10 +55,10 @@ class StateTableFinishingTest < ActiveSupport::TestCase
   test "approval answers only the matching action hold" do
     task = finishing("requested", "requested")
     first, second = Action.where(task_id: task.id).order(:position)
-    other = @scenario.hold(task, reason: "owner_approval", facts: { action_id: second.id })
+    other = approval_hold(task, second)
     assert_equal "invalid_state", T.apply(request_for("approve_action", task, first)).refusal.code
 
-    own = @scenario.hold(task, reason: "owner_approval", facts: { action_id: first.id })
+    own = approval_hold(task, first)
     assert T.apply(request_for("approve_action", task, first)).completed?
     assert_equal "approved", first.reload.state
     assert own.reload.closed_at
@@ -66,7 +70,8 @@ class StateTableFinishingTest < ActiveSupport::TestCase
     task = finishing("requested")
     action = Action.find_by!(task_id: task.id)
     orchestrator = @scenario.orchestrator
-    job = @scenario.job(kind: "approval", task: task, target: action, state: "finished", seat: orchestrator)
+    rule = @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+    job = completed_approval(task, action, rule, orchestrator, "approved")
     %w[approve_action stop_action].each do |command|
       params = { id: action.id, job_id: job.id }
       request = T::Request.new(command: command, workspace_id: task.workspace_id, caller_kind: "seat",
@@ -77,13 +82,33 @@ class StateTableFinishingTest < ActiveSupport::TestCase
     assert_equal "requested", action.reload.state
   end
 
+  test "an approval job can only run the action command for its recorded decision" do
+    orchestrator = @scenario.orchestrator
+    rule = @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+
+    { "approved" => "stop_action", "stopped" => "approve_action" }.each do |effect, wrong_command|
+      task = finishing("requested")
+      action = Action.find_by!(task_id: task.id)
+      job = completed_approval(task, action, rule, orchestrator, effect)
+      key = "key-#{SecureRandom.hex(6)}"
+      request = T::Request.new(command: "submit_job_result", workspace_id: task.workspace_id, caller_kind: "seat",
+        caller_id: orchestrator.id, key: key, request_hash: nil, params: { id: job.id })
+      ctx = @scenario.context(request: request)
+      ctx.emit("job.finished", task: task, subject: job, payload: {})
+
+      assert_equal :refused, T.run_as(ctx, wrong_command, requester: orchestrator, key: key,
+        params: { id: action.id, job_id: job.id })
+      assert_equal "requested", action.reload.state
+    end
+  end
+
   private
 
   def prepare(kase)
     task = kase.invalid_state? ? non_finishing(kase.from) : finishing_for_row(kase)
     action = Action.find_by!(task_id: task.id, position: 1)
     if kase.command == "approve_action" && kase.row && kase.refusal.nil?
-      @scenario.hold(task, reason: "owner_approval", facts: { action_id: action.id })
+      approval_hold(task, action)
     end
     if task.holder_seat_id && WORK.include?(kase.command)
       lease = Leverage::Briefing.lease_event(task, seat: @builder)
@@ -93,6 +118,19 @@ class StateTableFinishingTest < ActiveSupport::TestCase
     end
     @before = Event.where(workspace_id: @scenario.workspace_id).maximum(:seq)
     [ task, action ]
+  end
+
+  def completed_approval(task, action, rule, orchestrator, effect)
+    check = @scenario.rule_check(task, rule: rule, subject: action, checker: orchestrator, result: "applied",
+      effect: effect)
+    job = Job.find(RuleCheckAttempt.find_by!(rule_check_id: check.id).job_id)
+    job.update!(kind: "approval")
+    job
+  end
+
+  def approval_hold(task, action)
+    Leverage::Holds.open(@scenario.context, task: task, reason: "owner_approval", action_id: action.id,
+      facts: { action_id: action.id })
   end
 
   def non_finishing(state)
@@ -105,9 +143,10 @@ class StateTableFinishingTest < ActiveSupport::TestCase
   def finishing_for_row(kase)
     case kase.command
     when "approve_action"
-      @scenario.task(state: "working", builder: @builder) if kase.guard.include?("builder_busy")
       states = kase.guard.include?("approvals_pending") ? %w[requested requested] : %w[requested]
-      finishing(*states)
+      task = finishing(*states)
+      @scenario.task(state: "working", builder: @builder) if kase.guard.include?("builder_busy")
+      task
     when "grant_action_lease"
       finishing("approved", holder: false)
     when "start_action"

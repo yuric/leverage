@@ -45,12 +45,21 @@ class JobInputsApprovalTest < ActiveSupport::TestCase
   end
 
   test "the second queue miss passes to the owner and cannot be re-run" do
-    job = create_job(state: "queued", attempt_number: 2, queued_at: @scenario.database_now - 30.minutes)
+    job = create_job(state: "queued", queued_at: @scenario.database_now - 30.minutes)
+    Leverage::Sweep.timer(@scenario.workspace_id, "orchestrator_offline")
+    assert InboxItem.exists?(workspace_id: @task.workspace_id, kind: "orchestrator_offline", state: "open")
     Leverage::Sweep.timer(@scenario.workspace_id, "check_queue_timeout", "job_id" => job.id)
+    retry_attempt = RuleCheckAttempt.find_by!(rule_check_id: @check.id, attempt_number: 2)
+    retry_attempt.update!(queued_at: @scenario.database_now - 30.minutes)
+    Leverage::Sweep.timer(@scenario.workspace_id, "check_queue_timeout", "job_id" => retry_attempt.job_id)
     assert_equal "error", @check.reload.result
     assert_equal [ "owner_approval" ], Leverage::Holds.open_holds(@task).map(&:reason)
     result = apply("rerun_check", { "id" => @check.id }, caller: @scenario.owner)
     assert_equal "invalid_state", result.refusal&.code
+    @seat.update!(last_polled_at: @scenario.database_now)
+    Leverage::Sweep.timer(@scenario.workspace_id, "orchestrator_offline")
+    refute InboxItem.exists?(workspace_id: @task.workspace_id, kind: "orchestrator_offline", state: "open")
+    assert_equal 2, RuleCheckAttempt.where(rule_check_id: @check.id).count
   end
 
   private

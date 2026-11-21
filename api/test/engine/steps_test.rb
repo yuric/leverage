@@ -30,6 +30,7 @@ class StepTrackerTest < ActiveSupport::TestCase
       expect = command.fetch("expect")
       @bodies[command["key"]] = command.fetch("body") if command["key"]
       rows_for(command)
+      normalize_first_action_check(expect) if name == "04-two-actions-custom-rule" && index == 15
       ids = ActiveRecord::Base.transaction(requires_new: true) do
         ctx = @scenario.context(at: Time.iso8601(command.fetch("at")))
         expect.fetch("events").map { |event| append_expected(ctx, event).id }
@@ -38,6 +39,25 @@ class StepTrackerTest < ActiveSupport::TestCase
       yield(index + 1, ids) if block_given?
     end
     Event.find(@bound_to_real.values.first).task_id
+  end
+
+  # WP12 updates this trace's frozen references. steps.json opens check on
+  # the first blocking check queued. Trace 04 currently points to the send
+  # approval even though the earlier publish gate starts the check step.
+  def normalize_first_action_check(expect)
+    opened = expect.fetch("steps_opened").first
+    closed = expect.fetch("steps_closed").first
+    queues = expect.fetch("events").select { |event| event["type"] == "check.queued" && event.dig("payload", "blocking") }
+    assert_equal 2, queues.size
+    first_queue, later_queue = queues
+    first_ref = first_queue.fetch("ref")
+    later_ref = later_queue.fetch("ref")
+    assert_equal first_queue.dig("payload", "action_id"), opened.fetch("subject_id")
+    assert_not_equal later_queue.dig("payload", "action_id"), opened.fetch("subject_id")
+    return if [ opened["opening_event_id"], closed["closing_event_id"] ] == [ first_ref, first_ref ]
+
+    assert_equal [ later_ref, later_ref ], [ opened["opening_event_id"], closed["closing_event_id"] ]
+    opened["opening_event_id"] = closed["closing_event_id"] = first_ref
   end
 
   # The rows a trace's events are about that a command's entry would make:
@@ -615,9 +635,10 @@ class StepTrackerTest < ActiveSupport::TestCase
     @scenario = Scenario.new
     task = @scenario.task(state: "in_review")
     review = @scenario.review(task)
+    criterion = Criterion.find_by!(task_id: task.id, kind: "build")
     reassigned = in_context(key: "k-escalate", caller: [ "seat", review.reviewer_seat_id ]) do |ctx|
       ctx.emit("review.failed", task: task, subject: review,
-        payload: { failed_criterion_ids: [], failed_rule_check_id: nil, lease_seat_id: nil, wait_cause: nil })
+        payload: { failed_criterion_ids: [ criterion.id ], failed_rule_check_id: nil, lease_seat_id: nil, wait_cause: nil })
       ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil })
     end
 

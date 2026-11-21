@@ -118,6 +118,17 @@ class AcknowledgeBriefingTest < ActiveSupport::TestCase
     assert_equal "not_holder", apply(builder, current(task, builder)).refusal.code
   end
 
+  test "a finishing lease that already expired leaves no holder to acknowledge" do
+    builder = @scenario.seat
+    task = @scenario.finishing_task(builder: builder, actions: [
+      { description: "Publish the sample", state: "approved" }
+    ])
+    task.update!(holder_seat_id: nil, lease_due_at: nil)
+    @scenario.append("task.lease_expired", task: task, payload: { wait_cause: nil })
+
+    assert_equal "not_holder", apply(builder, current(task, builder)).refusal.code
+  end
+
   test "an unknown task is not found" do
     assert_raises(T::NotFound) { apply(@builder, "id" => SecureRandom.uuid, "briefing_hash" => "made-up") }
   end

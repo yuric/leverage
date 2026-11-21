@@ -50,6 +50,20 @@ class HoldsTest < ActiveSupport::TestCase
     assert_equal %w[waive return_for_rework cancel override_once], InboxItem.find_by!(hold_id: hold.id).choices
   end
 
+  test "closing the last hold under a fresh action lease leaves an acknowledgement due without resume" do
+    task = @scenario.finishing_task(builder: @builder, holder: false,
+      actions: [ { kind: "send", description: "Send the example.", state: "approved" } ])
+    hold = H.open(context, task: task, reason: "action_unconfirmed")
+    ctx = context
+
+    task.update!(holder_seat_id: @builder.id)
+    Leverage::Leases.grant(ctx, task, paused: true)
+    H.close(ctx, hold: hold, task: task, lease_seat_id: @builder.id, choice: "offer_again")
+
+    assert_nil task.reload.resume_pending_since
+    assert_equal ctx.at + 600, task.lease_due_at
+  end
+
   test "open writes the hold, hold.opened, the Needs you item and inbox.opened caused by it" do
     task = working_task
     ctx = context
