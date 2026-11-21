@@ -1,0 +1,41 @@
+{
+  "id": "07-packing-checklist",
+  "label": "approve",
+  "also_accepted": [],
+  "category": "matches",
+  "why": "The checked checklist and the sole recipient group match the contract.",
+  "contract": {
+    "title": "Send packing checklist to dispatch",
+    "goal": "Give the dispatch leads the final packing checklist for the test shipment.",
+    "details": "Send packing-checklist-v3.pdf to the dispatch leads group only.",
+    "criteria": [
+      {
+        "text": "The PDF has version 3 on the cover and seven checks, including the final seal check.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [
+      {
+        "kind": "send",
+        "description": "Send packing-checklist-v3.pdf to the dispatch leads group only."
+      }
+    ],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  },
+  "action": {
+    "kind": "send",
+    "description": "Send packing-checklist-v3.pdf to the dispatch leads group only.",
+    "position": 1
+  },
+  "review": {
+    "handoff_note": "The outgoing draft has the version 3 PDF attached.",
+    "review_notes": "The cover, seven checks, and sole dispatch leads recipient group match the contract.",
+    "evidence": "Draft preview shows one attachment named packing-checklist-v3.pdf and the dispatch leads group in To."
+  }
+}
