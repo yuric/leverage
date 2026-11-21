@@ -121,7 +121,7 @@ public struct Criterion: Codable, Equatable, Sendable {
 }
 
 /// `Action`: an outward action in a task's contract.
-public struct Action: Codable, Equatable, Sendable {
+public struct OutwardAction: Codable, Equatable, Sendable {
     public let id: UUID
     public let taskID: UUID
     public let kind: ActionKind
@@ -129,10 +129,14 @@ public struct Action: Codable, Equatable, Sendable {
     public let state: ActionState
     public let approvedByKind: ActorKind?
     public let approvedByID: UUID?
+    public let approvedAt: Date?
+    public let position: Int
+    public let stoppedByRuleCheckID: UUID?
 
     public init(
         id: UUID, taskID: UUID, kind: ActionKind, description: String, state: ActionState,
-        approvedByKind: ActorKind? = nil, approvedByID: UUID? = nil
+        approvedByKind: ActorKind? = nil, approvedByID: UUID? = nil, approvedAt: Date? = nil,
+        position: Int = 1, stoppedByRuleCheckID: UUID? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -141,15 +145,22 @@ public struct Action: Codable, Equatable, Sendable {
         self.state = state
         self.approvedByKind = approvedByKind
         self.approvedByID = approvedByID
+        self.approvedAt = approvedAt
+        self.position = position
+        self.stoppedByRuleCheckID = stoppedByRuleCheckID
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, description, state
+        case id, kind, description, state, position
         case taskID = "task_id"
         case approvedByKind = "approved_by_kind"
         case approvedByID = "approved_by_id"
+        case approvedAt = "approved_at"
+        case stoppedByRuleCheckID = "stopped_by_rule_check_id"
     }
 }
+
+public typealias Action = OutwardAction
 
 /// `Review`: one review of one round of a task.
 public struct Review: Codable, Equatable, Sendable {
@@ -217,11 +228,15 @@ public struct Question: Codable, Equatable, Sendable {
     public let basis: QuestionBasis?
     public let answeredByKind: ActorKind?
     public let answeredByID: UUID?
+    public let askedAt: Date
+    public let answeredAt: Date?
+    public let overturned: Bool
 
     public init(
         id: UUID, taskID: UUID, askingSeatID: UUID, text: String, assumption: String, blocking: Bool,
         outcome: QuestionOutcome, answer: String? = nil, basis: QuestionBasis? = nil,
-        answeredByKind: ActorKind? = nil, answeredByID: UUID? = nil
+        answeredByKind: ActorKind? = nil, answeredByID: UUID? = nil,
+        askedAt: Date = Date(timeIntervalSince1970: 0), answeredAt: Date? = nil, overturned: Bool = false
     ) {
         self.id = id
         self.taskID = taskID
@@ -234,14 +249,19 @@ public struct Question: Codable, Equatable, Sendable {
         self.basis = basis
         self.answeredByKind = answeredByKind
         self.answeredByID = answeredByID
+        self.askedAt = askedAt
+        self.answeredAt = answeredAt
+        self.overturned = overturned
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, text, assumption, blocking, outcome, answer, basis
+        case id, text, assumption, blocking, outcome, answer, basis, overturned
         case taskID = "task_id"
         case askingSeatID = "asking_seat_id"
         case answeredByKind = "answered_by_kind"
         case answeredByID = "answered_by_id"
+        case askedAt = "asked_at"
+        case answeredAt = "answered_at"
     }
 }
 
@@ -319,6 +339,42 @@ public struct InboxItem: Codable, Equatable, Sendable {
         self.resolvedByKind = resolvedByKind
         self.resolvedByID = resolvedByID
         self.resolvedAt = resolvedAt
+    }
+
+    public var questionID: UUID? {
+        factID("question_id")
+    }
+
+    public var actionID: UUID? {
+        factID("action_id")
+    }
+
+    public var actionIDs: [UUID] {
+        facts["action_ids"]?.arrayValue?.compactMap { $0.stringValue.flatMap(UUID.init(uuidString:)) } ?? []
+    }
+
+    public var ruleCheckID: UUID? {
+        factID("rule_check_id")
+    }
+
+    public var anyActionStarted: Bool? {
+        facts["any_action_started"]?.boolValue
+    }
+
+    public var approvedByKind: ActorKind? {
+        facts["approved_by_kind"]?.stringValue.flatMap(ActorKind.init(rawValue:))
+    }
+
+    public var approvedByID: UUID? {
+        factID("approved_by_id")
+    }
+
+    public var builderAnnouncedStart: Bool? {
+        facts["builder_announced_start"]?.boolValue
+    }
+
+    private func factID(_ name: String) -> UUID? {
+        facts[name]?.stringValue.flatMap(UUID.init(uuidString:))
     }
 
     /// The checks waiting, for an open `orchestrator_offline` item: the count

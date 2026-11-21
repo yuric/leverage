@@ -4,8 +4,9 @@ import Foundation
 /// precedence table. It is not consumed: it repeats until the seat acts.
 public struct NextItem: Codable, Equatable, Sendable {
     public let kind: NextKind
-    /// The task, the question or, for `command`, the command's key; nil for
-    /// `review`, `job`, `task` and `none`.
+    /// The question for `answer`, the command's key for `command`, and the
+    /// task for `briefing_changed`, `resume`, `action` and `rework`.
+    /// Nil for `review`, `job`, `task` and `none`.
     public let id: String?
     /// Set only for `briefing_changed` when the seat holds a review.
     public let reviewID: UUID?

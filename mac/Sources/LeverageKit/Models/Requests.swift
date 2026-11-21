@@ -38,7 +38,7 @@ public struct CriterionInput: Codable, Equatable, Sendable {
 }
 
 /// `ActionInput`: an outward action as the contract form sends it.
-public struct ActionInput: Encodable, Equatable, Sendable {
+public struct ActionInput: Codable, Equatable, Sendable {
     public let kind: ActionKind
     public let description: String
 
@@ -467,7 +467,7 @@ public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
 
 extension Setting where Value: Encodable {
     /// Writes nothing for `keep`, the value for `set`, and null for `clear`.
-    fileprivate func write<Key: CodingKey>(to container: inout KeyedEncodingContainer<Key>, forKey key: Key) throws {
+    func write<Key: CodingKey>(to container: inout KeyedEncodingContainer<Key>, forKey key: Key) throws {
         switch self {
         case .keep: break
         case .set(let value): try container.encode(value, forKey: key)

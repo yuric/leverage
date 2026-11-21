@@ -39,7 +39,8 @@ struct QuestionsAndApprovalsModelsTests {
             #expect(read.input.questionInput == nil)
         }
 
-        claim["input"] = try #require(ContractDocument.examples(of: otherComponent).first)
+        let wrongInput = try #require(ContractDocument.examples(of: otherComponent).first)
+        claim["input"] = wrongInput
         let wrong = try LeverageJSON.decoder().decode(JobClaim.self, from: ContractDocument.data(.object(claim)))
         #expect(wrong.input.questionInput == nil && wrong.input.approvalInput == nil)
     }
@@ -57,9 +58,59 @@ struct QuestionsAndApprovalsModelsTests {
         #expect(set == .object(["recovery_time_ceiling_seconds": .number(900)]))
     }
 
+    @Test("next reports a question ID for an answer and a task ID for an outward action")
+    func nextWork() throws {
+        // NextItem's examples cover task and briefing_changed. Use the
+        // question and action examples to exercise the two added kinds.
+        let questionID = try #require(ContractDocument.examples(of: "Question").first?["id"])
+        let taskID = try #require(ContractDocument.examples(of: "Action").first?["task_id"])
+        for (kind, id, expected): (String, JSONValue, NextKind) in [
+            ("answer", questionID, .answer), ("action", taskID, .action),
+        ] {
+            let payload = JSONValue.object(["kind": .string(kind), "id": id, "review_id": .null])
+            let item = try LeverageJSON.decoder().decode(NextItem.self, from: ContractDocument.data(payload))
+            #expect(item.kind == expected && item.id == id.stringValue && item.reviewID == nil)
+        }
+    }
+
+    @Test("an older HTTP landing prompt supplies the default connection")
+    func olderLandingPrompt() throws {
+        var prompt = try #require(ContractDocument.examples(of: "LandingPrompt").first?.objectValue)
+        prompt.removeValue(forKey: "connection")
+        let result = try LeverageJSON.decoder().decode(LandingPrompt.self, from: ContractDocument.data(.object(prompt)))
+        #expect(result.connection == .http)
+    }
+
+    @Test("mutations send null when clearing a project, budget, or task cap")
+    func clearAmountsAndProject() throws {
+        #expect(try Self.encoded(ChangeTaskProjectRequest(projectID: nil)) == .object(["project_id": .null]))
+        #expect(try Self.encoded(ChangeBudgetRequest(budget: nil)) == .object(["budget": .null]))
+        #expect(try Self.encoded(ChangeTaskCapRequest(budgetCap: nil)) == .object(["budget_cap": .null]))
+    }
+
+    @Test("question and approval job requests encode the result and its usage")
+    func jobResults() throws {
+        let question = JobResultRequest(result: .question(QuestionJobResult(outcome: .passedOn)), tokens: 10, spend: 1)
+        let approval = JobResultRequest(
+            result: .approval(ApprovalJobResult(decision: .approve, reason: "example")), tokens: 20, spend: 2)
+        let approvalExample = try #require(ContractDocument.examples(of: "ApprovalJobResult").first)
+
+        #expect(try Self.encoded(question) == .object([
+            "tokens": .number(10), "spend": .number(1),
+            "result": .object(["outcome": .string("passed_on"), "answer": .null, "basis": .null]),
+        ]))
+        #expect(try Self.encoded(approval) == .object([
+            "tokens": .number(20), "spend": .number(2), "result": approvalExample,
+        ]))
+        #expect(ContractDocument.schema("QuestionJobResult")?["properties"]?["answer"]?["maxLength"]?.intValue
+                == QuestionJobResult.answerLimit)
+        #expect(ContractDocument.schema("ApprovalJobResult")?["properties"]?["reason"]?["maxLength"]?.intValue
+                == ApprovalJobResult.reasonLimit)
+    }
+
     private static let roundTrips: [String: @Sendable (JSONValue) throws -> JSONValue] = [
         "Action": roundTrip(OutwardAction.self),
-        "ActionInput": roundTripActionInput,
+        "ActionInput": roundTrip(ActionInput.self),
         "AnsweredQuestion": roundTrip(AnsweredQuestion.self),
         "ApprovalJobInput": roundTrip(ApprovalJobInput.self),
         "ApprovalJobResult": roundTrip(ApprovalJobResult.self),
@@ -90,12 +141,6 @@ struct QuestionsAndApprovalsModelsTests {
             let model = try LeverageJSON.decoder().decode(type, from: ContractDocument.data(example))
             return try encoded(model)
         }
-    }
-
-    private static func roundTripActionInput(_ example: JSONValue) throws -> JSONValue {
-        let kind = try #require(example["kind"]?.stringValue.flatMap(ActionKind.init(rawValue:)))
-        let description = try #require(example["description"]?.stringValue)
-        return try encoded(ActionInput(kind: kind, description: description))
     }
 
     private static func encoded<T: Encodable>(_ model: T) throws -> JSONValue {

@@ -104,10 +104,12 @@ public struct Briefing: Codable, Equatable, Sendable {
     public let brief: [BriefEntry]
     public let roleFile: String
     public let contract: BriefingContract
+    /// The task's answers. They do not change the briefing hash.
+    public let answers: [AnsweredQuestion]
 
     public init(
         hash: String, versions: BriefingVersions, rules: [BriefingRule] = [], brief: [BriefEntry] = [],
-        roleFile: String, contract: BriefingContract
+        roleFile: String, contract: BriefingContract, answers: [AnsweredQuestion] = []
     ) {
         self.hash = hash
         self.versions = versions
@@ -115,10 +117,11 @@ public struct Briefing: Codable, Equatable, Sendable {
         self.brief = brief
         self.roleFile = roleFile
         self.contract = contract
+        self.answers = answers
     }
 
     enum CodingKeys: String, CodingKey {
-        case hash, versions, rules, brief, contract
+        case hash, versions, rules, brief, contract, answers
         case roleFile = "role_file"
     }
 }
