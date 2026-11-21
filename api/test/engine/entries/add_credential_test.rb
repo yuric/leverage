@@ -162,6 +162,11 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal "codex", taken.reload.provider
   end
 
+  test "a second Grok login is invalid even while the first add still runs" do
+    assert_completed(owner_command("add_credential", body(provider: "grok")))
+    assert_raises(T::Invalid) { owner_command("add_credential", body(provider: "grok", name: "Made-up other Grok")) }
+  end
+
   test "a removed credential id cannot be used for a new account" do
     removed = @scenario.credential(provider: "codex")
     assert_completed(owner_command("remove_credential", { "id" => removed.id }))

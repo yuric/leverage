@@ -13,6 +13,14 @@ require_relative "../support/walk"
 class LogAuditTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
+  test "an action reentered by a check override can stop on another failed gate" do
+    walk = Walk.new(seed: 991_672_114, steps: 120, credentials: true).run
+    override = Command.find_by!(workspace_id: walk.workspace_id, key: "walk-991672114-100")
+    assert_equal "override_check", override.command
+    assert Event.exists?(workspace_id: walk.workspace_id, command_id: override.key, type: "action.stopped")
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+  end
+
   test "releasing a lease after the last approved action was overturned leaves the stopped action" do
     walk = Walk.new(seed: 10_101, steps: 120).run
     events = Event.where(workspace_id: walk.workspace_id)

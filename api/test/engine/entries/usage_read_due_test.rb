@@ -44,6 +44,22 @@ class UsageReadDueTest < ActiveSupport::TestCase
     assert_empty @requests
   end
 
+  test "a lost pickup no longer suppresses a scheduled read" do
+    @scenario.live_helper(at: @at)
+    credential = @scenario.credential
+    overdue = @scenario.helper_request(kind: "read_usage", credential: credential,
+      state: "picked_up", at: @at - 91.seconds)
+
+    assert fire_timer.completed?
+
+    assert_equal "failed", overdue.reload.state
+    assert_equal "timed_out", overdue.result.dig("checks", 0, "failure")
+    replacement = @requests.find_by!(credential_id: credential.id, state: "queued")
+    assert_not_equal overdue.id, replacement.id
+    assert fire_timer.completed?
+    assert_equal [ replacement.id ], @requests.where(credential_id: credential.id, state: "queued").pluck(:id)
+  end
+
   test "the timer purges old terminal usage read requests and retains readings and other requests" do
     credential = @scenario.credential
     reading = @scenario.reading(credential, observed_at: @at - 8.days, created_at: @at - 8.days)
