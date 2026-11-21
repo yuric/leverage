@@ -33,6 +33,76 @@ class LogAuditTest < ActiveSupport::TestCase
 
   def key_of(runner, symbol) = Leverage::Contract::TraceBinder.new(start: Time.current).id(symbol)
 
+  test "a reorder with three order changes and the hold changes from readings and reorders pass" do
+    runner = run_trace("24-reading-ends-a-limit-wait")
+    events = Event.where(workspace_id: runner.workspace_id).where("seq > ?", runner.setup_seq).order(:seq)
+    by_command = events.group_by(&:command_id).values.map { |group| group.map(&:type) }
+
+    assert_includes by_command, %w[credential.order_changed credential.order_changed credential.order_changed]
+    assert_includes by_command, %w[credential.order_changed credential.order_changed inbox.opened]
+    assert_includes by_command,
+      %w[credential.order_changed credential.order_changed credential.order_changed hold.closed credential.switched inbox.resolved]
+    assert_includes by_command, %w[hold.closed inbox.resolved]
+    assert_includes by_command, %w[hold.closed]
+    findings = audit(runner)
+    assert_empty findings, findings.join("\n")
+  end
+
+  test "a removal that opens a limit item on another credential's hold passes" do
+    scenario = Scenario.new
+    own = scenario.credential
+    fallback = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    scenario.limit_credential(own)
+    scenario.limit_credential(fallback, reset_at: scenario.database_now + 1.hour)
+    scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+    after = scenario.workspace.reload.last_seq
+
+    written = credential_receipt(scenario, "remove_credential", "id" => fallback.id)
+    assert_equal [ [ "credential.removed", nil ], [ "inbox.opened", task.id ] ], written.map { |event| [ event.type, event.task_id ] }
+    assert_equal written.first.id, written.last.cause_id
+    findings = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert_empty findings, findings.join("\n")
+  end
+
+  test "a credential.removed written beside another command is found" do
+    scenario = Scenario.new
+    credential = scenario.credential
+    written = credential_receipt(scenario, "rename_credential", "id" => credential.id, "name" => "Made-up renamed account")
+    refute_empty written
+
+    assert_unexpected_removal(scenario, written.first, credential)
+  end
+
+  test "a removal command that writes two credential.removed events is found" do
+    scenario = Scenario.new
+    credential = scenario.credential
+    other = scenario.credential
+    written = credential_receipt(scenario, "remove_credential", "id" => credential.id)
+    assert_equal [ "credential.removed" ], written.map(&:type)
+
+    assert_unexpected_removal(scenario, written.first, other)
+  end
+
+  def credential_receipt(scenario, command, params)
+    key = "audit-#{command}"
+    request = T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: key, request_hash: "c" * 64, params: params)
+    outcome = T.apply(request)
+    assert outcome.completed?, outcome.refusal&.code
+    Event.where(workspace_id: scenario.workspace_id, command_id: key).order(:seq).to_a
+  end
+
+  def assert_unexpected_removal(scenario, first, credential)
+    request = T::Request.new(command: "audit_test", workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: first.command_id, request_hash: nil, params: {})
+    ActiveRecord::Base.transaction(requires_new: true) do
+      scenario.context(request: request, at: first.at).emit("credential.removed", subject: credential, payload: {})
+    end
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: first.seq - 1)
+    assert(found.any? { |line| line.include?(first.command_id) && line.include?("credential.removed") }, found.inspect)
+  end
+
   # Appends one event as if the command with this key wrote it later.
   def append_under(runner, key, type, task:, payload: {}, caller: nil, subject: nil)
     request = T::Request.new(command: "audit_test", workspace_id: runner.workspace_id, caller_kind: caller && "seat",

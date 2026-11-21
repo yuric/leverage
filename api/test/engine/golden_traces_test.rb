@@ -1,52 +1,19 @@
 require "test_helper"
 require_relative "../support/trace_runner"
 
-# Golden traces (PRD test 8, AT-6): run each served trace through the engine
-# and compare its events and steps field for field. The Credentials trace
-# runs its longest served prefix while the new entries are pending (CT-1).
+# Golden traces (PRD test 8, AT-6, CT-3): run each trace through the engine
+# and compare its events and steps field for field.
 class GoldenTracesTest < ActiveSupport::TestCase
-  # Trace => [milestone, number of leading commands with entries].
-  NOT_YET = { "24-reading-ends-a-limit-wait" => [ 6, 6 ] }.freeze
-
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
 
-  def self.served?(command)
-    Leverage::Transitions::Table.entry_for(command)
-    true
-  rescue Leverage::Transitions::Table::UnknownCommand
-    false
-  end
-
-  RUN = NAMES.select do |name|
-    Leverage::Contract.trace(name).fetch("commands").all? { |command| served?(command.fetch("command")) }
-  end.freeze
-
-  test "every trace is run whole or named in NOT_YET, and none is both" do
-    assert_equal NAMES, (RUN + NOT_YET.keys).sort
-    assert_empty RUN & NOT_YET.keys
-  end
-
-  test "each NOT_YET trace runs up to the first pending command" do
-    NOT_YET.each do |name, (milestone, prefix)|
-      assert_equal 6, milestone, name
-      commands = Leverage::Contract.trace(name).fetch("commands")
-      assert_equal prefix, commands.index { |command| !self.class.served?(command.fetch("command")) }, name
-    end
-  end
-
-  NOT_YET.each do |name, (_milestone, prefix)|
-    test "trace #{name} runs its first #{prefix} commands" do
-      runner = TraceRunner.new(name).run(prefix)
-      assert_empty runner.failures, runner.failures.join("\n")
-    end
-  end
-
-  RUN.each do |name|
+  NAMES.each do |name|
     test "trace #{name} runs whole and writes exactly its events and steps" do
       runner = TraceRunner.new(name).run
       assert_empty runner.failures, runner.failures.join("\n")
-      assert_empty Leverage::Replay.diff(runner.workspace_id), "the replay of #{name}'s log"
-      assert_empty Leverage::LogAudit.call(runner.workspace_id, after_seq: runner.setup_seq), "the log audit of #{name}"
+      diff = Leverage::Replay.diff(runner.workspace_id)
+      assert_empty diff, "the replay of #{name}'s log: #{diff.inspect}"
+      findings = Leverage::LogAudit.call(runner.workspace_id, after_seq: runner.setup_seq)
+      assert_empty findings, findings.join("\n")
     end
   end
 
