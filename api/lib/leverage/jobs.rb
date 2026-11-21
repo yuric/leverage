@@ -13,7 +13,7 @@ module Leverage
   # app runs, its run on its first available candidate (as Eligibility asks
   # of a builder or a reviewer), so the claim records the account that does
   # the work. A seat holds one job at a time and gets that one again (RD-40);
-  # otherwise the oldest queued job, by queue time, creation time and then id, of a task
+  # otherwise the oldest queued job, by queue time and then id (action batches use enqueue order), of a task
   # it never claimed as a builder (RC-49, from task.claimed). A job whose
   # due time has passed is never given out: its timer ends it (L399).
   #
@@ -24,6 +24,23 @@ module Leverage
     # The event fields a caller may name for every event a writer here
     # writes.
     EVENT_FIELDS = %i[effective_at actor_kind actor_id command_id cause_id].freeze
+
+    # Action jobs queued at the same effective time follow their enqueue
+    # events. A retried action check names its new job on check.queued.
+    # Other jobs keep the existing queued time and ID order (RD-35).
+    ACTION_QUEUE_ORDER = <<~SQL.squish.freeze
+      CASE WHEN jobs.kind IN ('rule_check', 'approval') AND EXISTS (
+        SELECT 1 FROM rule_checks
+        WHERE rule_checks.workspace_id = jobs.workspace_id AND rule_checks.id = jobs.target_id
+          AND rule_checks.hook = 'action.requested'
+      ) THEN (
+        SELECT MIN(events.seq) FROM events
+        WHERE events.workspace_id = jobs.workspace_id AND events.task_id = jobs.task_id AND (
+          (events.type = 'job.queued' AND events.subject_id = jobs.id) OR
+          (events.type = 'check.queued' AND events.subject_id = jobs.target_id AND events.payload->>'job_id' = jobs.id::text)
+        )
+      ) END ASC NULLS FIRST
+    SQL
 
     module_function
 
@@ -163,12 +180,12 @@ module Leverage
     # The oldest queued job of the seat's kinds whose queue time has not
     # run out, of a task the seat never claimed as a builder and that is
     # neither cancelled nor stripped of content. A Done task's jobs
-    # still run while it has content (RC-16). Jobs queued in one command
-    # share its effective time, so prefer the first row created.
+    # still run while it has content (RC-16). An action batch can queue
+    # more than one job at the same effective time.
     def claimable(seat, at)
       Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role)
         .where.not(task_id: built_by(seat)).where.not(task_id: unavailable_tasks(seat.workspace_id)).or(queued_without_task(seat))
-        .order(:queued_at, :created_at, :id).find { |job| !due?(job, :queue, at) }
+        .order(:queued_at, Arel.sql(ACTION_QUEUE_ORDER), :id).find { |job| !due?(job, :queue, at) }
     end
 
     def unavailable_tasks(workspace_id)
