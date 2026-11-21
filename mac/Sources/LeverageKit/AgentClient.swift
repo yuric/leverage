@@ -16,7 +16,8 @@ public struct AgentClient: AgentAPI {
     }
 
     public func next(wait: Int?) async throws -> NextItem {
-        try await transport.read(.getNext, waitSeconds: wait)
+        // Send the IF-14 default so the transport adds its timeout margin.
+        try await transport.read(.getNext, waitSeconds: wait ?? 30)
     }
 
     public func command(key: IdempotencyKey) async throws -> PlainOutcome {

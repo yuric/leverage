@@ -16,7 +16,8 @@ public struct HelperClient: HelperAPI {
     }
 
     public func next(wait: Int?) async throws -> HelperNext {
-        try await transport.read(.getHelperNext, waitSeconds: wait)
+        // The helper's next call (IF-15) shares the IF-14 wait default.
+        try await transport.read(.getHelperNext, waitSeconds: wait ?? 30)
     }
 
     public func reportRequestProgress(requestID: UUID, _ progress: HelperCheckProgress, key: IdempotencyKey)
