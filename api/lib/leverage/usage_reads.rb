@@ -5,6 +5,7 @@ module Leverage
   module UsageReads
     HELPERS_REPORT_WITHIN = 6 * Transitions::RecordPoll::HELPER_SECONDS
     READ_INTERVAL = 9.minutes
+    PICKUP_TIMEOUT = 90.seconds
     REQUEST_RETENTION = 7.days
     SWEEP_LIMIT = 50
 
@@ -40,6 +41,17 @@ module Leverage
     def purge(at, workspace_id:)
       HelperRequest.where(workspace_id: workspace_id, kind: "read_usage", state: %w[finished failed])
         .where(finished_at: ...at - REQUEST_RETENTION).delete_all
+    end
+
+    # Pickup is recorded before the helper receives the HTTP response.
+    # Leave ample time for the read and result delivery, then allow a retry.
+    def expire_pickups(at, workspace_id:)
+      result = {
+        "outcome" => "failed", "checks" => [ { "check" => "reading_taken", "passed" => false, "failure" => "timed_out" } ],
+        "tool_version" => nil, "plan" => nil, "account_email" => nil
+      }
+      unfinished(workspace_id).where(state: "picked_up", picked_up_at: ...at - PICKUP_TIMEOUT)
+        .update_all(state: "failed", result: result, finished_at: at, updated_at: at)
     end
 
     def unfinished(workspace_id)

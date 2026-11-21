@@ -97,8 +97,10 @@ struct UsageReadTests {
         let rig = try HelperRig()
         let readings = Self.recordReadings(rig)
         let started = Locked(false)
+        var timings = fastTimings
+        timings.readLimit = Patience.scaled(.seconds(30))
         let read = UsageRead(
-            api: rig.api, settings: rig.settings, timings: fastTimings, http: ProviderHTTP(), vault: MemoryTokenVault(),
+            api: rig.api, settings: rig.settings, timings: timings, http: ProviderHTTP(), vault: MemoryTokenVault(),
             log: quietLog, readers: { _ in ProbeReader(started: started) }, testedVersions: { _ in ["9876.5432.1098"] })
 
         _ = await read.run(loginRequest(UUID()))

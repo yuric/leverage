@@ -16,13 +16,15 @@ module Leverage
       # request carries (the provider's default the app fills in).
       #
       # A provider must match the kind, and only tokens carry the fixed
-      # mask. A second Gemini login (CL-20) and a credential id already
-      # in use are invalid. Duplicate names are checked within the provider
+      # mask. A second Gemini or Grok login and a used credential id
+      # are invalid. Duplicate names are checked within the provider
       # and kind, including adds still running.
       #
       # Params: "credential_id", "kind", "provider", "name", "masked_label",
       # "model", "effort", "strength_rank".
       class AddCredential < Entry
+        SINGLE_LOGIN_PROVIDERS = { "gemini" => "Gemini", "grok" => "Grok" }.freeze
+
         def load(ctx)
           params = ctx.request.params
           @id, @kind, @provider, @name = params.values_at("credential_id", "kind", "provider", "name")
@@ -31,8 +33,10 @@ module Leverage
           expected_label = @kind == "api_token" ? "••••••••" : nil
           raise Invalid, "The masked label does not match the credential kind" unless params["masked_label"] == expected_label
           raise Invalid, "A credential needs a name" unless @name.is_a?(String) && !@name.empty?
-          raise Invalid, "A Mac holds one Gemini login" if @provider == "gemini" && gemini_login?(ctx)
-          raise Invalid, "That credential id is taken" if @id.nil? || Credential.exists?(id: @id)
+          if (provider_name = SINGLE_LOGIN_PROVIDERS[@provider]) && existing_login?(ctx)
+            raise Invalid, "A Mac holds one #{provider_name} login"
+          end
+          raise Invalid, "That credential id is taken" if credential_id_taken?(ctx)
         end
 
         def refusals(ctx)
@@ -61,8 +65,13 @@ module Leverage
             .any? { |entry| entry.fetch("provider") == @provider && entry.fetch("kind") == @kind }
         end
 
-        def gemini_login?(ctx)
-          Credential.exists?(workspace_id: ctx.workspace.id, kind: "login", provider: "gemini")
+        def existing_login?(ctx)
+          Credential.exists?(workspace_id: ctx.workspace.id, kind: "login", provider: @provider)
+        end
+
+        def credential_id_taken?(ctx)
+          @id.nil? || Credential.exists?(id: @id) ||
+            Event.exists?(workspace_id: ctx.workspace.id, task_id: nil, type: "credential.removed", subject_id: @id)
         end
 
         def next_position(ctx)

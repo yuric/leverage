@@ -442,14 +442,22 @@ module Leverage
       problems
     end
 
-    # An override approves the stopped action under the action machine.
-    # The approval names the specific check override that caused it.
+    # An override can approve a stopped action or reenter an errored
+    # action check. If reentry finds another failed gate, the stopped
+    # event names that gate's finished check as its cause.
     def action_override?(name, event, events)
-      return false unless name == "override_check" && event.type == "action.approved"
+      return false unless name == "override_check"
 
-      events.any? do |cause|
-        cause.id == event.cause_id && cause.type == "check.overridden" && cause.task_id == event.task_id
-      end
+      override = events.find { |candidate| candidate.type == "check.overridden" && candidate.task_id == event.task_id }
+      return false unless override && override.seq < event.seq
+      return event.cause_id == override.id if event.type == "action.approved"
+      return false unless event.type == "action.stopped" && event.actor_kind == "app"
+
+      cause = Event.find_by(id: event.cause_id, workspace_id: event.workspace_id, task_id: event.task_id,
+        round: event.round, type: "check.finished")
+      cause && cause.seq < event.seq && cause.subject_id != override.subject_id &&
+        cause.payload.values_at("hook", "result", "subject_kind", "subject_id") ==
+          [ ACTION_HOOK, "failed", "action", event.subject_id ]
     end
 
     def cross_task_side_event?(event, events)

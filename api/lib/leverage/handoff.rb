@@ -259,18 +259,20 @@ module Leverage
         InboxItem.where(hold_id: open.id, state: "open", kind: ACCOUNT_SIGNED_OUT, credential_id: verified.id)
           .order(:opened_at).each { |item| resolve(ctx, item, task, choice) }
         open_blocker_item(ctx, open, task, seat, cause)
-      elsif open.reason == "credential_limit" && HANDOFF_ORDER_CHANGES.include?(ctx.request.command)
-        look_at_limit_item(ctx, open, task, seat, cause)
+      elsif HANDOFF_ORDER_CHANGES.include?(ctx.request.command)
+        look_at_order_items(ctx, open, task, seat, cause)
       end
     end
 
-    def look_at_limit_item(ctx, open, task, seat, cause)
-      if Candidates.due_at(seat, task, ctx.at)
-        InboxItem.where(hold_id: open.id, state: "open", kind: LIMIT_WITH_NO_RESET)
-          .order(:opened_at, :id).each { |item| resolve(ctx, item, task, nil) }
-      else
-        open_blocker_item(ctx, open, task, seat, cause, at: ctx.at)
+    def look_at_order_items(ctx, open, task, seat, cause)
+      due = Candidates.due_at(seat, task, ctx.at)
+      items = InboxItem.where(hold_id: open.id, state: "open").order(:opened_at, :id)
+      items.each do |item|
+        credential = Credential.find_by(id: item.credential_id, workspace_id: task.workspace_id)
+        still_eligible = credential && Candidates.kept_for?(seat, credential, task)
+        resolve(ctx, item, task, nil) unless still_eligible && !(due && item.kind == LIMIT_WITH_NO_RESET)
       end
+      open_blocker_item(ctx, open, task, seat, cause, at: ctx.at) unless due
     end
 
     # The item a credential hold with no open item and no due time needs:
@@ -377,7 +379,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :look_at_limit_item, :open_blocker_item, :go_on, :open_signed_out_item,
+    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :look_at_order_items, :open_blocker_item, :go_on, :open_signed_out_item,
       :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end

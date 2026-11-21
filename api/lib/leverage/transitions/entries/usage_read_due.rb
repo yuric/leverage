@@ -6,6 +6,7 @@ module Leverage
       class UsageReadDue < Entry
         def perform(ctx)
           workspace_id = ctx.workspace.id
+          UsageReads.expire_pickups(ctx.at, workspace_id: workspace_id)
           UsageReads.queue(ctx, UsageReads.due(ctx.at, workspace_id: workspace_id))
           UsageReads.purge(ctx.at, workspace_id: workspace_id)
         end
