@@ -17,6 +17,12 @@ struct HandoffRow: Identifiable, Equatable, Sendable {
     let handsOff: String
 }
 
+struct HandoffDropPreview: Equatable {
+    let targetID: UUID
+    let above: Bool
+    let hint: String
+}
+
 /// The Handoff tab: every account in the one handoff order, from
 /// `list_credentials` in `position` order, each with its state. The tab only
 /// reads; reordering is a later milestone's, and nothing here says it can be
@@ -37,6 +43,16 @@ final class HandoffModel {
 
     private(set) var state: State = .loading
     private(set) var rows: [HandoffRow] = []
+    private(set) var dropPreview: HandoffDropPreview?
+    private(set) var reorderFailure: String?
+
+    func canMoveUp(_ id: UUID) -> Bool { false }
+    func canMoveDown(_ id: UUID) -> Bool { false }
+    func moveUp(_ id: UUID) async {}
+    func moveDown(_ id: UUID) async {}
+    func previewDrop(of id: UUID, over targetID: UUID) {}
+    func clearDropPreview(over targetID: UUID) {}
+    func drop(_ id: UUID, over targetID: UUID) async {}
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void

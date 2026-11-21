@@ -62,7 +62,7 @@ struct NeedsYouModelTests {
         let row = try? #require(model.rows.first)
         #expect(row?.heading == "Claude, Personal is at its limit")
         #expect(
-            row?.body == "Fix the totals on the invoice page is waiting. Claude did not say when Claude, Personal is available again. When it is, choose Verify on Claude, Personal in Credentials and the task continues. If the agent's time on the task runs out first, the task goes back to waiting for any agent.")
+            row?.body == "Fix the totals on the invoice page is waiting. Claude did not say when Claude, Personal is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on Claude, Personal in Credentials.")
         #expect(row?.buttons.isEmpty == true)
     }
 

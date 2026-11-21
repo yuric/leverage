@@ -54,6 +54,14 @@ struct HandoffCopyTests {
         #expect(HandoffCopy.handsOffToNobody.text == "Hands off to nobody")
     }
 
+    @Test("move buttons and the drop hint have plain labels")
+    func reorderWords() {
+        #expect(HandoffCopy.moveUp.text == "Move up")
+        #expect(HandoffCopy.moveDown.text == "Move down")
+        #expect(HandoffCopy.dropHint.filled(["account": "Codex, Team", "number": "2"]) == "Drop to make Codex, Team number 2.")
+        #expect(HandoffCopy.orderChanged.text == "The list changed. Try again.")
+    }
+
     @Test("a row's state is one of the words HM-34 names")
     func stateWords() {
         #expect(HandoffCopy.stateReady.text == "Ready")
@@ -71,12 +79,10 @@ struct HandoffCopyTests {
         }
     }
 
-    @Test("nothing on the tab names a switch, an email or a way to reorder")
+    @Test("the tab keeps the copy plain and out of account details")
     func noSwitchNoEmail() {
         for text in HandoffCopy.allTexts {
             #expect(!text.contains("@"), "\(text)")
-            #expect(!text.lowercased().contains("reorder"), "\(text)")
-            #expect(!text.lowercased().contains("drag"), "\(text)")
             #expect(!text.contains("Nothing was lost"), "\(text)")
             #expect(BannedTerms.found(in: text).isEmpty, "\(text)")
         }
@@ -84,7 +90,7 @@ struct HandoffCopyTests {
 
     @Test("every placeholder of a Handoff sentence is one the screen fills in")
     func placeholders() throws {
-        let known: Set<String> = ["account", "time"]
+        let known: Set<String> = ["account", "time", "number"]
         let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
         for text in HandoffCopy.allTexts {
             let range = NSRange(text.startIndex..., in: text)
