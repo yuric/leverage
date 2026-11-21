@@ -715,11 +715,16 @@ in the completed outcome's result.
 
 - `usage_read_due` is a workspace timer on every sweep. It queues due
   usage reads and writes no event (CR-10).
+- The sweep and Refresh expire usage pickups older than 90 seconds.
+  They use the existing failed result with `reading_taken` and
+  `timed_out`. Late results cannot replace the timed-out receipt.
 - A reorder writes `credential.order_changed` for each added credential
   whose position changed, in the new order. A reorder or removal can
   close credential holds, switch credentials, and open or resolve
   Needs you items. A limit item also resolves if its hold has a reset
   time to wait for again (CR-28, CR-30, CR-32).
+- Reorder can resolve an item whose login is no longer a candidate.
+  The hold keeps its original reason and subject.
 - A reading is stored without a credential event. To clear a limit, it
   must be an `ok` reading observed after the limit was recorded. It needs
   at least one limit figure for the refused window, and every such figure

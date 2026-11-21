@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force. The Core loop, Handoff, Rule checks and Questions and approvals are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
-| **Last updated** | 2026-11-20 |
+| **Status** | Rules in force. The Core loop, Handoff, Rule checks, Questions and approvals, and Credentials are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
+| **Last updated** | 2026-11-21 |
 
 This document describes how leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
@@ -318,7 +318,11 @@ flowchart LR
       db[("db (PostgreSQL)")]
     end
   end
+  providerApi["Provider API"]
   app -- "starts with docker compose" --> docker
+  app -- "credential messages on standard input" --> helper
+  helper -- "HTTPS, token check and usage" --> providerApi
+  helper -- "starts usage session" --> tool
   app -- "starts, token in its environment" --> helper
   helper -- "starts, seat token, account and work in its environment" --> runner
   runner -- "exit code 5 and one line: limit or signed out" --> helper
@@ -339,7 +343,8 @@ containers through Docker Desktop ([ADR 0004](adr/0004-one-app-bundle-for-the-fi
 the API, the sweep that applies due timers, the daily backup
 ([ADR 0010](adr/0010-daily-backup-and-restore.md)) and PostgreSQL. Once
 the owner signs in, the app starts the helper, which polls the server for
-its requests: it adds and verifies logins, signs a login in again,
+its requests: it adds and verifies credentials, reads usage, signs a
+login in again,
 installs a provider's tool, and starts and stops a `LeverageRunner` for
 each seat the app runs, each on the account the server names. A runner
 claims tasks or reviews over the agent interface and drives the provider's
@@ -552,9 +557,15 @@ adds the MCP server.
   How long each part of a stop is given is `StopTimings`, in LeverageKit:
   the app waits 16 seconds for the helper, the helper 10 for a runner, and
   a runner 4 to give back what its seat holds.
+- `UsageRead` runs a version-gated login reader or asks `ProviderHTTP`
+  for a token provider's reply. It reports the reading separately from
+  the check outcome. `LocalChannel` decodes credential messages.
+  `PendingTokens` holds a pasted value until Add checks it. The vault
+  saves successful tokens by credential ID. `CredentialCleanup` cancels
+  work for a forgotten credential and handles local deletion.
 - **Owns:** the account folders, the tools leverage installed, and the
   runs' logs, under the support folder (see [Data](#data)).
-- **Depends on:** LeverageKit and Foundation.
+- **Depends on:** LeverageKit, Foundation and macOS Security when available.
 - **Code:** `mac/Sources/LeverageHelper/`; tests in
   `mac/Tests/LeverageHelperTests/`.
 
@@ -564,7 +575,7 @@ adds the MCP server.
   SwiftUI: `DockerLocator` (the `docker` program in four known folders),
   `ServerFiles` (the server folder), `ServerSupervisor` (Docker Desktop,
   `docker compose up -d`, the wait for health), `HelperSupervisor` (the
-  helper's token and process, its restarts, its stop), `AppLock` (one app
+  helper's token, process, standard input, restart and stop), `AppLock` (one app
   per support folder), `SessionStore` (`KeychainSessionStore` and
   `MemorySessionStore`), `ProcessRunner` for docker's commands,
   `UserNotifier` (macOS notifications through the platform's
@@ -586,8 +597,9 @@ adds the MCP server.
   task, Pause and Continue, the Add task form (with Save as an idea), Needs
   you, the Agent roster with Connect for the four roles, Pause, Resume and
   Change (and the landing prompt of a seat that connects on its own), the
-  Credentials list with Add credential, Sign in again and each login's
-  limit, the Handoff tab with the order and its eight fixed rules, and
+  Credentials list with Add credential, Refresh, Verify all, usage and
+  resets where available, and row actions, the Handoff tab with a
+  reorderable list and its eight fixed rules, and
   Settings with Rules and Workspace, Projects, Activity and Decided for
   you. The task page includes questions, outward actions and task settings.
   `InboxWatcher` announces each Needs you item once, through
@@ -667,13 +679,22 @@ the first change that needs one chooses it and adds it here.
 |---|---|---|
 | Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code, four timings (the lock wait, the event and step writes, the whole transition and the time in `Transitions::Gate`) and the rule a `blocked_by_rule` refusal names (`Leverage::CommandLog`); never a header, a body or a rule's reason. A logged parameter keeps its key, and its value only when the value is an id, a number or true or false: every other text, task text and a rule's words among it, is `[FILTERED]`, and so is anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
-| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, the app's `LEVERAGE_NOTIFICATIONS`, and `LEVERAGE_EVAL` and `LEVERAGE_EVAL_REAL`, read only by `LeverageRunner eval` and `scripts/eval_rule.sh`; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
-| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)), the one number `InboxCursorStore` keeps among them. The app writes no token to a regular file. External MCP client settings may contain the self-connected seat's token. |
+| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, the app's `LEVERAGE_NOTIFICATIONS`, and `LEVERAGE_EVAL` and `LEVERAGE_EVAL_REAL`, read only by `LeverageRunner eval` and `scripts/eval_rule.sh`; [DEPLOY.md](DEPLOY.md) lists them). The helper also reads `LEVERAGE_TOKEN_STORE`, `LEVERAGE_PROVIDER_API_BASE` and `LEVERAGE_READ_TIMEOUT_SECONDS`. The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
+| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | `KeychainSessionStore` keeps the owner's session. The bundled helper uses `KeychainTokenVault` for one item per verified API token. Development and smoke helpers use the memory vault. External MCP client settings may contain a self-connected seat's token. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) |
 | Notifications | None. | `Notifying` in LeverageKit's `AppRuntime`; the real one is `UserNotifier` in LeverageAppServices, on the platform's `UserNotifications`, made only by `UserNotifier.make(bundleURL:environment:)` and only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`; everywhere else, tests included, the form that posts nothing. `InboxWatcher` in LeverageApp is its one caller. |
 | Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
 | How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
-| Child processes | None. | `Subprocess` in LeverageKit: an absolute program path, an environment built from an allow-list and never the parent's, standard input `/dev/null`, the child in a process group of its own, both outputs read while it runs, and a time limit or stop that sends the group `SIGTERM` and then `SIGKILL`. A provider's tool gets `PATH`, `HOME`, `TMPDIR`, `LANG`, its account-folder variable and, for Claude, `USER` (`ProviderCatalog.toolEnvironment`), and for a job's run a new empty folder; the runner gets the helper's `HOME`, `TMPDIR`, `LANG` and `USER`, `PATH=/usr/bin:/bin`, its seat token and the run's inputs; the helper gets `HOME`, `PATH`, `TMPDIR`, `LANG`, `USER`, its token, the API's address and the support folder; docker gets only `HOME` and `PATH`. |
+| Child processes | None. | `Subprocess` in LeverageKit uses an absolute program path, an allow-listed environment, its own process group, drained outputs and a time limit or stop that ends the group. Standard input defaults to `/dev/null`. The session form keeps input open for the helper channel and Codex app-server. `ProviderCatalog.toolEnvironment` builds the tool environment and `HelperSupervisor` builds the helper's environment. Docker gets only `HOME` and `PATH`. |
+| Requests to a provider's API | None. | The helper's `ProviderHTTP` uses an ephemeral `URLSession` for a single bounded GET and returns only the catalog's allowed response headers. The leverage API's `HTTPTransport` uses separate authentication and exposes no headers. |
+| App to helper | Helper work is queued through the owner interface. | `HelperSupervisor` starts and stops the helper and sends the two messages in [Interfaces](#interfaces) on standard input. |
 | Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
+
+The helper's environment includes the API address, its own token, the
+support folder and the allowed launch settings, including
+`LEVERAGE_TOKEN_STORE`. A runner gets its seat token, the run's inputs,
+`HOME`, `TMPDIR`, `LANG`, `USER` and `PATH=/usr/bin:/bin`. A provider's
+tool gets `PATH`, `HOME`, `TMPDIR`, `LANG`, its account folder variable,
+and `USER` for Claude.
 
 ## Data
 
@@ -741,6 +762,12 @@ the first change that needs one chooses it and adds it here.
 - **How long.** The sweep deletes `commands` rows (the idempotency keys and
   stored outcomes) and `sweep_runs` rows older than 7 days. Delete content clears the applicable content columns while keeping
   the event log and timing records.
+- **Credential readings.** The server keeps typed figures, resets,
+  observation time, state and tool version in `credential_readings`.
+  The Credentials snapshot shows the newest observed reading per added
+  credential. Removing a credential deletes its readings. The sweep
+  deletes finished and failed `read_usage` requests after seven days.
+  Plan and account email are kept in their credential row.
 - **Backups.** The `backup` service dumps the whole database once a day
   (`pg_dump` custom format) into a folder on the host, outside Docker's
   volumes: the app's `<support folder>/backups`, folder 0700, each file
@@ -766,13 +793,15 @@ the first change that needs one chooses it and adds it here.
   the last Needs you item the app announced, so that each is announced
   once across restarts) and `app.lock`. A provider's own sign-in lives in
   that folder or, for a provider with one sign-in for the Mac, where the
-  tool keeps it; leverage never reads it. The Mac still keeps no token in
-  a file.
-- **Reply files.** `mac/Tests/StandIns/replies/` holds 22 provider replies,
-  each recorded from a tool with no login or made, scrubbed and checked by
-  `scripts/check_reply_fixtures.py`
-  ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md)). They
-  are test data, not shipped in the app.
+  tool keeps it. The bundled helper keeps API tokens in the Keychain as
+  described in [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md).
+- **Reply files.** `mac/Tests/StandIns/replies/` holds 61 test replies.
+  Run and status fixtures follow
+  [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md).
+  Usage fixtures contain made-up data and are checked by
+  `scripts/check_reply_fixtures.py`. The product keeps the typed reading
+  alone. Scrubbed developer captures stay outside the repository.
+  [ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md)
 - **Eval suites.** [Specific details](../evals/specific-details/README.md)
   and [outward action approvals](../evals/approves-actions/README.md)
   hold made-up cases, numeric bars, run records and per-model results.
@@ -796,14 +825,19 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Expected behavior, end to end | `api/contract/traces/` (23 golden traces, all run whole) |
+| Expected behavior, end to end | `api/contract/traces/` (24 golden traces, all run whole) |
 | Agent MCP tools | `api/contract/openapi.json`, `api/contract/roles.json` and the session behavior in [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
-The route table serves all 24 agent operations and the owner and helper
-operations for the Core loop, Handoff, Rule checks and Questions and
-approvals. The Credentials milestone operations are still unserved.
-The contract README records changes to each interface by milestone.
+The route table serves all 107 operations, including 24 agent operations.
+Credentials adds owner `rename_credential`, `remove_credential`,
+`refresh_usage`, `verify_all_credentials` and `reorder_credentials`, and
+helper `report_reading`. The contract README records the interface changes.
+
+On standard input, the helper accepts one UTF-8 JSON object per line in
+version 1 of `LocalHelperMessage`. Both `token` and `forget` carry
+`credential_id`. Only `token` carries the pasted value. The message
+decoder refuses malformed lines and uses a payload-free diagnostic.
 
 - **Commands.** Every call that changes something is a `POST` that carries
   an `Idempotency-Key` header and answers one outcome body: 200 completed,
@@ -876,10 +910,10 @@ multibyte characters, still makes its checks end in `error`.
 
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.
-No installer and no sign-in command has been run by an agent. The tool's
-standard input is always `/dev/null`, it runs in the task's folder (a
-job's run in its empty folder) under a time limit, and no run gets a flag
-that skips permissions or sandboxing.
+No installer and no sign-in command has been run by an agent. The runner
+closes the tool's standard input, runs it in the task's folder (a job's
+run in its empty folder) under a time limit, and passes no flag that
+skips permissions or sandboxing.
 An installer is downloaded only over HTTPS from a host its catalog entry
 lists.
 
@@ -894,6 +928,33 @@ names one (Claude `claude-opus-5-5` and Grok `grok-4.6`, each seen in a
 run with the agent's whole environment, not the allow-list), and leaves it
 empty for Codex and Antigravity, which name none; empty means the tool's
 own default.
+
+### Usage readers
+
+The catalog distinguishes tool help, vendor documentation, generated
+protocol schema, a recorded developer probe and facts stated in the PRD.
+All nine contract entries remain provisional.
+
+| Provider | Source and evidence | Shipped reader |
+| --- | --- | --- |
+| Claude login | Step 0 recorded the Claude Code 2.1.325 usage envelope without a model turn. Quota grammar was unavailable. The reset cache has made-up settings fixtures only. | Unavailable. Refresh cannot select the provisional reader. |
+| Codex login | `codex app-server` over JSON lines. Generated protocol schema and one Step 0 session for CLI 0.169.0. | 0.169.0. Five-hour and weekly limits, usage summary when present, and eligible reset credits. |
+| Gemini login | Antigravity usage screen in the PRD, and a terminal-free 1.5.13 probe without prompt tokens. | Unavailable. |
+| Grok login | `grok usage --json` from tool help. | Unavailable. |
+| OpenRouter token | Catalog GET, documentation and made replies. | Spending-use percentage, amount left and period usage when supplied. |
+| Claude API token | Catalog GET, documentation and made replies. | Requests remaining when the named header is present. |
+| OpenAI API token | Catalog GET, documentation and made replies. | Requests remaining when the named header is present. |
+| Gemini API token | Catalog GET, documentation and made replies. | Reading state. |
+| Grok API token | Catalog GET, documentation and made replies. | Reading state. |
+
+The workspace sweep queues due reads for active credentials with a live
+helper. A passed Add queues the first read. Refresh queues an active
+credential even if it has a recent reading. Refresh and the sweep end
+abandoned pickups after 90 seconds, so a lost pickup can be retried.
+The helper budgets 15 seconds for a read. The Codex usage session runs
+in an empty temporary working directory. Existing version and sign-in
+preflights keep their usual working directory.
+[ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md)
 
 ## Trust boundaries
 
@@ -969,6 +1030,25 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   it answers signed out only on the tool's own signed-out reply. Grok's
   standard output is the agent's answer and is never read for a limit or a
   sign-out, nor is any run a signal killed.
+- **Provider API tokens.** The secure field sends the pasted value to the
+  helper over standard input. The Rails Add request carries the fixed
+  mask. The helper checks the value at the selected catalog endpoint and
+  saves it only after a pass. Check and usage calls send authentication
+  in a header. The sender refuses redirects, limits the body to 1 MiB,
+  uses no cookies or cache, and gives the reader only named headers.
+  The loopback test override is refused by a bundled helper and accepts
+  only a marked made-up token. The app's helper environment omits the
+  override. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md)
+- **Usage and account facts.** Readers treat replies as bounded, untrusted
+  input and keep no raw reply. The Codex session checks the account home
+  during initialization. Its request methods are `initialize`,
+  `account/read` with refresh disabled, `account/rateLimits/read` and
+  `account/usage/read`. Claude and Codex account facts supply plan and
+  email on Add and Verify. The API keeps each in the credential row and
+  filters both from request logs. The provisional Claude cache reads one
+  entry from a regular `.claude.json` under the account folder, keeps its
+  fetch time and reset value in memory, and retains no file contents.
+  The API checks reading identity, time, schema and field bounds.
 - **The helper's reports are checked against what the seat holds.** A
   limit or sign-out report must name a credential that is an added login,
   a seat with a credential, and exactly one task, review or job; it is refused
@@ -981,8 +1061,9 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   prefix, a real id or a named field with a real value, and the
   end-to-end secret scan fails if a reply's marker or long line is found
   outside the stand-ins' folder.
-- **Secrets.** No request, stored outcome, event or log carries a provider
-  login, sign-in token, link, code or API token. The reference runner's
+- **Secrets.** A provider login, sign-in token, link, code or API token
+  stays out of the leverage API, stored outcomes, events and logs.
+  The reference runner's
   allow-listed tool environment excludes every leverage token. A tool
   acting as an external MCP client needs access to the seat token via
   its settings, to pass it to the MCP process as described above. The helper's
@@ -1049,6 +1130,8 @@ Each choice is recorded in the ADR named beside it.
 | Model checks | An orchestrator agent runs each check as a job with the provider's tool in its check mode, task text in nonce-marked quote blocks, in an empty folder | [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md) |
 | Eval suites | A folder per suite. CI scores the committed runs without using a provider | [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) |
 | MCP server | Swift executable over standard input and output, using the shared HTTP transport and generated agent tool schemas | [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
+| Provider API tokens | The platform's Security framework and the helper's local channel. The five provider services are catalog endpoints. | [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) |
+| Usage readers | Bounded parsers in the helper. Login usage requires a recorded, exact tool version. | [ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md) |
 | Finishing | A shared settlement path for action decisions and one scan for delayed leases | [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) |
 | Overturn after action completion | A durable event on the action | [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) |
 

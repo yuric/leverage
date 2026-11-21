@@ -37,6 +37,20 @@ Waiting on you) for comparison; that wording is not the design.
 
 The other screens the PRD lists for version 1 are not designed yet.
 
+## Credentials in the app
+
+The Credentials screen extends the mockup with sections for logins and
+API tokens, provider headings, a sign-in status dot, account facts,
+figure tiles, reset and reading-age lines, a row menu, and Refresh and
+Verify all. The Add sheet adds the token provider picker, a secure
+field and the token check. Handoff keeps the up and down buttons and
+adds a drag placement line and position hint. Token rows explain that
+the token is not used for work yet.
+
+In Activity, Everything shows `You renamed <name>.`, `You removed an
+account.` and `You moved <name> in the handoff order.` The app uses
+"an account" when it cannot look up a current name.
+
 ## How to read it
 
 - [docs/PRD.md](../PRD.md) defines what is built. Where the mockup and the PRD

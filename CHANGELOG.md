@@ -10,6 +10,10 @@ once it makes its first release.
 
 ### Added
 
+- Added the Credentials screen with limits and resets where available, API
+  tokens, Refresh and Verify all, renaming and removing a credential, and
+  reordering the handoff order.
+
 - Worker questions and access requests, with owner replies and grants
   in Needs you.
 - Outward actions after review, with approval or stop decisions, a

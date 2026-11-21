@@ -6,14 +6,18 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 ## Current state
 
 leverage has its contract, Core loop, Handoff, Rule checks and Questions
-and approvals. On the owner's Mac, the owner can sign in, add logins,
+and approvals, and Credentials. On the owner's Mac, the owner can sign in, add logins,
 connect agents, take a task from a form to Done, and see how it reached
 Done. A run that meets a provider limit or sign-out continues on the
 next eligible account or waits. The database is backed up daily, with a
 tested restore. All seven shipped rules act. The app shows questions,
 access requests, outward actions, projects and spending, Activity,
 Decided for you, content deletion and workspace settings. A seat that
-connects on its own can use HTTP or the bundled MCP server.
+connects on its own can use HTTP or the bundled MCP server. Credentials
+lists both kinds of credential, with token Add, Refresh, Verify all,
+Rename and Remove. The Handoff tab supports reordering. Codex CLI 0.169.0
+is the only registered login usage reader. The five API token readers
+have stand-in coverage.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
@@ -61,6 +65,8 @@ research, and the following code and checks.
   or a sign-out, with stand-in tools), `e2e_rule_checks.sh` (seven runs
   with the rules on and an orchestrator, with stand-in tools),
   `e2e_questions_approvals.sh` (seven stand-in cases, with MCP),
+  `e2e_credentials.sh` (three stand-in cases with replay and secret scans),
+  `capture_reader_reply.py` (a maintainer-only developer check),
   `restore_drill.sh` (a backup restored into an emptied cluster),
   `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
   `app_compose.py`, and the maintainer's runs on real tools,
@@ -68,8 +74,8 @@ research, and the following code and checks.
   `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
   migrations-from-zero check, the import check, the reply-file check, the
-  app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
-  `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`)
+  capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
   scripts), on every pull request;
@@ -183,7 +189,7 @@ These run on every pull request and must pass. Run them locally before you
 report work as done:
 
 ```bash
-npx markdownlint-cli2 "**/*.md"                      # Markdown lint
+npx --yes markdownlint-cli2 "**/*.md"                      # Markdown lint
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules
@@ -199,6 +205,7 @@ python3 -I scripts/test_generate_swift_contract.py   # self-test of the generato
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
+python3 -I scripts/test_capture_reader_reply.py      # capture guard and scrub self-test
 python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
@@ -323,6 +330,7 @@ scripts/e2e_core_loop.sh                             # the whole loop with stand
 scripts/e2e_handoff.sh                               # six interrupted runs, one compose project each
 scripts/e2e_rule_checks.sh                           # seven runs with the rules on, one compose project each
 scripts/e2e_questions_approvals.sh                   # seven runs with stand-ins, including MCP
+scripts/e2e_credentials.sh                          # three stand-in Credentials cases
 scripts/restore_drill.sh                             # back up, empty the cluster, restore, replay
 scripts/speed_run.sh                                 # 50 seats for 120 s; prints the speed table
 scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, open it, check its server
@@ -335,8 +343,8 @@ when it is set. Anything else that starts the `backup` service, or runs
 `bin/backup` or `bin/restore`, exports `LEVERAGE_BACKUP_DIR` to a folder of
 its own first, so that nothing writes into the checkout's `./backups`.
 `smoke_app.sh` uses a support folder and a compose project of its own
-(`leverage-smoke-<pid>`), sets `LEVERAGE_NOTIFICATIONS=off` so that no
-notification permission is asked for, signs up a made-up owner (the
+(`leverage-smoke-<pid>`), sets `LEVERAGE_NOTIFICATIONS=off` and
+`LEVERAGE_TOKEN_STORE=memory`, signs up a made-up owner (the
 backup dumps no database without a workspace) and waits for the first
 dump. No automated test calls a real provider: the
 tests find the providers' tools only through `LEVERAGE_TOOL_DIR`, on the
