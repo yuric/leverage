@@ -127,6 +127,14 @@ class ConnectSeatTest < ActiveSupport::TestCase
     assert_equal 3, Seat.find(outcome.result.fetch("seat_id")).strength_rank
   end
 
+  test "connecting refuses ranks outside Standard, Stronger and Strongest" do
+    assert_no_difference -> { Seat.where(workspace_id: @scenario.workspace_id).count } do
+      [ 0, 4, 2.5, "2", false ].each do |rank|
+        assert_raises(T::Invalid) { owner_command("connect_seat", body(provider: "grok", strength_rank: rank)) }
+      end
+    end
+  end
+
   # Milestone 3 plan HD-1: Connect builds the start from SeatRuns.placement.
   test "a seat connected on a limited login starts on its first available login" do
     own = @scenario.credential

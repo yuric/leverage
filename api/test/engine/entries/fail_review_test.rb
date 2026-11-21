@@ -5,9 +5,8 @@ require_relative "../gate_support"
 # milestone 2 plan EN-9, EN-12, EN-13, EN-28): at review.failed, the named
 # criteria reopen and the round goes up. A free previous builder gets a
 # fresh lease and the task goes back to Working; otherwise the task goes to
-# Ready. No rule escalates in this milestone. A failure that brings the
-# round to the limit also holds the task with rounds_exceeded and opens the
-# Past the round limit item.
+# Ready. A failure that reaches the limit also holds the task with
+# rounds_exceeded and opens the Past the round limit item.
 class FailReviewTest < ActiveSupport::TestCase
   T = Leverage::Transitions
   B = Leverage::Briefing
@@ -89,8 +88,7 @@ class FailReviewTest < ActiveSupport::TestCase
   end
 
   test "at the round limit the task is held with rounds_exceeded and the Past the round limit item opens" do
-    @task.update_columns(round: 2)
-    @review.update_columns(round: 2)
+    prior_failures(2)
     acknowledge
     assert fail_with([ @copy.id ]).completed?
 
@@ -109,11 +107,35 @@ class FailReviewTest < ActiveSupport::TestCase
   end
 
   test "one more round moves the limit" do
-    @task.update_columns(round: 2, extra_rounds: 1)
-    @review.update_columns(round: 2)
+    prior_failures(2)
+    @task.update_columns(extra_rounds: 1)
     acknowledge
     assert fail_with([ @copy.id ]).completed?
     assert_not_includes written.map(&:type), "hold.opened"
+  end
+
+  test "an owner rework advances the round without using one of the allowed failures" do
+    prior_failures(1, owner_reworks: 1)
+    acknowledge
+    assert fail_with([ @copy.id ]).completed?
+    assert_equal [ 3, 0 ], @task.reload.values_at(:round, :extra_rounds)
+    refute Hold.exists?(task_id: @task.id, reason: "rounds_exceeded", closed_at: nil)
+
+    assert apply("acknowledge_briefing", { "id" => @task.id,
+      "briefing_hash" => B.hash_for(@task, seat: @builder) }, @builder).completed?
+    [ @copy, @layout ].each do |criterion|
+      assert apply("pass_criterion", { "id" => @task.id, "cid" => criterion.id,
+        "evidence" => { "kind" => "note", "value" => "Evidence in the made-up work." } }, @builder).completed?
+    end
+    assert apply("submit", { "id" => @task.id, "handoff_note" => "Made-up note.", "work_reference" => nil },
+      @builder).completed?
+    review = @scenario.review(@task.reload, reviewer: @reviewer)
+    assert acknowledge(review).completed?
+    assert fail_with([ @copy.id ], review: review).completed?
+
+    hold = Hold.find_by!(task_id: @task.id, reason: "rounds_exceeded", closed_at: nil)
+    assert_equal({ "round" => 4 }, InboxItem.find_by!(hold_id: hold.id).facts)
+    assert_equal [ 4, 0 ], @task.reload.values_at(:round, :extra_rounds)
   end
 
   test "no named criterion, the review criterion, or another task's criterion is 422 invalid" do
@@ -223,6 +245,19 @@ class FailReviewTest < ActiveSupport::TestCase
     failed = written.first
     assert_equal [ nil, "credential_limit" ], failed.payload.values_at("lease_seat_id", "wait_cause")
     assert_not_includes written.map(&:type), "credential.switched"
+  end
+
+  private
+
+  # An owner rework advances the task's round without writing a failed review.
+  def prior_failures(count, owner_reworks: 0)
+    round = count + owner_reworks
+    @task.update_columns(round: round)
+    @review.update_columns(round: round)
+    count.times do |each|
+      Review.create!(workspace_id: @task.workspace_id, task_id: @task.id, round: each, verdict: "failed",
+        reviewer_seat_id: @reviewer.id, failed_criteria: [ @copy.id ])
+    end
   end
 end
 
