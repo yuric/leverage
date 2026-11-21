@@ -31,6 +31,7 @@ struct TokenChecksTests {
     func transportFailures() async throws {
         try await exercise(answer: .failure(.cannotConnectToHost), failure: .unreachable)
         try await exercise(answer: .failure(.timedOut), failure: .timedOut)
+        try await exercise(answer: .failure(.badServerResponse), failure: .noAnswer)
     }
 
     private func exercise(answer: StubURLProtocol.Answer, failure: HelperCheckFailure?) async throws {
@@ -61,6 +62,22 @@ struct TokenChecksTests {
         #expect(saved == nil ? failure != nil : failure == nil)
         #expect(StubURLProtocol.requests(host: host).count == 1)
         #expect(!rig.everythingSent().contains("LVRG-TOKEN-"))
+    }
+
+    @Test("cancelling a token check reports no provider failure")
+    func cancelledCheck() async throws {
+        let rig = try HelperRig()
+        let id = UUID()
+        let checks = TokenChecks(pending: PendingTokens(), vault: MemoryTokenVault(), http: try stubTransport(),
+                                 timeout: fastTimings.readLimit)
+        let result = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            let request = helperRequest(.verify, credential: id, params: .init(provider: provider, credentialKind: .apiToken))
+            var check = CheckRun(request: request, api: rig.api, log: quietLog)
+            return await checks.run(provider, credentialID: id, adding: false, check: &check)
+        }.value
+        #expect(result.outcome == .failed)
+        #expect(result.checks.isEmpty)
     }
 
     @Test("a local store failure during Add, Verify or a reading has its own result")

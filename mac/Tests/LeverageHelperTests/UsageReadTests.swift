@@ -57,6 +57,16 @@ struct UsageReadTests {
         #expect(!rig.everythingSent().contains("LVRG-TOKEN-"))
     }
 
+    @Test("a failed report to the workspace does not say the provider was unreachable")
+    func failedWorkspaceReport() async throws {
+        let rig = try HelperRig()
+        rig.api.script { $0.reportReading = { _, _, _ in throw LeverageClientError.invalidBody } }
+        let read = UsageRead(api: rig.api, settings: rig.settings, timings: fastTimings, http: ProviderHTTP(),
+                             vault: MemoryTokenVault(), log: quietLog)
+        let result = await read.run(loginRequest(UUID(), provider: .gemini))
+        #expect(result.checks.last?.failure == .noAnswer)
+    }
+
     @Test("absent token reports unavailable without contacting a provider")
     func missingToken() async throws {
         let rig = try HelperRig()
