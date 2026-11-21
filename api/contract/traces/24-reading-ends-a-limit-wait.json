@@ -3,8 +3,8 @@
   "description": "A fresh reading ends a five-hour limit and the task goes to Done. A second task waits for a reset, loses its only dated candidate in a reorder, then switches to an available login when the order changes again. A reading on that login ends another limit before its known reset time.",
   "covers": [
     "PRD test 8 and Build order, Credentials: the golden trace for usage readings and a handoff reorder (milestone 6 plan CT-3).",
-    "PRD Handoff, Waiting on a limit: neither a stale reading, a full refused window nor a different window ends the wait. A fresh reading of the refused window at 40 percent closes the hold and its Needs you item under the helper’s key (CR-14, IF-37).",
-    "PRD Handoff, Choice of credential: a reorder that removes the only reset time opens a Needs you item alongside the existing hold. A reorder giving the seat an available candidate closes the hold, switches the run and resolves the item under the owner’s key. The first order event is the cause for the hold close or item open (CR-28, CR-30).",
+    "PRD Handoff, A limit with no reset time: neither a stale reading, a full refused window nor a different window ends the wait. A fresh reading of the refused window at 40 percent closes the hold and its Needs you item under the helper’s key (CR-14, IF-37).",
+    "PRD Handoff, Candidates, A builder’s task is held and A limit with no reset time: a reorder that removes the only reset time opens a Needs you item alongside the existing hold. A reorder giving the seat an available candidate closes the hold, switches the run and resolves the item under the owner’s key. The last order event of the reorder is the cause of the hold close or the item open, as the state table’s note of reorder_credentials says (CR-28, CR-30).",
     "A fresh reading can end a limit before a known reset time. The hold and its wait_limit step close without a Needs you event (CR-14)."
   ],
   "setup": {
@@ -333,7 +333,7 @@
         "id": "$task:1"
       },
       "body": {
-        "briefing_hash": "briefing-hash-t1_ack"
+        "briefing_hash": "briefing-hash-t1_ack_40"
       },
       "expect": {
         "outcome": "completed",
@@ -764,7 +764,7 @@
       "body": {
         "evidence": {
           "kind": "link",
-          "value": "https://example.test/work/t1_layout_2500"
+          "value": "https://example.test/work/t1_work_110"
         }
       },
       "expect": {
@@ -800,7 +800,7 @@
             "task_id": "$task:1",
             "round": 0,
             "subject_kind": "evidence",
-            "subject_id": "$evidence:t1_layout_2500",
+            "subject_id": "$evidence:t1_work_110",
             "cause_id": null,
             "command_id": "$key:pass_criterion_110",
             "payload": {
@@ -962,7 +962,7 @@
         "id": "$review:t1_r0"
       },
       "body": {
-        "briefing_hash": "review-briefing-hash-t1_review_ack_2530"
+        "briefing_hash": "review-briefing-hash-t1_review_ack_140"
       },
       "expect": {
         "outcome": "completed",
@@ -1381,7 +1381,7 @@
         "id": "$task:2"
       },
       "body": {
-        "briefing_hash": "briefing-hash-t2_ack"
+        "briefing_hash": "briefing-hash-t2_ack_200"
       },
       "expect": {
         "outcome": "completed",
@@ -1543,7 +1543,7 @@
             "task_id": "$task:2",
             "round": 0,
             "subject_kind": "hold",
-            "subject_id": "$hold:t2_limit_no_date",
+            "subject_id": "$hold:t2_claude_limit",
             "cause_id": "@event:29",
             "command_id": "$key:limit_220",
             "payload": {
@@ -1738,7 +1738,7 @@
             "task_id": "$task:2",
             "round": 0,
             "subject_kind": "hold",
-            "subject_id": "$hold:t2_limit_no_date",
+            "subject_id": "$hold:t2_claude_limit",
             "cause_id": "@event:36",
             "command_id": "$key:reorder_240",
             "payload": {
@@ -1875,7 +1875,7 @@
             "task_id": "$task:2",
             "round": 0,
             "subject_kind": "hold",
-            "subject_id": "$hold:t2_limit_with_date",
+            "subject_id": "$hold:t2_spare_limit",
             "cause_id": "@event:40",
             "command_id": "$key:limit_260",
             "payload": {
@@ -1952,7 +1952,7 @@
             "task_id": "$task:2",
             "round": 0,
             "subject_kind": "hold",
-            "subject_id": "$hold:t2_limit_with_date",
+            "subject_id": "$hold:t2_spare_limit",
             "cause_id": null,
             "command_id": "$key:reading_280",
             "payload": {
