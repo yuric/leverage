@@ -10,7 +10,7 @@
         {"choice": "answer", "operation_id": "answer_question", "when": null}
       ],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"question_id": {"type": "string", "format": "uuid"}}, "required": ["question_id"]},
-      "closes": "Answering resolves the item. An answer also closes its hold when the question blocks. The hold is null for a question that does not block (AP-3)."
+      "closes": "Answering resolves the item and closes its hold when the question blocks. The hold is null for a question that does not block (AP-3). Cancelling the task or deleting its content also resolves the item."
     },
     {
       "item": "approval",

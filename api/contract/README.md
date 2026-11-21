@@ -661,6 +661,8 @@ allows the recovery time ceiling to be cleared (AP-39).
   cases are accepted and which return `invalid_state` (AP-3, AP-6,
   AP-36). Done withdraws queued or claimed question jobs. An orchestrator's
   answer can be overturned or replaced only while the task is active.
+  A passed-on question on a Done task remains answerable while the task's
+  content is present. Deleting that content resolves its open Needs you item.
   A project deletion also writes `content.deleted` for each
   task whose content it deletes. A changed brief advances its version
   once. Added and removed entries write `brief.changed` at that version.
@@ -686,7 +688,8 @@ allows the recovery time ceiling to be cleared (AP-39).
 - The owner inbox includes optional `detail` for access requests and
   stopped approvals. The content stays in its row.
 - Delete content also clears stored claim copies and check reasons from
-  command refusals. New refusals record the source task on the receipt.
+  command refusals. A refusal by a rule check records the check's task
+  on the receipt when the check row exists.
   A task page omits cleared evidence. A stale job claim
   exposes no material when the seat no longer holds that job in the
   current role or project, or the task content was deleted. A repeat

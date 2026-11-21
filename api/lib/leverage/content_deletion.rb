@@ -50,6 +50,7 @@ module Leverage
       end
       Idempotency.forget_task_claims(task)
       task.update_columns(**TASK_COLUMNS, content_deleted_at: ctx.at)
+      InboxItems.cancel_for_task(ctx, task)
       ctx.emit("content.deleted", task: task)
     end
 

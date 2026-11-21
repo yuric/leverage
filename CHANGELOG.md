@@ -26,8 +26,9 @@ once it makes its first release.
   approvals have their own eval suite.
 - Completing a task withdraws its unanswered question jobs. An
   outstanding Approval item is answered before the action can be waived.
-  Content deletion clears stored check reasons and evidence. The spending
-  fields share the Mac’s decimal separator and reject out-of-range amounts.
+  Content deletion clears stored check reasons and evidence and resolves
+  open Needs you items for unanswered questions. The spending fields
+  share the Mac’s decimal separator and reject out-of-range amounts.
 
 - Added rule checks: rules with versions in Settings, checks by an
   orchestrator agent, tasks that wait on a check, letting a check through

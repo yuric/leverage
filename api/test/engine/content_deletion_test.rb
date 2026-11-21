@@ -35,8 +35,8 @@ class ContentDeletionTest < ActiveSupport::TestCase
 
       other = scenario.question(scenario.task(state: "working", builder: builder), outcome: "passed_on", blocking: false)
       params = project ? { project_id: project.id } : { task_id: task.id }
-      last_at = Event.where(workspace_id: scenario.workspace_id).maximum(:at)
-      written = with_clock_behind(last_at) { events_written { assert_completed owner_command("delete_content", params) } }
+      before = Event.where(workspace_id: scenario.workspace_id).order(:seq).last
+      written = with_clock_behind(before.at) { events_written { assert_completed owner_command("delete_content", params) } }
 
       assert_empty items.where(state: "open")
       assert InboxItem.exists?(workspace_id: scenario.workspace_id, about_kind: "task", about_id: other.task_id, state: "open")
@@ -44,10 +44,11 @@ class ContentDeletionTest < ActiveSupport::TestCase
       assert_equal expected, written.select { |event| event.task_id == task.id }.map(&:type)
       resolved = written.find { |event| event.type == "inbox.resolved" }
       assert_equal [ item.id, { "choice" => "cancel" } ], [ resolved.subject_id, resolved.payload ]
+      assert_operator resolved.at, :>, before.at
       assert_equal [ "resolved", "owner", scenario.owner.id, resolved.at ],
         item.reload.attributes.values_at("state", "resolved_by_kind", "resolved_by_id", "resolved_at")
       assert_empty Leverage::Replay.diff(scenario.workspace_id)
-      assert_empty Leverage::LogAudit.call(scenario.workspace_id)
+      assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before.seq)
     end
   end
 

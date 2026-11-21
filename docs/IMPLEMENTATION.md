@@ -2035,9 +2035,10 @@ skeleton's pull request description, as rule AR-004 asks.
       alternative was to add Waive to the Approval choices.
     - **Review, questions at Done.** Done withdraws live question jobs.
       The owner can still answer a non-blocking question passed on
-      earlier. Orchestrator answers become final when the task ends. An
-      alternative was to let late jobs report cost and end quietly, leaving
-      them eligible to claim after Done.
+      earlier while the task's content is present. Deleting the content
+      resolves its open Needs you item. Orchestrator answers become final
+      when the task ends. An alternative was to let late jobs report cost
+      and end quietly, leaving them eligible to claim after Done.
 
     - **T-1.** Give an objection after completion an event. The alternative is the two action columns in AP-13.
     - **T-2.** Record the Claude Code MCP proof and the criterion and action start boundaries. The alternative is to wait for another client's or the owner's check before describing the MCP connection.
