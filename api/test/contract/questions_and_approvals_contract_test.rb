@@ -62,11 +62,30 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
 
   def test_offer_again_requires_an_enabled_builder
     offers = accepted("offer_task_again")
-    assert_equal 2, offers.size
+    assert_equal 3, offers.size
     offers.each { |row| assert_includes row["guard"], "builder_seat_enabled" }
     refused = rows("offer_task_again").find { |row| row["guard"].include?("builder_seat_unavailable") }
     assert_equal "invalid_state", refused&.fetch("refusal")
     assert_includes refused["guard"], "held_action_unconfirmed"
+  end
+
+  # A seat disabled in Finishing can be re-enabled while its former lease
+  # is still paused by the unconfirmed action hold (AP-19, DB-43).
+  def test_reenabled_builder_that_still_holds_the_task_gets_a_fresh_offer
+    guards = %w[held_action_unconfirmed builder_seat_enabled builder_holds_task]
+    row = accepted("offer_task_again").find { |candidate| candidate["guard"] == guards }
+    assert_equal "fresh", row&.fetch("builder_lease")
+    assert_equal [ "hold.closed" ], row["events"]
+    assert_includes row["note"], "lease_seat_id"
+  end
+
+  def test_marking_one_action_done_keeps_the_reenabled_builders_held_lease
+    guards = %w[held_action_unconfirmed not_last_open_action approvals_complete builder_holds_task]
+    row = accepted("mark_action_done").find { |candidate| candidate["guard"] == guards }
+    assert_equal "finishing", row&.fetch("to")
+    assert_nil row["builder_lease"]
+    assert_includes row["holds_closed"], "action_unconfirmed"
+    assert_empty row["holds_opened"]
   end
 
   def test_rework_replaces_a_held_lease_and_waive_keeps_it

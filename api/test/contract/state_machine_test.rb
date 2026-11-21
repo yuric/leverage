@@ -90,9 +90,7 @@ class StateMachineTest < Minitest::Test
     members = machine["guard_families"].to_h { |family| [ family["family"], family["guards"].map { |guard| guard["guard"] } ] }
     holder_exclusions = {
       "fail_review" => %w[does_not_escalate builder_holds_task],
-      "approve_action" => %w[approval_asked_of_caller approvals_complete builder_holds_task],
-      "mark_action_done" => %w[held_action_unconfirmed not_last_open_action approvals_complete builder_holds_task],
-      "offer_task_again" => %w[held_action_unconfirmed builder_seat_enabled builder_holds_task]
+      "approve_action" => %w[approval_asked_of_caller approvals_complete builder_holds_task]
     }
     rows.group_by { |row| [ row["command"], row["from"] ] }.each do |(command, from), same|
       same.each do |row|
