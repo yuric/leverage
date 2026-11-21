@@ -83,7 +83,7 @@ struct CodexAppServerTests {
     }
 
     @Test("completed replies survive EOF, a shutdown error, or a server waiting after EOF",
-          arguments: ["clean", "error", "wait"])
+          arguments: ["clean", "error", "wait", "truncated", "cancel"])
     func closesAndReaps(afterEOF: String) async throws {
         let rig = try HelperRig()
         let account = try makeAccount(rig)
@@ -114,8 +114,15 @@ struct CodexAppServerTests {
                 "account/rateLimits/read": {"rateLimits": {}},
                 "account/usage/read": {"summary": {}}
             }
+            if "\(afterEOF)" == "truncated":
+                sys.stderr.buffer.write(b"x" * ((8 << 20) + 1))
+                sys.stderr.buffer.flush()
             for line in sys.stdin:
                 call = json.loads(line)
+                if "\(afterEOF)" == "cancel" and call["method"] == "account/usage/read":
+                    pathlib.Path("last-read").touch()
+                    while os.getppid() != 1:
+                        time.sleep(0.05)
                 if "id" in call:
                     print(json.dumps({"id": call["id"], "result": replies[call["method"]]}), flush=True)
             pathlib.Path("stdin-closed").touch()
@@ -130,11 +137,20 @@ struct CodexAppServerTests {
         try Data(standIn.utf8).write(to: tool, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
 
-        let reading = try await CodexUsageReader().read(account)
-
-        #expect(reading.state == .ok)
         let work = account.workingDirectory
-        #expect(FileManager.default.fileExists(atPath: work.appendingPathComponent("stdin-closed").path))
+        let task = Task { try await CodexUsageReader().read(account) }
+        defer { task.cancel() }
+        if afterEOF == "cancel" {
+            try #require(await eventually(within: 30) {
+                FileManager.default.fileExists(atPath: work.appendingPathComponent("last-read").path)
+            })
+            task.cancel()
+        }
+        let reading = try await task.value
+        #expect(reading.state == (["truncated", "cancel"].contains(afterEOF) ? .unavailable : .ok))
+        if afterEOF != "cancel" {
+            #expect(FileManager.default.fileExists(atPath: work.appendingPathComponent("stdin-closed").path))
+        }
         #expect(!FileManager.default.fileExists(atPath: work.appendingPathComponent("server-wait-ended").path))
         let pids = try String(contentsOf: work.appendingPathComponent("pids"), encoding: .utf8)
             .split(separator: " ").compactMap { Int32($0) }

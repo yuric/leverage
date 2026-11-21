@@ -24,9 +24,9 @@ struct LocalChannelTests {
         let kept = UUID()
         let forgotten = UUID()
         let token = "LVRG-TOKEN-000000000701"
-        try vault.store(token, credentialID: forgotten)
+        try vault.store(ProviderToken(provider: .openrouter, value: token), credentialID: forgotten)
         let pipe = Pipe()
-        var bytes = try LocalHelperMessage.token(credentialID: kept, token: token).encodeLine()
+        var bytes = try LocalHelperMessage.token(credentialID: kept, provider: .openrouter, token: token).encodeLine()
         bytes.append(Data("\nbroken with \(token)\n".utf8))
         bytes.append(try LocalHelperMessage.forget(credentialID: forgotten).encodeLine())
         bytes.append(0x0A)
@@ -47,13 +47,13 @@ struct LocalChannelTests {
 
         // A second line cannot resurrect the token that was forgotten.
         let later = Pipe()
-        var afterForget = try LocalHelperMessage.token(credentialID: forgotten, token: token).encodeLine()
+        var afterForget = try LocalHelperMessage.token(credentialID: forgotten, provider: .openrouter, token: token).encodeLine()
         afterForget.append(0x0A)
         try later.fileHandleForWriting.write(contentsOf: afterForget)
         try later.fileHandleForWriting.close()
         await LocalChannel(cleanup: runtime.cleanup, log: log.log).run(input: later.fileHandleForReading)
 
-        let delivered = await pending.take(credentialID: kept) == token
+        let delivered = await pending.take(credentialID: kept) == ProviderToken(provider: .openrouter, value: token)
         let ignored = await pending.take(credentialID: forgotten) == nil
         #expect(ignored)
         #expect(delivered)

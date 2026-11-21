@@ -22,6 +22,14 @@ struct ProviderHTTP: Sendable {
 
         let host: String
         let code: Code
+
+        var checkFailure: HelperCheckFailure {
+            switch code {
+            case .timedOut: .timedOut
+            case .unreachable: .unreachable
+            case .invalidOverride, .unsupportedProvider, .invalidTestToken, .redirect, .bodyTooLarge: .noAnswer
+            }
+        }
     }
 
     private static let loopback = "127.0.0.1"

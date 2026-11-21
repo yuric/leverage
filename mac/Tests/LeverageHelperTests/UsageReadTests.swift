@@ -28,7 +28,7 @@ struct UsageReadTests {
         let readings = Self.recordReadings(rig)
         let vault = MemoryTokenVault()
         let credential = UUID()
-        try vault.store("LVRG-TOKEN-000000000704", credentialID: credential)
+        try vault.store(ProviderToken(provider: .openaiApi, value: "LVRG-TOKEN-000000000704"), credentialID: credential)
         let stub = StubURLProtocol.session(host: "api.openai.com", answer: .init(status: 200, json: "{\"object\":\"list\",\"data\":[]}"))
         defer { stub.invalidateAndCancel() }
         let runtime = HelperRuntime(
@@ -143,7 +143,7 @@ struct UsageReadTests {
         let credential = UUID()
         var timings = fastTimings
         timings.readLimit = .seconds(2)
-        try vault.store("LVRG-TOKEN-000000000705", credentialID: credential)
+        try vault.store(ProviderToken(provider: .openaiApi, value: "LVRG-TOKEN-000000000705"), credentialID: credential)
         let read = UsageRead(
             api: rig.api, settings: rig.settings, timings: timings,
             http: try ProviderHTTP(executableURL: URL(fileURLWithPath: "/test/LeverageHelper"), environment: [:],

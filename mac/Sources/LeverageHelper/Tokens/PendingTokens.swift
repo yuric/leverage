@@ -7,8 +7,8 @@ actor PendingTokens: HidesToken {
     private static let lifetime: Duration = .seconds(60)
 
     private enum Payload: Sendable {
-        case token(String)
-        case waiter(CheckedContinuation<String?, Never>)
+        case token(ProviderToken)
+        case waiter(CheckedContinuation<ProviderToken?, Never>)
     }
 
     private struct Slot: Sendable {
@@ -17,7 +17,7 @@ actor PendingTokens: HidesToken {
         let payload: Payload
         let timer: Task<Void, Never>
 
-        func finish(returning token: String? = nil) {
+        func finish(returning token: ProviderToken? = nil) {
             timer.cancel()
             if case .waiter(let continuation) = payload {
                 continuation.resume(returning: token)
@@ -45,7 +45,7 @@ actor PendingTokens: HidesToken {
         for slot in slots.values { slot.finish() }
     }
 
-    func insert(_ token: String, credentialID: UUID) {
+    func insert(_ token: ProviderToken, credentialID: UUID) {
         let receivedAt = now()
         if let slot = slots.removeValue(forKey: credentialID) {
             if case .waiter = slot.payload, receivedAt < slot.deadline {
@@ -57,10 +57,10 @@ actor PendingTokens: HidesToken {
         schedule(.token(token), credentialID: credentialID, id: UUID(), deadline: receivedAt + Self.lifetime)
     }
 
-    func take(credentialID: UUID) async -> String? {
+    func take(credentialID: UUID) async -> ProviderToken? {
         let waiterID = UUID()
         return await withTaskCancellationHandler {
-            let token: String? = await withCheckedContinuation { continuation in
+            let token: ProviderToken? = await withCheckedContinuation { continuation in
                 guard !Task.isCancelled else {
                     continuation.resume(returning: nil)
                     return

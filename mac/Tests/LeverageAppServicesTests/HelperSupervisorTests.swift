@@ -106,7 +106,7 @@ struct HelperSupervisorTests {
         let helperReady = await eventually { fake.log.contains("fake helper run 1") }
         #expect(helperReady)
         do {
-            try await helper.send(.token(credentialID: id, token: token))
+            try await helper.send(.token(credentialID: id, provider: .openrouter, token: token))
             #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
         } catch {
             Issue.record("token send failed while the helper was running")
@@ -116,8 +116,9 @@ struct HelperSupervisorTests {
         let lines = fake.inputLines(ofRun: 1)
         #expect(lines.count == 1)
         let sent = lines.first.flatMap { try? LocalHelperMessage.decodeLine($0) }
-        if case .token(let receivedID, let receivedToken) = sent {
+        if case .token(let receivedID, let provider, let receivedToken) = sent {
             #expect(receivedID == id)
+            #expect(provider == .openrouter)
             let tokenUnchanged = receivedToken == token
             #expect(tokenUnchanged)
         } else {

@@ -1,6 +1,9 @@
 import Foundation
 import LeverageKit
 import Testing
+#if canImport(Security)
+import Security
+#endif
 
 @testable import LeverageHelper
 
@@ -42,13 +45,28 @@ struct TokenVaultsTests {
         #expect(!TokenVaults.isBundled(executableURL: testRunner))
     }
 
+    #if canImport(Security)
+    @Test("a Keychain record needs the provider metadata written alongside its value")
+    func storedProvider() throws {
+        let sample = ProviderToken(provider: .grokApi, value: "LVRG-TOKEN-000000000707")
+        var item = KeychainTokenVault.attributes(for: sample)
+        #expect(item[kSecAttrGeneric as String] == Data(sample.provider.rawValue.utf8))
+        let matches = try KeychainTokenVault.token(in: item) == sample
+        #expect(matches)
+        item[kSecAttrGeneric as String] = nil
+        #expect(throws: TokenVaultFailure.unboundProvider) { try KeychainTokenVault.token(in: item) }
+        item[kSecAttrGeneric as String] = Data(Provider.codex.rawValue.utf8)
+        #expect(throws: TokenVaultFailure.unboundProvider) { try KeychainTokenVault.token(in: item) }
+    }
+    #endif
+
     @Test("memory vault stores, replaces and deletes by credential ID")
     func memoryVault() throws {
         let vault = MemoryTokenVault()
         let first = UUID()
         let second = UUID()
-        let token = "LVRG-TOKEN-bf493a02950e"
-        let newToken = "LVRG-TOKEN-beef310cd75a"
+        let token = ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-bf493a02950e")
+        let newToken = ProviderToken(provider: .geminiApi, value: "LVRG-TOKEN-beef310cd75a")
 
         try vault.store(token, credentialID: first)
         try vault.store(token, credentialID: second)
@@ -64,4 +82,11 @@ struct TokenVaultsTests {
         #expect(firstIsGone)
         #expect(secondIsPresent)
     }
+}
+
+/// Models a Keychain that refuses access without calling the Security API.
+struct LockedTestVault: TokenVault {
+    func store(_ token: ProviderToken, credentialID: UUID) throws { throw CocoaError(.fileWriteNoPermission) }
+    func read(credentialID: UUID) throws -> ProviderToken? { throw CocoaError(.fileReadNoPermission) }
+    func delete(credentialID: UUID) throws { throw CocoaError(.fileWriteNoPermission) }
 }

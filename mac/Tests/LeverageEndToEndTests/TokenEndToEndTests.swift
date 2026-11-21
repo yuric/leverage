@@ -155,7 +155,7 @@ struct TokenEndToEndTests {
         _ sample: Sample, id: UUID, name: String, helper: RunningHelper, owner: OwnerClient,
         failure: HelperCheckFailure? = nil
     ) async throws {
-        try await helper.send(.token(credentialID: id, token: sample.marker))
+        try await helper.send(.token(credentialID: id, provider: sample.provider, token: sample.marker))
         let request = AddCredentialRequest(credentialID: id, kind: .apiToken, provider: sample.provider,
                                            name: name, maskedLabel: MaskedLabel.forToken(sample.marker))
         let add = try await owner.addCredential(request, key: IdempotencyKey()).completedResult()

@@ -16,7 +16,7 @@ struct CredentialCleanupTests {
         let log = CapturedLog()
         let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
                                         requests: RunningRequests(), log: log.log)
-        try vault.store("LVRG-TOKEN-000000000706", credentialID: credential)
+        try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000706"), credentialID: credential)
         let owned = try cleanup.createFolder(for: credential)
         let external = try rig.folders.createFresh(for: other)
 
@@ -55,6 +55,24 @@ struct CredentialCleanupTests {
         #expect(files.fileExists(atPath: sibling.path))
     }
 
+    @Test("an unavailable vault keeps the removal queued until a later helper completes it")
+    func retriesFailedVaultDeletion() async throws {
+        let rig = try HelperRig()
+        let id = UUID()
+        let queue = PendingCredentialRemovals(supportFolder: rig.support)
+        try queue.insert(id)
+        let folder = try rig.folders.createFresh(for: id)
+        func helper(_ vault: any TokenVault) -> CredentialCleanup {
+            CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
+                              requests: RunningRequests(), log: quietLog)
+        }
+        await helper(LockedTestVault()).forget(id)
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+        #expect(try queue.pending() == [id])
+        await helper(MemoryTokenVault()).forget(id)
+        #expect(try queue.pending().isEmpty)
+    }
+
     @Test("confirmed removal preserves a linked account, linked root, mismatched marker and shared legacy folder")
     func preservesUnownedDirectories() async throws {
         for kind in ["account link", "root link", "wrong marker", "shared folder", "shared root"] {
@@ -87,6 +105,7 @@ struct CredentialCleanupTests {
                                             requests: RunningRequests(), log: quietLog)
             await cleanup.forget(id)
             #expect(files.fileExists(atPath: target.path), "\(kind)")
+            #expect(files.fileExists(atPath: queue.appendingPathComponent(id.contractString).path), "\(kind)")
         }
     }
 

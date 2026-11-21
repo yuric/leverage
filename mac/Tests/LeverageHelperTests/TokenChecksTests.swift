@@ -48,7 +48,7 @@ struct TokenChecksTests {
             executableURL: URL(fileURLWithPath: "/test/LeverageHelper"), environment: [:],
             protocolClasses: [StubURLProtocol.self])
         let request = helperRequest(.runAddChecks, credential: credential, params: .init(provider: provider, credentialKind: .apiToken))
-        await pending.insert(token, credentialID: credential)
+        await pending.insert(ProviderToken(provider: provider, value: token), credentialID: credential)
         var check = CheckRun(request: request, api: rig.api, log: quietLog)
         let result = await TokenChecks(pending: pending, vault: vault, http: transport, timeout: Patience.scaled(.seconds(30)))
             .run(provider, credentialID: credential, adding: true, check: &check)
@@ -70,7 +70,7 @@ struct TokenChecksTests {
         let stub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
         defer { stub.invalidateAndCancel() }
         let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
-                                    vault: UnavailableTokenVault(), http: try stubTransport())
+                                    vault: LockedTestVault(), http: try stubTransport())
         for kind in [HelperRequestKind.runAddChecks, .verify, .readUsage] {
             let id = UUID()
             if kind == .runAddChecks { try await paste(into: runtime, id: id, provider: provider) }
@@ -87,8 +87,8 @@ struct TokenChecksTests {
     func selectedProvider() async throws {
         let rig = try HelperRig()
         let observations = UsageReadTests.recordReadings(rig)
-        let chosen = Provider.openaiApi
-        let chosenHost = "api.openai.com"
+        let chosen = Provider.claudeApi
+        let chosenHost = "api.anthropic.com"
         let chosenStub = StubURLProtocol.session(host: chosenHost, answer: .init(status: 200, json: "{}"))
         let otherStub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
         defer { chosenStub.invalidateAndCancel(); otherStub.invalidateAndCancel() }
@@ -108,7 +108,8 @@ struct TokenChecksTests {
         for kind in [HelperRequestKind.verify, .readUsage] {
             #expect(await run(kind, for: provider)?.checks.last?.failure?.rawValue == "provider_mismatch")
         }
-        #expect(StubURLProtocol.requests(host: host).isEmpty)
+        let otherRequests = StubURLProtocol.requests(host: host).count
+        #expect(otherRequests == 0)
         #expect(StubURLProtocol.requests(host: chosenHost).count == 1)
         #expect(observations.value.map(\.state) == [.unavailable])
     }
@@ -119,9 +120,7 @@ struct TokenChecksTests {
     }
 
     private func paste(into runtime: HelperRuntime, id: UUID, provider: Provider) async throws {
-        var line = try JSONSerialization.data(withJSONObject: [
-            "version": 1, "kind": "token", "credential_id": id.uuidString, "token": token, "provider": provider.rawValue,
-        ])
+        var line = try LocalHelperMessage.token(credentialID: id, provider: provider, token: token).encodeLine()
         line.append(0x0A)
         let input = Pipe()
         try input.fileHandleForWriting.write(contentsOf: line)
@@ -152,10 +151,4 @@ struct TokenChecksTests {
         }
         #expect(StubURLProtocol.requests(host: host).isEmpty)
     }
-}
-
-private struct UnavailableTokenVault: TokenVault {
-    func store(_ token: String, credentialID: UUID) throws { throw CocoaError(.fileWriteNoPermission) }
-    func read(credentialID: UUID) throws -> String? { throw CocoaError(.fileReadNoPermission) }
-    func delete(credentialID: UUID) throws {}
 }

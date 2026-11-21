@@ -2,7 +2,7 @@ import Foundation
 
 /// The local line sent from the app to the helper's standard input.
 public enum LocalHelperMessage: Sendable, HidesToken {
-    case token(credentialID: UUID, token: String)
+    case token(credentialID: UUID, provider: Provider, token: String)
     case forget(credentialID: UUID)
 
     public enum CodingError: Error, Equatable, Sendable {
@@ -16,12 +16,14 @@ public enum LocalHelperMessage: Sendable, HidesToken {
     /// A UTF-8 JSON object without its terminating LF. Only the local channel
     /// encodes this value.
     public func encodeLine() throws -> Data {
-        let token: String?
+        let message: WireMessage
         switch self {
-        case .token(_, let value): token = value
-        case .forget: token = nil
+        case .token(let id, let provider, let token):
+            guard provider.kind == .apiToken else { throw CodingError.invalidLine }
+            message = WireMessage(version: kind.version, kind: kind, credentialID: id, provider: provider, token: token)
+        case .forget(let id):
+            message = WireMessage(version: kind.version, kind: kind, credentialID: id, provider: nil, token: nil)
         }
-        let message = WireMessage(version: Self.version, kind: kind, credentialID: credentialID, token: token)
         guard let data = try? JSONEncoder().encode(message) else { throw CodingError.invalidLine }
         return data
     }
@@ -31,19 +33,19 @@ public enum LocalHelperMessage: Sendable, HidesToken {
         // held a token or a caller supplied an arbitrary line.
         guard !line.contains(0x0A), !line.contains(0x0D),
               let message = try? JSONDecoder().decode(WireMessage.self, from: line),
-              message.version == version else {
+              message.version == message.kind.version else {
             throw CodingError.invalidLine
         }
         switch message.kind {
         case .token:
-            guard let token = message.token else { throw CodingError.invalidLine }
-            return .token(credentialID: message.credentialID, token: token)
+            guard let provider = message.provider, provider.kind == .apiToken, let token = message.token else {
+                throw CodingError.invalidLine
+            }
+            return .token(credentialID: message.credentialID, provider: provider, token: token)
         case .forget:
             return .forget(credentialID: message.credentialID)
         }
     }
-
-    private static let version = 1
 
     private var kind: Kind {
         switch self {
@@ -54,23 +56,27 @@ public enum LocalHelperMessage: Sendable, HidesToken {
 
     private var credentialID: UUID {
         switch self {
-        case .token(let id, _), .forget(let id): return id
+        case .token(let id, _, _), .forget(let id): return id
         }
     }
 
     private enum Kind: String, Codable {
         case token
         case forget
+
+        // An older helper must refuse a token line whose provider it would ignore.
+        var version: Int { self == .token ? 2 : 1 }
     }
 
     private struct WireMessage: Codable {
         let version: Int
         let kind: Kind
         let credentialID: UUID
+        let provider: Provider?
         let token: String?
 
         enum CodingKeys: String, CodingKey {
-            case version, kind, token
+            case version, kind, provider, token
             case credentialID = "credential_id"
         }
     }

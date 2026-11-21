@@ -8,18 +8,18 @@ struct LocalHelperMessageTests {
     private let credentialID = UUID(uuidString: "00112233-4455-6677-8899-AABBCCDDEEFF")!
     private let madeUpToken = "sk-LVRG-TOKEN-000000000001-for-tests"
 
-    @Test("version 1 token and forget messages each encode as one JSON object and decode")
+    @Test("version 2 token and version 1 forget messages each encode as one JSON object and decode")
     func roundTrips() throws {
         let token = madeUpToken + "\"\\\n\r"
-        let grantLine = try LocalHelperMessage.token(credentialID: credentialID, token: token).encodeLine()
+        let grantLine = try LocalHelperMessage.token(credentialID: credentialID, provider: .openrouter, token: token).encodeLine()
         let forgetLine = try LocalHelperMessage.forget(credentialID: credentialID).encodeLine()
 
         let grantWireFormatMatches = matchesWireFormat(grantLine, kind: "token", token: token)
         #expect(grantWireFormatMatches)
         #expect(matchesWireFormat(forgetLine, kind: "forget", token: nil))
         let grantMatches: Bool
-        if case .token(let id, let decodedToken) = try LocalHelperMessage.decodeLine(grantLine) {
-            grantMatches = id == credentialID && decodedToken == token
+        if case .token(let id, let provider, let decodedToken) = try LocalHelperMessage.decodeLine(grantLine) {
+            grantMatches = id == credentialID && provider == .openrouter && decodedToken == token
         } else {
             grantMatches = false
         }
@@ -36,10 +36,11 @@ struct LocalHelperMessageTests {
               let object = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] else {
             return false
         }
-        let fields = token == nil ? ["version", "kind", "credential_id"] : ["version", "kind", "credential_id", "token"]
-        return Set(object.keys) == Set(fields) && object["version"] as? Int == 1
+        let fields = token == nil ? ["version", "kind", "credential_id"] : ["version", "kind", "credential_id", "provider", "token"]
+        return Set(object.keys) == Set(fields) && object["version"] as? Int == (token == nil ? 1 : 2)
             && object["kind"] as? String == kind
             && (object["credential_id"] as? String).flatMap(UUID.init(uuidString:)) == credentialID
+            && object["provider"] as? String == (token == nil ? nil : "openrouter")
             && object["token"] as? String == token
     }
 
@@ -56,7 +57,9 @@ struct LocalHelperMessageTests {
             #"{"version":"1","kind":"forget","credential_id":"\#(credentialID)"}"#,
             #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":false}"#,
             #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)"}"#,
-            #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)","provider":"codex"}"#,
+            #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)","provider":"openrouter"}"#,
+            #"{"version":2,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)"}"#,
+            #"{"version":2,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)","provider":"codex"}"#,
             "not JSON",
         ]
         for line in lines {
@@ -80,7 +83,7 @@ struct LocalHelperMessageTests {
 
     @Test("descriptions, dumps and reflection show the kind and id and remove the token")
     func safelyPrintable() {
-        let message = LocalHelperMessage.token(credentialID: credentialID, token: madeUpToken)
+        let message = LocalHelperMessage.token(credentialID: credentialID, provider: .openrouter, token: madeUpToken)
         var dumped = ""
         dump(message, to: &dumped)
         let children = Mirror(reflecting: message).children.map { String(reflecting: $0.value) }

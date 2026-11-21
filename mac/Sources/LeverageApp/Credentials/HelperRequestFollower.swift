@@ -82,6 +82,8 @@ extension CredentialsCopy {
         guard let failed = request.failedCheck, let failure = failed.failure else { return failedGeneric.text }
         let copy: CredentialsCopy
         switch failure {
+        case .tokenStoreUnavailable, .providerMismatch:
+            return AddTokenCopy.failureLine(for: failure, provider: ProviderNames.name(provider))
         case .notInstalled: copy = .failNotInstalled
         case .notSignedIn: copy = .failNotSignedIn
         case .noAnswer: copy = .failNoAnswer

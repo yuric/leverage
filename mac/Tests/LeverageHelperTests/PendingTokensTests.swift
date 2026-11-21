@@ -7,7 +7,7 @@ import Testing
 @Suite("Pending API tokens", .timeLimit(.minutes(Patience.minutes(1))))
 struct PendingTokensTests {
     private let credentialID = UUID()
-    private let token = "LVRG-TOKEN-8acbea194b70"
+    private let token = ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-8acbea194b70")
 
     @Test("a waiting add takes the token that arrives four seconds later")
     func arrivesWithinDeadline() async throws {
@@ -95,7 +95,7 @@ struct PendingTokensTests {
     }
 
     private func beginTake(
-        from pending: PendingTokens, expecting expected: String?
+        from pending: PendingTokens, expecting expected: ProviderToken?
     ) -> (Task<Void, Never>, Locked<Bool?>) {
         let completed = Locked<Bool?>(nil)
         let task = Task {

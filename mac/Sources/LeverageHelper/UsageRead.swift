@@ -35,8 +35,8 @@ struct UsageRead: Sendable {
             observation = try await observe(provider, credentialID: credential, kind: kind)
         } catch is TimeExpired {
             observation = Observation(failure: .timedOut)
-        } catch let error as ProviderHTTP.Failure where error.code == .timedOut {
-            observation = Observation(failure: .timedOut)
+        } catch let error as ProviderHTTP.Failure {
+            observation = Observation(failure: error.checkFailure)
         } catch {
             observation = Observation(failure: .unreachable)
         }
@@ -86,12 +86,17 @@ struct UsageRead: Sendable {
     private func readToken(
         _ provider: Provider, credentialID: UUID, deadline: ContinuousClock.Instant
     ) async throws -> Observation {
-        guard let token = try vault.read(credentialID: credentialID) else {
-            return Observation(failure: .notSignedIn)
+        let stored: ProviderToken?
+        do {
+            stored = try vault.read(credentialID: credentialID)
+        } catch {
+            return Observation(failure: TokenVaultFailure.checkFailure(for: error))
         }
-        let response = try await http.get(provider, token: token, timeout: deadline - ContinuousClock.now)
-        return Observation(reading: TokenReaders.read(
-            provider: provider, status: response.status, headers: response.headers, body: response.body))
+        guard let token = stored else { return Observation(failure: .notSignedIn) }
+        guard token.provider == provider else { return Observation(failure: .providerMismatch) }
+        let response = try await http.get(token.provider, token: token.value, timeout: deadline - ContinuousClock.now)
+        let reading = TokenReaders.read(provider: provider, status: response.status, headers: response.headers, body: response.body)
+        return Observation(reading: reading, failure: reading.state == .unavailable ? .noAnswer : nil)
     }
 
     private func readLogin(

@@ -4,7 +4,7 @@ enum AddTokenCopy: OwnerFacingCopy {
     case loginProviders, tokenProviders, stepName, nameLabel, tokenLabel, add
     case nameContainsToken, checkWorks
     case helperNotRunning
-    case failRejected, failUnreachable, failTimedOut, failMissing
+    case failRejected, failUnreachable, failTimedOut, failMissing, failStore, failProvider, failAnswer
 
     var text: String {
         switch self {
@@ -20,6 +20,9 @@ enum AddTokenCopy: OwnerFacingCopy {
         case .failRejected: "{provider} rejected this token."
         case .failUnreachable: "{provider} could not be reached. Check this Mac's internet connection."
         case .failTimedOut: "{provider} took too long to check the token."
+        case .failStore: "leverage could not access this Mac’s Keychain. Check Keychain access and try again."
+        case .failProvider: "Check the token’s provider and add it again. Remove the old token first if it is listed."
+        case .failAnswer: "{provider} could not complete the token check."
         case .failMissing: "This token is missing on this Mac."
         }
     }
@@ -30,6 +33,9 @@ enum AddTokenCopy: OwnerFacingCopy {
         case .rejected: copy = .failRejected
         case .unreachable: copy = .failUnreachable
         case .timedOut: copy = .failTimedOut
+        case .tokenStoreUnavailable: copy = .failStore
+        case .providerMismatch: copy = .failProvider
+        case .noAnswer: copy = .failAnswer
         case .notSignedIn: copy = .failMissing
         default: return CredentialsCopy.failedGeneric.text
         }

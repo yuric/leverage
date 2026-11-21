@@ -248,7 +248,7 @@ extension AddChecksTests {
         let vault = MemoryTokenVault()
         let credential = UUID()
         let token = "LVRG-TOKEN-000000000703"
-        await pending.insert(token, credentialID: credential)
+        await pending.insert(ProviderToken(provider: .geminiApi, value: token), credentialID: credential)
         let stub = StubURLProtocol.session(host: "generativelanguage.googleapis.com", answer: .init(status: 200, json: "{}"))
         defer { stub.invalidateAndCancel() }
         let transport = try ProviderHTTP(

@@ -12,7 +12,7 @@ struct CredentialTestSupportTests {
         let runtime = FakeAppRuntime()
         let credentialID = UUID()
         let token = "LVRG-TOKEN-000000000001"
-        try await runtime.helper.send(.token(credentialID: credentialID, token: token))
+        try await runtime.helper.send(.token(credentialID: credentialID, provider: .openrouter, token: token))
         runtime.fakeHelper.sendFailure.value = SendFailure.unavailable
         await #expect(throws: SendFailure.unavailable) {
             try await runtime.helper.send(.forget(credentialID: credentialID))
@@ -20,12 +20,13 @@ struct CredentialTestSupportTests {
 
         let messages = runtime.fakeHelper.messages.value
         try #require(messages.count == 2)
-        guard case .token(let recordedID, let recordedToken) = messages[0],
+        guard case .token(let recordedID, let provider, let recordedToken) = messages[0],
               case .forget(let forgottenID) = messages[1] else {
             Issue.record("expected a token message followed by a forget message")
             return
         }
         #expect(recordedID == credentialID)
+        #expect(provider == .openrouter)
         let tokenMatches = recordedToken == token
         #expect(tokenMatches)
         #expect(forgottenID == credentialID)

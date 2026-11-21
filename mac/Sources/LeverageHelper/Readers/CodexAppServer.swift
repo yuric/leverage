@@ -67,9 +67,18 @@ enum CodexAppServer {
                 else { throw SessionFailure.differentHome }
                 try await write(Message(method: "initialized"), to: child)
                 let reply = try await read(child)
+                try Task.checkCancellation()
+                guard ContinuousClock.now < account.deadline else { throw SessionFailure.invalidReply }
                 child.closeInput()
+                // Give EOF a short grace period. An acknowledged read does
+                // not depend on the server's shutdown behavior or exit code.
+                let stop = Task {
+                    try await Task.sleep(for: .milliseconds(250))
+                    child.stop()
+                }
+                defer { stop.cancel() }
                 let result = await child.wait()
-                return result.succeeded && !result.outputTruncated && !Task.isCancelled ? reply : nil
+                return !result.outputTruncated && !Task.isCancelled ? reply : nil
             } catch {
                 child.closeInput()
                 child.stop()

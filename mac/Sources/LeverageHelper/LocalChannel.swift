@@ -71,8 +71,8 @@ struct LocalChannel: Sendable {
             return
         }
         switch message {
-        case .token(let id, let token):
-            await cleanup.acceptToken(token, credentialID: id)
+        case .token(let id, let provider, let token):
+            await cleanup.acceptToken(ProviderToken(provider: provider, value: token), credentialID: id)
         case .forget(let id):
             await cleanup.forget(id)
         }

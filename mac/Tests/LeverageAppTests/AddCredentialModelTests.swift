@@ -546,9 +546,9 @@ struct AddCredentialModelTests {
             result: Fixtures.finished())
     }
 
-    private nonisolated static func isExpectedSend(_ message: LocalHelperMessage?, credentialID: UUID) -> Bool {
-        guard case .token(let id, let token)? = message else { return false }
-        return id == credentialID && token == madeUpToken
+    private nonisolated static func isExpectedSend(_ message: LocalHelperMessage?, credentialID: UUID, provider: Provider) -> Bool {
+        guard case .token(let id, let selected, let token)? = message else { return false }
+        return id == credentialID && selected == provider && token == madeUpToken
     }
 
     private static func holdsToken(_ model: AddCredentialModel) -> Bool {
@@ -624,7 +624,7 @@ struct AddCredentialModelTests {
             let add = answers.addCredential
             answers.addCredential = { request, key in
                 let messages = runtime.fakeHelper.messages.value
-                helperSentFirst.value = messages.count == 1 && Self.isExpectedSend(messages.first, credentialID: id)
+                helperSentFirst.value = messages.count == 1 && Self.isExpectedSend(messages.first, credentialID: id, provider: .openaiApi)
                 return try await add(request, key)
             }
         }
@@ -672,6 +672,8 @@ struct AddCredentialModelTests {
     func tokenRetry() async throws {
         let cases: [(HelperCheckFailure, String)] = [
             (.noAnswer, "OpenRouter could not complete the token check."),
+            (.tokenStoreUnavailable, "leverage could not access this Mac’s Keychain. Check Keychain access and try again."),
+            (.providerMismatch, "Check the token’s provider and add it again. Remove the old token first if it is listed."),
             (.rejected, "OpenRouter rejected this token."),
             (.unreachable, "OpenRouter could not be reached. Check this Mac's internet connection."),
             (.timedOut, "OpenRouter took too long to check the token."),
@@ -702,7 +704,7 @@ struct AddCredentialModelTests {
             await model.retry()
             #expect(sendsAtAdd.value == [1, 2])
             let resendsSameToken = runtime.fakeHelper.messages.value.allSatisfy {
-                Self.isExpectedSend($0, credentialID: id)
+                Self.isExpectedSend($0, credentialID: id, provider: .openrouter)
             }
             #expect(resendsSameToken)
             let adds = Fixtures.calls(owner, .addCredential)

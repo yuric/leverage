@@ -202,7 +202,7 @@ final class AddCredentialModel {
         }
         let request = AddCredentialRequest(
             credentialID: credentialID, kind: .apiToken, provider: provider, name: trimmedName,
-            maskedLabel: MaskedLabel.forToken(token))
+            maskedLabel: MaskedLabel.forToken(trimmedToken))
         await startChecks(request)
     }
 
@@ -226,7 +226,7 @@ final class AddCredentialModel {
         if isToken && tokenCheck == nil {
             do {
                 try Task.checkCancellation()
-                try await helper.send(.token(credentialID: credentialID, token: token))
+                try await helper.send(.token(credentialID: credentialID, provider: provider, token: trimmedToken))
             } catch is CancellationError {
                 return
             } catch {
