@@ -104,11 +104,30 @@ class ReadingCapacityTest < ActiveSupport::TestCase
     refute shown?([ limit("five_hour", 1) ], created_at: @limited_since + 1.hour)
   end
 
-  test "the newest refusal determines the window" do
+  test "every window refused since this limit began needs evidence of room" do
     report_limit(window: "weekly")
     report_limit(window: "five_hour")
 
-    assert shown?([ limit("five_hour", 1), limit("weekly", 100) ])
+    refute shown?([ limit("five_hour", 1) ])
+    refute shown?([ limit("five_hour", 1), limit("weekly", 100) ])
+    assert shown?([ limit("five_hour", 1), limit("weekly", 2) ])
+  end
+
+  test "a refusal without a window also requires room in every limit figure" do
+    report_limit(window: nil)
+    report_limit(window: "five_hour")
+
+    refute shown?([ limit("five_hour", 1), limit("weekly", 100) ])
+    refute shown?([ limit("weekly", 1) ])
+    assert shown?([ limit("five_hour", 1) ])
+  end
+
+  test "refusals before this limit began do not determine its windows" do
+    report_limit(window: "weekly")
+    @limited_since = @scenario.database_now
+    report_limit(window: "five_hour")
+
+    assert shown?([ limit("five_hour", 1) ])
   end
 
   test "a newer refusal for another credential does not determine the window" do

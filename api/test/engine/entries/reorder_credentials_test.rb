@@ -78,6 +78,25 @@ class ReorderCredentialsTest < ActiveSupport::TestCase
     assert_nil Leverage::Candidates.due_at(seat, task, from_now(0))
   end
 
+  test "events follow rank changes among added credentials even when a removal leaves a gap" do
+    first, removed, second, third = Array.new(4) { scenario.credential }
+    assert_completed owner_command("remove_credential", { "id" => removed.id })
+    written = events_written { assert_completed reorder([ third, second, first ]) }
+
+    assert_equal [ [ "credential.order_changed", third.id ], [ "credential.order_changed", first.id ] ], typed(written)
+    assert_equal [ 1, 2, 3 ], [ third, second, first ].map { |credential| credential.reload.position }
+  end
+
+  test "a credential whose rank moves gets an event even if its stored position stays the same" do
+    removed, first, second = Array.new(3) { scenario.credential }
+    assert_completed owner_command("remove_credential", { "id" => removed.id })
+
+    written = events_written { assert_completed reorder([ second, first ]) }
+
+    assert_equal [ second.id, first.id ], written.map(&:subject_id)
+    assert_equal 2, first.reload.position
+  end
+
   test "an equal order writes no event and does not reconsider holds" do
     own = scenario.credential
     token = scenario.token_credential

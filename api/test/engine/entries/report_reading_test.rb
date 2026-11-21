@@ -45,6 +45,19 @@ class ReportReadingTest < ActiveSupport::TestCase
     assert_empty CredentialReading.where(workspace_id: scenario.workspace_id)
   end
 
+  test "the command accepts at most sixty seconds of helper clock skew" do
+    credential = scenario.credential
+    clock = Leverage::WorkspaceLock.method(:clock)
+    now = from_now(5).round(6)
+    Leverage::WorkspaceLock.define_singleton_method(:clock) { now }
+
+    assert_completed report_reading(credential, observed_at: now + 60)
+    assert_raises(T::Invalid) { report_reading(credential, observed_at: now + 60 + Rational(1, 1_000_000)) }
+    assert_equal [ now + 60 ], CredentialReading.newest_for(credential).pluck(:observed_at)
+  ensure
+    Leverage::WorkspaceLock.define_singleton_method(:clock, clock) if clock
+  end
+
   test "a reading must have an ISO 8601 observation time" do
     params = reading_params(scenario.credential).merge("observed_at" => "made-up invalid time")
 
@@ -96,19 +109,41 @@ class ReportReadingTest < ActiveSupport::TestCase
     assert_limit_cleared(spare, seat, task, hold)
   end
 
-  test "capacity does not close an unrelated hold or one for a sign-out" do
+  test "capacity does not close an unrelated hold" do
     recovered = scenario.limit_credential(scenario.credential)
     own = scenario.credential
     builder = scenario.seat(credential: own)
     unrelated = scenario.task(state: "working", builder: builder)
     unrelated_hold = scenario.hold(unrelated, reason: "credential_limit", credential: own)
-    signed_out = scenario.task(state: "working", builder: scenario.seat(credential: recovered))
-    signed_out_hold = scenario.hold(signed_out, reason: "credential_signed_out", credential: recovered)
 
     assert_empty events_written { assert_completed(report_reading(recovered)) }
     assert_nil recovered.reload.limited_since
     assert_nil unrelated_hold.reload.closed_at
-    assert_nil signed_out_hold.reload.closed_at
+  end
+
+  test "a signed-out hold resumes on the recovered fallback at the reading command time" do
+    own = scenario.credential
+    fallback = scenario.limit_credential(scenario.credential(provider: "codex"))
+    seat = scenario.seat(credential: own, wanted_running: true)
+    task = scenario.task(state: "working", builder: seat)
+    assert_completed report_signed_out(own, seat, task: task)
+    hold = open_hold(task)
+    assert_equal "credential_signed_out", hold.reason
+    item = InboxItem.find_by!(hold_id: hold.id)
+    clock = Leverage::WorkspaceLock.method(:clock)
+    now = from_now(10).round(6)
+    Leverage::WorkspaceLock.define_singleton_method(:clock) { now }
+
+    written = events_written { assert_completed report_reading(fallback, observed_at: now, key: "recovered-fallback") }
+
+    assert_equal [ [ "hold.closed", hold.id ], [ "credential.switched", fallback.id ], [ "inbox.resolved", item.id ] ], typed(written)
+    assert_helper_events(written, "recovered-fallback")
+    assert_equal [ now ], written.map(&:effective_at).uniq
+    assert_equal "signed_out", own.reload.state
+    assert_equal "resolved", item.reload.state
+    assert_limit_cleared(fallback, seat, task, hold)
+  ensure
+    Leverage::WorkspaceLock.define_singleton_method(:clock, clock) if clock
   end
 
   test "capacity never signs in a credential or ends a hold through a signed-out credential" do
@@ -143,6 +178,24 @@ class ReportReadingTest < ActiveSupport::TestCase
       assert_nil hold.reload.closed_at, reading.inspect
     end
     assert_equal cases.size, CredentialReading.newest_for(credential).count
+  end
+
+  test "overlapping limits need a reading observed after both reports with room in both windows" do
+    credential = scenario.credential
+    seats = Array.new(2) { scenario.seat(credential: credential) }
+    tasks = seats.map { |seat| scenario.task(state: "working", builder: seat) }
+    assert_completed report_limit(credential, seats.first, task: tasks.first, window: "weekly")
+    started = credential.reload.limited_since
+    assert_completed report_limit(credential, seats.last, task: tasks.last, window: "five_hour")
+    latest = Event.where(subject_id: credential.id, type: "credential.limit_reached").maximum(:effective_at)
+    figures = [ limit_figure(1, window: "weekly"), limit_figure(2) ]
+
+    assert_empty events_written { assert_completed report_reading(credential, observed_at: latest, figures: figures) }
+    assert_empty events_written { assert_completed report_reading(credential, figures: [ figures.last ]) }
+    assert_equal started, credential.reload.limited_since
+    assert_completed report_reading(credential, figures: figures)
+    assert_nil credential.reload.limited_since
+    assert tasks.all? { |task| open_hold(task).nil? }
   end
 
   test "a limit with no named window needs room in every limit figure" do

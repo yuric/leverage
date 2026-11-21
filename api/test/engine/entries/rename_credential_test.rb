@@ -54,14 +54,23 @@ class RenameCredentialTest < ActiveSupport::TestCase
 
     written = events_written { assert_completed rename(credential, credential.name) }
 
-    assert_equal [ "credential.renamed" ], written.map(&:type)
+    assert_empty written
+  end
+
+  test "Rename trims names before saving and checking other names" do
+    credential = scenario.credential
+    scenario.credential(name: " Made-up taken ", added: false)
+    assert_refused "duplicate_name", rename(credential, "Made-up taken\t")
+    assert_completed rename(credential, "  Made-up new  ")
+    assert_equal "Made-up new", credential.reload.name
+    assert_empty events_written { assert_completed rename(credential, " Made-up new ") }
   end
 
   test "rejects an empty name without changing the credential" do
     credential = scenario.credential
     original_name = credential.name
 
-    assert_empty events_written { assert_raises(T::Invalid) { rename(credential, "") } }
+    assert_empty events_written { assert_raises(T::Invalid) { rename(credential, " \t ") } }
     assert_equal original_name, credential.reload.name
   end
 

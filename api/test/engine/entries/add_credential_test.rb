@@ -60,6 +60,18 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal before, counts.call
   end
 
+  test "Add trims names and rejects a blank name" do
+    id = SecureRandom.uuid
+    assert_completed owner_command("add_credential", body(id: id, name: "  Made-up account\t"))
+    assert_equal "Made-up account", Credential.find(id).name
+    assert_raises(T::Invalid) { owner_command("add_credential", body(name: " \t ")) }
+  end
+
+  test "Add checks the trimmed name against existing and pending names" do
+    scenario.credential(name: "  Made-up account ", added: false)
+    assert_refused "duplicate_name", owner_command("add_credential", body(name: "\tMade-up account "))
+  end
+
   test "the same name with another provider is a new credential" do
     assert_completed(owner_command("add_credential", body(name: "Made-up shared name")))
 

@@ -103,6 +103,19 @@ class RemoveCredentialTest < ActiveSupport::TestCase
     assert_equal before, history.map { |row| row.reload.attributes }
   end
 
+  test "removing a seat then its credential leaves the helper's stop available to finish" do
+    credential = scenario.credential
+    seat = scenario.seat(credential: credential, run_state: "running", wanted_running: true)
+    assert_completed owner_command("remove_seat", { "id" => seat.id })
+    stop = HelperRequest.find_by!(seat_id: seat.id, kind: "stop_seat")
+
+    assert_completed remove(credential.id)
+
+    assert_equal "queued", stop.reload.state
+    assert_completed helper_command("report_request_result", { "id" => stop.id, "result" => result_body(checks: []) })
+    assert_equal "finished", stop.reload.state
+  end
+
   test "finished work and resolved Needs you history survive Remove" do
     credential = scenario.credential
     done = scenario.task(state: "done")

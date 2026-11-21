@@ -15,6 +15,19 @@ class UsageReadsTest < ActiveSupport::TestCase
     refute Reads.helper_alive?(@at, workspace_id: Scenario.new.workspace_id)
   end
 
+  test "a helper report after the command time does not keep the helper alive" do
+    @scenario.live_helper(at: @at + 1.second)
+
+    refute Reads.helper_alive?(@at, workspace_id: @scenario.workspace_id)
+  end
+
+  test "a reading stored after the command time does not keep an account off the due list" do
+    credential = @scenario.credential
+    @scenario.reading(credential, observed_at: @at, created_at: @at + 1.second)
+
+    assert_equal [ credential.id ], due_ids
+  end
+
   test "due includes active logins and tokens without a reading or with one stored over nine minutes ago" do
     missing = @scenario.credential
     old = @scenario.token_credential

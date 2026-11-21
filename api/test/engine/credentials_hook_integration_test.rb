@@ -73,6 +73,13 @@ class CredentialsHookIntegrationTest < ActiveSupport::TestCase
     assert_equal builder.id, task.reload.holder_seat_id
   end
 
+  test "renaming to the same name writes nothing with a waiting action" do
+    unrelated_tasks
+    assert_empty events_written {
+      assert_completed owner_command("rename_credential", { "id" => @credential.id, "name" => @credential.name })
+    }
+  end
+
   test "a reorder matching the current order writes nothing with a waiting action" do
     unrelated_tasks
     assert_empty events_written { assert_completed owner_command("reorder_credentials", { "order" => [ @credential.id ] }) }.map(&:type)
