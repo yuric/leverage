@@ -23,6 +23,9 @@ public struct CodexDetector: Detector {
                 name: "an error event whose limit field names a window is a limit, with its resets_at",
                 replyFile: "run-limit-five-hour.json", basis: .invented),
             DetectorRule(
+                name: "five-hour limit with no reset time",
+                replyFile: "run-limit-five-hour-no-reset.json", basis: .invented),
+            DetectorRule(
                 name: "an error event naming a window's limit in words is a limit; no time stated, no reset",
                 replyFile: "run-limit-weekly-text.json", basis: .invented),
             DetectorRule(
