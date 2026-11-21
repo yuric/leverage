@@ -383,7 +383,7 @@ struct TaskPageModelTests {
     func pauseOffered() async {
         for state in TaskState.allCases {
             let (model, _, _) = await loaded(page(state))
-            let expected: Bool = [.backlog, .ready, .working, .inReview].contains(state)
+            let expected: Bool = [.backlog, .ready, .working, .inReview, .finishing].contains(state)
             #expect(model.canPause == expected, "\(state)")
         }
         let (paused, _, _) = await loaded(page(.working, holds: [Fixtures.hold(.ownerHold, taskID: taskID)]))
@@ -675,7 +675,7 @@ struct TaskPageModelTests {
         let expected: [StepKind: String] = [
             .idea: "Idea", .draft: "Writing the details", .waitContract: "Waiting for details",
             .check: "Being checked", .waitReady: "Waiting for an agent", .briefing: "Reading the task",
-            .build: "Building", .finish: "Wrapping up", .waitReview: "Waiting for a reviewer", .review: "Reviewing",
+            .build: "Building", .finish: "Carrying out what goes out", .waitReview: "Waiting for a reviewer", .review: "Reviewing",
             .waitBuilder: "Waiting for its agent", .rework: "Fixing after review", .waitOwner: "Waiting for you",
             .waitSeat: "Agent paused", .waitLimit: "Waiting for an account",
         ]

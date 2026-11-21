@@ -172,6 +172,15 @@ final class TaskPageModel {
             accounts: accountNames, ruleChecks: page.ruleChecks, clock: clock)
     }
 
+    var questions: [TaskQuestionRow] { [] }
+    var actions: [TaskActionRow] { [] }
+    var cancelExplanation: String { TaskPageCopy.cancelExplanation.text }
+    var canDeleteContent: Bool { false }
+    private(set) var isConfirmingDeleteContent = false
+
+    func askToDeleteContent() {}
+    func confirmDeleteContent() async {}
+
     // MARK: what the owner can do
 
     /// A task left in Backlog shows its form, filled in (MA-16).
