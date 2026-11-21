@@ -296,6 +296,35 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
+  test "a job timeout and a credential hold release at the same effective time are audited separately" do
+    scenario = Scenario.new
+    login = scenario.credential
+    fallback = scenario.credential(provider: "codex")
+    builder = scenario.seat(credential: login)
+    task = scenario.task(state: "working", builder: builder)
+    check = scenario.rule_check(task, rule: scenario.rule)
+    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
+    attempt.update_columns(queued_at: scenario.database_now - 1.day)
+    scenario.sign_out_credential(login, seat: builder, task: task)
+    scenario.hold(task, reason: "credential_signed_out", credential: login, facts: { credential_id: login.id })
+    after = scenario.workspace.reload.last_seq
+
+    T.apply(T::Request.new(command: "heartbeat", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: builder.id, key: "audit-timers", request_hash: "a" * 64, params: { "id" => task.id }))
+    events = Event.where(workspace_id: scenario.workspace_id, command_id: nil).where("seq > ?", after).order(:seq).to_a
+    assert_equal %w[job.timed_out job.requeued check.queued hold.closed credential.switched inbox.resolved], events.map(&:type)
+    assert_equal 1, events.map { |event| [ event.at, event.effective_at ] }.uniq.size
+    switch = events.fetch(4)
+    assert_equal events.fetch(3).id, switch.cause_id
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+
+    # A switch attributed to the timed-out job still has no matching row.
+    scenario.append("credential.switched", task: task, subject: fallback, at: switch.at, effective_at: switch.effective_at,
+      payload: switch.payload, cause_id: events.first.id)
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("credential.switched") }, found.inspect)
+  end
+
   # A timer's events have no key: the credential hold release (hold.closed,
   # credential.switched) is read as credential_hold_release, and the same
   # events as no timer writes them when no credential hold closes.
