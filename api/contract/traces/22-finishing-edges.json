@@ -1011,26 +1011,6 @@
           },
           {
             "ref": "@event:23",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:110",
-            "effective_at": "@t:110",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:1",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t1_1_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_12",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:24",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:110",
@@ -1057,6 +1037,26 @@
             }
           },
           {
+            "ref": "@event:24",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_1_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_12",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
+            }
+          },
+          {
             "ref": "@event:25",
             "type": "hold.opened",
             "schema_version": 1,
@@ -1069,7 +1069,7 @@
             "round": 0,
             "subject_kind": "hold",
             "subject_id": "$hold:t1_owner_approval",
-            "cause_id": "@event:24",
+            "cause_id": "@event:23",
             "command_id": "$key:submit_job_result_12",
             "payload": {
               "reason": "owner_approval",
@@ -1316,26 +1316,6 @@
           },
           {
             "ref": "@event:33",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:140",
-            "effective_at": "@t:140",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:1",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t1_2_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_15",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:34",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:140",
@@ -1359,6 +1339,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:34",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_2_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_15",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
@@ -3456,26 +3456,6 @@
           },
           {
             "ref": "@event:90",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:735",
-            "effective_at": "@t:735",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:2",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t2_1_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_45",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:91",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:735",
@@ -3499,6 +3479,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:91",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:735",
+            "effective_at": "@t:735",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t2_1_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_45",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
@@ -3640,26 +3640,6 @@
           },
           {
             "ref": "@event:96",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:755",
-            "effective_at": "@t:755",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:2",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t2_2_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_47",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:97",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:755",
@@ -3683,6 +3663,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:97",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:755",
+            "effective_at": "@t:755",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t2_2_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_47",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
@@ -3824,26 +3824,6 @@
           },
           {
             "ref": "@event:102",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:775",
-            "effective_at": "@t:775",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:2",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t2_3_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_49",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:103",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:775",
@@ -3867,6 +3847,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:103",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:775",
+            "effective_at": "@t:775",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t2_3_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_49",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
@@ -5213,26 +5213,6 @@
           },
           {
             "ref": "@event:139",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:955",
-            "effective_at": "@t:955",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:3",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t3_1_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_67",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:140",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:955",
@@ -5256,6 +5236,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:140",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:955",
+            "effective_at": "@t:955",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t3_1_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_67",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
@@ -8722,26 +8722,6 @@
           },
           {
             "ref": "@event:232",
-            "type": "cost.reported",
-            "schema_version": 1,
-            "at": "@t:1655",
-            "effective_at": "@t:1655",
-            "actor_kind": "seat",
-            "actor_id": "$seat:orchestrator",
-            "project_id": null,
-            "task_id": "$task:5",
-            "round": 0,
-            "subject_kind": "job",
-            "subject_id": "$job:t5_1_approval_r0_1",
-            "cause_id": null,
-            "command_id": "$key:submit_job_result_115",
-            "payload": {
-              "tokens": 50,
-              "spend": 0
-            }
-          },
-          {
-            "ref": "@event:233",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:1655",
@@ -8765,6 +8745,26 @@
               "result": "applied",
               "effect": "approved",
               "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:233",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:1655",
+            "effective_at": "@t:1655",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:5",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t5_1_approval_r0_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_115",
+            "payload": {
+              "tokens": 50,
+              "spend": 0
             }
           },
           {
