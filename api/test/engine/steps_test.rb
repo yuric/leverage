@@ -631,17 +631,20 @@ class StepTrackerTest < ActiveSupport::TestCase
     assert_equal [ "rule", rule.id ], open_step(task).values_at(:cause_kind, :cause_rule_id)
   end
 
-  test "escalation opens the Ready wait at task.reassigned" do
+  test "escalation closes review at review.failed and opens the Ready wait at task.reassigned" do
     @scenario = Scenario.new
     task = @scenario.task(state: "in_review")
     review = @scenario.review(task)
     criterion = Criterion.find_by!(task_id: task.id, kind: "build")
+    review_step = open_step(task)
+    failed = nil
     reassigned = in_context(key: "k-escalate", caller: [ "seat", review.reviewer_seat_id ]) do |ctx|
-      ctx.emit("review.failed", task: task, subject: review,
+      failed = ctx.emit("review.failed", task: task, subject: review,
         payload: { failed_criterion_ids: [ criterion.id ], failed_rule_check_id: nil, lease_seat_id: nil, wait_cause: nil })
       ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil })
     end
 
+    assert_equal failed.id, review_step.reload.closing_event_id
     assert_equal [ "wait_ready", 1, reassigned.id ], open_step(task).values_at(:kind, :round, :opening_event_id)
   end
 
