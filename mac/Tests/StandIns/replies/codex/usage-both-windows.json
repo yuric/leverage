@@ -4,7 +4,7 @@
     "tool": "codex",
     "tool_version": "0.169.0",
     "date": "2026-11-21",
-    "basis": "made_from_schema",
+    "basis": "made_from_recorded",
     "kind": "usage",
     "command": [
       "app-server"
@@ -62,7 +62,9 @@
     "account/read": {
       "result": {
         "account": {
-          "type": "apiKey"
+          "type": "chatgpt",
+          "email": "<scrubbed>",
+          "planType": "<scrubbed>"
         },
         "requiresOpenaiAuth": true,
         "userId": null
@@ -80,9 +82,27 @@
             "windowDurationMins": 10080,
             "usedPercent": 12,
             "resetsAt": 1767830400
-          }
+          },
+          "credits": null,
+          "planType": "<scrubbed>"
         },
-        "rateLimitResetCredits": null
+        "rateLimitResetCredits": null,
+        "rateLimitsByLimitId": {
+          "codex": {
+            "primary": {
+              "windowDurationMins": 300,
+              "usedPercent": 30,
+              "resetsAt": 1767243600
+            },
+            "secondary": {
+              "windowDurationMins": 10080,
+              "usedPercent": 12,
+              "resetsAt": 1767830400
+            },
+            "credits": null,
+            "planType": "<scrubbed>"
+          }
+        }
       }
     },
     "account/usage/read": {
@@ -90,7 +110,9 @@
         "summary": {
           "lifetimeTokens": 1234567,
           "peakDailyTokens": 89000
-        }
+        },
+        "dailyUsageBuckets": [],
+        "threadUsage": null
       }
     }
   }

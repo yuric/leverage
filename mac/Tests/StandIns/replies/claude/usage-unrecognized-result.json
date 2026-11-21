@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "The result is text whose quota format has not been verified.",
+    "basis": "made_from_recorded",
+    "expect": {
+      "state": "unavailable",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-a00800000000"
+  },
+  "stdout": "{\"type\": \"result\", \"subtype\": \"success\", \"is_error\": false, \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}, \"modelUsage\": {}, \"result\": \"Synthetic usage report.\"}\n",
+  "stderr": "",
+  "exit_status": 0,
+  "marker": "LVRG-REPLY-a00800000000"
+}

@@ -9,9 +9,9 @@
     "command": [
       "app-server"
     ],
-    "shows": "A signed-out account and refused usage requests",
+    "shows": "A signed-out session refuses the usage requests. The preflight, not this protocol error, establishes sign-out.",
     "expect": {
-      "state": "signed_out",
+      "state": "unavailable",
       "figures": [],
       "resets": null
     },

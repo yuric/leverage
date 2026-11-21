@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "A fresh reset entry is null.",
+    "basis": "made_from_prd",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-a00800000003",
+    "now": "2027-01-01T00:00:00Z"
+  },
+  "settings": {
+    "cachedUsageUtilization": {
+      "fetchedAtMs": 1798761600000,
+      "utilization": {
+        "cedar_ember": null
+      }
+    }
+  },
+  "marker": "LVRG-REPLY-a00800000003"
+}

@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-21",
+    "basis": "made_from_recorded",
+    "kind": "usage",
+    "command": [
+      "app-server"
+    ],
+    "shows": "Rate-limit lookup returns an RPC error",
+    "expect": {
+      "state": "unavailable",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-800000000003"
+  },
+  "session": {
+    "initialize": {
+      "result": {
+        "codexHome": "<scrubbed>",
+        "userAgent": "codex-standin LVRG-REPLY-800000000003",
+        "platformFamily": "unix",
+        "platformOs": "macos"
+      }
+    },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "chatgpt",
+          "email": "<scrubbed>",
+          "planType": "<scrubbed>"
+        },
+        "requiresOpenaiAuth": true,
+        "userId": null
+      }
+    },
+    "account/rateLimits/read": {
+      "error": {
+        "code": -32000,
+        "message": "Synthetic usage failure"
+      }
+    },
+    "account/usage/read": {
+      "result": {
+        "summary": {
+          "lifetimeTokens": 1234567,
+          "peakDailyTokens": 89000
+        },
+        "dailyUsageBuckets": [],
+        "threadUsage": null
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "An empty reset entry was fetched eleven minutes ago.",
+    "basis": "made_from_prd",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-a00800000007",
+    "now": "2027-01-01T00:00:00Z"
+  },
+  "settings": {
+    "cachedUsageUtilization": {
+      "fetchedAtMs": 1798760940000,
+      "utilization": {
+        "cedar_ember": []
+      }
+    }
+  },
+  "marker": "LVRG-REPLY-a00800000007"
+}
