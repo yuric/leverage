@@ -33,6 +33,70 @@ struct CredentialCleanupTests {
         #expect(FileManager.default.fileExists(atPath: external.path))
     }
 
+    @Test("forget lets an active sign-in child finish with its account folder still present")
+    func waitsForSignInChild() async throws {
+        let rig = try HelperRig()
+        let entry = try #require(ProviderCatalog.entry(for: "claude"))
+        let credential = UUID()
+        let running = RunningRequests()
+        let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: MemoryTokenVault(),
+                                        requests: running, log: quietLog)
+        let account = try cleanup.createFolder(for: credential)
+        let ready = rig.folder.url.appendingPathComponent("sign-in-ready")
+        let finished = rig.folder.url.appendingPathComponent("sign-in-finished")
+        let program = rig.tools.file("sign-in-cleanup")
+        try Data("""
+        #!/usr/bin/env python3
+        import os
+        from pathlib import Path
+        import signal
+        import time
+
+        root = Path(os.environ["TMPDIR"])
+        account = Path(os.environ["CLAUDE_CONFIG_DIR"])
+        parent = os.getppid()
+        stopped = False
+
+        def stop(*_):
+            global stopped
+            stopped = True
+
+        signal.signal(signal.SIGTERM, stop)
+        ready = root / "sign-in-ready"
+        pending = ready.with_suffix(".tmp")
+        pending.write_text(str(os.getpid()))
+        pending.replace(ready)
+        deadline = time.monotonic() + \(Patience.seconds(45))
+        while not stopped and os.getppid() == parent and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        if stopped:
+            # A provider may finish cleanup during its grace period. A
+            # removed folder ends the wait early so the race is observable.
+            deadline = time.monotonic() + 0.5
+            while account.is_dir() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            (root / "sign-in-finished").write_text("present" if account.is_dir() else "removed")
+        """.utf8).write(to: program)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: program.path)
+
+        let window = SignInWindow(locator: ToolLocator(settings: rig.settings, timings: fastTimings),
+                                  timings: fastTimings)
+        let request = loginRequest(credential, kind: .openSignIn)
+        running.start(request) {
+            _ = await window.waitForSignIn(entry, tool: LocatedTool(path: program.path, version: "stand-in"),
+                                          accountFolder: account) { false }
+        }
+        let started = await eventually { FileManager.default.fileExists(atPath: ready.path) }
+        await cleanup.forget(credential)
+        try #require(started)
+        let pid = try #require(Int32(String(contentsOf: ready, encoding: .utf8)))
+        #expect(!isAlive(pid), "forget waits for the sign-in child to be reaped")
+        #expect(await eventually(within: 5) { !isAlive(pid) })
+        #expect(try String(contentsOf: finished, encoding: .utf8) == "present")
+        #expect(rig.folders.existing(for: credential) == nil)
+    }
+
     @Test("forget stops an active request and later requests cannot start tools or recreate folders")
     func cancelsActiveAndRejectsLaterRequests() async throws {
         let rig = try HelperRig()

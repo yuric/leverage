@@ -61,6 +61,18 @@ struct ProviderCatalogTests {
         #expect(ProviderCatalog.loginUsage(for: provider) == nil)
     }
 
+    @Test("only documented request allowances may be read from response headers", arguments: [
+        (Provider.claudeApi, ["anthropic-ratelimit-requests-remaining"]),
+        (Provider.openaiApi, ["x-ratelimit-remaining-requests"]),
+        (Provider.geminiApi, []),
+        (Provider.grokApi, []),
+        (Provider.openrouter, []),
+    ])
+    func tokenResponseHeaders(provider: Provider, headers: [String]) throws {
+        let entry = try #require(ProviderCatalog.tokenEntry(for: provider))
+        #expect(entry.responseHeaders == Evidenced(headers, .documented))
+    }
+
     @Test("Claude's usage report and Codex's app-server retain evidence for each fact")
     func loginCommands() throws {
         let claude = try #require(ProviderCatalog.loginUsage(for: .claude))

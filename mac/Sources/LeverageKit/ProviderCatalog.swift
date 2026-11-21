@@ -157,6 +157,7 @@ public struct TokenProviderEntry: Equatable, Sendable {
     public let method: Evidenced<String>
     public let authentication: Evidenced<TokenAuthentication>
     public let extraHeaders: Evidenced<[String: String]>
+    public var responseHeaders: Evidenced<[String]> { Evidenced([], .documented) }
 }
 
 /// Where login usage figures come from. Arguments describe the proposed
