@@ -58,15 +58,14 @@ final class LetThroughModel {
     }
 
     /// The task's contract as it is stored: every field sent again as it stands, so
-    /// the stored result is reused and the task becomes Ready (RD-48). Outward
-    /// actions are not built yet, so the list is empty.
+    /// the stored result is reused and the task becomes Ready (RD-48).
     private static func storedContract(of page: TaskPage) -> CompleteContractRequest {
         let task = page.task
         return CompleteContractRequest(
             title: task.title, goal: task.goal, details: task.details,
             criteria: page.criteria.sorted { $0.position < $1.position }
                 .map { CriterionInput(text: $0.text, kind: $0.kind) },
-            minimumStrengthRank: task.minimumStrengthRank, budgetCap: task.budgetCap,
+            actions: page.contractActions, minimumStrengthRank: task.minimumStrengthRank, budgetCap: task.budgetCap,
             workReference: task.workReference)
     }
 

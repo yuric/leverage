@@ -103,6 +103,11 @@ jobs:
         env:
           LEVERAGE_TEST_PATIENCE: "4"
         run: swift test --no-parallel
+      - name: Test the MCP server in its own lane
+        env:
+          LEVERAGE_ONLY: mcp
+          LEVERAGE_TEST_PATIENCE: "4"
+        run: swift test --no-parallel --scratch-path "$RUNNER_TEMP/leverage-mcp"
       # The app bundle, without the API image (that needs this job's Docker,
       # which macOS runners do not have).
       - name: Self-test of the bundle's compose file
@@ -119,8 +124,8 @@ jobs:
 
   e2e:
     name: End-to-end run with stand-in tools
-    # The whole loop: the API in its containers, and the helper and the
-    # runner built for Linux by the runner's own Swift (the package's `e2e`
+    # The whole loop: the API in its containers, with the helper, runner and
+    # MCP server built for Linux by the runner's Swift (the package's `e2e`
     # lane, its default on Linux). No provider is called: the tests use the
     # stand-in tools of mac/Tests/StandIns.
     runs-on: ubuntu-24.04
@@ -136,7 +141,7 @@ jobs:
           docker compose version
       - name: Use the example configuration
         run: cp .env.example .env
-      - name: Build the helper, the runner and the end-to-end tests
+      - name: Build the helper, runner, MCP server and end-to-end tests
         working-directory: mac
         env:
           LEVERAGE_ONLY: e2e
@@ -154,6 +159,10 @@ jobs:
       # provider, and starts nothing when it does.
       - name: Self-test of the real rule check's refusals
         run: bash scripts/test_real_rule_check.sh
+      - name: Self-test of the MCP developer check
+        run: bash scripts/test_real_mcp_run.sh
+      - name: Self-test of the approval developer check
+        run: bash scripts/test_real_approval_check.sh
       # Stand-in tools only. It builds the Swift runner lane, in a build
       # folder of its own, to run the runner's driver against them.
       - name: Self-test of the developer check with a real tool
@@ -174,6 +183,8 @@ jobs:
       # words of task text, which must be in no event's payload and no log.
       - name: The rule checks' end-to-end run
         run: scripts/e2e_rule_checks.sh
+      - name: The questions and approvals end-to-end run
+        run: scripts/e2e_questions_approvals.sh
       # A backup restored into a cluster whose volume was removed, from a
       # seeded log (milestone 3 plan §5.3).
       - name: The restore drill

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A seat's calls, one method per operation milestone 2 serves. The runner
+/// A seat's calls, one method per served operation. The runner
 /// takes `any AgentAPI`: `AgentClient` sends them over HTTP with the seat's
 /// token, and LeverageTestSupport's `FakeAgentAPI` answers them in memory.
 public protocol AgentAPI: Sendable {
@@ -56,4 +56,21 @@ public protocol AgentAPI: Sendable {
     /// `submit_job_result`: the result in the shape of the job's kind.
     func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
         -> PlainOutcome
+
+    // Questions, access, cost and outward actions.
+
+    /// `ask_question`.
+    func askQuestion(taskID: UUID, _ request: AskQuestionRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<AskQuestionResult>
+    /// `get_question`.
+    func getQuestion(taskID: UUID, questionID: UUID) async throws -> Question
+    /// `request_access`.
+    func requestAccess(taskID: UUID, _ request: RequestAccessRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `report_cost`.
+    func reportCost(taskID: UUID, _ request: ReportCostRequest, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `start_action`.
+    func startAction(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `report_action_done`.
+    func reportActionDone(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
 }

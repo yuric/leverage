@@ -8,8 +8,8 @@ require_relative "../support/http_calls"
 # planner:
 #
 # - every served agent operation is in the Roles table of a role, and a
-#   seat of another role is refused it: a claim is not_eligible, a read
-#   is 404, any other call is refused by a cause that ranks no lower than
+#   seat of another role is refused it: a claim is not_eligible, a briefing
+#   read is 404, a question read is not_holder, and any other call is refused by a cause that ranks no lower than
 #   forbidden (L548: lease_expired, task_cancelled, not_holder, forbidden);
 # - a seat of the wrong role that holds the very task or review the call
 #   names is refused forbidden;
@@ -31,7 +31,9 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
 
   # The calls about a task the builder holds, and about a review the
   # reviewer holds: what each sends besides the path's id.
-  TASK_CALLS = %w[acknowledge_task_briefing heartbeat_task start_criterion pass_criterion submit_task release_task].freeze
+  TASK_CALLS = %w[acknowledge_task_briefing heartbeat_task start_criterion pass_criterion submit_task release_task
+                  ask_question request_access report_cost].freeze
+  ACTION_CALLS = { "start_action" => "approved", "report_action_done" => "started" }.freeze
   REVIEW_CALLS = %w[heartbeat_review release_review acknowledge_review_briefing give_verdict].freeze
   CLAIMS = { "builder" => "claim_next_task", "reviewer" => "claim_next_review" }.freeze
   # The two job roles' calls (roles.json): a claim, and a result about the
@@ -54,9 +56,14 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     SERVED_AGENT.each do |operation_id|
       assert(ROLES.keys.any? { |role| ROLES.fetch(role).include?(operation_id) }, operation_id)
     end
-    covered = TASK_CALLS + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS + %w[get_next get_command]
+    covered = TASK_CALLS + ACTION_CALLS.keys + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS +
+      %w[get_next get_command get_question]
     assert_equal SERVED_AGENT.sort, covered.sort
-    TASK_CALLS.each { |operation_id| refute_includes ROLES.fetch("reviewer"), operation_id }
+    builder_only = TASK_CALLS + ACTION_CALLS.keys + %w[get_question]
+    assert_empty builder_only - ROLES.fetch("builder")
+    (ROLES.keys - [ "builder" ]).each do |role|
+      assert_empty builder_only & ROLES.fetch(role), role
+    end
     REVIEW_CALLS.each { |operation_id| refute_includes ROLES.fetch("builder"), operation_id }
     JOB_ROLES.each do |role|
       assert_equal (JOB_CALLS + %w[get_next get_command]).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
@@ -149,6 +156,49 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
       refused(operation_id, other, ids: task_ids(operation_id, task), body: task_body(operation_id, task),
         codes: %w[not_holder])
     end
+  end
+
+  ACTION_CALLS.each do |operation_id, state|
+    test "#{operation_id}: only the builder holding the Finishing task can act" do
+      ids = finishing_ids(@builder, state)
+      other = @scenario.seat(role: "builder")
+      refused(operation_id, other, ids: ids, codes: %w[not_holder])
+      [ @reviewer, *job_seats.values ].each do |seat|
+        refused(operation_id, seat, ids: ids, codes: HOLDER_CAUSES)
+        refused(operation_id, seat, ids: finishing_ids(seat, state), codes: %w[forbidden])
+      end
+    end
+  end
+
+  test "task holder refusals precede role and state refusals on question, access and action calls" do
+    task = @scenario.task(state: "working", builder: @builder, actions: [ { kind: "publish" } ])
+    action = Action.find_by!(task_id: task.id)
+    [ @reviewer, job_seats.fetch("orchestrator") ].each do |seat|
+      %w[ask_question request_access report_cost].each do |operation|
+        refused(operation, seat, codes: %w[not_holder], ids: task_ids(operation, task), body: task_body(operation, task))
+      end
+    end
+    [ @reviewer, @scenario.seat(role: "builder") ].each do |seat|
+      ACTION_CALLS.each_key do |operation|
+        refused(operation, seat, codes: %w[not_holder], ids: { "id" => task.id, "aid" => action.id })
+      end
+    end
+  end
+
+  test "get_question: only the builder who asked and still holds the task can read the answer" do
+    task = working_task(@builder)
+    question = @scenario.question(task, outcome: "answered", blocking: false)
+    ids = { "id" => task.id, "qid" => question.id }
+    other_seats = [ @scenario.seat(role: "builder"), @reviewer, *job_seats.values ]
+    before = counts
+    other_seats.each do |seat|
+      call("get_question", token: token(seat), ids: ids)
+      assert_response :conflict
+      assert_equal "not_holder", response.parsed_body.fetch("code")
+      assert_response_matches_contract
+    end
+    assert_equal before, counts
+    assert_nil question.reload.read_at
   end
 
   REVIEW_CALLS.each do |operation_id|
@@ -309,12 +359,21 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     %w[start_criterion pass_criterion].include?(operation_id) ? { "id" => task.id, "cid" => criterion(task).id } : { "id" => task.id }
   end
 
+  def finishing_ids(seat, action_state)
+    task = @scenario.finishing_task(builder: seat, holder: true,
+      actions: [ { kind: "publish", description: "Publish a sample.", state: action_state } ])
+    { "id" => task.id, "aid" => Action.find_by!(task_id: task.id).id }
+  end
+
   def task_body(operation_id, task)
     case operation_id
     when "acknowledge_task_briefing" then { "briefing_hash" => Leverage::Briefing.hash_for(task, @builder) }
     when "pass_criterion" then { "evidence" => { "kind" => "link", "value" => "https://example.test/made-up" } }
     when "submit_task" then { "handoff_note" => "Made-up note.", "work_reference" => "~/work/made-up" }
     when "release_task" then { "reason" => "unable_to_continue" }
+    when "ask_question" then { "text" => "What should I use?", "assumption" => "Use the sample.", "blocking" => true }
+    when "request_access" then { "description" => "Open the sample folder." }
+    when "report_cost" then { "tokens" => 10, "spend" => 0 }
     end
   end
 

@@ -76,7 +76,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:8", "type": "task.created", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_add", "payload": {"state": "backlog"}}
+          {"ref": "@event:8", "type": "task.created", "schema_version": 1, "at": "@t:10", "effective_at": "@t:10", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_add", "payload": {"state": "backlog", "added_action_ids": []}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:8"}
@@ -165,7 +165,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:19", "type": "task.created", "schema_version": 1, "at": "@t:70", "effective_at": "@t:70", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t2_add", "payload": {"state": "backlog"}}
+          {"ref": "@event:19", "type": "task.created", "schema_version": 1, "at": "@t:70", "effective_at": "@t:70", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t2_add", "payload": {"state": "backlog", "added_action_ids": []}}
         ],
         "steps_opened": [
           {"task_id": "$task:2", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:19"}
@@ -536,7 +536,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:56", "type": "task.created", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:3", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t3_add", "payload": {"state": "backlog"}}
+          {"ref": "@event:56", "type": "task.created", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "owner", "actor_id": "$user:owner", "project_id": "$project:site", "task_id": "$task:3", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t3_add", "payload": {"state": "backlog", "added_action_ids": []}}
         ],
         "steps_opened": [
           {"task_id": "$task:3", "kind": "wait_contract", "step_class": "waiting", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": null, "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:56"}

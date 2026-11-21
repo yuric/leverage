@@ -7,18 +7,14 @@ module Leverage
       # task.created names the state.
       #
       # A project_id names a project of the workspace, and the task is that
-      # project's (milestone 4 plan RD-52: the golden traces' tasks name the
-      # project their setup holds); no command makes a project until
-      # milestone 5, and no project_paused hold opens before then.
+      # project's (RD-52). A paused project holds the new task.
       #
       # 422 invalid in this milestone: another state, a project_id that
-      # names no project of the workspace, outward actions (milestone 5),
-      # criteria (they are the contract's: Complete contract writes them
-      # with task.contract_changed; the app sends them there, L108), and a
-      # work reference with sign-in details (L533).
+      # names no project of the workspace, criteria (Complete contract
+      # writes them, L108), and a work reference with sign-in details (L533).
       #
       # Params: title, goal, details, priority, work_reference, state,
-      # project_id, and criteria and actions only when empty. Result:
+      # project_id, actions, and criteria only when empty. Result:
       # task_id.
       class AddTask < Entry
         # The state-table guard of each state a task may be added in.
@@ -31,7 +27,6 @@ module Leverage
           @project = @params["project_id"] && Project.find_by(id: @params["project_id"], workspace_id: ctx.workspace.id)
           raise Invalid, "No such project in this workspace." if @params["project_id"] && @project.nil?
           raise Invalid, "Criteria are part of the contract: send them with Complete contract." if @params["criteria"].present?
-          raise Invalid, "Outward actions are not built yet." if @params["actions"].present?
 
           problem = LinkRules.work_reference_problem(@params["work_reference"])
           raise Invalid, problem if problem
@@ -43,7 +38,9 @@ module Leverage
           task = Task.create!(workspace_id: ctx.workspace.id, project_id: @project&.id, title: @params["title"], goal: @params["goal"],
             details: @params["details"], work_reference: @params["work_reference"].presence,
             priority: @params["priority"] || "normal", state: @state)
-          ctx.emit("task.created", task: task, payload: { state: @state })
+          definitions = Actions.create_for(task, Array(@params["actions"]))
+          ctx.emit("task.created", task: task, payload: { state: @state, added_action_ids: definitions.added_ids })
+          Projects.hold_if_paused(ctx, task)
           @result = { "task_id" => task.id }
         end
       end

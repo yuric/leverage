@@ -50,17 +50,8 @@
             }
           },
           "instruction": {
-            "description": "A model-checked rule's instruction is content, kept on its rule version and never in a payload: its text, or, until the milestone named here writes it, that milestone (the Rule checks milestone wrote \"specific details\", milestone 4 plan RV-2); null for an app-checked rule.",
-            "oneOf": [
-              {"type": "string", "minLength": 1},
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["to_be_written_in"],
-                "properties": {"to_be_written_in": {"enum": ["questions_and_approvals"]}}
-              },
-              {"type": "null"}
-            ]
+            "description": "A model-checked rule's instruction is content kept on its rule version. An app-checked rule has no instruction.",
+            "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]
           },
           "checker_role": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
           "queue_timeout_seconds": {"description": "Seconds; null means the workspace's check queue timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},

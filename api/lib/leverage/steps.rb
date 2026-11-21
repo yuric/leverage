@@ -22,8 +22,10 @@ module Leverage
   # - Within one command a task's open step changes at most once (steps.json,
   #   derived rule): a step opened earlier in the same command is changed in
   #   place, so a failed review at the round limit closes review and opens
-  #   wait_owner, with no wait_builder row between them. A command's events
-  #   share their at and effective_at; a timer's do too.
+  #   wait_owner, with no wait_builder row between them. A task created
+  #   on hold keeps its first step at task.created, even when that step has
+  #   zero length. A command's events share their at and effective_at; a
+  #   timer's do too.
   # - The criterion back-fill (rule 5, L279): when a criterion passes, an
   #   open build step with no criterion, of the same seat and round, is
   #   given it.
@@ -69,11 +71,13 @@ module Leverage
   # - wait_review names the provider rule (cause_kind rule, cause_rule_id)
   #   from the check.finished of an applied row at review.assign with
   #   effect refused, once per wait (RD-11).
+  #
+  # In Finishing, blocking checks name the first action still waiting in
+  # contract order. Once approvals settle, wait_builder names the first
+  # approved action until the builder acknowledges and opens finish.
+  # A hold interrupts either step as usual.
   module Steps
-    # An event that steps.json says opens or closes a step, but that no
-    # command of this milestone writes (outward actions, escalation, owner
-    # rework). Raised rather than guessing a step; the milestone that
-    # writes the event teaches the tracker.
+    # A contract event added without step-tracker behavior.
     class Unsupported < StandardError; end
 
     # What the task's open step is, or would be with no hold open.
@@ -86,14 +90,13 @@ module Leverage
     HOLD_EVENTS = %w[hold.opened hold.closed].freeze
     CRITERIA_EVENTS = %w[task.contract_changed criterion.passed criterion.reopened].freeze
 
-    # The events milestones 2 to 4 write that steps.json names, with what
-    # each does in advance. Every other event steps.json names is
-    # Unsupported.
+    # The events the fold uses to derive work steps.
     HANDLED = %w[
       task.created task.promoted task.returned task.ready task.claimed task.briefing_acknowledged criterion.started
       criterion.passed task.submitted review.started review.released review.lease_expired review.failed review.passed
-      task.released task.lease_expired task.done task.cancelled hold.opened hold.closed
-      check.queued check.finished job.claimed job.timed_out job.withdrawn
+      task.released task.lease_expired task.done task.cancelled hold.opened hold.closed task.reassigned
+      task.returned_for_rework action.approved action.stopped action.waived action.marked_done action.reported_done
+      action.lease_granted check.queued check.finished job.claimed job.timed_out job.withdrawn
     ].freeze
 
     # Which seat a working step names (L278): the builder's steps name the
@@ -113,6 +116,12 @@ module Leverage
     # queued (running), or ended in error (pending under check_error).
     CHECK_EVENTS = %w[check.queued check.finished check.overridden].freeze
 
+    ACTION_STATES = {
+      "action.requested" => "requested", "action.approved" => "approved", "action.started" => "started",
+      "action.stopped" => "stopped", "action.waived" => "waived", "action.reported_done" => "done",
+      "action.marked_done" => "done", "action.withdrawn" => "contracted", "action.revoked" => "revoked"
+    }.freeze
+
     module_function
 
     # Called by EventLog.append for every event it inserts.
@@ -121,8 +130,8 @@ module Leverage
     #         the log, so a replay can call it with any context.
     # event - the Event just inserted.
     def on_event(_ctx, event)
-      return unless event.task_id && named_events.include?(event.type)
-      raise Unsupported, "milestone 2 writes no #{event.type}; the step it opens is not built" unless HANDLED.include?(event.type)
+      return unless event.task_id && (HANDLED.include?(event.type) || named_events.include?(event.type))
+      raise Unsupported, "no step handling for #{event.type}" unless HANDLED.include?(event.type)
 
       open = TaskStep.find_by(workspace_id: event.workspace_id, task_id: event.task_id, closed_at: nil)
       before, after = open_holds_around(event)
@@ -155,8 +164,10 @@ module Leverage
       case event.type
       when "task.promoted", "task.returned"
         step("wait_contract", round: round)
-      when "task.ready", "task.released", "task.lease_expired"
+      when "task.ready", "task.reassigned"
         step("wait_ready", round: round, cause_kind: wait_cause(payload))
+      when "task.released", "task.lease_expired"
+        work.subject_kind == "action" ? work : step("wait_ready", round: round, cause_kind: wait_cause(payload))
       when "task.claimed"
         step("briefing", seat_id: payload["seat_id"] || event.actor_id, round: round)
       when "task.briefing_acknowledged"
@@ -171,6 +182,12 @@ module Leverage
         step("review", subject: [ "criterion", review_criterion_id(event) ], seat_id: event.actor_id, round: round)
       when "review.failed"
         failed(event, payload, [ round, event.round + 1 ].max)
+      when "task.returned_for_rework"
+        owner_rework(event, payload, [ round, event.round + 1 ].max)
+      when "action.approved", "action.waived", "action.marked_done", "action.reported_done"
+        next_action_step(work, event, round)
+      when "hold.closed", "action.lease_granted"
+        action_lease(work, payload, round)
       when "check.queued"
         queued(work, event, payload, round)
       when "check.finished"
@@ -180,7 +197,7 @@ module Leverage
       when "job.timed_out", "job.withdrawn"
         work.kind == "draft" && work.subject_id == event.subject_id ? step("wait_contract", round: round) : work
       else
-        # review.passed (task.done follows), hold.opened, hold.closed.
+        # review.passed, action.stopped and hold.opened leave work to the events that follow.
         work
       end
     end
@@ -190,7 +207,7 @@ module Leverage
     # event first, so it answers as of that event.
     def fold(event, criteria)
       events = Event.where(workspace_id: event.workspace_id, task_id: event.task_id).where("seq < ?", event.seq)
-        .where(type: (named_events.to_a + CRITERIA_EVENTS).uniq).order(:seq)
+        .where(type: (HANDLED + CRITERIA_EVENTS).uniq).order(:seq)
       events.reduce(nil) do |work, earlier|
         criteria.observe(earlier)
         HANDLED.include?(earlier.type) ? advance(work, earlier, criteria) : work
@@ -233,9 +250,12 @@ module Leverage
 
     # The first check.queued of a pending transition opens check; a warn
     # check's has none and opens no step (RC-16).
-    def queued(work, _event, payload, round)
+    def queued(work, event, payload, round)
+      return work unless payload["blocking"]
+      return next_action_step(work, event, round) if payload["action_id"]
+
       pending = payload["pending_transition_id"]
-      return work unless payload["blocking"] && pending
+      return work unless pending
       return work if work.kind == CHECK && work.subject_id == pending
 
       step(CHECK, subject: [ PENDING_SUBJECT, pending ], round: round)
@@ -289,6 +309,65 @@ module Leverage
       else
         step("wait_ready", round: round, cause_kind: wait_cause(payload))
       end
+    end
+
+    def owner_rework(event, payload, round)
+      seat = payload["lease_seat_id"]
+      return step("wait_ready", round: round, cause_kind: wait_cause(payload)) unless seat
+
+      review_id = task_events(event).where(type: "review.passed").order(seq: :desc).pick(:subject_id)
+      step("wait_builder", subject: [ "review", review_id ], seat_id: seat, round: round)
+    end
+
+    # Use the event sequence rather than the current action rows. Requests
+    # arrive in contract order. A request can have several consecutive
+    # checks, and stays on the same step between those checks.
+    def next_action_step(work, event, round)
+      states = {}
+      queued = Set.new
+      task_events(event).where(type: ACTION_STATES.keys + [ "check.queued" ]).order(:seq)
+        .pluck(:type, :subject_id, :payload).each do |type, id, payload|
+          if type == "check.queued"
+            queued.add(payload["action_id"]) if payload["blocking"] && payload["action_id"]
+          else
+            if type == "action.requested"
+              states.delete(id)
+              queued.delete(id)
+            end
+            states[id] = ACTION_STATES.fetch(type)
+          end
+        end
+
+      waiting = states.find { |id, state| state == "requested" && queued.include?(id) }
+      return step(CHECK, subject: [ "action", waiting.first ], round: round) if waiting
+      return work if states.value?("requested") || states.value?("stopped")
+
+      approved = states.find { |_id, state| %w[approved started].include?(state) }
+      return work unless approved
+
+      lease_seat = event.payload["lease_seat_id"]
+      seat = lease_seat || (work.seat_id if work.subject_kind == "action") || last_builder(event)
+      kind = work.kind == "finish" && lease_seat.nil? ? "finish" : "wait_builder"
+      step(kind, subject: [ "action", approved.first ], seat_id: seat, round: round)
+    end
+
+    def action_lease(work, payload, round)
+      seat = payload["lease_seat_id"]
+      return work unless seat && work.subject_kind == "action"
+
+      step("wait_builder", subject: [ "action", work.subject_id ], seat_id: seat, round: round)
+    end
+
+    def last_builder(event)
+      type, actor, payload = task_events(event).where(type: %w[task.claimed task.returned_for_rework review.failed])
+        .order(seq: :desc).pick(:type, :actor_id, :payload)
+      return unless payload
+
+      type == "task.claimed" ? payload["seat_id"] || actor : payload["lease_seat_id"]
+    end
+
+    def task_events(event)
+      Event.where(workspace_id: event.workspace_id, task_id: event.task_id).where("seq <= ?", event.seq)
     end
 
     # --- writing the rows --------------------------------------------------
@@ -347,9 +426,9 @@ module Leverage
     def move(open, wanted, event, again: false)
       return if open.nil? && wanted.nil?
       return if late_close(open, wanted, event)
-      return if open && wanted && same?(open, wanted) && !(again && !same_command?(open, event))
+      return if open && wanted && same?(open, wanted) && !(again && !coalescible?(open, event))
 
-      if open && wanted && same_command?(open, event)
+      if open && wanted && coalescible?(open, event)
         open.update!(row(wanted, event).merge(round: [ open.round, wanted.round ].max))
         return
       end
@@ -358,18 +437,23 @@ module Leverage
       TaskStep.create!(row(wanted, event).merge(workspace_id: event.workspace_id, task_id: event.task_id)) if wanted
     end
 
-    # The check step closes at the last event of the command its closed_by
+    # A check step closes at the last event of the command its closed_by
     # names (see the module's comment): when an earlier event of this
     # command closed check and opened the open step, and this event also
     # closes check and opens the step wanted now (or ends the task), the
     # change moves to this event, so the command still changes the step
-    # once. Returns whether it moved it.
+    # once. A task ending after a hold lifts closes the waiting step at
+    # its terminal event. Escalation moves only the Ready opener: the
+    # review ended at review.failed. Returns whether it moved the change.
     def late_close(open, wanted, event)
-      return false unless open && same_command?(open, event)
+      return false unless open && coalescible?(open, event)
 
       closed = TaskStep.find_by(workspace_id: event.workspace_id, task_id: event.task_id,
         closing_event_id: open.opening_event_id)
-      return false unless closed&.kind == CHECK && closes?(CHECK, event.type)
+      return false unless closed
+      escalated = event.type == "task.reassigned" && wanted&.kind == "wait_ready"
+      return false unless escalated || (closed.kind == CHECK && closes?(CHECK, event.type)) ||
+        (closed.kind == "wait_owner" && TERMINAL.include?(event.type))
 
       if wanted.nil?
         open.destroy!
@@ -378,7 +462,7 @@ module Leverage
       else
         return false
       end
-      closed.update!(closed_at: event.effective_at, closing_event_id: event.id)
+      closed.update!(closed_at: event.effective_at, closing_event_id: event.id) unless escalated
       true
     end
 
@@ -400,16 +484,15 @@ module Leverage
         [ work.kind, work.subject_kind, work.subject_id, work.seat_id, work.cause_kind, work.cause_rule_id ]
     end
 
-    # Whether the open step was opened by an earlier event of the same
-    # command: same at (the command's clock, read once under the lock) and
-    # effective_at. The key is not compared: a pending transition completed
-    # inside another command writes under its requester's key (milestone 4
-    # plan RE-3), and a timer applied inside a command writes none but has
-    # its own effective time.
-    def same_command?(open, event)
+    # A step may be changed in place within the command that opened it.
+    # The first step always keeps task.created. For other steps, use the
+    # same at (the command's clock under the lock) and effective_at. A
+    # pending transition completed inside another command writes under its
+    # requester's key (RE-3), and an inline timer has its own effective time.
+    def coalescible?(open, event)
       return false unless open.opened_at == event.effective_at
 
-      opener = Event.where(id: open.opening_event_id).pick(:at, :effective_at)
+      opener = Event.where(id: open.opening_event_id).where.not(type: "task.created").pick(:at, :effective_at)
       opener == [ event.at, event.effective_at ]
     end
 
@@ -530,16 +613,10 @@ module Leverage
       @step_classes.fetch(kind)
     end
 
-    # Every event steps.json names in an opened_by or closed_by, the two
-    # that close without opening, and the hold events.
     def named_events
-      @named_events ||= begin
-        steps = Contract.steps
-        named = steps.fetch("steps").flat_map do |entry|
-          (entry.fetch("opened_by") + entry.fetch("closed_by")).map { |item| item.fetch("event") }
-        end
-        Set.new(named + steps.fetch("close_without_opening") + HOLD_EVENTS)
-      end
+      @named_events ||= Contract.steps.fetch("steps").flat_map do |entry|
+        (entry.fetch("opened_by") + entry.fetch("closed_by")).map { |item| item.fetch("event") }
+      end.to_set
     end
 
     # The task's builder criteria and which have passed, as of an event:

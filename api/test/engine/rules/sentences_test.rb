@@ -25,13 +25,13 @@ module Leverage
           Sentences.for(shipped("different_provider_review"))
       end
 
-      test "the three functions that do not act yet have sentences for Settings" do
-        assert_equal "Workers ask the orchestrator before they ask you.", Sentences.for(shipped("ask_orchestrator_first"))
-        assert_equal "After 2 failed reviews a task moves to a stronger model.",
-          Sentences.for(shipped("escalate_after_failed_reviews"))
-        assert_equal "After 1 failed review a task moves to a stronger model.",
+      test "the question, escalation and spending rules use the sentences of AE-11" do
+        assert_equal "Agents ask the agent that checks tasks before they ask you.", Sentences.for(shipped("ask_orchestrator_first"))
+        assert_equal "After 2 failed reviews a task goes to a stronger agent.", Sentences.for(shipped("escalate_after_failed_reviews"))
+        assert_equal "After 1 failed review a task goes to a stronger agent.",
           Sentences.for_function("escalate_after_failed_reviews", { "threshold" => 1 })
-        assert_equal "A project pauses when it reaches its budget.", Sentences.for(shipped("project_budget_pause"))
+        assert_equal "A project pauses when its reported spending reaches its budget, and a task when it reaches its own limit.",
+          Sentences.for(shipped("project_budget_pause"))
       end
 
       test "every function of the shipped rules has a sentence, and a model rule has none" do

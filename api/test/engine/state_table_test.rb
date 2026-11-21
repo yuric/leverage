@@ -5,8 +5,7 @@ require "test_helper"
 # the state_machine.json row's move and events, or invalid_state. The cases
 # come from StateTableCases, so nothing here retypes the table.
 #
-# A row milestone 2 cannot reach is named with the decision that says so and
-# skipped. A command about a task that no seat holds in that state is also
+# A command about a task that no seat holds in that state is also
 # refused with a cause that ranks before invalid_state (not_holder, PRD
 # L548); there the test asserts that invalid_state is among the entry's
 # refusals and that the answer is the first by precedence. Claim and claim
@@ -27,23 +26,30 @@ class StateTableTest < ActiveSupport::TestCase
   end
 
   StateTableCases.define(self, T::Table::TASK_LOOP) do |kase|
-    reason = not_served(kase)
-    skip reason if reason
-
     kase.invalid_state? ? assert_invalid_state(kase) : assert_row(kase)
   end
 
-  private
+  %w[complete_contract edit_contract].each do |command|
+    test "#{command} closes the budget hold when the cap rises above spend" do
+      kase = StateTableCases.for([ command ]).find { |row| row.from == "backlog" }
+      assert_includes kase.row.fetch("holds_closed"), "budget"
+      task = task_in(kase.from)
+      task.update!(budget_cap: 1, spent: 1)
+      hold = @scenario.hold(task, reason: "budget")
 
-  # Why a case is skipped, or nil: a row a later milestone reaches
-  # (milestone 3 serves no row from Finishing either, its plan HS-3).
-  def not_served(kase)
-    return "not reachable before milestone 5: Finishing needs an outward action (SC-3)" if kase.from == "finishing"
-    return "not reachable before milestone 5: no rule escalates (RD-8)" if kase.guard.include?("escalates")
-    return "not reachable before milestone 5: an outward action (SC-3)" if kase.guard.include?("has_outward_action")
+      outcome = apply(command, @owner, contract_params(task).merge("budget_cap" => 2))
+      assert outcome.completed?, outcome.refusal&.code
 
-    nil
+      events = Event.where(command_id: @key).order(:seq).to_a
+      assert_equal [ kase.events.first, "hold.closed", "inbox.resolved", *kase.events.drop(1) ], events.map(&:type)
+      assert_equal events.first.id, events.second.cause_id
+      assert_equal "raise_cap", events.third.payload.fetch("choice")
+      assert hold.reload.closed_at
+      assert_equal [ kase.to, 2 ], [ task.reload.state, task.budget_cap ]
+    end
   end
+
+  private
 
   # Events a row's command writes before its own because it ends a waiting
   # command first (milestone 4 plan §2.1, rule 11): releasing a provisional
@@ -57,11 +63,37 @@ class StateTableTest < ActiveSupport::TestCase
 
     types = Event.where(command_id: @key).order(:seq).pluck(:type)
     first = CANCELLED_FIRST.fetch([ kase.command, kase.from ], [])
-    assert_equal first + kase.events + SIDE_EVENTS.fetch(kase.command, []), types
+    first = %w[check.finished] if kase.guard.include?("escalates")
+    last = SIDE_EVENTS.fetch(kase.command, [])
+    last = finish_events(kase) if kase.from == "finishing"
+    assert_equal first + kase.events + last, types
+    assert_finishing_effects(kase, task) if kase.to == "finishing"
     task ||= Task.find(outcome.result.fetch("task_id")) if outcome.result&.key?("task_id")
     task ||= Task.find(outcome.result.dig("task", "id")) if outcome.result&.key?("task")
     task ||= Review.find(outcome.result.dig("review", "id")).then { |review| Task.find(review.task_id) } if outcome.result&.key?("review")
     assert_equal kase.to, task.reload.state if kase.to
+  end
+
+  def finish_events(kase)
+    case kase.command
+    when "release" then %w[hold.opened inbox.opened]
+    when "cancel" then %w[action.revoked]
+    else []
+    end
+  end
+
+  def assert_finishing_effects(kase, task)
+    case kase.command
+    when "pass_review"
+      action = Action.find_by!(task_id: task.id)
+      assert_equal "requested", action.state
+      assert Hold.exists?(task_id: task.id, action_id: action.id, reason: "owner_approval", closed_at: nil)
+    when "release"
+      assert_nil task.reload.holder_seat_id
+      assert_nil task.lease_due_at
+      assert_equal @builder.id, task.builder_seat_id
+      assert Hold.exists?(task_id: task.id, reason: "action_unconfirmed", closed_at: nil)
+    end
   end
 
   def assert_invalid_state(kase)
@@ -134,7 +166,15 @@ class StateTableTest < ActiveSupport::TestCase
   end
 
   def review_command(command, from, valid:, guard:)
-    task = task_in(from || "in_review")
+    task = if guard.include?("has_outward_action")
+      @scenario.task(state: from, builder: @builder, actions: [ { kind: "send" } ])
+    else
+      task_in(from || "in_review")
+    end
+    if guard.include?("escalates")
+      @scenario.seat(role: "builder", strength_rank: @builder.strength_rank + 1)
+      @scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", parameters: { "threshold" => 1 })
+    end
     review = open_review(task)
     acknowledge_review(task, review) if valid && %w[pass_review fail_review].include?(command)
     @scenario.task(state: "working", builder: @builder) if guard.include?("builder_busy")
@@ -150,7 +190,11 @@ class StateTableTest < ActiveSupport::TestCase
 
   def task_in(state)
     @task_in ||= {}
-    @task_in[state] ||= @scenario.task(state: state, builder: @builder, reviewer: @reviewer)
+    @task_in[state] ||= if state == "finishing"
+      @scenario.finishing_task(builder: @builder, reviewer: @reviewer, actions: [ { kind: "send", state: "approved" } ])
+    else
+      @scenario.task(state: state, builder: @builder, reviewer: @reviewer)
+    end
   end
 
   # The task's open review, claimed by the reviewer when the task is In

@@ -27,11 +27,10 @@ enum ContractDocument {
         }
     }
 
-    /// The operations served so far: milestone 2's 48 (16 agent calls, the
-    /// health check, 21 owner calls, 5 helper calls and six additions),
-    /// milestone 3's eleven and, last, the twelve of the Rule checks
-    /// milestone.
-    static let served: [String] = [
+    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals
+
+    // Milestone 2 (Core loop).
+    static let coreLoop: [String] = [
         "get_next", "get_command", "claim_next_task", "get_task_briefing",
         "acknowledge_task_briefing", "heartbeat_task", "start_criterion", "pass_criterion",
         "submit_task", "release_task", "claim_next_review", "heartbeat_review",
@@ -45,19 +44,31 @@ enum ContractDocument {
         "report_run_stopped",
         "get_setup_state", "create_owner", "sign_out_owner", "get_helper_request",
         "report_request_progress", "get_landing_prompt",
-        // Milestone 3 (Handoff, plan section 2.3).
+    ]
+
+    // Milestone 3 (Handoff).
+    static let handoff: [String] = [
         "report_limit", "report_signed_out", "sign_in_again", "list_inbox", "promote_task",
         "edit_contract", "hold_task", "resume_task", "pause_seat", "resume_seat", "change_seat",
-        // Milestone 4 (Rule checks, plan section 2.3).
+    ]
+
+    // Milestone 4 (Rule checks).
+    static let ruleChecks: [String] = [
         "claim_next_job", "submit_job_result", "list_rules", "add_rule", "save_rule", "enable_rule",
         "disable_rule", "revert_rule", "remove_rule", "rerun_check", "override_check", "draft_contract",
     ]
 
-    /// The twelve operations the Rule checks milestone serves.
-    static let ruleChecks: [String] = Array(served.suffix(12))
-
-    /// The eleven operations the Handoff milestone serves.
-    static let handoff: [String] = Array(served.dropLast(12).suffix(11))
+    // Milestone 5 (Questions and approvals).
+    static let questionsAndApprovals: [String] = [
+        "ask_question", "get_question", "request_access", "report_cost",
+        "start_action", "report_action_done", "list_decisions", "list_projects",
+        "create_project", "edit_brief", "pause_project", "resume_project",
+        "change_budget", "delete_project_content", "change_task_priority", "change_task_project",
+        "change_task_cap", "return_for_rework", "offer_task_again", "grant_access",
+        "delete_task_content", "answer_question", "overturn_answer", "approve_action",
+        "stop_action", "waive_action", "mark_action_done", "overturn_approval",
+        "get_workspace_settings", "change_workspace_settings",
+    ]
 
     /// The registry entry of one operation.
     static func operation(_ id: String) -> JSONValue? {
@@ -151,11 +162,17 @@ struct ContractExamplesTests {
         "LandingPrompt": decodes(LandingPrompt.self),
         "TransportError": decodes(TransportError.self),
         "Refusal": decodes(Refusal.self),
+        "AskQuestionCompleted": decodes(CommandOutcome<AskQuestionResult>.self),
+        "Question": decodes(Question.self),
+        "DecisionsList": decodes(DecisionsList.self),
+        "ProjectsList": decodes(ProjectsList.self),
+        "WorkspaceSettings": decodes(WorkspaceSettings.self),
+        "ChangeWorkspaceSettingsCompleted": decodes(CommandOutcome<WorkspaceSettings>.self),
     ]
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 71)
+        #expect(ContractDocument.served.count == 101)
         #expect(ContractDocument.handoff.first == "report_limit")
         #expect(ContractDocument.handoff.last == "change_seat")
         #expect(ContractDocument.ruleChecks.first == "claim_next_job")
@@ -374,13 +391,20 @@ struct ContractExamplesTests {
     func enumsMatchTheSchema() throws {
         for (component, path, values) in Self.enumFields {
             // Each name is a property, except "items", an array's items.
+            let field = "\(component).\(path.joined(separator: "."))"
             var node = try #require(ContractDocument.schema(component), "\(component)")
             for key in path {
                 let next = key == "items" ? node["items"] : node["properties"]?[key]
-                node = try #require(next, "\(component).\(path.joined(separator: "."))")
+                node = try #require(next, "\(field)")
+                if let reference = node["$ref"]?.stringValue {
+                    let prefix = "#/components/schemas/"
+                    try #require(reference.hasPrefix(prefix), "\(field): \(reference)")
+                    let name = String(reference.dropFirst(prefix.count))
+                    node = try #require(ContractDocument.schema(name), "\(field): \(reference)")
+                }
             }
             let schemaValues = (node["enum"]?.arrayValue ?? []).compactMap(\.stringValue)
-            #expect(schemaValues == values, "\(component).\(path.joined(separator: "."))")
+            #expect(schemaValues == values, "\(field)")
         }
         let commandNames = (ContractDocument.schema("CommandName")?["enum"]?.arrayValue ?? [])
             .compactMap(\.stringValue)

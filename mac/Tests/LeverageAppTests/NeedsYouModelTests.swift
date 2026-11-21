@@ -13,12 +13,12 @@ private typealias Fixtures = NeedsYouFixtures
 struct NeedsYouModelTests {
     private func makeModel(
         _ owner: FakeOwnerAPI, reads: Locked<[Int]> = Locked([]), opened: Locked<[UUID]> = Locked([]),
-        agents: Locked<Int> = Locked(0)
+        agents: Locked<Int> = Locked(0), locale: Locale = Locale(identifier: "en_US")
     ) -> NeedsYouModel {
         NeedsYouModel(
             api: owner, noteRead: { seq in reads.update { $0.append(seq) } },
             openTask: { id in opened.update { $0.append(id) } }, openAgents: { agents.update { $0 += 1 } },
-            timing: .quick)
+            timing: .quick, locale: locale)
     }
 
     private func owner(_ items: [InboxItem]) -> FakeOwnerAPI {
@@ -83,15 +83,15 @@ struct NeedsYouModelTests {
         #expect(model.rows.first?.buttons.map(\.action) == [.cancelTask])
     }
 
-    @Test("an item of a kind that cannot open yet is one plain line with no button")
+    @Test("an approval missing its action is one plain line with no button")
     func unknownKind() async {
         let model = makeModel(owner([Fixtures.item(.approval, seq: 8)]))
         await model.load()
         let row = try? #require(model.rows.first)
         #expect(row?.buttons.isEmpty == true)
         #expect(row?.kind == .approval)
-        #expect(row?.heading == "Fix the totals on the invoice page needs you, and leverage cannot open this kind of item yet.")
-        #expect(row?.body == "")
+        #expect(row?.heading == "An action needs your approval")
+        #expect(row?.body == "The details could not be read.")
     }
 
     @Test("rows are in the order the items opened, and no sentence carries an email or a banned word")
@@ -233,12 +233,6 @@ struct NeedsYouModelTests {
             #expect(model.rows.first?.buttons.map(\.label) == labels, "\(kind)")
         }
         #expect(NeedsYouWords.isShown(.orchestratorOffline))
-        for kind in NeedsYouItem.allCases where ![
-            .accountSignedOut, .limitWithNoResetTime, .pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit,
-            .checkCouldNotRun, .noReviewerEligible, .orchestratorOffline,
-        ].contains(kind) {
-            #expect(!NeedsYouWords.isShown(kind), "\(kind) has no route yet")
-        }
     }
 
     @Test("a button is offered only when the item's own choices include it")
@@ -793,5 +787,315 @@ struct NeedsYouModelTests {
         await model.perform(.allowAnotherTry, on: UUID())
         #expect(owner.calls.isEmpty)
         #expect(model.confirmingCancel == nil)
+    }
+}
+
+@MainActor
+extension NeedsYouModelTests {
+    nonisolated private static let questionID = UUID()
+    nonisolated private static let actionID = UUID()
+    nonisolated private static let secondActionID = UUID()
+    nonisolated private static let projectID = UUID()
+    nonisolated private static let criterionID = UUID()
+    nonisolated private static let anotherCriterionID = UUID()
+    nonisolated private static let reviewID = UUID()
+    nonisolated private static let builderID = TaskScreenFixtures.builderID
+    nonisolated private static let approverID = UUID()
+
+    private func milestoneFive(
+        _ kind: NeedsYouItem, blocking: Bool = false, started: Bool = false,
+        checked: Bool = false, enabled: Bool = true, ownerApproved: Bool = false,
+        approvalState: ActionState = .requested, description: String = "the release notes",
+        locale: Locale = Locale(identifier: "en_US")
+    ) -> (NeedsYouModel, FakeOwnerAPI, InboxItem) {
+        let action = ["action_id": JSONValue.string(Self.actionID.contractString)]
+        let choices: [InboxChoice]
+        var facts: [String: JSONValue] = [:]
+        switch kind {
+        case .questionPassedOn:
+            choices = [.answer]
+            facts = ["question_id": .string(Self.questionID.contractString)]
+        case .approval:
+            choices = [.approve, .stop]
+            facts = action
+        case .stoppedAction:
+            choices = [.waive, .returnForRework, .cancel, .overrideOnce]
+            facts = action
+            facts["any_action_started"] = .bool(started)
+            facts["rule_check_id"] = checked ? .string(Fixtures.checkID.contractString) : .null
+        case .unconfirmedAction:
+            choices = [.offerAgain, .markDone, .waive, .cancel]
+            facts = [
+                "action_ids": .array([.string(Self.actionID.contractString), .string(Self.secondActionID.contractString)]),
+                "approved_by_kind": .string(ownerApproved ? "owner" : "seat"),
+                "approved_by_id": .string(Self.approverID.contractString),
+                "builder_announced_start": .bool(started),
+            ]
+        case .accessRequest: choices = [.markAccessGranted, .cancel]
+        case .taskBudgetReached: choices = [.raiseCap, .cancel]
+        case .projectBudgetReached: choices = [.changeBudget, .resumeProject]
+        default: preconditionFailure("Expected a milestone 5 item")
+        }
+        let project = kind == .projectBudgetReached
+        let item = Fixtures.item(
+            kind, seq: 50, task: project ? Self.projectID : Fixtures.taskID, choices: choices,
+            facts: facts, about: project ? .project : .task)
+        let owner = self.owner([item])
+        let actionState: ActionState = switch kind {
+        case .stoppedAction: .stopped
+        case .unconfirmedAction: started ? .started : .approved
+        default: approvalState
+        }
+        let page = TaskPage(
+            task: TaskScreenFixtures.summary(.finishing, id: Fixtures.taskID, builder: Self.builderID),
+            criteria: [
+                TaskScreenFixtures.criterion("Keep the title", taskID: Fixtures.taskID, id: Self.criterionID),
+                TaskScreenFixtures.criterion(
+                    "Correct the totals", taskID: Fixtures.taskID, position: 2, id: Self.anotherCriterionID),
+                TaskScreenFixtures.criterion(
+                    "Review the work", taskID: Fixtures.taskID, position: 3, kind: .review, id: Self.reviewID),
+            ],
+            actions: [
+                OutwardAction(
+                    id: Self.actionID, taskID: Fixtures.taskID, kind: .publish,
+                    description: description, state: actionState),
+                OutwardAction(
+                    id: Self.secondActionID, taskID: Fixtures.taskID, kind: .send,
+                    description: "the invoice", state: .approved, approvedByKind: .owner, position: 2),
+            ],
+            questions: [
+                Question(
+                    id: Self.questionID, taskID: Fixtures.taskID, askingSeatID: Self.builderID,
+                    text: "Which rounding rule?", assumption: "round half up", blocking: blocking, outcome: .passedOn)
+            ],
+            names: [LogName(kind: .seat, id: Self.builderID, name: "Builder One")],
+            reviewerSeatExists: true, asOfSeq: 51, ruleChecks: checked ? [Fixtures.check()] : [],
+            anyActionStarted: started)
+        owner.script {
+            $0.task = { _ in page }
+            $0.seats = {
+                SeatsList(seats: [
+                    Seat(id: Self.builderID, name: "Builder One", provider: .codex, role: .builder, enabled: enabled),
+                    Seat(id: Self.approverID, name: "Review Desk", provider: .claude, role: .orchestrator),
+                ], asOfSeq: 51)
+            }
+            $0.listProjects = {
+                ProjectsList(projects: [Project(id: Self.projectID, name: "Invoices", goal: "Correct totals", briefVersion: 0)])
+            }
+            $0.answerQuestion = { _, _, key in TaskScreenFixtures.plain(.answerQuestion, key: key) }
+            $0.approveAction = { _, key in TaskScreenFixtures.plain(.approveAction, key: key) }
+            $0.stopAction = { _, key in TaskScreenFixtures.plain(.stopAction, key: key) }
+            $0.waiveAction = { _, key in TaskScreenFixtures.plain(.waiveAction, key: key) }
+            $0.returnForRework = { _, _, key in TaskScreenFixtures.plain(.returnForRework, key: key) }
+            $0.overrideCheck = { _, _, key in TaskScreenFixtures.plain(.overrideCheck, key: key) }
+            $0.offerTaskAgain = { _, key in TaskScreenFixtures.plain(.offerTaskAgain, key: key) }
+            $0.markActionDone = { _, key in TaskScreenFixtures.plain(.markActionDone, key: key) }
+            $0.grantAccess = { _, key in TaskScreenFixtures.plain(.grantAccess, key: key) }
+            $0.cancelTask = { _, key in TaskScreenFixtures.plain(.cancel, key: key) }
+            $0.changeTaskCap = { _, _, key in TaskScreenFixtures.plain(.changeTaskCap, key: key) }
+            $0.changeBudget = { _, _, key in TaskScreenFixtures.plain(.changeBudget, key: key) }
+            $0.resumeProject = { _, key in TaskScreenFixtures.plain(.resumeProject, key: key) }
+        }
+        return (makeModel(owner, locale: locale), owner, item)
+    }
+
+    private func expectCall(
+        _ owner: FakeOwnerAPI, _ operation: ContractOperation, id: UUID, body: JSONValue? = nil
+    ) {
+        let call = Fixtures.calls(owner, operation).last
+        #expect(call?.path == ["id": id.contractString])
+        #expect(call?.key != nil)
+        #expect(call?.body == body)
+    }
+
+    @Test("a question shows both answers, and Keep that sends the worker's assumption", arguments: [false, true])
+    func milestoneQuestion(blocking: Bool) async throws {
+        let (model, owner, item) = milestoneFive(.questionPassedOn, blocking: blocking)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Builder One asked while working on Fix the totals on the invoice page")
+        #expect(row.body.contains("Which rounding rule?"))
+        let line = blocking ? "It is waiting for your answer." : "It is assuming round half up and has kept working."
+        #expect(row.body.contains(line))
+        #expect(row.buttons.map(\.label) == ["Keep that", "Answer differently"])
+        await model.perform(.keepAssumption, on: item.id)
+        expectCall(owner, .answerQuestion, id: Self.questionID, body: .object(["answer": .string("round half up")]))
+        await model.perform(.answerDifferently, on: item.id)
+        model.promptText = "round to even"
+        await model.confirmPrompt()
+        expectCall(owner, .answerQuestion, id: Self.questionID, body: .object(["answer": .string("round to even")]))
+        #expect(Fixtures.calls(owner, .answerQuestion).count == 2)
+    }
+
+    @Test("approval names the action and routes both choices to that action")
+    func milestoneApproval() async throws {
+        let (model, owner, item) = milestoneFive(.approval)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Publish the release notes?")
+        #expect(row.body == "Fix the totals on the invoice page passed its review. Publishing cannot be undone.")
+        #expect(row.buttons.map(\.label) == ["Approve", "Do not publish"])
+        await model.perform(.approve, on: item.id)
+        await model.perform(.stop, on: item.id)
+        expectCall(owner, .approveAction, id: Self.actionID)
+        expectCall(owner, .stopAction, id: Self.actionID)
+    }
+
+    @Test("an action sentence uses its verb once in the approval and unconfirmed item")
+    func actionSentence() async {
+        let (approval, _, _) = milestoneFive(.approval, description: "Publish the sample page.")
+        await approval.load()
+        #expect(approval.rows.first?.heading == "Publish the sample page?")
+
+        let (unconfirmed, _, _) = milestoneFive(.unconfirmedAction, description: "Publish the sample page.")
+        await unconfirmed.load()
+        #expect(unconfirmed.rows.first?.body.contains("publish the sample page, approved") == true)
+        #expect(unconfirmed.rows.first?.body.localizedCaseInsensitiveContains("publish publish") == false)
+    }
+
+    @Test("an unrefreshed approval item cannot approve an action the task now shows as stopped")
+    func staleApprovalItem() async {
+        let (model, owner, item) = milestoneFive(.approval, approvalState: .stopped)
+        await model.load()
+        #expect(model.rows.first?.buttons.isEmpty == true)
+        await model.perform(.approve, on: item.id)
+        #expect(Fixtures.calls(owner, .approveAction).isEmpty)
+    }
+
+    @Test("a stopped action never offers Approve and rework sends only the chosen build criteria")
+    func milestoneStopped() async throws {
+        let (model, owner, item) = milestoneFive(.stoppedAction, checked: true)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Publish was stopped")
+        #expect(row.reason == Fixtures.reason)
+        #expect(row.buttons.map(\.label) == ["Skip it", "Send the task back", "Cancel task", "Let it through once"])
+        await model.perform(.approve, on: item.id)
+        #expect(Fixtures.calls(owner, .approveAction).isEmpty)
+        await model.perform(.returnForRework, on: item.id)
+        model.selectedCriterionIDs = [Self.anotherCriterionID, Self.reviewID]
+        await model.confirmPrompt()
+        expectCall(owner, .returnForRework, id: Fixtures.taskID, body: .object([
+            "criterion_ids": .array([.string(Self.anotherCriterionID.contractString)])
+        ]))
+        await model.perform(.letThroughOnce, on: item.id)
+        model.letThroughReason = "I reviewed the changes."
+        await model.confirmLetThrough()
+        expectCall(owner, .overrideCheck, id: Fixtures.checkID, body: .object(["reason": .string("I reviewed the changes.")]))
+        await model.perform(.waive(Self.actionID), on: item.id)
+        expectCall(owner, .waiveAction, id: Self.actionID)
+        await model.perform(.cancelTask, on: item.id)
+        #expect(Fixtures.calls(owner, .cancelTask).isEmpty)
+        await model.confirmCancel()
+        expectCall(owner, .cancelTask, id: Fixtures.taskID)
+    }
+
+    @Test("a stopped action with a start and no failed check hides rework and the rule exception")
+    func milestoneStoppedGuards() async throws {
+        let (model, owner, item) = milestoneFive(.stoppedAction, started: true)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.buttons.map(\.label) == ["Skip it", "Cancel task"])
+        await model.perform(.returnForRework, on: item.id)
+        model.selectedCriterionIDs = [Self.criterionID]
+        await model.confirmPrompt()
+        await model.perform(.letThroughOnce, on: item.id)
+        model.letThroughReason = "I reviewed the changes."
+        await model.confirmLetThrough()
+        #expect(Fixtures.calls(owner, .returnForRework).isEmpty)
+        #expect(Fixtures.calls(owner, .overrideCheck).isEmpty)
+    }
+
+    @Test("an unconfirmed item names the approver and start, and routes choices for each action", arguments: [false, true])
+    func milestoneUnconfirmed(enabled: Bool) async throws {
+        let (model, owner, item) = milestoneFive(
+            .unconfirmedAction, started: enabled, enabled: enabled, ownerApproved: !enabled)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Did publishing happen?")
+        #expect(row.body.contains("Builder One was to publish the release notes"))
+        #expect(row.body.contains(enabled ? "approved by Review Desk" : "approved by you"))
+        #expect(row.body.contains(enabled ? "after it said it had started" : "before it said it had started"))
+        #expect(row.body.contains("the invoice"))
+        #expect(row.buttons.contains { $0.label == "Ask Builder One again" } == enabled)
+        await model.perform(.offerAgain, on: item.id)
+        if enabled {
+            expectCall(owner, .offerTaskAgain, id: Fixtures.taskID)
+        } else {
+            #expect(Fixtures.calls(owner, .offerTaskAgain).isEmpty)
+        }
+        await model.perform(.markDone(Self.secondActionID), on: item.id)
+        await model.perform(.waive(Self.actionID), on: item.id)
+        expectCall(owner, .markActionDone, id: Self.secondActionID)
+        expectCall(owner, .waiveAction, id: Self.actionID)
+        await model.perform(.cancelTask, on: item.id)
+        await model.confirmCancel()
+        expectCall(owner, .cancelTask, id: Fixtures.taskID)
+    }
+
+    @Test("granting access and cancelling use the task ID")
+    func milestoneAccess() async throws {
+        let (model, owner, item) = milestoneFive(.accessRequest)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Builder One needs access")
+        #expect(row.buttons.map(\.label) == ["I have given access", "Cancel task"])
+        await model.perform(.grantAccess, on: item.id)
+        expectCall(owner, .grantAccess, id: Fixtures.taskID)
+        await model.perform(.cancelTask, on: item.id)
+        await model.confirmCancel()
+        expectCall(owner, .cancelTask, id: Fixtures.taskID)
+    }
+
+    @Test("Needs you validates and sends amounts in the Mac’s number format",
+          arguments: [NeedsYouItem.taskBudgetReached, .projectBudgetReached])
+    func localizedBudget(kind: NeedsYouItem) async {
+        let (model, owner, item) = milestoneFive(kind, locale: Locale(identifier: "de_DE"))
+        let isCap = kind == .taskBudgetReached
+        let operation: ContractOperation = isCap ? .changeTaskCap : .changeBudget
+        await model.load()
+        await model.perform(isCap ? .raiseCap : .changeBudget, on: item.id)
+        for invalid in ["100000000,00", "100000000", "12.50", "12,505"] {
+            model.promptText = invalid
+            #expect(!model.canConfirmPrompt)
+        }
+        model.promptText = "12,50"
+        #expect(model.canConfirmPrompt)
+        await model.confirmPrompt()
+        expectCall(owner, operation, id: isCap ? Fixtures.taskID : Self.projectID,
+                   body: .object([isCap ? "budget_cap" : "budget": .number(12.5)]))
+    }
+
+    @Test("task and project budget items send dollar amounts, and a blank project budget clears the limit")
+    func milestoneBudgets() async throws {
+        let (taskModel, taskOwner, taskItem) = milestoneFive(.taskBudgetReached)
+        await taskModel.load()
+        let taskRow = try #require(taskModel.rows.first)
+        #expect(taskRow.heading == "Fix the totals on the invoice page reached its spending limit")
+        #expect(taskRow.body == "$0.00 reported")
+        #expect(taskRow.buttons.map(\.label) == ["Raise the limit", "Cancel task"])
+        await taskModel.perform(.raiseCap, on: taskItem.id)
+        taskModel.promptText = "25.375"
+        await taskModel.confirmPrompt()
+        #expect(Fixtures.calls(taskOwner, .changeTaskCap).isEmpty)
+        taskModel.promptText = "25.37"
+        await taskModel.confirmPrompt()
+        expectCall(taskOwner, .changeTaskCap, id: Fixtures.taskID, body: .object(["budget_cap": .number(25.37)]))
+        await taskModel.perform(.cancelTask, on: taskItem.id)
+        await taskModel.confirmCancel()
+        expectCall(taskOwner, .cancelTask, id: Fixtures.taskID)
+
+        let (projectModel, projectOwner, projectItem) = milestoneFive(.projectBudgetReached)
+        await projectModel.load()
+        let projectRow = try #require(projectModel.rows.first)
+        #expect(projectRow.heading == "Invoices reached its budget")
+        #expect(projectRow.body == "$0.00 reported")
+        #expect(projectRow.buttons.map(\.label) == ["Change the budget", "Continue anyway"])
+        await projectModel.perform(.changeBudget, on: projectItem.id)
+        projectModel.promptText = ""
+        await projectModel.confirmPrompt()
+        expectCall(projectOwner, .changeBudget, id: Self.projectID, body: .object(["budget": .null]))
+        await projectModel.perform(.resumeProject, on: projectItem.id)
+        expectCall(projectOwner, .resumeProject, id: Self.projectID)
     }
 }

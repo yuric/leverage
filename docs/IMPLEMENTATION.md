@@ -55,14 +55,14 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-20 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2) and Handoff (milestone 3) |
-| **Next** | The Rule checks milestone (milestone 4): built on `feat/rule-checks` with every check passing on the owner's Mac and in CI; its pull request is [#15](https://github.com/yuric/leverage/pull/15) |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3) and Rule checks (milestone 4) |
+| **Next** | Review Questions and approvals on `feat/questions-and-approvals`. |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 4 rule checks | `feat/rule-checks` | [#15](https://github.com/yuric/leverage/pull/15) | In review: every check of its plan passes on the owner's Mac and in CI; its adversarial review and the review of its fixes are done and every confirmed finding is fixed |
+| Milestone 5 Questions and approvals | `feat/questions-and-approvals` | [#16](https://github.com/yuric/leverage/pull/16) | In review. The managing agent ran both evals and both developer checks. Local verification and findings are recorded in the pull request description. |
 
 ## Milestones
 
@@ -75,10 +75,10 @@ the PRD's milestone list. How the build is run locally is in
 | --- | --- | --- | --- | --- |
 | 0 | Skeleton | Merged | #10 | Not a PRD milestone; it gives the others a place to land. Adds the first product source file, so it activates AR-006 and AR-007: it names the mechanisms and adds the AR-007 check. It lists a second component, so it activates AR-005 too. Its versions and test tools are in [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) |
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
-| 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
-| 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
-| 4 | Rule checks | In review | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 13. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
-| 5 | Questions and approvals | Not started | | |
+| 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 10 |
+| 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 11. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
+| 4 | Rule checks | Merged | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 12. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
+| 5 | Questions and approvals | In review | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run and pull request checks are ahead. See question 13 and [Measurements](#measurements). |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
 | 7 | Analytics page | Not in this build | | See question 1 |
 
@@ -195,7 +195,7 @@ from that record, or settles what it left open:
 The Core loop's choices where the PRD leaves a gap were made in the
 milestone's plan under the IDs below, which the code, the tests and the
 contract cite ("milestone 2 plan EN-24"). Each line is the choice as built.
-The plan's `[owner-later]` choices are in question 11, not here.
+The plan's `[owner-later]` choices are in question 10, not here.
 
 - **Scope.** SC-1: the commands the PRD's Core loop paragraph lists, the
   agent calls they need (SC-7: claim, briefing, pass, submit and review
@@ -203,7 +203,7 @@ The plan's `[owner-later]` choices are in question 11, not here.
   first-sign-in operations, and Cancel, Allow one more round and Remove
   seat. SC-3: Complete contract with an outward action is `422 invalid`,
   so no Finishing row can be reached. SC-4: Add task into the Imaginarium
-  is `422 invalid`; the app adds to Backlog. SC-11 (also question 11): the
+  is `422 invalid`; the app adds to Backlog. SC-11 (also question 10): the
   "No reviewer is eligible" item is not opened.
 - **The transition function.** EN-2: a later milestone's command has no
   entry and no route. EN-5: `Gating::NoRules` allows everything and plans
@@ -319,7 +319,7 @@ Where the build differs from the plan, or settles what it left open:
 The Handoff milestone's choices where the PRD leaves a gap were made in the
 milestone's plan under the IDs below, which the code, the tests and the
 contract cite ("milestone 3 plan HD-4"). Each line is the choice as built.
-The plan's `[owner-later]` choices are in question 12, not here.
+The plan's `[owner-later]` choices are in question 11, not here.
 
 - **Scope.** HS-1: what the PRD's Handoff paragraph lists, the seven owner
   commands Q-2 moved in, the backup of Q-14, eleven operations newly
@@ -569,7 +569,7 @@ the milestone's plan under the IDs below, which the code, the tests and
 the contract cite ("milestone 4 plan RD-45"). Each line is the choice as
 built. The plan's `[owner-later]` choices (RS-2, RE-2, RD-2, RD-8, RD-12,
 RD-24, RD-25, RD-29, RD-33, RD-45, RD-51, RD-61, RV-2 to RV-7, RM-1) are in
-question 13, not here.
+question 12, not here.
 
 - **Scope.** RS-1: what the PRD's Rule checks paragraph lists, with what
   earlier milestones left to it: the planner and Draft contract, "No
@@ -769,6 +769,29 @@ with a test that failed first:
   records the miss within 15 seconds at the due time, and claim-next's
   state row writes no `job.timed_out`. No requirement or audit rule needs
   the miss sooner.
+
+### The Questions and approvals milestone
+
+- **Reviewer eligibility after a seat request.** Walk 132052406 exposed an
+  inbox event attributed to an unchanged seat request. Change seat now
+  triggers the re-evaluation when it writes `seat.changed`. The workspace
+  timer covers account resets (contract decision SM-42).
+- **Overturn after an action is done.** The former question 8 is settled by a
+  durable `action.overturn_recorded` event, with the owner as actor and
+  the action as subject. The task and action stay as recorded before.
+  [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md)
+- **Finishing and MCP.** The previous builder receives any approved work.
+  The client starts the bundled MCP server for a seat that connects on
+  its own. [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md)
+  and [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+  record the boundaries.
+- **Verification limits.** The end-to-end builders that ask questions or
+  report spend are self-connected seats. A real provider tool carried out
+  no outward action. Lease expiry after approval was tested through HTTP.
+  The stand-in end-to-end builder lost the lease by releasing the task.
+  The MCP heartbeat window was tested with a manual clock. The
+  orchestrator's question prompt and its answer and basis parser ran
+  against stand-in tools.
 
 ## What the Rule checks milestone proves, and how far
 
@@ -1134,6 +1157,55 @@ Milliseconds.
   whole transition at the 99th percentile (81 ms and 108 ms over all
   commands; submit's whole transition 310 ms).
 
+### Questions and approvals runs
+
+The managing agent ran these checks on 2026-11-21 UTC.
+
+No supported model missed either bar. Grok was not run (not signed in).
+
+**approves-actions, run 1** (`LEVERAGE_EVAL=approves-actions
+LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh approves-actions`): exit 0.
+
+| Provider | Correct | Wrongly approved | Irreversible wrong approvals | Wrongly refused | No decision | Canary leaks | Tool runs | Met the bar |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| claude | 30 | 0 | 0 | 0 | 0 | 0 | 30 | yes |
+| codex | 30 | 0 | 0 | 0 | 0 | 0 | 30 | yes |
+| gemini | 30 | 0 | 0 | 0 | 0 | 0 | 31 (one second try) | yes |
+
+Every model met the bar of AV-5 on the first run, so the wording was not
+changed and the held-out set was not run. 91 of 360
+tool runs used.
+
+**specific-details, run 3** (the orchestrator's role file changed in this
+milestone, so milestone 4's results were recorded against the old file
+and `check_evals.py` asked for a new run): 24 of 24 correct for each of
+claude, codex and gemini, 0 wrongly passed, 0 instructed passes, 0 leaks,
+72 tool runs; 216 of 270 used, the suite's third and last run per model.
+
+`orchestrator_tested_providers` stays `claude`, `codex`, `gemini` (each
+met both suites' bars); `check_evals.py` OK. Commit 4dd2872.
+
+Every model scored every case right in both suites, so the suites do not
+tell the models apart, and they say nothing about cases harder than
+these. Claude Code and Codex ran on the Mac user's own settings folders,
+so the model "the tool's default" picked there is not known.
+
+| Check | Result | Time |
+| --- | --- | --- |
+| `real_mcp_run.sh claude`: one task to Done with Claude Code as the MCP client | passed, first run; the client asked for MCP protocol revision 2025-11-25 | 69 s |
+| `real_approval_check.sh claude` | passed, first run | 40 s |
+| `real_approval_check.sh codex` | passed, first run | 44 s |
+| `real_approval_check.sh gemini` | passed, first run | 65 s |
+
+Each passed only after `leverage:verify_log` and the secret scan. No
+outward action was carried out: the approved action of the approval
+check is the stand-in builder touching a file in the script's folder.
+The Claude Code MCP developer check used a stand-in reviewer, turned
+every rule off and supplied its own MCP settings. It pre-allowed the
+leverage tools and confirmed the defaults in its prompt.
+The real checks ran on the code at 4dd2872, before the documents step
+and the adversarial review.
+
 ## Installed for the build
 
 Nothing was installed on the owner's Mac. Every Ruby command ran in a
@@ -1155,7 +1227,7 @@ build 17F113, Swift 6.3.3).
 | `leverage-api` images | `m2`, `m2-rc`, `m3`, `m3-rc`, `m4`, `m4-rc`, `0.1.0` and others the scripts tag | Built from `api/Dockerfile` in the Mac's Docker | The milestones' tests and runs; `0.1.0` is the one `dist/Leverage.app` starts |
 | `swift` image | `6.4.2-noble` (by digest, the one milestone 2 recorded) | Docker Hub official image | Building and running the `e2e` lane on Linux on the Mac; no file refers to it |
 
-The Core loop, Handoff and Rule checks milestones installed nothing on the Mac. `lychee`, the link
+The Core loop, Handoff, Rule checks and Questions and approvals milestones installed nothing on the Mac. `lychee`, the link
 check, is not installed on the Mac, so it runs only in CI.
 
 The direct gems, their licenses and why each is needed are listed in the
@@ -1281,22 +1353,14 @@ skeleton's pull request description, as rule AR-004 asks.
      line now says so. Alternative: block job claims under a hold, which
      stalls every pending check until the last hold lifts.
 
-8. **Overturning an approval whose action is already reported done.** The
-   PRD says it "is recorded and changes nothing" (L144, L801), but no event
-   type or column records it, and the only command row, kept until command
-   keys are purged after 7 days, is not a durable record. The contract's
-   rows for it write nothing. *Proposed:* a PRD change adding a durable
-   record, for example an `action.overturn_recorded` event, or an
-   `overturned_by` column on `actions` that replay covers. *Chosen
-   meanwhile:* nothing is written, and the gap stays open.
-9. **Who carries out the approved actions left after Mark action done.**
+8. **Who carries out the approved actions left after Mark action done.**
    The PRD's row writes `hold.closed` and says nothing about a lease
    (L101). The contract applies L139: when no action waits for a decision
    the previous builder gets a fresh lease if it holds nothing, carried on
    that `hold.closed`, and otherwise the task waits for it. *Alternative:*
    keep the hold open until the owner offers the task again, which the
    PRD's row does not allow.
-10. **Changing a credential's model, effort or strength rank.** Add
+9. **Changing a credential's model, effort or strength rank.** Add
     credential now carries them (PRD Data model), nullable, without
     deciding the PRD's open decision "How a credential's model is set":
     whether the Mac app fills them from a provider default or the owner
@@ -1305,9 +1369,9 @@ skeleton's pull request description, as rule AR-004 asks.
     *Proposed:* answer it with that open decision, and add a "Change
     credential" owner command if the owner chooses them. The Handoff
     milestone took the open decision's first option as a working
-    assumption (R-4, question 12): the app fills them in at Add.
+    assumption (R-4, question 11): the app fills them in at Add.
 
-11. **The choices made for the owner in the Core loop.** The owner's
+10. **The choices made for the owner in the Core loop.** The owner's
     standing instruction for this run is to decide, record and continue,
     so each was taken and the milestone was built on it. Each line says
     what was chosen and the alternative.
@@ -1518,7 +1582,7 @@ skeleton's pull request description, as rule AR-004 asks.
       be installed from the pop-up, and whether each tool's sign-in needs a
       terminal is unknown until the owner's first run.
 
-12. **The choices made for the owner in the Handoff milestone.** The
+11. **The choices made for the owner in the Handoff milestone.** The
     owner's standing instruction for this run is to decide, record and
     continue, so each was taken and the milestone was built on it. Each
     line says what was chosen and the alternative. The plan's IDs are
@@ -1687,7 +1751,7 @@ skeleton's pull request description, as rule AR-004 asks.
       agent loses its task when its time on it runs out; the API still has
       no security scanner (question 6).
 
-13. **The choices made for the owner in the Rule checks milestone.** The
+12. **The choices made for the owner in the Rule checks milestone.** The
     owner's standing instruction for this run is to decide, record and
     continue, so each was taken and the milestone was built on it. Each
     line says what was chosen and the alternative. The plan's IDs are
@@ -1937,6 +2001,84 @@ skeleton's pull request description, as rule AR-004 asks.
       milestone (RD-59); the milestone made 82 real tool runs of its
       ceiling of 286; the API still has no security scanner (question 6).
 
+13. **The choices made for the owner in Questions and approvals.** Each
+    line records the choice and an alternative.
+
+    - **AP-13 / T-1.** Record the owner's objection after an action is done with `action.overturn_recorded` ([ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md)). The cheaper alternative is two columns on `actions`, for the actor and time.
+    - **AS-2.** Activate all seven shipped rules. With no orchestrator, questions go straight to the owner and approvals have two queue attempts. The alternative is to pass approvals to the owner immediately.
+    - **AS-4.** Put the recovery time ceiling in Settings for the owner to set. The alternatives were a hard-coded ceiling or a migration.
+    - **AE-10.** Answer from the record when it settles the question, decide small choices within the contract, and pass other questions to the owner. The alternative is to pass every question the record cannot settle.
+    - **AE-16.** Rework replaces the current builder's lease and a waiver that leaves approved work keeps it. The alternative is to treat the current holder as busy and make rework claimable.
+    - **AP-6.** Overturn sends the question back to the asking seat and the owner can answer in a second command. The alternative is to take a replacement answer in the overturn request.
+    - **AP-15.** The owner approves an action awaiting owner approval. A gate-stopped action has a check override, subject to the other frozen gates. The alternative is to allow approval of stopped actions as well.
+    - **AP-17.** The round limit counts failed reviews, since DB-15 leaves `extra_rounds` untouched on owner rework. The alternative is a separate owner-rework count.
+    - **AP-22.** The approval rule covers every action kind. The alternative is to ship it scoped to Publish and Send, which routes Pay and Delete to the owner in the server.
+    - **AP-23.** The shipped instruction passes payments and deletions that fit the contract to the owner. The alternative is to let the orchestrator approve an exactly described payment or deletion. The PRD's open decision stays open.
+    - **AP-24.** Connect and Change offer Standard, Stronger and Strongest. An escalated task with no stronger builder waits in Ready with a card message. The alternatives are a Needs you item, editable credential strength, or deriving credential strength from seats. With rank-1 logins added in the app, an escalated task stays within its builder's provider during handoff.
+    - **AP-30.** Put Decided for you and Activity in the pane, the project filter and Manage link below, and Workspace alongside Rules in Settings. The alternative is a top-level Projects entry.
+    - **AP-34.** Activity filters Important using the registry's event list in the app. The alternative is a server-side filter.
+    - **AP-36.** Delete content after a task ends, or after all a project's tasks end. Clear related content and claim snapshots and retain events and timing. The alternative is deletion while a task can still be held.
+    - **AP-39.** Changed settings apply at the next read. Existing check deadlines move because the timer derives them from the current setting. The alternative is to store each check's due time and leave it fixed.
+    - **AP-40.** The app-run builder reports tokens and zero spend and neither asks questions nor requests access. Self-connected builders can do both. The alternative is builder markers plus an answer wait and a further tool run.
+    - **AP-50.** The cases use the shipped payment and deletion policy. The alternative, allowing exact payments or deletions, needs a new frozen eval and run.
+    - **AM-1.** Bundle a Swift stdio server using platform modules and LeverageKit ([ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)). The alternatives are an HTTP endpoint or an MCP SDK.
+    - **AM-5.** The client supplies the seat token in the child environment. The app copies settings with a placeholder. The alternative is to write a token into each client's settings file from the app.
+    - **AM-10.** Prove one task to Done with the scripted client and a Claude Code developer check. The alternative is to wait for the owner's own run.
+    - **AV-3.** Use 30 main approval cases and 10 held-out cases constructed through the production input path. The alternatives are more cases or repeated samples per case.
+    - **AV-4.** Fix the supported models before the run to the defaults of Claude Code, Codex and Antigravity on the Mac. The alternative is to choose the list after seeing the scores.
+    - **AV-5.** Count wrong approvals, wrong refusals and leaks separately at one bar per model. List providers that met both suites' bars without restricting availability. The alternatives are accuracy alone or refusing untested orchestrators.
+    - **AV-6.** Freeze the cases and labels and limit real runs to 120 tool calls per model and 360 total. Use the held-out cases only after tuning. The alternatives are changing cases during tuning or using a higher quota.
+    - **AV-7.** Cover the shipped instruction and role file at each tool's default with one scored answer per case. Agents label and review the cases. The alternative is to sample multiple answers or evaluate owner-edited instructions too.
+    - **AU-1.** Use the copy catalogs' task, action, strength, budget and settings wording. The alternative is to display the contract's internal terms where the mockup is silent.
+
+    The PRD changes and the alternatives are listed below.
+
+    - **Review, approval and waiver.** The lifecycle row now requires
+      Approve or Stop before waiving an action with an open Approval
+      item. This follows the Approval choices and the Holds table. The
+      alternative was to add Waive to the Approval choices.
+    - **Review, questions at Done.** Done withdraws live question jobs.
+      The owner can still answer a non-blocking question passed on
+      earlier while the task's content is present. Deleting the content
+      resolves its open Needs you item. Orchestrator answers become final
+      when the task ends. An alternative was to let late jobs report cost
+      and end quietly, leaving them eligible to claim after Done.
+
+    - **T-1.** Give an objection after completion an event. The alternative is the two action columns in AP-13.
+    - **T-2.** Record the Claude Code MCP proof and the criterion and action start boundaries. The alternative is to wait for another client's or the owner's check before describing the MCP connection.
+    - **T-3.** Give a seat connecting through MCP its tool-based landing prompt. The alternative is one HTTP prompt for every seat.
+    - **T-4.** Route questions according to the orchestrator seat and open a hold only on a blocking question passed to the owner. The alternative is to wait for an orchestrator even with none connected.
+    - **T-5.** Count seat and verdict spend against task caps and retain the budget claim gate after manual resume. The alternative is to resume claims too or count job spend toward the cap.
+    - **T-6.** Count failed reviews toward the round limit. The alternative is an independent rework count.
+    - **T-7.** Require a stronger connected builder to escalate and expose seat strength in Connect and Change. The alternative is to escalate even when no stronger seat exists.
+    - **T-8.** Close the action holds when returning an eligible task for rework. The alternative is to leave the prior items open into the new round.
+    - **T-9.** Open Unconfirmed action if approved work remains and the previous builder seat is disabled, removed or in another role. The alternative is to wait for that seat.
+    - **T-10.** A later command or timer can grant a waiting action lease after account recovery. The alternative is to grant leases only in the named builder release entries.
+    - **T-11.** List only answers made by deciding, with reversibility and the start warning. The alternative is to list answers from the record too.
+    - **T-12.** Use the contract's Important event list. The alternative is a separately maintained filter.
+    - **T-13.** Edit a brief as one ordered list. The alternative is one edit per entry.
+    - **T-14.** Limit content deletion to ended work and include the project's tasks and task-related check and job content. The alternative is to keep that related content or allow deletion earlier.
+    - **T-15.** Expose six bounded workspace settings. The alternative is fixed settings and a migration for the recovery time ceiling.
+    - **T-16.** Record the approval eval's main and held-out case sets, numeric bar and results. The alternative is one aggregate score or more samples.
+    - **T-17.** Add four golden traces. The alternative is to extend only traces 03 and 04.
+    - **T-18.** Place task priority, project and cap commands in this milestone. The alternative is to defer them.
+    - **T-19.** Specify the runner's cost, action and prior-start behavior. The alternative is for the runner also to ask questions, request access or automatically repeat started actions.
+    - **T-20.** Instruct the orchestrator to approve matching Publish or Send actions, stop contradictions and pass uncertainty and payment or deletion approvals to the owner. The alternative is approval of an exact payment or deletion.
+    - **T-21.** Replace the current builder's lease on rework and keep it on a nonfinal waiver. The alternative is to release the builder.
+    - **T-22.** Leave a finally errored approval with the owner. The alternative is to queue another attempt when an orchestrator returns.
+    - **T-23.** Document strength rank 1 for logins the app adds. The alternative is credential strength settings.
+    - **T-24.** Close the budget hold when a contract edit clears the cap or raises it above spend. The alternative is to require the separate Change cap command.
+
+    Contract decisions on existing interfaces and rows are recorded in the
+    [contract README](../api/contract/README.md#what-the-questions-and-approvals-milestone-added).
+
+    - **Events and instruction.** Add the objection event, initial action IDs (DB-50), the open-overturn flag (DB-51) and the approval instruction. The alternatives are action columns, reconstructing history from command outcomes, or leaving the approval rule without an instruction.
+    - **Existing rows.** Name action and question side events and holds, the owner-approval guard and split move, refusal rows for answers, overturns, deletion and re-run, and the offline timer note. The alternative is to depend on unstated guards and side effects.
+    - **Builder and cost guards.** Distinguish the previous builder already holding the task and close a budget hold through the contract commands. The alternative is to treat that builder as busy and require Change cap separately.
+    - **Interfaces.** Add typed question and approval job inputs and results, workspace settings read and bounds, the landing prompt connection selector and the optional owner inbox detail. The alternative is generic job data and separate commands or reads for the new forms.
+    - **Remaining PRD gaps.** Reviewers report cost with a verdict only, despite the Roles text. The alternative is a reviewer cost call. There is no command to change credential strength. A failure routed to the orchestrator still goes to the owner (RD-24). The alternatives are a credential edit command and defining the orchestrator's action on that failure.
+    - **Held-out integrity.** The offline checker warns about two frozen candidates that disagree with their contract action. A real held-out run refuses that set. Changing the approval wording is blocked until the owner decides. A separately reviewed, refrozen set would require amending the PRD's “No case changes after that run” rule. The other option keeps the shipped wording and measured main-set results.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -1945,7 +2087,7 @@ run is also listed here until the owner has read it.
 
 | Item | What is waiting |
 | --- | --- |
-| The recovery time ceiling | The owner sets it before the Handoff milestone is called done (PRD, Handoff and Open decisions). The setting is empty. The six scripted runs were checked against a working bar of 900 seconds, which the run chose; their intervals are seconds, because the runs are scripted ([Measurements](#measurements)). Until the Questions and approvals milestone brings the command that changes workspace settings, the owner's number is written by a migration |
+| The recovery time ceiling | The owner can set it in Settings > Workspace settings. The setting is empty. Handoff stays not called done until the owner sets it. The six scripted cases used a verification bar of 900 seconds. |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
 | Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |
@@ -1967,11 +2109,16 @@ run is also listed here until the owner has read it.
 | The eval suite of "Every task needs specific details" | The 24 cases and their labels, the instruction's wording, the bar and the list of supported models (RV-2 to RV-5), all chosen by agents. No supported model missed the bar: Claude Code, Codex and Antigravity each scored 24 of 24 at their default model ([Measurements](#measurements)) |
 | The orchestrator's and the planner's role files | `api/config/role_files/orchestrator.md` and `planner.md`, written in the delegated run (RD-61) |
 | A first run with the rules on | On real logins with an orchestrator connected: three agents on two providers, a task that waits for its check and goes on, and one the check sends back for details. No real builder, reviewer or planner has run through this milestone; real model checks ran only in the eval and in the real checks through the server |
-| Grok as an orchestrator | It can be connected now and is shown as not tested. To cover it, sign in to Grok and run `LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 LEVERAGE_EVAL_PROVIDERS=grok scripts/eval_rule.sh specific-details`; if it meets the bar, add `grok` to `bar.json`'s supported models, to `SUPPORTED` in `scripts/check_evals.py` (and the PRD's sentence naming the supported models) and to the registry list |
 | The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login, a reviewer on a login of another provider and an orchestrator, since the shipped rules are on; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
 | The developer check with real tools | `scripts/real_provider_run.sh` (plan PV-6, driver flags only) and `scripts/real_gemini_through_app.sh` exist. The managing agent's runs on the tools signed in on the owner's Mac are in pull request 13: Claude, Codex and Gemini passed; Grok is installed and not signed in, so its run waits for the owner |
 | The three interrupted forms on real logins | A real limit cannot be caused on request, so the first one a real run meets is also the first test of a detector against a real reply. When it happens, the tool's reply is to be captured, scrubbed and committed as a recorded reply file. Until then PRD test 9 and the release line on recorded limit replies are not met as written, and a real limit will most likely stop the agent with no handoff |
 | A sign-out on a real login | Sign one account out in its provider's own tool while an agent works on it, and follow the notification. The reply of a login that expires during a run is to be captured the same way; the recorded ones are of a tool that never held a login |
 | The notification on the real bundle | That macOS asks once, that a notification shows while the app is in front and a click opens Needs you, and that a rebuilt, ad-hoc-signed app keeps its permission. No test touches the notification center |
-| A handoff between two real logins of one provider | The release line on continuing on another login of the same provider, which the provider-terms record says Anthropic's policy and Google's documents do not clearly allow (question 12, HM-55) |
+| A handoff between two real logins of one provider | The release line on continuing on another login of the same provider, which the provider-terms record says Anthropic's policy and Google's documents do not clearly allow (question 11, HM-55) |
 | A restore from inside the app, and a copy of the backups off the Mac | Neither is built. A restore is the maintainer's terminal command ([DEPLOY.md](DEPLOY.md#restoring)) |
+| Pull request 15 | The Rule checks milestone is merged. Its AI-assistance boxes remain for the owner. |
+| Questions and approvals pull request ([#16](https://github.com/yuric/leverage/pull/16)) | Both AI-assistance boxes await the owner's review. |
+| [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md), [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) and [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) | The owner reads the MCP, Finishing and overturn records. |
+| The owner's MCP run | Connect an agent through MCP from Agents and let the agent finish one task. |
+| The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
+| Grok | Outside both committed eval runs and untried as an MCP client. After sign-in, the maintainer can run `LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 LEVERAGE_EVAL_PROVIDERS=grok scripts/eval_rule.sh approves-actions`. Both shipped suites must cover and pass Grok for it to appear in the registry. |

@@ -3,22 +3,9 @@ require "erb"
 module Leverage
   module Reads
     # The landing prompt of a seat that connects on its own (get_landing_prompt;
-    # PRD Clients, milestone 2 plan MA-12, SC-10, Q-15, the owner's issue 11):
-    # the text the owner pastes into the agent. It is filled from one
-    # template, config/landing_prompt.md.erb, with the seat's role and name,
-    # the address the request came in on, the calls the role may make and
-    # this server serves, and the workspace's lease length. It never holds a
-    # token: the seat's token is shown once, by connect_seat, and the prompt
-    # tells the agent to read it from an environment variable the template
-    # names.
-    #
-    # The calls come from roles.json (what the role may make) and the
-    # registry (method and path), kept to the operations Http::RouteTable
-    # serves: a call the role may make that is not served yet answers 404, so
-    # it is left out. Each is listed by name, method and path only: the
-    # owner reads this text in the Connect sheet, and the contract's
-    # one-line summaries use engine words the owner's screens do not (PRD
-    # L794); the briefing tells the agent what each call is for.
+    # PRD Clients). The HTTP form describes the calls this server serves.
+    # The MCP form names the role's tools from the contract. Each form has
+    # its own template, and only the HTTP form uses the request address.
     module LandingPrompt
       CHECK_INTERVAL_MINUTES = 20
       # An orchestrator or a planner checks for work every minute, also
@@ -30,7 +17,7 @@ module Leverage
       # dropped (JobTimer.draft_miss; the second review of finding 19).
       JOB_CHECK_INTERVAL_MINUTES = 1
       JOB_ROLES = %w[orchestrator planner].freeze
-      TEMPLATE = "landing_prompt.md.erb".freeze
+      TEMPLATES = { "http" => "landing_prompt.md.erb", "mcp" => "landing_prompt_mcp.md.erb" }.freeze
 
       # The seat is one the app runs, which needs no prompt (409 invalid_state).
       class AppRunSeat < StandardError; end
@@ -67,36 +54,42 @@ module Leverage
 
       module_function
 
-      # { text:, check_interval_minutes: }, or nil when the workspace has no
-      # such seat or it was removed. Raises AppRunSeat for a seat the app runs
-      # and UnusableAddress for a base_url that is not safe to paste. Raises
+      # { text:, check_interval_minutes:, connection: }, or nil when the
+      # workspace has no such seat or it was removed. Raises AppRunSeat for
+      # a seat the app runs, UnusableAddress for an unsafe HTTP base_url and
       # ActiveRecord::RecordNotFound for an unknown workspace.
-      def call(workspace_id, seat_id, base_url:)
+      def call(workspace_id, seat_id, base_url:, connection: "http")
+        template = TEMPLATES.fetch(connection)
+        http = connection == "http"
         Snapshot.call(workspace_id) do |_as_of_seq|
           seat = Seat.find_by(workspace_id: workspace_id, id: seat_id, removed_at: nil)
           next nil unless seat
           raise AppRunSeat, "The app runs this seat" if seat.credential_id
 
-          raise UnusableAddress, "The address cannot be used in a command" unless ADDRESS.match?(base_url)
+          if http && !ADDRESS.match?(base_url)
+            raise UnusableAddress, "The address cannot be used in a command"
+          end
 
           lease_seconds = Workspace.where(id: workspace_id).pick(:lease_length_seconds)
-          page = page(seat, base_url, lease_seconds)
-          { text: render(page), check_interval_minutes: page.check_interval_minutes }
+          page = page(seat, base_url, lease_seconds, http: http)
+          { text: render(page, template), check_interval_minutes: page.check_interval_minutes, connection: connection }
         end
       end
 
-      def page(seat, base_url, lease_seconds)
-        Page.new(seat_name: seat.name, role: seat.role, base_url: base_url, calls: calls_for(seat.role),
+      def page(seat, base_url, lease_seconds, http:)
+        Page.new(seat_name: (seat.name if http), role: seat.role, base_url: (base_url if http),
+          calls: calls_for(seat.role, served_only: http),
           lease: duration(lease_seconds),
           check_interval_minutes: JOB_ROLES.include?(seat.role) ? JOB_CHECK_INTERVAL_MINUTES : CHECK_INTERVAL_MINUTES)
       end
 
-      # The calls the role may make that the server serves, in the order
-      # roles.json lists them.
-      def calls_for(role)
+      # The calls in contract order. The HTTP form only lists served routes.
+      def calls_for(role, served_only:)
         entry = Contract.roles.fetch("roles").find { |candidate| candidate.fetch("role") == role }
         operations = Contract.registry.fetch("operations").to_h { |operation| [ operation.fetch("operation_id"), operation ] }
-        entry.fetch("operations").select { |id| Http::RouteTable.serves?(id) }.map do |id|
+        ids = entry.fetch("operations")
+        ids = ids.select { |id| Http::RouteTable.serves?(id) } if served_only
+        ids.map do |id|
           operation = operations.fetch(id)
           Call.new(id: id, method: operation.fetch("method"), path: operation.fetch("path"))
         end
@@ -109,8 +102,8 @@ module Leverage
         minutes == 1 ? "1 minute" : "#{minutes} minutes"
       end
 
-      def render(page)
-        source = Rails.root.join("config", TEMPLATE).read
+      def render(page, template)
+        source = Rails.root.join("config", template).read
         "#{ERB.new(source, trim_mode: "-").result(page.get_binding).strip}\n"
       end
     end

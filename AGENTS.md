@@ -5,25 +5,24 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has its contract and the Core loop, Handoff and Rule checks
-milestones: an owner can sign in, add logins, connect a builder, a
-reviewer, an orchestrator and a planner, and take a task from a form to
-Done, on the owner's Mac; a run that meets a provider limit or a
-signed-out login continues on the next account in the Handoff order, or
-waits and tells the owner through Needs you and a notification; the owner
-can promote, edit, pause and continue a task and pause, resume and change
-an agent; the database is backed up every day, with a tested restore; and
-the seven shipped rules and the owner's own rules gate a task's moves,
-checked in the server or by the orchestrator agent, with Settings, a
-Timing section and a rule checklist in the app. That is shown end to end
-with stand-in provider tools. Real providers have run through it only in
-developer checks run by the maintainer or the managing agent of a
-delegated run: one Gemini build to Done through the
-app, and an orchestrator on each of Claude Code, Codex and Antigravity
-checking two contracts; no real reviewer or planner has, and no
-interruption has been shown on a real provider. The repository holds the documentation,
-the research behind its practices, and the scripts and checks that keep
-them consistent, plus:
+leverage has its contract, Core loop, Handoff, Rule checks and Questions
+and approvals. On the owner's Mac, the owner can sign in, add logins,
+connect agents, take a task from a form to Done, and see how it reached
+Done. A run that meets a provider limit or sign-out continues on the
+next eligible account or waits. The database is backed up daily, with a
+tested restore. All seven shipped rules act. The app shows questions,
+access requests, outward actions, projects and spending, Activity,
+Decided for you, content deletion and workspace settings. A seat that
+connects on its own can use HTTP or the bundled MCP server.
+
+The full workflows use stand-in tools. Developer checks also ran a
+Gemini task through the app, a Claude Code task through MCP, and checks
+and approvals with real orchestrators on Claude Code, Codex and
+Antigravity. Real checks used stand-ins for outward actions. Orchestrator
+question jobs used stand-ins for the prompt and for parsing the answer
+and basis. The owner's MCP run, real reviewer and planner runs, and a real
+interruption remain unverified. The repository contains the documents,
+research, and the following code and checks.
 
 - `api/`: a Rails application in API mode, with Minitest tests. It serves
   the owner's, the agents' and the helper's calls through one transition
@@ -42,13 +41,16 @@ them consistent, plus:
   `structure.sql` for every table of the Data model;
 - `mac/`: a Swift package with the library LeverageKit (with one limit
   and sign-out detector per provider), the reference runner
-  LeverageRunner, the helper LeverageHelper, the app's services
+  LeverageRunner, the MCP server LeverageMCP, the helper LeverageHelper,
+  the app's services
   LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
   specific details" (24 made-up cases, the bar, and the results of the
   maintainer's run on Claude Code, Codex and Antigravity);
+- `evals/approves-actions/`: the outward action approval eval suite, with
+  30 main cases, a 10-case held-out set, and the recorded main results;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
@@ -58,15 +60,17 @@ them consistent, plus:
   with stand-in tools), `e2e_handoff.sh` (six runs interrupted by a limit
   or a sign-out, with stand-in tools), `e2e_rule_checks.sh` (seven runs
   with the rules on and an orchestrator, with stand-in tools),
+  `e2e_questions_approvals.sh` (seven stand-in cases, with MCP),
   `restore_drill.sh` (a backup restored into an emptied cluster),
   `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
   `app_compose.py`, and the maintainer's runs on real tools,
-  `eval_rule.sh` (the eval suite, scored by `eval_score.py`) and
-  `real_rule_check.sh` (one real verdict through the server);
+  `eval_rule.sh` (both suites, scored by `eval_score.py`),
+  `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
   migrations-from-zero check, the import check, the reply-file check, the
   app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
-  `e2e_handoff.sh`, `e2e_rule_checks.sh`) and the restore drill, and the
+  `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`)
+  and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
   scripts), on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
@@ -201,11 +205,13 @@ python3 -I scripts/test_speed_report.py              # self-test of the speed re
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
 python3 -I scripts/test_real_provider_run.py         # the developer check, with stand-in tools
 python3 -I mac/Tests/StandIns/test_provider_tool.py  # self-test of the stand-in tools
-python3 -I scripts/check_evals.py                    # the eval suite's cases, results and registry list
+python3 -I scripts/check_evals.py                    # both suites' cases, results and registry list
 python3 -I scripts/test_check_evals.py               # self-test of that check
 python3 -I scripts/test_eval_score.py                # self-test of the eval scorer
 bash scripts/test_eval_rule.sh                       # the eval script's refusals and plumbing, stand-in tools
 bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
+bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
+bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
 ```
 
 After changing anything under `api/contract/registry.json` or the
@@ -291,7 +297,8 @@ swift test                                           # tests
 ```
 
 `LEVERAGE_ONLY=<lane>` builds and tests one lane of the package: `kit`,
-`runner`, `helper`, `services`, `app` or `e2e` (the only lane on Linux).
+`runner`, `helper`, `services`, `app`, `mcp` or `e2e`. CI builds the
+`e2e` lane on Linux, including the MCP server.
 When several agents work at once, each builds its own lane in its own
 `--scratch-path`, so that a half-written file in one lane never stops
 another from compiling.
@@ -315,6 +322,7 @@ else):
 scripts/e2e_core_loop.sh                             # the whole loop with stand-in tools
 scripts/e2e_handoff.sh                               # six interrupted runs, one compose project each
 scripts/e2e_rule_checks.sh                           # seven runs with the rules on, one compose project each
+scripts/e2e_questions_approvals.sh                   # seven runs with stand-ins, including MCP
 scripts/restore_drill.sh                             # back up, empty the cluster, restore, replay
 scripts/speed_run.sh                                 # 50 seats for 120 s; prints the speed table
 scripts/build_app.sh && scripts/smoke_app.sh         # build dist/Leverage.app, open it, check its server
@@ -346,19 +354,23 @@ It sends one build prompt through the runner's tool driver and proves the
 driver's flags only. Its self-test runs in the `e2e` job with stand-in
 tools.
 
-The eval suite's run and the real rule checks reach real tools too, and
+The eval suites and the real developer checks reach real tools too, and
 are run only by the maintainer or the managing agent of a delegated run,
 never in CI, each with its switch set by hand (`LEVERAGE_EVAL_REAL=1`,
-`LEVERAGE_REAL_PROVIDER`):
+`LEVERAGE_REAL_PROVIDER`, with `LEVERAGE_REAL_MCP=1` for the MCP check):
 
 ```bash
 LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
+LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh approves-actions
+LEVERAGE_REAL_MCP=1 LEVERAGE_REAL_PROVIDER=claude scripts/real_mcp_run.sh claude
+LEVERAGE_REAL_PROVIDER=claude scripts/real_approval_check.sh claude   # or codex, gemini
 LEVERAGE_REAL_PROVIDER=claude scripts/real_rule_check.sh claude   # or codex, gemini; gemini --through-app
 ```
 
-No other agent sets either switch. Against the stand-ins, with
+No other agent sets these switches. Against the stand-ins, with
 `LEVERAGE_TOOL_DIR` on a copy of `mac/Tests/StandIns/bin` and the switch
-unset, anyone may run both (`eval_rule.sh` also needs `--out <folder>`).
+unset, anyone may run the offline self-tests above. The eval script with a
+stand-in tool directory also takes `--out <folder>`.
 How to run and operate it all is in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Documentation style

@@ -56,6 +56,23 @@ module Leverage
         assert_empty filter(seat, :task).excluded_task_ids
       end
 
+      test "moving a task out of a named projects scope makes its cached claim failure irrelevant" do
+        project = scenario.project
+        seat = scenario.seat
+        task = scenario.task(state: "ready", project: project)
+        rule = model_gate("task.before_claim", scope_kind: "named_projects", scope_values: [ project.id ])
+        claim_check(task, seat, rule)
+        assert_equal [ task.id ], filter(seat, :task).excluded_task_ids
+
+        task.update!(project_id: nil)
+
+        assert_empty filter(seat, :task).excluded_task_ids
+        evaluation = Gating.evaluate(request_for(task, "task.before_claim", subject: seat, requester: seat))
+        assert_empty evaluation.failures
+        assert_empty evaluation.jobs
+        assert_equal :completed, evaluation.outcome
+      end
+
       test "a review the provider rule keeps from this seat is skipped, by next and by claim-next alike (RD-12)" do
         scenario.with_shipped_rules
         claude_task = scenario.task(state: "in_review", builder: scenario.seat(credential: scenario.credential(provider: "claude")))
@@ -75,6 +92,33 @@ module Leverage
         reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "claude"))
 
         assert_empty filter(reviewer, :review).excluded_review_ids
+      end
+
+      test "only tasks of covered projects at or over budget are skipped when the rule is on" do
+        rule = scenario.rule(key: "project_budget_pause", origin: "shipped")
+        seat = scenario.seat
+        at_budget = scenario.project(budget: 2, spent: 2)
+        over_budget = scenario.project(budget: 2, spent: 3)
+        under_budget = scenario.project(budget: 2, spent: 1)
+        no_budget = scenario.project(spent: 5)
+        at = scenario.task(state: "ready", project: at_budget)
+        over = scenario.task(state: "ready", project: over_budget)
+        [ under_budget, no_budget, nil ].each { |project| scenario.task(state: "ready", project: project) }
+
+        assert_equal [ at.id, over.id ].sort, filter(seat, :task).excluded_task_ids.sort
+        rule.update!(enabled: false)
+        assert_empty filter(seat, :task).excluded_task_ids
+      end
+
+      test "the project budget claim filter observes the active rule's scope" do
+        named = scenario.project(budget: 1, spent: 1)
+        other = scenario.project(budget: 1, spent: 1)
+        scenario.rule(key: "project_budget_pause", origin: "shipped", scope_kind: "named_projects",
+          scope_values: [ named.id ])
+        allowed = scenario.task(state: "ready", project: named)
+        scenario.task(state: "ready", project: other)
+
+        assert_equal [ allowed.id ], filter(scenario.seat, :task).excluded_task_ids
       end
 
       test "it filters only tasks and reviews" do

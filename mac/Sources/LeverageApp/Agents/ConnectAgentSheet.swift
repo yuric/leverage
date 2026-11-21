@@ -13,7 +13,9 @@ struct ConnectAgentSheet: View {
 
     var body: some View {
         let model = box.model {
-            ConnectAgentModel(api: context.owner, copy: Pasteboard.copy, onConnected: connected)
+            ConnectAgentModel(
+                api: context.owner, copy: Pasteboard.copy, onConnected: connected,
+                apiURL: { [server = context.runtime.server] in await MCPSettings.liveAPIAddress(from: server) })
         }
         ConnectAgentForm(
             model: model,
@@ -42,7 +44,7 @@ struct ConnectAgentForm: View {
             ScrollView {
                 Group {
                     switch model.phase {
-                    case .editing, .connecting: fields
+                    case .editing, .connecting: fields.disabled(model.isBusy)
                     case .shown: shown
                     case .done: connectedOnLogin
                     }
@@ -86,6 +88,15 @@ struct ConnectAgentForm: View {
             if model.mode == .runOnLogin {
                 loginField
             } else {
+                FormField(label: AgentsCopy.connectionLabel.text) {
+                    Picker(AgentsCopy.connectionLabel.text, selection: $model.connection) {
+                        ForEach(LandingPromptConnection.allCases, id: \.self) { connection in
+                            Text(AgentsCopy.connection(connection).text).tag(connection)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
                 FormField(label: AgentsCopy.providerLabel.text) {
                     Picker(AgentsCopy.providerLabel.text, selection: $model.provider) {
                         ForEach(ProviderNames.logins, id: \.self) { provider in
@@ -112,6 +123,7 @@ struct ConnectAgentForm: View {
                 TextField(AgentsCopy.defaultModel.text, text: $model.modelName)
                     .textFieldStyle(.roundedBorder)
             }
+            AgentStrengthPicker(selection: $model.strengthRank)
             if model.offersEffort {
                 FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
                     TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
@@ -182,12 +194,43 @@ struct ConnectAgentForm: View {
                         .foregroundStyle(Tokens.Tone.stop.foreground)
                 }
             }
+            if model.shownConnection == .mcp {
+                mcpSettingsSection
+            }
             VStack(alignment: .leading, spacing: 6) {
                 sectionTitle(AgentsCopy.landingTitle.text)
                 Text(AgentsCopy.landingNote.text)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
                 landingBody
+            }
+        }
+    }
+
+    private var mcpSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionTitle(AgentsCopy.mcpSettingsTitle.text)
+            if let settings = model.mcpConfiguration {
+                Text(AgentsCopy.mcpSettingsNote.text)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
+                Text(verbatim: settings.json)
+                    .font(.system(size: Tokens.FontSize.small, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        Tokens.Palette.inset, in: RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous))
+                Button(model.copiedMCPSettings ? AgentsCopy.copied.text : AgentsCopy.copy.text) { model.copyMCPSettings() }
+                    .accessibilityLabel(AgentsCopy.copyMCPSettings.text)
+                Text(verbatim: settings.plainText)
+                    .font(.system(size: Tokens.FontSize.small, design: .monospaced))
+                    .foregroundStyle(Tokens.Palette.text2)
+                    .textSelection(.enabled)
+            } else {
+                Text(AgentsCopy.mcpSettingsUnavailable.text)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Tone.stop.foreground)
             }
         }
     }

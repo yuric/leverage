@@ -41,12 +41,12 @@ module Leverage
         assert_equal scenario.current_version(rule).id, entry.version.id
       end
 
-      test "an app rule whose function is not built is in no set; the model approval rule is planned at its hook (RD-8)" do
+      test "each shipped policy is available at its hook (AP-1)" do
         scenario.with_shipped_rules
 
-        assert_empty Catalog.at(scenario.workspace_id, "review.failed")
-        assert_empty Catalog.at(scenario.workspace_id, "cost.reported")
-        assert_empty Catalog.at(scenario.workspace_id, "question.asked")
+        assert_equal [ "escalate_after_failed_reviews" ], keys(Catalog.at(scenario.workspace_id, "review.failed"))
+        assert_equal [ "project_budget_pause" ], keys(Catalog.at(scenario.workspace_id, "cost.reported"))
+        assert_equal [ "ask_orchestrator_first" ], keys(Catalog.at(scenario.workspace_id, "question.asked"))
         assert_equal [ "different_provider_review" ], keys(Catalog.at(scenario.workspace_id, "review.assign"))
         assert_equal [ "orchestrator_approves_actions" ], keys(Catalog.at(scenario.workspace_id, "action.requested"))
       end

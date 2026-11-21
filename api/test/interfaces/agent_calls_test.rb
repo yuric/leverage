@@ -14,7 +14,10 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
   Kase = Struct.new(:operation, :verb, :path, :command, :body, :result, keyword_init: true) do
     # The ids of the path, named as the contract names them.
     def ids
-      path.scan(%r{/(?:tasks|reviews|criteria)/(\h{8}-\h{4}-\h{4}-\h{4}-\h{12})}).flatten.zip(%w[id cid]).to_h { |value, name| [ name, value ] }
+      names = { "tasks" => "id", "reviews" => "id", "criteria" => "cid", "actions" => "aid" }
+      path.scan(%r{/(tasks|reviews|criteria|actions)/(\h{8}-\h{4}-\h{4}-\h{4}-\h{12})}).to_h do |resource, value|
+        [ names.fetch(resource), value ]
+      end
     end
 
     def params = ids.merge(body || {})
@@ -25,6 +28,8 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
   TASK = "00000000-0000-4000-8000-0000000000a1".freeze
   CRITERION = "00000000-0000-4000-8000-0000000000a2".freeze
   REVIEW = "00000000-0000-4000-8000-0000000000a3".freeze
+  QUESTION = "00000000-0000-4000-8000-0000000000a4".freeze
+  ACTION = "00000000-0000-4000-8000-0000000000a5".freeze
   EVIDENCE = { "evidence" => { "kind" => "link", "value" => "https://example.test/made-up" } }.freeze
   PASSED = { "verdict" => "passed", "failed_criteria" => [], "notes" => "Made-up notes.", "tokens" => 0, "spend" => 0 }.freeze
   FAILED = { "verdict" => "failed", "failed_criteria" => [ CRITERION ], "notes" => "Made-up notes.", "tokens" => 12, "spend" => 0 }.freeze
@@ -56,15 +61,29 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     Kase.new(operation: "give_verdict", verb: :post, path: "/v1/reviews/#{REVIEW}/verdict", command: "pass_review",
       body: PASSED, result: {}),
     Kase.new(operation: "give_verdict", verb: :post, path: "/v1/reviews/#{REVIEW}/verdict", command: "fail_review",
-      body: FAILED, result: {})
+      body: FAILED, result: {}),
+    Kase.new(operation: "ask_question", verb: :post, path: "/v1/tasks/#{TASK}/questions", command: "ask_question",
+      body: { "text" => "Which sample?", "assumption" => "Use the first.", "blocking" => false },
+      result: { "question_id" => QUESTION }),
+    Kase.new(operation: "request_access", verb: :post, path: "/v1/tasks/#{TASK}/access", command: "request_access",
+      body: { "description" => "Read the made-up sample." }, result: nil),
+    Kase.new(operation: "report_cost", verb: :post, path: "/v1/tasks/#{TASK}/cost", command: "report_cost",
+      body: { "tokens" => 12, "spend" => 1.25 }, result: nil),
+    Kase.new(operation: "start_action", verb: :post, path: "/v1/tasks/#{TASK}/actions/#{ACTION}/start",
+      command: "start_action", result: nil),
+    Kase.new(operation: "report_action_done", verb: :post, path: "/v1/tasks/#{TASK}/actions/#{ACTION}/done",
+      command: "report_action_done", result: nil)
   ].freeze
+
+  MILESTONE_5_COMMANDS = %w[ask_question request_access report_cost start_action report_action_done].freeze
 
   # The agent calls that only read.
   READS = [
     [ "get_next", "/v1/next?wait=0" ],
     [ "get_command", "/v1/commands/made-up-key" ],
     [ "get_task_briefing", "/v1/tasks/#{TASK}/briefing" ],
-    [ "get_review_briefing", "/v1/reviews/#{REVIEW}/briefing" ]
+    [ "get_review_briefing", "/v1/reviews/#{REVIEW}/briefing" ],
+    [ "get_question", "/v1/tasks/#{TASK}/questions/#{QUESTION}" ]
   ].freeze
 
   setup do
@@ -183,6 +202,40 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
         assert_empty @stand_in.requests
       end
     end
+
+    if MILESTONE_5_COMMANDS.include?(kase.operation)
+      test "#{label} answers the scripted pending outcome with 202" do
+        @stand_in.script(kase.command, T::Outcome.new(outcome: :pending))
+        key = new_key
+        send_case(kase, key: key)
+
+        assert_response :accepted
+        assert_response_matches_contract
+        assert_equal({ "key" => key, "command" => kase.command, "outcome" => "pending", "result" => nil, "refusal" => nil },
+          response.parsed_body)
+      end
+
+      unless kase.body
+        test "#{label} rejects a nonempty JSON body before running the command" do
+          send_case(kase, body: { "unexpected" => true })
+
+          assert_error :unprocessable_content, "invalid"
+          assert_response_matches_contract
+          assert_empty @stand_in.requests
+        end
+      end
+    end
+  end
+
+  test "action commands validate the action id as well as the task id" do
+    CASES.select { |candidate| candidate.path.include?(ACTION) }.each do |kase|
+      bad = kase.dup
+      bad.path = kase.path.sub(ACTION, "not-a-uuid")
+      send_case(bad)
+
+      assert_error :not_found, "not_found"
+      assert_empty @stand_in.requests
+    end
   end
 
   test "give_verdict runs pass_review for a passed verdict and fail_review for a failed one" do
@@ -277,6 +330,113 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     assert_equal first, row.reload.read_at
   end
 
+  # get_question calls the reader and marker supplied by WP11 and WP6.
+  QuestionView = Data.define(:row, :body)
+
+  def with_question_read(result)
+    reader = Leverage::Reads::Question.singleton_class
+    marker = T::MarkQuestionRead.singleton_class
+    original_read = reader.instance_method(:call)
+    original_mark = marker.instance_method(:call)
+    reads = []
+    marks = []
+    reader.define_method(:call) do |seat, question_id, task_id:|
+      reads << [ seat.id, task_id, question_id ]
+      result.respond_to?(:call) ? result.call(seat) : result
+    end
+    marker.define_method(:call) { |question, seat:| marks << [ question, seat.id ] }
+    yield reads, marks
+  ensure
+    reader.define_method(:call, original_read)
+    marker.define_method(:call, original_mark)
+  end
+
+  %w[answered overturned].each do |outcome|
+    test "get_question returns a question that is #{outcome} to the asking seat and marks it read" do
+      task = @scenario.task(state: "working", builder: @builder)
+      question = @scenario.question(task, outcome: outcome, assumption: "Use the sample.")
+      answer = self.class.example("Question").merge("id" => question.id, "task_id" => task.id,
+        "asking_seat_id" => @builder.id, "outcome" => outcome, "overturned" => outcome == "overturned")
+      path = "/v1/tasks/#{task.id}/questions/#{question.id}"
+      assert_request_matches_contract("GET", path, nil)
+
+      with_question_read(QuestionView.new(row: question, body: answer)) do |reads, marks|
+        get_as path
+
+        assert_response :ok
+        assert_response_matches_contract
+        assert response.parsed_body == answer, "the question view was changed"
+        assert_equal [ [ @builder.id, task.id, question.id ] ], reads
+        marked, seat_id = marks.sole
+        assert_same question, marked
+        assert_equal @builder.id, seat_id
+      end
+    end
+  end
+
+  test "get_question passes the signed in seat and both path ids and marks nothing on a refused or missing read" do
+    task = @scenario.task(state: "working", builder: @builder)
+    question = @scenario.question(task, outcome: "answered")
+    other_task = @scenario.task
+    other_seat = @scenario.seat
+    foreign = Scenario.new
+    stranger = foreign.seat
+
+    refusal = T::Refusal.new(code: "not_holder")
+    reader = ->(seat) { refusal if seat.id == other_seat.id }
+    with_question_read(reader) do |reads, marks|
+      path = "/v1/tasks/#{task.id}/questions/#{question.id}"
+      get_as path, token: @scenario.token_for(other_seat)
+      assert_response :conflict
+      assert_matches_component("Refusal", response.parsed_body)
+      assert_equal refusal.to_h, response.parsed_body
+
+      get_as path, token: foreign.token_for(stranger)
+      assert_error :not_found, "not_found"
+      assert_response_matches_contract
+
+      [ [ other_task.id, question.id ], [ "not-a-uuid", question.id ], [ task.id, "not-a-uuid" ] ].each do |task_id, question_id|
+        get_as "/v1/tasks/#{task_id}/questions/#{question_id}"
+        assert_equal 404, response.status
+        assert_equal "not_found", response.parsed_body.dig("error", "code")
+        assert_response_matches_contract
+      end
+      assert_equal [ [ other_seat.id, task.id, question.id ], [ stranger.id, task.id, question.id ],
+                     [ @builder.id, other_task.id, question.id ] ], reads
+      assert_empty marks
+    end
+  end
+
+  test "get_question returns the reader's not_holder refusal without marking the answer" do
+    task = @scenario.task(state: "working", builder: @builder)
+    question = @scenario.question(task, outcome: "answered")
+    refusal = T::Refusal.new(code: "not_holder")
+    with_question_read(refusal) do |reads, marks|
+      get_as "/v1/tasks/#{task.id}/questions/#{question.id}"
+      assert_response :conflict
+      assert_matches_component("Refusal", response.parsed_body)
+      assert_equal refusal.to_h, response.parsed_body
+      assert_equal [ [ @builder.id, task.id, question.id ] ], reads
+      assert_empty marks
+    end
+  end
+
+  test "get_question can read an open question without marking an answer read" do
+    task = @scenario.task(state: "working", builder: @builder)
+    question = @scenario.question(task)
+    view = self.class.example("Question").merge("id" => question.id, "task_id" => task.id, "asking_seat_id" => @builder.id,
+      "answer" => nil, "basis" => nil, "answered_by_kind" => nil, "answered_by_id" => nil)
+
+    with_question_read(QuestionView.new(row: question, body: view)) do |reads, marks|
+      get_as "/v1/tasks/#{task.id}/questions/#{question.id}"
+
+      assert_response :ok
+      assert_response_matches_contract
+      assert_equal [ [ @builder.id, task.id, question.id ] ], reads
+      assert_empty marks
+    end
+  end
+
   # The briefing reads
 
   BRIEFING = AgentCallsTest.example("BriefingResponse")["briefing"].freeze
@@ -351,7 +511,8 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     review = Review.create!(workspace_id: task.workspace_id, task_id: task.id, round: 0, verdict: "failed",
       notes: "Made-up reviewer notes.", failed_rule_check_id: check.id)
 
-    get_as "/v1/tasks/#{task.id}/briefing"
+    # Keep the real notes reader, while WP7 provides the new briefing fields.
+    with_briefing { get_as "/v1/tasks/#{task.id}/briefing" }
 
     assert_response :ok
     assert_equal [ { "review_id" => review.id, "round" => 0,
@@ -370,6 +531,18 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     get_as "/v1/tasks/#{task.id}/briefing"
 
     assert_error :not_found, "not_found"
+  end
+
+  test "get_task_briefing is available under the fresh lease in Finishing" do
+    task = @scenario.finishing_task(builder: @builder,
+      actions: [ { kind: "publish", description: "Made-up action.", state: "approved" } ])
+
+    with_briefing do |calls|
+      get_as "/v1/tasks/#{task.id}/briefing"
+      assert_response :ok
+      assert_response_matches_contract
+      assert_equal [ [ task.id, @builder.id ] ], calls.map { |subject, seat| [ subject.id, seat.id ] }
+    end
   end
 
   test "get_review_briefing answers the briefing of the review this reviewer holds, with no notes" do

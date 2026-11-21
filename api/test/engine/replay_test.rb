@@ -185,6 +185,83 @@ class ReplayTest < ActiveSupport::TestCase
     assert(log_diff(runner).any? { |line| line.start_with?("task_steps") }, log_diff(runner).inspect)
   end
 
+  def project_supported(workspace_id)
+    Leverage::Replay.project(workspace_id)
+  rescue Leverage::Replay::Unsupported => error
+    flunk error.message
+  end
+
+  test "Add task records and replays contracted action IDs without their content" do
+    scenario = Scenario.new
+    params = { "title" => "Sample", "goal" => "Send the update.",
+               "actions" => [ { "kind" => "send", "description" => "Made-up outward action." } ] }
+    outcome = T.apply(T::Request.new(command: "add_task", workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: SecureRandom.uuid, request_hash: Digest::SHA256.hexdigest(params.to_json),
+      params: params))
+    assert outcome.completed?
+    task_id = outcome.result.fetch("task_id")
+    action = Action.find_by!(task_id: task_id)
+    assert_equal({ "state" => "backlog", "added_action_ids" => [ action.id ] },
+      Event.find_by!(task_id: task_id, type: "task.created").payload)
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+    action.update_columns(state: "requested")
+    assert(Leverage::Replay.diff(scenario.workspace_id).any? { |line| line.include?("actions #{action.id} state") })
+  end
+
+  test "approval, waive, an action lease and a hold close all set the holder in Finishing" do
+    scenario = Scenario.new
+    builder = scenario.seat
+    task = scenario.finishing_task(builder: builder, holder: false, actions: [
+      { kind: "publish", description: "Publish the sample." }, { kind: "send", description: "Send the sample." },
+      { kind: "send", description: "Send a second sample." }
+    ])
+    first, second, third = Action.where(task_id: task.id).order(:position).to_a
+    projection = -> { project_supported(scenario.workspace_id) }
+    holder = -> { projection.call.fetch(:tasks).fetch(task.id).fetch("holder_seat_id") }
+
+    scenario.append("action.approved", task: task, subject: first, payload: { lease_seat_id: builder.id })
+    assert_equal builder.id, holder.call
+    scenario.append("action.waived", task: task, subject: second, payload: { lease_seat_id: nil })
+    assert_equal builder.id, holder.call, "Waive retains the holder when it grants no lease"
+    scenario.append("task.released", task: task, payload: { reason: "stopping", wait_cause: nil })
+    assert_nil holder.call
+    scenario.append("action.waived", task: task, subject: third, payload: { lease_seat_id: builder.id })
+    assert_equal builder.id, holder.call
+    scenario.append("task.released", task: task, payload: { reason: "stopping", wait_cause: nil })
+    assert_nil holder.call
+    scenario.append("action.lease_granted", task: task, subject: first, payload: { lease_seat_id: builder.id })
+    assert_equal builder.id, holder.call
+    scenario.append("task.lease_expired", task: task, payload: { wait_cause: nil })
+    assert_nil holder.call
+    hold = Leverage::Holds.open(scenario.context, task: task, reason: "action_unconfirmed", facts: {
+      action_ids: [ first.id ], approved_by_kind: "owner", approved_by_id: scenario.owner.id, builder_announced_start: false
+    })
+    scenario.append("hold.closed", task: task, subject: hold, payload: {
+      reason: hold.reason, rule_id: nil, credential_id: nil, lease_seat_id: builder.id, wait_cause: nil
+    })
+    assert_equal builder.id, holder.call
+    assert_equal({ first.id => { "state" => "approved" }, second.id => { "state" => "waived" },
+      third.id => { "state" => "waived" } }, projection.call.fetch(:actions))
+  end
+
+  test "return for rework grants a fresh lease and advances the round, then reassignment raises the minimum rank" do
+    scenario = Scenario.new
+    builder = scenario.seat
+    task = scenario.finishing_task(builder: builder, holder: false,
+      actions: [ { kind: "send", description: "Send the sample." } ])
+    action = Action.find_by!(task_id: task.id)
+    projection = -> { project_supported(scenario.workspace_id) }
+
+    scenario.append("task.returned_for_rework", task: task, payload: { lease_seat_id: builder.id, wait_cause: nil })
+    scenario.append("action.withdrawn", task: task, subject: action)
+    row = projection.call.fetch(:tasks).fetch(task.id)
+    assert_equal [ "working", 1, builder.id, builder.id ], row.values_at("state", "round", "holder_seat_id", "builder_seat_id")
+    assert_equal "contracted", projection.call.fetch(:actions).fetch(action.id).fetch("state")
+
+    scenario.append("task.reassigned", task: task, round: 1, payload: { minimum_strength_rank: 3, wait_cause: nil })
+    assert_equal 3, projection.call.fetch(:tasks).fetch(task.id).fetch("minimum_strength_rank")
+  end
+
   test "a project's paused and spent are rebuilt from its events" do
     scenario = Scenario.new
     project = scenario.project
@@ -194,8 +271,12 @@ class ReplayTest < ActiveSupport::TestCase
     project.update_columns(paused: true, spent: 0.25)
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
 
-    project.update_columns(spent: 1)
-    assert(Leverage::Replay.diff(scenario.workspace_id).any? { |line| line.include?("projects #{project.id} spent") })
+    scenario.append("project.resumed", project_id: project.id, actor_kind: "owner", actor_id: scenario.owner.id)
+    found = Leverage::Replay.diff(scenario.workspace_id)
+    assert(found.any? { |line| line.include?("projects #{project.id} paused") }, found.inspect)
+    project.update_columns(paused: false, spent: 1)
+    found = Leverage::Replay.diff(scenario.workspace_id)
+    assert(found.any? { |line| line.include?("projects #{project.id} spent") }, found.inspect)
   end
 
   test "the replay changes nothing: the tables are as they were after a diff" do

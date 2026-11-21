@@ -1,4 +1,5 @@
 import Foundation
+import LeverageKit
 import SwiftUI
 
 /// Keeps one view model for as long as the view lives, built the first time
@@ -25,7 +26,9 @@ struct BoardView: View {
         let model = box.model {
             BoardModel(api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) })
         }
-        BoardContent(model: model, open: { context.navigator.open(task: $0) })
+        BoardContent(
+            model: model, navigator: context.navigator, projects: context.paneProjects,
+            open: { context.navigator.open(task: $0) })
             .task {
                 model.attach(to: context.feed)
                 await model.load()
@@ -34,10 +37,11 @@ struct BoardView: View {
     }
 }
 
-/// What the board draws from its model: the switch, a line for a failed
-/// read, and the lanes side by side.
+/// The board's filters, any read failure, and the lanes side by side.
 struct BoardContent: View {
     @Bindable var model: BoardModel
+    @Bindable var navigator: Navigator
+    let projects: [Project]
     let open: (UUID) -> Void
 
     var body: some View {
@@ -48,6 +52,8 @@ struct BoardContent: View {
                         .font(.system(size: Tokens.FontSize.body, weight: .medium))
                         .foregroundStyle(Tokens.Tone.stop.foreground)
                 }
+                projectPicker
+                agentPicker
                 Spacer(minLength: 0)
                 Toggle(BoardCopy.showCancelled.text, isOn: $model.showCancelled)
                     .toggleStyle(.checkbox)
@@ -59,10 +65,41 @@ struct BoardContent: View {
                     .foregroundStyle(Tokens.Palette.text2)
             }
             ScrollView([.horizontal, .vertical]) {
-                BoardLanes(lanes: model.lanes, open: open)
+                BoardLanes(lanes: model.lanes(matching: navigator.boardFilter), open: open)
                     .padding(.bottom, 8)
             }
         }
+    }
+
+    private var projectPicker: some View {
+        Picker(BoardCopy.projectFilter.text, selection: $navigator.boardFilter.projectID) {
+            Text(ShellCopy.allProjects.text).tag(nil as UUID?)
+            ForEach(projects, id: \.id) { project in
+                Text(verbatim: ProjectsCopy.projectName(project))
+                    .tag(Optional(project.id))
+            }
+            if let selected = navigator.boardFilter.projectID, !projects.contains(where: { $0.id == selected }) {
+                Text(BoardCopy.selectedProject.text).tag(Optional(selected))
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .frame(maxWidth: 190)
+    }
+
+    private var agentPicker: some View {
+        Picker(BoardCopy.agentFilter.text, selection: $navigator.boardFilter.agentID) {
+            Text(BoardCopy.allAgents.text).tag(nil as UUID?)
+            ForEach(model.builders, id: \.id) { builder in
+                Text(verbatim: builder.name).tag(Optional(builder.id))
+            }
+            if let selected = navigator.boardFilter.agentID, !model.builders.contains(where: { $0.id == selected }) {
+                Text(BoardCopy.selectedAgent.text).tag(Optional(selected))
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .frame(maxWidth: 190)
     }
 
     private var notice: ShellCopy? {

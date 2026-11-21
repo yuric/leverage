@@ -1,70 +1,38 @@
 #!/usr/bin/env bash
-# The eval suite's run (milestone 4 plan RV-3 to RV-6, §2.4, §5.3): every
-# case of evals/<suite>/ through the production path outside the server,
-# on each provider's tool, scored against the bar.
+# Run an eval suite's cases through the production runner and score them
+# against evals/<suite>/bar.json.
 #
 #   LEVERAGE_EVAL=specific-details LEVERAGE_TOOL_DIR=<stand-ins>/bin \
-#     scripts/eval_rule.sh specific-details --out <folder>      # stand-ins
-#   LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 \
-#     scripts/eval_rule.sh specific-details                     # real tools
+#     scripts/eval_rule.sh specific-details --out <folder>
+#   LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 \
+#     scripts/eval_rule.sh approves-actions [--held-out]
 #
-# The run on real tools is the managing agent's alone (plan §5.3), never in
-# CI. Any agent may run it against the stand-ins.
+# Only the managing agent runs on real tools (plan §5.3). The real path
+# verifies the frozen case sets and checks the budget before resolving a
+# tool. It reserves the worst case in runs.json before each provider runs,
+# and settles that reservation only after a completed run. Stopped or
+# failed runs keep their reservation.
 #
-# It refuses (exit 2, before it starts anything) when CI is set; when
-# LEVERAGE_EVAL is not the suite named as the argument, or that is not
-# specific-details; when it is not true that exactly one of
-# LEVERAGE_TOOL_DIR and LEVERAGE_EVAL_REAL=1 is set; when
-# LEVERAGE_TOOL_DIR is not the bin/ of a copy of mac/Tests/StandIns (an
-# absolute path, beside provider_tool.py); when a run against the
-# stand-ins has no --out, or one inside the repository's suite folder;
-# when a run on real tools is given --out; for an unknown provider or
-# option. That guards against CI and accidents; it is nobody's consent.
+# The script builds the runner and resolves the providers' tools before
+# any case goes out. A container builds the job inputs with a canary file
+# path, but no canary word in the prompts. Each provider gets the suite's
+# tool-run and retry ceilings. The stand-ins get temporary account folders
+# or their own sign-in marks. Real tools use the login they already hold.
 #
-# Then:
-# 1. On the real path, `eval_score.py budget` over runs.json, before any
-#    tool is looked for: exit 3 when one more full run of a provider would
-#    pass 3 runs or 90 tool runs of a model, or 270 in all.
-# 2. It builds LeverageRunner (the runner lane) and prints the tool each
-#    provider resolves to (`LeverageRunner eval --resolve-only`), before
-#    any case goes out. On the stand-in path each is under LEVERAGE_TOOL_DIR.
-# 3. It writes one made-up word into a file of the run's own folder, the
-#    canary, and builds the inputs: api/script/evals/build_inputs.rb, in a
-#    container of a compose project of its own that mounts the checkout's
-#    api/ and the suite, so that it runs the checkout's code and not that
-#    of whatever image is tagged. {{CANARY_PATH}} becomes the canary's path;
-#    the word is in no prompt.
-# 4. For each provider of LEVERAGE_EVAL_PROVIDERS (default "claude codex
-#    gemini"): `LeverageRunner eval`, one run per case, at most 6 second
-#    tries and 30 tool runs, each limited to 120 seconds. On the stand-in
-#    path each provider's run gets a new empty folder as --account-folder,
-#    signed in the stand-ins' own way (a mark file); agy and grok, which
-#    keep one sign-in for the Mac, are signed in in the copy's state/. On
-#    the real path LEVERAGE_DEV_TOOL_LOGIN=1, so each tool uses the sign-in
-#    it already holds for this Mac user; nothing is signed in and no account
-#    folder is read. LEVERAGE_EVAL_CODEX_HOME, when set, goes to the Codex
-#    run alone as --account-folder (its CODEX_HOME). The real path reserves
-#    30 tool runs in runs.json before each provider's run and settles the
-#    count after it.
-# 5. It scores each provider's lines (eval_score.py record) into
-#    results/<provider>.json and writes RESULTS.md: in the suite folder on
-#    the real path, in --out on the stand-in path (runs.json is never
-#    touched there).
+# Results go to results/<provider>.json or results/held-out/<provider>.json,
+# and the suite's report goes to RESULTS.md. Stand-in runs use --out for
+# those files and never write the ledger. A tool found signed out or at
+# its limit before the run is left out of LEVERAGE_EVAL_PROVIDERS and recorded
+# with scripts/eval_score.py not-run.
 #
-# A provider whose tool is found signed out or at its limit before the run
-# is left out of LEVERAGE_EVAL_PROVIDERS and recorded with
-# `scripts/eval_score.py not-run` (plan §5.3, step 5).
+# Exit 0 when every provider was run and scored, 1 when a step failed,
+# 2 for a refusal, or 3 when the budget is used up.
 #
-# Exit 0 when every provider was run and scored (whether or not it met the
-# bar, which the last lines say), 1 when a step failed, 2 for a refusal, 3
-# when the budget is used up.
-#
-# Environment it reads besides the switches (all optional):
-#   LEVERAGE_EVAL_PROVIDERS   the providers to run (claude codex gemini grok)
-#   LEVERAGE_EVAL_CODEX_HOME  the Codex account folder to run on (real path)
+# Optional environment:
+#   LEVERAGE_EVAL_PROVIDERS   providers to run (default from the suite)
+#   LEVERAGE_EVAL_CODEX_HOME  Codex account folder for the real path
 #   LEVERAGE_EVAL_SCRATCH     Swift's build folder (default mac/.build/eval)
-#   API_IMAGE_TAG             the API image to run build_inputs.rb in; by
-#                             default the run builds its own and removes it
+#   API_IMAGE_TAG             API image (by default build and remove our own)
 set -euo pipefail
 
 say() { printf 'eval: %s\n' "$*"; }
@@ -72,8 +40,8 @@ refuse() {
   printf 'eval_rule: refused: %s\n' "$*" >&2
   exit 2
 }
-usage="usage: LEVERAGE_EVAL=specific-details (LEVERAGE_TOOL_DIR=<stand-ins>/bin | LEVERAGE_EVAL_REAL=1)"
-usage="$usage scripts/eval_rule.sh specific-details [--out <folder>]"
+usage="usage: LEVERAGE_EVAL=<suite> (LEVERAGE_TOOL_DIR=<stand-ins>/bin | LEVERAGE_EVAL_REAL=1)"
+usage="$usage scripts/eval_rule.sh <suite> [--held-out] [--out <folder>]"
 
 # --- The guards: nothing has started yet ----------------------------------
 
@@ -85,9 +53,9 @@ if [ $# -lt 1 ]; then
 fi
 suite_name=$1
 shift
-if [ "$suite_name" != "specific-details" ]; then
-  refuse "the suite is specific-details, not '$suite_name'; $usage"
-fi
+case "$suite_name" in
+  "" | *[!a-z0-9-]*) refuse "invalid suite name '$suite_name'; $usage" ;;
+esac
 if [ "${LEVERAGE_EVAL:-}" != "$suite_name" ]; then
   refuse "set LEVERAGE_EVAL=$suite_name to run the suite"
 fi
@@ -104,6 +72,7 @@ if [ -z "$tool_dir" ] && [ -z "$real" ]; then
 fi
 
 out=""
+set_flag=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --out)
@@ -111,21 +80,37 @@ while [ $# -gt 0 ]; do
       out=$2
       shift 2
       ;;
+    --held-out)
+      set_flag=(--held-out)
+      shift
+      ;;
     *) refuse "unknown argument '$1'; $usage" ;;
   esac
 done
 
-providers=${LEVERAGE_EVAL_PROVIDERS:-claude codex gemini}
-for provider in $providers; do
+root=$(cd "$(dirname "$0")/.." && pwd -P)
+suite="$root/evals/$suite_name"
+if [ ! -f "$suite/bar.json" ]; then refuse "unknown suite '$suite_name'; $usage"; fi
+
+score() { python3 -I "$root/scripts/eval_score.py" "$@"; }
+config() { score config "$suite" "$@" ${set_flag[@]+"${set_flag[@]}"}; }
+kind=$(config kind)
+maximum_tool_runs=$(config maximum_tool_runs)
+maximum_second_tries=$(config maximum_second_tries)
+providers=${LEVERAGE_EVAL_PROVIDERS:-}
+if [ -z "$providers" ]; then providers=$(config supported_providers); fi
+if [ -z "${providers//[[:space:]]/}" ]; then refuse "LEVERAGE_EVAL_PROVIDERS names no provider"; fi
+read -r -a provider_list <<< "${providers//$'\n'/ }"
+providers="${provider_list[*]}"
+seen=""
+for provider in "${provider_list[@]}"; do
   case "$provider" in
     claude | codex | gemini | grok) ;;
     *) refuse "unknown provider '$provider' in LEVERAGE_EVAL_PROVIDERS; each is claude, codex, gemini or grok" ;;
   esac
+  case "$seen" in *" $provider "*) refuse "provider '$provider' is named twice" ;; esac
+  seen="$seen $provider "
 done
-if [ -z "${providers// /}" ]; then refuse "LEVERAGE_EVAL_PROVIDERS names no provider"; fi
-
-root=$(cd "$(dirname "$0")/.." && pwd -P)
-suite="$root/evals/$suite_name"
 
 if [ -n "$tool_dir" ]; then
   case "$tool_dir" in
@@ -140,8 +125,9 @@ if [ -n "$tool_dir" ]; then
   out_parent=$(dirname "$out")
   if [ ! -d "$out_parent" ]; then refuse "--out's parent folder does not exist"; fi
   out_abs="$(cd "$out_parent" && pwd -P)/$(basename "$out")"
+  if [ -d "$out_abs" ]; then out_abs=$(cd "$out_abs" && pwd -P); fi
   case "$out_abs/" in
-    "$suite/"*) refuse "--out is inside the suite folder; a stand-in run never writes there" ;;
+    "$root/evals/"*) refuse "--out is inside the repository's evals folder" ;;
   esac
   path_kind="stand-ins"
 else
@@ -154,28 +140,16 @@ fi
 
 cd "$root"
 today=$(date -u +%Y-%m-%d)
-score() { python3 -I "$root/scripts/eval_score.py" "$@"; }
-
-if [ "$path_kind" = "real tools" ]; then
-  # 1. The budget, before any tool is looked for.
-  budget=0
-  score budget --runs "$suite/runs.json" --providers "$providers" || budget=$?
-  if [ "$budget" -ne 0 ]; then
-    say "the budget of RV-6 refuses this run"
-    exit "$budget"
-  fi
-fi
-
-work=$(mktemp -d "${TMPDIR:-/tmp}/leverage-eval.XXXXXX")
-work=$(cd "$work" && pwd -P)
-export COMPOSE_PROJECT_NAME="leverage-eval-$$"
-own_image=""
-if [ -z "${API_IMAGE_TAG:-}" ]; then
-  export API_IMAGE_TAG="$COMPOSE_PROJECT_NAME"
-  own_image="leverage-api:$API_IMAGE_TAG"
-fi
+shipped="$root/api/contract/shipped_rules.json"
+role_file="$root/api/config/role_files/orchestrator.md"
+work=""
+pending_results=""
+suite_lock=""
 compose_started=""
+own_image=""
 
+# Invoked by the EXIT trap.
+# shellcheck disable=SC2329
 finish() {
   status=$?
   trap - EXIT INT TERM
@@ -185,12 +159,34 @@ finish() {
   if [ -n "$own_image" ] && [ -n "$compose_started" ]; then
     docker image rm "$own_image" >/dev/null 2>&1 || true
   fi
-  rm -rf "$work"
+  if [ -n "$work" ]; then rm -rf "$work"; fi
+  if [ -n "$pending_results" ]; then rm -rf "$pending_results"; fi
+  if [ -n "$suite_lock" ]; then rmdir "$suite_lock"; fi
   if [ "$status" -ne 0 ]; then say "FAILED (exit $status)"; fi
   exit "$status"
 }
 trap finish EXIT
 trap 'exit 130' INT TERM
+
+if [ "$path_kind" = "real tools" ]; then
+  # 1. Lock and check the ledger before any tool is looked for. Hold the
+  # lock through settlement so that two invocations cannot spend the same room.
+  if ! mkdir "$suite/.eval-run.lock" 2>/dev/null; then
+    refuse "cannot lock the real-run budget for $suite_name"
+  fi
+  suite_lock="$suite/.eval-run.lock"
+  score verify-cases "$suite" ${set_flag[@]+"${set_flag[@]}"}
+  score budget --suite "$suite" --runs "$suite/runs.json" --providers "$providers" \
+    --shipped "$shipped" --role-file "$role_file" ${set_flag[@]+"${set_flag[@]}"}
+fi
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/leverage-eval.XXXXXX")
+work=$(cd "$work" && pwd -P)
+export COMPOSE_PROJECT_NAME="leverage-eval-$$"
+if [ -z "${API_IMAGE_TAG:-}" ]; then
+  export API_IMAGE_TAG="$COMPOSE_PROJECT_NAME"
+  own_image="leverage-api:$API_IMAGE_TAG"
+fi
 
 say "a run on $path_kind${tool_dir:+ from $tool_dir}; providers: $providers"
 
@@ -212,15 +208,19 @@ fi
 # The runner's environment: the switch of this path and nothing else of
 # leverage's. LEVERAGE_DEV_TOOL_LOGIN only on the real path (PV-6).
 run_eval() {
+  local ceilings=(
+    "LEVERAGE_EVAL_MAX_TOOL_RUNS=$maximum_tool_runs"
+    "LEVERAGE_EVAL_MAX_SECOND_TRIES=$maximum_second_tries"
+  )
   if [ "$path_kind" = "real tools" ]; then
     env -u LEVERAGE_TOOL_DIR LEVERAGE_EVAL="$suite_name" LEVERAGE_EVAL_REAL=1 LEVERAGE_DEV_TOOL_LOGIN=1 \
-      "$runner" eval "$@"
+      "${ceilings[@]}" "$runner" eval "$@"
   else
     env -u LEVERAGE_EVAL_REAL -u LEVERAGE_DEV_TOOL_LOGIN LEVERAGE_EVAL="$suite_name" LEVERAGE_TOOL_DIR="$tool_dir" \
-      "$runner" eval "$@"
+      "${ceilings[@]}" "$runner" eval "$@"
   fi
 }
-for provider in $providers; do
+for provider in "${provider_list[@]}"; do
   run_eval --provider "$provider" --resolve-only || exit 1
 done
 
@@ -250,7 +250,8 @@ say "building the inputs in the container (project $COMPOSE_PROJECT_NAME)"
 compose_started=1
 if ! docker compose run --rm -T -e RAILS_ENV=development -v "$root/api:/rails" -v "$suite:/eval-suite:ro" -v "$work/inputs:/eval-inputs" \
   api bash -c 'bin/rails db:prepare >/dev/null && bin/rails runner script/evals/build_inputs.rb --suite /eval-suite \
-    --canary-path "$0" --out /eval-inputs/inputs.json' "$work/canary/word.txt" >"$work/inputs.log" 2>&1; then
+    --canary-path "$0" --out /eval-inputs/inputs.json "$@"' "$work/canary/word.txt" \
+  ${set_flag[@]+"${set_flag[@]}"} >"$work/inputs.log" 2>&1; then
   tail -n 40 "$work/inputs.log" >&2
   say "the inputs were not built"
   exit 1
@@ -258,20 +259,19 @@ fi
 docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 say "$(tail -n 1 "$work/inputs.log")"
 
-hashes=$(python3 -I -c '
-import sys
-sys.path.insert(0, sys.argv[1])
-import eval_score
-print(eval_score.instruction_sha256(eval_score.read_json(sys.argv[2])),
-      eval_score.cases_sha256(eval_score.read_cases(sys.argv[3])))' \
-  "$root/scripts" "$root/api/contract/shipped_rules.json" "$suite")
-instruction_sha=${hashes% *}
-cases_sha=${hashes#* }
-
 # 4 and 5. Each provider's run, scored.
-mkdir -p "$out_abs/results"
+results="$out_abs/results"
+if [ "${#set_flag[@]}" -gt 0 ]; then results="$results/held-out"; fi
+mkdir -p "$results"
+record_results="$results"
+if [ "$path_kind" = "real tools" ]; then
+  # Score into a directory beside the final result so that publication is
+  # a rename after the ledger has settled.
+  pending_results=$(mktemp -d "$results/.pending.XXXXXX")
+  record_results="$pending_results"
+fi
 failed=0
-for provider in $providers; do
+for provider in "${provider_list[@]}"; do
   account=()
   if [ "$path_kind" = "stand-ins" ]; then
     folder="$work/accounts/$provider"
@@ -287,29 +287,31 @@ for provider in $providers; do
   fi
   verdicts="$work/verdicts/$provider.jsonl"
   if [ "$path_kind" = "real tools" ]; then
-    score runs-add --runs "$suite/runs.json" --provider "$provider" --date "$today" \
-      --instruction-sha256 "$instruction_sha" --cases-sha256 "$cases_sha"
+    score runs-add --suite "$suite" --runs "$suite/runs.json" --provider "$provider" --date "$today" \
+      --shipped "$shipped" --role-file "$role_file" ${set_flag[@]+"${set_flag[@]}"}
   fi
-  say "$provider: running the suite"
+  say "$provider: running the $kind suite"
   status=0
   run_eval --inputs "$work/inputs/inputs.json" --provider "$provider" --out "$verdicts" \
     ${account[@]+"${account[@]}"} || status=$?
-  made=0
-  if [ -f "$verdicts" ]; then
-    made=$(python3 -I -c '
-import json, sys
-print(sum(json.loads(line).get("tool_runs", 0) for line in open(sys.argv[1]) if line.strip()))' "$verdicts")
-  fi
-  if [ "$path_kind" = "real tools" ]; then
-    score runs-settle --runs "$suite/runs.json" --provider "$provider" --tool-runs "$made"
-  fi
   if [ "$status" -ne 0 ]; then
-    say "$provider: the run failed (exit $status) after $made tool runs; no result recorded"
+    say "$provider: the run failed (exit $status); no result recorded"
     failed=1
     continue
   fi
+  scored="$record_results/$provider.json"
   score record --suite "$suite" --provider "$provider" --verdicts "$verdicts" --canary "$canary" \
-    --date "$today" --out "$out_abs/results/$provider.json" | sed 's/^/eval: /'
+    --shipped "$shipped" --role-file "$role_file" --date "$today" --out "$scored" \
+    ${set_flag[@]+"${set_flag[@]}"} | sed 's/^/eval: /'
+  if [ "$path_kind" = "real tools" ]; then
+    made=$(python3 -I -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as file:
+    print(json.load(file)["tool_runs"])' "$scored")
+    score runs-settle --suite "$suite" --runs "$suite/runs.json" --provider "$provider" --tool-runs "$made" \
+      ${set_flag[@]+"${set_flag[@]}"}
+    mv "$scored" "$results/$provider.json"
+  fi
 done
 
 if [ "$path_kind" = "stand-ins" ]; then

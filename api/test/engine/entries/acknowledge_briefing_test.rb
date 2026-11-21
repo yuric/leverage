@@ -93,6 +93,42 @@ class AcknowledgeBriefingTest < ActiveSupport::TestCase
     assert_equal "task_cancelled", apply(seat, current(held, seat)).refusal.code
   end
 
+  test "the first acknowledgement in Finishing opens finish on the first action" do
+    task = @scenario.finishing_task(builder: @scenario.seat, actions: [
+      { description: "Publish the sample", state: "approved" },
+      { description: "Send the sample", kind: "send", state: "approved" }
+    ])
+    builder = Seat.find(task.builder_seat_id)
+    action = Action.find_by!(task_id: task.id, position: 1)
+    assert apply(builder, current(task, builder)).completed?
+    event = written.sole
+    step = TaskStep.find_by!(task_id: task.id, closed_at: nil)
+    assert_equal [ "finish", "action", action.id, builder.id, event.id ],
+      step.attributes.values_at("kind", "subject_kind", "subject_id", "seat_id", "opening_event_id")
+
+    assert apply(builder, current(task, builder)).completed?
+    assert_equal step.id, TaskStep.find_by!(task_id: task.id, closed_at: nil).id
+  end
+
+  test "there is no holder to acknowledge while the action waits for approval" do
+    task = @scenario.finishing_task(builder: @scenario.seat, actions: [
+      { description: "Publish the sample" }
+    ])
+    builder = Seat.find(task.builder_seat_id)
+    assert_equal "not_holder", apply(builder, current(task, builder)).refusal.code
+  end
+
+  test "a finishing lease that already expired leaves no holder to acknowledge" do
+    builder = @scenario.seat
+    task = @scenario.finishing_task(builder: builder, actions: [
+      { description: "Publish the sample", state: "approved" }
+    ])
+    task.update!(holder_seat_id: nil, lease_due_at: nil)
+    @scenario.append("task.lease_expired", task: task, payload: { wait_cause: nil })
+
+    assert_equal "not_holder", apply(builder, current(task, builder)).refusal.code
+  end
+
   test "an unknown task is not found" do
     assert_raises(T::NotFound) { apply(@builder, "id" => SecureRandom.uuid, "briefing_hash" => "made-up") }
   end

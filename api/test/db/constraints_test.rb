@@ -279,6 +279,23 @@ class ConstraintsTest < ActiveSupport::TestCase
     assert_rejected(ActiveRecord::RecordNotUnique) { action.call }
   end
 
+  test "questions accept only the registry outcomes and bases, and may have no basis" do
+    task_id = task
+    seat_id = seat
+    question = ->(outcome, basis) {
+      insert("questions", workspace_id: workspace, task_id: task_id, asking_seat_id: seat_id,
+        blocking: false, asked_at: Time.current, outcome: outcome, basis: basis)
+    }
+    Leverage::Contract.list("question_outcomes").each do |outcome|
+      assert_accepted { question.call(outcome, nil) }
+    end
+    Leverage::Contract.list("question_bases").each do |basis|
+      assert_accepted { question.call("answered", basis) }
+    end
+    assert_rejected { question.call("made_up_outcome", nil) }
+    assert_rejected { question.call("answered", "made_up_basis") }
+  end
+
   def inbox_item(kind:, about_kind: "task", about_id: nil, hold_id: nil, state: "open")
     insert("inbox_items", workspace_id: workspace, kind: kind, about_kind: about_kind, about_id: about_id,
       hold_id: hold_id, choices: [], facts: {}, state: state, opened_at: Time.current)

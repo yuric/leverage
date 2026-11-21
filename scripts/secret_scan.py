@@ -39,10 +39,10 @@ questions, each with its own paths:
   task's own rows of that dump is not a hit, and neither is it anywhere
   else in an event's row.
 - --logs PATH, with --not-in-logs WORD or alone: each word must be in no
-  file under the log paths (the containers', the helper's and the runs'
-  logs). Those files must also hold no nonce-shaped marker of a check or draft frame:
-  LEVERAGE-VERDICT-, -REASON-, -QUOTE-, -END- or -DRAFT- followed by 12
-  hexadecimal characters, which only a prompt or a tool's answer carries.
+  file under the log paths (the containers', the helper's, the runs' and
+  the MCP server's logs). Those files must also hold no nonce-shaped
+  marker from a check, draft, question, approval or action frame. These
+  markers carry 12 hexadecimal characters.
   The stand-ins' record of each call holds the prompts, so it is never one
   of the log paths.
 
@@ -79,10 +79,11 @@ SHAPES = [
     ("token shape", re.compile(rb"lv[sho]_[A-Za-z0-9_-]{16,}")),
     ("bearer value", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*", re.IGNORECASE)),
 ]
-# A check's or a draft's frame marks its own lines and quote blocks with a
-# nonce of 12 hexadecimal characters (plan §2.2, ADR 0012). Only a prompt
-# or a tool's answer holds one, and neither belongs in a log.
-NONCE_SHAPE = ("nonce-shaped marker", re.compile(rb"LEVERAGE-(?:VERDICT|REASON|QUOTE|END|DRAFT)-[0-9a-f]{12}"))
+# Frames mark their lines and quote blocks with a nonce (ADR 0012 and
+# milestone 5 plan AT-7). Only a prompt or a tool's answer holds one.
+NONCE_SHAPE = ("nonce-shaped marker", re.compile(
+    rb"LEVERAGE-(?:VERDICT|REASON|QUOTE|END|DRAFT|DECISION|ANSWER|BASIS|PASS-ON|DONE|CANNOT)-[0-9a-f]{12}"
+))
 # pg_dump's header of a table's rows, and the line that ends them.
 COPY_HEADER = re.compile(r"^COPY (?:public\.)?\"?events\"? \((.*)\) FROM stdin;$")
 COPY_END = b"\\."

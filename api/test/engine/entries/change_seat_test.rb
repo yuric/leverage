@@ -186,6 +186,15 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_raises(T::Invalid) { change(seat, credential_id: @login.id) }
   end
 
+  [ 0, 4 ].each do |rank|
+    test "change_seat refuses strength rank #{rank} (AP-24)" do
+      written = events_written { assert_raises(T::Invalid) { change(@builder, strength_rank: rank) } }
+
+      assert_empty written
+      assert_equal 1, @builder.reload.strength_rank
+    end
+  end
+
   test "turning off a seat with a Working task: seat.changed, task.released seat_disabled caused by it, stop_seat" do
     task = working_task(@builder)
     outcome, events = change(@builder, enabled: false)

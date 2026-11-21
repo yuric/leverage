@@ -22,17 +22,22 @@ module Leverage
 
     # Whether the seat may claim at all (L545): enabled, not paused, not
     # removed, of the role that claims this kind (a builder a task, a
-    # reviewer a review), holding no task and no review, and, for a seat
-    # the app runs, its run on its first available candidate (HD-4, which
-    # takes the place of EN-8's own-credential test).
+    # reviewer a review), holding no task or review, with no approved
+    # action waiting for it, and, for a seat the app runs, its run on its
+    # first available candidate (HD-4).
     #
     # kind - :task or :review.
     def may_claim?(seat, kind, at: Time.current)
       return false unless seat && seat.enabled && !seat.paused && seat.removed_at.nil?
       return false unless seat.role == (kind == :review ? "reviewer" : "builder")
-      return false if holds_anything?(seat)
+      return false unless idle_for_claim?(seat)
 
       placed_for?(seat, nil, at)
+    end
+
+    # Whether the seat is idle enough to take a new claim.
+    def idle_for_claim?(seat)
+      !holds_anything?(seat) && Finishing.waiting_for(seat).empty?
     end
 
     # The Ready task the seat would claim now, or nil: by priority high,

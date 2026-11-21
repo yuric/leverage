@@ -1,3 +1,5 @@
+import LeverageKit
+
 /// The owner-facing sentences of the Add task form (MA-13, MA-15, MA-16, HM-48)
 /// and of the same form on a task's page, where it changes the contract
 /// (HM-49). The words come from the mockup.
@@ -7,6 +9,9 @@ enum AddTaskCopy: OwnerFacingCopy {
     case goalLabel, goalPlaceholder, goalHint
     case criteriaLabel, criteriaPlaceholder, criteriaHint, criteriaHintRuleOn
     case detailsLabel, detailsPlaceholder
+    case projectLabel, noProject, actionsLabel
+    case actionKindLabel, actionDescription, actionDescriptionHint, addAction, removeAction
+    case actionPublish, actionPay, actionSend, actionDelete
     case priorityLabel, priorityLow, priorityNormal, priorityHigh
     case workLabel, workPlaceholder, workHint
     case footnote, footnoteProviderRule
@@ -16,6 +21,15 @@ enum AddTaskCopy: OwnerFacingCopy {
 
     /// The last criterion of every task: the independent review (PRD Terms).
     case reviewCriterion
+
+    static func actionKind(_ kind: ActionKind) -> Self {
+        switch kind {
+        case .publish: .actionPublish
+        case .pay: .actionPay
+        case .send: .actionSend
+        case .delete: .actionDelete
+        }
+    }
 
     var text: String {
         switch self {
@@ -31,6 +45,18 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .criteriaHintRuleOn: "Leave this empty and the task waits in Backlog until you fill it in."
         case .detailsLabel: "Who is it for, and what must it include or avoid?"
         case .detailsPlaceholder: "Optional"
+        case .projectLabel: "Project"
+        case .noProject: "No project"
+        case .actionsLabel: "What goes out at the end"
+        case .actionKindLabel: "Action"
+        case .actionDescription: "Description"
+        case .actionDescriptionHint: "Describe each action before saving."
+        case .addAction: "Add an action"
+        case .removeAction: "Remove"
+        case .actionPublish: "Publish"
+        case .actionPay: "Pay"
+        case .actionSend: "Send"
+        case .actionDelete: "Delete"
         case .priorityLabel: "Priority"
         case .priorityLow: "Low"
         case .priorityNormal: "Normal"

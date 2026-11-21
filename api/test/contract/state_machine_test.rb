@@ -81,14 +81,17 @@ class StateMachineTest < Minitest::Test
     end
   end
 
-  # For each (command, from) the guards of its rows cover every case exactly
-  # once: every assignment of the guard families the rows name is matched by
-  # one row, and a family a row does not name does not matter to it.
+  # For each (command, from), every reachable assignment matches one row.
+  # A guard family a row does not name does not matter to it.
   def test_guards_partition_each_command_and_state
     family_of = machine["guard_families"].each_with_object({}) do |family, map|
       family["guards"].each { |guard| map[guard["guard"]] = family["family"] }
     end
     members = machine["guard_families"].to_h { |family| [ family["family"], family["guards"].map { |guard| guard["guard"] } ] }
+    holder_exclusions = {
+      "fail_review" => %w[does_not_escalate builder_holds_task],
+      "approve_action" => %w[approval_asked_of_caller approvals_complete builder_holds_task]
+    }
     rows.group_by { |row| [ row["command"], row["from"] ] }.each do |(command, from), same|
       same.each do |row|
         assert_empty duplicates(row["guard"].map { |guard| family_of[guard] }), "#{label(row)} names a family twice"
@@ -97,7 +100,15 @@ class StateMachineTest < Minitest::Test
       assignments = families.map { |family| members[family] }.then { |lists| lists.empty? ? [ [] ] : lists[0].product(*lists[1..]) }
       assignments.each do |assignment|
         matched = same.count { |row| (row["guard"] - assignment).empty? }
-        assert_equal 1, matched, "#{command} from #{from.inspect}: #{assignment.inspect} matches #{matched} rows"
+        # AE-16: these paths cannot start with the builder holding this task.
+        # Check that the rest of each guard partition still has exactly one row.
+        excluded = holder_exclusions[command]
+        if excluded && (excluded - assignment).empty?
+          assert_equal 0, matched, "#{command} from #{from.inspect}: #{assignment.inspect} must be unreachable"
+          assert same.any? { |row| row["note"].to_s.include?("cannot hold this task") }, command
+        else
+          assert_equal 1, matched, "#{command} from #{from.inspect}: #{assignment.inspect} matches #{matched} rows"
+        end
       end
     end
   end
@@ -231,14 +242,16 @@ class StateMachineTest < Minitest::Test
   def test_every_action_event_a_row_writes_is_a_move_of_the_action_machine
     family = machine["guard_families"].find { |entry| entry["family"] == "approved_action_state" }
     family["guards"].each { |guard| refute_nil guard["action_states"], "#{guard["guard"]} names its action states" }
-    by_event = machine.fetch("action_machine").fetch("transitions").to_h { |move| [ move["event"], move ] }
+    by_event = machine.fetch("action_machine").fetch("transitions").group_by { |move| move["event"] }
     rows.each do |row|
       written(row).each do |event|
-        move = by_event[event] or next
-        assert_includes move["commands"], row["command"], "#{label(row)} writes #{event}"
+        moves = by_event[event] or next
+        matching = moves.select { |move| move["commands"].include?(row["command"]) }
+        refute_empty matching, "#{label(row)} writes #{event}"
+        from = matching.flat_map { |move| move["from"] }
         row["guard"].each do |guard|
           states = guard_action_states[guard] or next
-          assert_empty states - move["from"], "#{label(row)}: #{guard} admits #{states}, but #{event} moves only from #{move["from"]}"
+          assert_empty states - from, "#{label(row)}: #{guard} admits #{states}, but #{event} moves only from #{from}"
         end
       end
     end
@@ -255,8 +268,9 @@ class StateMachineTest < Minitest::Test
       refute_empty row["guard"] & %w[approvals_pending approvals_complete], "#{label(row)} names no approvals guard"
       next unless row["guard"].include?("approvals_complete")
 
-      refute_empty row["guard"] & %w[builder_free builder_busy], "#{label(row)} names no builder guard"
+      refute_empty row["guard"] & %w[builder_free builder_busy builder_holds_task], "#{label(row)} names no builder guard"
       assert_equal "fresh", row["builder_lease"], label(row) if row["guard"].include?("builder_free")
+      assert_nil row["builder_lease"], label(row) if row["guard"].include?("builder_holds_task")
     end
   end
 
@@ -303,8 +317,16 @@ class StateMachineTest < Minitest::Test
     row["side_events"].each do |entry|
       next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
       next if %w[hold.closed credential.switched inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")
+      next if %w[hold.opened inbox.opened].include?(entry["event"]) &&
+        entry["note"].include?("changes from builder to another role")
 
       assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
+    end
+  end
+
+  def test_a_waive_closes_the_errored_gate_of_its_action
+    rows.select { |row| row["command"] == "waive_action" && row["refusal"].nil? }.each do |row|
+      assert_includes row["holds_closed"], "check_error", label(row)
     end
   end
 

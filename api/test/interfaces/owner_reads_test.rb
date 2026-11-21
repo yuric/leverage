@@ -478,7 +478,7 @@ class OwnerReadsTest < CommittingTestCase
     task = scenario.task(state: "ready")
     body = assert_read("/v1/owner/tasks/#{task.id}")
     created = body["events"].find { |event| event["type"] == "task.created" }
-    assert_equal({ "state" => "backlog" }, created["payload"])
+    assert_equal({ "state" => "backlog", "added_action_ids" => [] }, created["payload"])
     assert_equal scenario.workspace_id, created["workspace_id"]
     refute created.key?("xact_id")
     refute created.key?("created_at")

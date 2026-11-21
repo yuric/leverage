@@ -90,8 +90,11 @@ struct ShippedRulesEndToEndTests {
             // the runner hands its tool as quoted material.
             let build = try world.prompts("claude", containing: "LEVERAGE-EVIDENCE")
             #expect(!build.isEmpty, "the builder's tool was run")
-            #expect(build.allSatisfy { $0.contains(acceptanceSentence) }, "the acceptance sentence is in the briefing")
-            #expect(build.allSatisfy { !$0.contains("Workers ask the orchestrator before they ask you") })
+            let includesAcceptance = build.allSatisfy { $0.contains(acceptanceSentence) }
+            #expect(includesAcceptance, "the acceptance sentence is in the briefing")
+            // The question routing rule starts acting in Questions and approvals (AS-2).
+            let includesQuestionRouting = build.allSatisfy { $0.contains("Workers ask the orchestrator before they ask you") }
+            #expect(includesQuestionRouting, "the question routing rule is in the briefing")
 
             // One attempt with a queue time and a run time; steps that sum
             // to the lifetime.

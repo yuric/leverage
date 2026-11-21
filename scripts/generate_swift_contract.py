@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Write the contract's fixed lists as Swift enums for the Mac side.
+"""Write the contract's fixed lists and agent tools for the Mac side.
 
 api/contract/registry.json is the authority for the fixed lists,
 api/contract/hooks.json for the hooks' moment names, and
 api/contract/openapi.json for the few closed values that only the interface
-schema has. The Mac side reads them as Swift enums in one generated file,
-mac/Sources/LeverageKit/Generated/Contract.swift, which is changed only by
-changing the contract and running this script again (rule AR-002). CI runs
-it with --check, which fails when the committed file differs from a fresh
-run.
+schema has. The generated files live in mac/Sources/LeverageKit/Generated
+and are changed by updating the contract and running this script again
+(rule AR-002). CI runs it with --check and compares both files.
 
 What is written:
 
@@ -29,7 +27,9 @@ What is written:
   * the operations, as ContractOperation with each one's method, path,
     caller and tag, so that no path is typed in Swift (IN-1);
   * the interface schema's own enums in OPENAPI_ENUMS (transport error
-    codes, helper checks and their states and failures, and a few more).
+    codes, helper checks and their states and failures, and a few more);
+  * the agent tools, as AgentTools, from the registry's agent operations,
+    roles.json, and the OpenAPI summaries and input schemas.
 
 The registry keys in SERVER_ONLY (guards, timers' due-time sources, policy
 effects, job kinds) are the server's machinery and are not written; `hooks`
@@ -44,8 +44,9 @@ lower snake case (dots allowed), or two values with one case name, fail.
 Usage:
   python3 scripts/generate_swift_contract.py           # write the file
   python3 scripts/generate_swift_contract.py --check   # compare, write nothing
-Options --registry, --openapi, --hooks and --output replace the four paths
-(for the self-test). Standard library only; exits 0 on success, 1 otherwise.
+Options --registry, --openapi, --hooks, --roles and --output replace the
+paths for the self-test. AgentTools.swift is written beside --output.
+Standard library only; exits 0 on success, 1 otherwise.
 """
 
 import argparse
@@ -58,6 +59,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = ROOT / "api" / "contract" / "registry.json"
 DEFAULT_OPENAPI = ROOT / "api" / "contract" / "openapi.json"
 DEFAULT_HOOKS = ROOT / "api" / "contract" / "hooks.json"
+DEFAULT_ROLES = ROOT / "api" / "contract" / "roles.json"
 DEFAULT_OUTPUT = ROOT / "mac" / "Sources" / "LeverageKit" / "Generated" / "Contract.swift"
 
 VALUE = re.compile(r"^[a-z][a-z0-9]*(?:[._][a-z0-9]+)*$")
@@ -119,6 +121,8 @@ LIST_REFERENCES = [
      "provider", "login",
      "The login providers whose tool's default model passed the eval suite (RV-5). "
      "It refuses nothing: the app says \"Not tested for checking tasks.\" beside every other choice."),
+    ("important_event_types", "importantEventTypes", "EventType", "event_types",
+     "type", None, "The event types shown by the Important filter in Activity."),
 ]
 
 # Registry keys that are lists of names, or of objects with a name field:
@@ -292,7 +296,7 @@ def list_references(registry):
         for value in values:
             if value not in known:
                 raise Problem(f"registry.json lists.{key}: {value!r} is not in {source}")
-            if known[value].get("kind") != kind:
+            if kind is not None and known[value].get("kind") != kind:
                 raise Problem(f"registry.json lists.{key}: {value!r} is not a {kind}")
         if len(set(values)) != len(values):
             raise Problem(f"registry.json lists.{key}: a value is listed twice")
@@ -396,37 +400,133 @@ def generate(registry, openapi, hooks):
     return HEADER + "\n" + "\n\n".join(blocks) + "\n"
 
 
+def resolve_references(node, document, chain=()):
+    """Expand local OpenAPI references, including nested schema alternatives."""
+    if isinstance(node, list):
+        return [resolve_references(item, document, chain) for item in node]
+    if not isinstance(node, dict):
+        return node
+    fields = {key: resolve_references(value, document, chain)
+              for key, value in node.items() if key != "$ref"}
+    if "$ref" not in node:
+        return fields
+    reference = node["$ref"]
+    if not reference.startswith("#/") or reference in chain:
+        raise Problem(f"openapi.json: cannot resolve {reference!r} inline")
+    target = document
+    for part in reference[2:].split("/"):
+        target = target[part.replace("~1", "/").replace("~0", "~")]
+    resolved = resolve_references(target, document, (*chain, reference))
+    if resolved.keys() & fields.keys():
+        # JSON Schema applies both keywords when a reference has siblings.
+        return {"allOf": [resolved, fields]}
+    return resolved | fields
+
+
+def tool_input_schema(openapi, path, operation):
+    path_item = openapi["paths"][path]
+    parameters = {}
+    for entry in path_item.get("parameters", []) + operation.get("parameters", []):
+        parameter = resolve_references(entry, openapi)
+        if parameter["in"] == "path":
+            parameters[parameter["name"]] = parameter["schema"]
+
+    body = resolve_references(operation.get("requestBody", {}), openapi)
+    schema = body["content"]["application/json"]["schema"] if body else {
+        "type": "object", "additionalProperties": False}
+    if schema.get("type") != "object":
+        raise Problem(f"openapi.json: {operation['operationId']} has a non-object request body")
+    body_properties = schema.pop("properties", {})
+    if parameters.keys() & body_properties.keys():
+        raise Problem(f"openapi.json: {operation['operationId']} shares a path and body field")
+    # Body examples alone do not represent complete tool arguments.
+    if parameters:
+        schema.pop("examples", None)
+    schema["properties"] = parameters | body_properties
+    schema["required"] = [*parameters, *schema.get("required", [])]
+    return schema
+
+
+def swift_string(value):
+    # JSON's short escapes for these control characters differ from Swift's.
+    encoded = json.dumps(value, ensure_ascii=False)
+    return re.sub(r'\\(?:\\|u([0-9a-f]{4})|([bf]))',
+                  lambda match: (match[0] if match[0] == r"\\"
+                                 else r"\u{" + (match[1] or {"b": "8", "f": "c"}[match[2]]) + "}"),
+                  encoded)
+
+
+def generate_tools(registry, openapi, roles):
+    lines = ["""\
+// Generated by scripts/generate_swift_contract.py from
+// api/contract/registry.json, api/contract/openapi.json and api/contract/roles.json.
+// Do not edit: change the contract and run
+//   python3 -I scripts/generate_swift_contract.py
+// CI fails when this file differs from a fresh run (rule AR-002).
+
+public struct AgentTool: Sendable {
+    public let id: String
+    public let method: HTTPMethod
+    public let path: String
+    public let summary: String
+    public let inputSchema: String
+    public let roles: [SeatRole]
+}
+
+public enum AgentTools {
+    public static let all: [AgentTool] = ["""]
+    for entry in registry["operations"]:
+        if entry["tag"] != "agent":
+            continue
+        tool_id, method, path = entry["operation_id"], entry["method"].lower(), entry["path"]
+        operation = openapi["paths"][path][method]
+        if operation["operationId"] != tool_id:
+            raise Problem(f"openapi.json: {method.upper()} {path} does not name {tool_id}")
+        tool_roles = ", ".join(f".{case_name(role['role'])}" for role in roles["roles"]
+                               if tool_id in role["operations"])
+        if not tool_roles:
+            raise Problem(f"roles.json: no role lists {tool_id}")
+        schema = json.dumps(tool_input_schema(openapi, path, operation), separators=(",", ":"),
+                            ensure_ascii=False)
+        lines.append(f"        .init(id: {swift_string(tool_id)}, method: .{method}, "
+                     f"path: {swift_string(path)}, summary: {swift_string(operation['summary'])}, "
+                     f"inputSchema: {swift_string(schema)}, roles: [{tool_roles}]),")
+    return "\n".join([*lines, "    ]", "}", ""])
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="compare with the file and write nothing")
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--openapi", type=Path, default=DEFAULT_OPENAPI)
     parser.add_argument("--hooks", type=Path, default=DEFAULT_HOOKS)
+    parser.add_argument("--roles", type=Path, default=DEFAULT_ROLES)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args(argv)
     try:
         registry = json.loads(arguments.registry.read_text(encoding="utf-8"))
         openapi = json.loads(arguments.openapi.read_text(encoding="utf-8"))
         hooks = json.loads(arguments.hooks.read_text(encoding="utf-8"))
-        text = generate(registry, openapi, hooks)
+        roles = json.loads(arguments.roles.read_text(encoding="utf-8"))
+        outputs = {
+            arguments.output: generate(registry, openapi, hooks),
+            arguments.output.with_name("AgentTools.swift"): generate_tools(registry, openapi, roles),
+        }
+        for output, text in outputs.items():
+            if arguments.check:
+                if not output.exists():
+                    raise Problem(f"{output.name} is missing: run python3 -I scripts/generate_swift_contract.py")
+                if output.read_text(encoding="utf-8") != text:
+                    raise Problem(f"{output.name} differs from the contract: "
+                                  "run python3 -I scripts/generate_swift_contract.py and commit the result")
+                print(f"{output.name} matches the contract")
+            else:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(text, encoding="utf-8")
+                print(f"wrote {output}")
     except (OSError, ValueError, KeyError, TypeError, Problem) as error:
         print(f"generate_swift_contract: {error}", file=sys.stderr)
         return 1
-    if arguments.check:
-        if not arguments.output.exists():
-            print(f"{arguments.output.name} is missing: run python3 -I scripts/generate_swift_contract.py",
-                  file=sys.stderr)
-            return 1
-        if arguments.output.read_text(encoding="utf-8") != text:
-            print(f"{arguments.output.name} differs from the contract: "
-                  "run python3 -I scripts/generate_swift_contract.py and commit the result",
-                  file=sys.stderr)
-            return 1
-        print(f"{arguments.output.name} matches the contract")
-        return 0
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(text, encoding="utf-8")
-    print(f"wrote {arguments.output}")
     return 0
 
 

@@ -283,4 +283,71 @@ class LandingPromptTest < CommittingTestCase
       assert_empty found, "#{seat.role}'s landing prompt uses #{found.join(", ")}"
     end
   end
+
+  def read_prompt(seat, base_url: "http://mcp-prompt.example:41234", **options)
+    Leverage::Reads::LandingPrompt.call(scenario.workspace_id, seat.id, base_url: base_url, **options)
+  end
+
+  test "the read identifies the default and explicit HTTP prompt and the selected MCP prompt" do
+    default = read_prompt(@builder)
+    assert_equal "http", default[:connection]
+    assert_equal default, read_prompt(@builder, connection: "http")
+    assert_equal "mcp", read_prompt(@builder, connection: "mcp")[:connection]
+  end
+
+  {
+    "builder" => [ "a", 20, "task", %w[command briefing_changed resume answer action rework task none] ],
+    "reviewer" => [ "a", 20, "review", %w[command briefing_changed review none] ],
+    "orchestrator" => [ "an", 1, "job", %w[command job none] ],
+    "planner" => [ "a", 1, "job", %w[command job none] ]
+  }.each do |role, (article, interval, unit, kinds)|
+    test "the MCP prompt tells #{article} #{role} its exact tools, next items and defaults" do
+      seat = scenario.seat(role: role, provider: "codex")
+      prompt = read_prompt(seat, connection: "mcp")
+      text = prompt.fetch(:text)
+
+      assert_includes text, "connecting as #{article} #{role}"
+      assert_equal interval, prompt[:check_interval_minutes]
+      assert_match(/first tool call is `get_next`/, text)
+      assert_equal role_operations(role).sort, text.scan(/^- `([a-z_]+)`$/).flatten.sort
+      assert_equal role_operations(role).sort, operations.keys.select { |id| names_operation?(text, id) }.sort
+      assert_equal kinds, text.scan(/^- `([a-z_]+)`:/).flatten
+      assert_includes text, "one #{unit} at a time"
+      assert_includes text, "every #{interval == 1 ? '60 seconds' : '20 minutes'}"
+      assert_match(/confirm.*defaults|defaults.*confirm/i, text)
+      assert_match(/ask your user/i, text)
+      assert_match(/do not start until/i, text)
+
+      if unit == "job"
+        assert_match(/read your role file.*before you do any work/i, text)
+      else
+        assert_match(/read your role file, your briefing and the rules before you do any work/i, text)
+        assert_match(/confirm.*`acknowledge_#{unit}_briefing`/, text)
+        assert_match(/release.*`release_#{unit}`/i, text)
+        assert_match(/only.*tool call in the last 10 minutes/, text)
+      end
+    end
+  end
+
+  test "the builder MCP prompt requires announcing start before carrying out an approved outward action" do
+    text = read_prompt(@builder, connection: "mcp").fetch(:text)
+
+    assert_match(/call `start_action` before you carry out an approved outward action/i, text)
+    assert_match(/call `report_action_done` after (you carry it out|the action is complete)/i, text)
+  end
+
+  test "the MCP prompt contains no HTTP address, sign-in instructions or token-shaped text" do
+    token = scenario.token_for(@builder)
+    token_shape = %w[lvs_ FAKE_EXAMPLE_ONLY].join
+    seat = scenario.seat(role: "builder", name: "Made-up http://label.example #{token_shape}")
+    text = read_prompt(seat, connection: "mcp").fetch(:text)
+
+    refute text.match?(%r{https?://|/v1/|\bcurl\b}), "the prompt gives an HTTP address or command"
+    refute text.match?(/authorization|bearer|token/i), "the prompt gives HTTP sign-in instructions"
+    refute text.match?(TOKEN_SHAPE), "the prompt includes a token-shaped value"
+    [ token, scenario.token_for(seat), scenario.owner_token, scenario.helper_token,
+      Leverage::Tokens.digest(token) ].each do |secret|
+      refute text.include?(secret), "the prompt includes a token or digest"
+    end
+  end
 end

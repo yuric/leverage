@@ -1,5 +1,6 @@
 require "test_helper"
 require_relative "rule_support"
+require_relative "jobs_support"
 
 # Entries::OverrideCheck (PRD L162 to L167, L380 to L383, L423, L910;
 # milestone 4 plan RD-45, RD-47, RD-48): "Let it through once", for one
@@ -11,6 +12,7 @@ require_relative "rule_support"
 # tells its requester to send it again. Any other check is invalid_state.
 class OverrideCheckTest < ActiveSupport::TestCase
   include RuleSupport
+  include JobsSupport
 
   Trigger = Leverage::Gating::Trigger
   REASON = "Made-up reason: checked by hand.".freeze
@@ -209,6 +211,94 @@ class OverrideCheckTest < ActiveSupport::TestCase
     outcome, = override(check)
 
     assert_refused("invalid_state", outcome)
+  end
+
+  def action_with_gates(model_versions: 1)
+    failed_rule = scenario.rule(hook: "action.requested", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 2 })
+    model_rule = scenario.rule(hook: "action.requested", versions: model_versions)
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Send the sample." } ])
+    [ task, Action.find_by!(task_id: task.id), failed_rule, model_rule ]
+  end
+
+  test "a stopped action cannot be approved while another frozen gate is missing" do
+    task, action, failed_rule, = action_with_gates
+    failed = scenario.rule_check(task, rule: failed_rule, subject: action, result: "failed")
+    Leverage::Actions.stop(scenario.context, action, by: [ "app", nil ], rule_check: failed)
+
+    outcome, _, events = override(failed)
+
+    assert_refused("invalid_state", outcome)
+    assert_empty events
+    assert_nil failed.reload.overridden_at
+    assert_equal "stopped", action.reload.state
+  end
+
+  test "a passing row of an older gate version does not clear the frozen gate" do
+    task, action, failed_rule, model_rule = action_with_gates(model_versions: 2)
+    failed = scenario.rule_check(task, rule: failed_rule, subject: action, result: "failed")
+    Leverage::Actions.stop(scenario.context, action, by: [ "app", nil ], rule_check: failed)
+    old = RuleVersion.find_by!(rule_id: model_rule.id, version: 1)
+    dormant = failed.dup
+    dormant.assign_attributes(rule_id: model_rule.id, rule_version_id: old.id, result: "passed")
+    dormant.save!
+
+    outcome, _, events = override(failed)
+
+    assert_refused("invalid_state", outcome)
+    assert_empty events
+    assert_equal "stopped", action.reload.state
+  end
+
+  %w[passed failed].each do |result|
+    test "a stopped action keeps the other model gate and its #{result} result controls override" do
+      task, action, failed_rule, model_rule = action_with_gates
+      Leverage::Transitions::Gate.request_action(scenario.context, action)
+      failed = RuleCheck.find_by!(task_id: task.id, rule_id: failed_rule.id)
+      pending = RuleCheck.find_by(task_id: task.id, rule_id: model_rule.id)
+      assert pending, "the other frozen gate still needs an answer"
+      assert_nil pending.result
+      assert_equal [ "rule_check" ], Job.where(task_id: task.id, state: "queued").pluck(:kind)
+      assert_equal "stopped", action.reload.state
+
+      outcome, _, pending_events = override(failed)
+      assert_refused("invalid_state", outcome)
+      assert_empty pending_events
+      assert_nil failed.reload.overridden_at
+
+      checker = scenario.orchestrator
+      assert_completed(seat_command(checker, "claim_job", {}))
+      job = Job.find_by!(target_id: pending.id, state: "claimed")
+      assert_completed(seat_command(checker, "submit_job_result", {
+        "id" => job.id, "result" => { "result" => result, "reason" => REASON }, "tokens" => 0, "spend" => 0
+      }))
+
+      outcome, _, events = override(failed)
+      if result == "passed"
+        assert_completed(outcome)
+        assert_includes events.map(&:type), "action.approved"
+        assert_equal "approved", action.reload.state
+      else
+        assert_refused("invalid_state", outcome)
+        assert_empty events
+        assert_equal "stopped", action.reload.state
+      end
+    end
+  end
+
+  test "a blocking gate added after the action was requested does not prevent a legitimate override" do
+    rule = scenario.rule(hook: "action.requested")
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Send the sample." } ])
+    action = Action.find_by!(task_id: task.id)
+    failed = scenario.rule_check(task, rule: rule, subject: action, result: "failed")
+    Leverage::Actions.stop(scenario.context, action, by: [ "app", nil ], rule_check: failed)
+    scenario.rule(hook: "action.requested")
+
+    outcome, _, events = override(failed)
+
+    assert_completed(outcome)
+    assert_includes events.map(&:type), "action.approved"
+    assert_equal "approved", action.reload.state
   end
 
   test "a check of another workspace is 404" do

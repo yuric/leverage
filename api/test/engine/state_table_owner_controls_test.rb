@@ -5,9 +5,8 @@ require_relative "entries/owner_controls_support"
 # HE-27, HS-3): for promote, edit_contract, hold and resume and every task
 # state, the state_machine.json row's move and events, or invalid_state;
 # for pause_seat, resume_seat and change_seat (rows from no state), the
-# row's events. A row from Finishing is not served in this milestone and is
-# proven refused invalid_state from a task Scenario puts there. The cases
-# come from StateTableCases, so nothing here retypes the table. Side events
+# row's events. Finishing has the owner's hold and resume rows. The cases
+# come from StateTableCases. Side events
 # a row lists only when something else holds (a hold to close, a task the
 # seat holds) are proven in the entries' own tests.
 class StateTableOwnerControlsTest < ActiveSupport::TestCase
@@ -35,13 +34,6 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
       named = kase.conditional_events.to_h { |conditional| [ conditional.fetch("event"), conditional.fetch("when") ] }
       assert_equal CONDITIONAL.fetch(kase.command, {}), named, kase.command
     end
-  end
-
-  test "the rows from Finishing are hold and resume, each marked not served (HS-3)" do
-    finishing = StateTableCases.for(COMMANDS).select(&:not_served?)
-
-    assert_equal [ [ "hold", [] ], [ "resume", [ "not_held_owner_hold" ] ], [ "resume", [ "held_owner_hold" ] ] ],
-      finishing.map { |kase| [ kase.command, kase.guard ] }
   end
 
   test "the log each owner control writes replays to the tables and passes the log audit (tests 1 and 2)" do
@@ -83,8 +75,8 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
     params, task = prepare(kase)
     outcome, events = owner_run(kase.command, params)
 
-    if kase.expected_refusal
-      assert_refused(kase.expected_refusal, outcome)
+    if kase.refusal
+      assert_refused(kase.refusal, outcome)
       assert_empty events, kase.name
     else
       assert_completed(outcome)
@@ -110,7 +102,9 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
   end
 
   def task_in(state)
-    return scenario.finishing_task(builder: @builder) if state == "finishing"
+    if state == "finishing"
+      return scenario.finishing_task(builder: @builder, actions: [ { kind: "send", state: "approved" } ])
+    end
 
     scenario.task(state: state, builder: (@builder if state == "working"))
   end

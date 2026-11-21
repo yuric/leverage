@@ -130,7 +130,8 @@ class PendingTransitionsTest < ActiveSupport::TestCase
 
       row = Command.find_by!(key: key)
       assert_equal [ "refused", true ], [ row.outcome, row.notify ]
-      assert_equal({ "code" => "blocked_by_rule", "rule_id" => rule.id, "reason" => "The note names no test." }, row.refusal)
+      assert_equal({ "code" => "blocked_by_rule", "rule_id" => rule.id, "reason" => "The note names no test.",
+        "task_id" => task.id }, row.refusal)
       assert_equal [ "refused", nil ], pending.reload.values_at(:state, :params)
       assert_equal [ "working", @builder.id ], task.reload.values_at(:state, :holder_seat_id)
       assert_empty written(key).drop(2), "the refusal writes no event of the submit's"

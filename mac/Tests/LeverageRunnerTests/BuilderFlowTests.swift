@@ -58,10 +58,11 @@ struct BuilderFlowTests {
         let copy = copyID.contractString, layout = layoutID.contractString
         let expected: [(ContractOperation, String?)] = [
             (.getNext, nil), (.claimNextTask, nil), (.acknowledgeTaskBriefing, nil),
-            (.startCriterion, copy), (.passCriterion, copy), (.startCriterion, layout), (.passCriterion, layout),
+            (.startCriterion, copy), (.reportCost, nil), (.passCriterion, copy),
+            (.startCriterion, layout), (.reportCost, nil), (.passCriterion, layout),
             (.submitTask, nil),
             (.getNext, nil), (.getTaskBriefing, nil), (.acknowledgeTaskBriefing, nil),
-            (.startCriterion, layout), (.passCriterion, layout), (.submitTask, nil),
+            (.startCriterion, layout), (.reportCost, nil), (.passCriterion, layout), (.submitTask, nil),
             (.getNext, nil),
         ]
         let calls = harness.api.calls
@@ -69,8 +70,13 @@ struct BuilderFlowTests {
         #expect(calls.map(\.cid) == expected.map(\.1))
         // Every command has a key of its own.
         let keys = calls.compactMap(\.key)
-        #expect(keys.count == 11)
+        #expect(keys.count == 14)
         #expect(Set(keys).count == keys.count)
+        let costs = harness.calls(.reportCost)
+        #expect(costs.count == 3)
+        #expect(costs.allSatisfy { $0.id == taskID.contractString && $0.body == .object([
+            "tokens": .number(10), "spend": .number(0),
+        ]) })
         // Each acknowledgement carries the briefing it read.
         let acks = harness.calls(.acknowledgeTaskBriefing).map { $0.body?["briefing_hash"]?.stringValue }
         #expect(acks == ["hash-round-0", "hash-round-1"])
@@ -168,7 +174,7 @@ struct BuilderFlowTests {
 
         #expect(await runToEnd(loop) == 0)
         #expect(harness.operations == [
-            .getNext, .claimNextTask, .acknowledgeTaskBriefing, .startCriterion, .releaseTask, .getNext,
+            .getNext, .claimNextTask, .acknowledgeTaskBriefing, .startCriterion, .reportCost, .releaseTask, .getNext,
         ])
         #expect(harness.calls(.releaseTask).first?.body?["reason"]?.stringValue == "unable_to_continue")
         #expect(harness.calls(.passCriterion).isEmpty)
@@ -301,6 +307,7 @@ extension BuilderFlowTests {
         #expect(harness.calls(.getCommand).first?.path["key"] == sent[0].key?.value)
         // Two criteria built, then one run for the rule's reason.
         #expect(driver.runs.map(\.purpose) == [.build, .build, .build])
+        #expect(harness.calls(.reportCost).count == 3)
         let rework = try #require(driver.runs.last?.prompt)
         #expect(Self.onlyQuoted(Self.hostileReason, in: rework))
         #expect(Self.onlyQuoted(Self.ruleName, in: rework))

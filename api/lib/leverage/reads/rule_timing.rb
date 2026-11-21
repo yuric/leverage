@@ -55,7 +55,7 @@ module Leverage
           scope = scope.where(id: rule_id) if rule_id
           rules = Rules.ordered(scope.to_a)
           checks = RuleCheck.where(workspace_id: workspace_id, rule_id: rules.map(&:id)).order(:created_at, :id).to_a
-          attempts = attempts(checks.map(&:id))
+          attempts = attempts_for_rules(checks)
           held = held_up(workspace_id, rules.map(&:id), checks, attempts, as_of)
           by_rule = checks.group_by(&:rule_id)
           rules.map { |rule| row(rule, by_rule.fetch(rule.id, []), attempts, held.fetch(rule.id, 0r), as_of) }
@@ -71,6 +71,27 @@ module Leverage
             Arel.sql("jobs.tokens"), Arel.sql("jobs.spend"))
           .map { |values| Attempt.new(*values) }
           .group_by(&:rule_check_id)
+      end
+
+      # A routing check is instantaneous. For rule statistics, its
+      # question jobs carry the work, including retry and timeout intervals.
+      def attempts_for_rules(checks)
+        timed = attempts(checks.map(&:id))
+        question_checks = checks.select do |check|
+          check.hook == "question.asked" && check.subject_kind == "question" &&
+            check.result == "applied" && check.effect == "to_orchestrator"
+        end
+        return timed if question_checks.empty?
+
+        question_attempts = Job.joins(<<~SQL.squish)
+          INNER JOIN rule_checks ON rule_checks.workspace_id = jobs.workspace_id
+            AND rule_checks.task_id = jobs.task_id AND rule_checks.subject_id = jobs.target_id
+        SQL
+          .where(kind: "question", target_kind: "question", rule_checks: { id: question_checks.map(&:id) })
+          .order(:attempt_number, :queued_at, :id)
+          .pluck("rule_checks.id", :attempt_number, :queued_at, :claimed_at, :finished_at, :tokens, :spend)
+          .map { |values| Attempt.new(*values) }.group_by(&:rule_check_id)
+        timed.merge(question_attempts)
       end
 
       # Queue seconds of an attempt: started minus queued, or its end

@@ -155,10 +155,69 @@ struct TaskLogTests {
                       "lease_seat_id": .null, "wait_cause": .null])) == "The task is no longer paused.")
     }
 
-    @Test("an event the task page has no sentence for yet reads as a general one")
-    func fallback() {
-        #expect(sentence(event(.questionAsked, actor: builder)) == "The task was updated.")
-        #expect(sentence(event(.actionRequested, actorKind: .app)) == "The task was updated.")
+    @Test("questions distinguish the asker and how the answer was given")
+    func questionEvents() {
+        #expect(sentence(event(.questionAsked, actor: builder, payload: ["blocking": .bool(false)]))
+            == "Builder One asked a question.")
+        #expect(sentence(event(.questionAsked, actor: builder, payload: ["blocking": .bool(true)]))
+            == "Builder One asked a question and is waiting for an answer.")
+        #expect(sentence(event(.questionAnswered, actor: reviewer, payload: ["basis": .string("record")]))
+            == "Reviewer One answered the question from the record.")
+        #expect(sentence(event(.questionAnswered, actor: reviewer, payload: ["basis": .string("decision")]))
+            == "Reviewer One decided how to answer the question.")
+        #expect(sentence(event(.questionAnswered, actorKind: .owner, payload: ["basis": .string("owner")]))
+            == "You answered the question.")
+        #expect(sentence(event(.questionOverturned, actorKind: .owner)) == "You overturned the answer.")
+    }
+
+    @Test("the log distinguishes a request, approval, start, reported completion and recorded overturn")
+    func actionEvents() {
+        let action = UUID()
+        let lease = ["lease_seat_id": JSONValue.string(builder.contractString)]
+        #expect(sentence(event(.actionRequested, subject: action, kind: .action, actorKind: .app))
+            == "The action was requested.")
+        #expect(sentence(event(.actionApproved, actor: reviewer, subject: action, kind: .action, payload: lease))
+            == "Reviewer One approved the action.")
+        #expect(sentence(event(.actionApproved, subject: action, kind: .action, actorKind: .owner))
+            == "You approved the action.")
+        #expect(sentence(event(.actionLeaseGranted, subject: action, kind: .action, actorKind: .app, payload: lease))
+            == "Builder One can now carry out the action.")
+        #expect(sentence(event(.actionStarted, actor: builder, subject: action, kind: .action))
+            == "Builder One said it was starting the action.")
+        #expect(sentence(event(.actionReportedDone, actor: builder, subject: action, kind: .action))
+            == "Builder One reported that the action was done.")
+        #expect(sentence(event(.actionMarkedDone, subject: action, kind: .action, actorKind: .owner))
+            == "You marked the action done.")
+        #expect(sentence(event(.actionStopped, subject: action, kind: .action, actorKind: .app))
+            == "The action was stopped.")
+        #expect(sentence(event(.actionOverturnRecorded, subject: action, kind: .action, actorKind: .owner))
+            == "You overturned the approval. The action was already done, so nothing changed.")
+    }
+
+    @Test("content deletion distinguishes task and project even with no names")
+    func contentDeletion() {
+        let task = event(.contentDeleted, actorKind: .owner)
+        let project = EventRecord(
+            id: UUID(), workspaceID: UUID(), seq: 2, at: task.at, type: .contentDeleted,
+            actorKind: .owner, projectID: UUID())
+        #expect(sentence(task) == "You deleted the task’s content.")
+        #expect(sentence(project) == "You deleted the project’s content.")
+    }
+
+    @Test("Activity can format other tasks' events together without attributing a stop to the wrong task")
+    func interleavedTasks() {
+        let otherTaskID = UUID()
+        let events = [
+            Fixtures.event(.taskClaimed, seq: 1, taskID: taskID, actor: builder),
+            Fixtures.event(.taskReturned, seq: 2, taskID: otherTaskID, actorKind: .owner),
+            Fixtures.event(.taskReturned, seq: 3, taskID: taskID, actorKind: .owner),
+        ]
+        let lines = TaskLog.entries(events: events, names: names, criteria: []).map(\.text)
+        #expect(lines == [
+            "Builder One took the task.",
+            "The task went back to Backlog.",
+            "The agent stopped and the task went back to Backlog.",
+        ])
     }
 
     @Test("every event type gets a sentence in plain words, with nothing of the engine's showing")
@@ -173,6 +232,7 @@ struct TaskLogTests {
                 ]))
             let line = text ?? ""
             #expect(!line.isEmpty, "\(type)")
+            #expect(line != "The task was updated.", "\(type)")
             #expect(BannedTerms.found(in: line).isEmpty, "\(type): \(line)")
             #expect(!line.contains("_") && !line.contains("{"), "\(type): \(line)")
         }

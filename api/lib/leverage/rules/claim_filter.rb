@@ -10,6 +10,7 @@ module Leverage
     #            round, the rule's current version), and not overridden: a
     #            claim would reuse the stored failure (L421). An overridden
     #            failure is a task the seat may claim (RD-14 puts it first).
+    #            Also skip tasks in projects at budget while the rule is on.
     #   reviews  those the provider rule keeps from the seat (RD-50).
     #
     # The tasks a seat ever held are left out of its reviews by Eligibility
@@ -28,23 +29,38 @@ module Leverage
         raise ArgumentError, "kind must be :task or :review, got #{kind.inspect}" unless %i[task review].include?(kind)
 
         seat = Seat.find_by(id: seat_id)
-        tasks = seat && kind == :task ? failed_task_ids(seat) : []
+        tasks = seat && kind == :task ? failed_task_ids(seat) | budget_task_ids(seat) : []
         reviews = seat && kind == :review ? refused_review_ids(seat) : []
         Gating::ClaimFilter.new(excluded_task_ids: tasks, excluded_review_ids: reviews)
       end
 
       def failed_task_ids(seat)
-        blocking = Catalog.at(seat.workspace_id, HOOK).select { |entry| entry.version.on_fail == "block" }
-          .map { |entry| entry.version.id }
+        blocking = Catalog.at(seat.workspace_id, HOOK).map(&:version)
+          .select { |version| version.on_fail == "block" }.index_by(&:id)
         return [] if blocking.empty?
 
         rows = RuleCheck.where(workspace_id: seat.workspace_id, hook: HOOK, subject_kind: "seat", subject_id: seat.id,
-          result: "failed", overridden_at: nil, rule_version_id: blocking).pluck(:task_id, :round, :input_hash)
+          result: "failed", overridden_at: nil, rule_version_id: blocking.keys)
+          .pluck(:task_id, :round, :input_hash, :rule_version_id)
         tasks = Task.where(id: rows.map(&:first)).index_by(&:id)
-        rows.filter_map do |task_id, round, input_hash|
+        rows.filter_map do |task_id, round, input_hash, version_id|
           task = tasks[task_id]
-          task_id if task && round == task.round && input_hash == ClaimGate.hash_for(task, seat.id)
+          next unless task && round == task.round && input_hash == ClaimGate.hash_for(task, seat.id)
+
+          task_id if Scope.covers?(blocking.fetch(version_id), task)
         end.uniq
+      end
+
+      def budget_task_ids(seat)
+        policy = Catalog.at(seat.workspace_id, "cost.reported")
+          .find { |entry| entry.version.checker_function == "pause_project_at_budget" }
+        return [] unless policy
+
+        projects = Checkers::PauseProjectAtBudget.projects_at_budget(seat.workspace_id)
+        tasks = Task.where(workspace_id: seat.workspace_id, state: "ready", project_id: projects.select(:id))
+        return tasks.ids if policy.version.scope_kind == "all_tasks"
+
+        tasks.filter_map { |task| task.id if Scope.covers?(policy.version, task) }
       end
 
       def refused_review_ids(seat)
@@ -57,7 +73,7 @@ module Leverage
         reviews.reject { |_, task_id| allowed.fetch(task_id) }.map(&:first)
       end
 
-      private_class_method :failed_task_ids, :refused_review_ids
+      private_class_method :failed_task_ids, :budget_task_ids, :refused_review_ids
     end
   end
 end

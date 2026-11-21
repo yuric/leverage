@@ -3,14 +3,16 @@ require_relative "../support/walk"
 
 # Step partition (PRD test 2, Steps and timing; milestone 2 plan EN-25):
 # for seeded random command sequences, each task's steps touch end to end
-# and sum to its lifetime. 300 walks of at most 100 steps over the
-# commands and timers of milestones 2 to 4 (Walk; milestone 3 plan HT-3:
+# and sum to its lifetime. 300 walks of at most 120 steps over the
+# commands and timers of milestones 2 to 5 (Walk; milestone 3 plan HT-3:
 # the twelve new commands, the credential timer and a credential whose
 # reset time the walk moves; milestone 4 plan RT-3: the twenty new
 # commands and timers, a rule set drawn per walk, an orchestrator that
 # answers drawn verdicts or none, a planner, and a step for each row of
-# rule 11's table); SEED and WALKS override, and a failure prints the seed
-# and the walk. The same walks also check the replay (test 1) and the log
+# rule 11's table; milestone 5 plan AT-3: questions, approvals, projects,
+# budgets and the choices in Needs you); SEED and WALKS override.
+# A failure prints the seed and the walk. The same walks also check the
+# replay (test 1) and the log
 # audit (L894, with RT-4's gate line), which a random sequence reaches in
 # more corners than a trace.
 #
@@ -18,7 +20,7 @@ require_relative "../support/walk"
 class StepPartitionTest < ActiveSupport::TestCase
   WALKS = Integer(ENV.fetch("WALKS", "300"), 10)
   SEED = Integer(ENV.fetch("SEED") { Random.new_seed.to_s }, 10) % 1_000_000_000
-  STEPS = 100
+  STEPS = 120
 
   # Milestone 3's commands and timers (its plan HT-3), which the walks must
   # reach and see completed.
@@ -128,7 +130,8 @@ class StepPartitionTest < ActiveSupport::TestCase
 
   # Fixed seeds, as COVERAGE_SEEDS: forty, because twenty walks seldom
   # time out a contract draft both in the queue and while it runs.
-  RULE_CHECK_SEEDS = (10_001..10_040)
+  # Seed 218 also reaches Check could not run with the milestone 5 draws.
+  RULE_CHECK_SEEDS = [ 218, *(10_001..10_040) ].freeze
 
   test "the walks complete milestone 4's commands, run its timers on due jobs and end waiting commands" do
     completed = Set.new
@@ -149,9 +152,47 @@ class StepPartitionTest < ActiveSupport::TestCase
     assert installed, "every walk starts with the seven shipped rules from the one-time write"
     assert_empty RULE_CHECKS - completed.to_a, "the walks never completed these"
     assert_equal [ %w[contract_draft queue], %w[contract_draft run], %w[rule_check queue], %w[rule_check run] ],
-      timed_out.to_a.sort, "the four job timers each time a job out"
+      timed_out.select { |kind, _due| %w[contract_draft rule_check].include?(kind) }.sort,
+      "each milestone 4 job timer times a job out"
     assert_empty %w[orchestrator_offline no_reviewer_eligible check_could_not_run] - items.to_a
     assert_empty RULE_11_REACHED - ends.to_a, "no walk ended a waiting command this way"
+  end
+
+  # AT-3: the app asks about each action and grants delayed leases from
+  # inside a different command. Those entries show up in events rather
+  # than as requests in the walk log.
+  QUESTIONS_AND_APPROVALS = %w[
+    approve_action stop_action start_action report_action_done waive_action mark_action_done offer_task_again
+    return_for_rework overturn_approval ask_question request_access answer_question overturn_answer grant_access
+    report_cost create_project edit_brief pause_project resume_project change_budget change_task_priority
+    change_task_project change_task_cap delete_content change_workspace_settings
+  ].freeze
+  # These draws reach owner, question and project outcomes alongside the
+  # busy-builder and action-completion path that starts the test below.
+  QUESTIONS_AND_APPROVALS_SEEDS = [ 10_075, 10_084, 10_088, 10_101, 10_105 ].freeze
+
+  test "the walks complete milestone 5's commands and run its timers on due jobs" do
+    commands = Set.new(QUESTIONS_AND_APPROVALS)
+    action_events = Set.new(%w[action.requested action.lease_granted])
+    timed_out = Set.new([ %w[approval queue], %w[approval run], %w[question queue], %w[question run] ])
+    walks = QUESTIONS_AND_APPROVALS_SEEDS.lazy.map { |seed| Walk.new(seed: seed, steps: STEPS).run }
+    finishing = Walk.new(seed: 10_121, steps: STEPS).run_finishing
+    assert_empty partition_problems(finishing.workspace_id, database_now), finishing.to_s
+    assert_empty Leverage::Replay.diff(finishing.workspace_id), finishing.to_s
+    assert_empty Leverage::LogAudit.call(finishing.workspace_id), finishing.to_s
+
+    [ finishing ].each.chain(walks).each do |walk|
+      commands.subtract(walk.log.select { |step| step.answer == "completed" }.map(&:command))
+      events = Event.where(workspace_id: walk.workspace_id)
+      action_events.subtract(events.where(type: action_events.to_a).distinct.pluck(:type))
+      timed_out.subtract(events.where(type: "job.timed_out").joins("JOIN jobs ON jobs.id = events.subject_id")
+        .pluck(Arel.sql("jobs.kind"), Arel.sql("CASE WHEN jobs.claimed_at IS NULL THEN 'queue' ELSE 'run' END")))
+      break if commands.empty? && action_events.empty? && timed_out.empty?
+    end
+    missing = { commands: commands.to_a, action_events: action_events.to_a, job_timeouts: timed_out.to_a }.reject do |_, outcomes|
+      outcomes.empty?
+    end
+    assert_empty missing, "the walks never reached these outcomes"
   end
 
   # The commands that withdrew a check of a waiting command (rule 11):
@@ -175,6 +216,17 @@ class StepPartitionTest < ActiveSupport::TestCase
     second = Walk.new(seed: SEED, steps: 20).run
     strip = ->(walk) { walk.log.map { |step| [ step.action, step.command, step.answer.gsub(/\h{8}-\h{4}-\S+/, "") ] } }
     assert_equal strip.call(first), strip.call(second)
+  end
+
+  test "a walk's diagnostic omits request content" do
+    walk = Walk.new(seed: 1)
+    text = "A made-up private question."
+    walk.log << Walk::Step.new(4, :holder_command, "ask_question", "builder", { "text" => text }, "completed")
+
+    diagnostic = walk.to_s
+    assert diagnostic.include?("ask_question by builder") && diagnostic.include?("-> completed"),
+      "the diagnostic should identify the command, caller and outcome"
+    refute diagnostic.include?(text), "the diagnostic disclosed request content"
   end
 
   test "the partition check finds steps that do not touch" do

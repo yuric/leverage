@@ -1,7 +1,7 @@
 require "digest"
 require "json"
 
-# A seeded random walk over the commands and timers of milestones 2 and 3
+# A seeded random walk over the commands and timers of milestones 2 to 5
 # (PRD test 2; milestone 2 plan EN-25, milestone 3 plan HT-3): owners add,
 # contract and cancel tasks and allow another round; builders claim,
 # acknowledge, start and pass criteria, submit, release and heartbeat;
@@ -30,6 +30,12 @@ require "json"
 # waiting command from outside); the orchestrator polls or stops polling;
 # and the sweep also runs the check and draft timers and the two
 # workspace timers.
+#
+# Milestone 5 (AT-3) draws contracts with outward actions, project
+# membership and budget caps. Builders ask questions, request access,
+# report spend and carry out approved actions. Orchestrators answer or
+# stay silent. An owner answers the choices in open Needs you items,
+# overturns decisions and changes project, task and workspace settings.
 #
 # Every command goes through Transitions.apply, so the whole log of the
 # walk's workspace is made by the engine: the helper is made by
@@ -63,9 +69,11 @@ class Walk
     claim_job: 5, job_result: 6, expire_job: 4, override_check: 2, rerun_check: 2, draft_contract: 2,
     add_rule: 1, save_rule: 1, switch_rule: 2, revert_rule: 1, remove_rule: 1, report_job_limit: 3,
     report_job_signed_out: 2, poll: 3, stop_polling: 1, report_run_stopped: 1, start_seat: 1,
-    new_helper_token: 1, remove_seat: 1, end_waiting: 6
+    new_helper_token: 1, remove_seat: 1, end_waiting: 6,
+    holder_command: 12, answer_needs_you: 12, review_decision: 4, project_command: 10,
+    task_settings: 5, workspace_settings: 2, delete_content: 3
   }.freeze
-  # The moments a custom rule is added at (RD-21), and the verdicts an
+  # The moments a custom rule is added at (RD-21, AP-1), and the verdicts an
   # orchestrator draws (nil: it answers none, and the job times out).
   # Submit and the pass are drawn twice as often: a task reaches them less
   # often than Ready or a claim, and rule 11's ends of a builder's and a
@@ -73,15 +81,19 @@ class Walk
   # details" gates every contract, so it is off in more walks than the
   # other shipped rules, for the walks to reach the later moments.
   MOMENTS = %w[task.before_ready task.before_claim task.before_submit task.before_submit task.before_done
-               task.before_done].freeze
+               task.before_done action.requested].freeze
   OFF = { "specific_details" => 0.6 }.freeze
   VERDICTS = [ "passed", "passed", "failed", nil ].freeze
-  # The job timers and the workspace timers the sweep runs (milestone 4).
-  JOB_TIMERS = %w[check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout].freeze
+  APPROVALS = [ "approve", "approve", "stop", "pass_to_owner", nil ].freeze
+  QUESTION_BASES = [ "record", "decision", "passed_on", nil ].freeze
+  JOB_TIMERS = Leverage::Timers::JOB_TIMERS.keys.freeze
   WORKSPACE_TIMERS = %w[orchestrator_offline reviewer_eligibility].freeze
   RELEASE_REASONS = %w[unable_to_continue not_suited_to_this_seat stopping].freeze
   MAXIMUM_TASKS = 8
   LIVE_TASKS = 3
+  MAXIMUM_PROJECTS = 2
+  CAP_AMOUNTS = [ nil, 0.10, 1.00 ].freeze
+  SPEND_AMOUNTS = [ 0, 0.01, 0.10, 1.00 ].freeze
   # The logins the helper adds, in order (their positions): the builders on
   # logins run on the first two, the reviewer on a login on the third. So
   # the first builder has three candidates, the second two and the
@@ -125,10 +137,45 @@ class Walk
     @spare = connect("builder", 3)
     @builders << @spare
     draw_rules
-    @steps.times { |index| send(pick, index) }
+    yield if block_given?
+    first = log.empty? ? 0 : log.last.index + 1
+    (first...@steps).each { |index| send(pick, index) }
     self
   rescue StandardError => error
-    raise Failed, "#{error.class}: #{error.message}\n#{self}", error.backtrace
+    raise Failed, "#{error.class}\n#{self}", error.backtrace, cause: nil
+  end
+
+  # Begin a seeded walk with a busy-builder handoff, an approval job
+  # that misses while claimed, and two ways of completing an action.
+  # Prep commands use the same real pipeline and count as walk steps.
+  def run_finishing
+    run do
+      use_guided_rules("orchestrator_approves_actions")
+      builder = @builders.fetch(2)
+      task = guided_contract([
+        { "kind" => "publish", "description" => "Made-up first action." },
+        { "kind" => "send", "description" => "Made-up second action." }
+      ])
+      guided("claim", builder)
+      guided_step { |index| build(index, builder) } until task.reload.state == "in_review"
+      guided_pass_review
+
+      # The task is awaiting approval and its previous builder takes a
+      # different task, so approval does not immediately grant its lease.
+      other = guided_contract([])
+      guided("claim", builder)
+      guided("claim_job", @orchestrator)
+      expire_guided_job
+      2.times { guided_approve_job }
+
+      guided("release", builder, "id" => other.id, "reason" => "stopping")
+      guided_step { |index| acknowledge_as(index, builder, task.reload) }
+      first, second = Leverage::Actions.for_task(task).to_a
+      guided("start_action", builder, "id" => task.id, "aid" => first.id)
+      guided("report_action_done", builder, "id" => task.id, "aid" => first.id)
+      guided("release", builder, "id" => task.id, "reason" => "stopping")
+      guided("mark_action_done", @owner, "id" => second.id)
+    end
   end
 
   # A walk ended by an error that is not a refusal, a 404 or a 422.
@@ -136,12 +183,64 @@ class Walk
 
   def to_s
     lines = log.map do |step|
-      "  #{step.index}: #{step.action} #{step.command} by #{step.caller} #{step.params.to_json} -> #{step.answer}"
+      "  #{step.index}: #{step.action} #{step.command} by #{step.caller} -> #{step.answer}"
     end
     ([ "walk with seed #{seed} (SEED=#{seed} reruns it as the first walk):" ] + lines).join("\n")
   end
 
   private
+
+  # Set up rare starting paths with the same commands the random walk
+  # uses, then let the seed draw the remaining steps normally.
+  def use_guided_rules(key)
+    rules.each do |rule|
+      enabled = rule.key == key
+      next if rule.enabled == enabled
+
+      guided(enabled ? "enable_rule" : "disable_rule", @owner, "id" => rule.id)
+    end
+  end
+
+  def guided_contract(actions)
+    guided("add_task", @owner, "title" => "Made-up coverage task", "goal" => "A made-up goal.", "state" => "backlog")
+    task = tasks.last
+    guided("complete_contract", @owner, contract(task).merge("actions" => actions, "budget_cap" => nil))
+    task
+  end
+
+  def guided_pass_review
+    reviewer = @reviewers.last
+    guided("claim_review", reviewer)
+    review = review_of(reviewer)
+    guided("acknowledge_review_briefing", reviewer, "id" => review.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(review, reviewer))
+    guided("pass_review", reviewer, "id" => review.id, "verdict" => "passed", "failed_criteria" => [],
+      "notes" => "Made-up notes.", "tokens" => 10, "spend" => 0)
+  end
+
+  def guided_approve_job
+    guided("claim_job", @orchestrator)
+    job = job_of(@orchestrator)
+    fields = { "decision" => "approve", "reason" => "A made-up reason." }
+    guided("submit_job_result", @orchestrator, "id" => job.id, "result" => fields, "tokens" => 10, "spend" => 0)
+  end
+
+  def expire_guided_job
+    make_job_due(log.last.index + 1, job_of(@orchestrator))
+    sweep(log.last.index + 1)
+  end
+
+  def guided(name, caller, params = {})
+    guided_step { |index| command(index, :guided, name, caller, params) }
+  end
+
+  def guided_step
+    index = log.empty? ? 0 : log.last.index + 1
+    raise "guided steps exceeded the walk length" if index >= @steps
+
+    yield index
+    raise "guided step did not complete" unless log.last.answer == "completed"
+  end
 
   def pick
     total = ACTIONS.values.sum
@@ -160,6 +259,8 @@ class Walk
 
   def tasks = Task.where(workspace_id: workspace_id).order(:created_at, :id).to_a
   def live_tasks = tasks.reject { |task| %w[done cancelled].include?(task.state) }
+
+  def projects = Project.where(workspace_id: workspace_id, content_deleted_at: nil).order(:created_at, :id).to_a
 
   def held_by(seat) = Task.find_by(workspace_id: workspace_id, holder_seat_id: seat.id)
 
@@ -194,7 +295,8 @@ class Walk
     return sweep(index) if tasks.size >= MAXIMUM_TASKS
 
     command(index, :add_task, "add_task", @owner, "title" => "Made-up task #{index}", "goal" => "A made-up goal.",
-      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "imaginarium" : "backlog")
+      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "imaginarium" : "backlog",
+      "project_id" => one([ nil, *projects ])&.id)
   end
 
   def complete_contract(index)
@@ -212,7 +314,14 @@ class Walk
     end
     { "id" => task.id, "title" => task.title || "Made-up task", "goal" => task.goal || "A made-up goal.",
       "details" => "Made-up details.", "criteria" => builds + [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
-      "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
+      "actions" => action_definitions, "minimum_strength_rank" => nil, "budget_cap" => one(CAP_AMOUNTS),
+      "work_reference" => nil }
+  end
+
+  def action_definitions
+    Array.new(@random.rand(3)) do |number|
+      { "kind" => one(%w[publish pay send delete]), "description" => "Made-up action #{number + 1}." }
+    end
   end
 
   def cancel(index)
@@ -237,28 +346,52 @@ class Walk
   # review, acknowledges it and gives a verdict.
   def progress(index)
     useful = []
-    backlog = tasks.select { |task| task.state == "backlog" }
-    useful << -> { complete_contract(index) } if backlog.any?
-    useful << -> { add_task(index) } if live_tasks.size < LIVE_TASKS && tasks.size < MAXIMUM_TASKS
-    ready = tasks.any? { |task| task.state == "ready" }
+    underway = []
+    all = tasks
+    useful << -> { complete_contract(index) } if all.any? { |task| task.state == "backlog" }
+    useful << -> { add_task(index) } if live_tasks.size < LIVE_TASKS && all.size < MAXIMUM_TASKS
+    ready = all.any? { |task| task.state == "ready" }
     @builders.each do |seat|
-      useful << -> { build(index, seat) } if ready || held_by(seat)
+      held = held_by(seat)
+      next unless ready || held
+
+      move = -> { build(index, seat) }
+      useful << move
+      underway << move if held && !Leverage::Holds.held?(held) && %w[working finishing].include?(held.state)
     end
     unclaimed = open_reviews.any? { |review| review.reviewer_seat_id.nil? }
     @reviewers.each do |seat|
-      useful << -> { review(index, seat) } if unclaimed || review_of(seat)
+      held = review_of(seat)
+      next unless unclaimed || held
+
+      move = -> { review(index, seat) }
+      useful << move
+      underway << move
     end
     job_seats.each do |seat|
-      useful << -> { work_job(index, seat) } if job_of(seat) || queued_jobs(seat.role).any?
+      move = -> { work_job(index, seat) }
+      job = job_of(seat)
+      queued = job ? [] : queued_jobs(seat.role)
+      next unless job || queued.any?
+
+      useful << move
+      underway << move if (job ? [ job ] : queued).any? { |each| each.kind == "approval" }
     end
     useful << -> { answer_hold(index) } if rule_holds.any?
-    useful.empty? ? sweep(index) : one(useful).call
+    needs_you = owner_offers
+    useful << -> { take_owner_offer(index, needs_you) } if needs_you.any?
+    # Give in-flight work a better chance of reaching a verdict and
+    # Finishing before other commands interrupt it.
+    choices = underway.any? && chance(0.60) ? underway : useful
+    choices.empty? ? sweep(index) : one(choices).call
   end
 
   def build(index, seat)
     task = held_by(seat)
     return command(index, :progress, "claim", seat, {}) unless task
     return acknowledge_as(index, seat, task) unless Leverage::Briefing.acknowledgement(task, seat: seat) == :current
+
+    return finish(index, seat, task) if task.state == "finishing"
 
     criterion = build_criteria(task).reject { |candidate| candidate.state == "passed" }.first
     return command(index, :progress, "submit", seat, "id" => task.id, "handoff_note" => "A made-up note.",
@@ -268,6 +401,15 @@ class Walk
     params = { "id" => task.id, "cid" => criterion.id }
     params["evidence"] = { "kind" => "link", "value" => "https://example.test/work/#{index}" } if name == "pass_criterion"
     command(index, :progress, name, seat, params)
+  end
+
+  def finish(index, seat, task)
+    action = Leverage::Actions.first_approved_open(task)
+    return heartbeat(index) unless action
+    return command(index, :finish, "release", seat, "id" => task.id, "reason" => "stopping") if chance(0.30)
+
+    name = action.state == "started" ? "report_action_done" : "start_action"
+    command(index, :finish, name, seat, "id" => task.id, "aid" => action.id)
   end
 
   def acknowledge_as(index, seat, task)
@@ -468,17 +610,35 @@ class Walk
   # out), or a contract for a draft.
   def answer_job(index, seat)
     job = job_of(seat)
-    if job.kind == "contract_draft"
-      task = Task.find(job.task_id)
-      result = contract(task).except("id", "work_reference", "minimum_strength_rank", "budget_cap")
-    else
-      verdict = one(VERDICTS)
-      return @log << Step.new(index, :job_result, "none", seat.role, { "job" => job.id }, "no answer") unless verdict
-
-      result = { "result" => verdict, "reason" => "A made-up reason." }
+    result = drawn_job_result(job)
+    unless result
+      @log << Step.new(index, :job_result, "none", seat.role, { "job" => job.id }, "no answer")
+      return
     end
+
     command(index, :job_result, "submit_job_result", seat, "id" => job.id, "result" => result, "tokens" => 10,
-      "spend" => 0.01)
+      "spend" => one(SPEND_AMOUNTS))
+  end
+
+  def drawn_job_result(job)
+    case job.kind
+    when "contract_draft"
+      contract(Task.find(job.task_id)).except("id", "work_reference", "minimum_strength_rank", "budget_cap")
+    when "question"
+      basis = one(QUESTION_BASES)
+      return unless basis
+      return { "outcome" => "passed_on", "answer" => nil, "basis" => nil } if basis == "passed_on"
+
+      { "outcome" => "answered", "answer" => "A made-up answer.", "basis" => basis }
+    when "approval"
+      decision = one(APPROVALS)
+      { "decision" => decision, "reason" => "A made-up reason." } if decision
+    when "rule_check"
+      verdict = one(VERDICTS)
+      { "result" => verdict, "reason" => "A made-up reason." } if verdict
+    else
+      raise ArgumentError, "unexpected job kind #{job.kind}"
+    end
   end
 
   # A queued or claimed job reaches its queue or run due time (EN-18): its
@@ -487,6 +647,10 @@ class Walk
     job = one(in_log_order(Job.where(workspace_id: workspace_id, state: %w[queued claimed]).to_a))
     return progress(index) unless job
 
+    make_job_due(index, job)
+  end
+
+  def make_job_due(index, job)
     kind = job.state == "queued" ? :queue : :run
     due = Leverage::Timers.job_due_at(job, kind)
     return progress(index) unless due
@@ -788,6 +952,127 @@ class Walk
     command(index, :change_seat, "change_seat", @owner, params)
   end
 
+  # --- questions, approvals, projects and settings (milestone 5) ------------
+
+  def holder_command(index)
+    holders = @builders.filter_map do |seat|
+      task = held_by(seat)
+      [ seat, task ] if task && %w[working finishing].include?(task.state)
+    end
+    seat, task = one(holders)
+    return progress(index) unless task
+
+    name, fields = one([
+      [ "ask_question", { "text" => "A made-up question.", "assumption" => "A made-up assumption.", "blocking" => chance(0.5) } ],
+      [ "request_access", { "description" => "Made-up access." } ],
+      [ "report_cost", { "tokens" => 1 + @random.rand(50), "spend" => one(SPEND_AMOUNTS) } ]
+    ])
+    command(index, :holder_command, name, seat, fields.merge("id" => task.id))
+  end
+
+  # The same choices the app reads, including the guard on Offer again.
+  def owner_offers
+    items = Leverage::Reads::Inbox.call(workspace_id).fetch(:items)
+    items.select { |item| %w[question_passed_on approval stopped_action unconfirmed_action
+                             access_request task_budget_reached project_budget_reached].include?(item.fetch(:kind)) }
+      .flat_map { |item| item.fetch(:choices).map { |choice| [ item, choice ] } }
+  end
+
+  def answer_needs_you(index)
+    offers = owner_offers
+    offers.empty? ? progress(index) : take_owner_offer(index, offers)
+  end
+
+  def take_owner_offer(index, offers)
+    recoveries = offers.select { |_item, choice| %w[offer_again mark_done].include?(choice) }
+    item, choice = one(recoveries.any? && chance(0.75) ? recoveries : offers)
+    name, params = owner_request(item, choice)
+    command(index, :answer_needs_you, name, @owner, params)
+  end
+
+  def owner_request(item, choice)
+    about_id = item.fetch(:about_id)
+    facts = item.fetch(:facts)
+    action_id = facts["action_id"] || Array(facts["action_ids"]).first
+    case choice
+    when "answer" then [ "answer_question", { "id" => facts.fetch("question_id"), "answer" => "A made-up owner answer." } ]
+    when "approve", "stop", "waive" then [ "#{choice}_action", { "id" => action_id } ]
+    when "mark_done" then [ "mark_action_done", { "id" => action_id } ]
+    when "offer_again" then [ "offer_task_again", { "id" => about_id } ]
+    when "return_for_rework"
+      criteria = build_criteria(Task.find(about_id))
+      [ choice, { "id" => about_id, "criterion_ids" => criteria.select { chance(0.5) }.map(&:id) } ]
+    when "override_once" then [ "override_check", { "id" => facts.fetch("rule_check_id"), "reason" => "A made-up reason." } ]
+    when "mark_access_granted" then [ "grant_access", { "id" => about_id } ]
+    when "raise_cap" then [ "change_task_cap", { "id" => about_id, "budget_cap" => nil } ]
+    when "change_budget" then [ choice, { "id" => about_id, "budget" => nil } ]
+    when "resume_project", "cancel" then [ choice, { "id" => about_id } ]
+    else raise ArgumentError, "unexpected Needs you choice #{choice}"
+    end
+  end
+
+  def review_decision(index)
+    questions = in_log_order(Question.where(workspace_id: workspace_id, outcome: "answered", answered_by_kind: "seat").to_a)
+    actions = tasks.flat_map do |task|
+      Leverage::Actions.for_task(task).where(state: %w[approved started done], approved_by_kind: "seat").to_a
+    end
+    decision = one(actions.any? && chance(0.7) ? actions : questions + actions)
+    return progress(index) unless decision
+
+    name = decision.is_a?(Question) ? "overturn_answer" : "overturn_approval"
+    command(index, :review_decision, name, @owner, "id" => decision.id)
+  end
+
+  def project_command(index)
+    all = projects
+    room = Project.where(workspace_id: workspace_id).count < MAXIMUM_PROJECTS
+    if room && (all.empty? || chance(0.4))
+      return command(index, :project_command, "create_project", @owner, "name" => "Made-up project #{index}",
+        "goal" => "A made-up project goal.", "budget" => one(CAP_AMOUNTS))
+    end
+
+    project = one(all)
+    return progress(index) unless project
+
+    name, fields = one([
+      [ project.paused? ? "resume_project" : "pause_project", {} ],
+      [ "change_budget", { "budget" => one(CAP_AMOUNTS) } ],
+      [ "edit_brief", { "entries" => [ { "kind" => one(%w[rule decision lesson]), "text" => "Made-up brief #{index}." } ] } ]
+    ])
+    command(index, :project_command, name, @owner, fields.merge("id" => project.id))
+  end
+
+  def task_settings(index)
+    task = one(live_tasks) || one(tasks)
+    return progress(index) unless task
+
+    name, fields = one([
+      [ "change_task_priority", { "priority" => one(%w[low normal high]) } ],
+      [ "change_task_project", { "project_id" => one([ nil, *projects ])&.id } ],
+      [ "change_task_cap", { "budget_cap" => one(CAP_AMOUNTS) } ]
+    ])
+    command(index, :task_settings, name, @owner, fields.merge("id" => task.id))
+  end
+
+  def workspace_settings(index)
+    fields = one([
+      { "lease_length_seconds" => one([ 300, 900 ]) },
+      { "check_queue_timeout_seconds" => one([ 30, 600 ]) },
+      { "check_run_timeout_seconds" => one([ 60, 600 ]) },
+      { "recovery_time_ceiling_seconds" => one([ nil, 180 ]) }
+    ])
+    command(index, :workspace_settings, "change_workspace_settings", @owner, fields)
+  end
+
+  def delete_content(index)
+    ended = tasks.select { |task| %w[done cancelled].include?(task.state) && task.content_deleted_at.nil? }
+    target = one(ended + projects)
+    return progress(index) unless target
+
+    key = target.is_a?(Task) ? "task_id" : "project_id"
+    command(index, :delete_content, "delete_content", @owner, key => target.id)
+  end
+
   # --- the helper (milestone 3) -------------------------------------------------
 
   # The run on a login meets a limit (with a reset time, or now and then
@@ -961,7 +1246,7 @@ class Walk
     outcome = T.apply(request)
     outcome.refused? ? "refused #{outcome.refusal.code}" : outcome.outcome.to_s
   rescue T::NotFound, T::Invalid => error
-    "rejected #{error.class.name.demodulize}: #{error.message}"
+    "rejected #{error.class.name.demodulize}"
   end
 
   def caller_label(caller)

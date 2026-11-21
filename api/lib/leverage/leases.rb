@@ -49,13 +49,13 @@ module Leverage
       subject.update!(lease_due_at: nil, lease_time_left_while_paused: nil)
     end
 
-    # Stops a running lease's clock, keeping the time it had left (none for
-    # a lease already past its due time). A paused lease, or no lease, is
+    # Stops a running lease's clock at the hold's effective time, keeping
+    # the time it had left then. A paused lease, or no lease, is
     # left as it is.
-    def pause(ctx, subject)
+    def pause(ctx, subject, at: ctx.at)
       return unless subject.lease_due_at && !paused?(subject)
 
-      left = [ subject.lease_due_at - ctx.at, 0 ].max
+      left = [ subject.lease_due_at - at, 0 ].max
       subject.update!(lease_due_at: nil, lease_time_left_while_paused: left.seconds)
     end
 

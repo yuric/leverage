@@ -30,11 +30,14 @@ public struct BoardTask: Codable, Equatable, Sendable {
     /// The reason of the failed check behind an open `contract_incomplete`
     /// hold, or nil (RD-27). Text a model wrote: shown as data.
     public let checkReason: String?
+    public let waitsForBuilder: Bool
+    public let waitsForStrongerAgent: Bool
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
         waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil,
-        checking: Bool = false, checkReason: String? = nil
+        checking: Bool = false, checkReason: String? = nil,
+        waitsForBuilder: Bool = false, waitsForStrongerAgent: Bool = false
     ) {
         self.task = task
         self.blocked = blocked
@@ -44,6 +47,8 @@ public struct BoardTask: Codable, Equatable, Sendable {
         self.inboxItem = inboxItem
         self.checking = checking
         self.checkReason = checkReason
+        self.waitsForBuilder = waitsForBuilder
+        self.waitsForStrongerAgent = waitsForStrongerAgent
     }
 
     enum CodingKeys: String, CodingKey {
@@ -53,6 +58,8 @@ public struct BoardTask: Codable, Equatable, Sendable {
         case waitingUntil = "waiting_until"
         case inboxItem = "inbox_item"
         case checkReason = "check_reason"
+        case waitsForBuilder = "waits_for_builder"
+        case waitsForStrongerAgent = "waits_for_stronger_agent"
     }
 }
 
@@ -200,6 +207,7 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let pending: PendingState?
     /// Where a contract draft stands (RD-37).
     public let draft: DraftState
+    public let anyActionStarted: Bool
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
@@ -207,7 +215,8 @@ public struct TaskPage: Codable, Equatable, Sendable {
         inboxItems: [InboxItem] = [], events: [EventRecord] = [], names: [LogName] = [],
         recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int,
         steps: [TaskStepRow] = [], lifetimeSeconds: Double = 0, asOf: Date = Date(timeIntervalSince1970: 0),
-        ruleChecks: [RuleCheckRow] = [], pending: PendingState? = nil, draft: DraftState = .none
+        ruleChecks: [RuleCheckRow] = [], pending: PendingState? = nil, draft: DraftState = .none,
+        anyActionStarted: Bool = false
     ) {
         self.task = task
         self.criteria = criteria
@@ -229,6 +238,7 @@ public struct TaskPage: Codable, Equatable, Sendable {
         self.ruleChecks = ruleChecks
         self.pending = pending
         self.draft = draft
+        self.anyActionStarted = anyActionStarted
     }
 
     enum CodingKeys: String, CodingKey {
@@ -240,6 +250,7 @@ public struct TaskPage: Codable, Equatable, Sendable {
         case waitingForCredentialID = "waiting_for_credential_id"
         case waitingUntil = "waiting_until"
         case recoveryTimes = "recovery_times"
+        case anyActionStarted = "any_action_started"
         case reviewerSeatExists = "reviewer_seat_exists"
         case asOfSeq = "as_of_seq"
     }
@@ -371,20 +382,34 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     }
 }
 
+public enum LandingPromptConnection: String, Codable, CaseIterable, Sendable {
+    case http
+    case mcp
+}
+
 /// `LandingPrompt`: the text an agent that connects on its own starts
 /// from (Q-15). It never holds the seat's token.
 public struct LandingPrompt: Codable, Equatable, Sendable {
     public let text: String
     public let checkIntervalMinutes: Int
+    public let connection: LandingPromptConnection
 
-    public init(text: String, checkIntervalMinutes: Int = 20) {
+    public init(text: String, checkIntervalMinutes: Int = 20, connection: LandingPromptConnection = .http) {
         self.text = text
         self.checkIntervalMinutes = checkIntervalMinutes
+        self.connection = connection
     }
 
     enum CodingKeys: String, CodingKey {
-        case text
+        case text, connection
         case checkIntervalMinutes = "check_interval_minutes"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        checkIntervalMinutes = try container.decode(Int.self, forKey: .checkIntervalMinutes)
+        connection = try container.decodeIfPresent(LandingPromptConnection.self, forKey: .connection) ?? .http
     }
 }
 

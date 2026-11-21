@@ -20,8 +20,9 @@ module Leverage
       # claimant holds the task in Ready with no lease, RE-5, and releasing
       # it writes task.released with its reason and leaves it Ready with no
       # holder). PendingTransitions.cancel withdraws its checks and jobs
-      # before task.released. Release from Finishing cannot be reached
-      # before milestone 5 (SC-3, HS-3).
+      # before task.released. In Finishing the lease ends and the task
+      # keeps its builder seat. Finishing.lose_builder handles the
+      # approved actions that still need the owner's confirmation (L147).
       #
       # 422 invalid for a reason only the app chooses (seat_disabled,
       # seat_removed).
@@ -45,11 +46,13 @@ module Leverage
           PendingTransitions.cancel(ctx, pending, "invalid_state") if pending
           held = Holds.held?(@task)
           Leases.end_lease(ctx, @task)
-          @task.update!(state: @row.fetch("to") || @task.state, holder_seat_id: nil, builder_seat_id: nil,
-            resume_pending_since: nil)
-          wait_cause = Candidates.wait_cause(@task, ctx.at) if @task.state == "ready"
+          to = @row.fetch("to")
+          builder = to == "ready" ? { builder_seat_id: nil } : {}
+          @task.update!(state: to, holder_seat_id: nil, resume_pending_since: nil, **builder)
+          wait_cause = Candidates.wait_cause(@task, ctx.at) if to == "ready"
           released = ctx.emit("task.released", task: @task,
             payload: { reason: @reason, wait_cause: (wait_cause unless held) })
+          Finishing.lose_builder(ctx, @task, cause: released) if to == "finishing"
           Holds.close_seat_bound(ctx, @task, cause: released, wait_cause: wait_cause)
           @result = nil
         end

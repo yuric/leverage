@@ -52,10 +52,12 @@ module Leverage
       # The checks a button is offered on (RD-28).
       LET_THROUGH = %w[failed error].freeze
       ENDED = %w[done cancelled].freeze
+      ACTION_STARTED = %w[action.started action.reported_done action.marked_done].freeze
 
       def page(workspace_id, task, as_of_seq)
         criteria = Criterion.where(task_id: task.id, removed_at: nil).order(:position, :id).to_a
-        evidence = Evidence.where(criterion_id: criteria.map(&:id)).order(:created_at, :id).group_by(&:criterion_id)
+        evidence = Evidence.where(criterion_id: criteria.map(&:id)).where.not(value: nil)
+          .order(:created_at, :id).group_by(&:criterion_id)
         reviews = Review.where(task_id: task.id).order(:round, :created_at, :id).to_a
         events = Event.where(workspace_id: workspace_id, task_id: task.id).order(:seq).to_a
         items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task.id, state: "open")
@@ -67,12 +69,13 @@ module Leverage
 
         { task: Shapes.task_summary(task),
           criteria: criteria.map { |criterion| Shapes.criterion(criterion, evidence.fetch(criterion.id, [])) },
-          actions: Action.where(task_id: task.id).order(:position, :id).map { |action| Shapes.action(action) },
-          questions: Question.where(task_id: task.id).order(:asked_at, :id).map { |question| Shapes.question(question) },
+          actions: actions(task, items, events),
+          any_action_started: events.any? { |event| ACTION_STARTED.include?(event.type) },
+          questions: ::Question.where(task_id: task.id).order(:asked_at, :id).map { |question| Question.shape(question) },
           holds: holds.map { |hold| Shapes.hold(hold) },
           **waiting.fetch(task.id),
           reviews: reviews.map { |review| Shapes.review(review) },
-          inbox_items: Board.inbox_items(items),
+          inbox_items: Board.inbox_items(workspace_id, items),
           events: events.map { |event| Shapes.event(event) },
           names: names(workspace_id, task, reviews, events),
           recovery_times: RecoveryTimes.call(workspace_id, task_id: task.id),
@@ -82,6 +85,18 @@ module Leverage
           rule_checks: rule_checks(task, holds),
           pending: pending(Board.pending_transitions(workspace_id, [ task.id ])[task.id]),
           draft: draft(task) }
+      end
+
+      def actions(task, items, events)
+        approved = events.select { |event| event.type == "action.approved" }.index_by(&:subject_id)
+        stopped = items.select { |item| item.kind == "stopped_action" }.to_h do |item|
+          item.facts.values_at("action_id", "rule_check_id")
+        end
+        Action.where(task_id: task.id).order(:position, :id).map do |action|
+          Shapes.action(action).merge(position: action.position,
+            approved_at: (Shapes.time(approved[action.id]&.at) if action.approved_by_kind),
+            stopped_by_rule_check_id: stopped[action.id])
+        end
       end
 
       # The checklist (RD-28): every rule check of the task.

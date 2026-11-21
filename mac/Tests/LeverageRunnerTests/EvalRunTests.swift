@@ -13,6 +13,8 @@ import Testing
 @Suite("EvalRunTests", .serialized)
 struct EvalRunTests {
     static let suite = "specific-details"
+    static let approvalSuite = "approves-actions"
+    static let approvalAction = "Send the made-up receipt to the test mailbox."
 
     final class Setup: @unchecked Sendable {
         let folder: TemporaryFolder
@@ -38,13 +40,37 @@ struct EvalRunTests {
             try writeInputs(ids: (1...cases).map { String(format: "%02d-made-up-case", $0) })
         }
 
-        func writeInputs(ids: [String], suite: String = EvalRunTests.suite) throws {
+        func writeInputs<Input: Encodable>(
+            ids: [String], suite: String, makeInput: () -> Input
+        ) throws {
             let encoder = JSONEncoder()
             let entries = try ids.map { id -> [String: Any] in
-                let input = try JSONSerialization.jsonObject(with: encoder.encode(JobFixture.checkInput()))
+                let input = try JSONSerialization.jsonObject(with: encoder.encode(makeInput()))
                 return ["id": id, "input": input]
             }
             try JSONSerialization.data(withJSONObject: ["suite": suite, "cases": entries]).write(to: inputs)
+        }
+
+        func writeInputs(ids: [String], suite: String = EvalRunTests.suite) throws {
+            try writeInputs(ids: ids, suite: suite) { JobFixture.checkInput() }
+        }
+
+        func writeApprovalInputs(count: Int) throws {
+            let check = JobFixture.checkMaterial()
+            let description = EvalRunTests.approvalAction
+            let contract = ActionJobContract(
+                title: check.contract.title, goal: check.contract.goal, details: check.contract.details,
+                criteria: check.contract.criteria, actions: [.init(kind: .send, description: description)])
+            let material = ApprovalMaterial(
+                roleFile: check.roleFile, instruction: check.instruction,
+                action: .init(kind: .send, description: description, position: 1), contract: contract,
+                quoted: [.init(label: .evidence, text: JobFixture.evidence)])
+            try writeInputs(
+                ids: (1...count).map { String(format: "%02d-made-up-case", $0) },
+                suite: EvalRunTests.approvalSuite
+            ) {
+                ApprovalJobInput(actionID: UUID(), ruleCheckID: UUID(), taskID: UUID(), material: material)
+            }
         }
 
         /// A stand-in run's environment, with values of the parent that must
@@ -185,6 +211,96 @@ struct EvalRunTests {
         #expect(results.allSatisfy { Self.string($0["verdict"]) == "none" })
         #expect(results.suffix(2).allSatisfy { ($0["not_reached"] as? Bool) == true })
         #expect(try setup.prompts().count == 30)
+    }
+
+    // MARK: - Approval eval
+
+    @Test("the approval eval resolves the stand-in without starting it")
+    func resolveApprovalTool() async throws {
+        let setup = try Setup()
+        let status = await setup.run(
+            ["--provider", "claude", "--resolve-only"], environment: setup.environment(["LEVERAGE_EVAL": Self.approvalSuite]))
+        #expect(status == 0)
+        #expect(setup.lines == ["eval: claude: tool \(setup.tools.tool("claude").path)"])
+        #expect(try setup.tools.calls().isEmpty)
+    }
+
+    @Test("approval runs use the production prompt and decision parser in check mode")
+    func approvalDecisions() async throws {
+        let setup = try Setup(scenario: ["approval_decisions": ["APPROVE", "STOP", "NONE", "ASK_OWNER"]])
+        try setup.writeApprovalInputs(count: 3)
+        try #require(await setup.run(environment: setup.environment(["LEVERAGE_EVAL": Self.approvalSuite])) == 0)
+
+        let results = try setup.results()
+        try #require(results.count == 3)
+        #expect(results.map { Self.string($0["decision"]) } == ["approve", "stop", "ask_owner"])
+        #expect(results.allSatisfy { $0["verdict"] == nil })
+        #expect(results[1]["reason"] as? String == "The stand-in stopped it.")
+        #expect(results.map { Self.int($0["tool_runs"]) } == [1, 1, 2])
+        #expect(results.map { Self.int($0["tokens"]) } == [150, 150, 300])
+        let prompts = try setup.prompts()
+        try #require(prompts.count == 4)
+        for call in prompts {
+            let prompt = try #require(call.argv.dropFirst().first)
+            #expect(prompt.hasPrefix("LEVERAGE APPROVAL\n"))
+            #expect(prompt.contains(Self.approvalAction))
+            #expect(prompt.contains(JobFixture.evidence))
+            #expect(call.argv.suffix(2) == ["--tools", ""])
+            #expect(!FileManager.default.fileExists(atPath: call.cwd))
+        }
+        #expect(Set(prompts.map(\.cwd)).count == 4)
+    }
+
+    @Test("two unreadable approval replies leave no decision and the next case still runs")
+    func approvalRetryStops() async throws {
+        let setup = try Setup(scenario: ["approval_decisions": ["NONE", "NONE", "STOP"]])
+        try setup.writeApprovalInputs(count: 2)
+        try #require(await setup.run(environment: setup.environment(["LEVERAGE_EVAL": Self.approvalSuite])) == 0)
+
+        let results = try setup.results()
+        try #require(results.count == 2)
+        #expect(results.map { Self.string($0["decision"]) } == ["none", "stop"])
+        #expect(results[0]["reason"] is NSNull)
+        #expect(results.map { Self.int($0["tool_runs"]) } == [2, 1])
+        #expect(results.map { Self.int($0["tokens"]) } == [300, 150])
+        #expect(try setup.prompts().count == 3)
+    }
+
+    @Test("approval evals stop at their tool-run and retry ceilings", arguments: [36, 12])
+    func approvalCeilings(maximumToolRuns: Int) async throws {
+        let retries = maximumToolRuns == 36 ? 6 : 2
+        let setup = try Setup(scenario: ["approval_decisions": Array(repeating: "NONE", count: 60)])
+        try setup.writeApprovalInputs(count: maximumToolRuns - retries + 2)
+        let environment = setup.environment([
+            "LEVERAGE_EVAL": Self.approvalSuite,
+            "LEVERAGE_EVAL_MAX_TOOL_RUNS": String(maximumToolRuns),
+            "LEVERAGE_EVAL_MAX_SECOND_TRIES": String(retries),
+        ])
+        try #require(await setup.run(environment: environment) == 0)
+
+        let results = try setup.results()
+        let attempts = Array(repeating: 2, count: retries)
+            + Array(repeating: 1, count: maximumToolRuns - 2 * retries) + [0, 0]
+        #expect(results.map { Self.int($0["tool_runs"]) } == attempts)
+        #expect(results.allSatisfy { Self.string($0["decision"]) == "none" })
+        #expect(results.suffix(2).allSatisfy { ($0["not_reached"] as? Bool) == true })
+        #expect(try setup.prompts().count == maximumToolRuns)
+    }
+
+    @Test("out-of-range or malformed eval ceilings are refused before the tool starts",
+          arguments: [("37", "6"), ("36", "7"), ("0", "0"), ("12", "-1"), ("12", "two")])
+    func refusesInvalidCeilings(toolRuns: String, retries: String) async throws {
+        let setup = try Setup()
+        try setup.writeApprovalInputs(count: 1)
+        let environment = setup.environment([
+            "LEVERAGE_EVAL": Self.approvalSuite,
+            "LEVERAGE_EVAL_MAX_TOOL_RUNS": toolRuns,
+            "LEVERAGE_EVAL_MAX_SECOND_TRIES": retries,
+        ])
+        #expect(await setup.run(environment: environment) == 2)
+        #expect(setup.lines.contains { $0.contains("LEVERAGE_EVAL_MAX_") })
+        #expect(try setup.tools.calls().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: setup.out.path))
     }
 
     // MARK: - The tool and its environment

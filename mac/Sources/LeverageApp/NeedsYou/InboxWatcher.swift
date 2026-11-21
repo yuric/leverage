@@ -206,8 +206,9 @@ final class InboxWatcher {
         }
         guard !fresh.isEmpty || !settled.isEmpty else { return true }
 
-        let names = await ((try? await NeedsYouNames.read(from: owner).names) ?? NeedsYouNames())
+        let basicNames = await ((try? await NeedsYouNames.read(from: owner).names) ?? NeedsYouNames())
             .checkingOrchestrator(for: fresh, from: owner)
+        let names = (try? await basicNames.addingDetails(for: fresh, from: owner)) ?? basicNames
         var pending: [Announcement] = fresh.map {
             Announcement(
                 seq: $0.openedSeq, id: $0.id, title: NeedsYouWords.heading(for: $0, names: names),

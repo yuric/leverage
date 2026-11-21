@@ -131,11 +131,24 @@ class CredentialHoldReleaseTest < ActiveSupport::TestCase
     assert hold.reload.closed_at
   end
 
-  test "a task named by the sweep must be in a state the timer has a row for; Finishing is not served (HS-3)" do
-    finishing = scenario.finishing_task(builder: scenario.seat(role: "builder", credential: @claude_a))
+  test "the workspace sweep closes a due credential hold in Finishing and keeps its holder" do
+    builder = scenario.seat(role: "builder", credential: @claude_a)
+    task = scenario.finishing_task(builder: builder, actions: [ { kind: "send", state: "approved" } ])
+    scenario.limit_credential(@claude_a, reset_at: from_now(3600))
+    hold = scenario.hold(task, reason: "credential_limit", credential: @claude_a, item: false)
+    @claude_a.update_columns(limited_until: last_effective_at(task))
+
+    written = events_written do
+      assert_equal({ "released_task_ids" => [ task.id ] }, assert_completed(release_timer).result)
+    end
+
+    assert_equal [ [ "hold.closed", hold.id ] ], typed(written)
+    assert_equal [ "finishing", builder.id, @claude_a.id ], task.reload.attributes.values_at("state", "holder_seat_id", "credential_id")
+  end
+
+  test "a named task outside the timer's rows is refused" do
     ready = scenario.task(state: "ready")
 
-    assert_refused("invalid_state", release_timer("task_id" => finishing.id))
     assert_refused("invalid_state", release_timer("task_id" => ready.id))
     assert_raises(T::NotFound) { release_timer("task_id" => SecureRandom.uuid) }
   end

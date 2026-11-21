@@ -20,9 +20,9 @@ module Leverage
       #     contract_incomplete, a pass that became a failed review) is left
       #     as it is: the Mac app sends Complete contract again (RD-48).
       #
-      # Any other check, an overridden one, a check of a cancelled task, and
-      # a check at "before anything goes out" (approve_action's, milestone 5)
-      # are invalid_state.
+      # An override can approve the action stopped by this exact failed
+      # gate, or let an action waiting on this errored gate be checked again.
+      # An already overridden, final approval, or cancelled check is refused.
       #
       # Params: id (the rule check), reason.
       class OverrideCheck < Entry
@@ -30,6 +30,7 @@ module Leverage
         ANSWERED = %w[check_error claim_gate_failed rerun_limit].freeze
         CLAIM_HOOK = "task.before_claim".freeze
         ACTION_HOOK = "action.requested".freeze
+        CLEARED = %w[passed not_applicable withdrawn].freeze
         OVERRIDE_ONCE = "override_once".freeze
 
         def load(ctx)
@@ -49,11 +50,15 @@ module Leverage
         def perform(ctx)
           user = User.find_by!(id: ctx.caller_id, workspace_id: ctx.workspace.id)
           RuleChecks.override(ctx, @check, user: user, reason: @reason)
+          if @check.hook == ACTION_HOOK
+            override_action(ctx)
+            return
+          end
           answered_holds.each { |hold| Holds.close(ctx, hold: hold, task: @task, choice: OVERRIDE_ONCE) }
           pending = PendingTransition.find_by(id: @check.pending_transition_id, state: "pending")
           if pending
             trigger = Gating::Trigger.new(kind: :check_overridden, rule_check_id: @check.id)
-            PendingTransitions.reenter(ctx, pending, trigger) unless Holds.held?(@task)
+            CheckReentry.after(ctx, @check, trigger) unless Holds.held?(@task)
           else
             notify_refused_command(ctx)
           end
@@ -63,10 +68,55 @@ module Leverage
         private
 
         def overridable?
-          return false if @check.overridden_at || @task.nil? || @task.state == "cancelled" || @check.hook == ACTION_HOOK
+          return false if @check.overridden_at || @task.nil? || @task.state == "cancelled"
+          if @check.hook == ACTION_HOOK
+            return false unless @task.state == "finishing" && @check.round == @task.round && !Gate.approval_check?(@check) && action
+            return @check.result == "failed" && other_action_gates_cleared? if stopped_hold
+
+            return action.state == "requested" && @check.result == "error"
+          end
           return true if OVERRIDABLE.include?(@check.result)
 
           @check.result.nil? && answered_holds.any? { |hold| hold.reason == "rerun_limit" }
+        end
+
+        # Let this one failed gate through only when every other gate at
+        # the request was cleared. If another failed, the action stays
+        # stopped and the owner can waive it or send the task for rework.
+        def other_action_gates_cleared?
+          requested = Event.where(workspace_id: @task.workspace_id, task_id: @task.id, round: @task.round,
+            type: ACTION_HOOK, subject_kind: "action", subject_id: action.id).order(:seq).last
+          return false unless requested
+
+          others = Rules::Catalog.action_gate_ids(requested) - [ @check.rule_version_id ]
+          checks = Actions.action_checks(action).where(round: @task.round, hook: ACTION_HOOK, input_hash: @check.input_hash,
+            rule_version_id: others)
+          cleared = checks.where(result: CLEARED).or(checks.where.not(overridden_at: nil)).pluck(:rule_version_id)
+          (others - cleared).empty?
+        end
+
+        def override_action(ctx)
+          if (hold = stopped_hold)
+            approved = Actions.approve(ctx, action, by: ctx.actor, rule_check: @check)
+            Holds.close(ctx, hold: hold, task: @task, choice: OVERRIDE_ONCE)
+            Finishing.settle(ctx, @task.reload, by: approved)
+          else
+            trigger = Gating::Trigger.new(kind: :check_overridden, rule_check_id: @check.id)
+            CheckReentry.after(ctx, @check, trigger)
+          end
+          @result = nil
+        end
+
+        def action
+          return unless @check.subject_kind == "action"
+
+          @action ||= Actions.for_task(@task).find_by(id: @check.subject_id)
+        end
+
+        def stopped_hold
+          return unless action&.state == "stopped"
+
+          @stopped_hold ||= Actions.holds_for(action, "action_stopped").find { |hold| hold.rule_check_id == @check.id }
         end
 
         # The open holds on the task the override answers, in the order they

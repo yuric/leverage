@@ -34,10 +34,13 @@ struct Toolbar: View {
         switch context.navigator.place {
         case .board: ShellCopy.tabBoard
         case .needsYou: ShellCopy.tabNeedsYou
+        case .decided: ShellCopy.tabDecided
+        case .activity: ShellCopy.tabActivity
         case .agents: ShellCopy.tabAgents
         case .credentials: ShellCopy.tabCredentials
         case .handoff: ShellCopy.tabHandoff
         case .settings: ShellCopy.tabSettings
+        case .projects: ShellCopy.projects
         }
     }
 }

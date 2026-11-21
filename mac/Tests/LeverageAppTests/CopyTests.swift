@@ -301,7 +301,10 @@ struct CopyTests {
     @Test("every placeholder of a Needs you sentence is one the screen fills in")
     func needsYouPlaceholders() throws {
         // "time": a reset time, which the offline item names (review finding 22).
-        let known: Set<String> = ["account", "task", "provider", "count", "time"]
+        let known: Set<String> = [
+            "account", "task", "provider", "count", "time",
+            "action", "agent", "amount", "assumption", "choice", "description", "project", "verb", "when", "who",
+        ]
         let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
         for text in NeedsYouCopy.allTexts {
             let range = NSRange(text.startIndex..., in: text)
@@ -329,7 +332,6 @@ struct CopyTests {
         #expect(RulesCopy.checkerModel.text == "An agent checks this")
         #expect(RulesCopy.onFailBlock.text == "Stop the task")
         #expect(RulesCopy.onFailWarn.text == "Only note it")
-        #expect(RulesCopy.notActing.text == "Starts working in a later version of leverage")
         #expect(RulesCopy.whenItRuns.text == "When it runs")
         #expect(RulesCopy.wordingOf.text == "Wording of {date}")
         #expect(RulesCopy.revertToDefault.text == "Go back to the original wording")

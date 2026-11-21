@@ -176,6 +176,23 @@ class CandidatesTest < ActiveSupport::TestCase
     assert_equal same_group.id, C.first_available(seat, task, @now).id
   end
 
+  test "rule 3: a candidate with no rank is kept when weak logins of other providers are passed over" do
+    own = @scenario.credential(provider: "claude", strength_rank: 1)
+    weak = @scenario.credential(provider: "codex", strength_rank: 1)
+    seat = @scenario.seat(credential: own, strength_rank: 2)
+    task = @scenario.task(state: "ready")
+    task.update_columns(minimum_strength_rank: 2)
+
+    assert_equal own.id, C.first_available(seat, task, @now)&.id
+    limited(own)
+    assert C.available?(weak, @now)
+    assert_nil C.first_available(seat, task, @now)
+
+    unranked = @scenario.credential(provider: "gemini", strength_rank: nil)
+    assert_equal unranked.id, C.first_available(seat, task, @now)&.id
+    assert_equal unranked.id, C.next_after(seat, task, own, @now)&.id
+  end
+
   test "rule 3: for a review, a candidate the provider rule refuses is passed over, and a task asks nothing" do
     own = limited(@scenario.credential(provider: "claude"))
     refused = @scenario.credential(provider: "codex")

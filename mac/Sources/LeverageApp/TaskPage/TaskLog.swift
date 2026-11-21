@@ -9,10 +9,8 @@ struct LogEntry: Identifiable, Equatable, Sendable {
     let text: String
 }
 
-/// The task page's log: each event of the task as one plain sentence, in the
-/// order of the log (L799, MA-28). Names come from the read's `names`, and a
-/// criterion's words from the page's criteria. An event this milestone has no
-/// sentence for reads as a general one rather than leaving a gap.
+/// Plain event sentences shared by the task page and Activity, in log order.
+/// Names and criterion text come from the reads supplied by the caller.
 enum TaskLog {
     static func entries(
         events: [EventRecord], names: [LogName], criteria: [Criterion], recoveryTimes: [RecoveryTime] = [],
@@ -43,22 +41,23 @@ enum TaskLog {
     /// verdict or its release. Only these stopped an agent: Ready has no
     /// holder, nor does a review no reviewer has taken.
     private static func returnedWhileHeld(_ ordered: [EventRecord]) -> Set<UUID> {
-        var builder = false
-        var reviewer = false
+        var building: Set<UUID> = []
+        var reviewing: Set<UUID> = []
         var held: Set<UUID> = []
         for event in ordered {
+            guard let taskID = event.taskID else { continue }
             switch event.type {
-            case .taskClaimed: builder = true
-            case .taskSubmitted, .taskReleased, .taskLeaseExpired, .taskDone, .taskCancelled: builder = false
-            case .reviewStarted: reviewer = true
-            case .reviewReleased, .reviewLeaseExpired, .reviewPassed, .reviewFailed: reviewer = false
+            case .taskClaimed: building.insert(taskID)
+            case .taskSubmitted, .taskReleased, .taskLeaseExpired, .taskDone, .taskCancelled: building.remove(taskID)
+            case .reviewStarted: reviewing.insert(taskID)
+            case .reviewReleased, .reviewLeaseExpired, .reviewPassed, .reviewFailed: reviewing.remove(taskID)
             case .taskReturned:
-                if builder || reviewer { held.insert(event.id) }
-                builder = false
-                reviewer = false
+                if building.contains(taskID) || reviewing.contains(taskID) { held.insert(event.id) }
+                building.remove(taskID)
+                reviewing.remove(taskID)
             default: break
             }
-            if case .string = event.payload["lease_seat_id"] { builder = true }
+            if case .string = event.payload["lease_seat_id"] { building.insert(taskID) }
         }
         return held
     }
@@ -328,11 +327,22 @@ enum TaskLog {
         }
     }
 
+    private static func questionAnsweredSentence(_ event: EventRecord, agent: [String: String]) -> String {
+        let basis = event.payload["basis"]?.stringValue.flatMap(QuestionBasis.init(rawValue:))
+        switch (event.actorKind, basis) {
+        case (.owner, _): return TaskPageCopy.logQuestionAnsweredByOwner.text
+        case (.seat, .record): return TaskPageCopy.logQuestionAnsweredFromRecord.filled(agent)
+        case (.seat, .decision): return TaskPageCopy.logQuestionDecided.filled(agent)
+        default: return TaskPageCopy.logQuestionAnswered.text
+        }
+    }
+
     private static func baseSentence(for event: EventRecord, in context: Context) -> String {
         let agent = ["agent": context.agent(event)]
         switch event.type {
         case .taskCreated: return TaskPageCopy.logCreated.text
         case .taskContractChanged: return TaskPageCopy.logContractChanged.text
+        case .taskChanged: return TaskPageCopy.logTaskChanged.text
         case .taskReady: return TaskPageCopy.logReady.text
         case .taskClaimed: return TaskPageCopy.logClaimed.filled(agent)
         case .taskBriefingAcknowledged: return TaskPageCopy.logBriefingRead.filled(agent)
@@ -347,6 +357,7 @@ enum TaskLog {
                 ? .logEvidenceNote : .logEvidenceLink
             return copy.filled(agent.merging(["criterion": context.criterion(event)]) { $1 })
         case .taskSubmitted: return TaskPageCopy.logSubmitted.filled(agent)
+        case .taskReassigned: return TaskPageCopy.logTaskReassigned.text
         case .reviewStarted: return TaskPageCopy.logReviewStarted.filled(agent)
         case .reviewReleased: return reviewReleasedSentence(event, context, agent: agent)
         case .reviewLeaseExpired: return TaskPageCopy.logReviewLeaseExpired.text
@@ -373,6 +384,36 @@ enum TaskLog {
         case .taskLeaseExpired: return TaskPageCopy.logLeaseExpired.text
         case .holdOpened: return holdOpenedSentence(event, context)
         case .holdClosed: return holdClosedSentence(event, context)
+        case .questionAsked:
+            let copy: TaskPageCopy = event.payload["blocking"]?.boolValue == true ? .logQuestionAskedWaiting : .logQuestionAsked
+            return copy.filled(agent)
+        case .questionAnswered: return questionAnsweredSentence(event, agent: agent)
+        case .questionOverturned: return TaskPageCopy.logQuestionOverturned.text
+        case .actionRequested: return TaskPageCopy.logActionRequested.text
+        case .actionApproved:
+            switch event.actorKind {
+            case .owner: return TaskPageCopy.logActionApprovedByOwner.text
+            case .seat: return TaskPageCopy.logActionApprovedByAgent.filled(agent)
+            case .app: return TaskPageCopy.logActionApproved.text
+            }
+        case .actionLeaseGranted:
+            let builder = context.agent(named: context.uuid(event, "lease_seat_id"))
+            return TaskPageCopy.logActionLeaseGranted.filled(["agent": builder])
+        case .actionStopped: return TaskPageCopy.logActionStopped.text
+        case .actionStarted: return TaskPageCopy.logActionStarted.filled(agent)
+        case .actionReportedDone: return TaskPageCopy.logActionReportedDone.filled(agent)
+        case .actionMarkedDone: return TaskPageCopy.logActionMarkedDone.text
+        case .actionWaived: return TaskPageCopy.logActionWaived.text
+        case .actionWithdrawn: return TaskPageCopy.logActionWithdrawn.text
+        case .actionRevoked: return TaskPageCopy.logActionRevoked.text
+        case .actionOverturnRecorded: return TaskPageCopy.logActionOverturnRecorded.text
+        case .credentialAdded:
+            return TaskPageCopy.logCredentialAdded.filled(["account": capitalised(context.account(context.credentialID(event)))])
+        case .credentialRenamed:
+            return TaskPageCopy.logCredentialRenamed.filled(["account": capitalised(context.account(context.credentialID(event)))])
+        case .credentialRemoved:
+            return TaskPageCopy.logCredentialRemoved.filled(["account": capitalised(context.account(context.credentialID(event)))])
+        case .credentialOrderChanged: return TaskPageCopy.logCredentialOrderChanged.text
         case .credentialLimitReached: return limitSentence(event, context)
         case .credentialSignedOut:
             let account = capitalised(context.account(context.credentialID(event)))
@@ -394,16 +435,32 @@ enum TaskLog {
         case .taskPromoted: return TaskPageCopy.logPromoted.text
         case .taskReturned:
             return (context.returnedWhileHeld.contains(event.id) ? TaskPageCopy.logReturned : .logReturnedNoAgent).text
+        case .seatConnected: return TaskPageCopy.logSeatConnected.filled(["agent": context.agent(named: event.subjectID)])
         case .seatPaused: return TaskPageCopy.logSeatPaused.filled(["agent": context.agent(named: event.subjectID)])
         case .seatResumed: return TaskPageCopy.logSeatResumed.filled(["agent": context.agent(named: event.subjectID)])
         case .seatChanged: return TaskPageCopy.logSeatChanged.filled(["agent": context.agent(named: event.subjectID)])
+        case .seatRemoved: return TaskPageCopy.logSeatRemoved.filled(["agent": context.agent(named: event.subjectID)])
         case .checkQueued: return TaskPageCopy.logCheckQueued.filled(["rule": context.rule(event)])
         case .checkStarted: return TaskPageCopy.logCheckStarted.filled(["rule": context.rule(event)])
         case .checkFinished: return checkFinishedSentence(event, context)
         case .checkOverridden: return overriddenSentence(event, context)
         case .jobQueued, .jobClaimed, .jobFinished, .jobTimedOut, .jobRequeued, .jobWithdrawn:
             return jobSentence(event, context)
-        default: return TaskPageCopy.logUpdated.text
+        case .ruleCreated: return TaskPageCopy.logRuleCreated.text
+        case .ruleChanged: return TaskPageCopy.logRuleChanged.text
+        case .ruleEnabled: return TaskPageCopy.logRuleEnabled.text
+        case .ruleDisabled: return TaskPageCopy.logRuleDisabled.text
+        case .ruleReverted: return TaskPageCopy.logRuleReverted.text
+        case .ruleRemoved: return TaskPageCopy.logRuleRemoved.text
+        case .costReported: return TaskPageCopy.logCostReported.filled(agent)
+        case .projectBudgetChanged: return TaskPageCopy.logProjectBudgetChanged.text
+        case .projectCreated: return TaskPageCopy.logProjectCreated.text
+        case .projectPaused: return TaskPageCopy.logProjectPaused.text
+        case .projectResumed: return TaskPageCopy.logProjectResumed.text
+        case .briefChanged: return TaskPageCopy.logBriefChanged.text
+        case .workspaceSettingsChanged: return TaskPageCopy.logWorkspaceSettingsChanged.text
+        case .contentDeleted:
+            return (event.taskID == nil ? TaskPageCopy.logProjectContentDeleted : .logTaskContentDeleted).text
         }
     }
 

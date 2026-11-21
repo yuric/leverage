@@ -34,6 +34,44 @@ module Leverage
         end)
       end
 
+      # The blocking gates enabled when the action was requested. A later
+      # enable or save cannot replace their frozen versions.
+      def action_gate_ids(event)
+        rules = {}
+        versions = {}
+        kinds = %w[rule.created rule.changed rule.reverted rule.enabled rule.disabled rule.removed]
+        Event.where(workspace_id: event.workspace_id, type: kinds).where("seq < ?", event.seq)
+          .order(:seq).pluck(:type, :subject_id, :payload).each do |type, id, payload|
+          versions[id] = payload["rule_version_id"] if payload.key?("rule_version_id")
+          case type
+          when "rule.created" then rules[id] = payload.fetch("enabled")
+          when "rule.enabled" then rules[id] = true
+          when "rule.disabled", "rule.removed" then rules[id] = false
+          end
+        end
+        ids = rules.filter_map { |id, enabled| versions[id] if enabled }
+        RuleVersion.where(workspace_id: event.workspace_id, id: ids, hook: "action.requested").filter_map do |version|
+          version.id if AppCheckers.runs?(version) && EvaluationBuilder.blocking?(version)
+        end
+      end
+
+      # The approval policies frozen when the action was requested.
+      # Saving a rule leaves that version in place. Turning a rule on again
+      # after the request leaves it out of the existing action.
+      def action_policies(event)
+        ids = at(event.workspace_id, "action.requested").filter_map do |entry|
+          next unless entry.version.kind == "policy"
+
+          events = Event.where(workspace_id: event.workspace_id, subject_kind: "rule", subject_id: entry.rule.id)
+          last_switch = events.where(type: %w[rule.created rule.enabled rule.disabled]).order(seq: :desc).pick(:seq)
+          next unless last_switch && last_switch < event.seq
+
+          events.where(type: %w[rule.created rule.changed rule.reverted]).where("seq < ?", event.seq)
+            .order(seq: :desc).pick(:payload)&.fetch("rule_version_id")
+        end
+        versions(ids)
+      end
+
       # The versions with these ids, each with its rule as it is now (which
       # may be switched off or removed since), in the order given: what a
       # pending transition froze.

@@ -58,6 +58,32 @@ module Leverage
         assert_equal :covers, Scope.coverage(rule_version, task, inputs)
       end
 
+      test "before anything goes out the scope is decided for each action" do
+        rule_version = version(hook: "action.requested", scope_kind: "action_kinds", scope_values: [ "send" ])
+        task = scenario.task
+        sending = action(task, kind: "send")
+        publishing = action(task, kind: "publish", position: 2)
+
+        sending_inputs = request_for(task, "action.requested", params: { "aid" => sending.id }).inputs
+        publishing_inputs = request_for(task, "action.requested", params: { "aid" => publishing.id }).inputs
+        assert_equal :covers, Scope.coverage(rule_version, task, sending_inputs)
+        assert_equal :not_covered, Scope.coverage(rule_version, task, publishing_inputs)
+        assert_equal :covers, Scope.coverage(rule_version, task), "a briefing still describes the whole task"
+      end
+
+      test "the other three moments after Ready use the task's actions" do
+        task = scenario.task
+        %w[task.before_claim task.before_submit task.before_done].each do |hook|
+          rule_version = version(hook: hook, scope_kind: "action_kinds", scope_values: [ "send" ])
+          assert_equal :not_covered, Scope.coverage(rule_version, task, {})
+        end
+        action(task, kind: "send")
+        %w[task.before_claim task.before_submit task.before_done].each do |hook|
+          rule_version = version(hook: hook, scope_kind: "action_kinds", scope_values: [ "send" ])
+          assert_equal :covers, Scope.coverage(rule_version, task, {})
+        end
+      end
+
       test "covers? is true for both covering answers" do
         task = scenario.task
         assert Scope.covers?(version(scope_kind: "checker_decides"), task)

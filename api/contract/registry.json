@@ -39,6 +39,7 @@
     {"type": "action.waived", "group": "Outward actions", "subject_kinds": ["action"], "schema_versions": [1], "written_as_side_event": false},
     {"type": "action.withdrawn", "group": "Outward actions", "subject_kinds": ["action"], "schema_versions": [1], "written_as_side_event": false},
     {"type": "action.revoked", "group": "Outward actions", "subject_kinds": ["action"], "schema_versions": [1], "written_as_side_event": true},
+    {"type": "action.overturn_recorded", "group": "Outward actions", "subject_kinds": ["action"], "schema_versions": [1], "written_as_side_event": false},
     {"type": "check.queued", "group": "Rule checks", "subject_kinds": ["rule_check"], "schema_versions": [1], "written_as_side_event": true},
     {"type": "check.started", "group": "Rule checks", "subject_kinds": ["rule_check"], "schema_versions": [1], "written_as_side_event": true},
     {"type": "check.finished", "group": "Rule checks", "subject_kinds": ["rule_check"], "schema_versions": [1], "written_as_side_event": true},
@@ -247,6 +248,7 @@
     {"operation_id": "change_budget", "method": "POST", "path": "/v1/owner/projects/{id}/budget", "caller": "owner", "commands": ["change_budget"], "tag": "owner"},
     {"operation_id": "delete_project_content", "method": "POST", "path": "/v1/owner/projects/{id}/delete-content", "caller": "owner", "commands": ["delete_content"], "tag": "owner"},
     {"operation_id": "change_workspace_settings", "method": "POST", "path": "/v1/owner/settings", "caller": "owner", "commands": ["change_workspace_settings"], "tag": "owner"},
+    {"operation_id": "get_workspace_settings", "method": "GET", "path": "/v1/owner/settings", "caller": "owner", "commands": ["read"], "tag": "owner"},
     {"operation_id": "connect_seat", "method": "POST", "path": "/v1/owner/seats", "caller": "owner", "commands": ["connect_seat"], "tag": "owner"},
     {"operation_id": "pause_seat", "method": "POST", "path": "/v1/owner/seats/{id}/pause", "caller": "owner", "commands": ["pause_seat"], "tag": "owner"},
     {"operation_id": "resume_seat", "method": "POST", "path": "/v1/owner/seats/{id}/resume", "caller": "owner", "commands": ["resume_seat"], "tag": "owner"},
@@ -282,8 +284,15 @@
     {"kind": "contract_draft", "input_component": "ContractDraftJobInput", "result_component": "ContractDraftJobResult"}
   ],
   "guards": [
+    "held_owner_approval", "not_held_owner_approval", "question_task_active", "question_task_ended",
+    "builder_holds_task", "approval_not_yet_overturned", "approval_already_overturned",
+    "approval_asked_of_caller", "approval_not_asked_of_caller", "builder_seat_unavailable",
+    "question_answerable", "question_not_answerable", "orchestrator_answer_not_overturned",
+    "no_orchestrator_answer_to_overturn", "content_deletable", "content_not_deletable",
+    "rerun_of_approval_check",
     "builder_free", "builder_busy", "last_open_action", "not_last_open_action",
     "held_action_unconfirmed", "held_action_stopped", "no_action_started", "action_started",
+    "needs_action_unconfirmed_hold",
     "reviewer_holds_review", "has_outward_action", "no_outward_action", "escalates",
     "does_not_escalate", "credential_differs", "stopped_by_check",
     "adds_to_imaginarium", "adds_to_backlog", "not_held_action_unconfirmed", "no_reviewer_holds_review",
@@ -320,6 +329,18 @@
     {"provider": "openrouter", "kind": "api_token", "provider_group": "openrouter"}
   ],
   "lists": {
+    "important_event_types": [
+      "task.created", "task.claimed", "task.submitted", "task.reassigned",
+      "task.returned_for_rework", "task.done", "task.cancelled", "review.passed",
+      "review.failed", "action.approved", "action.stopped", "action.started",
+      "action.reported_done", "action.marked_done", "action.waived", "action.withdrawn",
+      "action.revoked", "action.overturn_recorded", "question.answered", "question.overturned",
+      "inbox.opened", "check.overridden", "credential.limit_reached", "credential.signed_out",
+      "credential.switched", "project.created", "project.paused", "project.resumed",
+      "project.budget_changed", "rule.changed", "rule.enabled", "rule.disabled",
+      "rule.reverted", "rule.removed", "seat.connected", "seat.removed",
+      "workspace.settings_changed", "content.deleted"
+    ],
     "task_states": ["imaginarium", "backlog", "ready", "working", "in_review", "finishing", "done", "cancelled"],
     "criterion_states": ["open", "started", "passed"],
     "criterion_kinds": ["build", "review"],

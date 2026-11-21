@@ -358,6 +358,34 @@ struct RosterModelTests {
         #expect(keys.count == 2 && keys[0] == keys[1])
     }
 
+    @Test("MCP settings and the MCP landing prompt are available only for self-connected agents")
+    func copiesMCPConnection() async throws {
+        let owner = Fixtures.owner()
+        owner.script {
+            $0.landingPromptForConnection = { _, connection in
+                LandingPrompt(text: "Instructions for \(connection.rawValue).", connection: connection)
+            }
+        }
+        let apiURL = try #require(URL(string: "http://127.0.0.1:49171"))
+        let board = Fixtures.pasteboard()
+        let model = RosterModel(api: owner, noteRead: { _ in }, copy: board.copy, apiURL: { apiURL })
+        await model.load()
+        #expect(row(model, Fixtures.builderID)?.canCopyMCPSettings == false)
+        #expect(row(model, Fixtures.ownID)?.canCopyMCPSettings == true)
+        owner.forgetCalls()
+        await model.copyMCPSettings(Fixtures.builderID)
+        await model.copyLandingPrompt(Fixtures.builderID, connection: .mcp)
+        #expect(owner.calls.isEmpty)
+        #expect(board.copied.value.isEmpty)
+        await model.copyMCPSettings(Fixtures.ownID)
+        #expect(owner.calls.isEmpty)
+        #expect(board.copied.value == [MCPSettings.text(apiURL: apiURL, role: .builder)].compactMap { $0 })
+        #expect(board.copied.value.count == 1)
+        await model.copyLandingPrompt(Fixtures.ownID, connection: .mcp)
+        #expect(Fixtures.calls(owner, .getLandingPrompt).last?.query["connection"] == "mcp")
+        #expect(board.copied.value.last == "Instructions for mcp.")
+    }
+
     // MARK: Copy landing prompt
 
     @Test("Copy landing prompt fetches the prompt of that agent and copies it, each time it is chosen")

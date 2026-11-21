@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "action.overturn_recorded v1",
+  "description": "The owner overturns the approval of an action that is already done. The action is the subject.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {},
+  "required": [],
+  "examples": [
+    {}
+  ]
+}

@@ -59,7 +59,7 @@ result changes the list: the default model of the Claude Code, Codex and
 Antigravity (Gemini) login tools. A model that misses the bar, or whose
 tool cannot be run, stays a supported model with a failed or missing
 result. The registry list `orchestrator_tested_providers` holds exactly
-the providers whose result met the bar. The suite runs each tool's default
+the providers whose results met both shipped suites' bars. The suite runs each tool's default
 model: a model the owner chooses for an orchestrator is not covered by it.
 
 ## How a case is run
@@ -109,9 +109,9 @@ stand.
 
 CI never calls a provider. `scripts/check_evals.py` checks the cases'
 shape and counts, that every supported model has a result recorded against
-today's instruction and case set, that each result's "met the bar" is what
+today's instruction, orchestrator role file and case set, that each result's "met the bar" is what
 scoring it again gives, that the registry list equals the providers whose
-result met the bar, that `runs.json` is within the ceilings, and that no
+results met both suites' bars, that `runs.json` is within the ceilings, and that no
 case or result holds anything shaped like an email address or a token. So
-a change to the instruction or to a case fails CI until the suite is run
+a change to the instruction, the role file or a case fails CI until the suite is run
 again. A recorded miss does not fail it: it is printed.

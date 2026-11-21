@@ -1,10 +1,13 @@
 require "test_helper"
+require_relative "call_spy"
 require_relative "../gate_support"
 
 # Complete contract (PRD Lifecycle L80, L175; milestone 2 plan SC-3): from
 # Backlog to Ready at task.before_ready, writing task.contract_changed and
 # task.ready. The last criterion is the independent review (PRD Terms).
 class CompleteContractTest < ActiveSupport::TestCase
+  include CallSpy
+
   T = Leverage::Transitions
 
   # Records the hooks gating is asked at.
@@ -28,10 +31,10 @@ class CompleteContractTest < ActiveSupport::TestCase
     @task = @scenario.task(state: "backlog", work_reference: nil)
   end
 
-  def apply(params)
+  def apply(params, command: "complete_contract")
     key = "key-#{SecureRandom.hex(6)}"
     @key = key
-    T.apply(T::Request.new(command: "complete_contract", workspace_id: @scenario.workspace_id, caller_kind: "owner",
+    T.apply(T::Request.new(command: command, workspace_id: @scenario.workspace_id, caller_kind: "owner",
       caller_id: @owner.id, key: key, request_hash: Digest::SHA256.hexdigest(params.to_json), params: params))
   end
 
@@ -72,9 +75,39 @@ class CompleteContractTest < ActiveSupport::TestCase
     assert_equal [ "task.before_ready" ], gating.hooks
   end
 
-  test "an outward action is 422 invalid (SC-3)" do
-    assert_raises(T::Invalid) { apply(body(actions: [ { "kind" => "publish", "description" => "Made-up." } ])) }
-    assert_equal "backlog", @task.reload.state
+  test "completing the contract records its ordered outward actions" do
+    outcome = apply(body(actions: [ { "kind" => "send", "description" => "Send the price list." },
+                                   { "kind" => "publish", "description" => "Publish the prices." } ]))
+
+    assert outcome.completed?
+    actions = Action.where(task_id: @task.id).order(:position)
+    assert_equal [ [ 1, "send", "contracted" ], [ 2, "publish", "contracted" ] ], actions.pluck(:position, :kind, :state)
+    assert_equal actions.map(&:id), written.first.payload.fetch("added_action_ids")
+    assert_empty written.first.payload.fetch("removed_action_ids")
+  end
+
+  test "completing the contract preserves an unchanged outward action from Add task" do
+    definitions = [ { "kind" => "publish", "description" => "Publish the prices." } ]
+    added = apply({ "title" => @task.title, "goal" => @task.goal, "actions" => definitions }, command: "add_task")
+    assert added.completed?
+    task = Task.find(added.result.fetch("task_id"))
+    original_action = Action.where(task_id: task.id).sole
+
+    assert apply(body(task, actions: definitions)).completed?
+
+    assert_equal original_action.id, Action.where(task_id: task.id).sole.id
+    assert_empty written.first.payload.fetch("added_action_ids")
+    assert_empty written.first.payload.fetch("removed_action_ids")
+  end
+
+  test "completing the contract applies the saved cap through Costs (AE-12)" do
+    outcome = nil
+    calls = spy_on(Leverage::Costs, :cap_changed) do
+      outcome = apply(body(budget_cap: 7.5))
+    end
+
+    assert outcome.completed?
+    assert_equal [ [ @task.id, BigDecimal("7.5") ] ], calls.map { |call| [ call.arguments.last.id, call.arguments.last.budget_cap ] }
   end
 
   test "the last criterion, and only the last, is the independent review" do

@@ -33,11 +33,11 @@ module Leverage
   # seat may no longer claim (HD-4: paused, removed, or its login limited
   # or signed out while the claim waited; milestone 4 review, finding 7),
   # and the claim lapsed with no event of its own, so the holder is
-  # cleared at the next command's first event, or at the end of the log. The builder is set by
-  # task.claimed and cleared when the task returns to Ready or Backlog or is
-  # cancelled. The minimum strength rank and the contract version are set
+  # cleared at the next command's first event, or at the end of the log.
+  # The builder is set by task.claimed and a fresh lease on owner rework,
+  # and cleared when the task returns to Ready or Backlog or is cancelled. The minimum strength rank and the contract version are set
   # by task.contract_changed, which carries both (the rank is null for
-  # none); task.reassigned, escalation's, is not written yet (below).
+  # none); task.reassigned sets the rank on escalation.
   #
   # task_steps are rebuilt by driving the step tracker (Steps.on_event)
   # over the log in seq order, inside a transaction that is rolled back:
@@ -61,10 +61,8 @@ module Leverage
   # command's at, which RuleChecks.override stores). Job events change no
   # replay column.
   #
-  # Events that change a replay column but that no command of milestones
-  # 2 to 4 writes (outward actions, escalation, owner rework) raise
-  # Unsupported, as Steps does: the milestone that writes them teaches the
-  # replay.
+  # Action definitions come from task.created and task.contract_changed.
+  # Their states follow the action machine in the contract.
   module Replay
     # An event that changes a replay column and that the replay does not
     # yet project.
@@ -75,7 +73,7 @@ module Leverage
       task_id round kind step_class subject_kind subject_id seat_id cause_kind cause_rule_id opened_at closed_at
       opening_event_id closing_event_id
     ].freeze
-    UNSUPPORTED = /\A(action\.|task\.reassigned\z|task\.returned_for_rework\z)/
+    ACTION_NOTES = %w[action.lease_granted action.overturn_recorded].freeze
     CLAIM_HOOK = "task.before_claim".freeze
     LEASE_FIELD = "lease_seat_id".freeze
     # Projection keys that are not replay columns.
@@ -150,8 +148,7 @@ module Leverage
     # --- projecting one event ----------------------------------------------
 
     def apply(projection, event, review_criteria)
-      raise Unsupported, "the replay does not project #{event.type} yet (seq #{event.seq})" if UNSUPPORTED.match?(event.type)
-
+      project_actions(projection.fetch(:actions), event)
       payload = event.payload || {}
       task = projection[:tasks][event.task_id]
       case event.type
@@ -190,6 +187,28 @@ module Leverage
       move(task, event, payload) if task
     end
 
+    # Projects one task's action definitions and states. LogAudit also
+    # uses this fold to know which actions still exist when a task ends.
+    def project_actions(actions, event)
+      case event.type
+      when "task.created", "task.contract_changed"
+        event.payload.fetch("removed_action_ids", []).each { |id| actions.delete(id) }
+        event.payload.fetch("added_action_ids", []).each { |id| actions[id] = { "state" => "contracted" } }
+      when /\Aaction\./
+        return if ACTION_NOTES.include?(event.type)
+
+        state = action_states[event.type]
+        raise Unsupported, "the replay does not project #{event.type} (seq #{event.seq})" unless state
+
+        actions[event.subject_id] = { "state" => state }
+      end
+    end
+
+    def action_states
+      @action_states ||= Contract.state_machine.fetch("action_machine").fetch("transitions")
+        .to_h { |row| [ row.fetch("event"), row.fetch("to") ] }.freeze
+    end
+
     CRITERION_STATES = { "criterion.started" => "started", "criterion.passed" => "passed",
                          "criterion.reopened" => "open" }.freeze
 
@@ -211,10 +230,19 @@ module Leverage
         else
           task["holder_seat_id"] = nil
         end
+      when "action.requested" then task["state"] = "finishing"
+      when "task.reassigned" then task["minimum_strength_rank"] = payload.fetch("minimum_strength_rank")
       when "task.done" then task.merge!("state" => "done", "holder_seat_id" => nil)
       when "task.cancelled" then task.merge!("state" => "cancelled", "holder_seat_id" => nil, "builder_seat_id" => nil)
       when "review.failed"
         payload[LEASE_FIELD] ? task.merge!("state" => "working") : back(task, "ready")
+        task["round"] += 1
+      when "task.returned_for_rework"
+        if (seat = payload[LEASE_FIELD])
+          task.merge!("state" => "working", "builder_seat_id" => seat)
+        else
+          back(task, "ready")
+        end
         task["round"] += 1
       end
       task["holder_seat_id"] = payload[LEASE_FIELD] if payload[LEASE_FIELD]

@@ -187,6 +187,7 @@ struct Harness {
     let existingWork: URL
 
     init() throws {
+        api.script { $0.reportCost = { _, _, _ in Fixture.done(.reportCost) } }
         folder = try TemporaryFolder(prefix: "leverage-runner")
         workRoot = folder.path("work-root")
         existingWork = try folder.folder("pricing-page")

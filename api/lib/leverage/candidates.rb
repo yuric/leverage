@@ -165,7 +165,8 @@ module Leverage
 
       task = task_of(work)
       minimum = task.minimum_strength_rank
-      return false if minimum && !same_group?(seat, credential) && credential.strength_rank.to_i < minimum
+      rank = credential.strength_rank
+      return false if minimum && rank && rank < minimum && !same_group?(seat, credential)
       return true unless work.is_a?(Review)
 
       Gating.provider_allowed?(task_id: task.id, provider: credential.provider)
@@ -179,11 +180,10 @@ module Leverage
 
     # What a claim asks of a builder besides its accounts (Eligibility,
     # L545): enabled, not paused, not removed (the query above), holding
-    # nothing, strong enough for the task, the task's project running, and
-    # not filtered out of the claim by gating.
+    # nothing with no approved action waiting, strong enough for the task,
+    # the task's project running, and not filtered out of the claim by gating.
     def eligible_but_for_accounts?(seat, task)
-      return false if Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id).exists?
-      return false if Review.where(workspace_id: seat.workspace_id, reviewer_seat_id: seat.id, verdict: nil).exists?
+      return false unless Eligibility.idle_for_claim?(seat)
       return false if task.minimum_strength_rank && task.minimum_strength_rank > seat.strength_rank
       return false if task.project_id && Project.where(id: task.project_id, paused: true).exists?
 

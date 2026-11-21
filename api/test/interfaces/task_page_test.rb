@@ -19,7 +19,7 @@ class TaskPageReadTest < CommittingTestCase
   def page(task)
     body = Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id)
     json = JSON.parse(JSON.generate(body))
-    assert_matches_component("TaskPage", json)
+    assert_empty contract_errors("#/components/schemas/TaskPage", json)
     json
   end
 
@@ -269,5 +269,49 @@ class TaskPageReadTest < CommittingTestCase
     assert_equal [], json["rule_checks"]
     assert_nil json["pending"]
     assert_equal "none", json["draft"]
+  end
+
+  test "the task page gives ordered actions and records a start after the action has moved on" do
+    task = scenario.finishing_task(actions: [
+      { kind: "publish", description: "A sample notice", state: "done" },
+      { kind: "send", description: "A sample summary", state: "requested" }
+    ])
+    first, second = Action.where(task_id: task.id).order(:position)
+    approved = Event.find_by!(workspace_id: scenario.workspace_id, subject_id: first.id, type: "action.approved")
+
+    json = page(task)
+
+    assert_equal true, json["any_action_started"]
+    assert_equal [ first.id, second.id ], json.fetch("actions").map { |action| action.fetch("id") }
+    assert_equal [ 1, 2 ], json.fetch("actions").map { |action| action.fetch("position") }
+    assert_equal [ approved.at.utc.iso8601(6), nil ], json.fetch("actions").map { |action| action.fetch("approved_at") }
+    assert json.fetch("actions").all? { |action| action["stopped_by_rule_check_id"].nil? }
+  end
+
+  test "the stopped action names the rule check that stopped it" do
+    task = scenario.finishing_task(actions: [ { kind: "publish", description: "A sample notice", state: "stopped" } ])
+    action = Action.find_by!(task_id: task.id)
+    check = scenario.rule_check(task, rule: scenario.rule(hook: "action.requested"), subject: action, result: "failed")
+    item = InboxItem.find_by!(workspace_id: scenario.workspace_id, about_id: task.id, kind: "stopped_action")
+    item.update!(facts: item.facts.merge("rule_check_id" => check.id))
+
+    json = page(task)
+
+    assert_equal false, json["any_action_started"]
+    assert_equal check.id, json.fetch("actions").sole.fetch("stopped_by_rule_check_id")
+  end
+
+  test "the task page shows question timestamps and which answer was overturned" do
+    task = working_task
+    pending = scenario.question(task)
+    overturned = scenario.question(task, outcome: "overturned")
+
+    rows = page(task).fetch("questions")
+
+    assert_equal [ pending.id, overturned.id ], rows.map { |row| row.fetch("id") }
+    assert_equal [ false, true ], rows.map { |row| row.fetch("overturned") }
+    assert_equal [ pending.asked_at, overturned.asked_at ].map { |at| at.utc.iso8601(6) },
+      rows.map { |row| row.fetch("asked_at") }
+    assert_equal [ nil, overturned.answered_at.utc.iso8601(6) ], rows.map { |row| row.fetch("answered_at") }
   end
 end

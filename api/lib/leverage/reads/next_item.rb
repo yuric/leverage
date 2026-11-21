@@ -6,11 +6,6 @@ module Leverage
     # consumed and nothing is written: the same item repeats until the seat
     # acts.
     #
-    # Milestone 4 serves eight kinds, in the table's order: command,
-    # briefing_changed, resume, rework, review, job, task and none. `answer`
-    # and `action` need a question or an outward action, milestone 5's, so
-    # no branch asks for them.
-    #
     #   command           a command this seat sent waited on a check and is
     #                     no longer pending, or a check that refused it was
     #                     overridden: its commands row is marked notify with
@@ -25,9 +20,12 @@ module Leverage
     #                     review_id the review, when the seat holds one.
     #   resume            a hold on the seat's task has closed
     #                     (tasks.resume_pending_since, DB-35).
-    #   rework            a failed review gave the seat a fresh lease on its
-    #                     task (review.failed names it in lease_seat_id) and
-    #                     it has not acknowledged the briefing under it.
+    #   answer            an unread answer, or overturn, to a question this
+    #                     seat asked on a task it still holds.
+    #   action            the builder has a fresh Finishing lease and has
+    #                     not acknowledged its briefing under that lease.
+    #   rework            a failed review or the owner sent the task back
+    #                     under a fresh lease it has not acknowledged.
     #   review, task      Eligibility has a review or a task for a seat that
     #                     holds none (EN-23): the review claim-next would
     #                     take, so never one the claim filter leaves out for
@@ -57,6 +55,8 @@ module Leverage
       # A lease that has not passed its due time, or is paused (no due time).
       LIVE = "lease_due_at IS NULL OR lease_due_at > clock_timestamp()".freeze
 
+      REWORK_LEASES = %w[review.failed task.returned_for_rework].freeze
+
       @collaborators = {}
 
       class << self
@@ -65,7 +65,7 @@ module Leverage
           command = command_item(seat)
           return command if command
 
-          task = held_task(seat)
+          task = held_tasks(seat).take
           review = held_review(seat)
           item = (task && task_item(seat, task)) || (review && review_item(seat, review))
           return item if item
@@ -82,6 +82,11 @@ module Leverage
           yield
         ensure
           @collaborators = saved
+        end
+
+        # The builder's current task lease also controls question reads.
+        def held_tasks(seat)
+          Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: %w[working finishing]).where(LIVE)
         end
 
         private
@@ -101,10 +106,6 @@ module Leverage
           key && item("command", key)
         end
 
-        def held_task(seat)
-          Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "working").where(LIVE).take
-        end
-
         def held_review(seat)
           Review.where(workspace_id: seat.workspace_id, reviewer_seat_id: seat.id, verdict: nil).where(LIVE).take
         end
@@ -115,12 +116,26 @@ module Leverage
           lease = builder_lease_event(task, seat)
           acknowledged = acknowledgement(seat, task, nil, lease)
           if acknowledged && acknowledged.briefing_hash != briefing.hash_for(task, seat)
-            item("briefing_changed", task.id)
-          elsif task.resume_pending_since
-            item("resume", task.id)
-          elsif lease&.type == "review.failed" && acknowledged.nil?
+            return item("briefing_changed", task.id)
+          end
+          return item("resume", task.id) if task.resume_pending_since
+
+          answer = unread_answer(seat, task)
+          return answer if answer
+          return if acknowledged || lease.nil?
+
+          if task.state == "finishing" && lease.type != Leverage::Leases::BUILDER_GRANT &&
+              Action.where(workspace_id: task.workspace_id, task_id: task.id, state: %w[approved started]).exists?
+            item("action", task.id)
+          elsif REWORK_LEASES.include?(lease.type)
             item("rework", task.id)
           end
+        end
+
+        def unread_answer(seat, task)
+          id = ::Question.where(workspace_id: seat.workspace_id, task_id: task.id, asking_seat_id: seat.id,
+            read_at: nil, outcome: %w[answered overturned]).order(:asked_at, :id).pick(:id)
+          id && item("answer", id)
         end
 
         def review_item(seat, review)

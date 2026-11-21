@@ -42,15 +42,18 @@ struct RuleEditorModelTests {
 
     // MARK: adding (RD-21, RD-22)
 
-    @Test("Add offers the four moments a custom rule may use now, in their words, and two scopes")
+    @Test("Add offers five moments and four scopes in their words")
     func addOffers() {
-        #expect(RuleEditorModel.offeredHooks == [.taskBeforeReady, .taskBeforeClaim, .taskBeforeSubmit, .taskBeforeDone])
+        #expect(RuleEditorModel.offeredHooks == [
+            .taskBeforeReady, .taskBeforeClaim, .taskBeforeSubmit, .taskBeforeDone, .actionRequested,
+        ])
         #expect(RuleEditorModel.offeredHooks.map(\.momentName) == [
             "when a task is ready to start", "before an agent starts it", "before work is submitted",
-            "when the review has passed",
+            "when the review has passed", "before anything goes out",
         ])
-        #expect(!RuleEditorModel.offeredHooks.contains(.actionRequested))
-        #expect(RuleEditorModel.offeredScopes == [.allTasks, .checkerDecides])
+        #expect(RuleEditorModel.offeredScopes == [.allTasks, .checkerDecides, .namedProjects, .actionKinds])
+        #expect(RulesCopy.scopeWords(.namedProjects).text == "Tasks in these projects")
+        #expect(RulesCopy.scopeWords(.actionKinds).text == "Tasks that end in")
     }
 
     @Test("Add shows the name, the instruction, the moment and the scope, and neither Revert nor Remove")
@@ -221,16 +224,60 @@ struct RuleEditorModelTests {
         #expect(rig.owner.calls.first?.body == body(expected))
     }
 
-    @Test("a scope the screen does not offer is not shown and is saved as it was")
-    func unofferedScopeKept() async {
-        let scope = RuleScope(kind: .namedProjects, projectIDs: [Fixtures.id(500)])
+    @Test("A saved project scope is editable and an unchanged selection is kept exactly")
+    func existingProjectScope() async {
+        let ids = [Fixtures.id(502), Fixtures.id(501)]
+        let scope = RuleScope(kind: .namedProjects, projectIDs: ids)
         let row = Fixtures.row(number: 9, name: "Made up", scope: scope, instruction: "Old", origin: .custom)
         let rig = makeRig(.change(row))
-        #expect(!rig.model.showsScope)
+        #expect(rig.model.showsScope)
+        #expect(rig.model.projectIDs == Set(ids))
+        #expect(!rig.model.canSave)
         rig.model.instruction = "New"
         await rig.model.save()
         let expected = SaveRuleRequest(name: "Made up", instruction: "New", scope: scope, onFail: .block, route: .owner)
         #expect(rig.owner.calls.first?.body == body(expected))
+    }
+
+    @Test("Add at the outward action moment requires a project selection and sends the selected IDs")
+    func addProjectScope() async {
+        let rig = makeRig(.add)
+        rig.model.name = "Mention the date"
+        rig.model.instruction = "The goal names a date."
+        rig.model.hook = .actionRequested
+        rig.model.scopeKind = .namedProjects
+        #expect(!rig.model.canSave)
+        await rig.model.save()
+        #expect(rig.owner.calls.isEmpty)
+        let projectID = Fixtures.id(500)
+        rig.model.projectIDs = [projectID]
+        #expect(rig.model.canSave)
+        await rig.model.save()
+        let expected = AddRuleRequest(
+            name: "Mention the date", instruction: "The goal names a date.", hook: .actionRequested,
+            scope: RuleScope(kind: .namedProjects, projectIDs: [projectID]))
+        #expect(rig.owner.calls.last?.body == FakeCall.json(expected))
+    }
+
+    @Test("Save changes an action scope and sends the chosen action kinds without leftover project IDs")
+    func saveActionScope() async {
+        let row = Fixtures.row(
+            name: "Made up", scope: RuleScope(kind: .actionKinds, actionKinds: [.publish]), instruction: "Check.")
+        let rig = makeRig(.change(row))
+        #expect(rig.model.actionKinds == [.publish])
+        #expect(!rig.model.canSave)
+        rig.model.projectIDs = [Fixtures.id(500)]
+        rig.model.actionKinds = []
+        #expect(!rig.model.canSave)
+        await rig.model.save()
+        #expect(rig.owner.calls.isEmpty)
+        rig.model.actionKinds = [.delete, .send, .pay]
+        #expect(rig.model.canSave)
+        await rig.model.save()
+        let expected = SaveRuleRequest(
+            name: "Made up", instruction: "Check.", scope: RuleScope(kind: .actionKinds, actionKinds: [.pay, .send, .delete]),
+            onFail: .block, route: .owner)
+        #expect(rig.owner.calls.last?.body == body(expected))
     }
 
     // MARK: changing a shipped rule that leverage checks itself

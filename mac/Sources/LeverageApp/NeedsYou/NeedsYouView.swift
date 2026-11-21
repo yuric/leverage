@@ -50,6 +50,28 @@ struct NeedsYouContent: View {
                 }
             }
         }
+        .sheet(item: Binding(get: { model.prompt }, set: { if $0 == nil { model.dismissPrompt() } })) { prompt in
+            if let row = model.rows.first(where: { $0.id == prompt.id }) {
+                promptView(prompt, row: row)
+                    .interactiveDismissDisabled(model.isBusy(row.id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func promptView(_ prompt: NeedsYouModel.Prompt, row: NeedsYouRow) -> some View {
+        switch prompt.action {
+        case .answerDifferently:
+            AnswerSheet(model: model, row: row)
+        case .returnForRework:
+            ReworkSheet(model: model, row: row)
+        case .raiseCap:
+            AmountSheet(model: model, row: row, title: .raiseCap)
+        case .changeBudget:
+            AmountSheet(model: model, row: row, title: .changeBudget)
+        default:
+            EmptyView()
+        }
     }
 
     private func note(_ text: String, tone: Color = Tokens.Palette.text2) -> some View {
@@ -86,11 +108,17 @@ struct NeedsYouRowView: View {
                         .foregroundStyle(Tokens.Palette.text2)
                 }
             } else if model.confirmingCancel == row.id {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(NeedsYouCopy.cancelQuestion.text)
                         .font(.system(size: Tokens.FontSize.body, weight: .medium))
-                    Button(NeedsYouCopy.cancelConfirm.text) { Task { await model.confirmCancel() } }
-                    Button(NeedsYouCopy.cancelKeep.text) { model.dismissCancel() }
+                    if row.actionMayHaveStarted {
+                        Text(NeedsYouCopy.startedWarning.text)
+                            .foregroundStyle(Tokens.Tone.wait.foreground)
+                    }
+                    HStack(spacing: 8) {
+                        Button(NeedsYouCopy.cancelConfirm.text) { Task { await model.confirmCancel() } }
+                        Button(NeedsYouCopy.cancelKeep.text) { model.dismissCancel() }
+                    }
                 }
             } else if model.letThroughRow == row.id {
                 VStack(alignment: .leading, spacing: 8) {
@@ -114,15 +142,9 @@ struct NeedsYouRowView: View {
                     Button(NeedsYouCopy.goBack.text) { model.dismissTurnOff() }
                 }
             } else if !row.buttons.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(Array(row.buttons.enumerated()), id: \.element.id) { index, button in
-                        if index == 0 {
-                            Button(button.label) { run(button) }
-                                .buttonStyle(PrimaryButtonStyle())
-                        } else {
-                            Button(button.label) { run(button) }
-                        }
-                    }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { buttons }
+                    VStack(alignment: .leading, spacing: 8) { buttons }
                 }
                 .disabled(model.isBusy(row.id))
             }
@@ -151,7 +173,40 @@ struct NeedsYouRowView: View {
             .textSelection(.enabled)
     }
 
+    private var buttons: some View {
+        ForEach(Array(row.buttons.enumerated()), id: \.element.id) { index, button in
+            if index == 0 {
+                Button(button.label) { run(button) }.buttonStyle(PrimaryButtonStyle())
+            } else {
+                Button(button.label) { run(button) }
+            }
+        }
+    }
+
     private func run(_ button: NeedsYouButton) {
         Task { await model.perform(button.action, on: row.id) }
+    }
+}
+
+struct NeedsYouSheetButtons: View {
+    let model: NeedsYouModel
+    let row: NeedsYouRow
+    let confirm: NeedsYouCopy
+
+    var body: some View {
+        if let failure = model.failure(for: row.id) {
+            Text(verbatim: failure)
+                .foregroundStyle(Tokens.Tone.stop.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        HStack {
+            Spacer()
+            Button(NeedsYouCopy.closeSheet.text) { model.dismissPrompt() }
+                .keyboardShortcut(.cancelAction)
+                .disabled(model.isBusy(row.id))
+            Button(confirm.text) { Task { await model.confirmPrompt() } }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!model.canConfirmPrompt)
+        }
     }
 }

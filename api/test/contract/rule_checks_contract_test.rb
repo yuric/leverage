@@ -83,15 +83,17 @@ class RuleChecksContractTest < Minitest::Test
   end
 
   # Plan RD-42: Run it again on an errored task.before_claim check closes
-  # its hold and queues nothing; on any other check it queues a new attempt.
-  def test_rerun_check_splits_on_two_guards_of_one_family
-    family = sm.fetch("guard_families").find do |entry|
-      entry["guards"].map { |guard| guard["guard"] }.sort == %w[rerun_of_claim_check rerun_queues]
-    end
-    refute_nil family, "rerun_queues and rerun_of_claim_check are one guard family"
-    %w[rerun_queues rerun_of_claim_check].each { |guard| assert_includes registry.fetch("guards"), guard }
+  # its hold and queues nothing. An errored approval check is final (AE-15).
+  def test_rerun_check_splits_on_the_targets_of_one_guard_family
+    guards = %w[rerun_of_approval_check rerun_of_claim_check rerun_queues]
+    family = sm.fetch("guard_families").find { |entry| entry["family"] == "rerun_target" }
+    assert_equal guards, family.fetch("guards").map { |guard| guard["guard"] }.sort
+    guards.each { |guard| assert_includes registry.fetch("guards"), guard }
     reruns = rows_of("rerun_check")
-    assert_equal [ %w[rerun_of_claim_check], %w[rerun_queues] ], reruns.map { |row| row["guard"] }.sort
+    assert_equal guards.map { |guard| [ guard ] }, reruns.map { |row| row["guard"] }.sort
+    approval = reruns.find { |row| row["guard"] == %w[rerun_of_approval_check] }
+    assert_equal "invalid_state", approval["refusal"]
+    assert_empty approval["events"]
     queues = reruns.find { |row| row["guard"] == %w[rerun_queues] }
     assert_equal %w[check.queued job.queued], queues["events"]
     claim = reruns.find { |row| row["guard"] == %w[rerun_of_claim_check] }
@@ -225,7 +227,8 @@ class RuleChecksContractTest < Minitest::Test
     assert_equal %w[contract instruction may_answer_not_applicable moment quoted role_file], material.fetch("required").sort
     contract = schemas.fetch("CheckContract")
     assert_equal %w[criteria details goal title], contract.fetch("required").sort
-    criterion = contract.dig("properties", "criteria", "items")
+    criterion_ref = contract.dig("properties", "criteria", "items", "$ref")
+    criterion = schemas.fetch(criterion_ref.delete_prefix("#/components/schemas/"))
     assert_equal %w[kind state text], criterion.fetch("required").sort
     assert_equal registry.dig("lists", "criterion_kinds"), criterion.dig("properties", "kind", "enum")
     assert_equal registry.dig("lists", "criterion_states"), criterion.dig("properties", "state", "enum")
@@ -275,21 +278,19 @@ class RuleChecksContractTest < Minitest::Test
     assert_kind_of String, instruction
     assert instruction.start_with?("A task has specific details when someone who has never seen it could do it")
     assert instruction.end_with?("Do not judge whether the task is worth doing.")
-    assert_equal({ "to_be_written_in" => "questions_and_approvals" }, shipped("orchestrator_approves_actions")["instruction"])
   end
 
-  # The server writes each shipped rule's version from Rules::Shipped, which
-  # turns the placeholder into null: every shipped instruction it writes is
-  # one RuleVersion takes, the placeholder object is not, and the schema
-  # says when the instruction is null, as the Mac reads it (an optional
-  # string).
+  # The server writes both model rules with instructions. RuleVersion can
+  # still read an app rule or a version from before its instruction shipped.
   def test_a_shipped_instruction_as_written_is_one_rule_version_takes
     instruction = schemas.dig("RuleVersion", "properties", "instruction")
     takes = JSONSchemer.schema(instruction)
     Leverage::Rules::Shipped.all.each { |record| assert takes.valid?(record.instruction), record.key }
-    assert_nil Leverage::Rules::Shipped.find("orchestrator_approves_actions").instruction
-    refute takes.valid?(shipped("orchestrator_approves_actions")["instruction"])
-    assert_match(/null for an app-checked rule.*not written yet/m, instruction["description"].to_s)
+    approval = Leverage::Rules::Shipped.find("orchestrator_approves_actions").instruction
+    assert_kind_of String, approval
+    assert_equal shipped("orchestrator_approves_actions")["instruction"], approval
+    assert takes.valid?(approval)
+    assert takes.valid?(nil)
   end
 
   # RD-26: each rule of Settings, Rules with its sentence, its moment,

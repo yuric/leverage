@@ -1,3 +1,4 @@
+import LeverageKit
 import SwiftUI
 
 /// One rule: its switch, its name, when it runs, who it applies to, who
@@ -7,6 +8,7 @@ struct RuleRowView: View {
     let isChanging: Bool
     let turn: (Bool) -> Void
     let change: () -> Void
+    var projects: [Project] = []
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -23,9 +25,6 @@ struct RuleRowView: View {
                     Text(verbatim: line.name)
                         .font(.system(size: Tokens.FontSize.body, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                    if let notActing = line.notActing {
-                        Chip(text: notActing, tone: .wait)
-                    }
                     Spacer(minLength: 0)
                     Button(RulesCopy.change.text, action: change)
                         .buttonStyle(.link)
@@ -59,7 +58,7 @@ struct RuleRowView: View {
     private var facts: some View {
         HStack(alignment: .top, spacing: 18) {
             fact(RulesCopy.whenItRuns.text, line.whenItRuns)
-            fact(RulesCopy.appliesTo.text, line.appliesTo)
+            fact(RulesCopy.appliesTo.text, line.appliesTo(projects: projects))
             fact(RulesCopy.checkedBy.text, line.checkedBy)
             if let ifItFails = line.ifItFails {
                 fact(RulesCopy.ifItFails.text, ifItFails)

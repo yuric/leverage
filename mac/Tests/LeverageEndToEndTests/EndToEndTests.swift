@@ -69,12 +69,21 @@ extension LeverageEndToEnd {
                     failing: { $0.taskID == task && $0.type == .taskCancelled },
                     where: { $0.taskID == task && $0.type == .taskDone })
 
-                // The task's log is trace 09's, command by command.
+                // The task follows trace 09. AP-40 adds one builder cost
+                // report after each tool run, between start and pass.
                 let events = await follower.events(of: task)
-                let expected = try Trace09.commands()
-                #expect(events.map(\.type.rawValue) == expected.flatMap(\.events))
+                let expected = try Trace09.commands().flatMap { command -> [[String]] in
+                    if command.command == CommandName.startCriterion.rawValue {
+                        return [command.events, [EventType.costReported.rawValue]]
+                    }
+                    return [command.events]
+                }
+                #expect(events.map(\.type.rawValue) == expected.flatMap { $0 })
                 let groups = groupedByCommand(events)
-                #expect(groups.map { $0.events.map(\.type.rawValue) } == expected.map(\.events))
+                #expect(groups.map { $0.events.map(\.type.rawValue) } == expected)
+                let builderCosts = events.filter { $0.type == .costReported && $0.actorID == builder }
+                #expect(builderCosts.count == 3)
+                #expect(builderCosts.allSatisfy { $0.payload["spend"]?.numberValue == 0 })
                 #expect(groups.allSatisfy { $0.key != nil }, "every event names its command")
                 #expect(Set(groups.compactMap(\.key)).count == groups.count, "one key per command")
                 #expect(groups.first?.key == added.addKey.value)

@@ -1,3 +1,4 @@
+import LeverageKit
 import SwiftUI
 
 /// The task page, opened from a card (MA-9). Built with no arguments: it shows
@@ -28,7 +29,7 @@ private struct TaskPageHost: View {
                 taskID: taskID, api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
                 editOnOpen: context.navigator.takeEditRequest(for: taskID))
         }
-        TaskPageContent(model: model)
+        TaskPageContent(model: model, projects: context.paneProjects.filter { $0.contentDeletedAt == nil })
             .task {
                 model.attach(to: context.feed)
                 await model.load()
@@ -40,6 +41,7 @@ private struct TaskPageHost: View {
 /// What the page draws from its model.
 struct TaskPageContent: View {
     @Bindable var model: TaskPageModel
+    var projects: [Project] = []
 
     var body: some View {
         switch model.state {
@@ -84,15 +86,35 @@ struct TaskPageContent: View {
                 LetThroughSheet(model: sheet, cancel: { model.dismissLetThrough() })
             }
         }
+        .sheet(
+            isPresented: Binding(get: { model.settings != nil }, set: { if !$0 { model.endChangingSettings() } })
+        ) {
+            if let settings = model.settings {
+                TaskSettingsSheet(model: settings, projects: projects, dismiss: { model.endChangingSettings() })
+            }
+        }
         .confirmationDialog(
-            TaskPageCopy.cancelQuestion.text,
-            isPresented: Binding(get: { model.isConfirmingCancel }, set: { if !$0 { model.dismissCancel() } }),
+            (model.isConfirmingDeleteContent ? TaskPageCopy.deleteContentQuestion : .cancelQuestion).text,
+            isPresented: Binding(
+                get: { model.isConfirmingDeleteContent || model.isConfirmingCancel },
+                set: {
+                    if !$0 {
+                        model.dismissDeleteContent()
+                        model.dismissCancel()
+                    }
+                }),
             titleVisibility: .visible
         ) {
-            Button(TaskPageCopy.cancelTask.text, role: .destructive) { Task { await model.confirmCancel() } }
-            Button(TaskPageCopy.keepTask.text, role: .cancel) { model.dismissCancel() }
+            if model.isConfirmingDeleteContent {
+                Button(TaskPageCopy.deleteContent.text, role: .destructive) { Task { await model.confirmDeleteContent() } }
+                Button(TaskPageCopy.keepContent.text, role: .cancel) { model.dismissDeleteContent() }
+            } else {
+                Button(TaskPageCopy.cancelTask.text, role: .destructive) { Task { await model.confirmCancel() } }
+                Button(TaskPageCopy.keepTask.text, role: .cancel) { model.dismissCancel() }
+            }
         } message: {
-            Text(TaskPageCopy.cancelExplanation.text)
+            Text(verbatim: model.isConfirmingDeleteContent
+                ? TaskPageCopy.deleteContentExplanation.text : model.cancelExplanation)
         }
     }
 
@@ -118,10 +140,16 @@ struct TaskPageBody: View {
                     .font(.system(size: Tokens.FontSize.body))
                     .foregroundStyle(Tokens.Tone.stop.foreground)
             }
-            if model.showsContractForm { contractForm } else { contract }
-            criteria
-            if !model.checks.isEmpty { RuleChecklist(model: model) }
-            work
+            if model.isContentDeleted {
+                noteBox(TaskPageCopy.contentDeleted.text)
+            } else {
+                if model.showsContractForm { contractForm } else { contract }
+                criteria
+                if !model.actions.isEmpty { ActionsSection(rows: model.actions) }
+                if !model.questions.isEmpty { QuestionsSection(rows: model.questions) }
+                if !model.checks.isEmpty { RuleChecklist(model: model) }
+                work
+            }
             if let timing = model.timing { TimingSection(timing: timing) }
             log
         }
@@ -143,15 +171,23 @@ struct TaskPageBody: View {
                 }
             }
             Spacer(minLength: 0)
-            if model.canCancel {
+            if model.canChangeSettings || model.canCancel || model.canDeleteContent {
                 Menu {
-                    Button(TaskPageCopy.cancelTask.text, role: .destructive) { model.askToCancel() }
+                    if model.canChangeSettings {
+                        Button(TaskPageCopy.taskSettings.text) { model.beginChangingSettings() }
+                    }
+                    if model.canCancel {
+                        Button(TaskPageCopy.cancelTask.text, role: .destructive) { model.askToCancel() }
+                    }
+                    if model.canDeleteContent {
+                        Button(TaskPageCopy.deleteContent.text, role: .destructive) { model.askToDeleteContent() }
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .accessibilityLabel(TaskPageCopy.cancelTask.text)
+                .accessibilityLabel(TaskPageCopy.taskActions.text)
             }
         }
     }

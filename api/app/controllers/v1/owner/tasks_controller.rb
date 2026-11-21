@@ -46,6 +46,18 @@ module V1
       # answers its id.
       def draft_contract = control("draft_contract", "draft_contract")
 
+      def priority = control("change_task_priority", "change_task_priority")
+      def project = control("change_task_project", "change_task_project")
+      def cap = control("change_task_cap", "change_task_cap")
+      def rework = control("return_for_rework", "return_for_rework")
+      def offer_again = control("offer_task_again", "offer_task_again")
+      def grant_access = control("grant_access", "grant_access")
+
+      def delete_content
+        body = checked_body("delete_task_content")
+        run_command("delete_content", params: body.merge("task_id" => uuid_param!(:id)))
+      end
+
       private
 
       # operation_id names the body to check, command the entry to run.

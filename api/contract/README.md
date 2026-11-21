@@ -212,10 +212,12 @@ from-state and guard:
 
 - `from` and `to` are task states. `from: null` means the command does not
   read a task's state (Add task has no task yet).
-- `guard` is a conjunction of guards from the registry's `guards`. For each
-  command and from-state, every combination of the guard families its rows
-  name matches exactly one row; a family a row does not name does not
-  matter. A command and state with no row is refused with `invalid_state`.
+- `guard` is a conjunction of guards from the registry's `guards`. Every
+  reachable combination of the families a command and from-state name
+  matches exactly one row. A row accepts any value of a family it does
+  not name. The rows explain when the previous builder cannot hold this
+  task (AE-16). A command and state with no row is refused with
+  `invalid_state`.
 - `events` are always written; `conditional_events` are written when their
   `when` guard holds. The PRD's Events cell is these two together.
 - `side_events` are the events the paragraph under the PRD's lifecycle
@@ -229,12 +231,17 @@ from-state and guard:
 - `commands` gives each command's `work_call`, `blocked_by_hold` and
   `allowed_while_pending`, with a `note` where the PRD needs reading;
   `action_machine` is the outward action's own states. A guard about one
-  action names the `action_states` it holds in, and every action event a
-  row writes is a move of `action_machine` from each of them.
+  action can name the `action_states` it holds in. Action events that move
+  the action follow `action_machine`. `action.overturn_recorded` records
+  an overturn after the action is done and leaves its state unchanged.
+  A command without a move from the action's state is refused with
+  `invalid_state`. The audit-only overturn follows its own rows.
 - An operation that runs another command's rows names both (the verdict
   runs `pass_review` or `fail_review`; a job result may run
-  `approve_action`; an override of the check that stopped an action runs
-  `approve_action`), so the lease rule of the run command applies.
+  `approve_action`), so the lease rule of the run command applies. An
+  override of the failed check that stopped an action follows the
+  approval's task and lease rows and uses the `override_check` action
+  move (AP-15).
 - `who_in_other_rows` on a group names a caller of the PRD's Who may ask
   cell whose part other rows write (the app's own holds).
 
@@ -615,3 +622,86 @@ check result. What it added and changed, each from the milestone 4 plan
 
 Line numbers in the notes this milestone added are those of
 `docs/PRD.md` at the merge of milestone 3, as the plan cites them.
+
+## What the Questions and approvals milestone added
+
+The milestone serves the questions, access, cost, outward action, project,
+task settings and content deletion operations already in the contract.
+Its new operation is `get_workspace_settings`, an owner read at
+`GET /v1/owner/settings` returning `WorkspaceSettings` (AP-37).
+`ChangeWorkspaceSettingsRequest` declares the six setting bounds and
+allows the recovery time ceiling to be cleared (AP-39).
+
+- `action.overturn_recorded` v1 has an action subject and an empty payload.
+  An overturn after the action is done writes it once. A repeat is
+  refused with `invalid_state` (AP-13).
+- The approval rows require an open owner approval hold or the result of
+  the action's own approval job. The failed check that stopped an action
+  can be overridden through `override_check` (AP-15). An errored approval
+  check stays with the owner. The offline timer leaves it alone and
+  `rerun_check` refuses it (AE-15).
+- Offer task again requires an enabled, unremoved seat in the builder
+  role (AP-19). If the previous builder is unavailable in one of those
+  ways and approved actions remain, the task holds with
+  `action_unconfirmed`. Waive closes the `check_error` hold for any
+  gate it withdraws on that action. Return for rework closes
+  the approval and unconfirmed holds. When the previous builder still
+  holds the task and is enabled and unpaused, rework replaces its lease
+  and a waive keeps it (AE-16). A re-enabled seat can still hold the
+  task's paused lease. Offer task again replaces that lease. Mark action
+  done keeps it when approved actions remain and the seat is available
+  (AP-19). An action with an open owner approval must be approved or
+  stopped before it can be waived.
+- `task.created` carries the initial `action_ids` so replay can recover
+  actions added with the task. Replay accepts older events without that
+  field (DB-50). `action.stopped.overturned` distinguishes an open
+  approval overturned by the owner from an ordinary stop (DB-51).
+- A question passed on without blocking has a Needs you item with a null
+  hold. The answer, overturn and content deletion rows declare which
+  cases are accepted and which return `invalid_state` (AP-3, AP-6,
+  AP-36). Done withdraws queued or claimed question jobs. An orchestrator's
+  answer can be overturned or replaced only while the task is active.
+  A passed-on question on a Done task remains answerable while the task's
+  content is present. Deleting that content resolves its open Needs you item.
+  A project deletion also writes `content.deleted` for each
+  task whose content it deletes. A changed brief advances its version
+  once. Added and removed entries write `brief.changed` at that version.
+  A reorder alone records the moved entries (AP-27, DB-41).
+- Complete contract and Edit contract close a budget hold when the new
+  cap is empty or above the task's reported spending (AE-12). A report
+  opens no budget hold on a task the command just ended. Budget, cap and
+  spend requests accept at most 99,999,999.999999 dollars. A report whose
+  sum would overflow a task or project total returns `422 invalid`. The
+  saved spend and its event use the same six-decimal precision. If a
+  running gate's cost uses the capacity a waiting verdict needs, the
+  gate result still commits and the verdict is refused.
+- `QuestionJobInput` carries the task's question, contract with outward
+  actions, project brief, role file and earlier answers. `ApprovalJobInput`
+  carries the action, contract, role file, rule instruction and quoted
+  notes and evidence (AP-4, AP-5, AE-5). The result schemas limit an
+  answer to 4,000 characters and an approval reason to 500.
+  `shipped_rules.json` gives the model policy its instruction (AP-23).
+- `get_landing_prompt` accepts `connection=http` or `connection=mcp` and
+  returns the chosen form in `connection` (AM-8). Connect and Change
+  seat accept strength ranks 1 to 3 (AP-24). Activity uses the registry's
+  `important_event_types` list (AP-34).
+- The owner inbox includes optional `detail` for access requests and
+  stopped approvals. The content stays in its row.
+- Delete content also clears stored claim copies and check reasons from
+  command refusals. A refusal by a rule check records the check's task
+  on the receipt when the check row exists.
+  A task page omits cleared evidence. A stale job claim
+  exposes no material when the seat no longer holds that job in the
+  current role or project, or the task content was deleted. A repeat
+  preserves the key and never claims new work.
+- Decided for you reads expose the decision, its task and seat, and the
+  result of an overturn (AP-31, AP-32, AP-35). Projects expose their
+  ordered briefs, pause source, open task count and content deletion
+  time (AP-26). Task pages expose the action start flag and the action
+  and question details. Board cards expose the wait for a builder or a
+  stronger agent. Briefings carry the current action states and the
+  answered questions outside the hash.
+- The migration orders existing brief entries by creation time and id
+  within each project before making their positions required and unique.
+  It checks the question outcome and basis lists, lets job input be
+  cleared, and indexes Finishing tasks with no holder by workspace.

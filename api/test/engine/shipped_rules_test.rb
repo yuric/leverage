@@ -35,11 +35,12 @@ class ShippedRecordsTest < ActiveSupport::TestCase
       Shipped.find("acceptance_criteria").parameter_schema)
   end
 
-  test "a model rule's instruction is its text, and a placeholder is no instruction yet" do
-    text = json_rules.find { |rule| rule.fetch("key") == "specific_details" }.fetch("instruction")
-    assert_kind_of String, text
-    assert_equal text, Shipped.find("specific_details").instruction
-    assert_nil Shipped.find("orchestrator_approves_actions").instruction
+  test "the two shipped model rules carry their instructions" do
+    %w[specific_details orchestrator_approves_actions].each do |key|
+      text = json_rules.find { |rule| rule.fetch("key") == key }.fetch("instruction")
+      assert_kind_of String, text
+      assert text == Shipped.find(key).instruction
+    end
     assert_nil Shipped.find("acceptance_criteria").instruction
   end
 

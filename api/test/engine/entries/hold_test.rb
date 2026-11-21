@@ -1,11 +1,10 @@
 require "test_helper"
 require_relative "owner_controls_support"
 
-# Hold (PRD Lifecycle L104, Holds L168, L176; milestone 3 plan HE-24, HS-3):
-# the owner holds a task with owner_hold in any state but Finishing, Done
-# and Cancelled. hold.opened is the owner's; owner_hold has no Needs you
-# item and pauses the lease clocks. Finishing has a row that is not served
-# in this milestone: invalid_state.
+# Hold (PRD Lifecycle L104, Holds L168, L176; milestone 3 plan HE-24):
+# the owner holds a task with owner_hold in any state but Done and
+# Cancelled. hold.opened is the owner's; owner_hold has no Needs you item
+# and pauses the lease clocks.
 class HoldTest < ActiveSupport::TestCase
   include OwnerControlsSupport
 
@@ -81,12 +80,14 @@ class HoldTest < ActiveSupport::TestCase
     assert_equal %w[rounds_exceeded owner_hold], open_holds(task).map(&:reason)
   end
 
-  test "Finishing has a row that is not served in this milestone: invalid_state (HS-3)" do
-    task = scenario.finishing_task(builder: @builder)
+  test "the owner can hold a Finishing task that has no holder" do
+    task = scenario.finishing_task(builder: @builder, holder: false, actions: [ { kind: "send", state: "requested" } ])
     outcome, events = owner_run("hold", "id" => task.id)
 
-    assert_refused("invalid_state", outcome)
-    assert_empty events
+    assert_completed(outcome)
+    assert_equal %w[hold.opened], events.map(&:type)
+    assert_equal %w[owner_hold], open_holds(task).map(&:reason)
+    assert_equal [ "finishing", nil, nil ], task.reload.attributes.values_at("state", "holder_seat_id", "lease_due_at")
   end
 
   test "Done and Cancelled are invalid_state" do

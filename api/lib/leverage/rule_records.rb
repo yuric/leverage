@@ -16,14 +16,8 @@ module Leverage
   # added_version and saved_version, which entries call in load so that a
   # field that does not fit is 422 invalid before anything is written.
   module RuleRecords
-    # RD-21: the moments a custom rule may be added at in this milestone;
-    # "before anything goes out" (action.requested) arrives with outward
-    # actions in milestone 5.
-    CUSTOM_HOOKS = (Contract.registry.fetch("custom_rule_hooks") - %w[action.requested]).freeze
-
-    # RD-22: every task, and "let the checker decide" for a model rule.
-    # Named projects and action kinds wait for milestone 5.
-    SCOPES = %w[all_tasks checker_decides].freeze
+    CUSTOM_HOOKS = Contract.registry.fetch("custom_rule_hooks").freeze
+    SCOPES = Contract.list("scope_kinds").freeze
     CHECKER_DECIDES = "checker_decides".freeze
 
     # The fields of SaveRuleRequest, all required.
@@ -55,7 +49,7 @@ module Leverage
     # gate that blocks, keyed custom_ and its id (RD-23). Returns the Rule.
     # Raises Transitions::Invalid for fields added_version refuses.
     def add(ctx, fields)
-      columns = added_version(fields)
+      columns = added_version(fields, workspace_id: ctx.workspace.id)
       id = SecureRandom.uuid
       key = "custom_#{id}"
       create(ctx, id: id, key: key, enabled: true, columns: columns.merge(key: key))
@@ -122,22 +116,20 @@ module Leverage
     # The columns of a custom rule's first version from AddRuleRequest's
     # fields (L464; RD-4, RD-21 to RD-24; DB-28, RC-7): a model gate that
     # blocks, checked by the orchestrator, its failures to the owner at
-    # "ready to start" and to the builder at the other moments. Raises
-    # Transitions::Invalid for a moment or a scope not offered yet, or a
-    # blank name or instruction.
-    def added_version(fields)
+    # "ready to start" or "before anything goes out" and to the builder
+    # at the other moments. Raises Transitions::Invalid for invalid fields.
+    def added_version(fields, workspace_id:)
       fields = fields.to_h.stringify_keys
       name = text(fields, "name")
       instruction = text(fields, "instruction")
       hook = fields["hook"]
-      unless CUSTOM_HOOKS.include?(hook)
-        invalid("A rule can be added at #{CUSTOM_HOOKS.join(", ")}; #{hook.inspect} arrives in a later version")
-      end
+      invalid("A rule can be added at #{CUSTOM_HOOKS.join(", ")}") unless CUSTOM_HOOKS.include?(hook)
 
-      { name: name, hook: hook, kind: "gate", checker: "model", scope_kind: scope_kind(fields, model: true),
-        scope_values: [], checker_function: nil, parameters: {}, instruction: instruction,
-        checker_role: "orchestrator", on_fail: "block", route: hook == "task.before_ready" ? "owner" : "builder",
-        queue_timeout_seconds: nil, run_timeout_seconds: nil, origin: "custom" }
+      { name: name, hook: hook, kind: "gate", checker: "model", checker_function: nil, parameters: {},
+        instruction: instruction, checker_role: "orchestrator", on_fail: "block",
+        route: Rules::EvaluationBuilder.default_route(hook),
+        queue_timeout_seconds: nil, run_timeout_seconds: nil, origin: "custom",
+        **scope_columns(fields, model: true, workspace_id: workspace_id) }
     end
 
     # The columns of a rule's next version from SaveRuleRequest's fields
@@ -165,7 +157,7 @@ module Leverage
       current.attributes.symbolize_keys.slice(*Rules::Shipped::VERSION_COLUMNS).merge(
         name: name, instruction: saved_instruction(current, fields["instruction"], model),
         parameters: saved_parameters(rule, current, fields["parameters"], model),
-        scope_kind: scope_kind(fields, model: model), scope_values: [],
+        **scope_columns(fields, model: model, workspace_id: rule.workspace_id),
         on_fail: gate_only(fields["on_fail"], ON_FAIL, gate, "block or warn"),
         route: gate_only(fields["route"], ROUTES, gate, "a route"),
         queue_timeout_seconds: timeout(fields["queue_timeout_seconds"]),
@@ -230,13 +222,23 @@ module Leverage
     end
 
     def reenter_waiting(ctx, checks)
-      checks.select(&:pending_transition_id).group_by(&:pending_transition_id).each do |pending_id, withdrawn|
-        pending = PendingTransition.find_by(id: pending_id, state: "pending")
-        next unless pending
-        next if Holds.held?(Task.find(pending.task_id))
+      waiting = checks.group_by do |check|
+        if check.pending_transition_id
+          [ :transition, check.pending_transition_id ]
+        elsif check.subject_kind == "action"
+          [ :action, check.subject_id ]
+        end
+      end
+      waiting.except(nil).each do |(kind, id), withdrawn|
+        if kind == :transition
+          pending = PendingTransition.find_by(id: id, workspace_id: ctx.workspace.id, state: PendingTransitions::PENDING)
+          next unless pending
+          next if Holds.held?(Task.find(pending.task_id))
+        end
 
-        trigger = Gating::Trigger.new(kind: :rule_switched_off, rule_check_id: withdrawn.last.id)
-        PendingTransitions.reenter(ctx, pending, trigger)
+        check = withdrawn.last
+        trigger = Gating::Trigger.new(kind: :rule_switched_off, rule_check_id: check.id)
+        CheckReentry.after(ctx, check, trigger)
       end
     end
 
@@ -250,20 +252,41 @@ module Leverage
       value
     end
 
-    # RD-22: every task, or "let the checker decide" for a model rule, with
-    # neither project ids nor action kinds.
-    def scope_kind(fields, model:)
+    def scope_columns(fields, model:, workspace_id:)
       scope = fields["scope"]
       invalid("The rule's scope is an object") unless scope.is_a?(Hash)
       scope = scope.stringify_keys
       kind = scope["kind"]
       offered = model ? SCOPES : SCOPES - [ CHECKER_DECIDES ]
-      invalid("A rule's scope is one of #{offered.join(", ")} in this version") unless offered.include?(kind)
-      if Array(scope["project_ids"]).any? || Array(scope["action_kinds"]).any?
-        invalid("The scope #{kind} names no projects and no action kinds")
-      end
+      invalid("The rule's scope is one of #{offered.join(", ")}") unless offered.include?(kind)
 
-      kind
+      project_ids = scope_list(scope, "project_ids")
+      action_kinds = scope_list(scope, "action_kinds")
+      invalid("The scope #{kind} names no projects") if kind != "named_projects" && project_ids.any?
+      invalid("The scope #{kind} names no action kinds") if kind != "action_kinds" && action_kinds.any?
+
+      values = case kind
+      when "named_projects"
+        ids = project_ids.map(&:downcase)
+        matching = Project.where(workspace_id: workspace_id, id: ids).pluck(:id)
+        invalid("The scope must name projects in this workspace") unless (ids - matching).empty?
+        ids
+      when "action_kinds"
+        invalid("The scope contains an unknown action kind") if (action_kinds - Contract.list("action_kinds")).any?
+        action_kinds
+      else []
+      end
+      { scope_kind: kind, scope_values: values }
+    end
+
+    def scope_list(scope, key)
+      values = scope[key]
+      return [] if values.nil?
+
+      unless values.is_a?(Array) && values.all? { |value| value.is_a?(String) }
+        invalid("The rule's scope #{key} is a list of text values")
+      end
+      values
     end
 
     def saved_instruction(current, instruction, model)
@@ -323,6 +346,7 @@ module Leverage
     end
 
     private_class_method :create, :write_version, :author, :withdraw_in_flight, :live_jobs, :rule_holds,
-      :reenter_waiting, :invalid, :text, :scope_kind, :saved_instruction, :saved_parameters, :gate_only, :timeout
+      :reenter_waiting, :invalid, :text, :scope_columns, :scope_list, :saved_instruction, :saved_parameters,
+      :gate_only, :timeout
   end
 end

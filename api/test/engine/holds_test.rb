@@ -34,6 +34,36 @@ class HoldsTest < ActiveSupport::TestCase
 
   def left(record) = record.reload.lease_time_left_while_paused&.to_i
 
+  test "a stopped action offers override only for a failed check and rework only before a start" do
+    task = working_task
+    ctx = context
+    action_id = SecureRandom.uuid
+    facts = { action_id: action_id, rule_check_id: nil, any_action_started: true }
+    hold = H.open(ctx, task: task, reason: "action_stopped", facts: facts)
+    item = InboxItem.find_by!(hold_id: hold.id)
+
+    assert_equal facts.stringify_keys, item.facts
+    assert_equal %w[waive cancel], item.choices
+
+    hold = H.open(ctx, task: task, reason: "action_stopped",
+      facts: facts.merge(rule_check_id: SecureRandom.uuid, any_action_started: false))
+    assert_equal %w[waive return_for_rework cancel override_once], InboxItem.find_by!(hold_id: hold.id).choices
+  end
+
+  test "closing the last hold under a fresh action lease leaves an acknowledgement due without resume" do
+    task = @scenario.finishing_task(builder: @builder, holder: false,
+      actions: [ { kind: "send", description: "Send the example.", state: "approved" } ])
+    hold = H.open(context, task: task, reason: "action_unconfirmed")
+    ctx = context
+
+    task.update!(holder_seat_id: @builder.id)
+    Leverage::Leases.grant(ctx, task, paused: true)
+    H.close(ctx, hold: hold, task: task, lease_seat_id: @builder.id, choice: "offer_again")
+
+    assert_nil task.reload.resume_pending_since
+    assert_equal ctx.at + 600, task.lease_due_at
+  end
+
   test "open writes the hold, hold.opened, the Needs you item and inbox.opened caused by it" do
     task = working_task
     ctx = context
@@ -56,6 +86,21 @@ class HoldsTest < ActiveSupport::TestCase
     assert_nil task.reload.lease_due_at, "a paused lease has no running clock"
     assert_equal 250, left(task)
     assert H.pausing?(task)
+  end
+
+  test "a late question timeout pauses the lease at the hold's effective time" do
+    task = working_task
+    due = @scenario.database_now + 1.minute
+    task.update!(lease_due_at: due + 30.seconds)
+    ctx = context(at: due + 2.minutes)
+
+    Leverage::Timers.as_timer(ctx, "question_job_queue_timeout", due) do |timer|
+      H.open(timer, task: task, reason: "owner_question", facts: { question_id: SecureRandom.uuid })
+    end
+
+    assert_equal due, ctx.events.find { |event| event.type == "hold.opened" }.effective_at
+    assert_nil task.reload.lease_due_at
+    assert_equal 30, left(task)
   end
 
   test "a hold that pauses also stops the reviewer's lease clock on the open review (DB-20)" do

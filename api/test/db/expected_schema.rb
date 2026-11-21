@@ -177,12 +177,13 @@ module ExpectedSchema
     "brief_entries" => {
       columns: OWNED.merge(
         "project_id" => uuid,
+        "position" => int,
         "kind" => text,
         "text" => text(null: true),
         "author_kind" => text,
         "author_id" => uuid(null: true)
       ).merge(STAMPS),
-      indexes: [ idx("workspace_id"), idx("project_id") ],
+      indexes: [ idx("workspace_id"), idx("project_id"), idx("project_id", "position", unique: true) ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("project_id", "projects") ]
     },
     "rules" => {
@@ -250,7 +251,8 @@ module ExpectedSchema
         idx("workspace_id"),
         idx("project_id"),
         idx("holder_seat_id", unique: true, where: "(holder_seat_id IS NOT NULL)"),
-        idx("builder_seat_id")
+        idx("builder_seat_id"),
+        idx("workspace_id", where: "((state = 'finishing'::text) AND (holder_seat_id IS NULL))")
       ],
       foreign_keys: [
         fk("workspace_id", "workspaces"), fk("project_id", "projects"),
@@ -413,7 +415,7 @@ module ExpectedSchema
         "queued_at" => time(null: false),
         "claimed_at" => time,
         "finished_at" => time,
-        "input" => jsonb,
+        "input" => jsonb(null: true),
         "result" => jsonb(null: true),
         "tokens" => col("bigint", null: true),
         "spend" => money,
@@ -664,6 +666,7 @@ module ExpectedSchema
     "credentials.state default 'active'" => [ "active", "credential_states" ],
     "tasks.priority default 'normal'" => [ "normal", "priorities" ],
     "criteria.state default 'open'" => [ "open", "criterion_states" ],
+    "tasks waiting for a Finishing lease" => [ "finishing", "task_states" ],
     "questions.outcome default 'open'" => [ "open", "question_outcomes" ],
     "actions.state default 'contracted'" => [ "contracted", "action_states" ],
     "jobs.state default 'queued'" => [ "queued", "job_states" ],

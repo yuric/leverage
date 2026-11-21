@@ -60,6 +60,25 @@ public final class FakeAgentAPI: AgentAPI, @unchecked Sendable {
             _, _, _ in throw FakeAPIError.notScripted(.submitJobResult)
         }
 
+        public var askQuestion: @Sendable (UUID, AskQuestionRequest, IdempotencyKey) async throws -> CommandOutcome<AskQuestionResult> = {
+            _, _, _ in throw FakeAPIError.notScripted(.askQuestion)
+        }
+        public var getQuestion: @Sendable (UUID, UUID) async throws -> Question = {
+            _, _ in throw FakeAPIError.notScripted(.getQuestion)
+        }
+        public var requestAccess: @Sendable (UUID, RequestAccessRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.requestAccess)
+        }
+        public var reportCost: @Sendable (UUID, ReportCostRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.reportCost)
+        }
+        public var startAction: @Sendable (UUID, UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.startAction)
+        }
+        public var reportActionDone: @Sendable (UUID, UUID, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.reportActionDone)
+        }
+
         public init() {}
     }
 
@@ -169,5 +188,36 @@ public final class FakeAgentAPI: AgentAPI, @unchecked Sendable {
         -> PlainOutcome {
         try await record(.submitJobResult, Self.id(jobID), key: key, body: request)
             .submitJobResult(jobID, request, key)
+    }
+
+    public func askQuestion(taskID: UUID, _ request: AskQuestionRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<AskQuestionResult> {
+        try await record(.askQuestion, Self.id(taskID), key: key, body: request).askQuestion(taskID, request, key)
+    }
+
+    public func getQuestion(taskID: UUID, questionID: UUID) async throws -> Question {
+        try await record(.getQuestion, ["id": taskID.contractString, "qid": questionID.contractString])
+            .getQuestion(taskID, questionID)
+    }
+
+    public func requestAccess(taskID: UUID, _ request: RequestAccessRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.requestAccess, Self.id(taskID), key: key, body: request)
+            .requestAccess(taskID, request, key)
+    }
+
+    public func reportCost(taskID: UUID, _ request: ReportCostRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.reportCost, Self.id(taskID), key: key, body: request).reportCost(taskID, request, key)
+    }
+
+    public func startAction(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.startAction, ["id": taskID.contractString, "aid": actionID.contractString], key: key)
+            .startAction(taskID, actionID, key)
+    }
+
+    public func reportActionDone(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.reportActionDone, ["id": taskID.contractString, "aid": actionID.contractString], key: key)
+            .reportActionDone(taskID, actionID, key)
     }
 }

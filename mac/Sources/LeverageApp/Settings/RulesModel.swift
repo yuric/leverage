@@ -9,8 +9,6 @@ struct RuleLine: Identifiable, Equatable, Sendable {
     let isOn: Bool
     /// "When a task is ready to start".
     let whenItRuns: String
-    /// "Every task" or "The checker decides".
-    let appliesTo: String
     /// "leverage checks this itself" or "An agent checks this".
     let checkedBy: String
     /// "Stop the task" or "Only note it" on a gate; nil on a policy.
@@ -18,14 +16,16 @@ struct RuleLine: Identifiable, Equatable, Sendable {
     /// An app rule's sentence, or a model rule's instruction.
     let detail: String
     let detailIsInstruction: Bool
-    /// "Starts working in a later version of leverage" while its effect is not built.
-    let notActing: String?
     /// "Ran 12 times · average 8 seconds · …".
     let counts: String
     /// "Wording of Nov 12, 2026".
     let wording: String
     let isShipped: Bool
     let row: RuleRow
+
+    func appliesTo(projects: [Project] = []) -> String {
+        RulesCopy.scopeDescription(row.version.scope, projects: projects)
+    }
 }
 
 /// Settings, Rules (RD-25): the rules in the order the server gives them,
@@ -127,10 +127,9 @@ final class RulesModel {
         let model = version.checker == .model
         return RuleLine(
             id: row.rule.id, name: version.name, isOn: row.rule.enabled, whenItRuns: capitalized(row.momentName),
-            appliesTo: RulesCopy.scopeWords(version.scope.kind).text, checkedBy: (model ? RulesCopy.checkerModel : .checkerApp).text,
+            checkedBy: (model ? RulesCopy.checkerModel : .checkerApp).text,
             ifItFails: version.onFail.map { ($0 == .block ? RulesCopy.onFailBlock : .onFailWarn).text },
             detail: (model ? version.instruction : row.sentence) ?? "", detailIsInstruction: model,
-            notActing: row.acts ? nil : RulesCopy.notActing.text,
             counts: counts(of: row.stats, model: model, locale: locale),
             wording: RulesCopy.wordingOf.filled(["date": date(version.createdAt, calendar: calendar, locale: locale)]),
             isShipped: version.origin == .shipped, row: row)

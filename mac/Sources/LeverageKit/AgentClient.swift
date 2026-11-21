@@ -16,7 +16,8 @@ public struct AgentClient: AgentAPI {
     }
 
     public func next(wait: Int?) async throws -> NextItem {
-        try await transport.read(.getNext, waitSeconds: wait)
+        // Send the IF-14 default so the transport adds its timeout margin.
+        try await transport.read(.getNext, waitSeconds: wait ?? 30)
     }
 
     public func command(key: IdempotencyKey) async throws -> PlainOutcome {
@@ -99,5 +100,40 @@ public struct AgentClient: AgentAPI {
     public func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
         -> PlainOutcome {
         try await transport.command(.submitJobResult, path: ["id": jobID.contractString], body: request, key: key)
+    }
+}
+
+
+extension AgentClient {
+    public func askQuestion(taskID: UUID, _ request: AskQuestionRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<AskQuestionResult> {
+        try await transport.command(.askQuestion, path: ["id": taskID.contractString], body: request, key: key)
+    }
+
+    public func getQuestion(taskID: UUID, questionID: UUID) async throws -> Question {
+        try await transport.read(
+            .getQuestion, path: ["id": taskID.contractString, "qid": questionID.contractString])
+    }
+
+    public func requestAccess(taskID: UUID, _ request: RequestAccessRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.requestAccess, path: ["id": taskID.contractString], body: request, key: key)
+    }
+
+    public func reportCost(taskID: UUID, _ request: ReportCostRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.reportCost, path: ["id": taskID.contractString], body: request, key: key)
+    }
+
+    public func startAction(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(
+            .startAction, path: ["id": taskID.contractString, "aid": actionID.contractString],
+            key: key)
+    }
+
+    public func reportActionDone(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(
+            .reportActionDone, path: ["id": taskID.contractString, "aid": actionID.contractString],
+            key: key)
     }
 }

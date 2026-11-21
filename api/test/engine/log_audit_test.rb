@@ -13,6 +13,18 @@ require_relative "../support/walk"
 class LogAuditTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
+  test "releasing a lease after the last approved action was overturned leaves the stopped action" do
+    walk = Walk.new(seed: 10_101, steps: 120).run
+    events = Event.where(workspace_id: walk.workspace_id)
+    overturned = events.where(type: "action.stopped").where("payload->>'overturned' = 'true'").order(:seq).last
+    assert overturned, "the walk must overturn the approval"
+    release = events.where(task_id: overturned.task_id, type: "task.released").where("seq > ?", overturned.seq).order(:seq).first
+    assert release, "the builder must release the same task after the overturn"
+    refute events.where(command_id: release.command_id, type: "hold.opened")
+      .where("payload->>'reason' = 'action_unconfirmed'").exists?
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+  end
+
   def run_trace(name)
     TraceRunner.new(name).run.tap { |runner| assert_empty runner.failures, runner.failures.join("\n") }
   end
@@ -86,6 +98,65 @@ class LogAuditTest < ActiveSupport::TestCase
     RuleCheck.where(workspace_id: runner.workspace_id).delete_all
     found = audit(runner)
     assert(found.any? { |line| line.include?("task.ready") && line.include?("gate") }, found.inspect)
+  end
+
+  test "approval before the same round's passing review is found" do
+    scenario = Scenario.new
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.approved", task: task, round: 1, subject: action, payload: { lease_seat_id: nil })
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("action.approved") && line.include?("review.passed") }, found.inspect)
+  end
+
+  test "a passing check written after approval cannot clear the action's frozen gate" do
+    scenario = Scenario.new
+    rule = scenario.rule(hook: "action.requested")
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+    scenario.rule_check(task, rule: rule, subject: action, result: "passed")
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("action.approved") && line.include?(rule.id) }, found.inspect)
+  end
+
+  test "an override clears the frozen gate only for approvals written after it" do
+    scenario = Scenario.new
+    rule = scenario.rule(hook: "action.requested")
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    check = scenario.rule_check(task, rule: rule, subject: action, result: "failed")
+    before = scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+    scenario.append("check.overridden", task: task, subject: check, actor_kind: "owner", actor_id: scenario.owner.id)
+    after = scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+
+    gate_findings = Leverage::LogAudit.call(scenario.workspace_id, after_seq: before.seq - 1)
+      .select { |line| line.include?("action.approved") && line.include?(rule.id) }
+    assert_equal 1, gate_findings.size, gate_findings.inspect
+    assert_match(/seq #{before.seq}: /, gate_findings.sole)
+    refute_match(/seq #{after.seq}: /, gate_findings.sole)
+  end
+
+  test "start and report without approval and Done with an open action are found" do
+    scenario = Scenario.new
+    task = scenario.finishing_task(holder: false, actions: [
+      { kind: "send", description: "Made-up send." }, { kind: "publish", description: "Made-up publish." }
+    ])
+    action = Action.where(task_id: task.id).order(:position).first
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.started", task: task, subject: action)
+    scenario.append("action.reported_done", task: task, subject: action)
+    scenario.append("task.done", task: task)
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    %w[action.started action.reported_done].each do |type|
+      assert(found.any? { |line| line.include?(type) && line.include?("action.approved") }, found.inspect)
+    end
+    assert(found.any? { |line| line.include?("task.done") && line.include?("unresolved action") }, found.inspect)
   end
 
   # RC-50, RD-12: review claim-next writes the provider rule's applied row
@@ -225,6 +296,35 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end
 
+  test "a job timeout and a credential hold release at the same effective time are audited separately" do
+    scenario = Scenario.new
+    login = scenario.credential
+    fallback = scenario.credential(provider: "codex")
+    builder = scenario.seat(credential: login)
+    task = scenario.task(state: "working", builder: builder)
+    check = scenario.rule_check(task, rule: scenario.rule)
+    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
+    attempt.update_columns(queued_at: scenario.database_now - 1.day)
+    scenario.sign_out_credential(login, seat: builder, task: task)
+    scenario.hold(task, reason: "credential_signed_out", credential: login, facts: { credential_id: login.id })
+    after = scenario.workspace.reload.last_seq
+
+    T.apply(T::Request.new(command: "heartbeat", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: builder.id, key: "audit-timers", request_hash: "a" * 64, params: { "id" => task.id }))
+    events = Event.where(workspace_id: scenario.workspace_id, command_id: nil).where("seq > ?", after).order(:seq).to_a
+    assert_equal %w[job.timed_out job.requeued check.queued hold.closed credential.switched inbox.resolved], events.map(&:type)
+    assert_equal 1, events.map { |event| [ event.at, event.effective_at ] }.uniq.size
+    switch = events.fetch(4)
+    assert_equal events.fetch(3).id, switch.cause_id
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+
+    # A switch attributed to the timed-out job still has no matching row.
+    scenario.append("credential.switched", task: task, subject: fallback, at: switch.at, effective_at: switch.effective_at,
+      payload: switch.payload, cause_id: events.first.id)
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("credential.switched") }, found.inspect)
+  end
+
   # A timer's events have no key: the credential hold release (hold.closed,
   # credential.switched) is read as credential_hold_release, and the same
   # events as no timer writes them when no credential hold closes.
@@ -235,6 +335,37 @@ class LogAuditTest < ActiveSupport::TestCase
       payload: { reason: "owner_hold", rule_id: nil, credential_id: nil, lease_seat_id: nil, wait_cause: nil })
     found = audit(runner)
     assert(found.any? { |line| line.include?("no command") || line.include?("no timer") }, found.inspect)
+  end
+
+  test "a timer and the action requests on either side of a keyed review are audited in sequence" do
+    walk = Walk.new(seed: 1057, steps: 120).run
+    requested = Event.where(workspace_id: walk.workspace_id, type: "action.requested").order(:seq).first!
+    around = Event.where(workspace_id: walk.workspace_id, at: requested.at).order(:seq)
+    earlier_timer = around.where(command_id: nil).where("seq < ?", requested.seq).first
+    later_check = around.where(command_id: nil, type: "check.queued").where("seq > ?", requested.seq).first
+
+    assert earlier_timer, "the command applies a due timer before passing the review"
+    assert later_check, "passing the review queues an action check after action.requested"
+    assert earlier_timer.seq < requested.seq && requested.seq < later_check.seq
+
+    findings = Leverage::LogAudit.call(walk.workspace_id)
+    assert_empty findings, findings.join("\n")
+  end
+
+  test "orchestrator recovery can close an errored claim's hold without a workspace item" do
+    walk = Walk.new(seed: 632, steps: 120).run
+    events = Event.where(workspace_id: walk.workspace_id)
+    close = events.find_by!(seq: 100, type: "hold.closed")
+    opened = events.find_by!(type: "hold.opened", subject_id: close.subject_id)
+    check = events.where(type: "check.finished", subject_id: opened.payload.fetch("rule_check_id"))
+      .where("seq < ?", close.seq).order(:seq).last!
+
+    assert_nil close.command_id
+    assert_equal "check_error", close.payload.fetch("reason")
+    assert_equal %w[task.before_claim error], check.payload.values_at("hook", "result")
+    assert_equal [ "hold.closed" ], events.where(at: close.at).order(:seq).pluck(:type)
+    findings = Leverage::LogAudit.call(walk.workspace_id)
+    assert_empty findings, findings.join("\n")
   end
 
   test "the log of a walk, every event of it written by a command, passes from its first event" do

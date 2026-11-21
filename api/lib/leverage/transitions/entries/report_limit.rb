@@ -22,11 +22,10 @@ module Leverage
       #                 credential, or not exactly one of task and review;
       #   lease_expired, task_cancelled, not_holder  as for the seat's own
       #                 calls, when the seat does not hold the work;
-      #   invalid_state no row for the task's state that is served (no row
-      #                 from Finishing is, HS-3), the credential reported is
-      #                 not the one recorded for the work, or the task
-      #                 already waits on a credential hold (no run is on it,
-      #                 HE-21: the report is stale).
+      #   invalid_state no row for the task's state, the credential
+      #                 reported differs from the one recorded for the
+      #                 work, or the task already waits on a credential
+      #                 hold (no run is on it, HE-21: the report is stale).
       #
       # A refused report marks no credential and writes no event.
       #
@@ -34,9 +33,6 @@ module Leverage
       # body: credential_id, seat_id, task_id, review_id, job_id, window,
       # reset_at, observed_at, tool_version.
       class ReportLimit < Entry
-        # The task states whose rows are not served yet (HS-3).
-        NOT_SERVED_FROM = %w[finishing].freeze
-
         # The kind of stop Handoff.interrupt records.
         def kind = "limit"
 
@@ -59,7 +55,6 @@ module Leverage
           codes = @review ? Eligibility.review_refusals(@review, @seat) : Eligibility.task_refusals(@task, @seat, role: @seat.role)
           codes -= [ "forbidden" ]
           codes << state_refusal(@on.state, guards(ctx))
-          codes << Refusal.new(code: "invalid_state") if NOT_SERVED_FROM.include?(@on.state)
           codes << Refusal.new(code: "invalid_state") unless (@review || @task).credential_id == @credential.id
           codes << Refusal.new(code: "invalid_state") if held?
           codes.compact

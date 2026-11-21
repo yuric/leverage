@@ -13,6 +13,7 @@ Standard library only; exits 0 when every case behaves as expected.
 
 import copy
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,8 @@ REGISTRY = ROOT / "api" / "contract" / "registry.json"
 OPENAPI = ROOT / "api" / "contract" / "openapi.json"
 HOOKS = ROOT / "api" / "contract" / "hooks.json"
 OUTPUT = ROOT / "mac" / "Sources" / "LeverageKit" / "Generated" / "Contract.swift"
+AGENT_TOOLS = OUTPUT.with_name("AgentTools.swift")
+ROLES = ROOT / "api" / "contract" / "roles.json"
 VERBOSE = "-v" in sys.argv[1:]
 
 
@@ -51,6 +54,51 @@ def run(registry, openapi, *arguments, output_text=None, hooks=None):
             capture_output=True, text=True, check=False)
         swift = output_path.read_text(encoding="utf-8") if output_path.exists() else None
     return result.returncode, result.stdout + result.stderr, swift
+
+
+def check_agent_tools(cases, registry, openapi):
+    tools_text = AGENT_TOOLS.read_text(encoding="utf-8") if AGENT_TOOLS.exists() else ""
+    quoted = r'("(?:[^"\\]|\\.)*")'
+    rows = re.findall(
+        rf"^        \.init\(id: {quoted}, method: \.(get|post), path: {quoted}, "
+        rf"summary: {quoted}, inputSchema: {quoted}, roles: \[([^\]]*)\]\),$",
+        tools_text, re.MULTILINE)
+    operations = [op for op in registry["operations"] if op["tag"] == "agent"]
+    cases.check("AgentTools.swift has all 24 agent operations in registry order",
+                [json.loads(row[0]) for row in rows] == [op["operation_id"] for op in operations]
+                and len(rows) == 24, f"found {len(rows)} tool declarations")
+    roles = load(ROLES)["roles"]
+    for raw_id, method, raw_path, raw_summary, raw_schema, role_list in rows:
+        tool_id = json.loads(raw_id)
+        path = json.loads(raw_path)
+        summary = json.loads(raw_summary)
+        schema = json.loads(json.loads(raw_schema))
+        op = next((op for op in operations if op["operation_id"] == tool_id), None)
+        cases.check(f"{tool_id} matches the registry method and path",
+                    op and (method.upper(), path) == (op["method"], op["path"]))
+        if not op:
+            continue
+        interface = openapi["paths"][op["path"]][op["method"].lower()]
+        cases.check(f"{tool_id} matches the interface summary", summary == interface["summary"])
+        cases.check(f"{tool_id} lists the roles allowed by roles.json",
+                    role_list == ", ".join("." + role["role"] for role in roles
+                                           if tool_id in role["operations"]))
+        cases.check(f"{tool_id} has an object schema with every reference resolved",
+                    schema["type"] == "object" and '"$ref"' not in json.dumps(schema))
+        path_fields = set(re.findall(r"\{(\w+)\}", path))
+        body = interface.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema", {})
+        if "$ref" in body:
+            body = openapi["components"]["schemas"][body["$ref"].split("/")[-1]]
+        expected_fields = path_fields | set(body.get("required", []))
+        cases.check(f"{tool_id} requires every path and required body field",
+                    expected_fields <= set(schema.get("properties", {}))
+                    and expected_fields <= set(schema.get("required", [])))
+        if tool_id == "submit_job_result":
+            result = schema.get("properties", {}).get("result", {})
+            cases.check("submit_job_result retains its four resolved result alternatives and path id",
+                        "id" in schema.get("required", []) and len(result.get("oneOf", [])) == 4
+                        and {"outcome", "answer", "basis"} in [
+                            set(alternative.get("required", [])) for alternative in result["oneOf"]])
 
 
 class Cases:
@@ -86,6 +134,13 @@ def main():
     committed = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
     cases.check("a run into another folder writes the committed text",
                 swift == committed, "the outputs differ")
+
+    check_agent_tools(cases, registry, openapi)
+
+    cases.check("important event types are exposed as a typed list in registry order",
+                "importantEventTypes: [EventType] = [" + ", ".join(
+                    "." + re.sub(r"[._](.)", lambda match: match[1].upper(), event)
+                    for event in registry["lists"]["important_event_types"]) + "]" in swift)
 
     code2, _, swift2 = run(registry, openapi)
     cases.check("two runs write the same text", code2 == 0 and swift == swift2)

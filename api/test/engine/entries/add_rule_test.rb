@@ -4,8 +4,8 @@ require_relative "../../support/trace_runner"
 
 # Entries::AddRule (PRD L342, L423; milestone 4 plan RD-4, RD-21 to RD-24):
 # the owner adds a custom rule, a model-checked gate that blocks, at one of
-# the four moments a task can reach. Before anything goes out arrives with
-# outward actions, and two scopes wait for projects: each is 422 invalid.
+# the five moments a task can reach. Scope values must fit their kind
+# and any projects they name must belong to the workspace.
 class AddRuleTest < ActiveSupport::TestCase
   include RuleSupport
 
@@ -26,17 +26,36 @@ class AddRuleTest < ActiveSupport::TestCase
     assert_equal [ "task.before_submit", "builder", "block", "model" ], [ version.hook, version.route, version.on_fail, version.checker ]
   end
 
-  test "each of the four moments a task can reach is offered (RD-21)" do
-    %w[task.before_ready task.before_claim task.before_submit task.before_done].each do |hook|
+  test "each of the five custom rule moments is offered" do
+    hooks = Leverage::Contract.registry.fetch("custom_rule_hooks")
+    hooks.each do |hook|
       assert_completed(owner_command("add_rule", add_body(hook: hook)))
     end
-    assert_equal 4, Rule.where(workspace_id: scenario.workspace_id).count
+    versions = RuleVersion.where(workspace_id: scenario.workspace_id)
+    assert_equal hooks.sort, versions.pluck(:hook).sort
+    assert_equal "owner", versions.find_by!(hook: "action.requested").route
   end
 
-  test "before anything goes out, named projects and action kinds are 422 invalid and write nothing (RD-21, RD-22)" do
-    bodies = [ add_body(hook: "action.requested"),
-               add_body(scope: { "kind" => "named_projects", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }),
-               add_body(scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "publish" ] }) ]
+  test "named projects and action kinds are stored on the rule version" do
+    project = scenario.project
+    [
+      [ { "kind" => "named_projects", "project_ids" => [ project.id ], "action_kinds" => nil }, [ project.id ] ],
+      [ { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => %w[publish send] }, %w[publish send] ]
+    ].each do |scope, values|
+      assert_completed(owner_command("add_rule", add_body(hook: "action.requested", scope: scope)))
+      version = RuleVersion.find_by!(workspace_id: scenario.workspace_id, scope_kind: scope.fetch("kind"))
+      assert_equal values, version.scope_values
+    end
+  end
+
+  test "foreign projects and invalid scope values are 422 invalid and write nothing" do
+    project = scenario.project
+    foreign = Scenario.new.project
+    bodies = [
+      add_body(scope: { "kind" => "named_projects", "project_ids" => [ project.id, foreign.id ], "action_kinds" => nil }),
+      add_body(scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "made_up" ] }),
+      add_body(scope: { "kind" => "all_tasks", "project_ids" => [ project.id ], "action_kinds" => nil })
+    ]
     counts = [ Rule.count, Event.count, Command.count ]
 
     bodies.each { |body| assert_raises(T::Invalid) { owner_command("add_rule", body) } }

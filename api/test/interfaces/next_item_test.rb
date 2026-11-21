@@ -1,12 +1,8 @@
 require "test_helper"
 
-# GET /v1/next (milestone 2 plan WP8, PRD L514-L529, IF-7, IF-34, EN-13,
-# EN-20): which item a seat is told about, the first true row of the
-# precedence table, read from the rows Scenario builds. The kinds `command`,
-# `answer`, `action` and `job` cannot be true in this milestone and are
-# never answered (plan §1.2). Whether a task or a review is waiting for the
-# seat is Eligibility's (WP3) and what the briefing's hash is, Briefing's:
-# both are scripted here, each by its own two-method double.
+# GET /v1/next returns the first true row of the PRD's precedence table.
+# The tests build persisted rows with Scenario and script the answers from
+# Eligibility, Briefing and Jobs with their own doubles.
 class NextItemTest < ActiveSupport::TestCase
   include OpenapiAssertions
 
@@ -344,14 +340,95 @@ class NextItemTest < ActiveSupport::TestCase
       item(orchestrator, jobs: Claimable.new(@scenario.job(kind: "contract_draft", task: @scenario.task(state: "backlog"))))
   end
 
-  # the kinds this milestone cannot make true
+  # answers and outward actions (WP11)
 
-  test "the kinds of milestone 5 are never answered" do
-    task = reworked
+  test "answered and overturned questions repeat until the asking holder reads them" do
+    task = @scenario.task(state: "working", builder: @builder)
+    %w[answered overturned].each do |outcome|
+      question = @scenario.question(task, outcome: outcome, blocking: false)
+      expected = Item.new("answer", question.id, nil)
+
+      assert_item expected, item(@builder)
+      assert_item expected, item(@builder)
+      assert_nil question.reload.read_at
+
+      question.update_columns(read_at: @scenario.database_now)
+      assert_item Item.none, item(@builder)
+    end
+  end
+
+  test "open questions and questions asked by another seat or on a task the builder no longer holds are silent" do
+    submitted = @scenario.task(state: "in_review", builder: @builder)
+    held = @scenario.task(state: "working", builder: @builder)
+    @scenario.question(held, outcome: "open", blocking: false)
+    @scenario.question(held, outcome: "passed_on", blocking: false)
+    @scenario.question(held, outcome: "answered", blocking: false, asking_seat: @scenario.seat(role: "builder"))
+    @scenario.question(submitted, outcome: "answered", blocking: false)
+
+    assert_item Item.none, item(@builder)
+  end
+
+  test "an answer comes after resume and before an action under a fresh lease" do
+    task = @scenario.finishing_task(builder: @builder, actions: [ { kind: "publish", description: "Publish the sample.", state: "approved" } ])
+    question = @scenario.question(task, outcome: "answered", blocking: false)
     task.update_columns(resume_pending_since: @scenario.database_now)
-    @scenario.task(state: "ready")
 
-    assert_not_includes %w[answer action], item(@builder).fetch("kind")
+    assert_item Item.new("resume", task.id, nil), item(@builder)
+
+    task.update_columns(resume_pending_since: nil)
+    assert_item Item.new("answer", question.id, nil), item(@builder)
+
+    question.update_columns(read_at: @scenario.database_now)
+    assert_item Item.new("action", task.id, nil), item(@builder)
+  end
+
+  test "an approved action under a live lease repeats until the builder acknowledges that lease" do
+    task = @scenario.finishing_task(builder: @builder, actions: [ { kind: "publish", description: "Publish the sample.", state: "approved" } ])
+    waiting = Waiting.new(task: @scenario.task(state: "ready"))
+    acknowledge(@builder, task, lease_event(task, "task.claimed"))
+
+    assert_item Item.new("action", task.id, nil), item(@builder, eligibility: waiting)
+    assert_item Item.new("action", task.id, nil), item(@builder, eligibility: waiting)
+
+    acknowledge(@builder, task, lease_event(task, "action.approved"))
+    assert_item Item.none, item(@builder, eligibility: waiting)
+  end
+
+  test "a fresh Finishing lease still tells the builder about work already announced as started" do
+    task = @scenario.finishing_task(builder: @builder, actions: [
+      { kind: "publish", description: "Publish the sample.", state: "started" }
+    ])
+
+    assert_item Item.new("action", task.id, nil), item(@builder)
+  end
+
+  test "an approved action with no holder or an expired lease is silent" do
+    actions = [ { kind: "publish", description: "Publish the sample.", state: "approved" } ]
+    @scenario.finishing_task(builder: @builder, holder: false, actions: actions)
+    assert_item Item.none, item(@builder)
+
+    task = @scenario.finishing_task(builder: @builder, actions: actions)
+    @scenario.make_due(task)
+    assert_item Item.none, item(@builder)
+  end
+
+  test "owner rework gives a rework notice until the fresh lease is acknowledged" do
+    task = @scenario.finishing_task(builder: @builder, actions: [ { kind: "publish", description: "Publish the sample.", state: "approved" } ])
+    acknowledge(@builder, task, lease_event(task, "action.approved"))
+    ActiveRecord::Base.transaction do
+      task.update!(state: "working", round: task.round + 1, lease_due_at: @scenario.database_now + 600)
+      ctx = @scenario.context
+      begin
+        ctx.emit("task.returned_for_rework", task: task, actor_kind: "owner", actor_id: @scenario.owner.id,
+          payload: { lease_seat_id: @builder.id, wait_cause: nil }, command_id: nil)
+      rescue Leverage::Steps::Unsupported
+        # The event is written before Steps, whose new rows are built separately.
+      end
+    end
+
+    assert_item Item.new("rework", task.id, nil), item(@builder)
+    acknowledge(@builder, task, lease_event(task, "task.returned_for_rework"))
+    assert_item Item.none, item(@builder)
   end
 
   test "the answer is a NextItem of the contract" do

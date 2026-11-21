@@ -178,6 +178,16 @@ class StepTrackerTest < ActiveSupport::TestCase
     end
   end
 
+  {
+    "03-stop-rework-pass-approve-done" => "action check, stopped action, rework, wait_builder and finish",
+    "04-two-actions-custom-rule" => "action checks, builder busy, and finish moving to the next action",
+    "22-finishing-edges" => "holds, reoffered leases, waives, and action expiry"
+  }.each do |name, what|
+    test "trace #{name[0, 2]}'s events yield exactly its steps: #{what}" do
+      feed(name)
+    end
+  end
+
   test "trace 18: a waiting command ended from outside closes check where the transition ends, with no step between" do
     feed("18-claim-gate-done-gate-and-ends") do |number, ids|
       next unless [ 11, 36, 46, 51 ].include?(number)
@@ -245,6 +255,27 @@ class StepTrackerTest < ActiveSupport::TestCase
 
     row = TaskStep.find_by!(task_id: task.id)
     assert_equal row.opened_at, row.closed_at
+  end
+
+  test "creating a task in a paused project retains its first step at task.created" do
+    @scenario = Scenario.new
+    project = @scenario.project(paused: true)
+    params = { "title" => "A made-up task", "goal" => "A made-up goal.", "project_id" => project.id }
+    request = Leverage::Transitions::Request.new(command: "add_task", workspace_id: @scenario.workspace_id,
+      caller_kind: "owner", caller_id: @scenario.owner.id, key: "k-create-paused", request_hash: "test", params: params)
+    outcome = Leverage::Transitions.apply(request)
+    assert outcome.completed?
+
+    task_id = outcome.result.fetch("task_id")
+    created, held = Event.where(task_id: task_id).order(:seq).to_a
+    assert_equal [ "task.created", "hold.opened" ], [ created.type, held.type ]
+    first = TaskStep.find_by(task_id: task_id, opening_event_id: created.id)
+    assert_not_nil first, "task.created opens a step even when the same command holds the task"
+    assert_equal [ "wait_contract", held.id, created.effective_at, created.effective_at ],
+      first.values_at(:kind, :closing_event_id, :opened_at, :closed_at)
+
+    waiting = TaskStep.find_by!(task_id: task_id, closed_at: nil)
+    assert_equal [ "wait_owner", held.id, first.closed_at ], waiting.values_at(:kind, :opening_event_id, :opened_at)
   end
 
   test "task.cancelled closes the open step and opens none (EN-30)" do
@@ -601,12 +632,21 @@ class StepTrackerTest < ActiveSupport::TestCase
     assert_equal [ "rule", rule.id ], open_step(task).values_at(:cause_kind, :cause_rule_id)
   end
 
-  test "an event milestone 2 cannot write raises instead of guessing a step" do
+  test "escalation closes review at review.failed and opens the Ready wait at task.reassigned" do
     @scenario = Scenario.new
-    task = @scenario.task(state: "ready")
-    assert_raises(Leverage::Steps::Unsupported) do
-      in_context(key: "k-later") { |ctx| ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil }) }
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task)
+    criterion = Criterion.find_by!(task_id: task.id, kind: "build")
+    review_step = open_step(task)
+    failed = nil
+    reassigned = in_context(key: "k-escalate", caller: [ "seat", review.reviewer_seat_id ]) do |ctx|
+      failed = ctx.emit("review.failed", task: task, subject: review,
+        payload: { failed_criterion_ids: [ criterion.id ], failed_rule_check_id: nil, lease_seat_id: nil, wait_cause: nil })
+      ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil })
     end
+
+    assert_equal failed.id, review_step.reload.closing_event_id
+    assert_equal [ "wait_ready", 1, reassigned.id ], open_step(task).values_at(:kind, :round, :opening_event_id)
   end
 
   private

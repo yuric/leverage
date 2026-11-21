@@ -21,6 +21,7 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let canStop: Bool
     /// An agent that connects on its own has a landing prompt; one the app runs has none.
     let canCopyLandingPrompt: Bool
+    var canCopyMCPSettings: Bool { canCopyLandingPrompt }
     let canPause: Bool
     let canResume: Bool
     let canChange: Bool
@@ -101,8 +102,8 @@ struct PendingRemoval: Equatable, Sendable {
 }
 
 /// The Agents screen: one row per agent from `list_seats`, with Start and
-/// Stop for an agent the app runs, Copy landing prompt for one that connects
-/// on its own, and Remove behind a confirmation (MA-2, MA-12, MA-20, MA-30).
+/// Stop for an agent the app runs, Copy landing prompt and Copy MCP settings
+/// for one that connects on its own, and Remove behind a confirmation.
 ///
 /// It reads again when the events tail delivers a batch, and every 10 seconds,
 /// because when an agent last asked for work and whether it runs are not
@@ -127,6 +128,7 @@ final class RosterModel {
     private(set) var pendingRemoval: PendingRemoval?
     /// The agent whose landing prompt was copied last.
     private(set) var copiedPrompt: UUID?
+    private(set) var copiedMCPSettings: UUID?
     private(set) var busy: Set<UUID> = []
     private(set) var working: [UUID: AgentsCopy] = [:]
     /// The Change sheet, while the owner has one open.
@@ -136,6 +138,7 @@ final class RosterModel {
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private let copy: @MainActor (String) -> Void
+    @ObservationIgnored private let apiURL: @MainActor () async -> URL?
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timing: FollowTiming
     @ObservationIgnored private let testedProviders: [Provider]
@@ -148,7 +151,8 @@ final class RosterModel {
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
         copy: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
-        timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
+        timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
+        apiURL: @escaping @MainActor () async -> URL? = { nil }
     ) {
         self.api = api
         self.noteRead = noteRead
@@ -156,6 +160,7 @@ final class RosterModel {
         self.now = now
         self.timing = timing
         self.testedProviders = testedProviders
+        self.apiURL = apiURL
     }
 
     func isBusy(_ id: UUID) -> Bool { busy.contains(id) }
@@ -344,18 +349,38 @@ final class RosterModel {
         }
     }
 
+    func copyMCPSettings(_ id: UUID) async {
+        guard let seat = seats[id], seat.credentialID == nil, !busy.contains(id) else { return }
+        busy.insert(id)
+        defer { busy.remove(id) }
+        failures[id] = nil
+        copiedMCPSettings = nil
+        let address = await apiURL()
+        guard !Task.isCancelled, let current = seats[id], current.credentialID == nil else { return }
+        guard let address, let text = MCPSettings.text(apiURL: address, role: current.role) else {
+            failures[id] = AgentsCopy.mcpSettingsUnavailable.text
+            return
+        }
+        copy(text)
+        copiedPrompt = nil
+        copiedMCPSettings = id
+    }
+
     /// Copy landing prompt: fetches the prompt again each time and copies it.
     /// An agent the app runs has none.
-    func copyLandingPrompt(_ id: UUID) async {
+    func copyLandingPrompt(_ id: UUID, connection: LandingPromptConnection = .http) async {
         guard rows.first(where: { $0.id == id })?.canCopyLandingPrompt == true, !busy.contains(id) else { return }
         busy.insert(id)
         defer { busy.remove(id) }
         failures[id] = nil
         copiedPrompt = nil
         do {
-            let prompt = try await api.landingPrompt(seatID: id)
-            guard !TokenShape.isIn(prompt.text) else { throw LeverageClientError.invalidBody }
+            let prompt = try await api.landingPrompt(seatID: id, connection: connection)
+            guard prompt.connection == connection, !TokenShape.isIn(prompt.text) else {
+                throw LeverageClientError.invalidBody
+            }
             copy(prompt.text)
+            copiedMCPSettings = nil
             copiedPrompt = id
         } catch is CancellationError {
             return

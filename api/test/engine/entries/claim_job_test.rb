@@ -108,4 +108,59 @@ class ClaimJobTest < ActiveSupport::TestCase
 
     assert_refused("not_eligible", claim_job(@orchestrator))
   end
+
+  test "claiming an approval job starts its check attempt" do
+    task = scenario.task(state: "working", actions: [ { kind: "publish", description: "Publish the sample." } ])
+    action = Action.find_by!(task_id: task.id)
+    check = scenario.rule_check(task, rule: model_rule(hook: "action.requested"), subject: action, attempts: 0)
+    request = Leverage::Transitions::Request.new(command: "request_action", workspace_id: scenario.workspace_id,
+      caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
+    attempt = Leverage::RuleChecks.queue_attempt(scenario.context(request: request), check, kind: "approval")
+    job = Job.find(attempt.job_id)
+    outcome = nil
+    calls = answering(Leverage::JobInputs::Approval, :call, ->(*) { {} }) do
+      outcome = assert_completed(claim_job(@orchestrator))
+    end
+
+    assert_equal [ job.id, "approval" ], outcome.result.values_at("job_id", "kind")
+    assert_equal job.id, calls.sole.arguments.first.id
+    assert_equal @orchestrator.id, RuleCheckAttempt.find_by!(job_id: job.id).checker_seat_id
+    assert Event.exists?(workspace_id: scenario.workspace_id, type: "check.started", subject_id: check.id)
+    assert_equal (job.reload.claimed_at + 300).utc.iso8601(6), outcome.result.fetch("run_due_at")
+  end
+
+  test "a seat that changes jobs role cannot reclaim question material or take a second job" do
+    seat = own_seat(role: "orchestrator")
+    task = scenario.task(state: "working")
+    question = scenario.question(task)
+    question_job = scenario.job(kind: "question", task: task, target: question)
+    key = new_key
+    original = assert_completed(claim_job(seat, key: key))
+    assert_equal question_job.id, original.result.fetch("job_id")
+    repeated = events_written { assert_equal original, claim_job(seat, key: key) }
+    assert_empty repeated
+    draft_job = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog"))
+
+    assert_completed(owner_command("change_seat", { "id" => seat.id, "role" => "planner" }))
+
+    assert_nil Leverage::Jobs.next_for(seat.reload, at: scenario.database_now)
+    stored = Leverage::Reads::CommandOutcome.call(workspace_id: seat.workspace_id, caller_kind: "seat",
+      caller_id: seat.id, key: key)
+    assert_refused("not_eligible", stored.outcome)
+    assert_refused("not_eligible", claim_job(seat))
+    assert_equal [ "claimed", "queued" ], [ question_job.reload.state, draft_job.reload.state ]
+  end
+
+  test "a seat that built a task cannot claim its question job after becoming an orchestrator" do
+    former_builder = own_seat
+    task = scenario.task(state: "working", builder: former_builder)
+    assert_completed(seat_command(former_builder, "release", { "id" => task.id, "reason" => "unable_to_continue" }))
+    former_builder.update!(role: "orchestrator")
+    question = scenario.question(task)
+    job = scenario.job(kind: "question", task: task, target: question)
+
+    assert_refused("not_eligible", claim_job(former_builder))
+    assert_equal "queued", job.reload.state
+    assert_equal job.id, assert_completed(claim_job(@orchestrator)).result.fetch("job_id")
+  end
 end

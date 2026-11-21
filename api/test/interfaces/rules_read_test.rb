@@ -117,6 +117,15 @@ class RulesReadTest < CommittingTestCase
     assert_empty words.asked.select { |call, id| call == :sentence && model_versions.include?(id) }
   end
 
+  test "all seven shipped rules act in the production rules read" do
+    rules = scenario.with_shipped_rules
+
+    body = read(words: nil)
+
+    assert_equal rules.map(&:id).sort, body.fetch("rules").select { |item| item.fetch("acts") }
+      .map { |item| item.fetch("rule").fetch("id") }.sort
+  end
+
   test "a rule's stats: checks are its rows but not_applicable and withdrawn, overrides the rows let through, average the queue plus run of its finished attempts, tokens and spend its jobs'" do
     rule = scenario.rule
     other = scenario.rule

@@ -317,9 +317,10 @@ Where two inventories chose differently, the decision names the conflict.
   `password_digest`, `users.workspace_id` unique; `sessions (user_id,
   token_hash, created_at, last_used_at)`. D-G45, I-G17.
 - **DB-41** `[shape]` `projects.brief_version integer not null default 0`,
-  incremented on each `brief.changed`. Conflict: R-G28 (the seq of the
-  latest `brief.changed`); the column wins as the plainer read. D-G46,
-  R-G28.
+  incremented once for a whole brief edit that changes content or order.
+  Added and removed entries write `brief.changed` with the same
+  version. A reorder with no added or removed entries writes the moved
+  entries at the new version. An unchanged list writes nothing. D-G46, R-G28.
 - **DB-42** `[shape]` Content columns are nullable and blanked by Delete
   content (which writes `content.deleted`); `tasks.content_deleted_at`,
   `projects.content_deleted_at`. Content: task title, goal, details, work
@@ -380,6 +381,20 @@ Where two inventories chose differently, the decision names the conflict.
   added to `v1` in place, as DB-48's was: no released build wrote the
   event. Every golden trace's `hold.opened` gained it; traces 07, 17, 18
   and 19 name the check on those holds.
+- **DB-50** `[shape]` Added by Questions and approvals. The
+  `task.created` payload carries `added_action_ids`, the IDs of any
+  outward actions supplied to Add task, in contract order. With no
+  actions the list is empty. Replay starts these actions in `contracted`
+  state. Complete contract can preserve an existing action without
+  recording it again, so its event cannot reconstruct the initial rows.
+  The field is added to `v1` in place under DB-48.
+- **DB-51** `[shape]` Added by Questions and approvals. The
+  `action.stopped` payload carries `overturned`, true when Overturn
+  approval stops an open action and false for other stops. Decided for
+  you uses the field to distinguish an overturn from a Stop action
+  command. A done action's overturn still writes `action.overturn_recorded`
+  (AP-13). The field is added to `v1` in place under DB-48. The reader
+  treats a stop without the field as a stop without an overturn.
 
 ## State machine (SM)
 
@@ -442,8 +457,10 @@ Where two inventories chose differently, the decision names the conflict.
 - **SM-9** `[reading]` `task.reassigned` only on escalation, carrying
   `minimum_strength_rank`. M-G9, M-G20.
 - **SM-10** `[reading]` Waive is allowed from `requested, approved,
-  stopped, started`; when it answers a hold it also writes `hold.closed`
-  and `inbox.resolved` (L113). M-G10.
+  stopped, started` once the action has no open `owner_approval` hold.
+  Approve or Stop answers that hold first. Waive also writes
+  `hold.closed` and `inbox.resolved` when it answers a stopped or
+  unconfirmed action (L113, L158). M-G10.
 - **SM-11** `[reading]` After a waive or override clears `action_stopped`,
   the approval rule of L138 applies to the remaining approved actions.
   M-G11.
@@ -505,6 +522,9 @@ Where two inventories chose differently, the decision names the conflict.
   holder loses the task (`task.released`, reason
   `seat_disabled`/`seat_removed`, to Ready). The Working case is not in
   the PRD, so it is proposed as P-6 and its row is `status: proposed`.
+  Release and lease expiry in Finishing also open `action_unconfirmed`
+  when approved or started actions remain and that hold is not already
+  open. A stopped action remains stopped after its builder leaves.
   M-G34.
 - **SM-31** `[owner]` + P-8 A task's cap change writes `task.changed` with
   a `budget_cap` field; P-8 adds "cap" to the PRD note "(priority,
@@ -591,6 +611,13 @@ Where two inventories chose differently, the decision names the conflict.
   `Leverage::Gating.provider_allowed?`), and `inbox.resolved` when one
   may. Trace 02 covers it: one provider connected, the item opens at
   submit and closes when a second provider's reviewer connects.
+- **SM-43** `[reading]` An override of the check that stopped an
+  outward action may approve it only after every other blocking gate
+  frozen at `action.requested` has passed, did not apply, was withdrawn,
+  or was overridden. A missing or unfinished check cannot clear a gate.
+  Model gate jobs continue while the action is stopped. The approval job
+  is deferred. If another frozen gate fails, the action stays stopped,
+  and the owner may waive it or return the task for rework when allowed.
 
 ## Rules and checks (RC)
 

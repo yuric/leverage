@@ -106,7 +106,8 @@ CREATE TABLE public.brief_entries (
     author_kind text NOT NULL,
     author_id uuid,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "position" integer NOT NULL
 );
 
 
@@ -369,7 +370,7 @@ CREATE TABLE public.jobs (
     queued_at timestamp with time zone NOT NULL,
     claimed_at timestamp with time zone,
     finished_at timestamp with time zone,
-    input jsonb NOT NULL,
+    input jsonb,
     result jsonb,
     tokens bigint,
     spend numeric(14,6),
@@ -443,7 +444,9 @@ CREATE TABLE public.questions (
     answered_at timestamp with time zone,
     read_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT questions_basis_known CHECK ((basis = ANY (ARRAY['record'::text, 'decision'::text, 'owner'::text]))),
+    CONSTRAINT questions_outcome_known CHECK ((outcome = ANY (ARRAY['open'::text, 'answered'::text, 'passed_on'::text, 'overturned'::text])))
 );
 
 
@@ -1033,6 +1036,13 @@ CREATE INDEX index_backup_runs_on_ran_at ON public.backup_runs USING btree (ran_
 --
 
 CREATE INDEX index_brief_entries_on_project_id ON public.brief_entries USING btree (project_id);
+
+
+--
+-- Name: index_brief_entries_on_project_id_and_position; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_brief_entries_on_project_id_and_position ON public.brief_entries USING btree (project_id, "position");
 
 
 --
@@ -1663,6 +1673,13 @@ CREATE INDEX index_tasks_on_project_id ON public.tasks USING btree (project_id);
 --
 
 CREATE INDEX index_tasks_on_workspace_id ON public.tasks USING btree (workspace_id);
+
+
+--
+-- Name: index_tasks_waiting_for_finishing_lease; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_tasks_waiting_for_finishing_lease ON public.tasks USING btree (workspace_id) WHERE ((state = 'finishing'::text) AND (holder_seat_id IS NULL));
 
 
 --
@@ -2384,6 +2401,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261121011155'),
 ('20261120094700'),
 ('20261120011824'),
 ('20261119182802'),

@@ -189,14 +189,16 @@ module Leverage
     # A seat removed (IN-17, IN-40): its token answers no more from this
     # moment, it is no longer wanted running, a Working task it holds is
     # released with seat_removed (caused by removed, the seat.removed
-    # Event), a review it holds is released, and a seat the app runs gets
-    # a stop_seat request. A pending submit, a pending pass or a
-    # provisional claim of the seat is cancelled first (rule 11).
+    # Event), its Finishing tasks with open approvals are held, its held
+    # reviews are released, and a seat the app runs gets a stop_seat
+    # request. A pending submit, a pending pass or a provisional claim of
+    # the seat is cancelled first (rule 11).
     #
     # Returns the stop_seat HelperRequest, or nil.
     def removed(ctx, seat, cause:)
       seat.update!(token_hash: nil, wanted_running: false)
       release_working_task(ctx, seat, reason: "seat_removed", cause: cause)
+      hold_finishing_tasks(ctx, seat, cause: cause)
       held_reviews(ctx, seat).each do |review|
         cancel_pending(ctx, Task.find(review.task_id))
         release_review(ctx, review)
@@ -273,6 +275,18 @@ module Leverage
         payload: { reason: reason, wait_cause: (wait_cause unless bound) })
       Holds.close_seat_bound(ctx, task, cause: released, wait_cause: wait_cause) if bound
       released
+    end
+
+    # Include tasks under a hold so lifting that hold cannot leave an
+    # approved action waiting for a seat that is gone (L147, AP-19).
+    # Finishing opens a hold only when approved work remains.
+    def hold_finishing_tasks(ctx, seat, cause:)
+      finishing = Task.where(workspace_id: seat.workspace_id, state: "finishing")
+      held = finishing.where(holder_seat_id: seat.id)
+      assigned = finishing.where(holder_seat_id: nil, builder_seat_id: seat.id)
+      held.or(assigned).order(:created_at, :id).each do |task|
+        Finishing.lose_builder(ctx, task, cause: cause)
+      end
     end
 
     # Cancels the provisional claim the seat holds, if it holds one (PRD

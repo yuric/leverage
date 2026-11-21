@@ -494,6 +494,15 @@ class TaskTextTests(unittest.TestCase):
                 self.assertEqual(code, 1, output)
                 self.assertIn("runner.log:2: nonce-shaped marker", output)
 
+    def test_a_questions_and_approvals_frame_marker_in_a_log_is_a_hit(self):
+        for marker in ("DECISION", "REASON", "ANSWER", "BASIS", "PASS-ON", "DONE", "CANNOT"):
+            with self.subTest(marker=marker):
+                self.log("runner.log", f"the tool answered\nLEVERAGE-{marker}-{NONCE}: made-up text\n")
+                code, output = self.scan.run("--logs", self.logs)
+                self.assertEqual(code, 1, output)
+                self.assertIn("runner.log:2: nonce-shaped marker", output)
+                self.assertNotIn(NONCE, output)
+
     def test_a_marker_without_twelve_hex_characters_is_not_a_hit(self):
         path = self.write_dump(dump([event_row(1, "task.created", {"n": 1})]))
         self.log("runner.log", "LEVERAGE-VERDICT- is the frame's word\nLEVERAGE-QUOTE-0123 short\n")

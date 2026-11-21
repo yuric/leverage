@@ -6,9 +6,13 @@ import Observation
 @MainActor
 @Observable
 final class Navigator {
-    enum Place: Equatable, Sendable { case board, needsYou, agents, credentials, handoff, settings }
+    enum Place: Equatable, Sendable {
+        case board, needsYou, decided, activity, agents, credentials, handoff, settings, projects
+    }
 
     private(set) var place: Place = .board
+    /// Shared by the pane, the Board and the Add task sheet.
+    var boardFilter = BoardFilter()
     /// The task whose page is open in the content area (MA-9); nil shows the
     /// screen of `place`.
     private(set) var openTaskID: UUID?
@@ -23,6 +27,12 @@ final class Navigator {
         self.place = place
         openTaskID = nil
         editRequest = nil
+    }
+
+    /// Opens the Board scoped to this project, or to All projects for nil.
+    func selectProject(_ id: UUID?) {
+        boardFilter.projectID = id
+        show(.board)
     }
 
     /// Opens a task's page, with a way back to the board (MA-9). `editing`
@@ -60,9 +70,8 @@ final class Navigator {
 ///
 ///     @Environment(ScreenContext.self) private var context
 ///
-/// The shell builds the five screens with no arguments (`BoardView()`,
-/// `TaskPageView()`, `AddTaskSheet()`, `RosterView()`, `CredentialsView()`)
-/// and gives each its context this way, so a screen's own files never need
+/// The shell builds each screen with no arguments and gives it its
+/// context this way, so a screen's own files never need
 /// the shell to change. A screen builds its view model from `owner` when it
 /// appears, tells `feed` where each of its reads stood (`noteRead`), reads
 /// again when `feed` reports events, and uses `navigator` to open a task or
@@ -81,6 +90,8 @@ final class ScreenContext {
     let runtime: any AppRuntime
     /// Counts the open Needs you items and announces each new one (HM-29).
     let inbox: InboxWatcher
+    private(set) var paneProjects: [Project] = []
+    private(set) var projectListFailure: ShellCopy?
 
     init(
         owner: any OwnerAPI, feed: EventFeed, health: HealthLineModel, navigator: Navigator = Navigator(),
@@ -102,5 +113,39 @@ final class ScreenContext {
         inbox.attach(to: feed)
         defer { inbox.detach() }
         await inbox.run()
+    }
+
+    /// Reads the pane's project names while the signed-in window is open.
+    func watchProjects() async {
+        let (updates, request) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let subscription = feed.subscribe { events in
+            if events.contains(where: {
+                $0.type == .projectCreated || ($0.type == .contentDeleted && $0.taskID == nil)
+            }) {
+                request.yield()
+            }
+        }
+        defer {
+            subscription.cancel()
+            request.finish()
+        }
+
+        // The project list has no log position. If no screen has started
+        // the feed, seed it with a position read before the project list.
+        if feed.connection == .idle, let position = try? await owner.seats().asOfSeq, !Task.isCancelled {
+            feed.noteRead(asOfSeq: position)
+        }
+        request.yield()
+        for await _ in updates {
+            do {
+                let list = try await owner.listProjects()
+                try Task.checkCancellation()
+                paneProjects = list.projects
+                projectListFailure = nil
+            } catch {
+                if Task.isCancelled { return }
+                projectListFailure = ShellCopy.sentence(for: error)
+            }
+        }
     }
 }

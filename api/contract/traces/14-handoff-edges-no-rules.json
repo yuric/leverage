@@ -243,7 +243,8 @@
             "cause_id": null,
             "command_id": "$key:t1_add",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -575,7 +576,8 @@
             "cause_id": null,
             "command_id": "$key:t2_add",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -907,7 +909,8 @@
             "cause_id": null,
             "command_id": "$key:t3_add",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],

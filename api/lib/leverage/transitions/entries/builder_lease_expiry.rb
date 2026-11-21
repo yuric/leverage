@@ -31,8 +31,9 @@ module Leverage
       # A pending submit is cancelled first, with lease_expired (L376;
       # milestone 4 plan §2.1 rule 11): its withdrawals are the timer's, at
       # the due time, by the app, with no key (trace 18, command 36), also
-      # when the timer runs inside another command. No Finishing task exists
-      # before milestone 5: Finishing has its row and no way to reach it.
+      # when the timer runs inside another command. A Finishing task keeps
+      # its builder seat, and Finishing.lose_builder handles any approved
+      # actions that still need the owner's confirmation (L147).
       class BuilderLeaseExpiry < Entry
         BATCH = 100
 
@@ -87,6 +88,11 @@ module Leverage
           wait_cause = Candidates.wait_cause(task, effective_at) if to == "ready"
           expired = ctx.emit("task.lease_expired", task: task, payload: { wait_cause: (wait_cause unless held) },
             actor_kind: "app", actor_id: nil, command_id: nil, effective_at: effective_at)
+          if to == "finishing"
+            Timers.as_timer(ctx, command, effective_at) do |timer_ctx|
+              Finishing.lose_builder(timer_ctx, task, cause: expired)
+            end
+          end
           Holds.close_seat_bound(ctx, task, cause: expired, wait_cause: wait_cause)
         end
 

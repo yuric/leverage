@@ -7,7 +7,8 @@ module Leverage
     #
     # For each rule of the frozen set (Catalog), in Catalog's order:
     #
-    #   1. A stored result for the same identity is used first
+    #   1. A stored result for the same identity is reused while its fixed
+    #      scope still applies
     #      (StoredResults): passed, not applicable or overridden plans
     #      nothing; failed is a failure that names the stored row; a
     #      policy's applied row gives its effect again; an error or a
@@ -49,7 +50,7 @@ module Leverage
       # reenter_action plans once an action's gates have cleared.
       #
       # Returns [checks, jobs, effects].
-      def self.policies(request) = new(request).policies
+      def self.policies(request, entries:) = new(request).policies(entries)
 
       def initialize(request)
         @request = request
@@ -72,7 +73,7 @@ module Leverage
             gates, policies = entries.partition { |entry| entry.version.kind == "gate" }
             gates.each { |entry| plan_rule(entry) }
             if @failures.empty? && @pending
-              deferred = policies.map { |entry| entry.rule.id }
+              deferred = policies.filter_map { |entry| entry.rule.id if covered?(entry.version) }
             elsif @failures.empty?
               policies.each { |entry| plan_rule(entry) }
             end
@@ -85,9 +86,8 @@ module Leverage
           failures: @failures, warnings: @warnings, effects: @effects, holds_to_open: @holds, deferred_rule_ids: deferred)
       end
 
-      def policies
+      def policies(entries)
         hook!
-        entries = Catalog.at(@request.workspace_id, @request.hook).select { |entry| entry.version.kind == "policy" }
         prepare unless entries.empty?
         entries.each { |entry| plan_rule(entry) }
         [ @checks, @jobs, @effects ]
@@ -109,7 +109,17 @@ module Leverage
       end
 
       def plan_rule(entry)
-        row = StoredResults.find(**identity(entry.version))
+        version = entry.version
+        row = StoredResults.find(**identity(version))
+        unless covered?(version)
+          plan(entry, result: "not_applicable") unless row || quiet_policy?(version)
+          return
+        end
+        # Fixed scopes can change independently of the hashed inputs.
+        return fresh(entry) if row&.result == "not_applicable" && %w[named_projects action_kinds].include?(version.scope_kind)
+        # A final approval timeout has already passed the decision to the owner (AE-15).
+        return if approval_policy?(version) && row&.result == "error"
+
         case StoredResults.use(row)
         when :passed, :cleared then nil
         when :applied then @effects << effect(entry, row.effect) if row.effect
@@ -121,9 +131,7 @@ module Leverage
 
       def fresh(entry)
         version = entry.version
-        if Scope.coverage(version, @task, @request.inputs) == :not_covered
-          plan(entry, result: "not_applicable") unless quiet_policy?(version)
-        elsif version.checker == "model"
+        if version.checker == "model"
           plan_model(entry)
         elsif version.kind == "policy"
           plan_app_policy(entry)
@@ -131,6 +139,12 @@ module Leverage
           plan_app_gate(entry)
         end
       end
+
+      def covered?(version)
+        Scope.covers?(version, @task, @request.inputs, project_id: @request.project_id)
+      end
+
+      def approval_policy?(version) = version.hook == ACTION_HOOK && version.kind == "policy"
 
       def plan_model(entry)
         version = entry.version
@@ -162,12 +176,13 @@ module Leverage
 
       def plan_app_policy(entry)
         answer = AppCheckers.check(entry.version, request: @request, task: @task)
-        if answer.effect
-          plan(entry, result: "applied", effect: answer.effect, reason: answer.reason)
-          @effects << effect(entry, answer.effect)
-        elsif !quiet_policy?(entry.version)
-          plan(entry, result: "applied", reason: answer.reason)
-        end
+        effects = Array(answer.effect)
+        return if effects.empty? && quiet_policy?(entry.version)
+
+        # One check is recorded per rule and report. The plan can apply
+        # both budget effects, with the project pause first on the row.
+        plan(entry, result: "applied", effect: effects.first, reason: answer.reason)
+        effects.each { |value| @effects << effect(entry, value) }
       end
 
       # Adds a planned row and returns its index.
@@ -222,8 +237,10 @@ module Leverage
         # names none, the owner while no seat holds the task (ready to start,
         # an outward action) and the builder at the other moments (L464,
         # RD-24, RC-48).
-        def route(version)
-          version.route || (%w[task.before_ready action.requested].include?(version.hook) ? "owner" : "builder")
+        def route(version) = version.route || default_route(version.hook)
+
+        def default_route(hook)
+          %w[task.before_ready action.requested].include?(hook) ? "owner" : "builder"
         end
       end
     end

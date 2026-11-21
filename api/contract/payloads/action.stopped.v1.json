@@ -4,9 +4,15 @@
   "description": "The action is stopped.",
   "type": "object",
   "additionalProperties": false,
-  "properties": {},
-  "required": [],
+  "properties": {
+    "overturned": {
+      "type": "boolean",
+      "description": "Whether Overturn approval stopped the action."
+    }
+  },
+  "required": ["overturned"],
   "examples": [
-    {}
+    {"overturned": false},
+    {"overturned": true}
   ]
 }

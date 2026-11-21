@@ -11,6 +11,47 @@ import Testing
 // verdict; the tool ended 10 seconds before `run_due_at`.
 @Suite("Check job", .timeLimit(.minutes(Patience.minutes(2))))
 struct CheckJobTests {
+    @Test func actionGatesQuoteOnlyTheActionTheyCheck() async throws {
+        let harness = try Harness()
+        let driver = JobFixture.answering("PASSED")
+        let job = CheckJob(context: harness.context(driver: driver))
+        let fixture = JobFixture.checkInput()
+        let descriptions = ["First outward action", "Second outward action"]
+
+        for description in descriptions {
+            let input = RuleCheckJobInput(
+                ruleCheckID: fixture.ruleCheckID, ruleVersionID: fixture.ruleVersionID,
+                hook: .actionRequested, taskID: fixture.taskID,
+                inputs: ["action_kind": .string("send"), "action_description": .string(description)],
+                material: fixture.material)
+            _ = try await job.run(JobFixture.checkClaim(), input: input)
+        }
+
+        try #require(driver.runs.count == descriptions.count)
+        for (index, description) in descriptions.enumerated() {
+            let prompt = driver.runs[index].prompt
+            let nonce = try #require(JobFixture.nonce(of: prompt))
+            #expect(prompt.contains(JobPrompts.block("action", "(send) \(description)", nonce: nonce)))
+            #expect(!prompt.contains(descriptions[1 - index]))
+            #expect(prompt.contains("Judge the action named in the action block."))
+        }
+    }
+
+    @Test func actionGateWithoutAnActionStartsNoTool() async throws {
+        let harness = try Harness()
+        let driver = JobFixture.answering("PASSED")
+        let fixture = JobFixture.checkInput()
+        let input = RuleCheckJobInput(
+            ruleCheckID: fixture.ruleCheckID, ruleVersionID: fixture.ruleVersionID,
+            hook: .actionRequested, taskID: fixture.taskID, material: fixture.material)
+
+        let end = try await CheckJob(context: harness.context(driver: driver))
+            .run(JobFixture.checkClaim(), input: input)
+
+        #expect(end == .noResult)
+        #expect(driver.runs.isEmpty)
+    }
+
     @Test("a verdict is the result, with the tool's tokens and spend 0 for a login (RD-32)")
     func verdict() async throws {
         let harness = try Harness()

@@ -20,7 +20,7 @@
       "format": "uuid"
     },
     "lease_seat_id": {
-      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Set by Offer task again.",
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Set by Offer task again, or by Mark action done when approved actions remain and it grants a fresh lease.",
       "type": ["string", "null"],
       "format": "uuid"
     },

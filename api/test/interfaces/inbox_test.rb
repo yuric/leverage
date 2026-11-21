@@ -211,4 +211,45 @@ class InboxTest < CommittingTestCase
 
     assert_equal before, [ Command.count, Event.count, Workspace.find(scenario.workspace_id).last_seq ]
   end
+
+  test "the read offers an unconfirmed action again only while its builder is enabled and present" do
+    task = scenario.finishing_task(holder: false, actions: [ { state: "approved" } ])
+    builder = Seat.find(task.builder_seat_id)
+    action = Action.find_by!(task_id: task.id)
+    hold = scenario.hold(task, reason: "action_unconfirmed", facts: {
+      action_ids: [ action.id ], approved_by_kind: action.approved_by_kind, approved_by_id: action.approved_by_id,
+      builder_announced_start: false
+    })
+    all = %w[offer_again mark_done waive cancel]
+    unavailable = %w[mark_done waive cancel]
+
+    assert_equal all, read.fetch("items").sole.fetch("choices")
+
+    builder.update!(enabled: false)
+    assert_equal unavailable, read.fetch("items").sole.fetch("choices")
+    card = Leverage::Reads::Board.call(scenario.workspace_id).fetch(:tasks).sole
+    page = Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id)
+    assert_equal unavailable, card.dig(:inbox_item, :choices)
+    assert_equal unavailable, page.fetch(:inbox_items).sole.fetch(:choices)
+    assert_equal all, open_item(hold).choices
+
+    builder.update!(enabled: true)
+    assert_equal all, read.fetch("items").sole.fetch("choices")
+    scenario.remove(builder)
+    assert_equal unavailable, read.fetch("items").sole.fetch("choices")
+  end
+
+  test "blocking and nonblocking questions both reach Needs you with the Answer choice" do
+    builder = scenario.seat(role: "builder")
+    task = scenario.task(state: "working", builder: builder)
+    nonblocking = scenario.question(task, outcome: "passed_on", blocking: false)
+    blocking = scenario.question(task, outcome: "passed_on")
+
+    rows = read.fetch("items")
+
+    assert_equal [ nonblocking.id, blocking.id ], rows.map { |item| item.fetch("facts").fetch("question_id") }
+    assert_equal [ [ "answer" ], [ "answer" ] ], rows.map { |item| item.fetch("choices") }
+    assert_nil rows.first.fetch("hold_id")
+    assert_equal Hold.find_by!(task_id: task.id, reason: "owner_question").id, rows.last.fetch("hold_id")
+  end
 end

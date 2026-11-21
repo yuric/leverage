@@ -22,7 +22,7 @@ module Leverage
       # or without a model; nothing is refused for an orchestrator's
       # provider or model (L955). Another role is 422 invalid. An empty or
       # null model or effort is stored as "" (the tool's default, IN-29);
-      # the strength rank is 1 unless sent.
+      # the strength rank is 1 through 3 and defaults to 1 (AP-24).
       #
       # Params: "name", "role", "provider", "model", "effort",
       # "strength_rank", "credential_id".
@@ -35,6 +35,13 @@ module Leverage
           raise Invalid, "A seat needs a name" unless @name.is_a?(String) && !@name.empty?
           raise Invalid, "A seat's role is one of #{ROLES.join(", ")}" unless ROLES.include?(@role)
 
+          rank = params["strength_rank"]
+          rank = 1 if rank.nil?
+          unless rank.is_a?(Numeric) && (1..3).cover?(rank) && rank == rank.to_i
+            raise Invalid, "A seat's strength rank must be from 1 to 3"
+          end
+          @strength_rank = rank.to_i
+
           params["credential_id"] ? load_login(ctx, params["credential_id"]) : load_own
         end
 
@@ -44,7 +51,7 @@ module Leverage
           token = @credential ? nil : Tokens.issue(:seat)
           seat = Seat.create!(workspace_id: ctx.workspace.id, name: @name, role: @role, provider: @provider,
             model: ctx.request.params["model"].to_s, effort: ctx.request.params["effort"].to_s,
-            strength_rank: ctx.request.params["strength_rank"] || 1, credential_id: @credential&.id,
+            strength_rank: @strength_rank, credential_id: @credential&.id,
             token_hash: token && Tokens.digest(token))
           ctx.emit("seat.connected", subject: seat, payload: {})
           SeatRuns.connected(ctx, seat)

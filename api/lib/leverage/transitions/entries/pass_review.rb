@@ -8,8 +8,8 @@ module Leverage
       # is Done with no holder; it keeps its builder seat. review.passed and
       # task.done are written, then cost.reported about the review with the
       # verdict's tokens and spend, which add to the task's spent; no policy
-      # runs (EN-12). A work call, blocked by a hold (L174). The row with an
-      # outward action cannot be reached: no contract has one (SC-3).
+      # runs before its report. A work call, blocked by a hold (L174). The
+      # outward action row enters Finishing and requests each action.
       #
       # 422 invalid when a pass names failed criteria.
       #
@@ -29,11 +29,15 @@ module Leverage
           @review = Review.find_by(id: @params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such review")
           @task = Task.find_by!(id: @review.task_id, workspace_id: ctx.workspace.id)
           raise Invalid, "A pass names no failed criteria." if Array(@params["failed_criteria"]).any?
+
+          if @review.reviewer_seat_id == @seat.id && @review.verdict.nil? && @seat.role == "reviewer"
+            Costs.validate_verdict!(@task, tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
+          end
         end
 
         def refusals(_ctx)
           codes = Eligibility.review_refusals(@review, @seat)
-          codes << state_refusal(@task.state, [ "no_outward_action" ])
+          codes << state_refusal(@task.state, [ Actions.for_task(@task).exists? ? "has_outward_action" : "no_outward_action" ])
           codes << "on_hold" if Eligibility.on_hold?(@task)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[
             Briefing.acknowledgement(@task, seat: @seat, review: @review)]
@@ -51,14 +55,28 @@ module Leverage
           Criterion.where(task_id: @task.id, kind: "review", removed_at: nil).find_each do |criterion|
             criterion.update!(state: "passed", passed_at: ctx.at, passed_by_seat_id: @seat.id)
           end
-          spend = BigDecimal(@params.fetch("spend", 0).to_s)
-          @task.update!(state: "done", holder_seat_id: nil, spent: @task.spent + spend)
+          finishing = @row.fetch("to") == "finishing"
+          @task.update!(state: finishing ? "finishing" : "done", holder_seat_id: nil)
           ctx.emit("review.passed", task: @task, subject: @review, payload: {})
-          ctx.emit("task.done", task: @task, payload: {})
-          ctx.emit("cost.reported", task: @task, subject: @review,
-            payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
-          add_to_project(spend)
+          actions = finishing ? Actions.request_all(ctx, @task) : []
+          unless finishing
+            ctx.emit("task.done", task: @task, payload: {})
+            Questions.withdraw_jobs(ctx, @task)
+          end
+          Costs.report(ctx, task: @task, subject: @review,
+            tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
+          actions.each { |action| request_action(ctx, action) }
           @result = nil
+        end
+
+        private def request_action(ctx, action)
+          entry = RequestAction.new
+          Finishing.as_app(ctx, "request_action", { "id" => action.id }) do
+            entry.load(ctx)
+            raise ArgumentError, "a passing review must be able to request its action" if entry.refusals(ctx).any?
+
+            entry.perform(ctx)
+          end
         end
 
         # The failed gate's effect (hooks.json failed_review, SM-6): the
@@ -71,17 +89,6 @@ module Leverage
           failed.refusals(ctx)
           Gate.outcome(ctx, failed, Gate.call(ctx, failed))
           @result = failed.result
-        end
-
-        private
-
-        # The verdict's spend runs cost.reported for the task's project
-        # (L513): it adds to the project's spent, as the replay rebuilds it.
-        def add_to_project(spend)
-          return unless @task.project_id
-
-          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
-          project.update!(spent: project.spent + spend)
         end
       end
     end

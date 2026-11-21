@@ -1,11 +1,9 @@
 module Leverage
   module Transitions
-    # The commands, each with its entry (milestone 2 plan §2.1, EN-2;
-    # milestone 3 plan §2.1; milestone 4 plan §2.1): the one list, in nine
-    # named groups the state-table tests use. An entry is the class
+    # The served commands, in the groups the state-table tests use.
+    # An entry is the class
     # Leverage::Transitions::Entries::<Command>, in
-    # transitions/entries/<command>.rb, resolved when first used. A command
-    # of a later milestone is not here: it has no entry and no route.
+    # transitions/entries/<command>.rb, resolved when first used.
     module Table
       # A command with no entry.
       class UnknownCommand < StandardError; end
@@ -18,7 +16,7 @@ module Leverage
       TIMERS = %w[
         builder_lease_expiry review_lease_expiry command_key_retention credential_hold_release seat_run_placement
         check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
-        orchestrator_offline reviewer_eligibility
+        orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout
       ].freeze
       SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token].freeze
       ACCOUNTS = %w[
@@ -30,7 +28,18 @@ module Leverage
       RULES = %w[add_rule save_rule enable_rule disable_rule revert_rule remove_rule install_shipped_rules].freeze
       CHECKS = %w[rerun_check override_check].freeze
       JOBS = %w[draft_contract claim_job submit_job_result report_job_limit report_job_signed_out].freeze
-      COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS).freeze
+      FINISHING = %w[
+        request_action grant_action_lease approve_action stop_action start_action report_action_done waive_action
+        mark_action_done offer_task_again return_for_rework overturn_approval
+      ].freeze
+      QUESTIONS = %w[ask_question request_access answer_question overturn_answer grant_access].freeze
+      PROJECTS = %w[
+        report_cost create_project edit_brief pause_project resume_project change_budget change_task_priority
+        change_task_project change_task_cap
+      ].freeze
+      WORKSPACE = %w[delete_content change_workspace_settings].freeze
+      COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS +
+        FINISHING + QUESTIONS + PROJECTS + WORKSPACE).freeze
 
       @overrides = {}
 
@@ -45,8 +54,8 @@ module Leverage
         # with no entry.
         def entry_for(command)
           command = command.to_s
-          return @overrides.fetch(command) if @overrides.key?(command)
           raise UnknownCommand, "#{command} has no entry" unless include?(command)
+          return @overrides.fetch(command) if @overrides.key?(command)
 
           class_name(command).constantize
         end

@@ -60,12 +60,11 @@ struct RunnerTiming: Sendable {
     }
 }
 
-/// `GET /v1/next` to an action, for one seat (plan §2.2). A builder claims
-/// a task, and goes on with the one it holds on `rework`, `resume` and
-/// `briefing_changed`; a reviewer claims a review, and goes on with it on
-/// `briefing_changed`; a planner or an orchestrator claims a job (milestone
-/// 4, `JobFlow`); any seat reads a `command` item's outcome once. `stop()` ends the tool and the flow, gives back what
-/// the seat holds and makes `run()` return 0 (CL-23).
+/// What one seat does with each next item. A builder handles its task,
+/// its approved actions and any answer for the task it holds. A reviewer
+/// handles its review. A planner or an orchestrator handles jobs. Any seat
+/// reads the outcome of a command. A stop ends the tool and flow and gives
+/// back the held work (CL-23).
 final class RunnerLoop: @unchecked Sendable {
     /// How long a stop waits to give back what the seat holds. The tool is
     /// given 5 seconds to end before it is forced (Subprocess's grace
@@ -217,6 +216,20 @@ final class RunnerLoop: @unchecked Sendable {
             return try await jobs.claim() != nil
         case (.builder, .task):
             return try await builder.claim() != nil
+        case (.builder, .action):
+            guard let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
+            _ = try await FinishingFlow(context: context).continueTask(id)
+            return true
+        case (.builder, .answer):
+            // NextItem names only the question. Use the task this runner
+            // is holding; a fresh runner never asks a question of its own.
+            guard let questionID = item.id.flatMap(UUID.init(uuidString:)),
+                  case .task(let taskID) = context.state.held else { return false }
+            let api = context.api
+            if case .value = try await context.read("get_question", {
+                try await api.getQuestion(taskID: taskID, questionID: questionID)
+            }) { return true }
+            return false
         case (.builder, .rework), (.builder, .resume), (.builder, .briefingChanged):
             guard item.reviewID == nil, let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
             _ = try await builder.continueTask(id)

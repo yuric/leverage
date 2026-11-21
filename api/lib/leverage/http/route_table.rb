@@ -1,8 +1,7 @@
 module Leverage
   module Http
     # The operations served, each to its controller and action (milestone 2
-    # plan §2.1, §2.3, IN-1; milestone 3's eleven and milestone 4's twelve
-    # are the last entries).
+    # plan §2.1, §2.3, IN-1; the later milestones are grouped below).
     # config/routes.rb draws one route per entry with the registry's method
     # and path, so no path is typed anywhere else; every other registry
     # operation has no route and answers 404 (test/interfaces/seams_test.rb).
@@ -84,7 +83,38 @@ module Leverage
         "remove_rule" => "v1/owner/rules#remove",
         "rerun_check" => "v1/owner/rule_checks#rerun",
         "override_check" => "v1/owner/rule_checks#override",
-        "draft_contract" => "v1/owner/tasks#draft_contract"
+        "draft_contract" => "v1/owner/tasks#draft_contract",
+        # Milestone 5's thirty (its plan §2.3, AT-6).
+        "ask_question" => "v1/agent/questions#create",
+        "get_question" => "v1/agent/questions#show",
+        "request_access" => "v1/agent/tasks#access",
+        "report_cost" => "v1/agent/tasks#cost",
+        "start_action" => "v1/agent/actions#start",
+        "report_action_done" => "v1/agent/actions#done",
+        "list_decisions" => "v1/owner/decisions#index",
+        "list_projects" => "v1/owner/projects#index",
+        "create_project" => "v1/owner/projects#create",
+        "edit_brief" => "v1/owner/projects#brief",
+        "pause_project" => "v1/owner/projects#pause",
+        "resume_project" => "v1/owner/projects#resume",
+        "change_budget" => "v1/owner/projects#budget",
+        "delete_project_content" => "v1/owner/projects#delete_content",
+        "change_task_priority" => "v1/owner/tasks#priority",
+        "change_task_project" => "v1/owner/tasks#project",
+        "change_task_cap" => "v1/owner/tasks#cap",
+        "return_for_rework" => "v1/owner/tasks#rework",
+        "offer_task_again" => "v1/owner/tasks#offer_again",
+        "grant_access" => "v1/owner/tasks#grant_access",
+        "delete_task_content" => "v1/owner/tasks#delete_content",
+        "answer_question" => "v1/owner/questions#answer",
+        "overturn_answer" => "v1/owner/questions#overturn",
+        "approve_action" => "v1/owner/actions#approve",
+        "stop_action" => "v1/owner/actions#stop",
+        "waive_action" => "v1/owner/actions#waive",
+        "mark_action_done" => "v1/owner/actions#mark_done",
+        "overturn_approval" => "v1/owner/actions#overturn",
+        "get_workspace_settings" => "v1/owner/settings#show",
+        "change_workspace_settings" => "v1/owner/settings#update"
       }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",

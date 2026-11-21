@@ -27,12 +27,11 @@ module Leverage
       # them opened is closed, by PendingTransitions.cancel, before the
       # holds this edit answers are read. A check_error hold closes only
       # with the check it is about, which is why the edit does not close it
-      # itself. No outward action exists before milestone 5.
+      # itself. Costs applies any change to the task's budget cap (AE-12).
       #
       # Imaginarium, Finishing, Done and Cancelled have no row: invalid_state
-      # (HE-25 (v)). 422 invalid as for Complete contract: an outward action
-      # (SC-3, HE-25 (iii)), criteria that do not end with the one review,
-      # and a work reference with sign-in details (L533).
+      # (HE-25 (v)). As in Complete contract, criteria must end with the one
+      # review, and work references cannot carry sign-in details (L533).
       #
       # Params: id, and the CompleteContractRequest body.
       class EditContract < Entry
@@ -47,7 +46,6 @@ module Leverage
         def load(ctx)
           @params = ctx.request.params
           @task = Task.find_by(id: @params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such task")
-          raise Invalid, "Outward actions are not built yet." if @params["actions"].present?
 
           kinds = Array(@params["criteria"]).map { |criterion| criterion["kind"] }
           unless kinds.last == "review" && kinds.count("review") == 1
@@ -67,6 +65,7 @@ module Leverage
           answered = answered_holds
           free_seats(ctx) if active
           written = ContractDiff.write(@task, Array(@params["criteria"]), at: ctx.at)
+          actions = Actions.create_for(@task, Array(@params["actions"]))
           @task.update!(title: @params.fetch("title", @task.title), goal: @params.fetch("goal", @task.goal),
             details: @params["details"], work_reference: @params["work_reference"].presence,
             minimum_strength_rank: @params["minimum_strength_rank"], budget_cap: @params["budget_cap"],
@@ -74,19 +73,21 @@ module Leverage
           ctx.emit("task.contract_changed", task: @task,
             payload: { contract_version: @task.contract_version, minimum_strength_rank: @task.minimum_strength_rank,
                        added_criterion_ids: written.added_ids, reset_criterion_ids: written.reset_ids,
-                       removed_criterion_ids: written.removed_ids, added_action_ids: [], removed_action_ids: [] })
+                       removed_criterion_ids: written.removed_ids, added_action_ids: actions.added_ids,
+                       removed_action_ids: actions.removed_ids })
           returned = ctx.emit("task.returned", task: @task, payload: {}) if active
           answered.each { |hold| Holds.close(ctx, hold: hold, task: @task, choice: choice_for(hold)) }
           Holds.close_seat_bound(ctx, @task, cause: returned, wait_cause: nil) if active
+          Costs.cap_changed(ctx, @task)
           @result = nil
         end
 
         private
 
         # The open holds this edit answers, oldest first: the row's
-        # holds_closed but the seat-bound ones and check_error.
+        # holds_closed apart from seat-bound holds, check_error and budget.
         def answered_holds
-          reasons = @row.fetch("holds_closed") - SEAT_BOUND - WITH_A_CHECK
+          reasons = @row.fetch("holds_closed") - SEAT_BOUND - WITH_A_CHECK - [ "budget" ]
           Holds.open_holds(@task).select { |hold| reasons.include?(hold.reason) }
         end
 

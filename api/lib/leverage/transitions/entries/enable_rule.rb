@@ -40,6 +40,7 @@ module Leverage
           return unless version.hook == Rules::ClaimGate::HOOK && Rules::EvaluationBuilder.blocking?(version)
 
           Task.where(workspace_id: @rule.workspace_id, state: "ready").order(:created_at, :id).each do |task|
+            next unless Rules::Scope.covers?(version, task)
             next if Rules::ClaimGate.failed_seat_ids(task, @rule.id).size < Rules::ClaimGate::SEATS
             next if ::Hold.exists?(workspace_id: task.workspace_id, task_id: task.id, reason: "claim_gate_failed",
               rule_id: @rule.id, closed_at: nil)

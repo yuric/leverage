@@ -12,6 +12,9 @@ enum TaskPageCopy: OwnerFacingCopy {
     // The sections.
     case sectionGoal, sectionDetails, sectionCriteria, sectionWork, sectionLog
     case workNotGiven, emptyLog, noEvidence
+    case sectionQuestions, sectionActions, askedBy, answeredBy, approvedBy, you, leverage
+    case publish, pay, send, delete
+    case actionContracted, actionRequested, actionApproved, actionStarted, actionStopped, actionWaived, actionRevoked, actionDone
 
     // A criterion and its evidence.
     case criterionOpen, criterionStarted, criterionPassed
@@ -20,7 +23,9 @@ enum TaskPageCopy: OwnerFacingCopy {
     // What the owner can do.
     case sendToAgents, sending, backlogHint
     case pausedAtLimit, allowOneMoreTry, cancelTask, moveToBacklog, pauseTask, continueTask, changeTask
-    case cancelQuestion, cancelExplanation, keepTask, working
+    case cancelQuestion, cancelExplanation, cancelActionStarted, keepTask, working
+    case taskActions, taskSettings, taskSettingsProject, noProject, currentProject, spendingLimit, noSpendingLimit, invalidSpendingLimit
+    case deleteContent, deleteContentQuestion, deleteContentExplanation, keepContent, deletedTask, contentDeleted
 
     // The log's sentences.
     case anAgent, aPartOfTheTask
@@ -31,7 +36,20 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logReviewFailed, logReviewFailedList, logReturnedForRework, logDone, logCancelled
     case logReleasedUnable, logReleasedNotSuited, logReleasedStopping, logReleasedSwitchedOff
     case logReleasedRemoved, logReleasedOther, logLeaseExpired
-    case logPausedAtLimit, logPaused, logNoLongerPaused, logUpdated
+    case logPausedAtLimit, logPaused, logNoLongerPaused
+
+    // Additional task and workspace events shared with Activity.
+    case logTaskChanged, logTaskReassigned
+    case logQuestionAsked, logQuestionAskedWaiting, logQuestionAnswered
+    case logQuestionAnsweredByOwner, logQuestionAnsweredFromRecord, logQuestionDecided, logQuestionOverturned
+    case logActionRequested, logActionApproved, logActionApprovedByOwner, logActionApprovedByAgent, logActionLeaseGranted
+    case logActionStopped, logActionStarted, logActionReportedDone, logActionMarkedDone
+    case logActionWaived, logActionWithdrawn, logActionRevoked, logActionOverturnRecorded
+    case logCredentialAdded, logCredentialRenamed, logCredentialRemoved, logCredentialOrderChanged
+    case logSeatConnected, logSeatRemoved
+    case logRuleCreated, logRuleChanged, logRuleEnabled, logRuleDisabled, logRuleReverted, logRuleRemoved
+    case logCostReported, logProjectBudgetChanged, logProjectCreated, logProjectPaused, logProjectResumed, logBriefChanged
+    case logWorkspaceSettingsChanged, logTaskContentDeleted, logProjectContentDeleted
 
     // The log's sentences for an interruption, a handoff, a wait and a continuation (HM-43).
     case logLimitReached, logLimitReachedIn, logLimitReachedModel, logLimitResets
@@ -91,6 +109,25 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .workNotGiven: "Not given yet"
         case .emptyLog: "Nothing has happened yet."
         case .noEvidence: "No evidence yet"
+        case .sectionQuestions: "Questions"
+        case .sectionActions: "What goes out at the end"
+        case .askedBy: "Asked by {name}"
+        case .answeredBy: "Answered by {name}"
+        case .approvedBy: "Approved by {name}"
+        case .you: "You"
+        case .leverage: "leverage"
+        case .publish: "Publish"
+        case .pay: "Pay"
+        case .send: "Send"
+        case .delete: "Delete"
+        case .actionContracted: "Not yet asked"
+        case .actionRequested: "Being checked"
+        case .actionApproved: "Approved"
+        case .actionStarted: "Started"
+        case .actionStopped: "Stopped"
+        case .actionWaived: "Skipped"
+        case .actionRevoked: "Cancelled"
+        case .actionDone: "Done"
 
         case .criterionOpen: "Not started"
         case .criterionStarted: "In progress"
@@ -106,7 +143,22 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .cancelTask: "Cancel task"
         case .cancelQuestion: "Cancel this task?"
         case .cancelExplanation: "Any agent working on it stops. This can't be undone."
+        case .cancelActionStarted: "An action may already have gone out."
         case .keepTask: "Keep task"
+        case .taskActions: "Task actions"
+        case .taskSettings: "Task settings"
+        case .taskSettingsProject: "Project"
+        case .noProject: "No project"
+        case .currentProject: "Current project"
+        case .spendingLimit: "Spending limit"
+        case .noSpendingLimit: "No limit"
+        case .invalidSpendingLimit: "Enter an amount in US dollars with up to two decimal places, or leave it empty."
+        case .deleteContent: "Delete content"
+        case .deleteContentQuestion: "Delete this task’s content?"
+        case .deleteContentExplanation: "This deletes the task’s content. Backups made earlier can still contain it until they are replaced. Its timing and activity stay in the record."
+        case .keepContent: "Keep content"
+        case .deletedTask: "Deleted task"
+        case .contentDeleted: "This task’s content was deleted."
         case .working: "One moment…"
 
         case .anAgent: "An agent"
@@ -141,7 +193,49 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logPausedAtLimit: "Sent back too many times. Paused."
         case .logPaused: "The task was paused."
         case .logNoLongerPaused: "The task is no longer paused."
-        case .logUpdated: "The task was updated."
+        case .logTaskChanged: "The task’s settings were saved."
+        case .logTaskReassigned: "The task now needs a stronger agent."
+        case .logQuestionAsked: "{agent} asked a question."
+        case .logQuestionAskedWaiting: "{agent} asked a question and is waiting for an answer."
+        case .logQuestionAnswered: "The question was answered."
+        case .logQuestionAnsweredByOwner: "You answered the question."
+        case .logQuestionAnsweredFromRecord: "{agent} answered the question from the record."
+        case .logQuestionDecided: "{agent} decided how to answer the question."
+        case .logQuestionOverturned: "You overturned the answer."
+        case .logActionRequested: "The action was requested."
+        case .logActionApproved: "The action was approved."
+        case .logActionApprovedByOwner: "You approved the action."
+        case .logActionApprovedByAgent: "{agent} approved the action."
+        case .logActionLeaseGranted: "{agent} can now carry out the action."
+        case .logActionStopped: "The action was stopped."
+        case .logActionStarted: "{agent} said it was starting the action."
+        case .logActionReportedDone: "{agent} reported that the action was done."
+        case .logActionMarkedDone: "You marked the action done."
+        case .logActionWaived: "You skipped the action."
+        case .logActionWithdrawn: "The action will need to be requested again."
+        case .logActionRevoked: "The action’s approval was cancelled."
+        case .logActionOverturnRecorded: "You overturned the approval. The action was already done, so nothing changed."
+        case .logCredentialAdded: "{account} was added."
+        case .logCredentialRenamed: "{account} was renamed."
+        case .logCredentialRemoved: "{account} was removed."
+        case .logCredentialOrderChanged: "The handoff order changed."
+        case .logSeatConnected: "{agent} was connected."
+        case .logSeatRemoved: "{agent} was removed."
+        case .logRuleCreated: "A rule was added."
+        case .logRuleChanged: "Changes to a rule were saved."
+        case .logRuleEnabled: "A rule was turned on."
+        case .logRuleDisabled: "A rule was turned off."
+        case .logRuleReverted: "A rule was restored to its default settings."
+        case .logRuleRemoved: "A rule was removed."
+        case .logCostReported: "{agent} reported usage and spending."
+        case .logProjectBudgetChanged: "The project’s budget changed."
+        case .logProjectCreated: "A project was created."
+        case .logProjectPaused: "The project was paused."
+        case .logProjectResumed: "The project resumed."
+        case .logBriefChanged: "The project brief changed."
+        case .logWorkspaceSettingsChanged: "The workspace settings were saved."
+        case .logTaskContentDeleted: "You deleted the task’s content."
+        case .logProjectContentDeleted: "You deleted the project’s content."
         case .moveToBacklog: "Move to Backlog"
         case .pauseTask: "Pause this task"
         case .continueTask: "Continue this task"
@@ -199,7 +293,7 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .stepWaitReady: "Waiting for an agent"
         case .stepBriefing: "Reading the task"
         case .stepBuild: "Building"
-        case .stepFinish: "Wrapping up"
+        case .stepFinish: "Carrying out what goes out"
         case .stepWaitReview: "Waiting for a reviewer"
         case .stepReview: "Reviewing"
         case .stepWaitBuilder: "Waiting for its agent"
@@ -280,6 +374,28 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logChoseLetThrough: "You let it through once."
         case .logChoseRunAgain: "You ran the check again."
         case .logChoseTurnRuleOff: "You turned the rule off."
+        }
+    }
+
+    static func actionKind(_ kind: ActionKind) -> TaskPageCopy {
+        switch kind {
+        case .publish: .publish
+        case .pay: .pay
+        case .send: .send
+        case .delete: .delete
+        }
+    }
+
+    static func actionState(_ state: ActionState) -> TaskPageCopy {
+        switch state {
+        case .contracted: .actionContracted
+        case .requested: .actionRequested
+        case .approved: .actionApproved
+        case .started: .actionStarted
+        case .stopped: .actionStopped
+        case .waived: .actionWaived
+        case .revoked: .actionRevoked
+        case .done: .actionDone
         }
     }
 

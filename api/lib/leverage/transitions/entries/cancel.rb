@@ -19,8 +19,8 @@ module Leverage
       # milestone 4 review, finding 6): every check with no result and no
       # override (a warn rule's, which no command waits on) with its open
       # job, and every other job still queued or claimed (a contract
-      # draft), so no seat runs model work for a cancelled task. No outward
-      # action exists to revoke before milestone 5 (SC-3).
+      # draft). After task.cancelled, Actions revokes the task's open
+      # actions before the holds close (L208, trace 22).
       #
       # Params: id (the task).
       class Cancel < Entry
@@ -41,8 +41,9 @@ module Leverage
           end
           @task.update!(state: "cancelled", holder_seat_id: nil, builder_seat_id: nil, resume_pending_since: nil)
           ctx.emit("task.cancelled", task: @task, payload: {})
+          Actions.revoke_open(ctx, @task)
           Holds.open_holds(@task).each { |hold| Holds.close(ctx, hold: hold, task: @task, choice: "cancel") }
-          resolve_items(ctx)
+          InboxItems.cancel_for_task(ctx, @task)
           @result = nil
         end
 
@@ -57,16 +58,6 @@ module Leverage
           end
           Job.where(workspace_id: @task.workspace_id, task_id: @task.id, state: RuleRecords::LIVE_JOBS)
             .order(:queued_at, :id).each { |job| Jobs.withdraw(ctx, job) }
-        end
-
-        # The task's open Needs you items that no hold owns.
-        def resolve_items(ctx)
-          InboxItem.where(workspace_id: @task.workspace_id, about_kind: "task", about_id: @task.id, state: "open",
-            hold_id: nil).order(:opened_at).each do |item|
-            kind, id = ctx.actor
-            item.update!(state: "resolved", resolved_by_kind: kind, resolved_by_id: id, resolved_at: ctx.at)
-            ctx.emit("inbox.resolved", task: @task, subject: item, payload: { choice: "cancel" })
-          end
         end
       end
     end

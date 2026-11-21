@@ -34,15 +34,10 @@ class SeamsTest < ActionDispatch::IntegrationTest
     Leverage::Http::RouteTable::ROUTES.each_key { |operation_id| assert_includes ids, operation_id }
   end
 
-  # Operations of milestones 5 and 6, which milestone 4 does not serve (its
-  # plan §1.2): questions, outward actions and projects (5), the usage
-  # readers and reordering (6). Milestone 4's twelve are served.
-  test "later milestones' operations are not served, and milestone 4's twelve are" do
-    assert_operator unserved.size, :>, 0
+  test "the unserved operations are the Credentials milestone's seam" do
     ids = unserved.map { |operation| operation.fetch("operation_id") }
-    %w[ask_question create_project report_reading reorder_credentials].each do |operation_id|
-      assert_includes ids, operation_id
-    end
+    assert_equal %w[refresh_usage remove_credential rename_credential reorder_credentials report_reading
+                    verify_all_credentials], ids.sort
     %w[claim_next_job submit_job_result list_rules add_rule save_rule enable_rule disable_rule revert_rule remove_rule
        rerun_check override_check draft_contract].each { |operation_id| refute_includes ids, operation_id }
   end

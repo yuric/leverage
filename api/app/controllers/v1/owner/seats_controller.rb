@@ -43,7 +43,13 @@ module V1
       # seat the app runs needs none: 409 with a Refusal. It never holds the
       # seat's token.
       def landing_prompt
-        prompt = Leverage::Reads::LandingPrompt.call(current_caller.workspace_id, uuid_param!(:id), base_url: request.base_url)
+        options = request.query_parameters.slice("connection").symbolize_keys
+        if options.key?(:connection) && !%w[http mcp].include?(options[:connection])
+          raise Malformed, "connection must be http or mcp"
+        end
+
+        prompt = Leverage::Reads::LandingPrompt.call(current_caller.workspace_id, uuid_param!(:id), base_url: request.base_url,
+          **options)
         raise NotFound, "No such seat" unless prompt
 
         render json: prompt

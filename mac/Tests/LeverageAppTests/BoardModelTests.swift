@@ -78,6 +78,45 @@ struct BoardModelTests {
         #expect(model.lanes.flatMap(\.cards).map(\.id) == [id])
     }
 
+    @Test("project and agent filters combine and the agent matches the builder, even during review")
+    func projectAndAgentFilters() async {
+        let project = UUID()
+        let otherProject = UUID()
+        let anotherBuilder = UUID()
+        let tasks = [
+            BoardTask(task: TaskSummary(
+                id: UUID(), projectID: project, title: "Reviewing", goal: "Publish a report", state: .inReview,
+                holderSeatID: Fixtures.reviewerID, builderSeatID: Fixtures.builderID)),
+            BoardTask(task: TaskSummary(
+                id: UUID(), projectID: project, title: "Other builder", goal: "Write a report", state: .working,
+                holderSeatID: Fixtures.builderID, builderSeatID: anotherBuilder)),
+            BoardTask(task: TaskSummary(
+                id: UUID(), projectID: otherProject, title: "Other project", goal: "Write a report", state: .working,
+                builderSeatID: Fixtures.builderID)),
+            Fixtures.boardTask(.ready, title: "Unassigned"),
+        ]
+        let owner = Fixtures.owner(board: Fixtures.board(tasks))
+        let model = makeModel(owner)
+        let navigator = Navigator()
+        await model.load()
+        #expect(model.builders.map(\.id) == [Fixtures.builderID])
+
+        func filteredTitles() -> [String] {
+            model.lanes(matching: navigator.boardFilter).flatMap(\.cards).map(\.title)
+        }
+
+        #expect(filteredTitles() == ["Unassigned", "Reviewing", "Other builder", "Other project"])
+        navigator.selectProject(project)
+        #expect(filteredTitles() == ["Reviewing", "Other builder"])
+        navigator.boardFilter.agentID = Fixtures.builderID
+        #expect(filteredTitles() == ["Reviewing"])
+        navigator.selectProject(otherProject)
+        #expect(filteredTitles() == ["Other project"])
+        navigator.selectProject(nil)
+        #expect(filteredTitles() == ["Reviewing", "Other project"])
+        #expect(owner.calls.map(\.operation) == [.getBoard, .listSeats])
+    }
+
     // MARK: Show cancelled
 
     @Test("cancelled tasks are hidden until the Show cancelled switch is on, and then show in their own lane")
@@ -205,6 +244,46 @@ struct BoardModelTests {
         let rounds = await card(Fixtures.boardTask(.working, holds: [.roundsExceeded]))
         #expect(rounds?.statusLine == "Paused, was In progress")
         #expect(rounds?.chip?.text == "Sent back too many times")
+    }
+
+    @Test("the seven question and approval holds explain what the task is waiting for")
+    func questionAndApprovalHoldSentences() async {
+        let cases: [(HoldReason, String)] = [
+            (.ownerQuestion, "An agent is waiting for your answer."),
+            (.ownerApproval, "Something is ready to go out and needs your approval."),
+            (.access, "An agent needs you to give it access before it can continue."),
+            (.budget, "This task reached its spending limit."),
+            (.projectPaused, "This task is waiting for its project to resume."),
+            (.actionStopped, "Something that was to go out was stopped."),
+            (.actionUnconfirmed, "Check whether what was meant to go out happened."),
+        ]
+        for (reason, sentence) in cases {
+            let found = await card(Fixtures.boardTask(.working, holds: [reason]))
+            #expect(found?.lane == .blocked, "\(reason)")
+            #expect(found?.note == sentence, "\(reason)")
+        }
+    }
+
+    @Test("Finishing cards distinguish wrapping up from waiting for the builder")
+    func finishingCards() async {
+        let wrappingUp = await card(BoardTask(task: Fixtures.summary(.finishing)))
+        #expect(wrappingUp?.lane == .inProgress)
+        #expect(wrappingUp?.statusLine == "Wrapping up")
+
+        let waitingForBuilder = await card(BoardTask(task: Fixtures.summary(.finishing), waitsForBuilder: true))
+        #expect(waitingForBuilder?.lane == .inProgress)
+        #expect(waitingForBuilder?.statusLine == "Waiting for its agent")
+    }
+
+    @Test("a Ready card shows when the board says it is waiting for a stronger agent")
+    func waitingForStrongerAgent() async {
+        let task = TaskSummary(
+            id: UUID(), title: "Write a report", goal: "Summarize the results", state: .ready, minimumStrengthRank: 2)
+        let stronger = await card(BoardTask(task: task, waitsForStrongerAgent: true))
+        #expect(stronger?.lane == .ready)
+        #expect(stronger?.statusLine == "Waiting for a stronger agent")
+        let unflagged = await card(BoardTask(task: task))
+        #expect(unflagged?.statusLine == "Waiting for a free agent")
     }
 
     // MARK: rule checks (RD-27)
@@ -341,6 +420,33 @@ struct BoardModelTests {
         #expect(card?.chip?.text == "Login signed out")
         #expect(card?.chip?.tone == .stop)
         #expect(card?.note == "Claude, Personal is signed out. Sign in again to continue.")
+    }
+
+    @Test("an escalated task waiting for an account keeps the account's details and explains its provider restriction")
+    func strongerAccountWait() async {
+        let restriction = "Accounts of other providers are not strong enough for this task"
+        let until = Fixtures.date(19, 18)
+        func task(minimum: Int, holds: [HoldReason], waitingFor: UUID?) -> BoardTask {
+            BoardTask(
+                task: TaskSummary(
+                    id: UUID(), title: "Write a report", goal: "Summarize the results", state: .working,
+                    minimumStrengthRank: minimum),
+                holdReasons: holds, waitingForCredentialID: waitingFor)
+        }
+
+        let limited = await accountCard(
+            task(minimum: 2, holds: [.credentialLimit], waitingFor: personal),
+            credentials: [Fixtures.credential(personal, limitedUntil: until)])
+        #expect(limited?.note.map(Fixtures.flat) == "Waiting for Claude, Personal, which resets at 6:00 PM. \(restriction)")
+
+        let signedOut = await accountCard(task(minimum: 3, holds: [.credentialSignedOut], waitingFor: nil))
+        #expect(signedOut?.note == "An account is signed out. Sign in again to continue. \(restriction)")
+
+        let standard = await accountCard(task(minimum: 1, holds: [.credentialLimit], waitingFor: nil))
+        #expect(standard?.note == "Waiting for an account. It did not say when it is available again.")
+
+        let working = await accountCard(task(minimum: 2, holds: [], waitingFor: nil))
+        #expect(working?.note == nil)
     }
 
     // Review: the read leaves out the reset time of a signed-out account,

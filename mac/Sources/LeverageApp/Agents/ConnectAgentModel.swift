@@ -73,6 +73,8 @@ final class ConnectAgentModel {
         didSet { if name != oldValue { nameLine = nil } }
     }
     var provider: Provider = .claude
+    var strengthRank = AgentStrength.standard.rawValue
+    var connection: LandingPromptConnection = .http
     var modelName = ""
     var effort = ""
 
@@ -84,23 +86,31 @@ final class ConnectAgentModel {
     private(set) var landing: Landing = .none
     private(set) var copiedToken = false
     private(set) var copiedPrompt = false
+    private(set) var copiedMCPSettings = false
+    private(set) var shownConnection: LandingPromptConnection?
+    private(set) var mcpConfiguration: MCPSettings?
+    var mcpSettings: String? { mcpConfiguration?.json }
     private var allLogins: [LoginChoice] = []
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let copy: @MainActor (String) -> Void
+    @ObservationIgnored private let apiURL: @MainActor () async -> URL?
     @ObservationIgnored private let onConnected: @MainActor () -> Void
     @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var sent: (request: ConnectSeatRequest, key: IdempotencyKey)?
     @ObservationIgnored private var connectedSeatID: UUID?
+    @ObservationIgnored private var finished = false
 
     init(
         api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
-        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
+        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
+        apiURL: @escaping @MainActor () async -> URL? = { nil }
     ) {
         self.api = api
         self.copy = copy
         self.onConnected = onConnected
         self.testedProviders = testedProviders
+        self.apiURL = apiURL
     }
 
     /// Whether the sheet says an orchestrator is not tested for checking tasks (RV-5).
@@ -143,7 +153,9 @@ final class ConnectAgentModel {
     var isBusy: Bool { phase == .connecting }
 
     var canConnect: Bool {
-        phase == .editing && !trimmedName.isEmpty && (mode == .connectsOnItsOwn || credentialID != nil)
+        phase == .editing && !finished && !trimmedName.isEmpty
+            && AgentStrength(rawValue: strengthRank) != nil
+            && (mode == .connectsOnItsOwn || credentialID != nil)
     }
 
     private func clearFormLines() {
@@ -179,11 +191,11 @@ final class ConnectAgentModel {
             guard let login = logins.first(where: { $0.id == credentialID }) else { return nil }
             return ConnectSeatRequest(
                 name: typed, role: role, provider: login.provider, model: modelText, effort: effortText,
-                strengthRank: 1, credentialID: login.id)
+                strengthRank: strengthRank, credentialID: login.id)
         case .connectsOnItsOwn:
             return ConnectSeatRequest(
-                name: typed, role: role, provider: provider, model: modelText, effort: effortText, strengthRank: 1,
-                credentialID: nil)
+                name: typed, role: role, provider: provider, model: modelText, effort: effortText,
+                strengthRank: strengthRank, credentialID: nil)
         }
     }
 
@@ -194,35 +206,41 @@ final class ConnectAgentModel {
         phase = .connecting
         failure = nil
         nameLine = nil
+        let selectedConnection = request.credentialID == nil ? connection : nil
         let key = (sent?.request == request ? sent?.key : nil) ?? IdempotencyKey()
         sent = (request, key)
         do {
+            let address = selectedConnection == .mcp ? await apiURL() : nil
+            guard !finished else { return }
             let outcome = try await api.connectSeat(request, key: key)
+            guard !finished else { return }
             guard let answer = try outcome.completedResult() else { throw LeverageClientError.invalidBody }
             sent = nil
+            let token: String?
+            let alreadyConnected: Bool
             switch answer {
             case .shown(let connected):
                 connectedSeatID = connected.seatID
-                if let token = connected.seatToken, mode == .connectsOnItsOwn {
-                    shownToken = token
-                    phase = .shown
-                    onConnected()
-                    await fetchLandingPrompt()
-                } else {
-                    phase = .done
-                    onConnected()
-                }
+                token = connected.seatToken
+                alreadyConnected = false
             case .repeated(let repeated):
                 connectedSeatID = repeated.seatID
-                if mode == .connectsOnItsOwn {
-                    tokenGone = true
-                    phase = .shown
-                    onConnected()
-                    await fetchLandingPrompt()
-                } else {
-                    phase = .done
-                    onConnected()
+                token = nil
+                alreadyConnected = true
+            }
+            if let selectedConnection, token != nil || alreadyConnected {
+                shownToken = token
+                tokenGone = alreadyConnected
+                shownConnection = selectedConnection
+                if let address {
+                    mcpConfiguration = MCPSettings(apiURL: address, role: request.role)
                 }
+                phase = .shown
+                onConnected()
+                await fetchLandingPrompt()
+            } else {
+                phase = .done
+                onConnected()
             }
         } catch is CancellationError {
             phase = .editing
@@ -240,11 +258,14 @@ final class ConnectAgentModel {
     // MARK: the token and the landing prompt
 
     private func fetchLandingPrompt() async {
-        guard let seatID = connectedSeatID else { return }
+        guard let seatID = connectedSeatID, let shownConnection else { return }
         landing = .loading
         do {
-            let prompt = try await api.landingPrompt(seatID: seatID)
-            if TokenShape.isIn(prompt.text) || shownToken.map({ prompt.text.contains($0) }) == true {
+            let prompt = try await api.landingPrompt(seatID: seatID, connection: shownConnection)
+            guard !finished else { return }
+            if prompt.connection != shownConnection || TokenShape.isIn(prompt.text)
+                || shownToken.map({ prompt.text.contains($0) }) == true
+            {
                 landing = .failed(ShellCopy.somethingWentWrong.text)
             } else {
                 landing = .ready(prompt.text)
@@ -252,7 +273,7 @@ final class ConnectAgentModel {
         } catch is CancellationError {
             landing = .none
         } catch {
-            landing = .failed(ShellCopy.sentence(for: error).text)
+            if !finished { landing = .failed(ShellCopy.sentence(for: error).text) }
         }
     }
 
@@ -273,8 +294,19 @@ final class ConnectAgentModel {
         copiedPrompt = true
     }
 
-    /// Done: the token and the prompt are forgotten.
+    func copyMCPSettings() {
+        guard let mcpSettings else { return }
+        copy(mcpSettings)
+        copiedMCPSettings = true
+    }
+
+    /// Done: the token and the connection details are forgotten.
     func finish() {
+        finished = true
+        connectedSeatID = nil
+        shownConnection = nil
+        mcpConfiguration = nil
+        copiedMCPSettings = false
         shownToken = nil
         tokenGone = false
         landing = .none

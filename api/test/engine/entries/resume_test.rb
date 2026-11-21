@@ -2,11 +2,11 @@ require "test_helper"
 require_relative "owner_controls_support"
 require_relative "pending_stub"
 
-# Resume (PRD Lifecycle L104, Holds L176; milestone 3 plan HE-24, HS-3):
+# Resume (PRD Lifecycle L104, Holds L176; milestone 3 plan HE-24):
 # closes the task's owner_hold and nothing else. Without one it is
 # invalid_state (the row's guard not_held_owner_hold). When no pausing hold
 # is left the lease clocks run again, and when no hold is left on a task a
-# seat holds, its next GET /v1/next answers resume. Finishing is not served.
+# seat holds, its next GET /v1/next answers resume.
 class ResumeTest < ActiveSupport::TestCase
   include OwnerControlsSupport
   include PendingStub
@@ -73,17 +73,19 @@ class ResumeTest < ActiveSupport::TestCase
     end
   end
 
-  test "Finishing has a row that is not served in this milestone: invalid_state, even with an owner_hold (HS-3)" do
-    task = scenario.finishing_task(builder: @builder)
+  test "the owner can resume a Finishing task that has no holder" do
+    task = scenario.finishing_task(builder: @builder, holder: false, actions: [ { kind: "send", state: "requested" } ])
     ActiveRecord::Base.transaction(requires_new: true) do
       Leverage::Holds.open(scenario.context, task: task, reason: "owner_hold", actor_kind: "owner",
         actor_id: scenario.owner.id)
     end
     outcome, events = owner_run("resume", "id" => task.id)
 
-    assert_refused("invalid_state", outcome)
-    assert_empty events
-    assert_equal %w[owner_hold], open_holds(task).map(&:reason)
+    assert_completed(outcome)
+    assert_equal %w[hold.closed], events.map(&:type)
+    assert_empty open_holds(task)
+    assert_equal [ "finishing", nil, nil, nil ], task.reload.attributes.values_at("state", "holder_seat_id",
+      "lease_due_at", "resume_pending_since")
   end
 
   test "Done and Cancelled are invalid_state" do

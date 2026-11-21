@@ -11,7 +11,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   class TwoEvents < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog" })
+      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
       ctx.emit("task.promoted", task: task, payload: {})
       @result = { "task_id" => task.id }
     end
@@ -21,7 +21,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   class BadPayload < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog" })
+      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
       ctx.emit("task.promoted", task: task, payload: { made_up: true })
     end
   end
@@ -230,12 +230,10 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
-  # ask_question is milestone 5's. promote was the example until milestone
-  # 3 gave it an entry (milestone 3 plan HT-6), add_rule until milestone 4
-  # did (its plan RT-6, §0.1 fact 3).
+  # report_reading belongs to milestone 6.
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "ask_question")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "ask_question").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "report_reading")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "report_reading").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -278,16 +276,12 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { T::Precedence.first(%w[made_up_code]) }
   end
 
-  # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
-  # OWNER_CONTROLS, and two timers; milestone 4 (its plan §2.1, RT-6) three
-  # groups, RULES, CHECKS and JOBS, and six timers: 68 commands in nine
-  # groups. Its twenty waited in Table::PENDING while they were built, and
-  # that list and Table.known? are gone.
-  test "the table lists its commands in nine groups, each a registry command with state-table rows" do
+  test "the table lists its commands in thirteen groups, each a registry command with state-table rows" do
+    assert_equal 97, T::Table::COMMANDS.size
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
-               T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS ]
-    assert_equal [ 17, 11, 4, 12, 3, 7, 7, 2, 5 ], groups.map(&:size)
-    assert_equal 68, T::Table::COMMANDS.size
+               T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS, T::Table::FINISHING,
+               T::Table::QUESTIONS, T::Table::PROJECTS, T::Table::WORKSPACE ]
+    assert_equal [ 17, 13, 4, 12, 3, 7, 7, 2, 5, 11, 5, 9, 2 ], groups.map(&:size)
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
@@ -299,8 +293,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("claim")
     assert T::Table.include?("promote")
     assert T::Table.include?("add_rule")
-    refute T::Table.include?("ask_question")
-    refute T::Table.respond_to?(:known?)
+    assert T::Table.include?("ask_question")
     refute T::Table.const_defined?(:PENDING, false)
   end
 

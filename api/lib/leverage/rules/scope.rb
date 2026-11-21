@@ -8,42 +8,39 @@ module Leverage
     #   all_tasks        every task
     #   named_projects   a task of one of the projects named (scope_values);
     #                    never a task with no project (RC-44)
-    #   action_kinds     a task that ends in an outward action of one of the
-    #                    kinds named: at task.before_ready the requested
-    #                    contract's actions, elsewhere the task's actions
-    #                    that are not waived or revoked
+    #   action_kinds     at action.requested, the action being checked;
+    #                    at task.before_ready, the proposed actions;
+    #                    otherwise, the task's actions still in its contract
     #   checker_decides  the checker decides (a model rule); an app rule
     #                    cannot carry it (RD-6) and is treated as covering
     #
-    # Milestone 4 offers only all_tasks and checker_decides (RD-22); the
-    # other two are decided here all the same.
     module Scope
       # The action states in which a task no longer ends in that action.
       GONE = %w[waived revoked].freeze
 
       module_function
 
-      # inputs - the request's hashed inputs, when the hook hashes the
-      #          requested contract (task.before_ready); else nil.
+      # inputs - the request's hashed inputs, or nil for a briefing.
       #
       # Returns :covers, :checker_decides or :not_covered.
-      def coverage(version, task, inputs = nil)
+      def coverage(version, task, inputs = nil, project_id: task&.project_id)
         values = Array(version.scope_values)
         case version.scope_kind
         when "all_tasks" then :covers
         when "checker_decides" then version.checker == "model" ? :checker_decides : :covers
-        when "named_projects" then task&.project_id && values.include?(task.project_id) ? :covers : :not_covered
-        when "action_kinds" then (action_kinds(task, inputs) & values).empty? ? :not_covered : :covers
+        when "named_projects" then project_id && values.include?(project_id) ? :covers : :not_covered
+        when "action_kinds" then (action_kinds(version.hook, task, inputs) & values).empty? ? :not_covered : :covers
         else raise ArgumentError, "unknown scope #{version.scope_kind.inspect}"
         end
       end
 
-      def covers?(version, task, inputs = nil)
-        coverage(version, task, inputs) != :not_covered
+      def covers?(version, task, inputs = nil, **context)
+        coverage(version, task, inputs, **context) != :not_covered
       end
 
-      def action_kinds(task, inputs)
-        return Array(inputs["actions"]).map { |action| action["kind"] } if inputs.is_a?(Hash) && inputs.key?("actions")
+      def action_kinds(hook, task, inputs)
+        return [ inputs["action_kind"] ] if hook == "action.requested" && inputs
+        return Array(inputs["actions"]).map { |action| action["kind"] } if hook == "task.before_ready" && inputs
         return [] unless task
 
         Action.where(workspace_id: task.workspace_id, task_id: task.id).where.not(state: GONE).pluck(:kind)

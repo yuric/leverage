@@ -5,8 +5,7 @@ require_relative "entries/rule_support"
 # owner's two check commands: every state_machine.json row of the groups
 # rules, install_shipped_rules and rule_checks, run through the real entry.
 # Each row reads no task state (from: null) and changes none (to: null).
-# A case checks that the command completed, wrote the row's events and
-# nothing outside the row's events and side events. Three of the rows'
+# A case checks the row's refusal or completion, its events and side effects. Three of the rows'
 # events are written by another package's seam, which does nothing until
 # that package lands (RuleChecks is WP4's, Jobs WP6's): for those the case
 # proves the call instead (STUBBED), as the plan's shared run rules ask.
@@ -40,7 +39,6 @@ class StateTableRulesTest < ActiveSupport::TestCase
   StateTableCases.define(self, commands) do |kase|
     assert_nil kase.from, "the rule rows read no task state"
     assert_nil kase.to, "the rule rows change no task state"
-    assert_nil kase.refusal
     assert_nil kase.hook
     assert_empty kase.conditional_events
 
@@ -52,7 +50,11 @@ class StateTableRulesTest < ActiveSupport::TestCase
     end
     written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", before).order(:seq).map(&:type)
 
-    assert_completed(outcome)
+    if kase.refusal
+      assert_refused(kase.refusal, outcome)
+    else
+      assert_completed(outcome)
+    end
     own = kase.events - STUBBED.keys
     times = kase.command == "install_shipped_rules" ? Leverage::Rules::Shipped.all.size : 1
     assert_equal own * times, written.select { |type| own.include?(type) }, "#{kase.name}: the row's events"
@@ -98,8 +100,16 @@ class StateTableRulesTest < ActiveSupport::TestCase
   def builder = @builder ||= scenario.seat(role: "builder", credential: scenario.credential)
 
   # rerun_queues: an errored check a submit waits on. rerun_of_claim_check:
-  # an errored claim check whose check_error hold is open.
+  # an errored claim check whose check_error hold is open. An errored
+  # approval-policy check belongs to a requested action in Finishing.
   def errored_check(guard)
+    if guard == [ "rerun_of_approval_check" ]
+      rule = scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+      task = scenario.finishing_task(builder: builder, actions: [ { kind: "send", state: "requested" } ])
+      action = Action.find_by!(task_id: task.id)
+      return scenario.rule_check(task, rule: rule, result: "error", attempts: 2, subject: action)
+    end
+
     if guard == [ "rerun_of_claim_check" ]
       rule = scenario.rule(hook: "task.before_claim")
       task = scenario.task(state: "ready")

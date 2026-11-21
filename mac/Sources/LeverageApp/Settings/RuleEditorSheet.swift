@@ -6,6 +6,8 @@ import SwiftUI
 struct RuleEditorSheet: View {
     @Bindable var model: RuleEditorModel
     let cancel: () -> Void
+    var projects: [Project] = []
+    var projectListFailure: ShellCopy?
     @State private var confirmingRemove = false
 
     var body: some View {
@@ -14,7 +16,7 @@ struct RuleEditorSheet: View {
                 .font(.system(size: 20, weight: .semibold))
                 .padding(.bottom, 14)
             ScrollView {
-                RuleEditorFields(model: model)
+                RuleEditorFields(model: model, projects: projects, projectListFailure: projectListFailure)
                     .padding(.trailing, 6)
             }
             if let failure = model.failure {
@@ -73,6 +75,8 @@ struct RuleEditorSheet: View {
 /// has it.
 struct RuleEditorFields: View {
     @Bindable var model: RuleEditorModel
+    var projects: [Project] = []
+    var projectListFailure: ShellCopy?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -129,7 +133,7 @@ struct RuleEditorFields: View {
                         Text(verbatim: RulesCopy.scopeLabel.text)
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    scopeOptions
                 }
             }
             if model.showsOnFail {
@@ -145,5 +149,59 @@ struct RuleEditorFields: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var scopeOptions: some View {
+        switch model.scopeKind {
+        case .namedProjects:
+            projectChoices
+        case .actionKinds:
+            ForEach(ActionKind.allCases, id: \.self) { kind in
+                Toggle(isOn: selection(kind, in: $model.actionKinds)) {
+                    Text(verbatim: TaskPageCopy.actionKind(kind).text)
+                }
+                .toggleStyle(.checkbox)
+            }
+        case .allTasks, .checkerDecides:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var projectChoices: some View {
+        let available = projects.filter { $0.contentDeletedAt == nil }
+        let unlisted = model.projectIDs.subtracting(available.map(\.id))
+        if let projectListFailure {
+            Text(verbatim: projectListFailure.text)
+                .foregroundStyle(Tokens.Tone.stop.foreground)
+        } else if available.isEmpty, unlisted.isEmpty {
+            Text(verbatim: RulesCopy.scopeNoProjects.text)
+                .foregroundStyle(Tokens.Palette.text2)
+        }
+        ForEach(available, id: \.id) { project in
+            Toggle(isOn: selection(project.id, in: $model.projectIDs)) {
+                Text(verbatim: project.name)
+            }
+            .toggleStyle(.checkbox)
+        }
+        ForEach(unlisted.sorted { $0.contractString < $1.contractString }, id: \.self) { id in
+            Toggle(isOn: selection(id, in: $model.projectIDs)) {
+                Text(verbatim: RulesCopy.scopeUnlistedProject.text)
+            }
+            .toggleStyle(.checkbox)
+        }
+    }
+
+    private func selection<Value: Hashable>(_ value: Value, in values: Binding<Set<Value>>) -> Binding<Bool> {
+        Binding(
+            get: { values.wrappedValue.contains(value) },
+            set: { selected in
+                if selected {
+                    values.wrappedValue.insert(value)
+                } else {
+                    values.wrappedValue.remove(value)
+                }
+            })
     }
 }

@@ -36,6 +36,33 @@ class SaveRuleTest < ActiveSupport::TestCase
     end
   end
 
+  test "saving both fixed scopes keeps the action hook and preserves older versions" do
+    rule = scenario.rule(hook: "action.requested")
+    project = scenario.project
+    first = scenario.current_version(rule)
+
+    named = { "kind" => "named_projects", "project_ids" => [ project.id ], "action_kinds" => nil }
+    assert_completed(owner_command("save_rule", save_body(rule, scope: named).merge("id" => rule.id)))
+    second = scenario.current_version(rule)
+    assert_equal [ "action.requested", "named_projects", [ project.id ] ],
+      [ second.hook, second.scope_kind, second.scope_values ]
+
+    kinds = { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "publish" ] }
+    assert_completed(owner_command("save_rule", save_body(rule, scope: kinds).merge("id" => rule.id)))
+    third = scenario.current_version(rule)
+    assert_equal [ "action.requested", "action_kinds", [ "publish" ] ], [ third.hook, third.scope_kind, third.scope_values ]
+    assert_equal [ [], [ project.id ] ], [ first.reload.scope_values, second.reload.scope_values ]
+  end
+
+  test "saving a scope with a project from another workspace is 422 invalid" do
+    foreign = Scenario.new.project
+    scope = { "kind" => "named_projects", "project_ids" => [ foreign.id ], "action_kinds" => nil }
+    counts = [ RuleVersion.count, Event.count, Command.count ]
+
+    assert_raises(T::Invalid) { owner_command("save_rule", save_body(@rule, scope: scope).merge("id" => @rule.id)) }
+    assert_equal counts, [ RuleVersion.count, Event.count, Command.count ]
+  end
+
   test "a field that does not fit the rule is 422 invalid and writes nothing (RD-6)" do
     counts = [ RuleVersion.count, Event.count, Command.count ]
 

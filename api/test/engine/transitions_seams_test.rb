@@ -22,7 +22,7 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
   class OneEvent < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog" })
+      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
       @result = { "task_id" => task.id }
     end
   end
@@ -99,5 +99,51 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
     end
 
     assert_empty calls
+  end
+
+  test "Finishing sees the command once after it performs and does not run again for a repeated key" do
+    calls = nil
+    T::Table.with_entries("add_task" => OneEvent) do
+      repeated = request(key: "k-finishing-repeat")
+      calls = spy_on(Leverage::Finishing, :after_command) do
+        assert T.apply(repeated).completed?
+        assert T.apply(repeated).completed?
+      end
+    end
+
+    assert_equal 1, calls.size
+    ctx = calls.sole.arguments.sole
+    assert_equal [ "k-finishing-repeat", %w[task.created] ], [ ctx.request.key, ctx.events.map(&:type) ]
+  end
+
+  test "Finishing runs after an inline timer and the refused command, once each" do
+    task = @scenario.task(state: "working", builder: @scenario.seat(role: "builder"))
+    @scenario.make_due(task)
+    refused = request.with(params: { "id" => task.id })
+    observations = []
+    original = Leverage::Finishing.method(:after_command)
+    Leverage::Finishing.define_singleton_method(:after_command) do |ctx|
+      observations << [ ctx.request.command, ctx.request.key, Task.find(task.id).state ]
+      original.call(ctx)
+    end
+
+    T::Table.with_entries("add_task" => Refused) { assert T.apply(refused).refused? }
+
+    assert_equal [ [ "builder_lease_expiry", nil, "ready" ], [ "add_task", refused.key, "ready" ] ], observations
+  ensure
+    Leverage::Finishing.define_singleton_method(:after_command, original) if original
+  end
+
+  test "a sweep timer command calls Finishing once after its entry, with no key" do
+    task = @scenario.task(state: "working", builder: @scenario.seat(role: "builder"))
+    @scenario.make_due(task)
+    calls = spy_on(Leverage::Finishing, :after_command) do
+      assert Leverage::Sweep.timer(@scenario.workspace_id, "builder_lease_expiry", "id" => task.id).completed?
+    end
+
+    assert_equal 1, calls.size
+    ctx = calls.sole.arguments.sole
+    assert_equal [ "builder_lease_expiry", nil ], [ ctx.request.command, ctx.request.key ]
+    assert_includes ctx.events.map(&:type), "task.lease_expired"
   end
 end

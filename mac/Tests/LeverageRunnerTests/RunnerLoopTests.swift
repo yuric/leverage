@@ -86,7 +86,7 @@ struct RunnerLoopTests {
 
         #expect(await runToEnd(loop) == 0)
         #expect(harness.operations == [
-            .getNext, .claimNextTask, .acknowledgeTaskBriefing, .startCriterion, .passCriterion, .getNext,
+            .getNext, .claimNextTask, .acknowledgeTaskBriefing, .startCriterion, .reportCost, .passCriterion, .getNext,
         ])
     }
 
@@ -203,6 +203,29 @@ struct RunnerLoopTests {
         #expect(releases.count == 1)
         #expect(releases.first?.body?["reason"]?.stringValue == "stopping")
         #expect(releases.first?.id == taskID.contractString)
+    }
+
+    @Test("an answer for a known task is read once before the next poll")
+    func questionAnswer() async throws {
+        let harness = try Harness()
+        let questionID = UUID()
+        let taskID = self.taskID
+        let answer = Question(
+            id: questionID, taskID: taskID, askingSeatID: Fixture.seatID, text: "Which demo?",
+            assumption: "The blue one.", blocking: true, outcome: .answered, answer: "Use the blue demo.", basis: .record)
+        let loop = harness.loop(.builder, driver: ScriptedDriver.agreeable(), continuing: .task(taskID))
+        harness.api.script {
+            $0.taskBriefing = { _ in throw LeverageClientError.refused(Refusal(code: .onHold, ruleID: nil, reason: nil)) }
+            $0.getQuestion = { _, _ in answer }
+            $0.releaseTask = { _, _, _ in Fixture.done(.release) }
+        }
+        harness.next([NextItem(kind: .answer, id: questionID.contractString)], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        let calls = harness.calls(.getQuestion)
+        #expect(calls.count == 1)
+        #expect(calls.first?.path == ["id": taskID.contractString, "qid": questionID.contractString])
+        #expect(harness.operations.prefix(4) == [.getTaskBriefing, .getNext, .getQuestion, .getNext])
     }
 
     @Test("a stop while holding nothing releases nothing")

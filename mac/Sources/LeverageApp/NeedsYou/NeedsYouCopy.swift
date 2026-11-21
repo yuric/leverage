@@ -23,12 +23,25 @@ enum NeedsYouCopy: OwnerFacingCopy {
     case ruleLabel, reasonLabel
     case letThroughOnce, runAgain, turnRuleOff, connectAgent
     case letThroughQuestion, letThroughPlaceholder, letThroughConfirm, turnOffQuestion, turnOffConfirm, goBack
-    // An item this version cannot open.
-    case unknownLine
+    case questionHeading, questionAssuming, questionWaiting, questionAssumption, keepAssumption, answerDifferently
+    case answerTitle, sendAnswer, closeSheet
+    case approvalHeading, approvalBody, approve, stop
+    case publish, pay, send, delete, publishing, paying, sending, deleting
+    case stoppedHeading, stoppedBody, ruleStoppedAction, ownerStoppedAction, agentStoppedAction
+    case startedWarning, waive, returnForRework, criteriaToReopen
+    case unconfirmedHeading, unconfirmedBody, unconfirmedBeforeStart, unconfirmedAfterStart, unconfirmedStartUnknown
+    case offerAgain, markDone, actionChoice, approvedByYou, anAgent, approvalUnknown
+    case accessHeading, accessBody, grantAccess
+    case taskBudgetHeading, projectBudgetHeading, aProject, reportedAmount
+    case raiseCap, changeBudget, resumeProject, amount, amountHint, saveAmount
+
+    // An item whose details could not be read.
+    case detailsUnavailable
 
     // Notifications.
     case notificationsOff, settledBeforeYouSaw
     case kindSignedOut, kindLimit, kindSentBack, kindOther
+    case kindQuestion, kindApproval, kindStopped, kindUnconfirmed, kindAccess, kindBudget
     // Names used when a read could not say.
     case aTask, anAccount
 
@@ -90,7 +103,61 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .turnOffQuestion: "Turn this rule off for every task?"
         case .turnOffConfirm: "Turn it off"
         case .goBack: "Go back"
-        case .unknownLine: "{task} needs you, and leverage cannot open this kind of item yet."
+        case .questionHeading: "{agent} asked while working on {task}"
+        case .questionAssuming: "It is assuming {assumption} and has kept working."
+        case .questionWaiting: "It is waiting for your answer."
+        case .questionAssumption: "It is assuming {assumption}."
+        case .keepAssumption: "Keep that"
+        case .answerDifferently: "Answer differently"
+        case .answerTitle: "Your answer"
+        case .sendAnswer: "Send answer"
+        case .closeSheet: "Cancel"
+        case .approvalHeading: "{action}?"
+        case .approvalBody: "{task} passed its review. {action} cannot be undone."
+        case .approve: "Approve"
+        case .stop: "Do not {verb}"
+        case .publish: "Publish"
+        case .pay: "Pay"
+        case .send: "Send"
+        case .delete: "Delete"
+        case .publishing: "Publishing"
+        case .paying: "Paying"
+        case .sending: "Sending"
+        case .deleting: "Deleting"
+        case .stoppedHeading: "{verb} was stopped"
+        case .stoppedBody: "The task is waiting for you to choose what happens next."
+        case .ruleStoppedAction: "A rule stopped this action."
+        case .ownerStoppedAction: "You stopped this action."
+        case .agentStoppedAction: "{agent} stopped this action."
+        case .startedWarning: "Something may already have gone out."
+        case .waive: "Skip it"
+        case .returnForRework: "Send the task back"
+        case .criteriaToReopen: "Choose the parts of the work the agent should do again."
+        case .unconfirmedHeading: "Did {action} happen?"
+        case .unconfirmedBody: "{agent} was to {action}, approved by {who}, and stopped responding {when}."
+        case .unconfirmedBeforeStart: "before it said it had started"
+        case .unconfirmedAfterStart: "after it said it had started"
+        case .unconfirmedStartUnknown: "before its progress could be confirmed"
+        case .offerAgain: "Ask {agent} again"
+        case .markDone: "It was done"
+        case .actionChoice: "{choice} ({description})"
+        case .approvedByYou: "you"
+        case .anAgent: "An agent"
+        case .approvalUnknown: "an agent"
+        case .accessHeading: "{agent} needs access"
+        case .accessBody: "Give the agent the access it needs to continue."
+        case .grantAccess: "I have given access"
+        case .taskBudgetHeading: "{task} reached its spending limit"
+        case .projectBudgetHeading: "{project} reached its budget"
+        case .aProject: "A project"
+        case .reportedAmount: "{amount} reported"
+        case .raiseCap: "Raise the limit"
+        case .changeBudget: "Change the budget"
+        case .resumeProject: "Continue anyway"
+        case .amount: "Amount in US dollars"
+        case .amountHint: "Use up to two decimal places. Leave it empty for no limit."
+        case .saveAmount: "Save"
+        case .detailsUnavailable: "The details could not be read."
 
         case .notificationsOff:
             "Notifications are off for leverage. Turn them on in System Settings to be told when something needs you."
@@ -99,6 +166,12 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .kindLimit: "Limit with no reset time"
         case .kindSentBack: "Sent back too many times"
         case .kindOther: "Something needs you"
+        case .kindQuestion: "A question needs your answer"
+        case .kindApproval: "An action needs your approval"
+        case .kindStopped: "An action was stopped"
+        case .kindUnconfirmed: "An action could not be confirmed"
+        case .kindAccess: "An agent needs access"
+        case .kindBudget: "A spending limit was reached"
 
         case .aTask: "A task"
         case .anAccount: "An account"

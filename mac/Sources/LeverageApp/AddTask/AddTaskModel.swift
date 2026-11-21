@@ -12,6 +12,7 @@ struct ContractDraft: Equatable, Sendable {
     var details = ""
     /// One criterion on each line.
     var criteriaText = ""
+    var actions: [OutwardActionDraft] = []
     var priority: Priority = .normal
     var workReference = ""
     /// The words of the independent review. A task that has one keeps its own
@@ -39,19 +40,24 @@ struct ContractDraft: Equatable, Sendable {
         return typed + [CriterionInput(text: reviewCriterionText, kind: .review)]
     }
 
+    private var actionInputs: [ActionInput] {
+        actions.map { ActionInput(kind: $0.kind, description: $0.description) }
+    }
+
     /// Add task: into Backlog, with no criteria (they go with Complete contract).
-    func addRequest() -> AddTaskRequest {
+    func addRequest(projectID: UUID?) -> AddTaskRequest {
         AddTaskRequest(
-            title: trimmedTitle, goal: effectiveGoal, priority: priority,
-            workReference: Self.nonEmpty(workReference), state: .backlog)
+            title: trimmedTitle, goal: effectiveGoal, actions: actions.isEmpty ? nil : actionInputs,
+            projectID: projectID, priority: priority, workReference: Self.nonEmpty(workReference), state: .backlog)
     }
 
     /// Save as an idea: Add task alone, into the Imaginarium. It keeps the
     /// details too and leaves the criteria out, which are the contract's and
     /// go with Complete contract after Move to Backlog (HM-48).
-    func ideaRequest() -> AddTaskRequest {
+    func ideaRequest(projectID: UUID?) -> AddTaskRequest {
         AddTaskRequest(
-            title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details), priority: priority,
+            title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details),
+            actions: actions.isEmpty ? nil : actionInputs, projectID: projectID, priority: priority,
             workReference: Self.nonEmpty(workReference), state: .imaginarium)
     }
 
@@ -64,8 +70,19 @@ struct ContractDraft: Equatable, Sendable {
     func completeRequest() -> CompleteContractRequest {
         CompleteContractRequest(
             title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details), criteria: criteria,
-            workReference: Self.nonEmpty(workReference))
+            actions: actionInputs, workReference: Self.nonEmpty(workReference))
     }
+}
+
+struct OutwardActionDraft: Equatable, Identifiable, Sendable {
+    let id = UUID()
+    var kind: ActionKind = .publish
+    var description = ""
+}
+
+struct AddTaskProjectChoice: Equatable, Identifiable {
+    let id: UUID?
+    let name: String
 }
 
 /// The Add task form: Save task sends Add task and then Complete contract, each
@@ -137,16 +154,58 @@ final class AddTaskModel {
     private(set) var acceptanceCriteriaRuleOn = false
     private(set) var providerRuleOn = false
 
-    init(api: any OwnerAPI, onSaved: @escaping @MainActor () -> Void) {
+    private var selectedProjectID: UUID?
+
+    var projectID: UUID? {
+        get { selectedProjectID }
+        set {
+            guard canChooseProject, newValue != selectedProjectID else { return }
+            selectedProjectID = newValue
+            addKey = nil
+            ideaKey = nil
+        }
+    }
+
+    var actions: [OutwardActionDraft] {
+        get { draft.actions }
+        set { draft.actions = newValue }
+    }
+
+    init(api: any OwnerAPI, boardFilter: BoardFilter = BoardFilter(), onSaved: @escaping @MainActor () -> Void) {
         self.api = api
         self.onSaved = onSaved
+        selectedProjectID = boardFilter.projectID
+    }
+
+    /// After Add task creates the Backlog task, a retry only completes its contract.
+    var canChooseProject: Bool { !isBusy && state != .saved && createdTaskID == nil }
+
+    func projectChoices(_ projects: [Project]) -> [AddTaskProjectChoice] {
+        var choices = [AddTaskProjectChoice(id: nil, name: AddTaskCopy.noProject.text)]
+        choices += projects.map { AddTaskProjectChoice(id: $0.id, name: ProjectsCopy.projectName($0)) }
+        if let projectID, !projects.contains(where: { $0.id == projectID }) {
+            choices.append(AddTaskProjectChoice(id: projectID, name: BoardCopy.selectedProject.text))
+        }
+        return choices
+    }
+
+    func addAction() {
+        actions.append(OutwardActionDraft())
+    }
+
+    func removeAction(id: UUID) {
+        actions.removeAll { $0.id == id }
+    }
+
+    var hasIncompleteActions: Bool {
+        actions.contains { $0.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     var isBusy: Bool { state == .saving }
 
-    /// Whether Save task is on: there is a title and nothing is being sent.
+    /// Whether the form is ready to save.
     var canSave: Bool {
-        !isBusy && state != .saved && !draft.trimmedTitle.isEmpty
+        !isBusy && state != .saved && !draft.trimmedTitle.isEmpty && !hasIncompleteActions
     }
 
     /// The failure line, if the last try did not work.
@@ -192,7 +251,7 @@ final class AddTaskModel {
         do {
             let key = ideaKey ?? IdempotencyKey()
             ideaKey = key
-            let outcome = try await api.addTask(draft.ideaRequest(), key: key)
+            let outcome = try await api.addTask(draft.ideaRequest(projectID: projectID), key: key)
             guard try outcome.completedResult() != nil else { throw LeverageClientError.invalidBody }
             state = .saved
             onSaved()
@@ -209,7 +268,7 @@ final class AddTaskModel {
             if createdTaskID == nil {
                 let key = addKey ?? IdempotencyKey()
                 addKey = key
-                let outcome = try await api.addTask(draft.addRequest(), key: key)
+                let outcome = try await api.addTask(draft.addRequest(projectID: projectID), key: key)
                 guard let created = try outcome.completedResult() else { throw LeverageClientError.invalidBody }
                 createdTaskID = created.taskID
             }

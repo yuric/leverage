@@ -26,6 +26,7 @@ class CallerInterfacesTest < ActionDispatch::IntegrationTest
   # Made-up values for the path parameters: ids that name nothing, a key,
   # a provider. A call that gets past sign-in may then answer 404.
   IDS = { "id" => "00000000-0000-4000-8000-00000000c0de", "cid" => "00000000-0000-4000-8000-00000000c0df",
+          "aid" => "00000000-0000-4000-8000-00000000c0e0", "qid" => "00000000-0000-4000-8000-00000000c0e1",
           "key" => "made-up-key", "provider" => "claude" }.freeze
 
   SERVED = HttpCalls.served.map { |op| op.fetch("operation_id") }.freeze

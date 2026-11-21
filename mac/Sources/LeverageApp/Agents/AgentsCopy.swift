@@ -13,7 +13,7 @@ enum AgentsCopy: OwnerFacingCopy {
     case lastAsked, neverAsked
     case chipRunning
     case start, stop, starting, stopping, remove, copyLandingPrompt, copied
-    case startFailed, stopFailed
+    case startFailed, stopFailed, copyMCPSettings
     // Pause, Resume and Change (HM-45, HM-51, HE-26, HE-27).
     case stateNotRunning, stateWaitingFor, chipNotRunning, pausedNote
     case pause, resume, change, pausing, resuming, pausedWord
@@ -24,6 +24,9 @@ enum AgentsCopy: OwnerFacingCopy {
     case connectTitle, modeRunOnLogin, modeOwn, roleLabel, nameLabel, namePlaceholder, nameRequired
     case loginLabel, noLogins, geminiHidden, providerLabel
     case modelLabel, modelHint, effortLabel, effortHint
+    case strengthLabel, strengthStandard, strengthStronger, strengthStrongest
+    case connectionLabel, connectionMCP, connectionHTTP
+    case mcpSettingsTitle, mcpSettingsNote, mcpSettingsUnavailable
     case notTestedForChecking
     case connectButton, connecting
     case tokenTitle, tokenNote, tokenGone, copy
@@ -62,6 +65,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .stopping: "Stopping…"
         case .remove: "Remove"
         case .copyLandingPrompt: "Copy landing prompt"
+        case .copyMCPSettings: "Copy MCP settings"
         case .copied: "Copied"
         case .startFailed: "{name} could not start. Check its login in Credentials."
         case .stopFailed: "{name} did not stop. Try again."
@@ -104,6 +108,16 @@ enum AgentsCopy: OwnerFacingCopy {
         case .modelHint: "Leave empty to use the tool's own default."
         case .effortLabel: "Effort"
         case .effortHint: "Leave empty to use the tool's own default."
+        case .strengthLabel: "How strong is its model"
+        case .strengthStandard: "Standard"
+        case .strengthStronger: "Stronger"
+        case .strengthStrongest: "Strongest"
+        case .connectionLabel: "How it connects"
+        case .connectionMCP: "Through MCP"
+        case .connectionHTTP: "By HTTP calls"
+        case .mcpSettingsTitle: "MCP settings"
+        case .mcpSettingsNote: "Replace PASTE-THE-TOKEN-HERE in your MCP settings with this agent’s token."
+        case .mcpSettingsUnavailable: "The MCP settings are unavailable."
         case .connectButton: "Connect"
         case .connecting: "Connecting…"
         case .tokenTitle: "Its token"
@@ -118,6 +132,13 @@ enum AgentsCopy: OwnerFacingCopy {
         }
     }
 
+    static func connection(_ way: LandingPromptConnection) -> AgentsCopy {
+        switch way {
+        case .mcp: .connectionMCP
+        case .http: .connectionHTTP
+        }
+    }
+
     /// The sentence for a role.
     static func role(_ role: SeatRole) -> AgentsCopy {
         switch role {
@@ -125,6 +146,21 @@ enum AgentsCopy: OwnerFacingCopy {
         case .reviewer: .roleReviewer
         case .planner: .rolePlanner
         case .orchestrator: .roleOrchestrator
+        }
+    }
+}
+
+/// The three strengths the owner can choose (AP-24).
+enum AgentStrength: Int, CaseIterable {
+    case standard = 1
+    case stronger = 2
+    case strongest = 3
+
+    var copy: AgentsCopy {
+        switch self {
+        case .standard: .strengthStandard
+        case .stronger: .strengthStronger
+        case .strongest: .strengthStrongest
         }
     }
 }

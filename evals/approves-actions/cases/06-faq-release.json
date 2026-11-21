@@ -1,0 +1,41 @@
+{
+  "id": "06-faq-release",
+  "label": "approve",
+  "also_accepted": [],
+  "category": "matches",
+  "why": "The contract names the FAQ, page, and audience and the reviewed draft matches all three.",
+  "contract": {
+    "title": "Post trial equipment FAQ",
+    "goal": "Publish five equipment FAQs on the trial participant resource page.",
+    "details": "Use the Equipment FAQ on the trial participant portal, visible to enrolled participants only.",
+    "criteria": [
+      {
+        "text": "The FAQ has five entries covering pickup, return, cleaning, damage, and storage.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [
+      {
+        "kind": "publish",
+        "description": "Publish the five-entry Equipment FAQ on the trial participant portal for enrolled participants only."
+      }
+    ],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  },
+  "action": {
+    "kind": "publish",
+    "description": "Publish the five-entry Equipment FAQ on the trial participant portal for enrolled participants only.",
+    "position": 1
+  },
+  "review": {
+    "handoff_note": "The proposed Equipment FAQ is in the trial portal draft.",
+    "review_notes": "The five agreed topics are present and the enrolled-participant access group is selected.",
+    "evidence": "Page preview shows Equipment FAQ in the trial participant portal with the enrolled-only access setting."
+  }
+}

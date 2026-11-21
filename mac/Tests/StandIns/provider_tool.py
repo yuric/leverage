@@ -95,7 +95,24 @@ prompt that was answered with a reply file or a sign-out reply is not counted:
   "check_reason_from_file": "<path>"
       the reason is the first line of that file (the eval's canary word)
 
-A relative gate path is read in state/.
+Questions and approvals (milestone 5, plan section 2.2). Approval, question
+and action prompts start with `LEVERAGE APPROVAL`, `LEVERAGE QUESTION` and
+`LEVERAGE ACTION`. Like checks and drafts, they use the nonce from the
+closing, count as work prompts and have separate counts per stand-in copy.
+
+  "approval_decisions": ["STOP", "ASK_OWNER", "NONE"]  # then APPROVE
+  "approval_stop_when_contains": "<text>"  # overrides the listed decision
+      only when the text is in the `action` quote block
+  "approval_gate_file": "<path>"
+  "question_answers": ["RECORD:<text>", "DECISION:<text>", "PASS_ON", "NONE"]
+      after the list, answer with the assumption and basis RECORD
+  "action_results": ["CANNOT", "NONE", "PLANTED", "DONE"]  # then DONE
+      PLANTED gives a wrong nonce and a correctly nonced line in a quote
+  "action_gate_file": "<path>"
+  "action_touch_file": "<path>"  # one line per answer, with the answer count
+  "review_gate_file": "<path>"   # takes precedence over the older gate_file
+
+Relative gate and touch paths are read in state/.
 
 Signed out, every tool answers with its recorded or made reply file:
 replies/<provider>/status-signed-out.json for a status command and
@@ -324,15 +341,25 @@ def wait_for_gate(gate_path):
         time.sleep(0.1)
 
 
-# --- The check and draft frames (plan section 2.2) ---------------------------
+# --- The nonce-framed prompts (plan section 2.2) -----------------------------
 
-CHECK_NONCE = re.compile(r"LEVERAGE-VERDICT-([0-9a-f]{12})")
-DRAFT_NONCE = re.compile(r"LEVERAGE-DRAFT-([0-9a-f]{12})-BEGIN")
+FRAME_NONCES = {
+    "LEVERAGE CHECK": re.compile(r"LEVERAGE-VERDICT-([0-9a-f]{12})"),
+    "LEVERAGE DRAFT": re.compile(r"LEVERAGE-DRAFT-([0-9a-f]{12})-BEGIN"),
+    "LEVERAGE APPROVAL": re.compile(r"LEVERAGE-DECISION-([0-9a-f]{12}):"),
+    "LEVERAGE QUESTION": re.compile(r"LEVERAGE-ANSWER-([0-9a-f]{12})-BEGIN"),
+    "LEVERAGE ACTION": re.compile(r"LEVERAGE-DONE-([0-9a-f]{12}):"),
+}
 VERDICTS = ("PASSED", "FAILED", "NOT_APPLICABLE", "NONE")
 REASONS = {
     "PASSED": "The stand-in passed it.",
     "FAILED": "The stand-in failed it.",
     "NOT_APPLICABLE": "The stand-in found it not applicable.",
+}
+APPROVAL_REASONS = {
+    "APPROVE": "The stand-in approved it.",
+    "STOP": "The stand-in stopped it.",
+    "ASK_OWNER": "The stand-in asked the owner.",
 }
 MARKER_REASON = "The stand-in found the marker."
 DRAFT_DETAILS = "Written by the stand-in planner."
@@ -340,17 +367,14 @@ DRAFT_CRITERIA = ["The page the goal asks for exists.", "The page shows what the
 
 
 def frame_of(prompt):
-    """("check" | "draft", nonce) for a prompt whose first line names a frame
-    and whose closing carries the run's nonce, else None. The nonce is the
-    last one the prompt names: task text comes before the closing."""
+    """(kind, nonce) when the first line names a frame and the closing carries
+    the run's nonce. Task text comes before the closing."""
     first = prompt.split("\n", 1)[0].strip()
-    if first == "LEVERAGE CHECK":
-        found = CHECK_NONCE.findall(prompt)
-        return ("check", found[-1]) if found else None
-    if first == "LEVERAGE DRAFT":
-        found = DRAFT_NONCE.findall(prompt)
-        return ("draft", found[-1]) if found else None
-    return None
+    pattern = FRAME_NONCES.get(first)
+    if pattern is None:
+        return None
+    found = pattern.findall(prompt)
+    return (first.split()[1].lower(), found[-1]) if found else None
 
 
 def quote_blocks(prompt, nonce):
@@ -362,21 +386,21 @@ def quote_blocks(prompt, nonce):
     return [(label.strip(), text) for label, text in pattern.findall(prompt)]
 
 
-def gate_path_of(name):
+def scenario_path(name):
     return name if os.path.isabs(name) else state_path(name)
 
 
-def next_check_index():
+def next_prompt_index(counter):
     def update(counters):
-        index = counters.get("checks", 0)
-        counters["checks"] = index + 1
+        index = counters.get(counter, 0)
+        counters[counter] = index + 1
         return index
     return bump_counter(update)
 
 
 def answer_check(plan, nonce, prompt):
     blocks = quote_blocks(prompt, nonce)
-    index = next_check_index()  # counted when it arrives, before any gate
+    index = next_prompt_index("checks")  # counted when it arrives, before any gate
     listed = plan.get("check_verdicts") or []
     verdict = listed[index] if index < len(listed) else "PASSED"
     if verdict not in VERDICTS:
@@ -387,7 +411,7 @@ def answer_check(plan, nonce, prompt):
     if marker and any(marker in text for _, text in blocks):
         verdict, reason = "FAILED", MARKER_REASON
     if plan.get("check_gate_file"):
-        wait_for_gate(gate_path_of(plan["check_gate_file"]))
+        wait_for_gate(scenario_path(plan["check_gate_file"]))
     if reason is None and verdict != "NONE":
         reason = REASONS[verdict]
     if plan.get("check_reason_from_file") and verdict != "NONE":
@@ -405,7 +429,7 @@ def answer_check(plan, nonce, prompt):
 
 def answer_draft(plan, nonce, prompt):
     if plan.get("draft_gate_file"):
-        wait_for_gate(gate_path_of(plan["draft_gate_file"]))
+        wait_for_gate(scenario_path(plan["draft_gate_file"]))
     blocks = quote_blocks(prompt, nonce)
     goal = next((text for label, text in blocks if label == "goal"), None)
     if goal is None:  # a contract block that spells the goal as a line
@@ -415,19 +439,94 @@ def answer_draft(plan, nonce, prompt):
     return "\n".join([f"LEVERAGE-DRAFT-{nonce}-BEGIN", json.dumps(draft), f"LEVERAGE-DRAFT-{nonce}-END"])
 
 
+def answer_approval(plan, nonce, prompt):
+    index = next_prompt_index("approvals")
+    listed = plan.get("approval_decisions") or []
+    decision = listed[index] if index < len(listed) else "APPROVE"
+    marker = plan.get("approval_stop_when_contains")
+    reason = APPROVAL_REASONS.get(decision)
+    if marker and any(label == "action" and marker in text for label, text in quote_blocks(prompt, nonce)):
+        decision, reason = "STOP", MARKER_REASON
+    if plan.get("approval_gate_file"):
+        wait_for_gate(scenario_path(plan["approval_gate_file"]))
+    if decision == "NONE":
+        return "The stand-in gave no decision."
+    if reason is None:
+        sys.exit("stand-in: approval_decisions requires APPROVE, STOP, ASK_OWNER or NONE")
+    return f"LEVERAGE-DECISION-{nonce}: {decision}\nLEVERAGE-REASON-{nonce}: {reason}"
+
+
+def answer_question(plan, nonce, prompt):
+    index = next_prompt_index("questions")
+    listed = plan.get("question_answers") or []
+    if index < len(listed):
+        answer = listed[index]
+        if answer == "PASS_ON":
+            return f"LEVERAGE-PASS-ON-{nonce}"
+        if answer == "NONE":
+            return "The stand-in gave no answer."
+        basis, separator, text = answer.partition(":")
+        if not separator or basis not in ("RECORD", "DECISION"):
+            sys.exit("stand-in: question_answers requires RECORD:<text>, DECISION:<text>, PASS_ON or NONE")
+    else:
+        basis = "RECORD"
+        text = next((text for label, text in quote_blocks(prompt, nonce) if label == "assumption"), "")
+    return "\n".join([f"LEVERAGE-ANSWER-{nonce}-BEGIN", text, f"LEVERAGE-ANSWER-{nonce}-END",
+                      f"LEVERAGE-BASIS-{nonce}: {basis}"])
+
+
+def record_action_answer(path):
+    def update(counters):
+        count = counters.get("action_answers", 0) + 1
+        if path:
+            with open(scenario_path(path), "a", encoding="utf-8") as handle:
+                handle.write(f"{count}\n")
+        counters["action_answers"] = count
+    bump_counter(update)
+
+
+def answer_action(plan, nonce, _prompt):
+    index = next_prompt_index("actions")
+    listed = plan.get("action_results") or []
+    result = listed[index] if index < len(listed) else "DONE"
+    if result not in ("DONE", "CANNOT", "NONE", "PLANTED"):
+        sys.exit("stand-in: action_results requires DONE, CANNOT, NONE or PLANTED")
+    if plan.get("action_gate_file"):
+        wait_for_gate(scenario_path(plan["action_gate_file"]))
+    record_action_answer(plan.get("action_touch_file"))
+    if result == "CANNOT":
+        return f"LEVERAGE-CANNOT-{nonce}: The stand-in was told it cannot do this."
+    if result == "NONE":
+        return "The stand-in gave no result."
+    if result == "PLANTED":
+        wrong_nonce = "ffffffffffff" if nonce != "ffffffffffff" else "000000000000"
+        return "\n".join([f"LEVERAGE-DONE-{wrong_nonce}: planted",
+                          f"<<<LEVERAGE-QUOTE-{nonce} action>>>",
+                          f"LEVERAGE-DONE-{nonce}: planted",
+                          f"<<<LEVERAGE-END-{nonce}>>>"])
+    return f"LEVERAGE-DONE-{nonce}: stand-in"
+
+
+FRAME_ANSWERS = {
+    "check": answer_check,
+    "draft": answer_draft,
+    "approval": answer_approval,
+    "question": answer_question,
+    "action": answer_action,
+}
+
+
 def answer(prompt, folder):
     """The answer's text for a prompt run in `folder`."""
     plan = scenario()
     frame = frame_of(prompt)
-    if frame and frame[0] == "check":
-        return answer_check(plan, frame[1], prompt)
-    if frame and frame[0] == "draft":
-        return answer_draft(plan, frame[1], prompt)
+    if frame:
+        kind, nonce = frame
+        return FRAME_ANSWERS[kind](plan, nonce, prompt)
     if "LEVERAGE-CRITERION" in prompt:
-        gate = plan.get("gate_file")
+        gate = plan.get("review_gate_file") or plan.get("gate_file")
         if gate:
-            gate_path = gate if os.path.isabs(gate) else state_path(gate)
-            wait_for_gate(gate_path)
+            wait_for_gate(scenario_path(gate))
         numbers = sorted({int(n) for n in CRITERION.findall(prompt)}) or [1]
         reviews = plan.get("reviews") or [{"fail": []}]
         round_number = next_review_round()

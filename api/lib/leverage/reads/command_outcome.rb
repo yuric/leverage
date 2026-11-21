@@ -11,8 +11,11 @@ module Leverage
 
       # Found, or nil.
       def call(workspace_id:, caller_kind:, caller_id:, key:)
-        row = Command.find_by(workspace_id: workspace_id, caller_kind: caller_kind, caller_id: caller_id, key: key)
-        row && Found.new(row: row, outcome: Idempotency.outcome_of(row))
+        ActiveRecord::Base.transaction do
+          _workspace, at = WorkspaceLock.take(workspace_id)
+          row = Command.find_by(workspace_id: workspace_id, caller_kind: caller_kind, caller_id: caller_id, key: key)
+          row && Found.new(row: row, outcome: Idempotency.outcome_of(row, at: at))
+        end
       end
     end
   end

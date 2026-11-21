@@ -14,7 +14,7 @@ class TracesTest < Minitest::Test
   # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13), the
   # five the handoff milestone adds, also with no rules (milestone 3 plan
   # HT-1; PRD R-7), and the four the rule checks milestone adds (milestone
-  # 4 plan RT-1).
+  # 4 plan RT-1), then four for questions and approvals (milestone 5 AT-1).
   NAMES = %w[
     01-happy-path 02-failed-review-rework 03-stop-rework-pass-approve-done
     04-two-actions-custom-rule 05-limit-handoff 06-signed-out-hold-verify
@@ -25,6 +25,8 @@ class TracesTest < Minitest::Test
     15-owner-controls-no-rules
     16-model-gate-and-draft 17-submit-rule-rerun-and-override
     18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
+    20-questions-and-access 21-money-projects-escalation
+    22-finishing-edges 23-owner-housekeeping
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
   # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
@@ -767,6 +769,7 @@ class TracesTest < Minitest::Test
   # job, and job.requeued is written on the job it replaces.
   def test_each_attempt_of_a_check_runs_on_a_job_of_its_own
     traces.each do |name, trace|
+      question_jobs = Set.new
       jobs_by_check = Hash.new { |hash, key| hash[key] = [] }
       all_events(trace).each do |event|
         case event["type"]
@@ -774,7 +777,11 @@ class TracesTest < Minitest::Test
           earlier = jobs_by_check[event["subject_id"]]
           refute_includes earlier, event.dig("payload", "job_id"), "#{name} #{event["ref"]}: an attempt reuses a job"
           earlier << event.dig("payload", "job_id")
+        when "job.queued"
+          question_jobs << event["subject_id"] if event.dig("payload", "kind") == "question"
         when "job.requeued"
+          next if question_jobs.include?(event["subject_id"])
+
           assert jobs_by_check.values.any? { |jobs| jobs.last == event["subject_id"] },
             "#{name} #{event["ref"]}: job.requeued is not on the latest attempt's job"
         end
@@ -1168,6 +1175,117 @@ class TracesTest < Minitest::Test
     assert_equal [ %w[inbox.opened], %w[inbox.resolved check.queued job.queued] ], offline.map { |command| types(command) }, "RD-16, RD-19"
     jobs = commands.select { |command| command["command"] == "report_job_limit" }
     assert_equal [ %w[credential.limit_reached credential.switched], %w[credential.limit_reached] ], jobs.map { |command| types(command) }, "RD-40"
+  end
+
+  def test_trace_20_routes_answers_overturns_and_resumes_the_build
+    name = "20-questions-and-access"
+    trace = Leverage::Contract.trace(name)
+    events = all_events(trace)
+    assert_equal %w[to_orchestrator to_orchestrator to_orchestrator to_orchestrator to_owner],
+      payloads(events, "check.finished").map { |payload| payload["effect"] }
+    assert_equal %w[record decision owner owner owner owner],
+      payloads(events, "question.answered").map { |payload| payload["basis"] }
+    assert_equal %w[question.overturned], events_of(name, "overturn_answer").first.map { |event| event["type"] }
+
+    answered = commands_of(name).select { |command| types(command).include?("question.answered") }
+    assert answered.any? { |command| command.dig("expect", "steps_opened").any? { |step| step["kind"] == "build" } }
+    assert_equal %w[owner_question owner_question access], payloads(events, "hold.opened").map { |payload| payload["reason"] }
+    assert_equal %w[answer answer answer mark_access_granted], payloads(events, "inbox.resolved").map { |payload| payload["choice"] }
+    first = events_of(name, "question_job_queue_timeout").fetch(0)
+    second = events_of(name, "question_job_run_timeout").fetch(0)
+    assert_equal %w[job.timed_out job.requeued], first.map { |event| event["type"] }
+    assert_equal first.first["subject_id"], first.last["subject_id"]
+    refute_equal first.first["subject_id"], second.first["subject_id"], "DB-31: the retry gets its own job"
+    assert_equal %w[job.timed_out hold.opened inbox.opened], second.map { |event| event["type"] }
+  end
+
+  def test_trace_21_applies_project_and_task_budgets_and_escalates_only_with_a_stronger_builder
+    name = "21-money-projects-escalation"
+    commands = commands_of(name)
+    events = all_events(Leverage::Contract.trace(name))
+    assert_equal %w[raise_cap change_budget resume_project],
+      payloads(events, "inbox.resolved").map { |payload| payload["choice"] }
+    job_cost = events_of(name, "submit_job_result").fetch(0)
+    assert_equal "job", job_cost.find { |event| event["type"] == "cost.reported" }["subject_kind"]
+    assert_equal [ "project_paused", "project_paused" ], payloads(job_cost, "hold.opened").map { |payload| payload["reason"] }
+    assert_equal [ "task.changed", "hold.opened" ], events_of(name, "change_task_project").first.map { |event| event["type"] }
+    assert_equal [ "task.changed", "hold.closed" ], events_of(name, "change_task_project").last.map { |event| event["type"] }
+    assert_equal [ 2 ], payloads(events, "task.reassigned").map { |payload| payload["minimum_strength_rank"] }
+    assert_equal 4, events.count { |event| event["type"] == "review.failed" }
+    assert_equal [ "not_eligible" ] * 3, commands.filter_map { |command| command.dig("expect", "refusal", "code") }
+    # PRD L130: the previous builder is free, so the failed review alone
+    # would give it a fresh lease (L91); the escalation is what sends the
+    # task to Ready, and task.reassigned is the event steps.json gives that
+    # move (wait_ready, "an escalation sends the task to Ready").
+    escalation = commands.find { |command| types(command).include?("task.reassigned") }
+    reassigned = escalation["expect"]["events"].find { |event| event["type"] == "task.reassigned" }
+    assert_equal [ [ "wait_ready", reassigned["ref"] ] ],
+      escalation["expect"]["steps_opened"].map { |step| [ step["kind"], step["opening_event_id"] ] }
+  end
+
+  # README, Golden traces, Order: a job result writes job.finished, the
+  # check's check.finished, then cost.reported. An approval job is the
+  # attempt of the approval policy's check (jobs.json), so its result keeps
+  # the order of every other check job's, as traces 03 and 04 have it.
+  def test_a_check_jobs_result_writes_its_check_before_its_cost
+    seen = 0
+    NAMES.each do |name|
+      trace = Leverage::Contract.trace(name)
+      checks = all_events(trace).select { |event| event["type"] == "check.queued" }
+        .to_h { |event| [ event["payload"]["job_id"], event["subject_id"] ] }
+      trace["commands"].each_with_index do |command, index|
+        next unless command["command"] == "submit_job_result" && command["expect"]["outcome"] == "completed"
+
+        events = command["expect"]["events"]
+        check = checks[events.first["subject_id"]] or next
+        where = "#{name} command #{index + 1}"
+        assert_equal %w[job.finished check.finished cost.reported], events.first(3).map { |event| event["type"] }, where
+        assert_equal check, events[1]["subject_id"], "#{where}: the check whose attempt the job is"
+        seen += 1
+      end
+    end
+    assert_operator seen, :>=, 7, "trace 22's approval results are among them"
+  end
+
+  def test_trace_22_keeps_or_replaces_the_retained_lease_and_never_reopens_an_errored_approval
+    name = "22-finishing-edges"
+    events = all_events(Leverage::Contract.trace(name))
+    assert_equal [ "$seat:builder", "$seat:builder" ],
+      payloads(events_of(name, "offer_task_again").flatten, "hold.closed").map { |payload| payload["lease_seat_id"] }
+    mark = events_of(name, "mark_action_done")
+    assert_equal %w[action.marked_done hold.closed inbox.resolved], mark.first.map { |event| event["type"] }
+    assert_nil payloads(mark.first, "hold.closed").first["lease_seat_id"]
+    assert_equal %w[action.marked_done hold.closed task.done inbox.resolved], mark.last.map { |event| event["type"] }
+    waivers = events_of(name, "waive_action")
+    assert_equal [ nil, nil ], payloads(waivers.first(2).flatten, "action.waived").map { |payload| payload["lease_seat_id"] }
+    assert_equal %w[action.waived task.done hold.closed inbox.resolved], waivers.last.map { |event| event["type"] }
+    assert_empty waivers.fetch(2)
+    stop = events_of(name, "stop_action").last
+    assert_equal %w[action.stopped hold.closed inbox.resolved hold.opened inbox.opened], stop.map { |event| event["type"] }
+    assert_equal [ "stop" ], payloads(stop, "inbox.resolved").map { |payload| payload["choice"] }
+    rework = events_of(name, "return_for_rework").first
+    assert_equal "$seat:builder", payloads(rework, "task.returned_for_rework").first["lease_seat_id"]
+    assert_equal [ %w[action.stopped hold.opened inbox.opened], %w[action.overturn_recorded], [] ].sort,
+      events_of(name, "overturn_approval").map { |group| group.map { |event| event["type"] } }.sort
+    assert_equal [ %w[inbox.opened], %w[inbox.resolved] ],
+      events_of(name, "orchestrator_offline").map { |group| group.map { |event| event["type"] } }
+    assert_equal [ "error" ], payloads(events_of(name, "check_queue_timeout").flatten, "check.finished").map { |payload| payload["result"] }
+    assert_includes events.map { |event| event["type"] }, "action.revoked"
+  end
+
+  def test_trace_23_changes_a_live_brief_and_the_claim_order_and_retains_deleted_tasks_in_the_log
+    name = "23-owner-housekeeping"
+    commands = commands_of(name)
+    events = all_events(Leverage::Contract.trace(name))
+    assert_equal [ 1, 1, 2, 2 ], payloads(events, "brief.changed").map { |payload| payload["brief_version"] }
+    assert_includes commands.filter_map { |command| command.dig("expect", "refusal", "code") }, "briefing_changed"
+    created = events.select { |event| event["type"] == "task.created" }.map { |event| event["task_id"] }
+    first_claim = commands.find { |command| command["command"] == "claim" }
+    assert_equal created.last, first_claim.dig("expect", "events", 0, "task_id"), "the newer task was raised to high priority"
+    timer = events.find { |event| event["type"] == "task.lease_expired" }
+    assert_equal 300, seconds(timer["effective_at"]) - seconds(first_claim["at"])
+    deleted = events.select { |event| event["type"] == "content.deleted" }
+    assert_equal [ created.last, nil, created.first ], deleted.map { |event| event["task_id"] }
   end
 
   # A helper report runs the rows of the work it names, as a verdict runs

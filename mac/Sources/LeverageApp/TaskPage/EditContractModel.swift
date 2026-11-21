@@ -39,6 +39,7 @@ final class EditContractModel {
     /// What Save does, said first from a state where an agent may be at work (HM-49).
     let warning: AddTaskCopy?
 
+    @ObservationIgnored private let page: TaskPage
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let onSaved: @MainActor () -> Void
     @ObservationIgnored private var editKey: IdempotencyKey?
@@ -48,6 +49,7 @@ final class EditContractModel {
 
     init(page: TaskPage, api: any OwnerAPI, onSaved: @escaping @MainActor () -> Void) {
         taskID = page.task.id
+        self.page = page
         self.api = api
         self.onSaved = onSaved
         // An agent stops only where one holds the task: a builder in Working,
@@ -96,7 +98,7 @@ final class EditContractModel {
     private func send(thenComplete: Bool) async {
         guard canSave else { return }
         state = .saving
-        let request = draft.completeRequest()
+        let request = page.retainingContractFields(in: draft.completeRequest())
         do {
             if !edited {
                 let key = editKey ?? IdempotencyKey()

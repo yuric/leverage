@@ -181,12 +181,28 @@ public struct ContractDraftJobInput: Codable, Equatable, Sendable {
     }
 }
 
-/// A job's input, by its kind. Questions and approvals are milestone 5's:
-/// they are kept as the JSON they came as.
+/// A job's input, by its kind. Questions and approvals keep their wire
+/// payload and expose typed material to the runner.
 public enum JobInput: Equatable, Sendable {
     case ruleCheck(RuleCheckJobInput)
     case contractDraft(ContractDraftJobInput)
     case other(JobKind, JSONValue)
+
+    public var questionInput: QuestionJobInput? {
+        decodeInput(for: .question, as: QuestionJobInput.self)
+    }
+
+    public var approvalInput: ApprovalJobInput? {
+        decodeInput(for: .approval, as: ApprovalJobInput.self)
+    }
+
+    private func decodeInput<Input: Decodable>(for kind: JobKind, as type: Input.Type) -> Input? {
+        guard case .other(let actualKind, let payload) = self, actualKind == kind,
+              let data = try? LeverageJSON.encoder().encode(payload) else {
+            return nil
+        }
+        return try? LeverageJSON.decoder().decode(type, from: data)
+    }
 }
 
 /// `ClaimJobResult`: the next job. Context is limited to the task's own
@@ -289,12 +305,16 @@ public struct RuleCheckVerdict: Codable, Equatable, Sendable {
 public enum JobResult: Encodable, Equatable, Sendable {
     case ruleCheck(RuleCheckVerdict)
     case contractDraft(CompleteContractRequest)
+    case question(QuestionJobResult)
+    case approval(ApprovalJobResult)
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
         case .ruleCheck(let verdict): try container.encode(verdict)
         case .contractDraft(let contract): try container.encode(contract)
+        case .question(let answer): try container.encode(answer)
+        case .approval(let decision): try container.encode(decision)
         }
     }
 }

@@ -1,0 +1,41 @@
+{
+  "id": "05-captioned-demo",
+  "label": "approve",
+  "also_accepted": [],
+  "category": "matches",
+  "why": "The exact demo, module, and trainee audience are agreed and verified.",
+  "contract": {
+    "title": "Post captioned setup demo",
+    "goal": "Publish the 90-second captioned setup demo to the orientation portal.",
+    "details": "Put the demo in the orientation portal's Setup module. Only current trainees can view that module.",
+    "criteria": [
+      {
+        "text": "The demo runs 90 seconds and captions every spoken instruction.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [
+      {
+        "kind": "publish",
+        "description": "Publish the captioned 90-second setup demo in the Setup module for current trainees."
+      }
+    ],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  },
+  "action": {
+    "kind": "publish",
+    "description": "Publish the captioned 90-second setup demo in the Setup module for current trainees.",
+    "position": 1
+  },
+  "review": {
+    "handoff_note": "The orientation portal draft contains the captioned setup demo.",
+    "review_notes": "I watched the 90-second cut with captions enabled and checked the Setup module's audience.",
+    "evidence": "The preview shows the Setup module, a 90-second duration, captions enabled, and access for current trainees."
+  }
+}

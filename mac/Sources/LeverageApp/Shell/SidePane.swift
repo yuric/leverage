@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The floating left pane: the brand, the tabs, and the health line at
-/// its foot.
+/// The floating left pane: tabs, project filters and the health line.
 struct SidePane: View {
     let context: ScreenContext
+    @State private var projectListAttempt = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -16,13 +16,16 @@ struct SidePane: View {
 
             VStack(spacing: 2) {
                 ForEach(Self.tabs, id: \.place) { entry in
-                    tab(
-                        entry.place, entry.copy, symbol: entry.symbol,
-                        badge: entry.place == .needsYou ? Self.badge(for: context.inbox.openCount) : nil)
+                    row(
+                        entry.copy.text, symbol: entry.symbol, selected: context.navigator.place == entry.place,
+                        badge: entry.place == .needsYou ? Self.badge(for: context.inbox.openCount) : nil
+                    ) {
+                        context.navigator.show(entry.place)
+                    }
                 }
             }
 
-            Spacer(minLength: 0)
+            projects
 
             HealthLineView(model: context.health)
                 .padding(.horizontal, 6)
@@ -34,6 +37,7 @@ struct SidePane: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .glass(.nav, radius: Tokens.Radius.window - Tokens.Spacing.window)
         .task { await context.health.run() }
+        .task(id: projectListAttempt) { await context.watchProjects() }
     }
 
     /// One tab of the pane.
@@ -47,6 +51,8 @@ struct SidePane: View {
     static let tabs: [Tab] = [
         Tab(place: .board, copy: .tabBoard, symbol: "square.grid.3x1.below.line.grid.1x2"),
         Tab(place: .needsYou, copy: .tabNeedsYou, symbol: "bell"),
+        Tab(place: .decided, copy: .tabDecided, symbol: "checkmark.circle"),
+        Tab(place: .activity, copy: .tabActivity, symbol: "clock"),
         Tab(place: .agents, copy: .tabAgents, symbol: "person.2"),
         Tab(place: .credentials, copy: .tabCredentials, symbol: "key"),
         Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
@@ -56,17 +62,56 @@ struct SidePane: View {
     /// The count on the Needs you tab; nil when nothing is open.
     static func badge(for count: Int) -> String? { count > 0 ? String(count) : nil }
 
-    private func tab(
-        _ place: Navigator.Place, _ copy: ShellCopy, symbol: String, badge: String? = nil
+    private var projects: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(ShellCopy.projects.text)
+                    .foregroundStyle(Tokens.Palette.text2)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button(ShellCopy.manageProjects.text) { context.navigator.show(.projects) }
+                    .buttonStyle(.link)
+                    .accessibilityLabel(ShellCopy.manageProjectsAccessibility.text)
+            }
+            .font(.system(size: Tokens.FontSize.small, weight: .semibold))
+            .padding(.horizontal, 8)
+
+            if let failure = context.projectListFailure {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(failure.text).foregroundStyle(Tokens.Tone.stop.foreground)
+                    Button(ShellCopy.tryAgain.text) { projectListAttempt += 1 }.buttonStyle(.link)
+                }
+                .font(.system(size: Tokens.FontSize.small))
+                .padding(.horizontal, 8)
+            }
+
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    projectRow(ShellCopy.allProjects.text, id: nil, symbol: "square.grid.2x2")
+                    ForEach(context.paneProjects, id: \.id) { project in
+                        projectRow(
+                            project.name.isEmpty ? ProjectsCopy.deletedProject.text : project.name,
+                            id: project.id, symbol: "folder")
+                    }
+                }
+            }
+        }
+    }
+
+    private func projectRow(_ name: String, id: UUID?, symbol: String) -> some View {
+        row(name, symbol: symbol, selected: context.navigator.boardFilter.projectID == id) {
+            context.navigator.selectProject(id)
+        }
+    }
+
+    private func row(
+        _ title: String, symbol: String, selected: Bool, badge: String? = nil, action: @escaping () -> Void
     ) -> some View {
-        let selected = context.navigator.place == place
-        return Button {
-            context.navigator.show(place)
-        } label: {
+        Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
                     .frame(width: 16)
-                Text(copy.text)
+                Text(verbatim: title)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if let badge {
