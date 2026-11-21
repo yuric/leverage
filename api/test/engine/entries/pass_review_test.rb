@@ -89,7 +89,7 @@ class PassReviewTest < ActiveSupport::TestCase
     assert_equal [ "review", @review.id, { "tokens" => 1200, "spend" => 0.42 } ],
       [ cost.subject_kind, cost.subject_id, cost.payload ]
     assert(written.all? { |event| event.actor_kind == "seat" && event.actor_id == @reviewer.id && event.round == 0 })
-    assert_equal [ "task.before_done" ], gating.hooks
+    assert_equal %w[task.before_done cost.reported], gating.hooks
   end
 
   test "naming failed criteria on a pass is 422 invalid" do
