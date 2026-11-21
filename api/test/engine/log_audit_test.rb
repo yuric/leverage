@@ -311,6 +311,22 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty findings, findings.join("\n")
   end
 
+  test "orchestrator recovery can close an errored claim's hold without a workspace item" do
+    walk = Walk.new(seed: 632, steps: 120).run
+    events = Event.where(workspace_id: walk.workspace_id)
+    close = events.find_by!(seq: 100, type: "hold.closed")
+    opened = events.find_by!(type: "hold.opened", subject_id: close.subject_id)
+    check = events.where(type: "check.finished", subject_id: opened.payload.fetch("rule_check_id"))
+      .where("seq < ?", close.seq).order(:seq).last!
+
+    assert_nil close.command_id
+    assert_equal "check_error", close.payload.fetch("reason")
+    assert_equal %w[task.before_claim error], check.payload.values_at("hook", "result")
+    assert_equal [ "hold.closed" ], events.where(at: close.at).order(:seq).pluck(:type)
+    findings = Leverage::LogAudit.call(walk.workspace_id)
+    assert_empty findings, findings.join("\n")
+  end
+
   test "the log of a walk, every event of it written by a command, passes from its first event" do
     walk = Walk.new(seed: 21).run
     assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
