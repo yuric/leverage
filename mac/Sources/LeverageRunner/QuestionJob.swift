@@ -1,12 +1,15 @@
 import Foundation
 import LeverageKit
 
-/// The work for a question claim. WP14 supplies the tool run.
+/// Answers a question in check mode, or passes it on to the owner.
 struct QuestionJob: Sendable {
     let context: FlowContext
 
     func run(_ claim: JobClaim, input: QuestionJobInput) async throws -> JobRunEnd {
-        .noResult
+        try await JobToolRun.runForResult(
+            claim, context: context, attempts: 2, fallback: .question(QuestionJobResult(outcome: .passedOn)),
+            prompt: { JobPrompts.question(material: input.material, nonce: $0) },
+            parse: { AnswerJobParser.parse($0, nonce: $1).map(JobResult.question) })
     }
 }
 

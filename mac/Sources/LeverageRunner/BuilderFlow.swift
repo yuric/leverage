@@ -96,15 +96,16 @@ struct BuilderFlow: Sendable {
         return end
     }
 
-    private enum Step {
+    enum Step {
         case end(FlowEnd)
         /// Read the briefing again; `acknowledge` when the refusal asked for
         /// an acknowledgement.
         case restart(acknowledge: Bool)
     }
 
-    private func steps(_ taskID: UUID, start: BriefingResponse?, acknowledgement: Acknowledgement) async throws
-        -> FlowEnd {
+    private func steps(
+        _ taskID: UUID, start: BriefingResponse?, acknowledgement: Acknowledgement
+    ) async throws -> FlowEnd {
         let api = context.api
         var briefing = start
         var restarts = 0
@@ -117,26 +118,32 @@ struct BuilderFlow: Sendable {
                 switch try await context.read("get_task_briefing", { try await api.taskBriefing(taskID: taskID) }) {
                 case .value(let read): current = read
                 case .refused(let code):
-                    switch try await answer(code, taskID) {
+                    switch try await context.builderStep(refused: code, taskID: taskID) {
                     case .end(let end): return end
                     case .restart(let asked):
                         acknowledge = acknowledge || asked
                         restarts += 1
-                        if restarts > Self.maximumRestarts { return try await release(taskID) }
+                        if restarts > Self.maximumRestarts { return try await context.releaseBuilderTask(taskID) }
                         try await Task.sleep(for: context.timing.errorPause)
                         continue
                     }
                 case .gone: return .ended
-                case .failed: return try await release(taskID)
+                case .failed: return try await context.releaseBuilderTask(taskID)
                 }
             }
-            switch try await attempt(taskID, current, acknowledge: acknowledge) {
+            let step: Step
+            if FinishingFlow.hasApprovedWork(current.briefing) {
+                step = try await FinishingFlow(context: context).perform(taskID, current, acknowledge: acknowledge)
+            } else {
+                step = try await attempt(taskID, current, acknowledge: acknowledge)
+            }
+            switch step {
             case .end(let end):
                 return end
             case .restart(let asked):
                 acknowledge = acknowledge || asked
                 restarts += 1
-                if restarts > Self.maximumRestarts { return try await release(taskID) }
+                if restarts > Self.maximumRestarts { return try await context.releaseBuilderTask(taskID) }
                 briefing = nil
             }
         }
@@ -148,35 +155,34 @@ struct BuilderFlow: Sendable {
             reference: response.workReference, taskID: taskID, workRoot: context.workRoot, home: context.home)
         guard let folder = resolution.folder, let reference = resolution.reference else {
             context.log.warning("task \(taskID.contractString): its work reference is not a local folder")
-            return .end(try await release(taskID))
+            return .end(try await context.releaseBuilderTask(taskID))
         }
         let hash = response.briefing.hash
-        if acknowledge, let step = try await check(context.command("acknowledge_task_briefing", {
+        if acknowledge, let step = try await context.builderStep(context.command("acknowledge_task_briefing", {
             try await api.acknowledgeTaskBriefing(taskID: taskID, briefingHash: hash, key: $0)
-        }), taskID) { return step }
+        }), taskID: taskID) { return step }
 
         for item in Prompts.builderCriteria(of: response.briefing.contract.criteria)
         where item.criterion.state != .passed {
             let criterionID = item.criterion.id
-            if let step = try await check(context.command("start_criterion", {
+            if let step = try await context.builderStep(context.command("start_criterion", {
                 try await api.startCriterion(taskID: taskID, criterionID: criterionID, key: $0)
-            }), taskID) { return step }
+            }), taskID: taskID) { return step }
 
             let prompt = Prompts.builder(
                 number: item.number, criterion: item.criterion, briefing: response.briefing,
                 reviewNotes: response.reviewNotes, folder: folder)
             let answer: ToolAnswer
-            let driver = context.driver
-            switch try await context.interruption.run(for: .task(taskID), {
-                try await driver.execute(prompt: prompt, in: folder, purpose: .build)
-            }) {
-            case .answered(let answered):
+            switch try await context.runBuilderTool(taskID: taskID, prompt: prompt, folder: folder) {
+            case .step(let step):
+                return step
+            case .tool(.answered(let answered)):
                 answer = answered
-            case .failed(let failure):
+            case .tool(.failed(let failure)):
                 context.state.toolFailed()
                 context.log.warning("task \(taskID.contractString), criterion \(item.number): \(failure)")
-                return .end(try await release(taskID))
-            case .accountStopped(let report):
+                return .end(try await context.releaseBuilderTask(taskID))
+            case .tool(.accountStopped(let report)):
                 context.log.warning(
                     "task \(taskID.contractString), criterion \(item.number): the account stopped (\(report.kind.rawValue))")
                 return .end(.accountStopped(report))
@@ -185,17 +191,17 @@ struct BuilderFlow: Sendable {
             case .evidence(let value):
                 context.state.toolAnswered()
                 let evidence = AnswerParser.evidence(value)
-                if let step = try await check(context.command("pass_criterion", {
+                if let step = try await context.builderStep(context.command("pass_criterion", {
                     try await api.passCriterion(taskID: taskID, criterionID: criterionID, evidence: evidence, key: $0)
-                }), taskID) { return step }
+                }), taskID: taskID) { return step }
             case .cannot:
                 context.state.toolAnswered()
                 context.log.info("task \(taskID.contractString), criterion \(item.number): the tool cannot do it")
-                return .end(try await release(taskID))
+                return .end(try await context.releaseBuilderTask(taskID))
             case .none:
                 context.state.toolFailed()
                 context.log.warning("task \(taskID.contractString), criterion \(item.number): no marker line")
-                return .end(try await release(taskID))
+                return .end(try await context.releaseBuilderTask(taskID))
             }
         }
 
@@ -226,24 +232,23 @@ struct BuilderFlow: Sendable {
                 return outcome
             }
             guard case .refused(.blockedByRule) = sent, let key = last.key else {
-                if let step = try await check(sent, taskID) { return step }
+                if let step = try await context.builderStep(sent, taskID: taskID) { return step }
                 return .end(.finished)
             }
             refusals += 1
             if try await letThrough(key) { continue }
             guard refusals <= Self.maximumRuleReworks else {
                 context.log.warning("task \(taskID.contractString): a rule refused the submit \(refusals) times")
-                return .end(try await release(taskID))
+                return .end(try await context.releaseBuilderTask(taskID))
             }
             let rule = response.briefing.rules.first { $0.ruleID == last.refusal?.ruleID }
             let prompt = Self.rulePrompt(
                 ruleName: rule?.name ?? "A rule of the workspace", reason: last.refusal?.reason ?? VerdictParser.noReason,
                 briefing: response.briefing, folder: folder)
-            let driver = context.driver
-            switch try await context.interruption.run(for: .task(taskID), {
-                try await driver.execute(prompt: prompt, in: folder, purpose: .build)
-            }) {
-            case .answered(let answer):
+            switch try await context.runBuilderTool(taskID: taskID, prompt: prompt, folder: folder) {
+            case .step(let step):
+                return step
+            case .tool(.answered(let answer)):
                 switch AnswerParser.builder(answer.text) {
                 case .evidence(let value):
                     context.state.toolAnswered()
@@ -253,17 +258,17 @@ struct BuilderFlow: Sendable {
                 case .cannot:
                     context.state.toolAnswered()
                     context.log.info("task \(taskID.contractString): the tool cannot meet the rule")
-                    return .end(try await release(taskID))
+                    return .end(try await context.releaseBuilderTask(taskID))
                 case .none:
                     context.state.toolFailed()
                     context.log.warning("task \(taskID.contractString), rework for a rule: no marker line")
-                    return .end(try await release(taskID))
+                    return .end(try await context.releaseBuilderTask(taskID))
                 }
-            case .failed(let failure):
+            case .tool(.failed(let failure)):
                 context.state.toolFailed()
                 context.log.warning("task \(taskID.contractString), rework for a rule: \(failure)")
-                return .end(try await release(taskID))
-            case .accountStopped(let report):
+                return .end(try await context.releaseBuilderTask(taskID))
+            case .tool(.accountStopped(let report)):
                 return .end(.accountStopped(report))
             }
         }
@@ -311,29 +316,79 @@ struct BuilderFlow: Sendable {
             \(Prompts.quoted(briefing.contract.goal))\(criteria.isEmpty ? "" : "\n\nEvery criterion of the task:\n" + Prompts.quoted(criteria))
             """
     }
+}
 
-    /// Nil when the command completed; otherwise what the flow does next.
-    private func check<Result>(_ sent: Sent<Result>, _ taskID: UUID) async throws -> Step? {
-        switch sent {
-        case .completed: return nil
-        case .refused(let code): return try await answer(code, taskID)
-        case .failed: return .end(try await release(taskID))
+extension FlowContext {
+    enum BuilderRun {
+        case tool(Interruption.Result)
+        case step(BuilderFlow.Step)
+    }
+
+    private struct CostReportFailure: Error {
+        let code: RefusalCode?
+        let toolRecord: ToolRunRecord?
+    }
+
+    /// Reports the usage of every finished tool attempt, including the
+    /// attempts that the interruption handler can retry for build work.
+    func runBuilderTool(taskID: UUID, prompt: String, folder: URL, retryInPlace: Bool = true) async throws
+        -> BuilderRun {
+        let toolInterruption = retryInPlace ? interruption : interruption.withoutInPlaceRetries
+        do {
+            let result = try await toolInterruption.run(for: .task(taskID)) {
+                try Task.checkCancellation()
+                let run = try await driver.execute(prompt: prompt, in: folder, purpose: .build)
+                try Task.checkCancellation()
+                let tokens: Int
+                let record: ToolRunRecord?
+                switch run {
+                case .answered(let answer): (tokens, record) = (answer.tokens, nil)
+                case .failed(_, let failureRecord): (tokens, record) = (0, failureRecord)
+                }
+                let cost = ReportCostRequest(tokens: tokens, spend: 0)
+                switch try await command("report_cost", { try await api.reportCost(taskID: taskID, cost, key: $0) }) {
+                case .completed: return run
+                case .refused(let code): throw CostReportFailure(code: code, toolRecord: record)
+                case .failed: throw CostReportFailure(code: nil, toolRecord: record)
+                }
+            }
+            return .tool(result)
+        } catch let failure as CostReportFailure {
+            // The cost command can race with the end of the task. A limit
+            // or sign-out still stops the account even if cost was refused.
+            if let record = failure.toolRecord {
+                let now = Date()
+                if case .accountStopped(let outcome) = await toolInterruption.decide(after: record, at: now) {
+                    return .tool(.accountStopped(Interruption.report(outcome, of: .task(taskID), at: now)))
+                }
+            }
+            if let code = failure.code {
+                return .step(try await builderStep(refused: code, taskID: taskID))
+            }
+            return .step(.end(try await releaseBuilderTask(taskID)))
         }
     }
 
-    private func answer(_ code: RefusalCode, _ taskID: UUID) async throws -> Step {
+    /// Nil when the command completed; otherwise what the flow does next.
+    func builderStep<Result>(_ sent: Sent<Result>, taskID: UUID) async throws -> BuilderFlow.Step? {
+        switch sent {
+        case .completed: return nil
+        case .refused(let code): return try await builderStep(refused: code, taskID: taskID)
+        case .failed: return .end(try await releaseBuilderTask(taskID))
+        }
+    }
+
+    func builderStep(refused code: RefusalCode, taskID: UUID) async throws -> BuilderFlow.Step {
         switch RefusalAction(code) {
         case .restart: return .restart(acknowledge: RefusalAction.asksForAcknowledgement(code))
         case .pause: return .end(.paused)
         case .end: return .end(.ended)
-        case .release: return .end(try await release(taskID))
+        case .release: return .end(try await releaseBuilderTask(taskID))
         }
     }
 
-    /// Gives the task back: `unable_to_continue`.
-    private func release(_ taskID: UUID) async throws -> FlowEnd {
-        let api = context.api
-        _ = try await context.command("release_task") {
+    func releaseBuilderTask(_ taskID: UUID) async throws -> FlowEnd {
+        _ = try await command("release_task") {
             try await api.releaseTask(taskID: taskID, reason: .unableToContinue, key: $0)
         }
         return .released
