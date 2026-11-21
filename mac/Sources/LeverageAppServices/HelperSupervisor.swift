@@ -12,7 +12,8 @@ import LeverageKit
 /// waits for it; a start meanwhile waits for it too, so two helpers never
 /// run at once and none is lost track of.
 ///
-/// The helper's standard output and standard error go to
+/// Credential messages go to the current helper's standard input. The
+/// helper's standard output and standard error go to
 /// `<support folder>/logs/helper.log`, which is replaced by a new file at a
 /// start once it has passed 5 MB (the old one is kept as `helper.log.1`).
 public actor HelperSupervisor: HelperSupervising {
@@ -42,11 +43,11 @@ public actor HelperSupervisor: HelperSupervising {
 
         /// What the helper may be given from the app's environment: what a
         /// provider's tool needs from it (ProviderCatalog builds each tool's
-        /// own environment from the helper's), and the two settings that
-        /// point the helper at stand-ins in a test run.
+        /// own environment from the helper's), the paths to stand-ins, and
+        /// the switch to an in-memory token store for tests.
         public static let passedNames = [
             EnvironmentKeys.home, EnvironmentKeys.path, EnvironmentKeys.tmpdir, EnvironmentKeys.lang,
-            EnvironmentKeys.user, EnvironmentKeys.toolDir, EnvironmentKeys.runnerPath,
+            EnvironmentKeys.user, EnvironmentKeys.toolDir, EnvironmentKeys.runnerPath, EnvironmentKeys.tokenStore,
         ]
 
         /// The helper next to the app's own program, as the bundle has it.
@@ -88,7 +89,16 @@ public actor HelperSupervisor: HelperSupervising {
     public func state() async -> HelperState { current }
 
     public func send(_ message: LocalHelperMessage) async throws {
-        throw HelperSendError.notRunning
+        guard let child else { throw HelperSendError.notRunning }
+        let line = try message.encodeLine()
+        // Cancelling a session write stops its child. The write to this
+        // shared helper must survive cancellation of the caller.
+        do {
+            try await Task { try await child.writeLine(line) }.value
+        } catch {
+            // The child can close its input before the supervisor sees it exit.
+            throw HelperSendError.notRunning
+        }
     }
 
     public func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState {
@@ -166,7 +176,7 @@ public actor HelperSupervisor: HelperSupervising {
 
         let started: RunningSubprocess
         do {
-            started = try Subprocess.start(request(apiBaseURL: apiBaseURL, token: token))
+            started = try Subprocess.startSession(request(apiBaseURL: apiBaseURL, token: token))
         } catch {
             log.error("the helper could not be started: \(error)")
             return await restartOrGiveUp()
@@ -240,8 +250,9 @@ public actor HelperSupervisor: HelperSupervising {
 
     /// The helper runs through `/bin/sh`, which sends its two outputs to
     /// the log file and then replaces itself with the helper (`exec`), so
-    /// the process is the helper's own and its parent is the app. The
-    /// token is only in the environment.
+    /// the process is the helper's own and its parent is the app. Its
+    /// standard input remains the session's channel. The helper's own
+    /// sign-in token is only in the environment.
     private func request(apiBaseURL: URL, token: String) -> SubprocessRequest {
         let logFile = prepareLog()
         let environment = Subprocess.environment(
