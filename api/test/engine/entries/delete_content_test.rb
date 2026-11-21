@@ -11,7 +11,7 @@ class DeleteContentTest < ActiveSupport::TestCase
       project = scenario.project
       task = state == "finishing" ? scenario.finishing_task(project: project) : scenario.task(state: state, project: project)
       finished = scenario.task(state: "cancelled", project: project)
-      before = [ task.attributes, finished.attributes, project.attributes ]
+      before = [ task.attributes, finished.attributes, project.reload.attributes ]
 
       written = events_written do
         assert_refused "invalid_state", owner_command("delete_content", { task_id: task.id })
