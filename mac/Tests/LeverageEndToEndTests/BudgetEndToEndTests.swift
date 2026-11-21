@@ -33,7 +33,7 @@ struct BudgetEndToEndTests {
             _ = try await world.waitFor("the second task is ready", task: otherTask) {
                 $0.type == .taskReady && $0.taskID == otherTask
             }
-            #expect(try await otherBuilder.next(wait: nil).kind == .task)
+            #expect(try await otherBuilder.next(wait: 0).kind == .task)
 
             try await requestAndGrantAccess(task, builder: builder, world: world)
             let firstCostKey = IdempotencyKey()
@@ -42,7 +42,7 @@ struct BudgetEndToEndTests {
             let belowBudget = try await listedProject(project, world: world)
             #expect(belowBudget.spent == Decimal(6) / 10)
             #expect(!belowBudget.paused)
-            #expect(try await otherBuilder.next(wait: nil).kind == .task)
+            #expect(try await otherBuilder.next(wait: 0).kind == .task)
 
             let secondCostKey = IdempotencyKey()
             _ = try await builder.reportCost(

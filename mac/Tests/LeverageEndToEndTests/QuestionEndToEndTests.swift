@@ -31,7 +31,7 @@ struct QuestionEndToEndTests {
             #expect(expectedAnswer, "get_question returned the orchestrator's answer")
             let expectedQuestion = decided.text == request.text && decided.assumption == request.assumption
             #expect(expectedQuestion, "get_question returned the question and assumption")
-            #expect(try await builder.next(wait: nil).kind == .none)
+            #expect(try await builder.next(wait: 0).kind == .none)
 
             let decisions = try await world.owner.listDecisions()
             let matchingDecision = decisions.decisions.filter { $0.questionID == question }.only
@@ -49,7 +49,7 @@ struct QuestionEndToEndTests {
             let withdrawn = try await builder.getQuestion(taskID: task, questionID: question)
             #expect(withdrawn.outcome == .overturned)
             #expect(withdrawn.overturned)
-            #expect(try await builder.next(wait: nil).kind == .none)
+            #expect(try await builder.next(wait: 0).kind == .none)
 
             let answerKey = IdempotencyKey()
             let ownerAnswer = "Use the first sample."
@@ -60,7 +60,7 @@ struct QuestionEndToEndTests {
             #expect(replaced.basis == .owner)
             let expectedReplacement = replaced.answer == ownerAnswer
             #expect(expectedReplacement, "get_question returned the owner's replacement")
-            #expect(try await builder.next(wait: nil).kind == .none)
+            #expect(try await builder.next(wait: 0).kind == .none)
 
             try await finishManualTask(task, builder: builder, world: world)
             let events = try await world.wholeLog().filter { $0.taskID == task }
@@ -126,7 +126,7 @@ struct QuestionEndToEndTests {
             #expect(answered.basis == .owner)
             let usedAssumption = answered.answer == request.assumption
             #expect(usedAssumption, "get_question returned the assumption the owner used")
-            #expect(try await builder.next(wait: nil).kind == .none)
+            #expect(try await builder.next(wait: 0).kind == .none)
             let openInbox = try await world.owner.listInbox(afterSeq: nil, wait: nil)
             let stillOpen = openInbox.items.contains { $0.id == item.id }
             #expect(!stillOpen)
@@ -168,7 +168,7 @@ struct QuestionEndToEndTests {
     }
 
     private func expectQuestionNotice(_ builder: AgentClient, _ question: UUID) async throws {
-        #expect(try await builder.next(wait: nil) == NextItem(kind: .answer, id: question.contractString))
+        #expect(try await builder.next(wait: 0) == NextItem(kind: .answer, id: question.contractString))
     }
 
     private func verifyQuestionJob(
@@ -224,7 +224,7 @@ func claimManualTask(
     _ task: UUID, seat: UUID, builder: AgentClient, world: QuestionsApprovalsWorld
 ) async throws -> TaskClaim {
     _ = try await world.waitFor("the task is ready", task: task) { $0.type == .taskReady && $0.taskID == task }
-    #expect(try await builder.next(wait: nil).kind == .task)
+    #expect(try await builder.next(wait: 0).kind == .task)
     let claimKey = IdempotencyKey()
     let outcome = try await builder.claimNextTask(key: claimKey)
     guard let claim = try outcome.completedResult() else {
@@ -243,7 +243,7 @@ func claimManualTask(
 }
 
 func resumeManualTask(_ task: UUID, builder: AgentClient, world: QuestionsApprovalsWorld) async throws {
-    #expect(try await builder.next(wait: nil) == NextItem(kind: .resume, id: task.contractString))
+    #expect(try await builder.next(wait: 0) == NextItem(kind: .resume, id: task.contractString))
     let key = try await acknowledgeManualTask(task, builder: builder)
     let events = try await world.owner.task(id: task).events
     try questionsApprovalsOrder(events, [.type(.taskBriefingAcknowledged) { $0.commandID == key.value }])

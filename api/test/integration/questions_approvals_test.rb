@@ -165,6 +165,7 @@ class QuestionsApprovalsHttpTest < ActionDispatch::IntegrationTest
     old_item = InboxItem.find(item.fetch("id"))
     completed("return_for_rework", @owner, ids: { "id" => task_id },
       body: { "criterion_ids" => [ criterion_ids(task_id).fetch("cid") ] })
+    assert_equal [ "rework", task_id ], next_item(@builder)
     acknowledge_task(task_id)
     submit_task(task_id)
     pass_review(start_review(task_id))

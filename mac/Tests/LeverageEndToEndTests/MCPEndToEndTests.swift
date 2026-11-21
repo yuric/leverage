@@ -93,7 +93,7 @@ struct MCPEndToEndTests {
         while true {
             let offered = try session.call("get_next", ["wait": 10])
             if offered.body["kind"] as? String == "answer" {
-                #expect(offered.body["question_id"] as? String == qid)
+                #expect(offered.body["id"] as? String == qid)
                 break
             }
             guard ContinuousClock.now < deadline else { throw EndToEndFailure("MCP builder received no answer offer") }

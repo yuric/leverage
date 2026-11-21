@@ -284,6 +284,30 @@ struct DecidedModelTests {
         #expect(model.confirming == latest)
     }
 
+    @Test("Refreshing the list dismisses a superseded approval's confirmation")
+    func refreshDismissesSupersededApproval() async {
+        let original = decision(.approval, time: 1, state: .approved)
+        let superseded = Decision(
+            actionID: original.actionID, decidedAt: original.decidedAt, undoable: false, kind: .approval,
+            taskID: original.taskID, taskTitle: original.taskTitle, seatID: original.seatID,
+            summary: original.summary, actionState: .approved)
+        let latest = decision(
+            .approval, time: 2, state: .approved, actionID: original.actionID, taskID: original.taskID)
+        let current = Locked([original])
+        let owner = owner(current)
+        let model = DecidedModel(api: owner)
+        await model.load()
+        model.requestUndo(original)
+        #expect(model.confirming == original)
+
+        current.value = [superseded, latest]
+        await model.load()
+
+        #expect(model.confirming == nil)
+        await model.confirmUndo()
+        #expect(commands(owner).isEmpty)
+    }
+
     private func owner(_ decisions: Locked<[Decision]>) -> FakeOwnerAPI {
         let owner = FakeOwnerAPI()
         owner.script { script in

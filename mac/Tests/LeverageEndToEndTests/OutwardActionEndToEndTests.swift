@@ -51,7 +51,9 @@ struct OutwardActionEndToEndTests {
             #expect(wroteOneLine, "the stand-in performed the action once")
 
             let decisions = try await world.owner.listDecisions().decisions
-            let approval = try #require(decisions.first { $0.kind == .approval && $0.actionID == action.id })
+            guard let approval = decisions.first(where: { $0.kind == .approval && $0.actionID == action.id }) else {
+                throw EndToEndFailure("the finished action's approval was missing from Decided for you")
+            }
             #expect(approval.taskID == task && approval.seatID == world.orchestrator)
             #expect(!approval.undoable)
             let beforeOverturn = try await world.owner.task(id: task)
@@ -105,8 +107,10 @@ struct OutwardActionEndToEndTests {
                 .type(.inboxOpened) { $0.id == opened.id },
             ])
 
-            let criterion = try #require(beforeRework.criteria.first { $0.kind == .build }?.id)
-            let reviewCriterion = try #require(beforeRework.criteria.first { $0.kind == .review }?.id)
+            let buildID = beforeRework.criteria.first { $0.kind == .build }?.id
+            let reviewID = beforeRework.criteria.first { $0.kind == .review }?.id
+            let criterion = try #require(buildID)
+            let reviewCriterion = try #require(reviewID)
             let reworkKey = IdempotencyKey()
             let rework = try await world.owner.returnForRework(
                 taskID: task, ReturnForReworkRequest(criterionIDs: [criterion]), key: reworkKey)
@@ -271,7 +275,9 @@ private func openInboxItem(
     _ opened: EventRecord, kind: NeedsYouItem, task: UUID, world: QuestionsApprovalsWorld
 ) async throws -> InboxItem {
     let items = try await world.owner.listInbox(afterSeq: nil, wait: nil).items
-    let item = try #require(items.first { $0.id == opened.subjectID })
+    guard let item = items.first(where: { $0.id == opened.subjectID }) else {
+        throw EndToEndFailure("the opened \(kind.rawValue) item was missing from Needs you")
+    }
     #expect(item.kind == kind && item.state == .open && item.aboutKind == .task && item.aboutID == task)
     #expect(item.openedSeq == opened.seq)
     return item
