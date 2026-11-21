@@ -380,10 +380,8 @@ class ReportLimitTest < ActiveSupport::TestCase
     assert_refused("not_holder", report_limit(@claude_a, other, task: @task))
 
     finisher = scenario.seat(role: "builder", credential: @claude_a)
-    finishing = scenario.finishing_task(builder: finisher)
-    assert_refused("invalid_state", report_limit(@claude_a, finisher, task: finishing))
-    # not_holder ranks before invalid_state.
-    assert_refused("not_holder", report_limit(@claude_a, other, task: finishing))
+    finishing = scenario.finishing_task(builder: finisher, holder: false, actions: [ { kind: "send" } ])
+    assert_refused("not_holder", report_limit(@claude_a, finisher, task: finishing))
 
     # The credential reported is not the one recorded for the work.
     assert_refused("invalid_state", report_limit(@codex_h, @builder, task: @task))

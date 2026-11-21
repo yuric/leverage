@@ -162,13 +162,13 @@ class ReportSignedOutTest < ActiveSupport::TestCase
 
   # Milestone 4 plan RD-40: a report that names a job is
   # report_job_signed_out's; milestone 3's 404 (HE-33) became 422 here.
-  test "the refusals of HE-9 apply: a job is 422, another seat is not_holder, a Finishing task invalid_state" do
+  test "the refusals of HE-9 apply: a job is 422 and a seat without the task is not_holder" do
     trace_12
     other = scenario.seat(role: "builder", credential: @claude_a)
     assert_raises(T::Invalid) { report_signed_out(@claude_a, @builder, task: @task, job_id: SecureRandom.uuid) }
     assert_refused("not_holder", report_signed_out(@claude_a, other, task: @task))
-    finisher = scenario.seat(role: "builder", credential: @claude_a)
-    assert_refused("invalid_state", report_signed_out(@claude_a, finisher, task: scenario.finishing_task(builder: finisher)))
+    finishing = scenario.finishing_task(builder: other, holder: false, actions: [ { kind: "send" } ])
+    assert_refused("not_holder", report_signed_out(@claude_a, other, task: finishing))
     assert_equal "active", @claude_a.reload.state
     assert_empty Event.where(workspace_id: scenario.workspace_id, type: "credential.signed_out", subject_id: @claude_a.id)
   end

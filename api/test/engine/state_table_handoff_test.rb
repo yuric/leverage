@@ -3,12 +3,8 @@ require_relative "entries/jobs_support"
 
 # Test 3 (PRD L836) for the handoff rows (milestone 3 plan HT-2, HS-3): the
 # two reports and the credential_hold_release timer, every task state, from
-# StateTableCases. A row from Finishing is not served in this milestone and
-# is refused invalid_state, from a task Scenario puts in Finishing. A report
-# about a task no seat holds in that state is refused with a cause that
-# ranks before invalid_state (not_holder, HE-9): the test asserts that
-# invalid_state is among the entry's refusals and that the answer is the
-# first by precedence.
+# StateTableCases. Finishing uses the same handoff as Working and keeps
+# the holder. A report without a holder is refused with not_holder (HE-9).
 #
 # Milestone 4 (its plan §2.1 rule 11): a reviewer's row with no candidate
 # releases the review, and a pass of it that waits on a model check is
@@ -28,8 +24,7 @@ class StateTableHandoffTest < ActiveSupport::TestCase
   end
 
   StateTableCases.define(self, COMMANDS) do |kase|
-    if kase.not_served? then assert_not_served(kase)
-    elsif kase.invalid_state? || kase.refusal then assert_refusal(kase)
+    if kase.refusal then assert_refusal(kase)
     else assert_row(kase)
     end
   end
@@ -40,7 +35,7 @@ class StateTableHandoffTest < ActiveSupport::TestCase
   # can hold it.
   def task_in(from)
     case from
-    when "finishing" then scenario.finishing_task(builder: @builder)
+    when "finishing" then scenario.finishing_task(builder: @builder, actions: [ { kind: "send", state: "approved" } ])
     when "working" then scenario.task(state: "working", builder: @builder)
     else scenario.task(state: from, builder: @builder, reviewer: @reviewer)
     end
@@ -58,12 +53,6 @@ class StateTableHandoffTest < ActiveSupport::TestCase
 
   def apply(kase, params)
     kase.command == "credential_hold_release" ? release_timer(params) : helper_command(kase.command, params)
-  end
-
-  def assert_not_served(kase)
-    task = task_in(kase.from)
-    hold_on(task) if kase.command == "credential_hold_release"
-    assert_refused(kase.expected_refusal, apply(kase, params_for(kase, task)))
   end
 
   def assert_refusal(kase)
@@ -99,15 +88,16 @@ class StateTableHandoffTest < ActiveSupport::TestCase
     expected << "inbox.opened" if kase.command == "report_signed_out" && kase.conditional_events.any? && !review
     assert_equal expected, written.map(&:type), kase.name
     assert_equal kase.to, task.reload.state
+    assert_equal @builder.id, task.holder_seat_id if kase.from == "finishing"
   end
 
   # A credential_limit hold on the task whose due time has passed: the
-  # seat's own login reset a moment after the task's last event.
+  # seat's own login reset at the task's last event.
   def hold_on(task)
     scenario.limit_credential(@own, reset_at: from_now(3600))
     scenario.limit_credential(@below, reset_at: from_now(3600))
     scenario.hold(task, reason: "credential_limit", credential: @own, item: false)
-    @own.update_columns(limited_until: Event.where(task_id: task.id).maximum(:effective_at) + 0.002)
+    @own.update_columns(limited_until: Event.where(task_id: task.id).maximum(:effective_at))
   end
 
   def refusal_codes(kase, params)
