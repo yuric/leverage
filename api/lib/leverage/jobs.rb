@@ -13,7 +13,7 @@ module Leverage
   # app runs, its run on its first available candidate (as Eligibility asks
   # of a builder or a reviewer), so the claim records the account that does
   # the work. A seat holds one job at a time and gets that one again (RD-40);
-  # otherwise the oldest queued job, by queued time and then id, of a task
+  # otherwise the oldest queued job, by queue time, creation time and then id, of a task
   # it never claimed as a builder (RC-49, from task.claimed). A job whose
   # due time has passed is never given out: its timer ends it (L399).
   #
@@ -51,7 +51,7 @@ module Leverage
 
       job = held(seat, at)
       if job
-        return unless role_matches?(job, seat)
+        return unless role_matches?(job, seat) && !task_of(job)&.content_deleted_at
 
         return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
       end
@@ -162,17 +162,19 @@ module Leverage
 
     # The oldest queued job of the seat's kinds whose queue time has not
     # run out, of a task the seat never claimed as a builder and that is
-    # not cancelled (cancel withdraws a task's jobs, L207; this only makes
-    # sure one left queued is never handed out). A Done task's jobs are
-    # still handed out: a warn rule's check at task.before_done runs after
-    # the pass completed (RC-16).
+    # neither cancelled nor stripped of content. A Done task's jobs
+    # still run while it has content (RC-16). Jobs queued in one command
+    # share its effective time, so prefer the first row created.
     def claimable(seat, at)
       Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role)
-        .where.not(task_id: built_by(seat)).where.not(task_id: cancelled_tasks(seat.workspace_id)).or(queued_without_task(seat))
-        .order(:queued_at, :id).find { |job| !due?(job, :queue, at) }
+        .where.not(task_id: built_by(seat)).where.not(task_id: unavailable_tasks(seat.workspace_id)).or(queued_without_task(seat))
+        .order(:queued_at, :created_at, :id).find { |job| !due?(job, :queue, at) }
     end
 
-    def cancelled_tasks(workspace_id) = Task.where(workspace_id: workspace_id, state: "cancelled").select(:id)
+    def unavailable_tasks(workspace_id)
+      tasks = Task.where(workspace_id: workspace_id)
+      tasks.where(state: "cancelled").or(tasks.where.not(content_deleted_at: nil)).select(:id)
+    end
 
     # A queued job with no task, which no past holder can be kept from.
     def queued_without_task(seat)
@@ -206,7 +208,7 @@ module Leverage
       ctx.emit(type, subject: job, payload: payload, **fields)
     end
 
-    private_class_method :active?, :placed?, :claimable, :cancelled_tasks, :queued_without_task, :kinds_for, :built_by, :task_of, :event_fields,
+    private_class_method :active?, :placed?, :claimable, :unavailable_tasks, :queued_without_task, :kinds_for, :built_by, :task_of, :event_fields,
       :emit
   end
 end

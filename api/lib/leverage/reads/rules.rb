@@ -113,7 +113,7 @@ module Leverage
         # rule id => RuleStats for the rules that have a check.
         def stats(workspace_id, rule_ids)
           checks = RuleCheck.where(workspace_id: workspace_id, rule_id: rule_ids).to_a
-          attempts = RuleTiming.attempts(checks.map(&:id))
+          attempts = RuleTiming.attempts_for_rules(checks)
           checks.group_by(&:rule_id).transform_values do |rows|
             ran = rows.reject { |check| NOT_RUN.include?(check.result) }
             finished = ran.flat_map { |check| attempts.fetch(check.id, []) }.filter_map do |attempt|

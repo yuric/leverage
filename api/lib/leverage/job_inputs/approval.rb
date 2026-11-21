@@ -17,7 +17,7 @@ module Leverage
         {
           "task_id" => task.id, "project_id" => task.project_id, "action_id" => action.id, "rule_check_id" => check.id,
           "material" => {
-            "role_file" => RoleFiles.text("orchestrator"), "instruction" => version.instruction.to_s,
+            "role_file" => RoleFiles.text("orchestrator"), "instruction" => instruction(version),
             "action" => action.attributes.slice("kind", "description", "position"),
             "contract" => contract, "quoted" => quotes(task, check.round, criteria)
           }
@@ -35,7 +35,15 @@ module Leverage
         values.filter_map { |label, value| { "label" => label, "text" => value.to_s } unless value.nil? }
       end
 
-      private_class_method :quotes
+      def instruction(version)
+        value = version.instruction
+        if value.nil? && version.origin == "shipped" && version.key == "orchestrator_approves_actions"
+          value = Rules::Shipped.find(version.key).instruction
+        end
+        value.to_s
+      end
+
+      private_class_method :quotes, :instruction
     end
   end
 end
