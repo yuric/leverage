@@ -64,8 +64,8 @@ module Leverage
   # Events with no key also come from the job timers (job.timed_out), from
   # the workspace timers orchestrator_offline and reviewer_eligibility
   # (their Needs you items name them) and from the one-time write of the
-  # shipped rules (rule.created). One command may apply several timers of
-  # a task: each timer's events share its effective time.
+  # shipped rules (rule.created). Several timers on one task can have
+  # the same effective time when their due times precede its latest event.
   #
   # The gate (RT-4, test 4): no task.ready, task.claimed, task.submitted or
   # review.passed is written by a command that had, at its hook, an
@@ -294,15 +294,22 @@ module Leverage
       kinds.filter_map { |kind| ITEM_TIMERS[kind] }.first
     end
 
-    # A task's events with no key, cut where the effective time changes
-    # (each timer's events carry its due time) and before each lease end
-    # that is not the end of the withdrawals before it (rule 11): what each
-    # timer a command applied wrote, in the order it applied them.
+    # A job timeout always starts its timer. When the task's last effective
+    # time clamps two due times together, a credential hold close can start
+    # the next timer in that same instant. A lease expiry can close a seat's
+    # credential hold itself, so leave those closes with the lease.
     def timer_runs(events)
-      events.slice_when do |earlier, later|
-        earlier.effective_at != later.effective_at ||
-          (TIMER_EVENTS.key?(later.type) && !CANCEL_EVENTS.include?(earlier.type))
-      end.to_a
+      runs = []
+      events.each do |event|
+        run = runs.last
+        if !run || event.effective_at != run.last.effective_at || event.type == "job.timed_out" ||
+            (run.first.type == "job.timed_out" && credential_close?(event)) ||
+            (TIMER_EVENTS.key?(event.type) && !CANCEL_EVENTS.include?(run.last.type))
+          runs << []
+        end
+        runs.last << event
+      end
+      runs
     end
 
     def timer_run(task_id, events, states)
@@ -356,9 +363,16 @@ module Leverage
     # credential_hold_release when the events close a credential hold.
     def credential_release(events)
       closes = events.select { |event| event.type == "hold.closed" }
-      return unless closes.any? && closes.all? { |event| CREDENTIAL_HOLDS.include?((event.payload || {})["reason"]) }
+      return unless closes.any? && closes.all? { |event| credential_close?(event) }
+
+      switches = events.select { |event| event.type == "credential.switched" }
+      return unless switches.all? { |event| closes.any? { |close| close.id == event.cause_id && close.seq < event.seq } }
 
       CREDENTIAL_HOLD_RELEASE
+    end
+
+    def credential_close?(event)
+      event.type == "hold.closed" && CREDENTIAL_HOLDS.include?(event.payload["reason"])
     end
 
     # The commands row a group of events belongs to.
