@@ -36,18 +36,25 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     end
   end
 
-  test "jobs queued together are claimed in enqueue order" do
-    task = @scenario.task(state: "working", builder: @builder)
-    first_target = @scenario.question(task, blocking: false)
-    second_target = @scenario.question(task, blocking: false)
+  test "outward action jobs queued together follow event order" do
+    task = @scenario.finishing_task(builder: @builder, actions: [
+      { kind: "publish", description: "Sample first action" },
+      { kind: "send", description: "Sample second action" }
+    ])
+    first_action, second_action = Leverage::Actions.for_task(task).to_a
+    gate = @scenario.rule(hook: "action.requested")
+    policy = @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+    first_check = @scenario.rule_check(task, rule: gate, subject: first_action, attempts: 0)
+    second_check = @scenario.rule_check(task, rule: policy, subject: second_action, attempts: 0)
     ctx = @scenario.context
-    first = Leverage::Jobs.queue(ctx, kind: "question", task: task, target: first_target, seat_role: "orchestrator",
+    first = Leverage::Jobs.queue(ctx, kind: "rule_check", task: task, target: first_check, seat_role: "orchestrator",
       input: {}, id: "ffffffff-ffff-4fff-8fff-ffffffffffff")
-    second = Leverage::Jobs.queue(ctx, kind: "question", task: task, target: second_target, seat_role: "orchestrator",
+    second = Leverage::Jobs.queue(ctx, kind: "approval", task: task, target: second_check, seat_role: "orchestrator",
       input: {}, id: "00000000-0000-4000-8000-000000000001")
+    first.update_columns(created_at: second.created_at + 1)
 
     assert_equal first.queued_at, second.queued_at
-    assert_equal first.id, seat("claim_job", @orchestrator).result.fetch("job_id")
+    assert_equal first.id, Leverage::Jobs.next_for(@orchestrator)&.id
   end
 
   [ nil, "Use the owner's sample instruction." ].each do |instruction|
