@@ -110,13 +110,13 @@ class GatingEngineTest < ActiveSupport::TestCase
       approval = approval_policy
       first = action_gate
       second = action_gate
-      made = action(working_task)
+      task, made = requested_action
       if name == :action_gates_passed
-        action_check(working_task, made, first, "passed")
-        action_check(working_task, made, second, "failed", overridden: true)
+        action_check(task, made, first, "passed")
+        action_check(task, made, second, "failed", overridden: true)
       else
-        action_check(working_task, made, first, "failed")
-        action_check(working_task, made, second, "not_applicable")
+        action_check(task, made, first, "failed")
+        action_check(task, made, second, "not_applicable")
       end
       { action_id: made.id, trigger: trigger, rule_id: first.id, approval_rule_id: approval.id }
     when :briefing
@@ -134,21 +134,22 @@ class GatingEngineTest < ActiveSupport::TestCase
     approval = scenario.rule(key: "orchestrator_approves_actions", origin: "shipped", scope_kind: "action_kinds",
       scope_values: [ "publish" ])
     gate = action_gate(scope_kind: "action_kinds", scope_values: [ "send" ])
-    publishing = action(working_task, kind: "publish")
-    sending = action(working_task, kind: "send", position: 2)
+    task = scenario.finishing_task(actions: [ { kind: "publish", description: "Publish a made-up page." },
+      { kind: "send", description: "Send a made-up note." } ])
+    publishing, sending = Action.where(task_id: task.id).order(:position)
 
-    evaluation = gating.evaluate(action_request(working_task, publishing))
+    evaluation = gating.evaluate(action_request(task, publishing))
     assert_equal [ [ gate.id, "not_applicable" ], [ approval.id, nil ] ], evaluation.checks.map { |check| [ check.rule_id, check.result ] }
     assert_equal [ [ "approval", 1, "orchestrator" ] ], evaluation.jobs.map { |job| [ job.kind, job.rule_check_ref, job.seat_role ] }
     assert_empty evaluation.deferred_rule_ids
 
-    evaluation = gating.evaluate(action_request(working_task, sending))
+    evaluation = gating.evaluate(action_request(task, sending))
     assert_equal :pending, evaluation.outcome
     assert_equal [ gate.id ], evaluation.checks.map(&:rule_id)
     assert_equal [ [ "rule_check", 0 ] ], evaluation.jobs.map { |job| [ job.kind, job.rule_check_ref ] }
     assert_empty evaluation.deferred_rule_ids
 
-    settled = action_check(working_task, sending, gate, "passed")
+    settled = action_check(task, sending, gate, "passed")
     decision = gating.reenter_action(action_id: sending.id, trigger: trigger(:check_finished, settled))
     assert_equal :complete, decision.action
     assert_equal [ [ approval.id, "not_applicable" ] ], decision.checks.map { |check| [ check.rule_id, check.result ] }
@@ -158,10 +159,10 @@ class GatingEngineTest < ActiveSupport::TestCase
   test "reentering an action considers only gate checks for its current round" do
     approval_policy
     gate = action_gate
-    made = action(working_task)
-    action_check(working_task, made, gate, "failed")
-    working_task.update!(round: working_task.round + 1)
-    check = action_check(working_task, made, gate, "passed")
+    task, made = requested_action
+    action_check(task, made, gate, "failed")
+    task.update!(round: task.round + 1)
+    check = action_check(task, made, gate, "passed")
 
     decision = gating.reenter_action(action_id: made.id, trigger: trigger(:check_finished, check))
     assert_equal :complete, decision.action
@@ -207,6 +208,22 @@ class GatingEngineTest < ActiveSupport::TestCase
     assert_equal :complete, decision.action
     assert_equal [ first.id ], decision.checks.map(&:rule_version_id)
     assert_equal [ "approval" ], decision.jobs.map(&:kind)
+  end
+
+  test "a late gate result plans no second approval once one is running or ended in error" do
+    approval = approval_policy
+    gate = action_gate
+    [ nil, "error" ].each do |result|
+      task, made = requested_action
+      action_check(task, made, approval, result)
+      settled = action_check(task, made, gate, "passed")
+
+      decision = gating.reenter_action(action_id: made.id, trigger: trigger(:check_finished, settled))
+
+      assert_equal :complete, decision.action
+      assert_empty decision.checks
+      assert_empty decision.jobs
+    end
   end
 
   test "an outward action whose gate still runs, or ended in error, waits; the error under check_error" do
