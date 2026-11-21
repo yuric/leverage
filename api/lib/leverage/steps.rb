@@ -22,8 +22,10 @@ module Leverage
   # - Within one command a task's open step changes at most once (steps.json,
   #   derived rule): a step opened earlier in the same command is changed in
   #   place, so a failed review at the round limit closes review and opens
-  #   wait_owner, with no wait_builder row between them. A command's events
-  #   share their at and effective_at; a timer's do too.
+  #   wait_owner, with no wait_builder row between them. A task created
+  #   on hold keeps its first step at task.created, even when that step has
+  #   zero length. A command's events share their at and effective_at; a
+  #   timer's do too.
   # - The criterion back-fill (rule 5, L279): when a criterion passes, an
   #   open build step with no criterion, of the same seat and round, is
   #   given it.
@@ -424,9 +426,9 @@ module Leverage
     def move(open, wanted, event, again: false)
       return if open.nil? && wanted.nil?
       return if late_close(open, wanted, event)
-      return if open && wanted && same?(open, wanted) && !(again && !same_command?(open, event))
+      return if open && wanted && same?(open, wanted) && !(again && !coalescible?(open, event))
 
-      if open && wanted && same_command?(open, event)
+      if open && wanted && coalescible?(open, event)
         open.update!(row(wanted, event).merge(round: [ open.round, wanted.round ].max))
         return
       end
@@ -444,7 +446,7 @@ module Leverage
     # its terminal event. Escalation moves only the Ready opener: the
     # review ended at review.failed. Returns whether it moved the change.
     def late_close(open, wanted, event)
-      return false unless open && same_command?(open, event)
+      return false unless open && coalescible?(open, event)
 
       closed = TaskStep.find_by(workspace_id: event.workspace_id, task_id: event.task_id,
         closing_event_id: open.opening_event_id)
@@ -482,16 +484,15 @@ module Leverage
         [ work.kind, work.subject_kind, work.subject_id, work.seat_id, work.cause_kind, work.cause_rule_id ]
     end
 
-    # Whether the open step was opened by an earlier event of the same
-    # command: same at (the command's clock, read once under the lock) and
-    # effective_at. The key is not compared: a pending transition completed
-    # inside another command writes under its requester's key (milestone 4
-    # plan RE-3), and a timer applied inside a command writes none but has
-    # its own effective time.
-    def same_command?(open, event)
+    # A step may be changed in place within the command that opened it.
+    # The first step always keeps task.created. For other steps, use the
+    # same at (the command's clock under the lock) and effective_at. A
+    # pending transition completed inside another command writes under its
+    # requester's key (RE-3), and an inline timer has its own effective time.
+    def coalescible?(open, event)
       return false unless open.opened_at == event.effective_at
 
-      opener = Event.where(id: open.opening_event_id).pick(:at, :effective_at)
+      opener = Event.where(id: open.opening_event_id).where.not(type: "task.created").pick(:at, :effective_at)
       opener == [ event.at, event.effective_at ]
     end
 
