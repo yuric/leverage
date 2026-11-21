@@ -15,14 +15,15 @@ import PackageDescription
 //   services  the app services and their tests
 //   app       the app without LeverageAppServices (Live.swift then returns
 //             UnavailableRuntime) and its tests
-//   e2e       the runner, the helper and the end-to-end tests
+//   mcp       the MCP server and its tests
+//   e2e       the runner, the helper, the MCP server and the end-to-end tests
 #if os(Linux)
 let defaultLane = "e2e"
 #else
 let defaultLane = "all"
 #endif
 let lane = Context.environment["LEVERAGE_ONLY"].flatMap { $0.isEmpty ? nil : $0 } ?? defaultLane
-let lanes = ["kit", "runner", "helper", "services", "app", "e2e", "all"]
+let lanes = ["kit", "runner", "helper", "services", "app", "mcp", "e2e", "all"]
 precondition(lanes.contains(lane), "LEVERAGE_ONLY must be one of \(lanes.dropLast().joined(separator: ", ")), or unset")
 
 func when(_ names: String...) -> Bool { lane == "all" || names.contains(lane) }
@@ -69,6 +70,13 @@ if when("app") {
     targets.append(.executableTarget(name: "LeverageApp", dependencies: appDependencies))
     targets.append(.testTarget(
         name: "LeverageAppTests", dependencies: [kit, "LeverageApp", support]))
+}
+if when("mcp", "e2e") {
+    products.append(.executable(name: "LeverageMCP", targets: ["LeverageMCP"]))
+    targets.append(.executableTarget(name: "LeverageMCP", dependencies: [kit]))
+}
+if when("mcp") {
+    targets.append(.testTarget(name: "LeverageMCPTests", dependencies: [kit, "LeverageMCP", support]))
 }
 if when("e2e") {
     targets.append(.testTarget(name: "LeverageEndToEndTests", dependencies: [kit, support]))
