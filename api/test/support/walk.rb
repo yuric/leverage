@@ -259,24 +259,44 @@ class Walk
   # review, acknowledges it and gives a verdict.
   def progress(index)
     useful = []
-    backlog = tasks.select { |task| task.state == "backlog" }
-    useful << -> { complete_contract(index) } if backlog.any?
-    useful << -> { add_task(index) } if live_tasks.size < LIVE_TASKS && tasks.size < MAXIMUM_TASKS
-    ready = tasks.any? { |task| task.state == "ready" }
+    underway = []
+    all = tasks
+    useful << -> { complete_contract(index) } if all.any? { |task| task.state == "backlog" }
+    useful << -> { add_task(index) } if live_tasks.size < LIVE_TASKS && all.size < MAXIMUM_TASKS
+    ready = all.any? { |task| task.state == "ready" }
     @builders.each do |seat|
-      useful << -> { build(index, seat) } if ready || held_by(seat)
+      held = held_by(seat)
+      next unless ready || held
+
+      move = -> { build(index, seat) }
+      useful << move
+      underway << move if held && !Leverage::Holds.held?(held) && %w[working finishing].include?(held.state)
     end
     unclaimed = open_reviews.any? { |review| review.reviewer_seat_id.nil? }
     @reviewers.each do |seat|
-      useful << -> { review(index, seat) } if unclaimed || review_of(seat)
+      held = review_of(seat)
+      next unless unclaimed || held
+
+      move = -> { review(index, seat) }
+      useful << move
+      underway << move
     end
     job_seats.each do |seat|
-      useful << -> { work_job(index, seat) } if job_of(seat) || queued_jobs(seat.role).any?
+      move = -> { work_job(index, seat) }
+      job = job_of(seat)
+      queued = job ? [] : queued_jobs(seat.role)
+      next unless job || queued.any?
+
+      useful << move
+      underway << move if (job ? [ job ] : queued).any? { |each| each.kind == "approval" }
     end
     useful << -> { answer_hold(index) } if rule_holds.any?
     needs_you = owner_offers
     useful << -> { take_owner_offer(index, needs_you) } if needs_you.any?
-    useful.empty? ? sweep(index) : one(useful).call
+    # Give in-flight work a better chance of reaching a verdict and
+    # Finishing before other commands interrupt it.
+    choices = underway.any? && chance(0.60) ? underway : useful
+    choices.empty? ? sweep(index) : one(choices).call
   end
 
   def build(index, seat)
@@ -299,7 +319,7 @@ class Walk
   def finish(index, seat, task)
     action = Leverage::Actions.first_approved_open(task)
     return heartbeat(index) unless action
-    return command(index, :finish, "release", seat, "id" => task.id, "reason" => "stopping") if chance(0.18)
+    return command(index, :finish, "release", seat, "id" => task.id, "reason" => "stopping") if chance(0.30)
 
     name = action.state == "started" ? "report_action_done" : "start_action"
     command(index, :finish, name, seat, "id" => task.id, "aid" => action.id)
@@ -873,7 +893,8 @@ class Walk
   end
 
   def take_owner_offer(index, offers)
-    item, choice = one(offers)
+    recoveries = offers.select { |_item, choice| %w[offer_again mark_done].include?(choice) }
+    item, choice = one(recoveries.any? && chance(0.75) ? recoveries : offers)
     name, params = owner_request(item, choice)
     command(index, :answer_needs_you, name, @owner, params)
   end
@@ -904,7 +925,7 @@ class Walk
     actions = tasks.flat_map do |task|
       Leverage::Actions.for_task(task).where(state: %w[approved started done], approved_by_kind: "seat").to_a
     end
-    decision = one(questions + actions)
+    decision = one(actions.any? && chance(0.7) ? actions : questions + actions)
     return progress(index) unless decision
 
     name = decision.is_a?(Question) ? "overturn_answer" : "overturn_approval"

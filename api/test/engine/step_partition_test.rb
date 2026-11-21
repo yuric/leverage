@@ -169,21 +169,22 @@ class StepPartitionTest < ActiveSupport::TestCase
   QUESTIONS_AND_APPROVALS_SEEDS = (10_041..10_120)
 
   test "the walks complete milestone 5's commands and run its timers on due jobs" do
-    completed = Set.new
-    action_events = Set.new
-    timed_out = Set.new
+    commands = Set.new(QUESTIONS_AND_APPROVALS)
+    action_events = Set.new(%w[action.requested action.lease_granted])
+    timed_out = Set.new([ %w[approval queue], %w[approval run], %w[question queue], %w[question run] ])
     QUESTIONS_AND_APPROVALS_SEEDS.each do |seed|
       walk = Walk.new(seed: seed, steps: STEPS).run
-      completed.merge(walk.log.select { |step| step.answer == "completed" }.map(&:command))
+      commands.subtract(walk.log.select { |step| step.answer == "completed" }.map(&:command))
       events = Event.where(workspace_id: walk.workspace_id)
-      action_events.merge(events.where(type: %w[action.requested action.lease_granted]).distinct.pluck(:type))
-      timed_out.merge(events.where(type: "job.timed_out").joins("JOIN jobs ON jobs.id = events.subject_id")
+      action_events.subtract(events.where(type: action_events.to_a).distinct.pluck(:type))
+      timed_out.subtract(events.where(type: "job.timed_out").joins("JOIN jobs ON jobs.id = events.subject_id")
         .pluck(Arel.sql("jobs.kind"), Arel.sql("CASE WHEN jobs.claimed_at IS NULL THEN 'queue' ELSE 'run' END")))
+      break if commands.empty? && action_events.empty? && timed_out.empty?
     end
-    assert_empty QUESTIONS_AND_APPROVALS - completed.to_a, "the walks never completed these"
-    assert_empty %w[action.requested action.lease_granted] - action_events.to_a, "the app entries never acted"
-    assert_empty [ %w[approval queue], %w[approval run], %w[question queue], %w[question run] ] - timed_out.to_a,
-      "the walks never timed out these jobs"
+    missing = { commands: commands.to_a, action_events: action_events.to_a, job_timeouts: timed_out.to_a }.reject do |_, outcomes|
+      outcomes.empty?
+    end
+    assert_empty missing, "the walks never reached these outcomes"
   end
 
   # The commands that withdrew a check of a waiting command (rule 11):
