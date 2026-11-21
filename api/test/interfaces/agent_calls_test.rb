@@ -349,23 +349,24 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     marker.define_method(:call, original_mark)
   end
 
-  test "get_question answers the asking seat and marks exactly that question read" do
-    task = @scenario.task(state: "working", builder: @builder)
-    question = @scenario.question(task, outcome: "answered", assumption: "Use the sample.")
-    answer = self.class.example("Question").merge(
-      "id" => question.id, "task_id" => task.id, "asking_seat_id" => @builder.id, "outcome" => "answered"
-    )
-    path = "/v1/tasks/#{task.id}/questions/#{question.id}"
-    assert_request_matches_contract("GET", path, nil)
+  %w[answered overturned].each do |outcome|
+    test "get_question returns a question that is #{outcome} to the asking seat and marks it read" do
+      task = @scenario.task(state: "working", builder: @builder)
+      question = @scenario.question(task, outcome: outcome, assumption: "Use the sample.")
+      answer = self.class.example("Question").merge("id" => question.id, "task_id" => task.id,
+        "asking_seat_id" => @builder.id, "outcome" => outcome, "overturned" => outcome == "overturned")
+      path = "/v1/tasks/#{task.id}/questions/#{question.id}"
+      assert_request_matches_contract("GET", path, nil)
 
-    with_question_read(answer) do |reads, marks|
-      get_as path
+      with_question_read(answer) do |reads, marks|
+        get_as path
 
-      assert_response :ok
-      assert_response_matches_contract
-      assert_equal answer, response.parsed_body
-      assert_equal [ [ @builder.id, question.id ] ], reads
-      assert_equal [ question.id ], marks
+        assert_response :ok
+        assert_response_matches_contract
+        assert response.parsed_body == answer, "the question view was changed"
+        assert_equal [ [ @builder.id, question.id ] ], reads
+        assert_equal [ question.id ], marks
+      end
     end
   end
 
@@ -380,12 +381,14 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     with_question_read(self.class.example("Question")) do |reads, marks|
       [ @scenario.token_for(other_seat), foreign.token_for(stranger) ].each do |token|
         get_as "/v1/tasks/#{task.id}/questions/#{question.id}", token: token
-        assert_error :not_found, "not_found"
+        assert_equal 404, response.status
+        assert_equal "not_found", response.parsed_body.dig("error", "code")
         assert_response_matches_contract
       end
       [ [ other_task.id, question.id ], [ "not-a-uuid", question.id ], [ task.id, "not-a-uuid" ] ].each do |task_id, question_id|
         get_as "/v1/tasks/#{task_id}/questions/#{question_id}"
-        assert_error :not_found, "not_found"
+        assert_equal 404, response.status
+        assert_equal "not_found", response.parsed_body.dig("error", "code")
         assert_response_matches_contract
       end
       assert_empty reads
@@ -497,7 +500,8 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     review = Review.create!(workspace_id: task.workspace_id, task_id: task.id, round: 0, verdict: "failed",
       notes: "Made-up reviewer notes.", failed_rule_check_id: check.id)
 
-    get_as "/v1/tasks/#{task.id}/briefing"
+    # Keep the real notes reader, while WP7 provides the new briefing fields.
+    with_briefing { get_as "/v1/tasks/#{task.id}/briefing" }
 
     assert_response :ok
     assert_equal [ { "review_id" => review.id, "round" => 0,
