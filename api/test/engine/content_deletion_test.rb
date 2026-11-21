@@ -37,14 +37,37 @@ class ContentDeletionTest < ActiveSupport::TestCase
         result: { "job_id" => SecureRandom.uuid, "input" => { "task_id" => item.id, "material" => "Made-up content" } })
     end
     target, neighbor = requested
-    before = target.attributes
-    other_before = neighbor.attributes
+    before = target.reload.attributes
+    other_before = neighbor.reload.attributes
 
     assert_completed owner_command("delete_content", { task_id: task.id })
 
     expected = before.merge("result" => before.fetch("result").except("input"))
     assert_equal expected, target.reload.attributes
     assert_equal other_before, neighbor.reload.attributes
+  end
+
+  test "deletion clears copies in builder and reviewer claims and in claims from a former project" do
+    project = scenario.project
+    task = scenario.task(state: "done", project: project)
+    claim = saved_claim("claim", own_seat(role: "builder"), "task" => { "id" => task.id, "title" => "Sample title" },
+      "briefing" => { "brief" => "Sample brief" }, "work_reference" => "Sample path")
+    review_identity = { "id" => SecureRandom.uuid, "task_id" => task.id }
+    review = saved_claim("claim_review", own_seat(role: "reviewer"),
+      "review" => review_identity.merge("notes" => "Sample notes"),
+      "briefing" => { "brief" => "Sample brief" }, "work_reference" => "Sample path")
+    outside = scenario.task(state: "working")
+    old_project_claim = saved_claim("claim_job", own_seat(role: "orchestrator"),
+      "job_id" => SecureRandom.uuid, "input" => { "task_id" => outside.id, "project_id" => project.id, "material" => "Sample brief" })
+
+    assert_completed owner_command("delete_content", { project_id: project.id })
+
+    assert_equal({ "task" => { "id" => task.id } }, claim.reload.result)
+    assert_equal({ "review" => review_identity }, review.reload.result)
+    refute old_project_claim.reload.result.key?("input")
+    [ claim, review, old_project_claim ].each do |receipt|
+      assert_equal "not_eligible", Leverage::Idempotency.outcome_of(receipt).refusal&.code
+    end
   end
 
   test "deletion appends under the stepped-back clock and keeps replay, event history, and steps intact" do
@@ -113,6 +136,11 @@ class ContentDeletionTest < ActiveSupport::TestCase
   end
 
   private
+
+  def saved_claim(command, seat, result)
+    Command.create!(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id, command: command,
+      key: new_key, request_hash: "a" * 64, outcome: "completed", result: result)
+  end
 
   def snapshot(rows) = rows.to_h { |row| [ row, row.reload.attributes ] }
 
