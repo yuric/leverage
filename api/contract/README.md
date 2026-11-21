@@ -640,9 +640,11 @@ allows the recovery time ceiling to be cleared (AP-39).
   can be overridden through `override_check` (AP-15). An errored approval
   check stays with the owner. The offline timer leaves it alone and
   `rerun_check` refuses it (AE-15).
-- The blocker on Offer task again is the builder seat being disabled or
-  removed (AP-19). If one of those seats is needed for approved actions,
-  the task holds with `action_unconfirmed`. Return for rework closes
+- Offer task again requires an enabled, unremoved seat in the builder
+  role (AP-19). If the previous builder is unavailable in one of those
+  ways and approved actions remain, the task holds with
+  `action_unconfirmed`. Waive closes the `check_error` hold for any
+  gate it withdraws on that action. Return for rework closes
   the approval and unconfirmed holds. When the previous builder still
   holds the task and is enabled and unpaused, rework replaces its lease
   and a waive keeps it (AE-16). A re-enabled seat can still hold the

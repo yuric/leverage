@@ -488,8 +488,11 @@ a stand-in reviewer. `scripts/real_approval_check.sh` checks an approval
 and a stop or owner handoff with a real orchestrator and a stand-in
 builder and reviewer. The approved action writes a line to a temporary
 test file. Both checks replay the log and scan for secrets. The scripts
-accept `LEVERAGE_E2E_SCRATCH` to reuse a Swift build directory. Their
-outcomes are in [Measurements](IMPLEMENTATION.md#measurements).
+accept `LEVERAGE_E2E_SCRATCH` to reuse a Swift build directory.
+`LEVERAGE_MCP_CHECK_OUT` selects where the MCP check saves its verified
+event list and replay result. `LEVERAGE_APPROVAL_CHECK_OUT` selects where
+the approval check saves audited event IDs, task states and replay output.
+The outcomes are in [Measurements](IMPLEMENTATION.md#measurements).
 
 ## Stopping and rolling back
 
