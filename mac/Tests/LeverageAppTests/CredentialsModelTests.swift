@@ -63,7 +63,7 @@ struct CredentialsModelTests {
         return ResetClock(now: { at }, calendar: Fixtures.utc, locale: Fixtures.usEnglish)
     }
 
-    @Test("a ready login says it is signed in and answering; a signed-out one says so; one at its limit says until when")
+    @Test("the status dot and usage sentence show sign-out and a reported limit")
     func states() async throws {
         let later = now.addingTimeInterval(3600)
         let model = makeModel(owner([
@@ -75,13 +75,13 @@ struct CredentialsModelTests {
         ]))
         await model.load()
         try #require(model.rows.count == 4)
-        #expect(model.rows[0].chip.text == "Ready" && model.rows[0].usage == "Signed in and answering.")
-        #expect(model.rows[1].chip.text == "Signed out" && model.rows[1].usage == "Not signed in.")
+        #expect(!model.rows[0].isSignedOut && model.rows[0].usage == "Signed in and answering.")
+        #expect(model.rows[1].isSignedOut && model.rows[1].usage == "Not signed in.")
         let time = ResetTime.text(for: later, clock: clock)
-        #expect(model.rows[2].chip.text == "At its limit")
+        #expect(!model.rows[2].isSignedOut)
         #expect(model.rows[2].usage == "At its limit until \(time).")
-        #expect(model.rows[3].chip.text == "Ready")
-        for row in model.rows { #expect(BannedTerms.found(in: row.usage + row.chip.text).isEmpty) }
+        #expect(model.rows[3].usage == "Signed in and answering.")
+        for row in model.rows { #expect(BannedTerms.found(in: row.usage).isEmpty) }
     }
 
     @Test("a limit with no reset time says the provider did not give one")
@@ -93,7 +93,7 @@ struct CredentialsModelTests {
         ]))
         await model.load()
         try #require(model.rows.count == 2)
-        #expect(model.rows[0].chip.text == "At its limit")
+        #expect(!model.rows[0].isSignedOut)
         #expect(model.rows[0].usage == "At its limit. Claude did not say when it is available again.")
         #expect(model.rows[1].usage == "At its limit. Codex did not say when it is available again.")
     }
@@ -107,7 +107,7 @@ struct CredentialsModelTests {
                 until: now.addingTimeInterval(-1), position: 2),
         ]))
         await model.load()
-        #expect(model.rows.map(\.chip.text) == ["Ready", "Ready"])
+        #expect(model.rows.map(\.usage) == ["Signed in and answering.", "Signed in and answering."])
     }
 
     @Test("a signed-out account at its limit says it is signed out: signing in comes first")
@@ -118,7 +118,7 @@ struct CredentialsModelTests {
         ]))
         await model.load()
         try #require(model.rows.count == 1)
-        #expect(model.rows[0].chip.text == "Signed out")
+        #expect(model.rows[0].isSignedOut && model.rows[0].usage == "Not signed in.")
     }
 
     @Test("the Credentials row shows account facts when the provider gives them")
@@ -133,14 +133,15 @@ struct CredentialsModelTests {
         #expect(row.accountDetails == [Fixtures.madeUpPlan, Fixtures.madeUpEmail])
     }
 
-    @Test("an API token is named as one, though none can be added yet")
-    func tokenKind() async {
+    @Test("an API token keeps its kind and provider")
+    func tokenKind() async throws {
         let token = CredentialWithReading(
-            credential: Credential(id: UUID(), kind: .apiToken, provider: .claudeApi, name: "Key", maskedLabel: "…abcd", position: 1))
+            credential: Credential(id: UUID(), kind: .apiToken, provider: .claudeApi, name: "Key", maskedLabel: MaskedLabel.forToken(""), position: 1))
         let model = makeModel(owner([token]))
         await model.load()
-        #expect(model.rows[0].kindLine == "API token")
-        #expect(model.rows[0].providerName == "Claude API")
+        let row = try #require(model.rows.first)
+        #expect(row.kindLine == "API token")
+        #expect(row.providerName == "Claude API")
     }
 
     @Test("logins and tokens have separate sections with only populated providers in registry order")

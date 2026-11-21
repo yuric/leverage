@@ -9,9 +9,14 @@ enum CredentialsCopy: OwnerFacingCopy {
     // The list.
     case loading, empty, header, addCredential
     case kindLogin, kindToken
-    case chipReady, chipSignedOut, chipLimit
+    case statusSignedOut
     case usageReady, usageSignedOut
-    case verify, verifying
+    case verify, verifying, verifyAll, refresh, readingUsage
+    case noTokens, active, rowActions, rename, renaming, renameField, remove, removing
+    case removeTitle, removeMessage, inUse, cleanupFailed
+    case unavailable, noReader, untestedVersion, lookedSignedOut, tokenStopped, tokenUse, handoffModel
+    case percentUsed, resetsAt, resetsAvailable, resetCount, resetExpiry, readAge
+    case resetFiveHour, resetWeekly, resetPerModel, resetFull
     // At its limit, and Sign in again on a signed-out login (HM-45, HM-47).
     case usageLimitUntil, usageLimitNoTime, signInAgain
 
@@ -31,19 +36,49 @@ enum CredentialsCopy: OwnerFacingCopy {
 
     var text: String {
         switch self {
-        case .loading: "Loading the logins…"
+        case .loading: "Loading credentials…"
         case .empty: "No logins yet. Add one so an agent can run on it."
-        case .header: "The logins agents can run on."
+        case .header: "The order they take over in is set on Handoff."
         case .addCredential: "Add credential"
         case .kindLogin: "Subscription login"
         case .kindToken: "API token"
-        case .chipReady: "Ready"
-        case .chipSignedOut: "Signed out"
-        case .chipLimit: "At its limit"
+        case .statusSignedOut: "Signed out"
         case .usageReady: "Signed in and answering."
         case .usageSignedOut: "Not signed in."
         case .verify: "Verify"
         case .verifying: "Checking…"
+        case .verifyAll: "Verify all"
+        case .refresh: "Refresh"
+        case .readingUsage: "Reading usage…"
+        case .noTokens: "No API tokens yet."
+        case .active: "Active"
+        case .rowActions: "Actions for {name}"
+        case .rename: "Rename"
+        case .renaming: "Renaming…"
+        case .renameField: "Name"
+        case .remove: "Remove"
+        case .removing: "Removing…"
+        case .removeTitle: "Remove {name}?"
+        case .removeMessage: "You can add this account again from Credentials."
+        case .inUse: "{name} is in use by an agent or by work that is not finished."
+        case .cleanupFailed: "The account was removed. Its saved sign-in or token may still be on this Mac."
+        case .unavailable: "Unavailable right now."
+        case .noReader: "Unavailable. leverage does not read usage for {provider} yet."
+        case .untestedVersion: "Unavailable. leverage has not been checked with {tool} {version} yet."
+        case .lookedSignedOut: "Looked signed out when last read. Choose Verify to check."
+        case .tokenStopped: "This token no longer works. Remove it and add it again."
+        case .tokenUse: "Not used for work yet. leverage checks it and shows what its provider reports."
+        case .handoffModel: "Uses {model} when work moves here from another provider"
+        case .percentUsed: "{percent} used"
+        case .resetsAt: "Resets {time}."
+        case .resetsAvailable: "Available resets: {resets}"
+        case .resetCount: "{count} {kind}"
+        case .resetExpiry: "{reset}, expires {time}"
+        case .readAge: "Last read {age}."
+        case .resetFiveHour: "5-hour"
+        case .resetWeekly: "weekly"
+        case .resetPerModel: "per-model"
+        case .resetFull: "full"
         case .usageLimitUntil: "At its limit until {time}."
         case .usageLimitNoTime: "At its limit. {provider} did not say when it is available again."
         case .signInAgain: "Sign in again"
