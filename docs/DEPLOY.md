@@ -119,6 +119,7 @@ client speaks MCP with the child over standard input and output.
 | The last Needs you item the app announced | `<support folder>/inbox-cursor`, one number, mode 0600 |
 | The API | `http://127.0.0.1:<port>`, the first free port from 47130 to 47139, kept in `API_PORT` in the server folder's `.env` |
 | A Claude or Codex login's settings | `<support folder>/accounts/<credential id>/` |
+| Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
 | Tools leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
@@ -126,18 +127,19 @@ client speaks MCP with the child over standard input and output.
 
 For an API token, choose Add credential, pick an API token provider,
 name the credential and paste the token into the secure field. The
-bundled helper saves a verified token in a generic password item, service
-`leverage API token`, account the credential ID. The default macOS setup
-uses the login Keychain. A custom default or search list affects where
-the file-based Security API stores and finds the item. A rebuilt app
-may prompt for Keychain access. Tokens stay on this Mac.
+bundled helper saves a verified token and its provider in a generic
+password item, service `leverage API token`, account the credential ID.
+The default macOS setup uses the login Keychain. A custom default or
+search list affects where the file-based Security API stores and finds
+the item. A rebuilt app may prompt for Keychain access. Tokens stay on
+this Mac. If an item has no saved provider, Remove and Add it again.
 
-Remove first deletes the server row and its readings, then asks the
-helper to delete the Keychain item or the login folder the helper marked
-as its own. Existing settings folders created before that marker was
-introduced are retained. The provider's shared Mac sign-in is also
-retained. An interruption between the two steps can leave local data
-behind. The helper performs no automatic cleanup of that residue.
+Remove first deletes the server row and its readings. The app records
+the confirmed credential ID in its support folder and asks the helper
+to delete the Keychain item or the login's settings folder, including
+folders made by earlier versions. Shared Mac sign-ins are kept. Pending
+cleanup is sent again when the helper starts and cleared after the
+helper finishes it.
 Readings are kept with their credential. The sweep deletes finished
 and failed read requests after seven days.
 

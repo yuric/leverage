@@ -11,20 +11,23 @@ TK-1, TK-2).
 
 ## Decision
 
-The app sends a pasted value on the current helper's standard input.
+The app sends the selected provider and the pasted value on the current
+helper's standard input.
 The helper holds the value in memory for at most 60 seconds pending
 Add. The server receives the same fixed mask for every token. After a
 successful check, the bundled helper stores a generic password with
-service `leverage API token` and the credential ID as account. The
-file-based Security API uses the user's default Keychain for insertion
+service `leverage API token` and the credential ID as account, with
+the provider stored as item metadata. Checks and reads use this binding.
+The file-based Security API uses the user's default Keychain for insertion
 and search list for lookups. The standard setup uses the login Keychain.
 The helper uses the in-memory vault for development, Linux and smoke.
 
-Remove follows the completed server command with a local forget
+Remove records the confirmed credential ID locally and sends a forget
 message. The helper cancels work for that ID, deletes the matching
-Keychain item and removes a settings folder when the helper can prove
-ownership. See [Deployment](../DEPLOY.md#where-things-live) for upgrade
-and interrupted cleanup behavior.
+Keychain item and removes the credential's own settings folder. The
+helper clears the pending ID only after cleanup succeeds. See
+[Deployment](../DEPLOY.md#where-things-live) for upgrade and interrupted
+cleanup behavior.
 
 `ProviderCatalog` prescribes one GET per service for checking a token
 or reading usage. The services are hosted APIs. Their versions are

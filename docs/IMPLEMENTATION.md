@@ -819,8 +819,9 @@ with a test that failed first:
 - **CR-12, RD-8.** Scrubbed developer recordings stay outside the
   repository. Made-up usage fixtures carry a typed expectation and
   have separate reader tests.
-- **CR-14, CR-15, CR-16.** A fresh reading below 100 percent in the
-  refused window clears a limit. A passed Verify can still clear an
+- **CR-14, CR-15, CR-16.** A fresh reading below 100 percent in every
+  window refused since the limit began clears the limit and reassesses
+  both credential hold reasons. A passed Verify can still clear an
   undated limit. Readings alone can neither set a limit nor sign out
   the credential.
 - **CR-17, CR-18, RD-6.** The catalog owns figure labels and response
@@ -840,7 +841,7 @@ with a test that failed first:
   at the end. Remove refuses live references. Reorder and Remove
   reassess credential holds and the associated Needs you item.
 - **CR-31.** The helper forgets removed credentials through standard
-  input. Cleanup preserves unmarked folders and Mac-wide sign-ins.
+  input. It clears the locally queued ID after cleanup succeeds.
 - **CR-33.** Codex counts its available rate-limit reset credits as
   full resets and groups credits with the same expiry.
 - **CR-38.** The row describes the configured handoff model. Model,
@@ -878,6 +879,13 @@ with a test that failed first:
   UUID-shaped names and plans from logs. The case where a hold regains
   a dated candidate is described in the Handoff paragraphs and the
   Needs you contract. The earlier summary cells remain as written.
+- **Adversarial review.** Limits retain their start through overlapping
+  refusals. A reading that restores a candidate reassesses the wait in
+  that command. The API bounds observation times, compares places
+  among added credentials at reorder and leaves an unchanged rename
+  event-free. Needs you offers automatic recovery when a reading
+  identifies a tested tool version. The Codex reader completes after
+  receiving the required replies and reaping the child.
 
 ### Credentials readers and recordings
 
@@ -2232,10 +2240,19 @@ skeleton's pull request description, as rule AR-004 asks.
     - **CR-37.** An unlisted tool version shows unavailable. Alternative: accept later versions when decoding succeeds.
     - **CR-3.** Register only Codex with its usable recording. Alternative: write Claude, Gemini and Grok readers from conjectured formats.
     - **CS-2, RD-7, CR-12.** Step 0 used the tools' existing sign-ins and saved scrubbed copies outside the repository. Alternative: wait for the owner to record each reply.
-    - **CR-14.** Fresh capacity below 100 percent in the applicable window clears dated and undated limits, with Verify retained for undated limits. Alternative: wait for the provider's reset or require another read.
+    - **CR-14.** Fresh capacity below 100 percent in every refused
+      window clears dated and undated limits, with Verify retained for
+      undated limits. A reading that restores a candidate can release
+      either credential hold reason at the reading's command time. The
+      Handoff paragraphs now describe the same rule for both kinds of
+      wait. The alternatives were to consider only the latest refusal
+      or to wait for the sweep to release a signed-out hold.
     - **CR-7.** Every token has the same fixed mask. Alternative: expose a short suffix.
     - **CR-9.** Send a pasted token over helper standard input and save only after validation. Alternative: route it through the server or store it before checking.
-    - **CR-31.** Use the local channel to forget after Remove. Alternative: add a server request kind and track local cleanup there.
+    - **CR-31.** Use the local channel to forget after Remove. Store the
+      confirmed ID in the support folder so interrupted cleanup can
+      resume at helper startup. The alternative was to track local
+      cleanup with a server request.
     - **CR-4.** The provisional Claude cache checks `.claude.json` and shows a dash for an unknown grant. Alternative: infer the grant count or wait to implement the cache.
     - **CR-10.** The server schedules due reads and Refresh. Alternative: have the helper keep a local schedule.
     - **CR-36.** Read an account even when an agent is using it. Alternative: delay reads until the account is idle.
@@ -2271,9 +2288,9 @@ skeleton's pull request description, as rule AR-004 asks.
 
     A successful reading can end a dated limit before the originally
     reported reset time. Reviewer eligibility can take one sweep after
-    reorder or Remove. A crash or an unmarked legacy account folder can
-    leave local data after Remove. A stopped token is replaced by Remove
-    and Add. The API still has no security scanner.
+    reorder or Remove. An interruption before the app records a
+    confirmed removal can leave local data. A stopped token is replaced
+    by Remove and Add. The API still has no security scanner.
 
 ## Waiting for the owner
 

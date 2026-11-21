@@ -686,7 +686,7 @@ the first change that needs one chooses it and adds it here.
 | How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
 | Child processes | None. | `Subprocess` in LeverageKit uses an absolute program path, an allow-listed environment, its own process group, drained outputs and a time limit or stop that ends the group. Standard input defaults to `/dev/null`. The session form keeps input open for the helper channel and Codex app-server. `ProviderCatalog.toolEnvironment` builds the tool environment and `HelperSupervisor` builds the helper's environment. Docker gets only `HOME` and `PATH`. |
 | Requests to a provider's API | None. | The helper's `ProviderHTTP` uses an ephemeral `URLSession` for a single bounded GET and returns only the catalog's allowed response headers. The leverage API's `HTTPTransport` uses separate authentication and exposes no headers. |
-| App to helper | Helper work is queued through the owner interface. | `HelperSupervisor` starts and stops the helper and sends the two messages in [Interfaces](#interfaces) on standard input. |
+| App to helper | Helper work is queued through the owner interface. | `HelperSupervisor` starts and stops the helper and sends the two messages in [Interfaces](#interfaces) on standard input. A durable queue in the support folder holds confirmed removal IDs until local cleanup finishes. |
 | Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
 
 The helper's environment includes the API address, its own token, the
@@ -785,8 +785,8 @@ and `USER` for Claude.
   Support/leverage` (or `LEVERAGE_SUPPORT_DIR`): `server/` (the compose
   file and the `.env` with the database passwords and `SECRET_KEY_BASE`,
   folder 0700, files 0600), `accounts/<credential id>/` (a Claude or Codex
-  login's own settings folder, made new by Add and removed when the add
-  fails), `tools/<provider>/` (a tool leverage unpacked),
+  login's own settings folder, made new by Add and removed after a failed
+  Add or confirmed Remove), `tools/<provider>/` (a tool leverage unpacked),
   `work/<task id>/` (a task's folder when it names none), `logs/`
   (`helper.log` and one `seat-<id>.log` per run), `backups/` (the daily
   dumps, folder 0700), `inbox-cursor` (mode 0600: one number, the `seq` of
@@ -834,10 +834,11 @@ Credentials adds owner `rename_credential`, `remove_credential`,
 `refresh_usage`, `verify_all_credentials` and `reorder_credentials`, and
 helper `report_reading`. The contract README records the interface changes.
 
-On standard input, the helper accepts one UTF-8 JSON object per line in
-version 1 of `LocalHelperMessage`. Both `token` and `forget` carry
-`credential_id`. Only `token` carries the pasted value. The message
-decoder refuses malformed lines and uses a payload-free diagnostic.
+On standard input, the helper accepts one UTF-8 JSON object per line.
+Both `token` (version 2) and `forget` (version 1) of
+`LocalHelperMessage` carry `credential_id`. The `token` message also
+carries the selected provider and the pasted value. The message decoder
+refuses malformed lines and uses a payload-free diagnostic.
 
 - **Commands.** Every call that changes something is a `POST` that carries
   an `Idempotency-Key` header and answers one outcome body: 200 completed,
@@ -954,7 +955,8 @@ the first read. Refresh queues an active
 credential even if it has a recent reading. Refresh and the sweep end
 abandoned pickups after 90 seconds, so a lost pickup can be retried.
 The helper budgets 15 seconds for a read. The Codex usage session runs
-in an empty temporary working directory. Existing version and sign-in
+in an empty temporary working directory. It stops and reaps the child
+after collecting the required replies. Existing version and sign-in
 preflights keep their usual working directory.
 [ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md)
 
@@ -1034,10 +1036,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   sign-out, nor is any run a signal killed.
 - **Provider API tokens.** The secure field sends the pasted value to the
   helper over standard input. The Rails Add request carries the fixed
-  mask. The helper checks the value at the selected catalog endpoint and
-  saves it only after a pass. Check and usage calls send authentication
-  in a header. The sender refuses redirects, limits the body to 1 MiB,
-  uses no cookies or cache, and gives the reader only named headers.
+  mask. The helper checks the value at the locally selected catalog
+  endpoint and saves the provider with the value after a pass. Verify and
+  usage use that provider binding. Check and usage calls send
+  authentication in a header. The sender refuses redirects, limits the
+  body to 1 MiB, uses no cookies or cache, and gives the reader only
+  named headers.
   The loopback test override is refused by a bundled helper and accepts
   only a marked made-up token. The app's helper environment omits the
   override. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md)

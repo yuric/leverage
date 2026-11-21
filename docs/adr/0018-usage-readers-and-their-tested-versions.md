@@ -20,7 +20,8 @@ CR-12, CR-37, RD-1 to RD-3, RD-7, RD-8).
   and schedules due reads in the sweep.
 - Use the existing subprocess mechanism with open standard input for
   the Codex JSON line session. Check the account home before asking
-  for data. The allowed methods are in
+  for data. Once the required replies arrive, stop and reap the child.
+  The allowed methods are in
   [Architecture](../ARCHITECTURE.md#trust-boundaries).
 - Keep recorded usage replies out of the repository. Scrub a
   maintainer's developer capture before writing it. Test parsers with

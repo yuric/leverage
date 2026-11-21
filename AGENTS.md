@@ -15,9 +15,10 @@ access requests, outward actions, projects and spending, Activity,
 Decided for you, content deletion and workspace settings. A seat that
 connects on its own can use HTTP or the bundled MCP server. Credentials
 lists both kinds of credential, with token Add, Refresh, Verify all,
-Rename and Remove. The Handoff tab supports reordering. Codex CLI 0.169.0
-is the only registered login usage reader. The five API token readers
-have stand-in coverage.
+Rename and Remove. Confirmed local credential cleanup resumes when the
+helper starts. The Handoff tab supports reordering. Codex CLI 0.169.0 is
+the only registered login usage reader. The five API token readers have
+stand-in coverage.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks

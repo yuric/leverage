@@ -12,7 +12,9 @@ once it makes its first release.
 
 - Added the Credentials screen with limits and resets where available, API
   tokens, Refresh and Verify all, renaming and removing a credential, and
-  reordering the handoff order.
+  reordering the handoff order. A usage reading can resume a waiting task
+  as soon as a candidate has capacity. Needs you explains when Verify is
+  needed. Pending local credential cleanup resumes when the helper starts.
 
 - Worker questions and access requests, with owner replies and grants
   in Needs you.
