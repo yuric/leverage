@@ -2,6 +2,7 @@ module Leverage
   # Gives completed decisions back to the task's previous builder.
   module Finishing
     GRANT_LIMIT = 5
+    BUILDER_RELEASE_EVENTS = %w[task.submitted task.released].freeze
 
     module_function
 
@@ -41,7 +42,11 @@ module Leverage
         next unless builder_free?(task, at: ctx.at)
 
         entry = Transitions::Entries::GrantActionLease.new
-        as_app(ctx, "grant_action_lease", { "id" => task.id }, key: ctx.request.key) do
+        release = ctx.events.reverse.find do |event|
+          BUILDER_RELEASE_EVENTS.include?(event.type) && event.actor_kind == "seat" &&
+            event.actor_id == task.builder_seat_id
+        end
+        as_app(ctx, "grant_action_lease", { "id" => task.id }, key: ctx.request.key, cause_id: release&.id) do
           entry.load(ctx)
           if entry.refusals(ctx).empty?
             entry.perform(ctx)
@@ -113,10 +118,10 @@ module Leverage
       end
     end
 
-    def as_app(ctx, command, params, key: nil)
+    def as_app(ctx, command, params, key: nil, cause_id: nil)
       request = PendingTransitions::Requested.new(command: command, workspace_id: ctx.workspace.id,
         requester_kind: nil, requester_id: nil, command_key: key, params: params)
-      ctx.as_requester(request, cause_id: nil) { yield }
+      ctx.as_requester(request, cause_id: cause_id) { yield }
     end
 
     def waiting_tasks(scope)

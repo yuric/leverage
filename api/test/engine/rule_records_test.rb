@@ -68,11 +68,13 @@ class RuleRecordsTest < ActiveSupport::TestCase
     assert_equal [ [ "app", nil ] ], RuleVersion.where(workspace_id: scenario.workspace_id).distinct.pluck(:author_kind, :author_id)
   end
 
-  test "the placeholder instruction of the approvals rule is stored as no instruction, never as the placeholder" do
+  test "installs the approval rule with its shipped instruction" do
     Records.install_shipped(owner_context)
     version = RuleVersion.find_by!(workspace_id: scenario.workspace_id, key: "orchestrator_approves_actions")
 
-    assert_nil version.instruction
+    instruction = Leverage::Rules::Shipped.find("orchestrator_approves_actions").instruction
+    assert_kind_of String, instruction
+    assert instruction == version.instruction
     assert_kind_of String, RuleVersion.find_by!(workspace_id: scenario.workspace_id, key: "specific_details").instruction
   end
 
@@ -97,13 +99,13 @@ class RuleRecordsTest < ActiveSupport::TestCase
     assert_equal [ rule.id, "key-add" ], [ event.subject_id, event.command_id ]
   end
 
-  test "a custom rule's route is the owner at ready to start and the builder at the other three moments (RD-24, RC-7)" do
-    routes = %w[task.before_ready task.before_claim task.before_submit task.before_done].to_h do |hook|
+  test "the default route is the owner before Ready and outward action, otherwise the builder (RD-24, RC-7)" do
+    routes = %w[task.before_ready task.before_claim task.before_submit task.before_done action.requested].to_h do |hook|
       [ hook, scenario.current_version(Records.add(owner_context, add_body(hook: hook))).route ]
     end
 
     assert_equal({ "task.before_ready" => "owner", "task.before_claim" => "builder", "task.before_submit" => "builder",
-                   "task.before_done" => "builder" }, routes)
+                   "task.before_done" => "builder", "action.requested" => "owner" }, routes)
   end
 
   test "a custom rule may let the checker decide (RD-22, RC-47)" do
@@ -115,10 +117,9 @@ class RuleRecordsTest < ActiveSupport::TestCase
 
   test "add refuses what the milestone does not offer, as invalid, writing nothing (RD-21, RD-22)" do
     invalid = {
-      "the moment before anything goes out (RD-21)" => add_body(hook: "action.requested"),
       "a hook that is not a gate's moment" => add_body(hook: "review.assign"),
-      "named projects (RD-22)" => add_body(scope: { "kind" => "named_projects", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }),
-      "action kinds (RD-22)" => add_body(scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "publish" ] }),
+      "an unknown project (RC-44)" => add_body(scope: { "kind" => "named_projects", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }),
+      "an unknown action kind (RC-43)" => add_body(scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "sample_unknown_kind" ] }),
       "values with every task" => add_body(scope: { "kind" => "all_tasks", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }),
       "a blank name" => add_body(name: "  "),
       "a blank instruction" => add_body(instruction: ""),
@@ -192,8 +193,8 @@ class RuleRecordsTest < ActiveSupport::TestCase
       "a parameter below its minimum" => [ criteria, save_body(criteria, parameters: { "minimum_count" => -1 }) ],
       "parameters on a model rule" => [ custom, save_body(custom, parameters: { "minimum_count" => 1 }) ],
       "let the checker decide on an app rule" => [ criteria, save_body(criteria, scope: { "kind" => "checker_decides", "project_ids" => nil, "action_kinds" => nil }) ],
-      "named projects (RD-22)" => [ custom, save_body(custom, scope: { "kind" => "named_projects", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }) ],
-      "action kinds (RD-22)" => [ custom, save_body(custom, scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "pay" ] }) ],
+      "an unknown project (RC-44)" => [ custom, save_body(custom, scope: { "kind" => "named_projects", "project_ids" => [ SecureRandom.uuid ], "action_kinds" => nil }) ],
+      "an unknown action kind (RC-43)" => [ custom, save_body(custom, scope: { "kind" => "action_kinds", "project_ids" => nil, "action_kinds" => [ "sample_unknown_kind" ] }) ],
       "no on_fail on a gate (RC-10)" => [ custom, save_body(custom, on_fail: nil) ],
       "an on_fail on a policy" => [ provider, save_body(provider, on_fail: "block") ],
       "no route on a gate" => [ custom, save_body(custom, route: nil) ],
@@ -209,8 +210,8 @@ class RuleRecordsTest < ActiveSupport::TestCase
     assert_equal counts, [ RuleVersion.count, rule_events.size ]
   end
 
-  test "the approvals rule, whose instruction is still to be written, may be saved with none (milestone 5 writes it)" do
-    rule = scenario.with_shipped_rules.find { |row| row.key == "orchestrator_approves_actions" }
+  test "an older approval rule with a missing instruction may retain it on a scope edit" do
+    rule = scenario.rule(key: "orchestrator_approves_actions", origin: "shipped", instruction: nil)
 
     version = Records.save(owner_context, rule, save_body(rule, scope: { "kind" => "checker_decides", "project_ids" => nil, "action_kinds" => nil }))
 

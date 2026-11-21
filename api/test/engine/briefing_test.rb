@@ -149,19 +149,25 @@ class BriefingTest < ActiveSupport::TestCase
   test "the rules join the briefing with their versions: a model rule's instruction, an app rule's sentence (L470, RD-62)" do
     use_engine
     rules = @scenario.with_shipped_rules.to_h { |rule| [ rule.key, rule ] }
-    acting = %w[acceptance_criteria specific_details different_provider_review].map { |key| rules.fetch(key) }
+    keys = %w[acceptance_criteria specific_details ask_orchestrator_first different_provider_review
+      escalate_after_failed_reviews project_budget_pause orchestrator_approves_actions]
+    acting = rules.values_at(*keys)
     versions = acting.map { |rule| @scenario.current_version(rule) }
     briefing = B.for(@task, seat: @builder)
 
     assert_matches_component("Briefing", briefing)
     assert_equal versions.map(&:id), briefing["versions"]["rule_version_ids"]
-    assert_equal [
-      [ acting[0].id, versions[0].id, "acceptance_criteria", "Every task needs acceptance criteria",
-        "Every task needs at least 1 acceptance criterion besides the review.", false ],
-      [ acting[1].id, versions[1].id, "specific_details", "Every task needs specific details", versions[1].instruction, false ],
-      [ acting[2].id, versions[2].id, "different_provider_review", "A different provider reviews every task",
-        "An agent on a provider that built the task may not review it.", false ]
-    ], briefing["rules"].map { |rule| rule.values_at("rule_id", "rule_version_id", "key", "name", "instruction", "may_apply") }
+    assert_equal acting.zip(versions).map { |rule, version| [ rule.id, version.id, rule.key, version.name, false ] },
+      briefing["rules"].map { |rule| rule.values_at("rule_id", "rule_version_id", "key", "name", "may_apply") }
+    expected_instructions = [
+      "Every task needs at least 1 acceptance criterion besides the review.", versions[1].instruction,
+      "Agents ask the agent that checks tasks before they ask you.",
+      "An agent on a provider that built the task may not review it.",
+      "After 2 failed reviews a task goes to a stronger agent.",
+      "A project pauses when its reported spending reaches its budget, and a task when it reaches its own limit.",
+      versions[6].instruction
+    ]
+    assert expected_instructions == briefing["rules"].pluck("instruction")
     parts = acting.map { |rule| { "kind" => "rule", "id" => rule.id, "version" => 1 } }
     expected = Digest::SHA256.hexdigest(Leverage::Gating::CanonicalJson.dump([
       { "kind" => "brief", "id" => nil, "version" => 0 },

@@ -273,9 +273,6 @@ class RuleCallsTest < ActionDispatch::IntegrationTest
     assert_response_matches_contract
   end
 
-  # shipped_rules.json holds a placeholder object, {"to_be_written_in": ...},
-  # where milestone 5 writes the approvals rule's instruction; RuleVersion's
-  # instruction is text or null, and the Mac reads it as an optional string.
   test "list_rules answers the seven shipped rules as install_shipped_rules writes them, held to the contract" do
     install = Leverage::Timers.apply_workspace(@scenario.workspace, "install_shipped_rules", at: @scenario.database_now)
     assert install.completed?, install.inspect
@@ -287,12 +284,12 @@ class RuleCallsTest < ActionDispatch::IntegrationTest
     rules = response.parsed_body.fetch("rules").index_by { |item| item.dig("rule", "key") }
     assert_equal Leverage::Rules::Shipped.all.map(&:key), rules.keys
     approvals = rules.fetch("orchestrator_approves_actions")
-    assert_equal [ "model", nil, nil, false ],
-      [ approvals.dig("version", "checker"), approvals.dig("version", "instruction"), approvals["sentence"], approvals["acts"] ]
+    assert_equal [ "model", nil, true ], [ approvals.dig("version", "checker"), approvals["sentence"], approvals["acts"] ]
+    assert Leverage::Rules::Shipped.find("orchestrator_approves_actions").instruction == approvals.dig("version", "instruction")
     assert_kind_of String, rules.fetch("specific_details").dig("version", "instruction")
     rules.each_value do |item|
       instruction = item.dig("version", "instruction")
-      assert(instruction.nil? || instruction.is_a?(String), "#{item.dig("rule", "key")}: #{instruction.inspect}")
+      assert(instruction.nil? || instruction.is_a?(String), item.dig("rule", "key"))
     end
   end
 
