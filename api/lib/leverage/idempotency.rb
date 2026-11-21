@@ -88,7 +88,7 @@ module Leverage
     end
 
     def claim_material_available?(row, at)
-      return row.result&.key?("briefing") if %w[claim claim_review].include?(row.command)
+      return !work_claim_deleted?(row) if %w[claim claim_review].include?(row.command)
       return true unless row.command == "claim_job"
       return false unless row.result&.key?("input")
 
@@ -99,10 +99,15 @@ module Leverage
       Task.where(workspace_id: row.workspace_id, id: job.task_id, project_id: row.result.dig("input", "project_id")).exists?
     end
 
+    def work_claim_deleted?(row)
+      task_id = row.result&.dig("task", "id") || row.result&.dig("review", "task_id")
+      task_id && Task.where(workspace_id: row.workspace_id, id: task_id).where.not(content_deleted_at: nil).exists?
+    end
+
     def completed_claims(workspace_id)
       Command.where(workspace_id: workspace_id, caller_kind: "seat", outcome: "completed")
     end
 
-    private_class_method :claim_material_available?, :completed_claims
+    private_class_method :claim_material_available?, :work_claim_deleted?, :completed_claims
   end
 end
