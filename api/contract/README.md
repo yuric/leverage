@@ -719,19 +719,24 @@ in the completed outcome's result.
   They use the existing failed result with `reading_taken` and
   `timed_out`. Late results cannot replace the timed-out receipt.
 - A reorder writes `credential.order_changed` for each added credential
-  whose position changed, in the new order. A reorder or removal can
-  close credential holds, switch credentials, and open or resolve
-  Needs you items. A limit item also resolves if its hold has a reset
-  time to wait for again (CR-28, CR-30, CR-32).
+  whose rank among added credentials changed, in the new order. Reorder
+  and Remove can close credential holds, switch credentials, and resolve or open
+  Needs you items. Remove keeps unfinished `stop_seat` requests so the
+  helper can still stop the run. A limit item also resolves if its hold
+  has a reset time to wait for again (CR-28, CR-30, CR-32).
 - Reorder can resolve an item whose login is no longer a candidate.
   The hold keeps its original reason and subject.
-- A reading is stored without a credential event. To clear a limit, it
-  must be an `ok` reading observed after the limit was recorded. It needs
-  at least one limit figure for the refused window, and every such figure
-  must be below 100 percent used. When the report named no window, the
-  same test applies to all limit figures. This can end a wait with or
-  without a reset time. A passed Verify still clears a limit with no
-  reset time (CR-14).
+- Add and Rename trim surrounding whitespace and require a nonblank name
+  unique within its provider and kind. An unchanged name writes no event.
+- A reading at most 60 seconds ahead of the command time is stored
+  without a credential event. To clear a limit, an `ok` reading must
+  have been observed after the latest refusal in the current limit.
+  Every named window refused since the limit began needs at least one
+  limit figure, with every such figure below 100 percent used. When any
+  refusal named no window, or no refusal is recorded, the reading must
+  also include a limit figure and every limit figure must be below 100.
+  When this restores a candidate, either credential hold can close at
+  the command time. A passed Verify still clears an undated limit (CR-14).
 - Add accepts an API token with the fixed mask `••••••••` and a login
   with a null label. The database clears any older nonconforming labels
   before enforcing those two values. The helper's successful add result

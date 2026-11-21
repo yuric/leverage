@@ -62,8 +62,8 @@ class CredentialsHookIntegrationTest < ActiveSupport::TestCase
   test "a reading that restores a waiting builder's account can grant its action lease" do
     builder = scenario.seat(credential: @credential)
     task = scenario.finishing_task(builder: builder, holder: false, actions: [ { kind: "send", state: "approved" } ])
-    at = scenario.database_now
-    scenario.limit_credential(@credential, since: at - 1.minute, seat: builder)
+    scenario.limit_credential(@credential, since: scenario.database_now - 1.minute, seat: builder)
+    at = Event.where(subject_id: @credential.id, type: "credential.limit_reached").maximum(:effective_at) + 1.second
     params = { "id" => @credential.id, "credential_id" => @credential.id, "observed_at" => at.iso8601(6),
       "state" => "ok", "resets" => nil, "tool_version" => nil,
       "figures" => [ { "label" => "Made-up limit", "kind" => "limit", "window" => "five_hour", "percent_used" => 25,

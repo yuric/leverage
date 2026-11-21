@@ -20,7 +20,7 @@ module Leverage
       removed.where(credential_id: credential.id).update_all(credential_id: nil, updated_at: ctx.at)
       removed.where(run_credential_id: credential.id).update_all(run_credential_id: nil, updated_at: ctx.at)
       HelperRequest.where(workspace_id: ctx.workspace.id, credential_id: credential.id, state: SeatRuns::UNFINISHED)
-        .update_all(state: "failed", result: nil, finished_at: ctx.at, updated_at: ctx.at)
+        .where.not(kind: "stop_seat").update_all(state: "failed", result: nil, finished_at: ctx.at, updated_at: ctx.at)
     end
   end
 end

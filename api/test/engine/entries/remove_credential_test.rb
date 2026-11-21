@@ -111,7 +111,8 @@ class RemoveCredentialTest < ActiveSupport::TestCase
 
     assert_completed remove(credential.id)
 
-    assert_equal "queued", stop.reload.state
+    assert_equal stop, Leverage::Reads::HelperNext.call(scenario.workspace_id)
+    assert_equal "picked_up", T::MarkRead.helper_request(stop).state
     assert_completed helper_command("report_request_result", { "id" => stop.id, "result" => result_body(checks: []) })
     assert_equal "finished", stop.reload.state
   end

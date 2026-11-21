@@ -124,7 +124,8 @@ class ReadingCapacityTest < ActiveSupport::TestCase
 
   test "refusals before this limit began do not determine its windows" do
     report_limit(window: "weekly")
-    @limited_since = @scenario.database_now
+    prior = Event.where(subject_id: @credential.id, type: "credential.limit_reached").sole
+    @limited_since = prior.effective_at + Rational(1, 1_000_000)
     report_limit(window: "five_hour")
 
     assert shown?([ limit("five_hour", 1) ])
@@ -164,7 +165,7 @@ class ReadingCapacityTest < ActiveSupport::TestCase
       reset_at: reset_at)
   end
 
-  def shown?(figures, state: "ok", observed_at: @limited_since + 1.second, created_at: @limited_since + 2.seconds)
+  def shown?(figures, state: "ok", observed_at: @scenario.context.at + 1.second, created_at: observed_at + 1.second)
     reading = @scenario.reading(@credential, observed_at: observed_at, state: state, figures: figures, created_at: created_at)
     Leverage::ReadingCapacity.shown?(@credential, reading)
   end

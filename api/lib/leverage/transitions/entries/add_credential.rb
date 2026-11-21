@@ -32,7 +32,8 @@ module Leverage
 
           expected_label = @kind == "api_token" ? "••••••••" : nil
           raise Invalid, "The masked label does not match the credential kind" unless params["masked_label"] == expected_label
-          raise Invalid, "A credential needs a name" unless @name.is_a?(String) && !@name.empty?
+          @name = Credential.trim_name(@name)
+          raise Invalid, "A credential needs a name" if @name.blank?
           if (provider_name = SINGLE_LOGIN_PROVIDERS[@provider]) && existing_login?(ctx)
             raise Invalid, "A Mac holds one #{provider_name} login"
           end
@@ -41,7 +42,7 @@ module Leverage
 
         def refusals(ctx)
           causes = [ state_refusal(nil) ]
-          if Credential.exists?(workspace_id: ctx.workspace.id, kind: @kind, provider: @provider, name: @name)
+          if Credential.name_taken?(workspace_id: ctx.workspace.id, kind: @kind, provider: @provider, name: @name)
             causes << Refusal.new(code: "duplicate_name")
           end
           causes.compact

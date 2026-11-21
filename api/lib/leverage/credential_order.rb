@@ -35,13 +35,12 @@ module Leverage
 
       ordered = ids.map { |id| added.fetch(id) }
       pending = @credentials.where.not(id: ids).order(:position)
-      (ordered + pending).each_with_index.with_object([]) do |(credential, index), changed|
+      (ordered + pending).each_with_index do |credential, index|
         position = index + 1
-        next if credential.position == position
-
-        credential.update_columns(position: position)
-        changed << credential if added.key?(credential.id)
+        credential.update_columns(position: position) unless credential.position == position
       end
+      old_order = added.keys
+      ordered.each_with_index.filter_map { |credential, index| credential if credential.id != old_order[index] }
     end
   end
 end

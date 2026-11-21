@@ -12217,7 +12217,7 @@
               "null"
             ],
             "format": "date-time",
-            "description": "When a limit was reported for the credential; null when it is not limited. limited_until is when that limit ends, or null when the provider gave no reset time. Limited means limited_since is set and limited_until is null or later than now (milestone 3 plan HE-3)."
+            "description": "When the current or most recent limit began. Cleared when capacity is restored by a reading or Verify. limited_until is when that limit ends, or null when the provider gave no reset time. Limited means limited_since is set and limited_until is null or later than now (milestone 3 plan HE-3)."
           },
           "position": {
             "type": "integer",
@@ -12411,7 +12411,8 @@
           },
           "observed_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "The time the provider's usage was observed. report_reading accepts at most 60 seconds ahead of the server's command time."
           },
           "state": {
             "type": "string",
@@ -12797,7 +12798,8 @@
           },
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Add trims surrounding whitespace and requires a nonblank name unique within this provider and kind, including pending adds."
           },
           "masked_label": {
             "type": [
@@ -12896,7 +12898,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Rename trims surrounding whitespace and requires a nonblank name unique within this provider and kind, including pending adds. Keeping the same name completes without an event."
           }
         },
         "required": [

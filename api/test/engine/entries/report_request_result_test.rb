@@ -290,7 +290,7 @@ class ReportRequestResultTest < ActiveSupport::TestCase
     assert_equal before, request.reload.attributes
   end
 
-  %w[rejected not_signed_in unreachable timed_out].each do |failure|
+  %w[rejected not_signed_in unreachable timed_out no_answer token_store_unavailable provider_mismatch].each do |failure|
     test "a token Verify that reports #{failure} has the TK-3 outcome" do
       credential = @scenario.token_credential
       request = queue_request("verify", credential: credential, state: "picked_up",

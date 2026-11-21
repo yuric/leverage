@@ -70,7 +70,9 @@ class RenameCredentialTest < ActiveSupport::TestCase
     credential = scenario.credential
     original_name = credential.name
 
-    assert_empty events_written { assert_raises(T::Invalid) { rename(credential, " \t ") } }
+    [ "", " \t " ].each do |name|
+      assert_empty events_written { assert_raises(T::Invalid) { rename(credential, name) } }
+    end
     assert_equal original_name, credential.reload.name
   end
 

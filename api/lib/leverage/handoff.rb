@@ -37,8 +37,8 @@ module Leverage
     # Rule 5: marks the stopped credential and writes the first event,
     # credential.limit_reached or credential.signed_out, with the credential
     # as subject, on the work's task. A limit: limited_since is the
-    # command's time, and limited_until the reset time when it is after
-    # observed_at (HE-32) and no further after it than the window can last
+    # first report's time while that limit lasts. limited_until is the reset
+    # time when it is after observed_at (HE-32) and no further off than the window can last
     # (RESET_BOUNDS), never earlier than a later reset already stored
     # (HE-22); a limit with no reset time has none. A sign-out: state
     # signed_out. The seat's run is recorded as ended (HD-10).
@@ -57,7 +57,8 @@ module Leverage
       if kind == "limit"
         reset = reset_at if plausible_reset?(window, reset_at, observed_at)
         stored = credential.limited_until
-        credential.update!(limited_since: ctx.at, limited_until: reset && stored && stored > reset ? stored : reset)
+        since = credential.limited?(ctx.at) ? credential.limited_since : ctx.at
+        credential.update!(limited_since: since, limited_until: reset && stored && stored > reset ? stored : reset)
         first = ctx.emit("credential.limit_reached", task: on, subject: credential,
           payload: payload.merge(window: window, reset_at: reset&.utc&.iso8601(6)))
       else

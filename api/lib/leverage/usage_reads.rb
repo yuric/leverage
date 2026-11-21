@@ -12,13 +12,13 @@ module Leverage
     module_function
 
     def helper_alive?(at, workspace_id:)
-      Helper.where(workspace_id: workspace_id, last_reported_at: (at - HELPERS_REPORT_WITHIN)..).exists?
+      Helper.where(workspace_id: workspace_id, last_reported_at: (at - HELPERS_REPORT_WITHIN)..at).exists?
     end
 
     def due(at, workspace_id:)
       return [] unless helper_alive?(at, workspace_id: workspace_id)
 
-      recently_stored = CredentialReading.where(workspace_id: workspace_id, created_at: (at - READ_INTERVAL)..)
+      recently_stored = CredentialReading.where(workspace_id: workspace_id, created_at: (at - READ_INTERVAL)..at)
         .select(:credential_id)
       underway = unfinished(workspace_id).where.not(credential_id: nil).select(:credential_id)
       Credential.added.where(workspace_id: workspace_id, state: "active").where.not(id: recently_stored)

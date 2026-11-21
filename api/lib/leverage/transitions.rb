@@ -22,8 +22,8 @@ module Leverage
   #      then ReviewerEligibility.after_command looks at what it changed
   #      (milestone 4 plan SM-42). Finishing.after_command runs once after
   #      the outer command's outcome is decided, including refusals (AE-2).
-  #      Usage bookkeeping, an unchanged order and a receipt ignored after
-  #      Remove do not trigger either workspace check (CR-10, CR-14, CR-30, CR-31).
+  #      Usage bookkeeping, an unchanged name or order and a receipt
+  #      ignored after Remove do not trigger either workspace check (CR-10, CR-14, CR-30, CR-31).
   #   7. Idempotency.store writes the commands row, for a refusal too, so
   #      the timer events of step 3 and the rule checks of step 5 commit
   #      with it (test 7, RE-7). A command whose key now names a pending
@@ -135,6 +135,7 @@ module Leverage
         when "refresh_usage", "usage_read_due" then true
         when "report_request_result" then entry.usage_or_removed?
         when "report_reading" then !entry.capacity_restored
+        when "rename_credential" then ctx.events.none? { |event| event.type == "credential.renamed" }
         when "reorder_credentials" then ctx.events.none? { |event| event.type == "credential.order_changed" }
         else false
         end
