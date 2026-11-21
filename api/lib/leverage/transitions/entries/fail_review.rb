@@ -5,10 +5,12 @@ module Leverage
       # L127-L131; milestone 2 plan EN-9, EN-12, EN-13, EN-28). At
       # review.failed the review gets its verdict, the criteria it names and
       # its notes, and its lease ends (it keeps its reviewer, DB-20). The
-      # named criteria reopen; the review criterion stays open. No rule
-      # escalates in this milestone (EN-5), so the row is does_not_escalate,
-      # and task.reassigned is never written:
+      # named criteria reopen and the review criterion stays open. The
+      # review.failed policy can send the task to Ready with a higher
+      # minimum strength rank (AP-24, AP-25):
       #
+      #   escalates     task.reassigned records the new minimum and the
+      #                 cause of the wait in Ready.
       #   builder_free  the previous builder holds nothing (a lease of its
       #                 past its due time is ended first, by its timer), is
       #                 enabled, not paused and not removed, and, for a seat
@@ -24,11 +26,10 @@ module Leverage
       #   builder_busy  the task is Ready with no holder and no builder, and
       #                 review.failed names the cause of the wait (HE-35).
       #
-      # review.failed, criterion.reopened for each named criterion in the
-      # contract's order and cost.reported (EN-12) carry the round that
-      # failed (EN-28); then the round goes up by one. When it reaches
-      # maximum_rounds plus extra_rounds the task is held with
-      # rounds_exceeded (EN-13): Holds.open, after the normal move, writes
+      # The events carry the round that failed (EN-28). Then the round goes
+      # up by one. When the failed verdict count reaches maximum_rounds
+      # plus extra_rounds, the task is held with rounds_exceeded (AP-17).
+      # Holds.open, after the normal move, writes
       # hold.opened (by the app, caused by review.failed) and inbox.opened
       # (Past the round limit, its facts the round reached), and pauses the
       # fresh lease. A work call, blocked by a hold.
@@ -67,7 +68,7 @@ module Leverage
 
         def refusals(_ctx)
           codes = Eligibility.review_refusals(@review, @seat)
-          codes << state_refusal(@task.state, [ "does_not_escalate", @free ? "builder_free" : "builder_busy" ])
+          codes << state_refusal(@task.state, rework_guards)
           codes << "on_hold" if Eligibility.on_hold?(@task)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[
             Briefing.acknowledgement(@task, seat: @seat, review: @review)]
@@ -80,29 +81,37 @@ module Leverage
         end
 
         def perform(ctx)
+          minimum = escalation_rank(ctx)
+          row = state_row(@task.state, minimum ? [ "escalates" ] : rework_guards)
+          fresh = row.fetch("builder_lease") == "fresh"
           Leases.end_lease(ctx, @review)
           @review.update!(verdict: "failed", failed_criteria: @failed.map(&:id), notes: @params["notes"],
             failed_rule_check_id: @failed_rule_check_id)
           @failed.each { |criterion| criterion.update!(state: "open", passed_at: nil, passed_by_seat_id: nil) }
-          if @free
-            @task.update!(state: "working", holder_seat_id: @builder.id)
+          if fresh
+            @task.update!(state: row.fetch("to"), holder_seat_id: @builder.id)
             Leases.grant(ctx, @task)
           else
             Leases.end_lease(ctx, @task)
-            @task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil)
+            @task.update!(state: row.fetch("to"), holder_seat_id: nil, builder_seat_id: nil,
+              minimum_strength_rank: minimum || @task.minimum_strength_rank)
           end
 
+          wait_cause = Candidates.wait_cause(@task, ctx.at) unless fresh
           failed = ctx.emit("review.failed", task: @task, subject: @review,
             payload: { failed_criterion_ids: @failed.map(&:id), failed_rule_check_id: @failed_rule_check_id,
-                       lease_seat_id: @free ? @builder.id : nil,
-                       wait_cause: @free ? nil : Candidates.wait_cause(@task, ctx.at) })
+                       lease_seat_id: fresh ? @builder.id : nil, wait_cause: minimum ? nil : wait_cause })
           @failed.each { |criterion| ctx.emit("criterion.reopened", task: @task, subject: criterion, payload: {}) }
+          if minimum
+            ctx.emit("task.reassigned", task: @task, cause_id: failed.id,
+              payload: { minimum_strength_rank: minimum, wait_cause: wait_cause })
+          end
           Costs.report(ctx, task: @task, subject: @review,
             tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
-          place_fresh_lease(ctx, failed) if @free
+          place_fresh_lease(ctx, failed) if fresh
 
           reached = @task.round + 1
-          if reached >= ctx.workspace.maximum_rounds + @task.extra_rounds
+          if ReviewRounds.failed_count(@task) >= ctx.workspace.maximum_rounds + @task.extra_rounds
             Holds.open(ctx, task: @task, reason: "rounds_exceeded", cause_id: failed.id, facts: { round: reached })
           end
           @task.update!(round: reached)
@@ -110,6 +119,21 @@ module Leverage
         end
 
         private
+
+        def rework_guards
+          [ "does_not_escalate", @free ? "builder_free" : "builder_busy" ]
+        end
+
+        # Gate has already written the policy check, also when a failed
+        # before-done gate invokes this entry. Match the check for this verdict.
+        def escalation_rank(ctx)
+          escalates = ctx.events.any? do |event|
+            event.type == "check.finished" && event.task_id == @task.id && event.command_id == ctx.request.key &&
+              event.payload.values_at("hook", "subject_id", "result", "effect") ==
+                [ "review.failed", @review.id, "applied", "escalated" ]
+          end
+          @builder.strength_rank + 1 if escalates
+        end
 
         def load_builder(ctx)
           @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)
