@@ -60,7 +60,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
 
         case .limitHeading: "{account} is at its limit"
         case .limitBody:
-            "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues. If the agent's time on the task runs out first, the task goes back to waiting for any agent."
+            "{task} is waiting. {provider} did not say when {account} is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."
 
         case .sentBackHeading: "{task} was sent back {count} times"
         case .sentBackBody: "It is paused until you choose what happens next."

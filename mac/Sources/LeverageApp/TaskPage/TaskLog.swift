@@ -410,10 +410,10 @@ enum TaskLog {
         case .credentialAdded:
             return TaskPageCopy.logCredentialAdded.filled(["account": capitalised(context.account(context.credentialID(event)))])
         case .credentialRenamed:
-            return TaskPageCopy.logCredentialRenamed.filled(["account": capitalised(context.account(context.credentialID(event)))])
-        case .credentialRemoved:
-            return TaskPageCopy.logCredentialRemoved.filled(["account": capitalised(context.account(context.credentialID(event)))])
-        case .credentialOrderChanged: return TaskPageCopy.logCredentialOrderChanged.text
+            return TaskPageCopy.logCredentialRenamed.filled(["account": context.account(context.credentialID(event))])
+        case .credentialRemoved: return TaskPageCopy.logCredentialRemoved.text
+        case .credentialOrderChanged:
+            return TaskPageCopy.logCredentialOrderChanged.filled(["account": context.account(context.credentialID(event))])
         case .credentialLimitReached: return limitSentence(event, context)
         case .credentialSignedOut:
             let account = capitalised(context.account(context.credentialID(event)))

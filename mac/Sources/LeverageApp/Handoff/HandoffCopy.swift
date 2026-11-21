@@ -8,7 +8,7 @@ enum HandoffCopy: OwnerFacingCopy {
     case title, hint, rulesTitle, rulesHint
     case loading, empty
     case moveUp, moveDown, dropHint, orderChanged
-    case handsOffTo, handsOffToNobody
+    case handsOffTo, handsOffToNobody, notUsedForWorkYet
     case stateReady, stateWorking, stateSignedOut, stateLimit, stateLimitUntil
     case rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8
 
@@ -19,10 +19,14 @@ enum HandoffCopy: OwnerFacingCopy {
         case .rulesTitle: "Rules"
         case .rulesHint: "Run by code, the same way every time."
         case .loading: "Loading the order…"
-        case .empty: "No logins yet. Add one in Credentials, and it appears here."
-        case .moveUp, .moveDown, .dropHint, .orderChanged: ""
+        case .empty: "No accounts yet. Add one in Credentials, and it appears here."
+        case .moveUp: "Move up"
+        case .moveDown: "Move down"
+        case .dropHint: "Drop to make {account} number {number}."
+        case .orderChanged: "The list changed. Try again."
         case .handsOffTo: "Hands off to {account}"
         case .handsOffToNobody: "Hands off to nobody"
+        case .notUsedForWorkYet: "Not used for work yet"
         case .stateReady: "Ready"
         case .stateWorking: "Working"
         case .stateSignedOut: "Signed out"
