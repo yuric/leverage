@@ -178,6 +178,16 @@ class StepTrackerTest < ActiveSupport::TestCase
     end
   end
 
+  {
+    "03-stop-rework-pass-approve-done" => "action check, stopped action, rework, wait_builder and finish",
+    "04-two-actions-custom-rule" => "action checks, builder busy, and finish moving to the next action",
+    "22-finishing-edges" => "holds, reoffered leases, waives, and action expiry"
+  }.each do |name, what|
+    test "trace #{name[0, 2]}'s events yield exactly its steps: #{what}" do
+      feed(name)
+    end
+  end
+
   test "trace 18: a waiting command ended from outside closes check where the transition ends, with no step between" do
     feed("18-claim-gate-done-gate-and-ends") do |number, ids|
       next unless [ 11, 36, 46, 51 ].include?(number)
@@ -601,12 +611,17 @@ class StepTrackerTest < ActiveSupport::TestCase
     assert_equal [ "rule", rule.id ], open_step(task).values_at(:cause_kind, :cause_rule_id)
   end
 
-  test "an event milestone 2 cannot write raises instead of guessing a step" do
+  test "escalation opens the Ready wait at task.reassigned" do
     @scenario = Scenario.new
-    task = @scenario.task(state: "ready")
-    assert_raises(Leverage::Steps::Unsupported) do
-      in_context(key: "k-later") { |ctx| ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil }) }
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task)
+    reassigned = in_context(key: "k-escalate", caller: [ "seat", review.reviewer_seat_id ]) do |ctx|
+      ctx.emit("review.failed", task: task, subject: review,
+        payload: { failed_criterion_ids: [], failed_rule_check_id: nil, lease_seat_id: nil, wait_cause: nil })
+      ctx.emit("task.reassigned", task: task, payload: { minimum_strength_rank: 2, wait_cause: nil })
     end
+
+    assert_equal [ "wait_ready", 1, reassigned.id ], open_step(task).values_at(:kind, :round, :opening_event_id)
   end
 
   private

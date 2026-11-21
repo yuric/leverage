@@ -52,6 +52,21 @@ class PassReviewTest < ActiveSupport::TestCase
       "notes" => "Every criterion holds.", "tokens" => 1200, "spend" => 0.42)
   end
 
+  test "a passing review requests each contracted action and asks the owner when the rule is off" do
+    actions = %w[send publish].each_with_index.map do |kind, index|
+      Action.create!(workspace_id: @task.workspace_id, task_id: @task.id, kind: kind, position: index + 1,
+        description: "Sample action")
+    end
+    Leverage::Gating.implementation = Leverage::Gating::StandIn.new
+    acknowledge
+    assert_equal :completed, give_pass.outcome
+
+    assert_equal "finishing", @task.reload.state
+    assert_equal actions.map(&:id), written.select { |event| event.type == "action.requested" }.map(&:subject_id)
+    assert_equal %w[requested requested], actions.map { |action| action.reload.state }
+    assert_equal actions.map(&:id).sort, Hold.where(task_id: @task.id, reason: "owner_approval").pluck(:action_id).sort
+  end
+
   test "passes: Done, the review criterion passed, cost reported" do
     acknowledge
     gating = Recording.new

@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "call_spy"
 require_relative "owner_controls_support"
 
 # Edit contract (PRD Lifecycle L81, L82, Contract edits L205; milestone 3
@@ -13,6 +14,7 @@ require_relative "owner_controls_support"
 # round is kept. Imaginarium, Finishing, Done and Cancelled are
 # invalid_state.
 class EditContractTest < ActiveSupport::TestCase
+  include CallSpy
   include OwnerControlsSupport
 
   FIELDS = %w[contract_version minimum_strength_rank added_criterion_ids reset_criterion_ids removed_criterion_ids
@@ -211,16 +213,55 @@ class EditContractTest < ActiveSupport::TestCase
 
   test "Finishing is invalid_state (L205)" do
     task = scenario.finishing_task(builder: @builder)
-    outcome, events = edit(task)
+    outcome, events = edit(task, actions: [ { "kind" => "publish", "description" => "Publish the prices." } ])
 
     assert_refused("invalid_state", outcome)
     assert_empty events
   end
 
-  test "an outward action is 422 invalid (SC-3)" do
+  test "editing the contract records its ordered outward actions" do
     task = scenario.task(state: "backlog")
-    error = assert_raises(T::Invalid) { owner_run("edit_contract", body(task, actions: [ { "text" => "Made-up." } ])) }
-    assert_match(/Outward actions/, error.message)
+    outcome, events = edit(task, actions: [ { "kind" => "send", "description" => "Send the update." },
+                                           { "kind" => "publish", "description" => "Publish the prices." } ])
+
+    assert_completed(outcome)
+    actions = Action.where(task_id: task.id).order(:position)
+    assert_equal [ [ 1, "send", "contracted" ], [ 2, "publish", "contracted" ] ], actions.pluck(:position, :kind, :state)
+    assert_equal actions.map(&:id), events.sole.payload.fetch("added_action_ids")
+    assert_empty events.sole.payload.fetch("removed_action_ids")
+  end
+
+  test "editing the contract records the identities of replaced outward actions" do
+    task = scenario.task(state: "backlog")
+    unchanged = { "kind" => "send", "description" => "Send the update." }
+    original = { "kind" => "publish", "description" => "Publish all prices." }
+    assert_completed(edit(task, actions: [ unchanged, original ]).first)
+    keep, remove = Action.where(task_id: task.id).order(:position).to_a
+
+    outcome, events = edit(task, actions: [ unchanged, original.merge("description" => "Publish changed prices.") ])
+
+    assert_completed(outcome)
+    active = Action.where(task_id: task.id, state: "contracted").order(:position).to_a
+    assert_equal [ [ 1, "Send the update." ], [ 2, "Publish changed prices." ] ],
+      active.map { |action| [ action.position, action.description ] }
+    assert_equal keep.id, active.first.id
+    refute_equal remove.id, active.last.id
+    assert_equal [ active.last.id ], events.sole.payload.fetch("added_action_ids")
+    assert_equal [ remove.id ], events.sole.payload.fetch("removed_action_ids")
+  end
+
+  test "editing the contract applies the saved cap through Costs (AE-12)" do
+    task = scenario.task(state: "backlog")
+    task.update!(budget_cap: 5, spent: 6)
+    hold = open_hold(task, "budget")
+    outcome = nil
+    calls = spy_on(Leverage::Costs, :cap_changed) do
+      outcome, = edit(task, budget_cap: 4)
+    end
+
+    assert_completed(outcome)
+    assert_equal [ [ task.id, BigDecimal("4") ] ], calls.map { |call| [ call.arguments.last.id, call.arguments.last.budget_cap ] }
+    assert_nil hold.reload.closed_at
   end
 
   test "criteria that do not end with the one review are 422 invalid" do

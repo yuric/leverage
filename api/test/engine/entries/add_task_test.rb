@@ -1,13 +1,13 @@
 require "test_helper"
+require_relative "call_spy"
 
 # Add task (PRD Lifecycle L77; milestone 2 plan SC-3, SC-4, SC-8): the owner
 # adds a task to the Backlog, or to the Imaginarium now that Promote exists
-# (milestone 3 plan HE-24), and task.created is written. Criteria and
-# outward actions are 422 invalid; a project is accepted when it is a row of
-# the workspace (milestone 4 plan RD-52: the golden traces' tasks name the
-# project their setup holds), and 422 invalid otherwise. No command makes a
-# project until milestone 5.
+# (milestone 3 plan HE-24), and task.created is written. Complete contract
+# writes criteria. The task can name a project in the workspace (RD-52).
 class AddTaskTest < ActiveSupport::TestCase
+  include CallSpy
+
   T = Leverage::Transitions
 
   setup do
@@ -82,12 +82,30 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
   end
 
-  test "criteria and outward actions are 422 invalid (SC-3)" do
-    [ body(criteria: [ { "text" => "Made-up.", "kind" => "build" } ]),
-      body(actions: [ { "kind" => "publish", "description" => "Made-up." } ]) ].each do |params|
-      assert_raises(T::Invalid) { apply(params) }
-    end
+  test "criteria are 422 invalid until Complete contract" do
+    assert_raises(T::Invalid) { apply(body(criteria: [ { "text" => "Made-up.", "kind" => "build" } ])) }
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
+  end
+
+  test "adds contracted outward actions in the order given" do
+    outcome = apply(body(actions: [ { "kind" => "send", "description" => "Send the update." },
+                                   { "kind" => "publish", "description" => "Publish the prices." } ]))
+
+    assert outcome.completed?
+    task = Task.find(outcome.result.fetch("task_id"))
+    assert_equal [ [ 1, "send", "Send the update.", "contracted" ], [ 2, "publish", "Publish the prices.", "contracted" ] ],
+      Action.where(task_id: task.id).order(:position).pluck(:position, :kind, :description, :state)
+  end
+
+  test "applies the project's pause to a newly created task" do
+    project = @scenario.project(paused: true)
+    outcome = nil
+    calls = spy_on(Leverage::Projects, :hold_if_paused) do
+      outcome = apply(body(project_id: project.id))
+    end
+
+    assert outcome.completed?
+    assert_equal [ outcome.result.fetch("task_id") ], calls.map { |call| call.arguments.last.id }
   end
 
   test "empty criteria and actions are accepted" do

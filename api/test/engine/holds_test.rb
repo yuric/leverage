@@ -34,6 +34,22 @@ class HoldsTest < ActiveSupport::TestCase
 
   def left(record) = record.reload.lease_time_left_while_paused&.to_i
 
+  test "a stopped action offers override only for a failed check and rework only before a start" do
+    task = working_task
+    ctx = context
+    action_id = SecureRandom.uuid
+    facts = { action_id: action_id, rule_check_id: nil, any_action_started: true }
+    hold = H.open(ctx, task: task, reason: "action_stopped", facts: facts)
+    item = InboxItem.find_by!(hold_id: hold.id)
+
+    assert_equal facts.stringify_keys, item.facts
+    assert_equal %w[waive cancel], item.choices
+
+    hold = H.open(ctx, task: task, reason: "action_stopped",
+      facts: facts.merge(rule_check_id: SecureRandom.uuid, any_action_started: false))
+    assert_equal %w[waive return_for_rework cancel override_once], InboxItem.find_by!(hold_id: hold.id).choices
+  end
+
   test "open writes the hold, hold.opened, the Needs you item and inbox.opened caused by it" do
     task = working_task
     ctx = context
