@@ -11,6 +11,8 @@ import Darwin
 /// arguments in `state/args-<n>`, writes one line to standard error, and
 /// then exits with line n of `state/codes`, or, past the end of that file,
 /// runs until it is asked to stop.
+/// It can record lines from standard input in `state/input-<n>` or close
+/// its input while leaving the process running.
 ///
 /// Asked to stop (SIGTERM), run n ends at once, unless the test holds it
 /// (`holdOnStop(run:)`): it then ends only once the test lets it go
@@ -23,6 +25,10 @@ import Darwin
 /// folder is removed. The folders a crashed test run could not remove are
 /// removed by the next run (`removeFoldersOfEndedTestRuns()`).
 final class FakeHelperProgram: @unchecked Sendable {
+    enum InputMode: String {
+        case ignored, recorded, closed
+    }
+
     static let folderPrefix = "leverage-helper-supervisor"
 
     let folder: TemporaryFolder
@@ -30,7 +36,7 @@ final class FakeHelperProgram: @unchecked Sendable {
     var state: URL { folder.url.appendingPathComponent("state") }
     var support: URL { folder.url.appendingPathComponent("support") }
 
-    init(exitCodes: [Int32]) throws {
+    init(exitCodes: [Int32], input: InputMode = .ignored) throws {
         _ = Self.foldersOfEndedTestRunsRemoved
         folder = try TemporaryFolder(prefix: Self.folderPrefix)
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
@@ -50,13 +56,21 @@ final class FakeHelperProgram: @unchecked Sendable {
             echo "$n" > "$dir/count"
             env | grep -v -E '^(PWD|OLDPWD|SHLVL|_)=' | sort > "$dir/env-$n"
             printf '%s\\n' "$0" "$@" > "$dir/args-$n"
+            if [ '\(input.rawValue)' = closed ]; then exec 0<&-; fi
             echo "fake helper run $n" >&2
             code=$(sed -n "${n}p" "$dir/codes")
             if [ -n "$code" ]; then exit "$code"; fi
             # The parent's process id stops answering once it is gone. A run
             # whose parent was gone before it began has 1 (launchd) as its
             # PPID, which refuses kill -0, so it ends at once too.
-            while kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
+            while kill -0 "$PPID" 2>/dev/null; do
+                # A bounded read lets the fake notice its parent is gone.
+                if [ '\(input.rawValue)' = recorded ] && IFS= read -r -t 1 line; then
+                    printf '%s\\n' "$line" >> "$dir/input-$n"
+                else
+                    sleep 0.05
+                fi
+            done
             echo "fake helper run $n: the process that started it is gone" >&2
             """)
     }
@@ -86,6 +100,11 @@ final class FakeHelperProgram: @unchecked Sendable {
 
     func arguments(ofRun n: Int) -> String {
         (try? String(contentsOf: state.appendingPathComponent("args-\(n)"), encoding: .utf8)) ?? ""
+    }
+
+    func inputLines(ofRun n: Int) -> [Data] {
+        guard let data = try? Data(contentsOf: state.appendingPathComponent("input-\(n)")) else { return [] }
+        return data.split(separator: 0x0A, omittingEmptySubsequences: false).dropLast().map { Data($0) }
     }
 
     /// What every run wrote to the helper's log.

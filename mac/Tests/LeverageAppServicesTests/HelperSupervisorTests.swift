@@ -41,17 +41,21 @@ private let parentEnvironment = [
 ]
 
 private let apiURL = URL(string: "http://127.0.0.1:47130")!
+private let credentialTokenMarker = "LVRG-" + "TOKEN-"
 
 @Suite("HelperSupervisor")
 struct HelperSupervisorTests {
     private func supervisor(
-        _ fake: FakeHelperProgram, now: @escaping @Sendable () -> Date = { Date() }
+        _ fake: FakeHelperProgram,
+        environment: [String: String] = parentEnvironment,
+        now: @escaping @Sendable () -> Date = { Date() },
+        log: Log = Log(component: "test", write: { _ in })
     ) -> HelperSupervisor {
         var configuration = HelperSupervisor.Configuration(
-            helperProgram: fake.program, supportFolder: fake.support, environment: parentEnvironment)
+            helperProgram: fake.program, supportFolder: fake.support, environment: environment)
         configuration.restartDelay = .zero
         configuration.stopGracePeriod = Patience.scaled(.seconds(5))
-        return HelperSupervisor(configuration: configuration, now: now, log: Log(component: "test", write: { _ in }))
+        return HelperSupervisor(configuration: configuration, now: now, log: log)
     }
 
     @Test("issues the token with the helper's name, and starts the helper with it in its environment only")
@@ -85,6 +89,179 @@ struct HelperSupervisorTests {
         let files = textOfEveryFile(under: fake.support)
         #expect(files.values.allSatisfy { !$0.contains("lvh_made-up") })
         #expect(files["logs/helper.log"]?.contains("fake helper run 1") == true)
+        await fake.expectNothingLeft()
+    }
+
+    @Test("a token goes through the shell launcher as one JSON line, outside arguments, environment and logs")
+    func sendsTokenOnStandardInputOnly() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [], input: .recorded)
+        let entries = Locked<[String]>([])
+        let helper = supervisor(fake, log: Log(component: "test", write: { entry in
+            entries.update { $0.append(entry) }
+        }))
+        let id = UUID()
+        let token = "\(credentialTokenMarker)facedeadbeef\r\nmade-up tail"
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        #expect(await eventually { fake.log.contains("fake helper run 1") })
+        do {
+            try await helper.send(.token(credentialID: id, token: token))
+            #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
+        } catch {
+            Issue.record("send failed while the helper was running: \(error)")
+        }
+        await helper.stop()
+
+        let lines = fake.inputLines(ofRun: 1)
+        #expect(lines.count == 1)
+        let sent = lines.first.flatMap { try? LocalHelperMessage.decodeLine($0) }
+        if case .token(let receivedID, let receivedToken) = sent {
+            #expect(receivedID == id)
+            let tokenUnchanged = receivedToken == token
+            #expect(tokenUnchanged)
+        } else {
+            Issue.record("the helper did not receive a token message")
+        }
+        let arguments = fake.arguments(ofRun: 1)
+        let environment = fake.environment(ofRun: 1)
+        #expect(!arguments.isEmpty)
+        #expect(environment["HOME"] != nil)
+        #expect(fake.log.contains("fake helper run 1"))
+        #expect(entries.value.contains { $0.contains("the helper started") })
+        let launchedAndLogged = [arguments, fake.log] + Array(environment.values) + entries.value
+        let leakedToken = launchedAndLogged.contains { $0.contains(credentialTokenMarker) }
+        #expect(!leakedToken)
+        await fake.expectNothingLeft()
+    }
+
+    @Test("two sends arrive as separate lines in send order")
+    func keepsSendOrder() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [], input: .recorded)
+        let helper = supervisor(fake)
+        let first = UUID()
+        let second = UUID()
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        do {
+            try await helper.send(.forget(credentialID: first))
+            try await helper.send(.forget(credentialID: second))
+            #expect(await eventually { fake.inputLines(ofRun: 1).count == 2 })
+        } catch {
+            Issue.record("send failed while the helper was running: \(error)")
+        }
+        await helper.stop()
+        let lines = fake.inputLines(ofRun: 1)
+        #expect(lines.count == 2)
+        let ids = lines.compactMap { line -> UUID? in
+            guard case .forget(let id) = try? LocalHelperMessage.decodeLine(line) else { return nil }
+            return id
+        }
+        #expect(ids == [first, second])
+        await fake.expectNothingLeft()
+    }
+
+    @Test("sending without a running helper throws before start and after stop")
+    func refusesSendWithoutHelper() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        let helper = supervisor(fake)
+        let message = LocalHelperMessage.forget(credentialID: UUID())
+
+        await #expect(throws: HelperSendError.notRunning) { try await helper.send(message) }
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        await helper.stop()
+        await #expect(throws: HelperSendError.notRunning) { try await helper.send(message) }
+        await fake.expectNothingLeft()
+    }
+
+    @Test("sending to closed standard input throws and leaves the app and helper running")
+    func refusesSendAfterChildClosesInput() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [], input: .closed)
+        let helper = supervisor(fake)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        #expect(await eventually { fake.log.contains("fake helper run 1") })
+        await #expect(throws: HelperSendError.notRunning) {
+            try await helper.send(.forget(credentialID: UUID()))
+        }
+        #expect(fake.isRunning(run: 1))
+        await helper.stop()
+        await fake.expectNothingLeft()
+    }
+
+    @Test("a cancelled caller does not send a message or stop the shared helper")
+    func cancelledSendLeavesHelperRunning() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [], input: .recorded)
+        let helper = supervisor(fake)
+        let id = UUID()
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        #expect(await eventually { fake.log.contains("fake helper run 1") })
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await helper.send(.forget(credentialID: UUID()))
+        }
+        await #expect(throws: CancellationError.self) { try await cancelled.value }
+        #expect(fake.isRunning(run: 1))
+        do {
+            try await helper.send(.forget(credentialID: id))
+            #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
+        } catch {
+            Issue.record("send failed after the cancelled call: \(error)")
+        }
+        await helper.stop()
+        #expect(fake.runs == 1)
+        let lines = fake.inputLines(ofRun: 1)
+        #expect(lines.count == 1)
+        if case .forget(let received) = lines.first.flatMap({ try? LocalHelperMessage.decodeLine($0) }) {
+            #expect(received == id)
+        } else {
+            Issue.record("the helper did not receive the later forget message")
+        }
+        await fake.expectNothingLeft()
+    }
+
+    @Test("the token store setting reaches the helper and the provider API override stays out")
+    func passesOnlyAllowedTokenConfiguration() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [])
+        var environment = parentEnvironment
+        environment["LEVERAGE_TOKEN_STORE"] = "memory"
+        environment["LEVERAGE_PROVIDER_API_BASE"] = "http://127.0.0.1:47131"
+        let helper = supervisor(fake, environment: environment)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        #expect(await eventually { fake.log.contains("fake helper run 1") })
+        let launched = fake.environment(ofRun: 1)
+        #expect(launched["HOME"] != nil)
+        #expect(launched["LEVERAGE_TOKEN_STORE"] == "memory")
+        #expect(launched["LEVERAGE_PROVIDER_API_BASE"] == nil)
+        await helper.stop()
+        await fake.expectNothingLeft()
+    }
+
+    @Test("a send after exit code 3 goes to the replacement helper")
+    func sendsToReplacement() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [3], input: .recorded)
+        let helper = supervisor(fake)
+        let id = UUID()
+
+        _ = await helper.start(apiBaseURL: apiURL, issuer: issuer([]))
+        #expect(await eventually { fake.runs == 2 && fake.log.contains("fake helper run 2") })
+        #expect(await helper.state() == .running)
+        do {
+            try await helper.send(.forget(credentialID: id))
+            #expect(await eventually { fake.inputLines(ofRun: 2).count == 1 })
+        } catch {
+            Issue.record("send failed after the helper restarted: \(error)")
+        }
+        await helper.stop()
+        #expect(fake.inputLines(ofRun: 1).isEmpty)
+        let lines = fake.inputLines(ofRun: 2)
+        #expect(lines.count == 1)
+        if case .forget(let received) = lines.first.flatMap({ try? LocalHelperMessage.decodeLine($0) }) {
+            #expect(received == id)
+        } else {
+            Issue.record("the replacement helper did not receive a forget message")
+        }
         await fake.expectNothingLeft()
     }
 
