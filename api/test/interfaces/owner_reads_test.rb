@@ -363,6 +363,52 @@ class OwnerReadsTest < CommittingTestCase
     [ page.slice(*WAITING), ready_card(task).slice(*WAITING) ]
   end
 
+  def reorder_credentials(*credentials)
+    post "/v1/owner/credentials/order", params: { order: credentials.map(&:id) }.to_json,
+      headers: { "Authorization" => "Bearer #{@owner_token}", "Idempotency-Key" => SecureRandom.uuid,
+                 "Content-Type" => "application/json" }
+    assert_response :ok, response.body
+    assert_response_matches_contract
+  end
+
+  test "both reads show the earliest reset that becomes eligible after reorder" do
+    soon = scenario.credential
+    later = scenario.credential
+    own = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    reset = scenario.database_now.change(usec: 0) + 1800
+    scenario.limit_credential(soon, reset_at: reset)
+    scenario.limit_credential(later, reset_at: reset + 1800)
+    scenario.limit_credential(own)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, facts: { credential_id: own.id })
+    step = TaskStep.where(task_id: task.id, closed_at: nil).sole
+    before = [ hold.attributes, step.attributes ]
+    assert_equal [{ "waiting_for_credential_id" => own.id, "waiting_until" => nil }] * 2, page_and_card(task)
+
+    reorder_credentials(own, later, soon)
+
+    assert_equal [{ "waiting_for_credential_id" => soon.id, "waiting_until" => reset.utc.iso8601(6) }] * 2, page_and_card(task)
+    assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
+  end
+
+  test "both reads drop the reset that becomes ineligible after reorder" do
+    own = scenario.credential
+    dated = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    reset = scenario.database_now.change(usec: 0) + 1800
+    scenario.limit_credential(own)
+    scenario.limit_credential(dated, reset_at: reset)
+    hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
+    step = TaskStep.where(task_id: task.id, closed_at: nil).sole
+    before = [ hold.attributes, step.attributes ]
+    assert_equal [{ "waiting_for_credential_id" => dated.id, "waiting_until" => reset.utc.iso8601(6) }] * 2, page_and_card(task)
+
+    reorder_credentials(dated, own)
+
+    assert_equal [{ "waiting_for_credential_id" => own.id, "waiting_until" => nil }] * 2, page_and_card(task)
+    assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
+  end
+
   test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do
     credential = scenario.credential(name: "Signed-out account")
     scenario.seat(role: "builder", credential: credential)
