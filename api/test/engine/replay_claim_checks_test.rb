@@ -12,7 +12,38 @@ require_relative "entries/jobs_support"
 # test found replay clearing the holder at the first failure while the
 # table kept it (milestone 4 WP20, the whole suite with SEED=44444).
 class ReplayClaimChecksTest < ActiveSupport::TestCase
-  test "walk 44727: a claim whose first check fails while its second runs replays as the table holds it" do
+  include JobsSupport
+
+  test "a failed blocking check leaves the provisional holder until the other blocking check finishes" do
+    use_scenario
+    blocking = model_rule(hook: "task.before_claim", name: "Made-up first blocking rule")
+    model_rule(hook: "task.before_claim", name: "Made-up second blocking rule")
+    orchestrators = Array.new(2) { scenario.orchestrator(credential: scenario.credential(provider: "codex", model: nil), model: "m") }
+    builder = scenario.seat(role: "builder", credential: scenario.credential)
+    task = scenario.task(state: "ready")
+    start = scenario.workspace.reload.last_seq
+
+    assert_equal :pending, seat_command(builder, "claim").outcome
+    jobs = orchestrators.to_h { |seat| [ seat, Job.find(assert_completed(claim_job(seat)).result.fetch("job_id")) ] }
+    first, second = jobs.partition { |_, job| RuleCheck.find(job.target_id).rule_id == blocking.id }
+    assert_equal 1, first.size
+    assert_equal 1, second.size
+    first_seat, first_job = first.first
+    second_seat, second_job = second.first
+
+    assert_completed(submit_result(first_seat, first_job, { "result" => "failed", "reason" => "A made-up reason." }))
+    assert_equal builder.id, task.reload.holder_seat_id
+    assert_equal "claimed", second_job.reload.state
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: start)
+
+    assert_completed(submit_result(second_seat, second_job, { "result" => "passed", "reason" => "A made-up reason." }))
+    assert_nil task.reload.holder_seat_id
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: start)
+  end
+
+  test "walk 44727 is replayable and passes the log audit" do
     walk = Walk.new(seed: 44_727, steps: 100).run
     assert_empty Leverage::Replay.diff(walk.workspace_id), walk.to_s
     assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
