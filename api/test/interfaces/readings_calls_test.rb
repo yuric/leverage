@@ -66,6 +66,17 @@ class ReadingsCallsTest < ActionDispatch::IntegrationTest
     assert_transport_error :not_found, "not_found"
   end
 
+  test "the entry receives both ids so it can reject a reading for a different credential" do
+    other_id = SecureRandom.uuid
+    @stand_in.script("report_reading") { raise T::Invalid, "Reading credential does not match the path" }
+    send_reading(reading, credential_id: other_id)
+
+    assert_response :unprocessable_content
+    assert_response_matches_contract
+    assert_equal "invalid", response.parsed_body.dig("error", "code")
+    assert_equal [ other_id, @credential_id ], @stand_in.requests.sole.params.values_at("id", "credential_id")
+  end
+
   private
 
   def path(id = @credential_id) = "/v1/helper/credentials/#{id}/readings"
