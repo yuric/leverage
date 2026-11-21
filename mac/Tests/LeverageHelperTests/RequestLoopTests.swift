@@ -316,6 +316,46 @@ struct RequestLoopTests {
 
     // MARK: The helper's own dispatch
 
+    @Test("stop_seat still stops a registered run after its credential is forgotten")
+    func stopsSeatAfterCredentialIsForgotten() async throws {
+        let rig = try HelperRig()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
+        let seat = UUID()
+        let credential = UUID()
+        _ = try runtime.cleanup.createFolder(for: credential)
+        let start = helperRequest(
+            .startSeat, seat: seat, credential: credential, params: .init(provider: .claude, role: .builder))
+        let started = await runtime.handle(start)
+        #expect(started?.outcome == .finished)
+        #expect(await runtime.launcher.runningSeats() == [seat])
+
+        await runtime.cleanup.forget(credential)
+        let result = await runtime.handle(helperRequest(.stopSeat, seat: seat, credential: credential))
+        let remaining = await runtime.launcher.runningSeats()
+        let stopped = rig.calls(.reportRunStopped)
+        await runtime.shutdown()
+
+        #expect(result?.outcome == .finished)
+        #expect(remaining.isEmpty)
+        #expect(stopped.map { $0.path["id"] } == [seat.contractString])
+    }
+
+    @Test("forget does not cancel a stop_seat already in flight with that credential ID")
+    func forgettingCredentialKeepsInFlightStop() async {
+        let running = RunningRequests()
+        let gate = Gate()
+        let credential = UUID()
+        running.start(helperRequest(.stopSeat, seat: UUID(), credential: credential)) {
+            await gate.wait()
+        }
+
+        let workToCancel = running.forget(credential)
+        gate.release()
+        await running.cancelAll()
+
+        #expect(workToCancel.isEmpty)
+    }
+
     @Test("the helper dispatches read_usage and reports an unavailable reading for a login with no reader")
     func dispatchesUsage() async throws {
         let rig = try HelperRig()

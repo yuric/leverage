@@ -73,7 +73,7 @@ struct CredentialCleanupTests {
         #expect(try queue.pending().isEmpty)
     }
 
-    @Test("confirmed removal preserves a linked account, linked root, mismatched marker and shared legacy folder")
+    @Test("confirmed removal preserves unowned directories and acknowledges cleanup after deleting the token")
     func preservesUnownedDirectories() async throws {
         for kind in ["account link", "root link", "wrong marker", "shared folder", "shared root"] {
             let rig = try HelperRig()
@@ -101,12 +101,38 @@ struct CredentialCleanupTests {
             default:
                 try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: rig.folders.root.path)
             }
-            let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: MemoryTokenVault(),
+            let vault = MemoryTokenVault()
+            try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000707"), credentialID: id)
+            let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
                                             requests: RunningRequests(), log: quietLog)
             await cleanup.forget(id)
             #expect(files.fileExists(atPath: target.path), "\(kind)")
-            #expect(files.fileExists(atPath: queue.appendingPathComponent(id.contractString).path), "\(kind)")
+            #expect(try vault.read(credentialID: id) == nil, "\(kind)")
+            #expect(!files.fileExists(atPath: queue.appendingPathComponent(id.contractString).path), "\(kind)")
         }
+    }
+
+    @Test("an unowned folder does not acknowledge a failed vault deletion")
+    func retriesFailedVaultDeletionWithUnownedFolder() async throws {
+        let rig = try HelperRig()
+        let id = UUID()
+        let files = FileManager.default
+        let queue = PendingCredentialRemovals(supportFolder: rig.support)
+        try queue.insert(id)
+        let account = try rig.folders.createFresh(for: id)
+        try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: account.path)
+        func helper(_ vault: any TokenVault) -> CredentialCleanup {
+            CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
+                              requests: RunningRequests(), log: quietLog)
+        }
+
+        await helper(LockedTestVault()).forget(id)
+        #expect(try queue.pending() == [id])
+        #expect(files.fileExists(atPath: account.path))
+
+        await helper(MemoryTokenVault()).forget(id)
+        #expect(try queue.pending().isEmpty)
+        #expect(files.fileExists(atPath: account.path))
     }
 
     @Test("forget lets an active sign-in child finish with its account folder still present")

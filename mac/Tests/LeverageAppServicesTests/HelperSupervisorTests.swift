@@ -189,6 +189,39 @@ struct HelperSupervisorTests {
         await fake.expectNothingLeft()
     }
 
+    @Test("forget reaches the running helper even if the removal cannot be recorded")
+    func sendsForgetWhenRemovalRecordFails() async throws {
+        let fake = try FakeHelperProgram(exitCodes: [], input: .recorded)
+        let entries = Locked<[String]>([])
+        let helper = supervisor(fake, log: Log(component: "test", write: { entry in
+            entries.update { $0.append(entry) }
+        }))
+        let id = UUID()
+        let queue = fake.support.appendingPathComponent("pending-removals")
+        try FileManager.default.createDirectory(at: fake.support, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        try Data().write(to: queue)
+
+        #expect(await helper.start(apiBaseURL: apiURL, issuer: issuer([])) == .running)
+        do {
+            try await helper.send(.forget(credentialID: id))
+            #expect(await eventually { fake.inputLines(ofRun: 1).count == 1 })
+        } catch {
+            Issue.record("could not send forget to the running helper")
+        }
+        await helper.stop()
+
+        let lines = fake.inputLines(ofRun: 1)
+        #expect(lines.count == 1)
+        if case .forget(let received) = lines.first.flatMap({ try? LocalHelperMessage.decodeLine($0) }) {
+            #expect(received == id)
+        } else {
+            Issue.record("the helper did not receive a forget message")
+        }
+        #expect(entries.value.contains { $0.contains("could not record a pending credential removal") })
+        await fake.expectNothingLeft()
+    }
+
     @Test("sending without a running helper throws before start and after stop")
     func refusesSendWithoutHelper() async throws {
         let fake = try FakeHelperProgram(exitCodes: [])
