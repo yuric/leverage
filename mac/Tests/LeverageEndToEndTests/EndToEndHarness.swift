@@ -170,11 +170,15 @@ final class RunningHelper: Sendable {
         }
         if let tmp = inherited[EnvironmentKeys.tmpdir] { environment[EnvironmentKeys.tmpdir] = tmp }
         logFile = folder.logs.appendingPathComponent("helper.log")
-        process = try Subprocess.start(SubprocessRequest(
+        process = try Self.launch(SubprocessRequest(
             executable: try EndToEnd.program("LeverageHelper").path,
             arguments: [],
             environment: environment,
             gracePeriod: .seconds(20)))
+    }
+
+    static func launch(_ request: SubprocessRequest) throws -> RunningSubprocess {
+        try Subprocess.start(request)
     }
 
     /// Stops the helper (it stops its runs first) and keeps what it wrote
