@@ -233,6 +233,22 @@ struct FinishingFlowTests {
         setup.expectRelease()
     }
 
+    @Test("an on-hold start keeps the task held while the runner pauses")
+    func heldStart() async throws {
+        let setup = try Setup()
+        let action = setup.action("Publish the proof page.", 1)
+        try setup.serve([setup.briefing([action])])
+        setup.harness.api.script {
+            $0.startAction = { _, _, _ in Fixture.refused(.onHold, .startAction) }
+        }
+        let driver = try setup.tool.driver(setup.provider, timeout: Int(Patience.seconds(30)))
+        let context = setup.harness.context(driver: driver)
+
+        #expect(try await FinishingFlow(context: context).continueTask(setup.taskID) == .paused)
+        #expect(context.state.held == .task(setup.taskID))
+        #expect(setup.operations == [.getTaskBriefing, .acknowledgeTaskBriefing, .startAction])
+    }
+
     @Test("a hold between actions pauses until a resume item reads the new briefing")
     func holdAndResume() async throws {
         let setup = try Setup()

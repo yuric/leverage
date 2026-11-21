@@ -212,6 +212,27 @@ struct QuestionAndApprovalJobTests {
         try expectToolRuns(1, setup: setup, frame: "LEVERAGE APPROVAL")
     }
 
+    @Test("short rate limits use only the approval job's two attempts, each with a fresh frame")
+    func approvalRateLimit() async throws {
+        let setup = try scenario([:])
+        try setup.drivers.tools.write(scenario: StandInScenario(directives: [
+            .reply("claude/run-rate-limited.json", tool: tool.tool,
+                   account: setup.drivers.account, onPrompt: 1, times: 4),
+        ]))
+        let input = ApprovalJobInput(
+            actionID: UUID(), ruleCheckID: UUID(), taskID: UUID(), material: DecisionJobsFixture.approval())
+        let claim = try DecisionJobsFixture.claim(kind: .approval, input: input)
+        let driver = try setup.drivers.driver(tool)
+        let interruption = Interruption(provider: .claude, hasCredential: true, waits: InterruptionTests.noWaits)
+        let context = setup.harness.context(driver: driver, interruption: interruption)
+
+        let end = try await ApprovalJob(context: context).run(claim, input: input)
+        #expect(end == .result(JobResultRequest(
+            result: .approval(ApprovalJobResult(decision: .passToOwner, reason: "The agent gave no decision.")),
+            tokens: 0, spend: 0)))
+        try expectToolRuns(2, setup: setup, frame: "LEVERAGE APPROVAL")
+    }
+
     @Test("a waiting approval keeps asking for the next item with no wait")
     func pollsWhileWaiting() async throws {
         let setup = try scenario(["approval_gate_file": "approve-now"])
