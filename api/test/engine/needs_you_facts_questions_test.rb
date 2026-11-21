@@ -32,9 +32,11 @@ class NeedsYouFactsQuestionsTest < ActiveSupport::TestCase
     other_builder = own_seat
     reviewer = own_seat(role: "reviewer")
 
+    held_by_reviewer = scenario.task(state: "working", builder: reviewer)
     assert_empty events_written {
       assert_refused("not_holder", seat_command(other_builder, "request_access", params))
-      assert_refused("forbidden", seat_command(reviewer, "request_access", params))
+      assert_refused("not_holder", seat_command(reviewer, "request_access", params))
+      assert_refused("forbidden", seat_command(reviewer, "request_access", params.merge("id" => held_by_reviewer.id)))
     }
     assert_empty task_holds
   end
