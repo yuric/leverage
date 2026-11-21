@@ -52,6 +52,22 @@ class ActionsTest < ActiveSupport::TestCase
     assert_equal "action.revoked", ctx.events.last.type
   end
 
+  test "waiving an action keeps its ended approval check and withdraws unsettled checks" do
+    approval = @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+    gate = @scenario.rule(hook: "action.requested")
+    ended = @scenario.rule_check(@task, rule: approval, subject: @action, result: "error")
+    waiting = @scenario.rule_check(@task, rule: approval, subject: @action)
+    blocked = @scenario.rule_check(@task, rule: gate, subject: @action, result: "error")
+
+    ctx = @scenario.context
+    A.waive(ctx, @action)
+
+    assert_equal "error", ended.reload.result
+    assert_equal "withdrawn", waiting.reload.result
+    assert_equal "withdrawn", blocked.reload.result
+    assert_equal [ waiting.id, blocked.id ].sort, ctx.events.select { |event| event.type == "check.finished" }.map(&:subject_id).sort
+  end
+
   test "contract definitions keep unchanged rows and return added and removed ids" do
     task = @scenario.task(state: "backlog")
     first = A.create_for(task, [ { kind: "send", description: "Sample notice" } ])
