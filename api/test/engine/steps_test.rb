@@ -257,6 +257,27 @@ class StepTrackerTest < ActiveSupport::TestCase
     assert_equal row.opened_at, row.closed_at
   end
 
+  test "creating a task in a paused project retains its first step at task.created" do
+    @scenario = Scenario.new
+    project = @scenario.project(paused: true)
+    params = { "title" => "A made-up task", "goal" => "A made-up goal.", "project_id" => project.id }
+    request = Leverage::Transitions::Request.new(command: "add_task", workspace_id: @scenario.workspace_id,
+      caller_kind: "owner", caller_id: @scenario.owner.id, key: "k-create-paused", request_hash: "test", params: params)
+    outcome = Leverage::Transitions.apply(request)
+    assert outcome.completed?
+
+    task_id = outcome.result.fetch("task_id")
+    created, held = Event.where(task_id: task_id).order(:seq).to_a
+    assert_equal [ "task.created", "hold.opened" ], [ created.type, held.type ]
+    first = TaskStep.find_by(task_id: task_id, opening_event_id: created.id)
+    assert_not_nil first, "task.created opens a step even when the same command holds the task"
+    assert_equal [ "wait_contract", held.id, created.effective_at, created.effective_at ],
+      first.values_at(:kind, :closing_event_id, :opened_at, :closed_at)
+
+    waiting = TaskStep.find_by!(task_id: task_id, closed_at: nil)
+    assert_equal [ "wait_owner", held.id, first.closed_at ], waiting.values_at(:kind, :opening_event_id, :opened_at)
+  end
+
   test "task.cancelled closes the open step and opens none (EN-30)" do
     @scenario = Scenario.new
     builder = @scenario.seat(role: "builder")
