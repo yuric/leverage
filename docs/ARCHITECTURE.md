@@ -982,8 +982,10 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   end-to-end secret scan fails if a reply's marker or long line is found
   outside the stand-ins' folder.
 - **Secrets.** No request, stored outcome, event or log carries a provider
-  login, sign-in token, link, code or API token. A provider's tool gets no
-  leverage token: its environment is the allow-list above. The helper's
+  login, sign-in token, link, code or API token. The reference runner's
+  allow-listed tool environment excludes every leverage token. A tool
+  acting as an external MCP client needs access to the seat token via
+  its settings, to pass it to the MCP process as described above. The helper's
   requests carry only non-secret inputs (`params`), and the landing prompt
   never contains the seat's token. A request body that is not sent as
   JSON is answered `400` before Rails reads it, whatever the method and
