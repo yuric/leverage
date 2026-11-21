@@ -50,8 +50,7 @@ struct ProviderCatalogTests {
         #expect(entry.displayName == name)
         #expect(entry.url.value.absoluteString == address)
         #expect(entry.url.evidence == .documented)
-        #expect(entry.method == Evidenced("GET", .documented))
-        #expect(entry.prd == .prd)
+        #expect(entry.method == Evidenced("GET", .prd))
         let url = entry.url.value
         #expect(url.scheme == "https")
         #expect(url.user == nil && url.password == nil && url.query == nil && url.fragment == nil)
@@ -68,7 +67,7 @@ struct ProviderCatalogTests {
         #expect(claude.arguments == Evidenced(["-p", "/usage", "--output-format", "json"], .prd))
         #expect(claude.details.contains(Evidenced("cachedUsageUtilization.utilization.cedar_ember", .prd)))
         #expect(claude.details.contains(Evidenced(".claude.json in CLAUDE_CONFIG_DIR", .probe)))
-        #expect(claude.details.contains(Evidenced("The entry is kept in that file", .unverified)))
+        #expect(claude.details.contains(Evidenced("Whether the entry is kept in that file", .unverified)))
 
         let codex = try #require(ProviderCatalog.loginUsage(for: .codex))
         #expect(codex.arguments == Evidenced(["app-server"], .help))

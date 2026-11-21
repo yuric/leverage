@@ -61,6 +61,8 @@ struct LocalHelperMessageTests {
             #expect(refuses(Data(line.utf8)))
         }
         let valid = try LocalHelperMessage.forget(credentialID: credentialID).encodeLine()
+        #expect(refuses(valid + Data([0x0A])))
+        #expect(refuses(valid + Data([0x0D])))
         #expect(refuses(valid + Data([0x0A]) + valid))
     }
 

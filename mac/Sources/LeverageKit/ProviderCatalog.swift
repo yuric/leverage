@@ -143,11 +143,13 @@ public struct ProviderEntry: Equatable, Sendable {
     public let defaultModel: Evidenced<String>?
 }
 
+/// The header that carries a token and the scheme prefix, if required.
 public struct TokenAuthentication: Equatable, Sendable {
     public let header: String
     public let scheme: String?
 }
 
+/// A token provider's validity check, recorded without any credential data.
 public struct TokenProviderEntry: Equatable, Sendable {
     public let provider: Provider
     public let displayName: String
@@ -155,28 +157,96 @@ public struct TokenProviderEntry: Equatable, Sendable {
     public let method: Evidenced<String>
     public let authentication: Evidenced<TokenAuthentication>
     public let extraHeaders: Evidenced<[String: String]>
-    public let prd: Evidence
 }
 
+/// Where login usage figures come from. Arguments describe the proposed
+/// command where there is one. Reader availability is decided separately.
 public struct LoginUsageSource: Equatable, Sendable {
     public let source: Evidenced<String>
     public let arguments: Evidenced<[String]?>
     public let details: [Evidenced<String>]
 }
 
-/// Per login provider: names, commands, installer and environment, each
-/// with its evidence level. The facts were taken on this Mac on 2026-11-19
-/// (WP2a's step 0, with only harmless commands: versions, statuses, help
+/// Names, commands, installers, environments and validity checks, with
+/// evidence for provider behavior. Login setup facts were taken on this
+/// Mac on 2026-11-19 (WP2a's step 0, with versions, statuses, help
 /// and one "ready" prompt per signed-in tool, under the allow-list).
 public enum ProviderCatalog {
-    public static let tokenEntries: [TokenProviderEntry] = []
+    private static let bearer = TokenAuthentication(header: "Authorization", scheme: "Bearer")
+
+    // The PRD names the validity checks. Step D checked the full addresses,
+    // authentication and fixed headers against the vendors' documentation.
+    public static let tokenEntries: [TokenProviderEntry] = [
+        token(.claudeApi, "Claude API", "https://api.anthropic.com/v1/models", bearer,
+              extraHeaders: ["anthropic-version": "2026-10-21"]),
+        token(.openaiApi, "OpenAI API", "https://api.openai.com/v1/models", bearer),
+        token(.geminiApi, "Gemini API", "https://generativelanguage.googleapis.com/v1beta/models",
+              TokenAuthentication(header: "x-goog-api-key", scheme: nil)),
+        token(.grokApi, "Grok API", "https://api.x.ai/v1/api-key", bearer),
+        token(.openrouter, "OpenRouter", "https://openrouter.ai/api/v1/key", bearer),
+    ]
 
     public static func tokenEntry(for provider: Provider) -> TokenProviderEntry? {
-        nil
+        tokenEntries.first { $0.provider == provider }
+    }
+
+    private static func token(
+        _ provider: Provider, _ name: String, _ address: String, _ authentication: TokenAuthentication,
+        extraHeaders: [String: String] = [:]
+    ) -> TokenProviderEntry {
+        TokenProviderEntry(
+            provider: provider, displayName: name,
+            url: Evidenced(URL(string: address)!, .documented),
+            method: Evidenced("GET", .prd),
+            authentication: Evidenced(authentication, .documented),
+            extraHeaders: Evidenced(extraHeaders, .documented))
     }
 
     public static func loginUsage(for provider: Provider) -> LoginUsageSource? {
-        nil
+        switch provider {
+        case .claude:
+            return LoginUsageSource(
+                source: Evidenced("Claude Code usage report and reset entry", .prd),
+                arguments: Evidenced(["-p", "/usage", "--output-format", "json"], .prd),
+                details: [
+                    Evidenced("Week for all models, week per model, and 5-hour session", .prd),
+                    Evidenced("-p and --output-format json worked with another prompt", .probe),
+                    Evidenced("cachedUsageUtilization.utilization.cedar_ember", .prd),
+                    Evidenced(".claude.json in CLAUDE_CONFIG_DIR", .probe),
+                    Evidenced("Whether the entry is kept in that file", .unverified),
+                    Evidenced("Whether /usage starts a model turn", .unverified),
+                ])
+        case .codex:
+            return LoginUsageSource(
+                source: Evidenced("Codex app-server over standard input and output", .help),
+                arguments: Evidenced(["app-server"], .help),
+                details: [
+                    Evidenced("initialize", .schema),
+                    Evidenced("initialized", .schema),
+                    Evidenced("account/rateLimits/read", .schema),
+                    Evidenced("account/usage/read", .schema),
+                    Evidenced("5-hour and weekly windows, lifetime tokens, peak daily tokens", .prd),
+                    Evidenced("rateLimits.primary and rateLimits.secondary", .schema),
+                    Evidenced("usedPercent, resetsAt, windowDurationMins", .schema),
+                    Evidenced("rateLimitResetCredits.availableCount", .schema),
+                    Evidenced("rateLimitResetCredits.credits[].expiresAt", .schema),
+                    Evidenced("rateLimitResetCredits.credits[].status", .schema),
+                    Evidenced("summary.lifetimeTokens and summary.peakDailyTokens", .schema),
+                    Evidenced("One JSON object per line", .unverified),
+                ])
+        case .gemini:
+            return LoginUsageSource(
+                source: Evidenced("Antigravity interactive /usage", .documented),
+                arguments: Evidenced(nil, .help),
+                details: [Evidenced("Antigravity's usage screen", .prd)])
+        case .grok:
+            return LoginUsageSource(
+                source: Evidenced("grok usage --json", .help),
+                arguments: Evidenced(nil, .help),
+                details: [Evidenced("Requires the tool's background service", .help)])
+        case .claudeApi, .openaiApi, .geminiApi, .grokApi, .openrouter:
+            return nil
+        }
     }
 
     /// What every provider's tool gets (CL-10); `PATH` is built, not passed.

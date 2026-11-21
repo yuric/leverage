@@ -161,8 +161,8 @@ struct SubprocessTests {
 
         #expect(result.endedBy == reason)
         #expect(await child.readLine() == nil)
-        #expect(await gone(grandchild))
-        #expect(await gone(child.processID))
+        #expect(await gone(grandchild, timeoutSeconds: Patience.seconds(5)))
+        #expect(await gone(child.processID, timeoutSeconds: Patience.seconds(5)))
     }
 
     @Test("session reads preserve complete lines through EOF and truncation", arguments: [8, 30])
@@ -332,10 +332,10 @@ private func waitForPID(_ file: URL) async throws -> Int32 {
     throw CocoaError(.fileReadNoSuchFile)
 }
 
-/// True once no process has this id. It looks for up to five seconds, so an
-/// orphan that its new parent has not reaped yet is given time.
-private func gone(_ pid: Int32) async -> Bool {
-    for _ in 0..<100 {
+/// True once no process has this id. Give an orphan's new parent time
+/// to reap it, five seconds by default.
+private func gone(_ pid: Int32, timeoutSeconds: Double = 5) async -> Bool {
+    for _ in 0..<Int((timeoutSeconds * 20).rounded(.up)) {
         if kill(pid, 0) != 0 && errno == ESRCH { return true }
         try? await Task.sleep(for: .milliseconds(50))
     }
