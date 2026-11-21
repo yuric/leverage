@@ -293,6 +293,26 @@ class HandoffTest < ActiveSupport::TestCase
     assert_nil hold.reload.closed_at
   end
 
+  test "a reorder replaces an item whose credential is no longer a candidate" do
+    own = scenario.credential(provider: "claude")
+    signed_out = scenario.credential(provider: "codex")
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(own)
+    scenario.sign_out_credential(signed_out)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+    as_helper { |ctx| H.reevaluate(ctx, signed_out: signed_out) }
+    previous = InboxItem.find_by!(hold_id: hold.id, state: "open")
+
+    written = events_written { after_swapping_positions(own, signed_out) }
+
+    assert_equal %w[credential.order_changed credential.order_changed inbox.resolved inbox.opened], written.map(&:type)
+    assert_equal "resolved", previous.reload.state
+    item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+    assert_equal [ "limit_with_no_reset_time", own.id ], [ item.kind, item.credential_id ]
+    assert_nil hold.reload.closed_at
+  end
+
   test "removing an unrecorded candidate with the only reset also opens the no-reset item" do
     own = scenario.credential
     dated = scenario.credential

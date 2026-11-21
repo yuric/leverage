@@ -162,6 +162,14 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal "codex", taken.reload.provider
   end
 
+  test "a removed credential id cannot be used for a new account" do
+    removed = @scenario.credential(provider: "codex")
+    assert_completed(owner_command("remove_credential", { "id" => removed.id }))
+
+    assert_raises(T::Invalid) { owner_command("add_credential", body(id: removed.id)) }
+    assert_not Credential.exists?(removed.id)
+  end
+
   test "Retry after a failed add sends the same id again with a new key" do
     id = SecureRandom.uuid
     first = assert_completed(owner_command("add_credential", body(id: id)))
