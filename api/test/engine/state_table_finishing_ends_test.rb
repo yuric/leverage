@@ -127,24 +127,25 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
 
   { "change_seat" => [ { "enabled" => false }, "seat.changed" ], "remove_seat" => [ {}, "seat.removed" ] }.each do |command, (params, event)|
     test "#{command} calls lose_builder for the held task and each waiting task without clearing the holder" do
-      waiting = Array.new(2) { finishing(holder: false) }
+      waiting = finishing(holder: false)
+      paused = finishing(holder: false)
+      scenario.hold(paused, reason: "owner_hold")
       held = finishing
       key = new_key
       written = nil
       calls = recording_builder_loss do
-        waiting_calls = answering(Leverage::Finishing, :waiting_for, ->(_seat) { waiting }) do
+        answering(Leverage::Finishing, :waiting_for, ->(_seat) { [ waiting ] }) do
           written = events_written { assert_completed(owner_command(command, params.merge("id" => @builder.id), key: key)) }
         end
-        assert_equal [ @builder.id ], waiting_calls.map { |call| call.arguments.sole.id }
       end
 
       assert_equal [ event ], written.map(&:type)
-      assert_equal [ held.id, *waiting.map(&:id) ].sort, calls.map { |call| call.arguments[1].id }.sort
+      assert_equal [ held.id, waiting.id, paused.id ].sort, calls.map { |call| call.arguments[1].id }.sort
       calls.each do |call|
         assert_lost_builder(call, call.arguments[1], written.sole, actor: [ "owner", scenario.owner.id ], key: key)
       end
       assert_equal [ "finishing", @builder.id, @builder.id ], held.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id")
-      waiting.each { |task| assert_nil task.reload.holder_seat_id }
+      [ waiting, paused ].each { |task| assert_nil task.reload.holder_seat_id }
     end
   end
 
