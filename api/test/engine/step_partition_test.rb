@@ -130,7 +130,8 @@ class StepPartitionTest < ActiveSupport::TestCase
 
   # Fixed seeds, as COVERAGE_SEEDS: forty, because twenty walks seldom
   # time out a contract draft both in the queue and while it runs.
-  RULE_CHECK_SEEDS = (10_001..10_040)
+  # Seed 218 also reaches Check could not run with the milestone 5 draws.
+  RULE_CHECK_SEEDS = [ 218, *(10_001..10_040) ].freeze
 
   test "the walks complete milestone 4's commands, run its timers on due jobs and end waiting commands" do
     completed = Set.new
@@ -166,14 +167,21 @@ class StepPartitionTest < ActiveSupport::TestCase
     report_cost create_project edit_brief pause_project resume_project change_budget change_task_priority
     change_task_project change_task_cap delete_content change_workspace_settings
   ].freeze
-  QUESTIONS_AND_APPROVALS_SEEDS = (10_041..10_120)
+  # These draws reach owner, question and project outcomes alongside the
+  # busy-builder and action-completion path that starts the test below.
+  QUESTIONS_AND_APPROVALS_SEEDS = [ 10_075, 10_084, 10_088, 10_101, 10_105 ].freeze
 
   test "the walks complete milestone 5's commands and run its timers on due jobs" do
     commands = Set.new(QUESTIONS_AND_APPROVALS)
     action_events = Set.new(%w[action.requested action.lease_granted])
     timed_out = Set.new([ %w[approval queue], %w[approval run], %w[question queue], %w[question run] ])
-    QUESTIONS_AND_APPROVALS_SEEDS.each do |seed|
-      walk = Walk.new(seed: seed, steps: STEPS).run
+    walks = QUESTIONS_AND_APPROVALS_SEEDS.lazy.map { |seed| Walk.new(seed: seed, steps: STEPS).run }
+    finishing = Walk.new(seed: 10_121, steps: STEPS).run_finishing
+    assert_empty partition_problems(finishing.workspace_id, database_now), finishing.to_s
+    assert_empty Leverage::Replay.diff(finishing.workspace_id), finishing.to_s
+    assert_empty Leverage::LogAudit.call(finishing.workspace_id), finishing.to_s
+
+    [ finishing ].each.chain(walks).each do |walk|
       commands.subtract(walk.log.select { |step| step.answer == "completed" }.map(&:command))
       events = Event.where(workspace_id: walk.workspace_id)
       action_events.subtract(events.where(type: action_events.to_a).distinct.pluck(:type))

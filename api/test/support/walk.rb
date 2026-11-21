@@ -137,10 +137,45 @@ class Walk
     @spare = connect("builder", 3)
     @builders << @spare
     draw_rules
-    @steps.times { |index| send(pick, index) }
+    yield if block_given?
+    first = log.empty? ? 0 : log.last.index + 1
+    (first...@steps).each { |index| send(pick, index) }
     self
   rescue StandardError => error
     raise Failed, "#{error.class}\n#{self}", error.backtrace, cause: nil
+  end
+
+  # Begin a seeded walk with a busy-builder handoff, an approval job
+  # that misses while claimed, and two ways of completing an action.
+  # Prep commands use the same real pipeline and count as walk steps.
+  def run_finishing
+    run do
+      use_guided_rules("orchestrator_approves_actions")
+      builder = @builders.fetch(2)
+      task = guided_contract([
+        { "kind" => "publish", "description" => "Made-up first action." },
+        { "kind" => "send", "description" => "Made-up second action." }
+      ])
+      guided("claim", builder)
+      guided_step { |index| build(index, builder) } until task.reload.state == "in_review"
+      guided_pass_review
+
+      # The task is awaiting approval and its previous builder takes a
+      # different task, so approval does not immediately grant its lease.
+      other = guided_contract([])
+      guided("claim", builder)
+      guided("claim_job", @orchestrator)
+      expire_guided_job
+      2.times { guided_approve_job }
+
+      guided("release", builder, "id" => other.id, "reason" => "stopping")
+      guided_step { |index| acknowledge_as(index, builder, task.reload) }
+      first, second = Leverage::Actions.for_task(task).to_a
+      guided("start_action", builder, "id" => task.id, "aid" => first.id)
+      guided("report_action_done", builder, "id" => task.id, "aid" => first.id)
+      guided("release", builder, "id" => task.id, "reason" => "stopping")
+      guided("mark_action_done", @owner, "id" => second.id)
+    end
   end
 
   # A walk ended by an error that is not a refusal, a 404 or a 422.
@@ -154,6 +189,58 @@ class Walk
   end
 
   private
+
+  # Set up rare starting paths with the same commands the random walk
+  # uses, then let the seed draw the remaining steps normally.
+  def use_guided_rules(key)
+    rules.each do |rule|
+      enabled = rule.key == key
+      next if rule.enabled == enabled
+
+      guided(enabled ? "enable_rule" : "disable_rule", @owner, "id" => rule.id)
+    end
+  end
+
+  def guided_contract(actions)
+    guided("add_task", @owner, "title" => "Made-up coverage task", "goal" => "A made-up goal.", "state" => "backlog")
+    task = tasks.last
+    guided("complete_contract", @owner, contract(task).merge("actions" => actions, "budget_cap" => nil))
+    task
+  end
+
+  def guided_pass_review
+    reviewer = @reviewers.last
+    guided("claim_review", reviewer)
+    review = review_of(reviewer)
+    guided("acknowledge_review_briefing", reviewer, "id" => review.id,
+      "briefing_hash" => Leverage::Briefing.hash_for(review, reviewer))
+    guided("pass_review", reviewer, "id" => review.id, "verdict" => "passed", "failed_criteria" => [],
+      "notes" => "Made-up notes.", "tokens" => 10, "spend" => 0)
+  end
+
+  def guided_approve_job
+    guided("claim_job", @orchestrator)
+    job = job_of(@orchestrator)
+    fields = { "decision" => "approve", "reason" => "A made-up reason." }
+    guided("submit_job_result", @orchestrator, "id" => job.id, "result" => fields, "tokens" => 10, "spend" => 0)
+  end
+
+  def expire_guided_job
+    make_job_due(log.last.index + 1, job_of(@orchestrator))
+    sweep(log.last.index + 1)
+  end
+
+  def guided(name, caller, params = {})
+    guided_step { |index| command(index, :guided, name, caller, params) }
+  end
+
+  def guided_step
+    index = log.empty? ? 0 : log.last.index + 1
+    raise "guided steps exceeded the walk length" if index >= @steps
+
+    yield index
+    raise "guided step did not complete" unless log.last.answer == "completed"
+  end
 
   def pick
     total = ACTIONS.values.sum
@@ -560,6 +647,10 @@ class Walk
     job = one(in_log_order(Job.where(workspace_id: workspace_id, state: %w[queued claimed]).to_a))
     return progress(index) unless job
 
+    make_job_due(index, job)
+  end
+
+  def make_job_due(index, job)
     kind = job.state == "queued" ? :queue : :run
     due = Leverage::Timers.job_due_at(job, kind)
     return progress(index) unless due
