@@ -598,6 +598,14 @@ Where two inventories chose differently, the decision names the conflict.
   `Leverage::Gating.provider_allowed?`), and `inbox.resolved` when one
   may. Trace 02 covers it: one provider connected, the item opens at
   submit and closes when a second provider's reviewer connects.
+- **SM-43** `[reading]` An override of the check that stopped an
+  outward action may approve it only after every other blocking gate
+  frozen at `action.requested` has passed, did not apply, was withdrawn,
+  or was overridden. A missing or unfinished check cannot clear a gate.
+  Model gate jobs continue while the action is stopped. The approval job
+  is deferred. If another frozen gate fails, the action stays stopped,
+  and the owner may waive it or return the task for rework when allowed.
+
 
 ## Rules and checks (RC)
 
