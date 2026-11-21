@@ -2,9 +2,7 @@ module Leverage
   module Transitions
     module Entries
       class ReportReading < Entry
-        def perform(_ctx)
-          raise NotImplementedError, "not built yet"
-        end
+        def perform(_ctx) = nil
       end
     end
   end

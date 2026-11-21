@@ -45,8 +45,8 @@ class StateTableAccountsTest < ActiveSupport::TestCase
       helper_request(command, { "id" => request.id, "check" => "signed_in", "state" => "running", "failure" => nil,
                                 "install" => nil })
     when "report_request_result"
-      request = queue_request("install_tool", state: "picked_up", params: { "provider" => "claude" })
-      helper_request(command, { "id" => request.id, "result" => result_body(checks: []) })
+      request = queue_request("read_usage", credential: scenario.credential, state: "picked_up")
+      helper_request(command, { "id" => request.id, "result" => result_body(checks: [ check("reading_taken") ]) })
     when "report_run_started"
       seat = scenario.seat(credential: scenario.credential, run_state: "stopped")
       helper_request(command, { "id" => seat.id, "credential_id" => seat.credential_id,

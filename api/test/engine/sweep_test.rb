@@ -16,8 +16,9 @@ require_relative "entries/job_timers_support"
 # Milestone 4 (its plan, WP7): the sweep also applies the check and draft
 # timers to jobs no command has touched, and fires the two workspace timers
 # of milestone 4, orchestrator_offline and reviewer_eligibility (WP9's
-# entry), on every run through Timers.apply_workspace, so a run fires three
-# workspace timers, four when it purges.
+# entry), on every run through Timers.apply_workspace. Milestone 6 adds
+# usage_read_due to every run (CR-10), bringing the count to four workspace
+# timers, or five when the run also purges command keys.
 module SweepTestEntries
   # Closes a due credential hold, as WP3's credential_hold_release does
   # when the sweep runs it with params limit.
@@ -76,8 +77,7 @@ class SweepTest < ActiveSupport::TestCase
 
     run = runs.sole
     assert_equal 2, run.tasks_touched
-    assert_equal 3, run.workspace_timers_fired,
-      "seat_run_placement, orchestrator_offline and reviewer_eligibility: no purge was asked for (HD-4)"
+    assert_equal 4, run.workspace_timers_fired
     assert_operator run.ran_at, :>=, due
   end
 
@@ -87,8 +87,7 @@ class SweepTest < ActiveSupport::TestCase
 
     S.sweep_workspace(@scenario.workspace_id)
 
-    assert_equal [ 0, 3 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ],
-      "seat_run_placement (HD-4), orchestrator_offline and reviewer_eligibility run on every sweep"
+    assert_equal [ 0, 4 ], [ runs.sole.tasks_touched, runs.sole.workspace_timers_fired ]
     assert_equal seq, Workspace.find(@scenario.workspace_id).last_seq
   end
 
@@ -124,8 +123,7 @@ class SweepTest < ActiveSupport::TestCase
 
     refute Command.exists?(old.id)
     refute SweepRun.exists?(old_run.id)
-    assert_equal 4, runs.sole.workspace_timers_fired,
-      "command_key_retention, seat_run_placement, orchestrator_offline and reviewer_eligibility"
+    assert_equal 5, runs.sole.workspace_timers_fired
   end
 
   test "pass sweeps every workspace and says how many" do
@@ -274,7 +272,7 @@ class SweepTest < ActiveSupport::TestCase
 
     assert_equal 2, E::Placement::RUNS[@scenario.workspace_id]
     assert_equal 1, E::Placement::RUNS[other.workspace_id]
-    assert_equal [ 3, 3 ], runs.map(&:workspace_timers_fired)
+    assert_equal [ 4, 4 ], runs.map(&:workspace_timers_fired)
   end
 
   # --- Milestone 4 ---------------------------------------------------------
@@ -283,13 +281,13 @@ class SweepTest < ActiveSupport::TestCase
 
   def scenario = @scenario
 
-  test "it fires orchestrator_offline and reviewer_eligibility on every run, through Timers.apply_workspace" do
+  test "it fires orchestrator_offline, reviewer_eligibility and usage_read_due through Timers.apply_workspace" do
     started = @scenario.database_now
 
     calls = spy_on(Leverage::Timers, :apply_workspace) { S.sweep_workspace(@scenario.workspace_id) }
 
-    assert_equal [ [ @scenario.workspace_id, "orchestrator_offline" ], [ @scenario.workspace_id, "reviewer_eligibility" ] ],
-      calls.map(&:arguments)
+    expected = %w[orchestrator_offline reviewer_eligibility usage_read_due]
+    assert_equal expected.map { |name| [ @scenario.workspace_id, name ] }, calls.map(&:arguments)
     calls.each do |call|
       assert_operator call.keywords.fetch(:at), :>=, started
       assert_operator call.keywords.fetch(:at), :<=, runs.sole.ran_at
@@ -337,6 +335,18 @@ class SweepTest < ActiveSupport::TestCase
       times = Event.where(task_id: task.id).order(:seq).map(&:effective_at)
       assert_equal times.sort, times, "effective times never go backwards within a task (L120)"
     end
+  end
+
+  # --- Milestone 6 ---------------------------------------------------------
+
+  test "a sweep without command key purging schedules a due usage read" do
+    credential = @scenario.credential
+    @scenario.live_helper
+
+    S.sweep_workspace(@scenario.workspace_id, purge: false)
+
+    requests = HelperRequest.where(workspace_id: @scenario.workspace_id, kind: "read_usage")
+    assert_equal [ [ credential.id, "queued" ] ], requests.pluck(:credential_id, :state)
   end
 
   def job_of_attempt(check, number) = RuleCheckAttempt.find_by!(rule_check_id: check.id, attempt_number: number).job_id
