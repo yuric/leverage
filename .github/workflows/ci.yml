@@ -188,6 +188,8 @@ jobs:
         run: scripts/e2e_rule_checks.sh
       - name: The questions and approvals end-to-end run
         run: scripts/e2e_questions_approvals.sh
+      - name: The credentials end-to-end run
+        run: scripts/e2e_credentials.sh
       # A backup restored into a cluster whose volume was removed, from a
       # seeded log (milestone 3 plan §5.3).
       - name: The restore drill

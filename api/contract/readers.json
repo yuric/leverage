@@ -136,13 +136,13 @@
         "source": "rateLimitResetCredits.availableCount and each available codexRateLimits credit in rateLimitResetCredits.credits, with its expiry date when given"
       },
       "capture": {
-        "usage": "none",
+        "usage": "recorded",
         "limit": "none",
         "sign_out": "none"
       },
       "provisional": true,
       "verified": true,
-      "tested_tool_versions": [],
+      "tested_tool_versions": ["0.169.0"],
       "prd_source": "PRD, What each account shows",
       "example_reading": {
         "credential_id": "00000000-0000-4000-8000-000000000102",

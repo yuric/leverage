@@ -1132,7 +1132,7 @@ extension Provider {
     public var testedToolVersions: [String] {
         switch self {
         case .claude: return []
-        case .codex: return []
+        case .codex: return ["0.169.0"]
         case .gemini: return []
         case .grok: return []
         case .claudeApi: return []

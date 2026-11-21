@@ -97,7 +97,9 @@ struct UsageRead: Sendable {
     private func readLogin(
         _ provider: Provider, credentialID: UUID, deadline: ContinuousClock.Instant
     ) async throws -> Observation {
-        guard let reader = readers(provider), let entry = ProviderCatalog.entry(for: provider.rawValue) else {
+        let versions = testedVersions(provider)
+        guard !versions.isEmpty, let reader = readers(provider),
+              let entry = ProviderCatalog.entry(for: provider.rawValue) else {
             return Observation()
         }
         var toolTimings = timings
@@ -107,7 +109,7 @@ struct UsageRead: Sendable {
         try Task.checkCancellation()
         let version = String(Redaction.redact(tool.version).prefix(64))
         var observation = Observation(version: version)
-        guard VersionGate.accepts(tool.version, testedVersions: testedVersions(provider)) else {
+        guard VersionGate.accepts(tool.version, testedVersions: versions) else {
             return observation
         }
 

@@ -581,7 +581,8 @@ def claude(argv):
     if argv[:2] == ["auth", "status"]:
         if signed_in("claude"):
             print(json.dumps({"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty",
-                              "email": STATUS_EMAIL, "orgName": STATUS_ORG}, indent=2))
+                              "email": STATUS_EMAIL, "orgName": STATUS_ORG,
+                              "subscriptionType": "standin-claude-plan"}, indent=2))
             return 0
         return play("claude", "status-signed-out.json")
     if argv[:2] == ["auth", "login"]:
