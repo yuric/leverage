@@ -26,12 +26,14 @@ final class ActivityModel {
     private var taskTitles: [UUID: String] = [:]
     private var deletedTasks: Set<UUID> = []
     private var agentNames: [UUID: LogName] = [:]
+    private var accountNames: [UUID: String] = [:]
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private weak var feed: EventFeed?
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var namesRefresh: Task<Void, Never>?
     @ObservationIgnored private var agentNamesSeq = 0
+    @ObservationIgnored private var accountNamesSeq = 0
 
     var hasEarlier: Bool { historyStart > 0 }
     var isLoaded: Bool { anchor != nil }
@@ -42,7 +44,7 @@ final class ActivityModel {
         // chosen filter hides the events that explain a later sentence.
         let byTask = Dictionary(grouping: events.values, by: \.taskID)
         return byTask.flatMap { taskID, events in
-            let log = TaskLog.entries(events: events, names: names, criteria: [])
+            let log = TaskLog.entries(events: events, names: names, criteria: [], accounts: accountNames)
             let shown = filter == .everything ? log : importantEntries(log, events: events)
             guard let taskID else { return shown }
             let title = title(for: taskID)
@@ -94,6 +96,7 @@ final class ActivityModel {
             // while the read was out, EventFeed replays from here.
             feed?.noteRead(asOfSeq: board.asOfSeq)
             await refreshAgentNames()
+            await refreshAccountNames()
         } catch {
             report(error)
         }
@@ -131,7 +134,8 @@ final class ActivityModel {
             switch event.type {
             case .taskCreated, .taskChanged, .taskContractChanged:
                 namesChanged = namesChanged || event.taskID != nil
-            case .seatConnected, .seatChanged, .seatRemoved:
+            case .seatConnected, .seatChanged, .seatRemoved,
+                 .credentialAdded, .credentialRenamed, .credentialOrderChanged, .credentialRemoved:
                 namesChanged = true
             default:
                 break
@@ -160,6 +164,7 @@ final class ActivityModel {
             storeTitles(from: board)
         }
         if !Task.isCancelled { await refreshAgentNames() }
+        if !Task.isCancelled { await refreshAccountNames() }
     }
 
     private func refreshAgentNames() async {
@@ -170,6 +175,12 @@ final class ActivityModel {
             agentNames[seat.id] = LogName(kind: .seat, id: seat.id, name: seat.name)
         }
         agentNamesSeq = seats.asOfSeq
+    }
+
+    private func refreshAccountNames() async {
+        guard let rows = try? await api.credentials(), !Task.isCancelled, rows.asOfSeq >= accountNamesSeq else { return }
+        accountNames = Dictionary(uniqueKeysWithValues: rows.credentials.map { ($0.credential.id, $0.credential.name) })
+        accountNamesSeq = rows.asOfSeq
     }
 
     private func title(for taskID: UUID) -> String {
