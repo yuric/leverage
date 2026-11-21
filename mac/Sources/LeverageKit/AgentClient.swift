@@ -101,3 +101,33 @@ public struct AgentClient: AgentAPI {
         try await transport.command(.submitJobResult, path: ["id": jobID.contractString], body: request, key: key)
     }
 }
+
+
+extension AgentClient {
+    public func askQuestion(taskID: UUID, _ request: AskQuestionRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<AskQuestionResult> {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func getQuestion(taskID: UUID, questionID: UUID) async throws -> Question {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func requestAccess(taskID: UUID, _ request: RequestAccessRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func reportCost(taskID: UUID, _ request: ReportCostRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func startAction(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func reportActionDone(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+}

@@ -218,3 +218,114 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         try await transport.command(.draftContract, path: ["id": taskID.contractString], key: key)
     }
 }
+
+
+extension OwnerClient {
+    public func listDecisions() async throws -> DecisionsList {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func listProjects() async throws -> ProjectsList {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func createProject(_ request: CreateProjectRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func editBrief(projectID: UUID, _ request: EditBriefRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func pauseProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func resumeProject(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func deleteProjectContent(projectID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func changeBudget(projectID: UUID, _ request: ChangeBudgetRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func changeTaskPriority(taskID: UUID, _ request: ChangeTaskPriorityRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func changeTaskProject(taskID: UUID, _ request: ChangeTaskProjectRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func changeTaskCap(taskID: UUID, _ request: ChangeTaskCapRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func returnForRework(taskID: UUID, _ request: ReturnForReworkRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func offerTaskAgain(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func grantAccess(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func deleteTaskContent(taskID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func answerQuestion(questionID: UUID, _ request: AnswerQuestionRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func overturnAnswer(questionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func approveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func stopAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func waiveAction(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func markActionDone(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func overturnApproval(actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func changeWorkspaceSettings(_ request: ChangeWorkspaceSettingsRequest, key: IdempotencyKey) async throws
+        -> CommandOutcome<WorkspaceSettings> {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func workspaceSettings() async throws -> WorkspaceSettings {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt {
+        throw LeverageClientError.invalidBody
+    }
+}
