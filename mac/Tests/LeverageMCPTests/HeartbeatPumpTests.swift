@@ -42,6 +42,24 @@ struct HeartbeatPumpTests {
         #expect(requests.last?.path == ["id": reviewID])
     }
 
+    @Test func transportTimeDoesNotDelayTheNextScheduledBeat() async throws {
+        let clock = ManualMCPClock()
+        let fake = RecordingTransport([claim(taskID)])
+        let caller = ToolCaller(transport: { request in
+            if request.operation == .heartbeatTask { clock.advance(by: .seconds(3)) }
+            return await fake.send(request)
+        }, now: clock.now)
+        let claim = try #require(ToolCatalog().tool(named: "claim_next_task"))
+        _ = await caller.call(claim, arguments: [:])
+        let schedule = ManualSchedule(clock: clock, ticks: 3)
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep).run()
+
+        #expect(await fake.requests.map(\.operation) ==
+                [.claimNextTask, .heartbeatTask, .heartbeatTask, .heartbeatTask])
+        #expect(await schedule.intervals == [.seconds(60), .seconds(57), .seconds(57)])
+        #expect(clock.now() == .seconds(183))
+    }
+
     @Test func activityWithoutHeldWorkDoesNotHeartbeat() async throws {
         let clock = ManualMCPClock()
         let fake = RecordingTransport()
