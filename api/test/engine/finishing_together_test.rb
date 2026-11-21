@@ -226,7 +226,10 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     assert_equal [ "finishing", 0, @builder.id, @builder.id ],
       task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
     closed = event(task, "hold.closed")
-    assert_in_delta closed.effective_at + remaining, task.lease_due_at, 0.000_001
+    # Compare at PostgreSQL's resolution. Subtracting the times as floats
+    # can put a difference of one microsecond just outside the tolerance.
+    resumed_microseconds = (task.lease_due_at.to_r - closed.effective_at.to_r) * 1_000_000
+    assert_in_delta (remaining.to_f * 1_000_000).round, resumed_microseconds, 1
     assert_nil event(task, "action.waived").payload.fetch("lease_seat_id")
     assert_nil closed.payload.fetch("lease_seat_id")
     assert_equal "resume", Leverage::Reads::NextItem.call(@builder).fetch("kind")
