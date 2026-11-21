@@ -8,6 +8,7 @@ and talks to the stand-in only through files beside it, in `state/`:
 
   state/scenario.json        written by the test (below)
   state/calls.jsonl          one line per run: tool, argv, cwd, env
+  state/app-server.jsonl     one line per message received by Codex
   state/counters.json        how many review prompts have been answered,
                              and each account's work prompts
   state/signed-in-<tool>     the sign-in of a tool with one sign-in for the
@@ -125,6 +126,7 @@ import fcntl
 import json
 import os
 import re
+import runpy
 import signal
 import subprocess
 import sys
@@ -170,11 +172,15 @@ class Locked:
         self.handle.close()
 
 
-def record_call(tool, argv):
-    line = json.dumps({"tool": tool, "argv": argv, "cwd": os.getcwd(), "env": dict(os.environ)})
+def record_json(name, value):
+    line = json.dumps(value)
     with Locked():
-        with open(state_path("calls.jsonl"), "a") as out:
+        with open(state_path(name), "a", encoding="utf-8") as out:
             out.write(line + "\n")
+
+
+def record_call(tool, argv):
+    record_json("calls.jsonl", {"tool": tool, "argv": argv, "cwd": os.getcwd(), "env": dict(os.environ)})
 
 
 def scenario():
@@ -685,6 +691,23 @@ def grok(argv):
     return 2
 
 
+# --- Usage reads (RD-8) -------------------------------------------------------
+
+# The separate usage list matches tool and account, like run directives but
+# without prompt counts. Its fields are reply, settings, stale_settings,
+# never_answers, version and codex_home. Available account commands and
+# the shape of their usage files are in usage_tool.py.
+def usage_command(tool, argv):
+    app_server = tool == "codex" and argv == ["app-server"]
+    if not (app_server or argv == ["--version"]
+            or tool == "claude" and prompt_of(argv, "-p", "--print") == "/usage"):
+        return None
+    dispatch = runpy.run_path(os.path.join(ROOT, "usage_tool.py"))["dispatch"]
+    return dispatch(tool, argv, scenario().get("usage") or [], REPLIES,
+                    account_of(tool), app_server and signed_in(tool),
+                    lambda message: record_json("app-server.jsonl", message))
+
+
 # --- The runner ---------------------------------------------------------------
 
 
@@ -748,6 +771,9 @@ def main():
     tool, argv = sys.argv[1], sys.argv[2:]
     if tool != "runner":
         record_call(tool, argv)
+        result = usage_command(tool, argv)
+        if result is not None:
+            return result
     return TOOLS[tool](argv)
 
 
