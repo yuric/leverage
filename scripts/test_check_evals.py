@@ -527,6 +527,24 @@ class ApprovalCheckTests(unittest.TestCase):
         self.copy.write_case(path, case)
         self.assertFails("cases:", case["id"], "does not match the contract action at its position")
 
+    def test_a_frozen_inconsistent_held_out_candidate_blocks_only_its_run(self):
+        path = self.copy.approval_cases(held=True)[0]
+        case = self.copy.case(path)
+        case["action"]["description"] = "A different held-out action."
+        self.copy.write_case(path, case)
+        bar_path = self.copy.approvals / "bar.json"
+        bar = self.copy.case(bar_path)
+        bar["held_out"]["cases_sha256"] = self.copy.case_hash(held=True)
+        self.copy.write_case(bar_path, bar)
+
+        self.assertPasses("WARNING: 1 held-out approval candidate")
+        score = SCRIPT.with_name("eval_score.py")
+        code, output = python(score, "verify-cases", self.copy.approvals)
+        self.assertEqual(code, 0, output)
+        code, output = python(score, "verify-cases", self.copy.approvals, "--held-out")
+        self.assertEqual(code, 2, output)
+        self.assertIn("1 held-out approval candidate", output)
+
     def test_an_approval_result_against_another_instruction_fails(self):
         path = self.copy.approval_result_path("claude")
         result = self.copy.case(path)
