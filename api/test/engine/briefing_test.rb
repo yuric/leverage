@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "entries/jobs_support"
 
 # Leverage::Briefing and Leverage::RoleFiles (PRD, The briefing; milestone 2
 # plan EN-6): the briefing holds the brief (empty, version 0, while tasks
@@ -8,6 +9,9 @@ require "test_helper"
 # acknowledgement is kept per seat, per lease and per hash.
 class BriefingTest < ActiveSupport::TestCase
   include OpenapiAssertions
+  include JobsSupport
+
+  def scenario = @scenario
 
   B = Leverage::Briefing
 
@@ -211,4 +215,55 @@ class BriefingTest < ActiveSupport::TestCase
       [ without.id, "Made-up done rule: The made-up check's reason." ]
     ], response["review_notes"].map { |note| note.values_at("review_id", "notes") }
   end
+
+  test "the project brief is in position order and only its holder has to acknowledge the edit" do
+    @scenario.owner
+    project = @scenario.project(brief: [ { kind: "rule", text: "Made-up sample rule." },
+      { kind: "lesson", text: "Made-up sample lesson." } ])
+    @task.update!(project_id: project.id)
+    entry_ids = BriefEntry.where(project_id: project.id).order(:position).pluck(:id)
+    expected_version = project.brief_version
+    initial = B.for(@task, seat: @builder)
+    assert_equal entry_ids, initial.fetch("brief").map { |row| row.fetch("id") }
+    assert_equal expected_version, initial.fetch("versions").fetch("brief_version")
+    acknowledge(@task, @builder, initial.fetch("hash"))
+    unrelated = @scenario.task(state: "working")
+    other_seat = Seat.find(unrelated.holder_seat_id)
+    acknowledge(unrelated, other_seat, B.hash_for(unrelated, seat: other_seat))
+
+    edit = owner_request("edit_brief", { "id" => project.id, "entries" => [
+      { "kind" => "lesson", "text" => "Made-up sample lesson." },
+      { "kind" => "rule", "text" => "Made-up sample rule." }
+    ] })
+    assert_completed(T.apply(edit))
+
+    assert_equal entry_ids.reverse, B.for(@task, seat: @builder).fetch("brief").map { |row| row.fetch("id") }
+    assert_equal :current, B.acknowledgement(unrelated, seat: other_seat)
+    criterion = Criterion.find_by!(task_id: @task.id, kind: "build")
+    assert_refused("briefing_changed", seat_command(@builder, "start_criterion", { "id" => @task.id, "cid" => criterion.id }))
+  end
+
+  test "the briefing has the action states and current answers without hashing their progress" do
+    task = @scenario.finishing_task(builder: @builder, actions: [
+      { kind: "send", description: "Send the sample.", state: "approved" },
+      { kind: "publish", description: "Publish the sample.", state: "started" }
+    ])
+    initial_hash = B.hash_for(task, seat: @builder)
+    @scenario.question(task, outcome: "open", text: "Unanswered example?")
+    @scenario.question(task, outcome: "overturned", text: "Overturned example?")
+    @scenario.question(task, outcome: "answered", text: "Where is the sample?", answer: "In the example folder.")
+    other = @scenario.task(state: "working")
+    @scenario.question(other, outcome: "answered", text: "Unrelated example?")
+
+    briefing = B.for(task, seat: @builder)
+
+    assert_matches_component("Briefing", briefing)
+    assert_equal [ [ "send", "approved", 1 ], [ "publish", "started", 2 ] ],
+      briefing.fetch("contract").fetch("actions").map { |row| row.values_at("kind", "state", "position") }
+    assert briefing.fetch("contract").fetch("actions").all? { |row| row.fetch("approved_at").present? }
+    assert_equal [ { "text" => "Where is the sample?", "answer" => "In the example folder.", "basis" => "record" } ],
+      briefing.fetch("answers")
+    assert_equal initial_hash, briefing.fetch("hash")
+  end
+
 end
