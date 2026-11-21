@@ -374,13 +374,20 @@ struct ContractExamplesTests {
     func enumsMatchTheSchema() throws {
         for (component, path, values) in Self.enumFields {
             // Each name is a property, except "items", an array's items.
+            let field = "\(component).\(path.joined(separator: "."))"
             var node = try #require(ContractDocument.schema(component), "\(component)")
             for key in path {
                 let next = key == "items" ? node["items"] : node["properties"]?[key]
-                node = try #require(next, "\(component).\(path.joined(separator: "."))")
+                node = try #require(next, "\(field)")
+                if let reference = node["$ref"]?.stringValue {
+                    let prefix = "#/components/schemas/"
+                    try #require(reference.hasPrefix(prefix), "\(field): \(reference)")
+                    let name = String(reference.dropFirst(prefix.count))
+                    node = try #require(ContractDocument.schema(name), "\(field): \(reference)")
+                }
             }
             let schemaValues = (node["enum"]?.arrayValue ?? []).compactMap(\.stringValue)
-            #expect(schemaValues == values, "\(component).\(path.joined(separator: "."))")
+            #expect(schemaValues == values, "\(field)")
         }
         let commandNames = (ContractDocument.schema("CommandName")?["enum"]?.arrayValue ?? [])
             .compactMap(\.stringValue)

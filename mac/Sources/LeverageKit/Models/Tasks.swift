@@ -312,6 +312,7 @@ public struct InboxItem: Codable, Equatable, Sendable {
     public let choices: [InboxChoice]
     /// The facts its kind stores (`needs_you.json`).
     public let facts: [String: JSONValue]
+    public var detail: String? { nil }
     public let state: InboxState
     public let openedAt: Date
     public let openedSeq: Int
