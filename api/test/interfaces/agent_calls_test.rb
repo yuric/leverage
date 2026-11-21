@@ -331,6 +331,8 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
   end
 
   # get_question calls the reader and marker supplied by WP11 and WP6.
+  QuestionView = Data.define(:row, :body)
+
   def with_question_read(result)
     reader = Leverage::Reads::Question.singleton_class
     marker = T::MarkQuestionRead.singleton_class
@@ -338,11 +340,11 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     original_mark = marker.instance_method(:call)
     reads = []
     marks = []
-    reader.define_method(:call) do |seat, question_id|
-      reads << [ seat.id, question_id ]
-      result
+    reader.define_method(:call) do |seat, question_id, task_id:|
+      reads << [ seat.id, task_id, question_id ]
+      result.respond_to?(:call) ? result.call(seat) : result
     end
-    marker.define_method(:call) { |question| marks << question.id }
+    marker.define_method(:call) { |question, seat:| marks << [ question, seat.id ] }
     yield reads, marks
   ensure
     reader.define_method(:call, original_read)
@@ -358,19 +360,21 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
       path = "/v1/tasks/#{task.id}/questions/#{question.id}"
       assert_request_matches_contract("GET", path, nil)
 
-      with_question_read(answer) do |reads, marks|
+      with_question_read(QuestionView.new(row: question, body: answer)) do |reads, marks|
         get_as path
 
         assert_response :ok
         assert_response_matches_contract
         assert response.parsed_body == answer, "the question view was changed"
-        assert_equal [ [ @builder.id, question.id ] ], reads
-        assert_equal [ question.id ], marks
+        assert_equal [ [ @builder.id, task.id, question.id ] ], reads
+        marked, seat_id = marks.sole
+        assert_same question, marked
+        assert_equal @builder.id, seat_id
       end
     end
   end
 
-  test "get_question will not read or mark a question for the wrong seat or task" do
+  test "get_question passes the signed in seat and both path ids and marks nothing on a refused or missing read" do
     task = @scenario.task(state: "working", builder: @builder)
     question = @scenario.question(task, outcome: "answered")
     other_task = @scenario.task
@@ -378,20 +382,27 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     foreign = Scenario.new
     stranger = foreign.seat
 
-    with_question_read(self.class.example("Question")) do |reads, marks|
-      [ @scenario.token_for(other_seat), foreign.token_for(stranger) ].each do |token|
-        get_as "/v1/tasks/#{task.id}/questions/#{question.id}", token: token
-        assert_equal 404, response.status
-        assert_equal "not_found", response.parsed_body.dig("error", "code")
-        assert_response_matches_contract
-      end
+    refusal = T::Refusal.new(code: "not_holder")
+    reader = ->(seat) { refusal if seat.id == other_seat.id }
+    with_question_read(reader) do |reads, marks|
+      path = "/v1/tasks/#{task.id}/questions/#{question.id}"
+      get_as path, token: @scenario.token_for(other_seat)
+      assert_response :conflict
+      assert_matches_component("Refusal", response.parsed_body)
+      assert_equal refusal.to_h, response.parsed_body
+
+      get_as path, token: foreign.token_for(stranger)
+      assert_error :not_found, "not_found"
+      assert_response_matches_contract
+
       [ [ other_task.id, question.id ], [ "not-a-uuid", question.id ], [ task.id, "not-a-uuid" ] ].each do |task_id, question_id|
         get_as "/v1/tasks/#{task_id}/questions/#{question_id}"
         assert_equal 404, response.status
         assert_equal "not_found", response.parsed_body.dig("error", "code")
         assert_response_matches_contract
       end
-      assert_empty reads
+      assert_equal [ [ other_seat.id, task.id, question.id ], [ stranger.id, task.id, question.id ],
+                     [ @builder.id, other_task.id, question.id ] ], reads
       assert_empty marks
     end
   end
@@ -405,7 +416,7 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
       assert_response :conflict
       assert_matches_component("Refusal", response.parsed_body)
       assert_equal refusal.to_h, response.parsed_body
-      assert_equal [ [ @builder.id, question.id ] ], reads
+      assert_equal [ [ @builder.id, task.id, question.id ] ], reads
       assert_empty marks
     end
   end
@@ -416,12 +427,12 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     view = self.class.example("Question").merge("id" => question.id, "task_id" => task.id, "asking_seat_id" => @builder.id,
       "answer" => nil, "basis" => nil, "answered_by_kind" => nil, "answered_by_id" => nil)
 
-    with_question_read(view) do |reads, marks|
+    with_question_read(QuestionView.new(row: question, body: view)) do |reads, marks|
       get_as "/v1/tasks/#{task.id}/questions/#{question.id}"
 
       assert_response :ok
       assert_response_matches_contract
-      assert_equal [ [ @builder.id, question.id ] ], reads
+      assert_equal [ [ @builder.id, task.id, question.id ] ], reads
       assert_empty marks
     end
   end
