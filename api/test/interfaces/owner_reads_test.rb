@@ -611,6 +611,38 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal [ shown.id ], assert_read("/v1/owner/credentials")["credentials"].map { |row| row.dig("credential", "id") }
   end
 
+  test "the credentials list pairs each added credential in handoff order with its newest reading or null" do
+    token = scenario.token_credential(position: 4)
+    running = scenario.credential(added: false, position: 2)
+    login = scenario.credential(position: 1)
+    unread = scenario.credential(position: 3)
+    other = Scenario.new
+    foreign = other.credential
+    now = scenario.database_now
+    observed_at = now - 30
+    figures = [ { "label" => "Five hours", "kind" => "limit", "window" => "five_hour",
+                  "percent_used" => 0, "reset_at" => nil, "value" => nil } ]
+    resets = [ { "kind" => "five_hour", "count" => 0, "expires_at" => nil } ]
+
+    scenario.reading(login, observed_at: observed_at, created_at: now - 10, tool_version: "0.0.0-made-up", figures: figures, resets: resets)
+    scenario.reading(login, observed_at: now - 60, created_at: now, state: "unavailable")
+    scenario.reading(token, observed_at: now, state: "unavailable")
+    scenario.reading(running, observed_at: now)
+    other.reading(foreign, observed_at: now)
+
+    body = assert_read("/v1/owner/credentials")
+
+    assert_equal last_seq, body["as_of_seq"]
+    rows = body["credentials"]
+    assert_equal [ login.id, unread.id, token.id ], rows.map { |row| row.dig("credential", "id") }
+    assert_equal({ "credential_id" => login.id, "observed_at" => observed_at.utc.iso8601(6), "state" => "ok",
+                   "tool_version" => "0.0.0-made-up", "figures" => figures, "resets" => resets }, rows.first.fetch("reading"))
+    assert_nil rows.second.fetch("reading")
+    assert_equal({ "credential_id" => token.id, "observed_at" => now.utc.iso8601(6), "state" => "unavailable",
+                   "tool_version" => nil, "figures" => [], "resets" => nil }, rows.last.fetch("reading"))
+    assert_no_match(/"[^" ]*(?:token|secret|password|digest|hash)[^" ]*"\s*:/i, response.body)
+  end
+
   # --- get_system_health ----------------------------------------------------------------------------------------------
 
   test "the health line says the sweep is late when it never ran, and counts the queues (IN-33)" do
