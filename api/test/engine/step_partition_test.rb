@@ -154,6 +154,35 @@ class StepPartitionTest < ActiveSupport::TestCase
     assert_empty RULE_11_REACHED - ends.to_a, "no walk ended a waiting command this way"
   end
 
+  # AT-3: the app asks about each action and grants delayed leases from
+  # inside a different command. Those entries show up in events rather
+  # than as requests in the walk log.
+  QUESTIONS_AND_APPROVALS = %w[
+    approve_action stop_action start_action report_action_done waive_action mark_action_done offer_task_again
+    return_for_rework overturn_approval ask_question request_access answer_question overturn_answer grant_access
+    report_cost create_project edit_brief pause_project resume_project change_budget change_task_priority
+    change_task_project change_task_cap delete_content change_workspace_settings
+  ].freeze
+  QUESTIONS_AND_APPROVALS_SEEDS = (10_041..10_044)
+
+  test "the walks complete milestone 5's commands and run its timers on due jobs" do
+    completed = Set.new
+    action_events = Set.new
+    timed_out = Set.new
+    QUESTIONS_AND_APPROVALS_SEEDS.each do |seed|
+      walk = Walk.new(seed: seed, steps: 120).run
+      completed.merge(walk.log.select { |step| step.answer == "completed" }.map(&:command))
+      events = Event.where(workspace_id: walk.workspace_id)
+      action_events.merge(events.where(type: %w[action.requested action.lease_granted]).distinct.pluck(:type))
+      timed_out.merge(events.where(type: "job.timed_out").joins("JOIN jobs ON jobs.id = events.subject_id")
+        .pluck(Arel.sql("jobs.kind"), Arel.sql("CASE WHEN jobs.claimed_at IS NULL THEN 'queue' ELSE 'run' END")))
+    end
+    assert_empty QUESTIONS_AND_APPROVALS - completed.to_a, "the walks never completed these"
+    assert_empty %w[action.requested action.lease_granted] - action_events.to_a, "the app entries never acted"
+    assert_empty [ %w[approval queue], %w[approval run], %w[question queue], %w[question run] ] - timed_out.to_a,
+      "the walks never timed out these jobs"
+  end
+
   # The commands that withdrew a check of a waiting command (rule 11):
   # the command whose key wrote the withdrawn check.finished, or the lease
   # timer whose end came with it.
