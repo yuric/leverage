@@ -22,15 +22,9 @@ module Leverage
       #                           workspace's due holds, oldest due first,
       #                           at most params limit (default BATCH).
       #
-      # A row from Finishing is not served in this milestone (HS-3): a named
-      # task in Finishing is invalid_state, and the sweep takes none.
-      #
       # Result: released_task_ids, the tasks whose hold it closed.
       class CredentialHoldRelease < Entry
         BATCH = 100
-
-        # The task states whose rows are not served yet (HS-3).
-        NOT_SERVED_FROM = %w[finishing].freeze
 
         def initialize(command = self.class.command, targets: nil)
           super(command)
@@ -52,15 +46,11 @@ module Leverage
           end
         end
 
-        # A named task must be in a state the timer has a row for, and one
-        # that is served.
+        # A named task must be in a state the timer has a row for.
         def refusals(_ctx)
           return [] unless @named
 
-          state = @tasks.sole.state
-          return [ Refusal.new(code: "invalid_state") ] if NOT_SERVED_FROM.include?(state)
-
-          [ state_refusal(state) ].compact
+          [ state_refusal(@tasks.sole.state) ].compact
         end
 
         def perform(ctx)
@@ -73,7 +63,7 @@ module Leverage
 
         private
 
-        def from_states = rows.map { |row| row.fetch("from") } - NOT_SERVED_FROM
+        def from_states = rows.map { |row| row.fetch("from") }
       end
     end
   end

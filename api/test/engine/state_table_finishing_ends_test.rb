@@ -17,7 +17,7 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
     seat_hold = scenario.hold(task, reason: "seat_paused")
     key = new_key
     written = nil
-    calls = answering(Leverage::Finishing, :lose_builder) do
+    calls = recording_builder_loss do
       written = events_written do
         assert_completed(seat_command(@builder, "release", { "id" => task.id, "reason" => "unable_to_continue" }, key: key))
       end
@@ -40,7 +40,7 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
     scenario.make_due(task, at: due)
     row = finishing_row("builder_lease_expiry")
     written = nil
-    calls = answering(Leverage::Finishing, :lose_builder) do
+    calls = recording_builder_loss do
       written = events_written do
         outcome = T.apply(T::Request.new(command: "builder_lease_expiry", workspace_id: scenario.workspace_id,
           caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: {}))
@@ -62,7 +62,7 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
     last = Event.where(task_id: task.id).order(:seq).last
     scenario.make_due(task, at: last.effective_at - 1)
     written = nil
-    calls = answering(Leverage::Finishing, :lose_builder) do
+    calls = recording_builder_loss do
       answering(Leverage::WorkspaceLock, :clock, -> { last.at - 1 }) do
         written = events_written { assert_refused("lease_expired", seat_command(@builder, "heartbeat", { "id" => task.id })) }
       end
@@ -131,7 +131,7 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
       held = finishing
       key = new_key
       written = nil
-      calls = answering(Leverage::Finishing, :lose_builder) do
+      calls = recording_builder_loss do
         waiting_calls = answering(Leverage::Finishing, :waiting_for, ->(_seat) { waiting }) do
           written = events_written { assert_completed(owner_command(command, params.merge("id" => @builder.id), key: key)) }
         end
@@ -165,6 +165,16 @@ class StateTableFinishingEndsTest < ActiveSupport::TestCase
   end
 
   private
+
+  # Keep the post-command lease scan from granting a lease in cases
+  # where the spy stands in for the hold that would prevent the grant.
+  def recording_builder_loss(&block)
+    calls = nil
+    answering(Leverage::Finishing, :after_command) do
+      calls = answering(Leverage::Finishing, :lose_builder, &block)
+    end
+    calls
+  end
 
   def finishing(holder: true, state: "approved")
     scenario.finishing_task(builder: @builder, holder: holder, actions: [ { kind: "send", state: state } ])

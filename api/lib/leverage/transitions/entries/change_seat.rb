@@ -24,7 +24,8 @@ module Leverage
       #   runs, stop_seat is queued; a Working task the seat holds is
       #   released to Ready with seat_disabled, caused by seat.changed
       #   (SeatRuns.release_working_task), and its seat-bound holds close
-      #   (Holds.close_seat_bound, with HE-35's wait_cause). A review the
+      #   (Holds.close_seat_bound, with HE-35's wait_cause). Finishing
+      #   tasks with open approvals are held (L147, AP-19). A review the
       #   seat holds is released when its run is reported stopped (IF-21).
       #   enabled true starts nothing: the owner chooses Start. Milestone 4
       #   (plan §2.1 rule 11): the pending submit of that Working task, and a
@@ -33,10 +34,6 @@ module Leverage
       #   pass is cancelled when its run is reported stopped (SeatRuns), not
       #   by the change; a job the seat holds as a checker or a planner is
       #   left to its run timeout.
-      #
-      # The row's other side events need Finishing (action_unconfirmed,
-      # milestone 5), checks and jobs (milestone 4) or No reviewer is
-      # eligible (SM-42, milestone 4) and are not written.
       #
       # A request that changes no field (an empty body, or every field set
       # to what it is) completes with no event and changes nothing.
@@ -58,6 +55,11 @@ module Leverage
           end
           if @params.key?("role") && !Contract.list("seat_roles").include?(@params["role"])
             raise Invalid, "A seat is a builder, a reviewer, a planner or an orchestrator"
+          end
+
+          rank = @params["strength_rank"]
+          unless rank.nil? || [ 1, 2, 3 ].include?(rank)
+            raise Invalid, "A seat's strength rank is 1, 2 or 3"
           end
 
           load_login(ctx) if @params.key?("credential_id")
@@ -127,6 +129,7 @@ module Leverage
             task = Task.find(released.task_id)
             Holds.close_seat_bound(ctx, task, cause: released, wait_cause: Candidates.wait_cause(task, ctx.at))
           end
+          SeatRuns.hold_finishing_tasks(ctx, @seat, cause: changed)
           @seat.credential_id && SeatRuns.queue(ctx, "stop_seat", seat: @seat)
         end
 

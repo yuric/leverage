@@ -7,7 +7,8 @@ module Leverage
       # the app runs, queues stop_seat. A Working task the seat holds is
       # released to Ready (task.released, seat_removed, caused by
       # seat.removed), unless its lease has already passed its due time,
-      # which is the lease timer's. A review the seat holds with a live or
+      # which is the lease timer's. Finishing tasks with open approvals
+      # are held (L147, AP-19). A review the seat holds with a live or
       # paused lease is released too (review.released), so another reviewer
       # can claim it at once: a removed seat can never act on it again, and
       # a seat that connects on its own has no run whose stop would release
@@ -16,8 +17,7 @@ module Leverage
       # cancelled with invalid_state, after seat.removed and before the task
       # or the review is released (milestone 4 plan §2.1 rule 11,
       # SeatRuns.removed). A job the seat holds as a checker or a planner is
-      # left to its run timeout. The row's other side events need holds of
-      # later milestones and are not written.
+      # left to its run timeout.
       #
       # A removed or unknown seat is 404.
       #

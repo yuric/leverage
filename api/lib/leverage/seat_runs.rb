@@ -189,14 +189,16 @@ module Leverage
     # A seat removed (IN-17, IN-40): its token answers no more from this
     # moment, it is no longer wanted running, a Working task it holds is
     # released with seat_removed (caused by removed, the seat.removed
-    # Event), a review it holds is released, and a seat the app runs gets
-    # a stop_seat request. A pending submit, a pending pass or a
-    # provisional claim of the seat is cancelled first (rule 11).
+    # Event), its Finishing tasks with open approvals are held, its held
+    # reviews are released, and a seat the app runs gets a stop_seat
+    # request. A pending submit, a pending pass or a provisional claim of
+    # the seat is cancelled first (rule 11).
     #
     # Returns the stop_seat HelperRequest, or nil.
     def removed(ctx, seat, cause:)
       seat.update!(token_hash: nil, wanted_running: false)
       release_working_task(ctx, seat, reason: "seat_removed", cause: cause)
+      hold_finishing_tasks(ctx, seat, cause: cause)
       held_reviews(ctx, seat).each do |review|
         cancel_pending(ctx, Task.find(review.task_id))
         release_review(ctx, review)
@@ -273,6 +275,16 @@ module Leverage
         payload: { reason: reason, wait_cause: (wait_cause unless bound) })
       Holds.close_seat_bound(ctx, task, cause: released, wait_cause: wait_cause) if bound
       released
+    end
+
+    # Losing an enabled builder seat holds both its current Finishing
+    # task and any that wait for it. A held task keeps the holder and the
+    # hold pauses its lease (L147, AP-19).
+    def hold_finishing_tasks(ctx, seat, cause:)
+      held = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id, state: "finishing").to_a
+      (held + Finishing.waiting_for(seat)).uniq.each do |task|
+        Finishing.lose_builder(ctx, task, cause: cause)
+      end
     end
 
     # Cancels the provisional claim the seat holds, if it holds one (PRD
