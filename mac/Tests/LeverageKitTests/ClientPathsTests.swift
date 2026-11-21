@@ -337,6 +337,31 @@ struct ClientPathsTests {
         #expect(Set(Self.calls.keys) == Set(ContractDocument.served))
     }
 
+    @Test("agent and helper polls give the server its requested wait and a timeout margin",
+          arguments: [nil, 0, 12] as [Int?])
+    func nextTimeout(wait: Int?) async throws {
+        let host = "next-timeout-\(wait.map(String.init) ?? "default").test"
+        let session = StubURLProtocol.session(host: host, answers: [
+            .init(status: 200, json: #"{"kind":"none","id":null,"review_id":null}"#),
+            .init(status: 200, json: #"{"request":null}"#),
+        ])
+        let clients = Clients(baseURL: URL(string: "http://\(host)")!, session: session)
+
+        let item = try await clients.agent.next(wait: wait)
+        let next = try await clients.helper.next(wait: wait)
+        #expect(item.kind == .none)
+        #expect(next.request == nil)
+
+        let requests = StubURLProtocol.requests(host: host)
+        #expect(requests.count == 2)
+        let expectedWait = wait ?? 30 // IF-14 sets the server default for both operations.
+        for sent in requests {
+            let query = sent.url?.query
+            #expect(query == "wait=\(expectedWait)" || (query == nil && wait == nil))
+            #expect(sent.request.timeoutInterval >= TimeInterval(expectedWait) + HTTPTransport.longPollMargin)
+        }
+    }
+
     @Test("each client method sends its registry operation", arguments: ContractDocument.served)
     func sendsItsOperation(operation: String) async throws {
         let entry = try #require(ContractDocument.operation(operation))
