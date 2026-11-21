@@ -83,6 +83,8 @@ class Handler(BaseHTTPRequestHandler):
                 key: value for key, value in expected["contract"].items() if key != "work_reference"
             }
             assert work_folder.is_dir()
+            scenario = json.loads((work_folder.parent / "reviewer-tools/state/scenario.json").read_text())
+            assert expected["review"]["evidence"] in scenario["reviews"][0]["notes"]
             if index == 2:
                 assert self.server.first_page_reads > 0, "the second task started before checking the first"
             self.server.pages[f"/v1/owner/tasks/{task_id}"] = self.page(task_id, index)
@@ -91,10 +93,12 @@ class Handler(BaseHTTPRequestHandler):
             ready = instruction.with_suffix(".ready")
             ready.unlink(missing_ok=True)
             instruction.write_text(f"{index}\n{work_folder}\n")
-            deadline = monotonic() + 2
-            while not ready.exists() and monotonic() < deadline:
+            deadline = monotonic() + 3
+            orchestrator_ready = instruction.with_name("orchestrator-ready")
+            while not (ready.exists() and orchestrator_ready.exists()) and monotonic() < deadline:
                 sleep(0.02)
             assert ready.exists(), "the builder shim did not receive the action"
+            assert orchestrator_ready.exists(), "the orchestrator shim did not check the launch limit"
             instruction.unlink()
             result = None
         self.answer({"outcome": "completed", "result": result})
@@ -109,7 +113,7 @@ class Handler(BaseHTTPRequestHandler):
                     "actor_id": ident(actor), "task_id": task_id, "subject_id": subject, "payload": payload or {}}
 
         events = []
-        stopped = not first and fault != "owner"
+        stopped = not first and fault not in {"owner", "fallback"}
         effect = "approved" if first else ("stopped" if stopped else "passed_to_owner")
         events.append(event("job.finished", 3, ident(500 + index)))
         events.append(event("check.finished", 3, ident(600 + index), {
@@ -131,8 +135,10 @@ class Handler(BaseHTTPRequestHandler):
                          "approved_by_kind": "seat" if first else None,
                          "approved_by_id": ident(approver) if first else None}],
             "holds": [] if stopped or first else [{"reason": "owner_approval", "closed_at": None}],
-            "inbox_items": [] if stopped or first else [{"kind": "owner_approval", "facts": {"action_id": action_id}}],
+            "inbox_items": [] if stopped or first else [{"kind": "approval", "facts": {"action_id": action_id}}],
             "events": events,
+            "rule_checks": [{"rule_id": ident(90),
+                             "reason": "The agent gave no decision." if fault == "fallback" else "Fixture decision."}],
         }
 
     def handle_one_request(self):
@@ -151,7 +157,7 @@ from pathlib import Path
 
 name = Path(sys.argv[0]).name
 args = sys.argv[1:]
-work = Path(os.environ.get("TEST_SHIM_ROOT", Path(sys.argv[0]).resolve().parent.parent))
+work = Path(os.environ.get("TEST_SHIM_ROOT", Path(sys.argv[0]).resolve().parent))
 with (work / "calls").open("a") as calls:
     calls.write(name + "\n")
 if name in {"claude", "codex", "agy", "grok"}:
@@ -171,6 +177,8 @@ elif name == "docker":
         print("COPY public.events (seq, payload) FROM stdin;\n1\t{}\n\\.")
     elif operation == "up":
         assert args[-3:] == ["db", "api", "sweep"]
+    elif operation == "logs" and (work / "fault").read_text() == "leaked-token":
+        print("lvs_mock_" + "0" * 24)
     elif operation not in {"logs", "down"}:
         sys.exit(7)
 elif name == "swift":
@@ -194,15 +202,16 @@ elif name == "LeverageRunner":
             subprocess.run([str(tool)], check=True, capture_output=True, timeout=2)
         # The real path has an explicit launch ceiling.
         assert subprocess.run([str(tool)], capture_output=True, timeout=2).returncode != 0
+        (work / "orchestrator-ready").touch()
     else:
         assert "LEVERAGE_DEV_TOOL_LOGIN" not in os.environ
         assert tool.parent == Path(os.environ["LEVERAGE_TOOL_DIR"])
         assert tool.name == {"builder": "claude", "reviewer": "codex"}[role]
-        work = Path(os.environ["TMPDIR"]).parent
         instruction = work / "task-folder"
         ready = instruction.with_suffix(".ready")
         if role == "builder":
-            while True:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
                 if instruction.exists() and not ready.exists():
                     index, folder = instruction.read_text().splitlines()
                     scenario = json.loads((tool.parent.parent / "state/scenario.json").read_text())
@@ -247,9 +256,10 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
     bash = shutil.which("bash")
     failures = []
 
-    def run(arguments, variables):
+    def run(arguments, variables, *, tracing=False):
         calls.unlink(missing_ok=True)
-        return subprocess.run([bash, str(script), *arguments], cwd=root, env=env | variables,
+        options = ["-x"] if tracing else []
+        return subprocess.run([bash, *options, str(script), *arguments], cwd=root, env=env | variables,
                               capture_output=True, text=True, timeout=15)
 
     def check(condition, message):
@@ -275,20 +285,28 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
               f"expected refusal {reason!r}, got exit {result.returncode}")
         check(not calls.exists(), f"refusal {reason!r} started a command")
 
+    traced = run(["claude"], {"CI": "1"}, tracing=True)
+    check(traced.returncode == 2 and traced.stderr.startswith("real_approval_check:"),
+          "the script printed an inherited shell trace line")
+
     for index, (fault, expected_status, message) in enumerate([
         ("none", 0, "passed"),
         ("owner", 0, "passed"),
+        ("fallback", 1, "the second check gave no decision"),
         ("approval-actor", 1, "orchestrator"),
         ("report-actor", 1, "builder"),
         ("second-approval", 1, "second action"),
         ("no-touch", 1, "first canary"),
         ("second-touch", 1, "second canary"),
         ("http-body", 1, "HTTP 422"),
+        ("leaked-token", 1, "the secret scan found a leak"),
+        ("fixed-port", 1, "dynamic loopback port"),
     ]):
         out = work / f"results-{index}"
         scratch = work / f"scratch-{index}"
         (work / "fault").write_text(fault)
         marker.unlink(missing_ok=True)
+        (work / "orchestrator-ready").unlink(missing_ok=True)
         with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
             server.tasks, server.pages = {}, {}
             server.rules = {ident(i): {"key": key, "id": ident(i), "enabled": True}
@@ -298,7 +316,8 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
             thread.start()
             try:
                 result = run(["claude"], {"LEVERAGE_REAL_PROVIDER": "claude",
-                             "FIXTURE_PORT": str(server.server_port), "LEVERAGE_E2E_SCRATCH": str(scratch),
+                             "FIXTURE_PORT": "3000" if fault == "fixed-port" else str(server.server_port),
+                             "LEVERAGE_E2E_SCRATCH": str(scratch),
                              "LEVERAGE_APPROVAL_CHECK_OUT": str(out)})
             finally:
                 server.shutdown()
@@ -317,6 +336,8 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
                 for path in out.iterdir():
                     check(quiet_value not in path.read_text() and token(0) not in path.read_text(),
                           f"{fault}: private data escaped into results")
+        else:
+            check(not out.exists(), f"{fault}: failed run published results")
         check(not list((work / "tmp").glob("leverage-real-approval-check-*")),
               f"{fault}: private run folder remained")
 
