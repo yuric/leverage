@@ -616,7 +616,6 @@ Where two inventories chose differently, the decision names the conflict.
   is deferred. If another frozen gate fails, the action stays stopped,
   and the owner may waive it or return the task for rework when allowed.
 
-
 ## Rules and checks (RC)
 
 - **RC-7** `[owner]` Shipped rules: scope all tasks; gates `on_fail:
