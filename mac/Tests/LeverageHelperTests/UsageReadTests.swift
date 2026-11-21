@@ -78,6 +78,20 @@ struct UsageReadTests {
         #expect(try rig.tools.calls().isEmpty)
     }
 
+    @Test("a login reader without a tested version does not start the tool")
+    func noTestedVersion() async throws {
+        let rig = try HelperRig()
+        let readings = Self.recordReadings(rig)
+        let read = UsageRead(
+            api: rig.api, settings: rig.settings, timings: fastTimings, http: ProviderHTTP(),
+            vault: MemoryTokenVault(), log: quietLog, testedVersions: { _ in [] })
+
+        _ = await read.run(loginRequest(UUID(), provider: .codex))
+        #expect(readings.value.first?.state == .unavailable)
+        #expect(readings.value.first?.toolVersion == nil)
+        #expect(try rig.tools.calls().isEmpty)
+    }
+
     @Test("an unknown version reports the version while running only the version command")
     func versionGate() async throws {
         let rig = try HelperRig()
