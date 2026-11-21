@@ -30,7 +30,7 @@
   },
   "action": {
     "kind": "send",
-    "description": "Send the weekly inventory update to the Stockroom Shift group.",
+    "description": "Send the weekly inventory update to the stockroom team.",
     "position": 1
   },
   "review": {

@@ -30,7 +30,7 @@
   },
   "action": {
     "kind": "publish",
-    "description": "Publish the one-page training recap on the training office release board.",
+    "description": "Publish the one-page training recap on the usual release board.",
     "position": 1
   },
   "review": {

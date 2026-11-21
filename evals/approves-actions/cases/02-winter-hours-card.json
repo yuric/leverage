@@ -30,7 +30,7 @@
   },
   "action": {
     "kind": "publish",
-    "description": "Make the tentative winter hours card visible on the public Hours page of the workshop site.",
+    "description": "Publish the tentative winter hours card on the workshop site's public Hours page.",
     "position": 1
   },
   "review": {

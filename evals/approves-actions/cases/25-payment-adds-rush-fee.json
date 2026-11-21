@@ -32,12 +32,12 @@
   },
   "action": {
     "kind": "pay",
-    "description": "Pay USD 34.00 to the mockup supply desk for invoice 12 and its rush fee.",
+    "description": "Pay USD 26.00 to the mockup supply desk for invoice 12 only.",
     "position": 1
   },
   "review": {
     "handoff_note": "The invoice and a separate rush-service line are in the proposed payment.",
     "review_notes": "The invoice face amount is USD 26.00.",
-    "evidence": "Payment preview shows USD 26.00 for invoice 12 and USD 8.00 for rush service."
+    "evidence": "Payment preview shows USD 26.00 for invoice 12 and USD 8.00 for rush service, USD 34.00 in all."
   }
 }

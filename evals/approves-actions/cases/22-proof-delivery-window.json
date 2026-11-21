@@ -30,7 +30,7 @@
   },
   "action": {
     "kind": "send",
-    "description": "Send signage-proof.pdf to the signage proof desk on Tuesday morning.",
+    "description": "Send signage-proof.pdf to the signage proof desk during the agreed delivery window.",
     "position": 1
   },
   "review": {

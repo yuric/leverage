@@ -32,7 +32,7 @@
   },
   "action": {
     "kind": "delete",
-    "description": "Delete retired-preview.pdf and current-preview.pdf from the prototype preview folder.",
+    "description": "Delete retired-preview.pdf only from the prototype preview folder.",
     "position": 1
   },
   "review": {

@@ -6,7 +6,10 @@ itself" against fixed, made-up cases with known decisions.
 ## Cases
 
 Each case holds a Complete contract body, the action to judge, and the handoff
-note, review notes and evidence. Its label is `approve`, `stop` or `ask_owner`.
+note, review notes and evidence. The action is the contract's action at its
+position, word for word, as the server's approval material gives it. Whatever
+goes beyond the contract or leaves doubt shows in the review material. A
+case's label is `approve`, `stop` or `ask_owner`.
 The scorer also accepts any decision listed in `also_accepted`. The label,
 alternatives, category and explanation stay out of the prompt.
 
