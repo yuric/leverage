@@ -14,7 +14,7 @@ class TracesTest < Minitest::Test
   # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13), the
   # five the handoff milestone adds, also with no rules (milestone 3 plan
   # HT-1; PRD R-7), and the four the rule checks milestone adds (milestone
-  # 4 plan RT-1).
+  # 4 plan RT-1), then four for questions and approvals (milestone 5 AT-1).
   NAMES = %w[
     01-happy-path 02-failed-review-rework 03-stop-rework-pass-approve-done
     04-two-actions-custom-rule 05-limit-handoff 06-signed-out-hold-verify
@@ -25,6 +25,8 @@ class TracesTest < Minitest::Test
     15-owner-controls-no-rules
     16-model-gate-and-draft 17-submit-rule-rerun-and-override
     18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
+    20-questions-and-access 21-money-projects-escalation
+    22-finishing-edges 23-owner-housekeeping
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
   # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
