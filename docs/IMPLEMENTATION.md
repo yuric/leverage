@@ -1319,14 +1319,17 @@ and the adversarial review.
 The three stand-in cases cover Add and usage, API token checks and
 cleanup, and recovery after a reading or a reorder. In the three WP13
 Mac runs every Credentials database passed replay, audit and scans.
-The recovery times in the third run were two and one seconds against
-the working 900-second bar. The pinned Swift 6.4.2 arm64 Linux run
+The final Mac gate also passed all five end-to-end scripts. In its
+Credentials run, replay and audit passed with 33, 23 and 74 events,
+and both recoveries took two and one seconds against the working
+900-second bar. The pinned Swift 6.4.2 arm64 Linux run
 passed all three cases, with 33, 23 and 74 events respectively. This
 exercises the Linux-built token path. The hosted x86_64 job remains
 unverified by the local package.
 
 Final integration exercised 124 focused API tests with 985 assertions.
 The full API suite passed 4,208 tests with no failures, errors or skips.
+The 1,000-walk gate reported 1,007 tests and 8,073 assertions.
 The Mac suite reported 1,562 tests in 177 suites. Its 29 environment
 gates cover the separately invoked end-to-end cases and real developer
 checks. No gate waits for another package. The Refresh count test now
