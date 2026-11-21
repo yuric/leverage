@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The Add credential pop-up (MA-17). Built by the Credentials screen, which
 /// gives it the way to close itself; the shell's `ScreenContext` is in the
-/// environment. `finish` runs when the login was added and when the owner
+/// environment. `finish` runs when the credential was added and when the owner
 /// cancels.
 struct AddCredentialSheet: View {
     let finish: @MainActor () -> Void
@@ -12,7 +12,7 @@ struct AddCredentialSheet: View {
 
     var body: some View {
         let model = box.model {
-            AddCredentialModel(api: context.owner, onAdded: finish)
+            AddCredentialModel(api: context.owner, onAdded: finish, helper: context.runtime.helper)
         }
         AddCredentialForm(
             model: model,
@@ -53,21 +53,14 @@ struct AddCredentialForm: View {
     private var pickStep: some View {
         VStack(alignment: .leading, spacing: 8) {
             label(CredentialsCopy.stepPick.text)
-            ForEach(model.providers) { choice in
-                Button {
-                    model.pick(choice.provider)
-                } label: {
-                    HStack {
-                        Text(verbatim: choice.name)
-                        Spacer(minLength: 0)
-                        if choice.isAdded {
-                            Text(CredentialsCopy.added.text)
-                                .foregroundStyle(Tokens.Palette.text2)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 28)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    label(AddTokenCopy.loginProviders.text)
+                    providerButtons(for: .login)
+                    label(AddTokenCopy.tokenProviders.text)
+                    providerButtons(for: .apiToken)
                 }
-                .disabled(choice.isAdded)
+                .padding(.horizontal, 2)
             }
             if let line = model.failure {
                 problem(line)
@@ -75,22 +68,53 @@ struct AddCredentialForm: View {
         }
     }
 
+    private func providerButtons(for kind: CredentialKind) -> some View {
+        ForEach(model.providers.filter { $0.kind == kind }) { choice in
+            Button {
+                model.pick(choice.provider)
+            } label: {
+                HStack {
+                    Text(verbatim: choice.name)
+                    Spacer(minLength: 0)
+                    if choice.isAdded {
+                        Text(CredentialsCopy.added.text)
+                            .foregroundStyle(Tokens.Palette.text2)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 28)
+            }
+            .disabled(choice.isAdded)
+        }
+    }
+
     // MARK: step 2
 
     private var nameStep: some View {
-        let provider = model.provider.map(ProviderNames.name) ?? ""
+        let provider = model.selection?.name ?? ""
         return VStack(alignment: .leading, spacing: 8) {
-            label(CredentialsCopy.stepName.text)
+            label(model.isToken ? AddTokenCopy.stepName.text : CredentialsCopy.stepName.text)
             FormField(
-                label: CredentialsCopy.nameLabel.filled(["provider": provider]),
-                hint: CredentialsCopy.nameHint.filled(["provider": provider])
+                label: model.isToken ? AddTokenCopy.nameLabel.filled(["provider": provider])
+                    : CredentialsCopy.nameLabel.filled(["provider": provider]),
+                hint: model.isToken ? nil : CredentialsCopy.nameHint.filled(["provider": provider])
             ) {
                 TextField(CredentialsCopy.namePlaceholder.text, text: $model.name)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await model.signIn() } }
+                    .onSubmit {
+                        Task {
+                            if model.isToken { await model.addToken() } else { await model.signIn() }
+                        }
+                    }
             }
             if let line = model.nameLine {
                 problem(line)
+            }
+            if model.isToken {
+                FormField(label: AddTokenCopy.tokenLabel.text) {
+                    SecureField(AddTokenCopy.tokenLabel.text, text: $model.token)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { Task { await model.addToken() } }
+                }
             }
         }
     }
@@ -151,10 +175,17 @@ struct AddCredentialForm: View {
                 .keyboardShortcut(.cancelAction)
             switch model.step {
             case .nameIt:
-                Button(CredentialsCopy.signIn.text) { Task { await model.signIn() } }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.canSignIn)
+                if model.isToken {
+                    Button(AddTokenCopy.add.text) { Task { await model.addToken() } }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!model.canAddToken)
+                } else {
+                    Button(CredentialsCopy.signIn.text) { Task { await model.signIn() } }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!model.canSignIn)
+                }
             case .checking where model.canRetry:
                 Button(CredentialsCopy.retry.text) { Task { await model.retry() } }
                     .buttonStyle(PrimaryButtonStyle())
