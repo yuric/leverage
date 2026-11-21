@@ -6,9 +6,7 @@ import http.server
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -26,9 +24,10 @@ SEAT_TOKEN = "stand-in-builder-token"
 PRIVATE_TEXT = "stand-in raw response must stay private"
 RULES = [f"00000000-0000-4000-8000-00000000020{i}" for i in range(7)]
 
-SHIM = r"""
+SHIM = r'''
 import json, os, pathlib, subprocess, sys, time
-p = pathlib.Path(os.environ["STAND_IN_ROOT"])
+p = pathlib.Path(sys.argv[0]).resolve().parent.parent
+mode = (p / "mode").read_text() if (p / "mode").exists() else ""
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 with (p / "calls").open("a") as log:
@@ -38,7 +37,7 @@ if name == "docker":
         print("127.0.0.1:" + os.environ["STAND_IN_PORT"])
     elif "leverage:verify_log" in args:
         print("verify_log: stand-in workspace verified")
-    elif "logs" in args and os.environ.get("STAND_IN_MODE") == "leak":
+    elif "logs" in args and mode == "leak":
         print("stand-in-builder-token")
     elif not any(cmd in args for cmd in ("up", "down", "logs", "rm")):
         sys.exit(92)
@@ -51,6 +50,10 @@ elif name == "LeverageRunner":
     assert "LEVERAGE_DEV_TOOL_LOGIN" not in os.environ
     assert pathlib.Path(os.environ["LEVERAGE_TOOL_PATH"]).parent == pathlib.Path(
         os.environ["LEVERAGE_TOOL_DIR"])
+    parent = os.getppid()
+    end = time.monotonic() + 20
+    while time.monotonic() < end and os.getppid() == parent:
+        time.sleep(0.05)
 elif name == "LeverageMCP":
     assert os.environ["LEVERAGE_SEAT_TOKEN"] == "stand-in-builder-token"
     assert os.environ["LEVERAGE_SEAT_ROLE"] == "builder"
@@ -60,12 +63,13 @@ elif name == "claude":
     server = json.loads(config.read_text())["mcpServers"]["leverage"]
     facts = {"path": str(config), "mode": config.stat().st_mode & 0o777,
              "parent_mode": config.parent.stat().st_mode & 0o777,
-             "mcp": server, "args": args, "cwd": os.getcwd(),
+             "has_builder_token": server["env"]["LEVERAGE_SEAT_TOKEN"] == "stand-in-builder-token",
+             "args": args, "cwd": os.getcwd(),
              "empty": not list(pathlib.Path.cwd().iterdir())}
-    (p / "client.json").write_text(json.dumps(facts))
+    (p / "client.tmp").write_text(json.dumps(facts))
+    (p / "client.tmp").replace(p / "client.json")
     assert "LEVERAGE_SEAT_TOKEN" not in os.environ
     assert "LEVERAGE_REAL_MCP" not in os.environ
-    mode = os.environ.get("STAND_IN_MODE", "")
     cmd = server["command"]
     assert pathlib.Path(cmd).name in ("LeverageMCP", "sh")
     child_env = os.environ.copy()
@@ -80,12 +84,30 @@ elif name == "claude":
     if mode == "failure":
         print("stand-in raw response must stay private", file=sys.stderr)
         sys.exit(1)
+    if mode == "orphan":
+        source = """import pathlib, signal, sys, time
+root = pathlib.Path(sys.argv[1])
+signal.signal(signal.SIGTERM, lambda *_: ((root / 'orphan-stopped').touch(), sys.exit(0)))
+(root / 'orphan-started').touch()
+end = time.monotonic() + 12
+while root.exists() and time.monotonic() < end:
+    time.sleep(0.02)
+"""
+        subprocess.Popen([sys.executable, "-I", "-c", source, str(p)],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        end = time.monotonic() + 3
+        while not (p / "orphan-started").exists() and time.monotonic() < end:
+            time.sleep(0.02)
+        assert (p / "orphan-started").exists()
     pathlib.Path("hello.txt").write_text("ready\n")
     (p / "submitted").touch()
-    print(json.dumps({"is_error": False, "result": "stand-in raw response must stay private"}))
+    result = "stand-in raw response must stay private"
+    if mode == "no_denials":
+        result += "; no MCP tool calls were denied"
+    print(json.dumps({"is_error": False, "result": result, "permission_denials": []}))
 else:
     sys.exit(93)
-"""
+'''
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -122,6 +144,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == "/v1/owner/seats":
             seat = message["role"]
             assert seat in ("builder", "reviewer")
+            assert message["provider"] == ("claude" if seat == "builder" else "codex")
             assert not message.get("credential_id")
             result = completed({"seat_id": BUILDER if seat == "builder" else REVIEWER,
                                 "seat_token": f"stand-in-{seat}-token"})
@@ -177,14 +200,12 @@ class Check(unittest.TestCase):
         # Fixed tool lookup. No provider can be found outside the shims.
         (self.bin / "python3").symlink_to(sys.executable)
         self.env = {"PATH": str(self.bin), "HOME": folder.name, "TMPDIR": folder.name, "LANG": "C",
-                    "STAND_IN_ROOT": folder.name, "DOCKER_CONFIG": "/private/tmp/claude-501/dockercfg",
-                    "DOCKER_HOST": "unix:///Users/yuri/.docker/run/docker.sock",
                     "COMPOSE_PROJECT_NAME": "leverage-m5-wp21", "API_IMAGE_TAG": "leverage-m5-wp21",
                     "LEVERAGE_MCP_CHECK_OUT": str(self.root / "results")}
 
     def start(self, args, env):
         return subprocess.Popen(
-            ["/bin/bash", str(SCRIPT), *args], env={**self.env, **env}, start_new_session=True,
+            ["/bin/bash", "-x", str(SCRIPT), *args], env={**self.env, **env}, start_new_session=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
 
@@ -222,6 +243,7 @@ class Check(unittest.TestCase):
 
     def exercise(self, mode, expected, reason):
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        (self.root / "mode").write_text(mode)
         server.root = self.root
         server.disabled = set()
         server.mode = mode
@@ -230,7 +252,7 @@ class Check(unittest.TestCase):
         try:
             process = self.start(["claude"], {
                 "LEVERAGE_REAL_PROVIDER": "claude", "LEVERAGE_REAL_MCP": "1",
-                "STAND_IN_MODE": mode, "STAND_IN_PORT": str(server.server_port),
+                "STAND_IN_PORT": str(server.server_port),
             })
             facts_file = self.root / "client.json"
             if mode == "interrupt":
@@ -245,6 +267,7 @@ class Check(unittest.TestCase):
             self.assertNotIn(SEAT_TOKEN, output)
             self.assertNotIn("stand-in-session-token", output)
             self.assertNotIn(PRIVATE_TEXT, output)
+            self.assertNotRegex(output, r"(?m)^\+")
             self.assertNotIn("timeout", output.lower())
             self.assertTrue(facts_file.is_file(), "Claude shim did not see settings")
             facts = json.loads(facts_file.read_bytes())
@@ -254,7 +277,7 @@ class Check(unittest.TestCase):
             self.assertNotIn(SCRIPT.parents[1], path.parents)
             self.assertEqual(facts["mode"], 0o600)
             self.assertEqual(facts["parent_mode"], 0o700)
-            self.assertEqual(facts["mcp"]["env"]["LEVERAGE_SEAT_TOKEN"], SEAT_TOKEN)
+            self.assertTrue(facts["has_builder_token"])
             self.assertEqual(Path(facts["cwd"]), server.work_folder)
             self.assertTrue(facts["empty"])
             args = facts["args"]
@@ -288,6 +311,13 @@ class Check(unittest.TestCase):
 
     def test_success(self):
         self.exercise("success", 0, "passed")
+
+    def test_success_with_no_denials(self):
+        self.exercise("no_denials", 0, "passed")
+
+    def test_stops_descendants_after_client_exit(self):
+        self.exercise("orphan", 0, "passed")
+        self.assertTrue((self.root / "orphan-stopped").exists())
 
     def test_failed_client(self):
         self.exercise("failure", 1, "client failed")
