@@ -421,6 +421,18 @@ class OwnerReadsTest < CommittingTestCase
     assert_equal [ { "waiting_for_credential_id" => nil, "waiting_until" => nil } ] * 2, page_and_card(task)
   end
 
+  test "both reads omit a future reset when another eligible account is already available" do
+    own = scenario.credential
+    spare = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    now = scenario.database_now
+    scenario.limit_credential(own, reset_at: now - 1)
+    scenario.limit_credential(spare, reset_at: now + 1800)
+    scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    assert_equal [ { "waiting_for_credential_id" => nil, "waiting_until" => nil } ] * 2, page_and_card(task)
+  end
+
   test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do
     credential = scenario.credential(name: "Signed-out account")
     scenario.seat(role: "builder", credential: credential)
