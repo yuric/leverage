@@ -19,7 +19,10 @@ class RefreshUsageTest < ActiveSupport::TestCase
     scenario.credential(state: "signed_out")
     scenario.token_credential(state: "signed_out")
     scenario.credential(added: false, state: "active")
-    Scenario.new.credential
+    other_workspace = Scenario.new
+    other_login = other_workspace.credential
+    foreign = other_workspace.helper_request(kind: "read_usage", credential: other_login, state: "picked_up",
+      at: other_workspace.database_now - 91.seconds)
     outcome = nil
 
     written = events_written { outcome = assert_completed(owner_command("refresh_usage")) }
@@ -39,7 +42,9 @@ class RefreshUsageTest < ActiveSupport::TestCase
       assert_equal [ "read_usage", "queued", scenario.workspace_id ], [ request.kind, request.state, request.workspace_id ]
       assert_equal({ "provider" => credential.provider, "credential_kind" => credential.kind }, request.params)
     end
-    assert_equal (ids + [ previous.id ]).sort, HelperRequest.where(kind: "read_usage").order(:id).pluck(:id)
+    assert_equal (ids + [ previous.id ]).sort,
+      HelperRequest.where(workspace_id: scenario.workspace_id, kind: "read_usage").order(:id).pluck(:id)
+    assert_equal "picked_up", foreign.reload.state
   end
 
   test "repeating the same key answers the stored ids even after a request finishes" do
