@@ -205,7 +205,228 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     lock.define_singleton_method(:clock, original) if original
   end
 
+  test "waiving a stopped action retains the already acknowledged Finishing lease" do
+    task, first, other = two_approved_actions
+    acknowledge(task)
+    assert owner("stop_action", first, "reason" => "Sample stop").completed?
+    assert_nil task.reload.lease_due_at
+    remaining = task.lease_time_left_while_paused
+    assert_operator remaining, :>, 0
+
+    assert owner("waive_action", first).completed?
+
+    assert_equal [ "waived", "approved" ], [ first.reload.state, other.reload.state ]
+    assert_equal [ "finishing", 0, @builder.id, @builder.id ],
+      task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
+    closed = event(task, "hold.closed")
+    assert_in_delta closed.effective_at + remaining, task.lease_due_at, 0.000_001
+    assert_nil event(task, "action.waived").payload.fetch("lease_seat_id")
+    assert_nil closed.payload.fetch("lease_seat_id")
+    assert_equal "resume", Leverage::Reads::NextItem.call(@builder).fetch("kind")
+  end
+
+  [ "pending", "free", "busy" ].each do |availability|
+    test "waive leaves the other action with approvals or builder #{availability}" do
+      task = pass_review("send", "publish")
+      first, other = Action.where(task_id: task.id).order(:position).to_a
+      assert owner("approve_action", other).completed? unless availability == "pending"
+      @scenario.task(state: "working", builder: @builder) if availability == "busy"
+      assert owner("stop_action", first, "reason" => "Sample stop").completed?
+
+      assert owner("waive_action", first).completed?
+
+      expected_holder = @builder.id if availability == "free"
+      assert_equal [ "finishing", 0, @builder.id, expected_holder ],
+        task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
+      assert_equal [ "waived", availability == "pending" ? "requested" : "approved" ], [ first.reload.state, other.reload.state ]
+      waived = event(task, "action.waived")
+      assert_equal [ expected_holder, 0 ], [ waived.payload.fetch("lease_seat_id"), waived.round ]
+      expected_holds = availability == "pending" ? [ "owner_approval" ] : []
+      assert_equal expected_holds, Leverage::Holds.open_holds(task).map(&:reason)
+    end
+  end
+
+  [ false, true ].each do |paused|
+    test "return for rework #{paused ? 'releases a paused builder and closes its seat hold' : 'replaces the retained Finishing lease'}" do
+      task, first, other = two_approved_actions
+      acknowledge(task)
+      assert owner("stop_action", first, "reason" => "Sample stop").completed?
+      assert owner("pause_seat", @builder).completed? if paused
+      seat_hold = Hold.find_by!(task_id: task.id, reason: "seat_paused", closed_at: nil) if paused
+      criterion = Criterion.find_by!(task_id: task.id, kind: "build", removed_at: nil)
+
+      assert owner("return_for_rework", task, "criterion_ids" => [ criterion.id ]).completed?
+
+      returned = event(task, "task.returned_for_rework")
+      expected_seat = @builder.id unless paused
+      assert_equal [ paused ? "ready" : "working", 1, expected_seat, expected_seat ],
+        task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
+      assert_equal [ expected_seat, 0 ], [ returned.payload.fetch("lease_seat_id"), returned.round ]
+      related = Event.where(task_id: task.id, command_id: returned.command_id).order(:seq)
+      assert_equal [ 0 ], related.pluck(:round).uniq
+      assert_equal [ first.id, other.id ], related.where(type: "action.withdrawn").pluck(:subject_id)
+      assert_equal %w[contracted contracted], [ first.reload.state, other.reload.state ]
+      assert_equal "open", criterion.reload.state
+      assert_empty Leverage::Holds.open_holds(task)
+      assert_nil task.lease_time_left_while_paused
+      if paused
+        assert_nil task.lease_due_at
+        closed = related.find_by!(type: "hold.closed", subject_id: seat_hold.id)
+        assert_equal [ "owner", @scenario.owner.id, "seat_paused" ],
+          [ closed.actor_kind, closed.actor_id, closed.payload.fetch("reason") ]
+        row = Leverage::Contract.state_machine.fetch("groups").find { |group| group["id"] == "return_for_rework" }
+          .fetch("rows").find { |entry| entry.fetch("guard").include?("builder_busy") }
+        assert_includes row.fetch("holds_closed"), closed.payload.fetch("reason")
+      else
+        assert_equal returned.at + @scenario.workspace.lease_length_seconds, task.lease_due_at
+        assert_equal "rework", Leverage::Reads::NextItem.call(@builder).fetch("kind")
+      end
+    end
+  end
+
+  [ "free", "busy", "retained" ].each do |availability|
+    test "mark done leaves another approved action with the builder #{availability}" do
+      task, first, other = two_approved_actions
+      if availability == "retained"
+        acknowledge(task)
+        assert owner("change_seat", @builder, "enabled" => false).completed?
+        assert owner("change_seat", @builder, "enabled" => true).completed?
+      else
+        assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
+        @scenario.task(state: "working", builder: @builder) if availability == "busy"
+      end
+      hold = Hold.find_by!(task_id: task.id, reason: "action_unconfirmed", closed_at: nil)
+
+      assert owner("mark_action_done", first).completed?
+
+      assert_equal [ "done", "approved" ], [ first.reload.state, other.reload.state ]
+      close = event(task, "hold.closed")
+      assert_equal hold.id, close.subject_id
+      assert_equal %w[action.marked_done hold.closed inbox.resolved],
+        Event.where(task_id: task.id, command_id: close.command_id).order(:seq).pluck(:type)
+      expected_holder = @builder.id unless availability == "busy"
+      fresh_seat = @builder.id if availability == "free"
+      assert_equal [ "finishing", 0, @builder.id, expected_holder ],
+        task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
+      assert_equal [ fresh_seat, 0 ], [ close.payload.fetch("lease_seat_id"), close.round ]
+      assert_empty Leverage::Holds.open_holds(task)
+    end
+  end
+
+  test "mark done closes the unconfirmed hold while a different action still needs a decision" do
+    task, first, other = two_approved_actions
+    assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
+    assert owner("stop_action", other, "reason" => "Sample stop").completed?
+
+    assert owner("mark_action_done", first).completed?
+
+    assert_equal [ "done", "stopped" ], [ first.reload.state, other.reload.state ]
+    assert_equal [ "finishing", @builder.id, nil ], task.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
+    assert_equal [ "action_stopped" ], Leverage::Holds.open_holds(task).map(&:reason)
+    assert_equal "action_unconfirmed", event(task, "hold.closed").payload.fetch("reason")
+    assert_nil event(task, "hold.closed").payload.fetch("lease_seat_id")
+  end
+
+  test "offer closes the hold when the builder is busy and waits for its other work to finish" do
+    task, = two_approved_actions
+    assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
+    occupied = @scenario.task(state: "working", builder: @builder)
+
+    assert owner("offer_task_again", task).completed?
+
+    assert_nil event(task, "hold.closed").payload.fetch("lease_seat_id")
+    assert_nil task.reload.holder_seat_id
+    assert_empty Leverage::Holds.open_holds(task)
+    assert seat("release", @builder, "id" => occupied.id, "reason" => "unable_to_continue").completed?
+    assert_equal [ "finishing", @builder.id, @builder.id ],
+      task.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
+    assert_equal event(occupied, "task.released").id, event(task, "action.lease_granted").cause_id
+  end
+
+  test "offer after re-enabling a retained builder replaces its lease and requires a new briefing" do
+    task, first, = two_approved_actions
+    acknowledge(task)
+    original_due = task.reload.lease_due_at
+    assert owner("change_seat", @builder, "enabled" => false).completed?
+    assert_equal "invalid_state", owner("offer_task_again", task).refusal&.code
+    assert owner("change_seat", @builder, "enabled" => true).completed?
+
+    assert owner("offer_task_again", task).completed?
+
+    assert_equal @builder.id, event(task, "hold.closed").payload.fetch("lease_seat_id")
+    assert_equal [ "finishing", 0, @builder.id, @builder.id ],
+      task.reload.attributes.values_at("state", "round", "builder_seat_id", "holder_seat_id")
+    assert_operator task.lease_due_at, :>, original_due
+    assert_equal "briefing_not_acknowledged", action_call("start_action", task, first).refusal&.code
+  end
+
+  test "the second approval timeout leaves the owner the decision when the orchestrator returns" do
+    @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
+    task = pass_review("send")
+    action = Action.find_by!(task_id: task.id)
+    check = RuleCheck.find_by!(subject_id: action.id)
+    attempts = Job.where(task_id: task.id, kind: "approval")
+    deadline = Leverage::Timers.job_due_at(attempts.sole, :queue)
+    at_workspace_time(deadline - 1) { assert app("orchestrator_offline").completed? }
+    offline = InboxItem.find_by!(workspace_id: @scenario.workspace_id, kind: "orchestrator_offline", state: "open")
+    at_workspace_time(deadline) { assert app("check_queue_timeout").completed? }
+    assert_equal [ [ 1, "timed_out" ], [ 2, "queued" ] ], attempts.order(:attempt_number).pluck(:attempt_number, :state)
+    second = attempts.find_by!(attempt_number: 2)
+    deadline = Leverage::Timers.job_due_at(second, :queue)
+    at_workspace_time(deadline) { assert app("check_queue_timeout").completed? }
+    assert_equal [ "error", "timed_out" ], [ check.reload.result, second.reload.state ]
+    assert Hold.exists?(task_id: task.id, reason: "owner_approval", closed_at: nil)
+    refute Hold.exists?(task_id: task.id, reason: "check_error", closed_at: nil)
+
+    at_workspace_time(deadline + 1) do
+      assert Leverage::Transitions::RecordPoll.seat(@orchestrator)
+      assert Leverage::RolePresence.online?(@scenario.workspace, "orchestrator", deadline + 1)
+      polling = seat("claim_job", @orchestrator)
+      assert_equal "not_eligible", polling.refusal&.code
+      assert app("orchestrator_offline").completed?
+      assert_equal "resolved", offline.reload.state
+      assert_equal [ [ 1, "timed_out" ], [ 2, "timed_out" ] ], attempts.order(:attempt_number).pluck(:attempt_number, :state)
+      assert owner("approve_action", action).completed?
+    end
+    assert_equal "approved", action.reload.state
+  end
+
+  test "the task page identifies the check that stopped the real action" do
+    gate = @scenario.rule(hook: "action.requested")
+    task = pass_review("send")
+    job = seat("claim_job", @orchestrator).result.fetch("job_id")
+    assert seat("submit_job_result", @orchestrator, "id" => job,
+      "result" => { "result" => "failed", "reason" => "Sample failure" }, "tokens" => 0, "spend" => 0).completed?
+    action = Action.find_by!(task_id: task.id)
+    check = RuleCheck.find_by!(task_id: task.id, rule_id: gate.id)
+    page = Leverage::Reads::TaskPage.call(@scenario.workspace_id, task.id)
+
+    assert_equal [ action.id, "stopped", check.id ], page.fetch(:actions).sole.values_at(:id, :state, :stopped_by_rule_check_id)
+    assert_equal check.id, page.fetch(:inbox_items).find { |item| item[:kind] == "stopped_action" }.fetch(:facts).fetch("rule_check_id")
+  end
+
   private
+
+  def two_approved_actions
+    task = pass_review("send", "publish")
+    first, other = Action.where(task_id: task.id).order(:position).to_a
+    assert owner("approve_action", first).completed?
+    assert owner("approve_action", other).completed?
+    [ task, first, other ]
+  end
+
+  def app(command)
+    apply(command, nil, nil, {})
+  end
+
+  def at_workspace_time(at)
+    lock = Leverage::WorkspaceLock
+    original = lock.method(:clock)
+    lock.define_singleton_method(:clock) { at }
+    yield
+  ensure
+    lock.define_singleton_method(:clock, original)
+  end
 
   def pass_review(*kinds)
     task = @scenario.task(state: "in_review", builder: @builder, reviewer: @reviewer,
@@ -242,7 +463,7 @@ class FinishingTogetherTest < ActiveSupport::TestCase
 
   def apply(command, kind, caller, params)
     T.apply(T::Request.new(command: command, workspace_id: @scenario.workspace_id,
-      caller_kind: kind, caller_id: caller.id, key: SecureRandom.uuid,
+      caller_kind: kind, caller_id: caller&.id, key: (SecureRandom.uuid if kind),
       request_hash: Digest::SHA256.hexdigest(params.to_json), params: params))
   end
 end
