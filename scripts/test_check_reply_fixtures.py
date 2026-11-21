@@ -155,6 +155,23 @@ class CheckReplyFixtures(unittest.TestCase):
         self.put(reply)
         self.assert_fails("a thread_id in one line of JSON lines")
 
+    def test_run_and_status_outputs_require_placeholders_for_credentials_and_names(self):
+        for kind in ("run", "status"):
+            for field in ("refresh_token", "apiKey", "password", "displayName"):
+                with self.subTest(kind=kind, field=field):
+                    reply = clean_reply()
+                    reply["meta"].update(kind=kind, expect="failed")
+                    value = "made-up-sensitive-value"
+                    reply["stderr"] = json.dumps({field: value})
+                    self.put(reply)
+                    result = self.check()
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("run-limit.json", result.stdout)
+                    self.assertNotIn(value, result.stdout + result.stderr)
+                    reply["stderr"] = json.dumps({field: "<scrubbed>"})
+                    self.put(reply)
+                    self.assert_passes()
+
     def test_a_named_field_scrubbed_or_empty_passes(self):
         reply = clean_reply()
         body = json.loads(reply["stdout"])
@@ -380,6 +397,17 @@ class CheckReplyFixtures(unittest.TestCase):
                 message["details"] = [{"payload": json.dumps({field: bad})}]
                 self.assert_usage_fails(reply, hidden=bad)
                 message["details"] = [{"payload": json.dumps({field: "<scrubbed>"})}]
+                self.put_usage(reply)
+                self.assert_passes()
+
+    def test_usage_settings_require_placeholders_for_credentials_and_names(self):
+        for field in ("oauthRefresh", "displayName"):
+            with self.subTest(field=field):
+                meta = usage_reply("claude")["meta"]
+                value = "made-up-sensitive-value"
+                reply = {"meta": meta, "settings": {field: value}, "marker": meta["marker"]}
+                self.assert_usage_fails(reply, hidden=value)
+                reply["settings"][field] = "<scrubbed>"
                 self.put_usage(reply)
                 self.assert_passes()
 
