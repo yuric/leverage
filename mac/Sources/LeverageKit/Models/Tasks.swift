@@ -312,7 +312,8 @@ public struct InboxItem: Codable, Equatable, Sendable {
     public let choices: [InboxChoice]
     /// The facts its kind stores (`needs_you.json`).
     public let facts: [String: JSONValue]
-    public var detail: String? { nil }
+    /// Owner-facing content shown with an access request or a stopped action.
+    public let detail: String?
     public let state: InboxState
     public let openedAt: Date
     public let openedSeq: Int
@@ -323,7 +324,7 @@ public struct InboxItem: Codable, Equatable, Sendable {
     public init(
         id: UUID, kind: NeedsYouItem, aboutKind: InboxAboutKind, aboutID: UUID, holdID: UUID? = nil,
         credentialID: UUID? = nil, choices: [InboxChoice], facts: [String: JSONValue] = [:],
-        state: InboxState = .open, openedAt: Date, openedSeq: Int, resolvedByKind: ActorKind? = nil,
+        detail: String? = nil, state: InboxState = .open, openedAt: Date, openedSeq: Int, resolvedByKind: ActorKind? = nil,
         resolvedByID: UUID? = nil, resolvedAt: Date? = nil
     ) {
         self.id = id
@@ -334,6 +335,7 @@ public struct InboxItem: Codable, Equatable, Sendable {
         self.credentialID = credentialID
         self.choices = choices
         self.facts = facts
+        self.detail = detail
         self.state = state
         self.openedAt = openedAt
         self.openedSeq = openedSeq
@@ -386,7 +388,7 @@ public struct InboxItem: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, choices, facts, state
+        case id, kind, choices, facts, detail, state
         case aboutKind = "about_kind"
         case aboutID = "about_id"
         case holdID = "hold_id"

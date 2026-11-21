@@ -18,9 +18,6 @@ enum RulesCopy: OwnerFacingCopy {
     case checkerApp, checkerModel
     case onFailBlock, onFailWarn
 
-    // A rule whose effect is not built yet (RD-8).
-    case notActing
-
     // The counts line (RD-26, RD-32).
     case countsNone, countsRanOnce, countsRan, countsAverage, countsUnderSecond
     case countsTokens, countsSpend, countsLetThroughOnce, countsLetThrough
@@ -62,8 +59,6 @@ enum RulesCopy: OwnerFacingCopy {
         case .checkerModel: "An agent checks this"
         case .onFailBlock: "Stop the task"
         case .onFailWarn: "Only note it"
-
-        case .notActing: "Starts working in a later version of leverage"
 
         case .countsNone: "Has not run yet"
         case .countsRanOnce: "Ran once"

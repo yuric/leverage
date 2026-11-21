@@ -249,7 +249,7 @@ final class NeedsYouModel {
             heading: NeedsYouWords.heading(for: item, names: names),
             body: NeedsYouWords.body(for: item, names: names), buttons: NeedsYouWords.buttons(for: item, names: names))
         row.ruleName = note?.ruleName ?? rule.flatMap { ruleNames[$0] }
-        row.reason = note?.reason
+        row.reason = note?.reason ?? (item.kind == .stoppedAction ? item.detail : nil)
         row.ruleID = rule
         row.checkID = check
         row.actionMayHaveStarted = NeedsYouWords.hasStarted(item, page: names.page(for: item))

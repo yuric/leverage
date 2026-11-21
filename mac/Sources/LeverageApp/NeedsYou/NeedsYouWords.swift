@@ -267,7 +267,7 @@ enum NeedsYouWords {
             if actions.isEmpty { return NeedsYouCopy.detailsUnavailable.text }
             return actions.map { unconfirmedLine($0, item: item, page: page, names: names) }.joined(separator: "\n")
         case .accessRequest:
-            return NeedsYouCopy.accessBody.text
+            return item.detail ?? NeedsYouCopy.accessBody.text
         case .taskBudgetReached:
             return names.page(for: item).map { reported($0.task.spent) } ?? ""
         case .projectBudgetReached:

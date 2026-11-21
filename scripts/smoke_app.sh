@@ -1,7 +1,7 @@
 #!/bin/bash
 # Starts the bundled app once and checks that it brings its server up
 # (milestone 2 plan WP18, PK-1, PK-2) and that its daily backup runs
-# (milestone 3 plan HB-2, HB-3):
+# (milestone 3 plan HB-2, HB-3). First checks the bundled LeverageMCP --version.
 #
 #   scripts/build_app.sh && scripts/smoke_app.sh
 #
@@ -9,9 +9,8 @@
 # an app opened from Finder has (HOME, USER, LOGNAME, TMPDIR, LANG and a
 # PATH of /usr/bin:/bin:/usr/sbin:/sbin), plus a support folder and a
 # compose project of its own, the memory session store and
-# LEVERAGE_NOTIFICATIONS=off (so no permission prompt is raised, HM-27), so
-# the owner's folder, project, Keychain and notifications are never
-# touched. Within 60 seconds the process must be alive and GET /v1/health
+# LEVERAGE_NOTIFICATIONS=off (HM-27) and an empty provider tools folder.
+# Within 60 seconds the process must be alive and GET /v1/health
 # must answer "ok" on the port the app wrote to <support>/server/.env.
 # Then it signs up a made-up owner (the backup dumps no database without a
 # workspace), and within the same time again the first dump must be in
@@ -55,6 +54,13 @@ fail() { printf 'smoke_app: FAILED: %s\n' "$*" >&2; exit 1; }
 [ "$(uname -s)" = Darwin ] || fail "the app runs only on macOS"
 program="$app/Contents/MacOS/LeverageApp"
 [ -x "$program" ] || fail "no app at $app (run scripts/build_app.sh first)"
+mcp="$app/Contents/MacOS/LeverageMCP"
+[ -x "$mcp" ] || fail "no LeverageMCP in $app (run scripts/build_app.sh first)"
+mcp_version=$(env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin "$mcp" --version) || fail "LeverageMCP --version failed"
+version=$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist") \
+  || fail "could not read the bundle version"
+[ "$mcp_version" = "LeverageMCP $version" ] || fail "LeverageMCP --version disagrees with the bundle"
+say "$mcp_version"
 command -v docker >/dev/null || fail "docker is not on PATH (needed to remove the compose project)"
 command -v curl >/dev/null || fail "curl is not on PATH"
 
@@ -127,6 +133,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+mkdir "$support/tools"
 say "starting $program"
 say "support folder $support, compose project $project"
 env -i \
@@ -137,6 +144,7 @@ env -i \
   LEVERAGE_COMPOSE_PROJECT="$project" \
   LEVERAGE_SESSION_STORE=memory \
   LEVERAGE_NOTIFICATIONS=off \
+  LEVERAGE_TOOL_DIR="$support/tools" \
   "$program" >"$output" 2>&1 &
 pid=$!
 

@@ -16,7 +16,7 @@ final class DecidedModel {
     private(set) var confirming: Decision?
     private(set) var busy = false
     private(set) var failure: ShellCopy?
-    private var tasksAcceptingObjections: Set<UUID> = []
+    private var recordableApprovals: Set<Decision.RowID> = []
     var answer = ""
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -34,22 +34,32 @@ final class DecidedModel {
         generation += 1
         let mine = generation
         do {
-            let decisions = try await api.listDecisions().decisions
-            let taskIDs = Set(decisions.filter(isUnrecordedCompletedApproval).map(\.taskID))
+            let decisions = try await api.listDecisions().decisions.sorted { $0.decidedAt > $1.decidedAt }
+            // Overturn approval takes an action id and records against its latest approval.
+            let latestApprovals = Dictionary(
+                decisions.compactMap { decision -> (UUID, Decision)? in
+                    guard decision.kind == .approval, let id = decision.actionID else { return nil }
+                    return (id, decision)
+                }, uniquingKeysWith: { latest, _ in latest })
+            let candidates = latestApprovals.values.filter(isUnrecordedCompletedApproval)
+            let taskIDs = Set(candidates.map(\.taskID))
             let tasks = taskIDs.isEmpty ? [] : ((try? await api.board().tasks) ?? [])
             guard mine == generation, !Task.isCancelled else { return }
             // A completed action can still belong to a cancelled task, which
             // has no record-only transition. The board includes those tasks.
-            tasksAcceptingObjections = Set(tasks.compactMap { row in
+            let allowedTasks = Set<UUID>(tasks.compactMap { row in
                 let task = row.task
-                let allowed = task.state == .finishing || task.state == .done
-                return allowed && taskIDs.contains(task.id) ? task.id : nil
+                return task.state == .finishing || task.state == .done ? task.id : nil
             })
-            if let confirming, isUnrecordedCompletedApproval(confirming), !busy,
-               !tasksAcceptingObjections.contains(confirming.taskID) {
-                clearConfirmation()
+            recordableApprovals = Set(candidates.filter { allowedTasks.contains($0.taskID) }.map(\.decidedRowID))
+            rows = decisions
+            if let confirming, confirming.kind == .approval, !busy {
+                if let current = actionableDecision(confirming.decidedRowID) {
+                    self.confirming = current
+                } else {
+                    clearConfirmation()
+                }
             }
-            rows = decisions.sorted { $0.decidedAt > $1.decidedAt }
             state = .loaded
         } catch is CancellationError {
             return
@@ -93,9 +103,12 @@ final class DecidedModel {
 
     func requestUndo(_ decision: Decision) {
         guard !busy, confirming == nil,
-              let current = rows.first(where: { $0.decidedRowID == decision.decidedRowID }),
-              canUndo(current) || canRecordObjection(current) else { return }
+              let current = actionableDecision(decision.decidedRowID) else { return }
         confirming = current
+    }
+
+    private func actionableDecision(_ id: Decision.RowID) -> Decision? {
+        rows.first { $0.decidedRowID == id && (canUndo($0) || canRecordObjection($0)) }
     }
 
     func canUndo(_ decision: Decision) -> Bool {
@@ -107,7 +120,7 @@ final class DecidedModel {
     }
 
     func canRecordObjection(_ decision: Decision) -> Bool {
-        isUnrecordedCompletedApproval(decision) && tasksAcceptingObjections.contains(decision.taskID)
+        recordableApprovals.contains(decision.decidedRowID)
     }
 
     private func isUnrecordedCompletedApproval(_ decision: Decision) -> Bool {
@@ -123,7 +136,17 @@ final class DecidedModel {
     var canEditAnswer: Bool { !busy && sentAnswer == nil && undoKey == nil }
 
     func confirmUndo() async {
-        guard let decision = confirming, !busy else { return }
+        guard let selected = confirming, !busy else { return }
+        let decision: Decision
+        if selected.kind == .approval {
+            guard let current = actionableDecision(selected.decidedRowID) else {
+                clearConfirmation()
+                return
+            }
+            decision = current
+        } else {
+            decision = selected
+        }
         busy = true
         failure = nil
         defer { busy = false }
@@ -198,5 +221,11 @@ final class DecidedModel {
 }
 
 extension Decision {
-    var decidedRowID: UUID { questionID ?? actionID ?? taskID }
+    struct RowID: Hashable {
+        let kind: DecisionKind
+        let subjectID: UUID
+        let decidedAt: Date
+    }
+
+    var decidedRowID: RowID { RowID(kind: kind, subjectID: questionID ?? actionID ?? taskID, decidedAt: decidedAt) }
 }
