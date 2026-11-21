@@ -32,11 +32,12 @@ class ReadersTest < Minitest::Test
     end
   end
 
-  def test_token_readers_are_provisional_until_a_reply_is_recorded_and_openai_is_not_verified
+  def test_token_readers_are_provisional_and_openai_is_not_verified
     tokens = readers.select { |reader| reader["kind"] == "api_token" }
     assert_equal 5, tokens.size
     tokens.each do |reader|
-      assert_equal reader.dig("capture", "usage") == "none", reader["provisional"], reader["provider"]
+      assert_equal true, reader["provisional"], reader["provider"]
+      assert_equal "none", reader.dig("capture", "usage"), reader["provider"]
     end
     assert_equal false, by_provider.fetch("openai_api")["verified"]
     assert_equal false, by_provider.fetch("gemini")["verified"], "every Gemini fact is unverified (PRD)"
@@ -128,7 +129,15 @@ class ReadersTest < Minitest::Test
 
   private
 
-  def version_errors(_reader) = []
+  def version_errors(reader)
+    versions = reader.fetch("tested_tool_versions")
+    return [] if versions.empty?
+
+    errors = []
+    errors << "tested versions need a recorded usage reply" unless reader.dig("capture", "usage") == "recorded"
+    errors << "a tested version must contain only digits and dots" unless versions.all? { |version| version.match?(/\A[0-9]+(?:\.[0-9]+)*\z/) }
+    errors
+  end
 
   def each_key(node, &block)
     case node

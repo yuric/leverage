@@ -171,7 +171,7 @@
       "prd_choices": "None. It closes when a reading shows capacity.",
       "choices": [],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
-      "closes": "When a reading shows capacity for the credential (L199, L696). Until the usage readers exist, a passed Verify or Sign in again of the credential is that reading (milestone 3 plan HE-2)."
+      "closes": "When a new ok reading shows capacity in the refused window, or in every limit figure when the refusal named no window (milestone 6 plan CR-14). A passed Verify or Sign in again of the credential still clears a limit with no reset time (milestone 3 plan HE-2). The item is also resolved when its hold has a reset time to wait for again (milestone 6 plan CR-28)."
     },
     {
       "item": "no_reviewer_eligible",

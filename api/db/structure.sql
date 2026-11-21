@@ -193,7 +193,8 @@ CREATE TABLE public.credentials (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     limited_since timestamp with time zone,
-    CONSTRAINT credentials_limited_until_needs_limited_since CHECK (((limited_until IS NULL) OR (limited_since IS NOT NULL)))
+    CONSTRAINT credentials_limited_until_needs_limited_since CHECK (((limited_until IS NULL) OR (limited_since IS NOT NULL))),
+    CONSTRAINT credentials_masked_label_is_fixed CHECK (((masked_label IS NULL) OR (masked_label = '••••••••'::text)))
 );
 
 
@@ -2401,6 +2402,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261121114342'),
 ('20261121011155'),
 ('20261120094700'),
 ('20261120011824'),

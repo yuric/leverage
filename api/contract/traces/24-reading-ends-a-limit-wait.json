@@ -1,0 +1,1992 @@
+{
+  "name": "24-reading-ends-a-limit-wait",
+  "description": "A fresh reading ends a five-hour limit and the task goes to Done. A second task waits for a reset, loses its only dated candidate in a reorder, then switches to an available login when the order changes again. A reading on that login ends another limit before its known reset time.",
+  "covers": [
+    "PRD test 8 and Build order, Credentials: the golden trace for usage readings and a handoff reorder (milestone 6 plan CT-3).",
+    "PRD Handoff, Waiting on a limit: neither a stale reading, a full refused window nor a different window ends the wait. A fresh reading of the refused window at 40 percent closes the hold and its Needs you item under the helper’s key (CR-14, IF-37).",
+    "PRD Handoff, Choice of credential: a reorder that removes the only reset time opens a Needs you item alongside the existing hold. A reorder giving the seat an available candidate closes the hold, switches the run and resolves the item under the owner’s key. The first order event is the cause for the hold close or item open (CR-28, CR-30).",
+    "A fresh reading can end a limit before a known reset time. The hold and its wait_limit step close without a Needs you event (CR-14)."
+  ],
+  "setup": {
+    "settings": {},
+    "users": [
+      {
+        "id": "$user:owner"
+      }
+    ],
+    "helpers": [
+      {
+        "id": "$helper:mac",
+        "name": "Owner's Mac"
+      }
+    ],
+    "credentials": [
+      {
+        "id": "$credential:grok_r",
+        "kind": "login",
+        "provider": "grok",
+        "name": "Grok R",
+        "state": "active",
+        "limited_until": null,
+        "position": 1,
+        "model": "grok-model-1",
+        "effort": null,
+        "strength_rank": 1
+      },
+      {
+        "id": "$credential:codex_dated",
+        "kind": "login",
+        "provider": "codex",
+        "name": "Codex with a reset",
+        "state": "active",
+        "limited_until": "@t:3200",
+        "position": 2,
+        "model": null,
+        "effort": null,
+        "strength_rank": 1,
+        "limited_since": "@t:-10"
+      },
+      {
+        "id": "$credential:codex_spare",
+        "kind": "login",
+        "provider": "codex",
+        "name": "Codex spare",
+        "state": "active",
+        "limited_until": null,
+        "position": 3,
+        "model": "codex-model-1",
+        "effort": null,
+        "strength_rank": 1
+      },
+      {
+        "id": "$credential:claude_a",
+        "kind": "login",
+        "provider": "claude",
+        "name": "Claude A",
+        "state": "active",
+        "limited_until": null,
+        "position": 4,
+        "model": "claude-model-1",
+        "effort": null,
+        "strength_rank": 1
+      }
+    ],
+    "seats": [
+      {
+        "id": "$seat:builder",
+        "name": "Builder",
+        "provider": "claude",
+        "model": "claude-model-1",
+        "effort": "high",
+        "role": "builder",
+        "strength_rank": 1,
+        "credential_id": "$credential:claude_a",
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": null
+      },
+      {
+        "id": "$seat:reviewer",
+        "name": "Reviewer",
+        "provider": "grok",
+        "model": "grok-model-1",
+        "effort": "high",
+        "role": "reviewer",
+        "strength_rank": 1,
+        "credential_id": "$credential:grok_r",
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": null
+      }
+    ],
+    "projects": [],
+    "rules": []
+  },
+  "commands": [
+    {
+      "at": "@t:10",
+      "caller": "$user:owner",
+      "command": "add_task",
+      "operation_id": "add_task",
+      "key": "$key:add_task_10",
+      "path_params": {},
+      "body": {
+        "title": "Write the release notes",
+        "goal": "Write the release notes, done and checked.",
+        "priority": "normal",
+        "work_reference": "~/work/task-1",
+        "state": "backlog"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:1",
+            "type": "task.created",
+            "schema_version": 1,
+            "at": "@t:10",
+            "effective_at": "@t:10",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:add_task_10",
+            "payload": {
+              "state": "backlog",
+              "added_action_ids": []
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_contract",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:1"
+          }
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:20",
+      "caller": "$user:owner",
+      "command": "complete_contract",
+      "operation_id": "complete_contract",
+      "key": "$key:complete_contract_20",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "title": "Write the release notes",
+        "goal": "Write the release notes, done and checked.",
+        "details": "Use the notes in the brief.",
+        "criteria": [
+          {
+            "text": "Write the release notes: the work is done.",
+            "kind": "build"
+          },
+          {
+            "text": "An independent reviewer agrees.",
+            "kind": "review"
+          }
+        ],
+        "actions": [],
+        "minimum_strength_rank": null,
+        "budget_cap": null,
+        "work_reference": "~/work/task-1"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:2",
+            "type": "task.contract_changed",
+            "schema_version": 1,
+            "at": "@t:20",
+            "effective_at": "@t:20",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_20",
+            "payload": {
+              "contract_version": 1,
+              "minimum_strength_rank": null,
+              "added_criterion_ids": [
+                "$criterion:t1_work",
+                "$criterion:t1_review"
+              ],
+              "reset_criterion_ids": [],
+              "removed_criterion_ids": [],
+              "added_action_ids": [],
+              "removed_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:3",
+            "type": "task.ready",
+            "schema_version": 1,
+            "at": "@t:20",
+            "effective_at": "@t:20",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_20",
+            "payload": {
+              "wait_cause": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_ready",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:3"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_contract",
+            "closing_event_id": "@event:3"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:30",
+      "caller": "$seat:builder",
+      "command": "claim",
+      "operation_id": "claim_next_task",
+      "key": "$key:claim_30",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:4",
+            "type": "task.claimed",
+            "schema_version": 1,
+            "at": "@t:30",
+            "effective_at": "@t:30",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:claim_30",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "credential_id": "$credential:claude_a",
+              "model": "claude-model-1"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "briefing",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:4"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_ready",
+            "closing_event_id": "@event:4"
+          }
+        ],
+        "result_fields": {
+          "credential_id": "$credential:claude_a",
+          "model": "claude-model-1"
+        }
+      }
+    },
+    {
+      "at": "@t:40",
+      "caller": "$seat:builder",
+      "command": "acknowledge_briefing",
+      "operation_id": "acknowledge_task_briefing",
+      "key": "$key:acknowledge_briefing_40",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "briefing_hash": "briefing-hash-t1_ack"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:5",
+            "type": "task.briefing_acknowledged",
+            "schema_version": 1,
+            "at": "@t:40",
+            "effective_at": "@t:40",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:acknowledge_briefing_40",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:5"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "briefing",
+            "closing_event_id": "@event:5"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:50",
+      "caller": "$seat:builder",
+      "command": "start_criterion",
+      "operation_id": "start_criterion",
+      "key": "$key:start_criterion_50",
+      "path_params": {
+        "id": "$task:1",
+        "cid": "$criterion:t1_work"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:6",
+            "type": "criterion.started",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_work",
+            "cause_id": null,
+            "command_id": "$key:start_criterion_50",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_work",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:6"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:6"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:60",
+      "caller": "$helper:mac",
+      "command": "report_limit",
+      "operation_id": "report_limit",
+      "key": "$key:limit_60",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "seat_id": "$seat:builder",
+        "task_id": "$task:1",
+        "review_id": null,
+        "job_id": null,
+        "window": "five_hour",
+        "reset_at": null,
+        "observed_at": "@t:50",
+        "tool_version": "0.0.0-example"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:7",
+            "type": "credential.limit_reached",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "cause_id": null,
+            "command_id": "$key:limit_60",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "review_id": null,
+              "job_id": null,
+              "window": "five_hour",
+              "reset_at": null
+            }
+          },
+          {
+            "ref": "@event:8",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_limit",
+            "cause_id": "@event:7",
+            "command_id": "$key:limit_60",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:claude_a",
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:9",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_no_reset",
+            "cause_id": "@event:8",
+            "command_id": "$key:limit_60",
+            "payload": {
+              "kind": "limit_with_no_reset_time"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_limit",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:8"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:8"
+          }
+        ]
+      },
+      "note": "The builder’s only candidate reaches a five-hour limit with no reset time."
+    },
+    {
+      "at": "@t:70",
+      "caller": "$helper:mac",
+      "command": "report_reading",
+      "operation_id": "report_reading",
+      "key": "$key:reading_70",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "observed_at": "@t:50",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "5-hour session",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 40,
+            "reset_at": null,
+            "value": null
+          }
+        ],
+        "resets": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [],
+        "steps_opened": [],
+        "steps_closed": []
+      },
+      "note": "Observed before the limit, so it changes nothing."
+    },
+    {
+      "at": "@t:80",
+      "caller": "$helper:mac",
+      "command": "report_reading",
+      "operation_id": "report_reading",
+      "key": "$key:reading_80",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "observed_at": "@t:75",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "5-hour session",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 100,
+            "reset_at": null,
+            "value": null
+          }
+        ],
+        "resets": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [],
+        "steps_opened": [],
+        "steps_closed": []
+      },
+      "note": "Fresh but at 100 percent in the refused window."
+    },
+    {
+      "at": "@t:90",
+      "caller": "$helper:mac",
+      "command": "report_reading",
+      "operation_id": "report_reading",
+      "key": "$key:reading_90",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "observed_at": "@t:85",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "Week, all models",
+            "kind": "limit",
+            "window": "weekly",
+            "percent_used": 40,
+            "reset_at": null,
+            "value": null
+          }
+        ],
+        "resets": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [],
+        "steps_opened": [],
+        "steps_closed": []
+      },
+      "note": "Fresh but reports only the weekly window."
+    },
+    {
+      "at": "@t:100",
+      "caller": "$helper:mac",
+      "command": "report_reading",
+      "operation_id": "report_reading",
+      "key": "$key:reading_100",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "observed_at": "@t:95",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "5-hour session",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 40,
+            "reset_at": null,
+            "value": null
+          }
+        ],
+        "resets": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:10",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:100",
+            "effective_at": "@t:100",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_limit",
+            "cause_id": null,
+            "command_id": "$key:reading_100",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:claude_a",
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:11",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:100",
+            "effective_at": "@t:100",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_no_reset",
+            "cause_id": null,
+            "command_id": "$key:reading_100",
+            "payload": {
+              "choice": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_work",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:10"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_limit",
+            "closing_event_id": "@event:10"
+          }
+        ]
+      },
+      "note": "Fresh and below 100 percent in the refused window. The builder resumes on the same login."
+    },
+    {
+      "at": "@t:110",
+      "caller": "$seat:builder",
+      "command": "pass_criterion",
+      "operation_id": "pass_criterion",
+      "key": "$key:pass_criterion_110",
+      "path_params": {
+        "id": "$task:1",
+        "cid": "$criterion:t1_work"
+      },
+      "body": {
+        "evidence": {
+          "kind": "link",
+          "value": "https://example.test/work/t1_layout_2500"
+        }
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:12",
+            "type": "criterion.passed",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_work",
+            "cause_id": null,
+            "command_id": "$key:pass_criterion_110",
+            "payload": {}
+          },
+          {
+            "ref": "@event:13",
+            "type": "evidence.attached",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "evidence",
+            "subject_id": "$evidence:t1_layout_2500",
+            "cause_id": null,
+            "command_id": "$key:pass_criterion_110",
+            "payload": {
+              "criterion_id": "$criterion:t1_work",
+              "kind": "link"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "finish",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:12"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:12"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:120",
+      "caller": "$seat:builder",
+      "command": "submit",
+      "operation_id": "submit_task",
+      "key": "$key:submit_120",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "handoff_note": "Done; the evidence links show each criterion.",
+        "work_reference": "~/work/task-1"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:14",
+            "type": "task.submitted",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:submit_120",
+            "payload": {
+              "work_reference_changed": false
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_review",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:14"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "finish",
+            "closing_event_id": "@event:14"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:130",
+      "caller": "$seat:reviewer",
+      "command": "claim_review",
+      "operation_id": "claim_next_review",
+      "key": "$key:claim_review_130",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:15",
+            "type": "review.started",
+            "schema_version": 1,
+            "at": "@t:130",
+            "effective_at": "@t:130",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:claim_review_130",
+            "payload": {
+              "credential_id": "$credential:grok_r",
+              "model": "grok-model-1"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "review",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_review",
+            "seat_id": "$seat:reviewer",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:15"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_review",
+            "closing_event_id": "@event:15"
+          }
+        ],
+        "result_fields": {
+          "credential_id": "$credential:grok_r",
+          "model": "grok-model-1"
+        }
+      }
+    },
+    {
+      "at": "@t:140",
+      "caller": "$seat:reviewer",
+      "command": "acknowledge_review_briefing",
+      "operation_id": "acknowledge_review_briefing",
+      "key": "$key:acknowledge_review_briefing_140",
+      "path_params": {
+        "id": "$review:t1_r0"
+      },
+      "body": {
+        "briefing_hash": "review-briefing-hash-t1_review_ack_2530"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:16",
+            "type": "task.briefing_acknowledged",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:acknowledge_review_briefing_140",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:150",
+      "caller": "$seat:reviewer",
+      "command": "pass_review",
+      "operation_id": "give_verdict",
+      "key": "$key:pass_review_150",
+      "path_params": {
+        "id": "$review:t1_r0"
+      },
+      "body": {
+        "verdict": "passed",
+        "failed_criteria": [],
+        "notes": "Checked against every criterion.",
+        "tokens": 1200,
+        "spend": 0.42
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:17",
+            "type": "review.passed",
+            "schema_version": 1,
+            "at": "@t:150",
+            "effective_at": "@t:150",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:pass_review_150",
+            "payload": {}
+          },
+          {
+            "ref": "@event:18",
+            "type": "task.done",
+            "schema_version": 1,
+            "at": "@t:150",
+            "effective_at": "@t:150",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:pass_review_150",
+            "payload": {}
+          },
+          {
+            "ref": "@event:19",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:150",
+            "effective_at": "@t:150",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:pass_review_150",
+            "payload": {
+              "tokens": 1200,
+              "spend": 0.42
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "review",
+            "closing_event_id": "@event:18"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:160",
+      "caller": "$user:owner",
+      "command": "reorder_credentials",
+      "operation_id": "reorder_credentials",
+      "key": "$key:reorder_160",
+      "path_params": {},
+      "body": {
+        "order": [
+          "$credential:grok_r",
+          "$credential:codex_spare",
+          "$credential:claude_a",
+          "$credential:codex_dated"
+        ]
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:20",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_spare",
+            "cause_id": null,
+            "command_id": "$key:reorder_160",
+            "payload": {}
+          },
+          {
+            "ref": "@event:21",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "cause_id": null,
+            "command_id": "$key:reorder_160",
+            "payload": {}
+          },
+          {
+            "ref": "@event:22",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_dated",
+            "cause_id": null,
+            "command_id": "$key:reorder_160",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      },
+      "note": "Set up the second case: put the login with a reset below the builder’s own."
+    },
+    {
+      "at": "@t:170",
+      "caller": "$user:owner",
+      "command": "add_task",
+      "operation_id": "add_task",
+      "key": "$key:add_task_170",
+      "path_params": {},
+      "body": {
+        "title": "Check the release checklist",
+        "goal": "Check the release checklist against the brief.",
+        "priority": "normal",
+        "work_reference": "~/work/task-2",
+        "state": "backlog"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:23",
+            "type": "task.created",
+            "schema_version": 1,
+            "at": "@t:170",
+            "effective_at": "@t:170",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:add_task_170",
+            "payload": {
+              "state": "backlog",
+              "added_action_ids": []
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_contract",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:23"
+          }
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:180",
+      "caller": "$user:owner",
+      "command": "complete_contract",
+      "operation_id": "complete_contract",
+      "key": "$key:complete_contract_180",
+      "path_params": {
+        "id": "$task:2"
+      },
+      "body": {
+        "title": "Check the release checklist",
+        "goal": "Check the release checklist against the brief.",
+        "details": "Use the notes in the brief.",
+        "criteria": [
+          {
+            "text": "Check each link on the release checklist.",
+            "kind": "build"
+          },
+          {
+            "text": "An independent reviewer agrees.",
+            "kind": "review"
+          }
+        ],
+        "actions": [],
+        "minimum_strength_rank": null,
+        "budget_cap": null,
+        "work_reference": "~/work/task-2"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:24",
+            "type": "task.contract_changed",
+            "schema_version": 1,
+            "at": "@t:180",
+            "effective_at": "@t:180",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_180",
+            "payload": {
+              "contract_version": 1,
+              "minimum_strength_rank": null,
+              "added_criterion_ids": [
+                "$criterion:t2_work",
+                "$criterion:t2_review"
+              ],
+              "reset_criterion_ids": [],
+              "removed_criterion_ids": [],
+              "added_action_ids": [],
+              "removed_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:25",
+            "type": "task.ready",
+            "schema_version": 1,
+            "at": "@t:180",
+            "effective_at": "@t:180",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_180",
+            "payload": {
+              "wait_cause": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_ready",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:25"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_contract",
+            "closing_event_id": "@event:25"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:190",
+      "caller": "$seat:builder",
+      "command": "claim",
+      "operation_id": "claim_next_task",
+      "key": "$key:claim_190",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:26",
+            "type": "task.claimed",
+            "schema_version": 1,
+            "at": "@t:190",
+            "effective_at": "@t:190",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:claim_190",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "credential_id": "$credential:claude_a",
+              "model": "claude-model-1"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "briefing",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:26"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_ready",
+            "closing_event_id": "@event:26"
+          }
+        ],
+        "result_fields": {
+          "credential_id": "$credential:claude_a",
+          "model": "claude-model-1"
+        }
+      }
+    },
+    {
+      "at": "@t:200",
+      "caller": "$seat:builder",
+      "command": "acknowledge_briefing",
+      "operation_id": "acknowledge_task_briefing",
+      "key": "$key:acknowledge_briefing_200",
+      "path_params": {
+        "id": "$task:2"
+      },
+      "body": {
+        "briefing_hash": "briefing-hash-t2_ack"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:27",
+            "type": "task.briefing_acknowledged",
+            "schema_version": 1,
+            "at": "@t:200",
+            "effective_at": "@t:200",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:acknowledge_briefing_200",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:27"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "briefing",
+            "closing_event_id": "@event:27"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:210",
+      "caller": "$seat:builder",
+      "command": "start_criterion",
+      "operation_id": "start_criterion",
+      "key": "$key:start_criterion_210",
+      "path_params": {
+        "id": "$task:2",
+        "cid": "$criterion:t2_work"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:28",
+            "type": "criterion.started",
+            "schema_version": 1,
+            "at": "@t:210",
+            "effective_at": "@t:210",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t2_work",
+            "cause_id": null,
+            "command_id": "$key:start_criterion_210",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t2_work",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:28"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "closing_event_id": "@event:28"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:220",
+      "caller": "$helper:mac",
+      "command": "report_limit",
+      "operation_id": "report_limit",
+      "key": "$key:limit_220",
+      "path_params": {
+        "id": "$credential:claude_a"
+      },
+      "body": {
+        "credential_id": "$credential:claude_a",
+        "seat_id": "$seat:builder",
+        "task_id": "$task:2",
+        "review_id": null,
+        "job_id": null,
+        "window": "five_hour",
+        "reset_at": null,
+        "observed_at": "@t:210",
+        "tool_version": "0.0.0-example"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:29",
+            "type": "credential.limit_reached",
+            "schema_version": 1,
+            "at": "@t:220",
+            "effective_at": "@t:220",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "cause_id": null,
+            "command_id": "$key:limit_220",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "review_id": null,
+              "job_id": null,
+              "window": "five_hour",
+              "reset_at": null
+            }
+          },
+          {
+            "ref": "@event:30",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:220",
+            "effective_at": "@t:220",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_limit_no_date",
+            "cause_id": "@event:29",
+            "command_id": "$key:limit_220",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:codex_dated",
+              "rule_check_id": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_limit",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_dated",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:30"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "closing_event_id": "@event:30"
+          }
+        ]
+      },
+      "note": "The only other candidate is limited with a known reset, so the hold opens without a Needs you item."
+    },
+    {
+      "at": "@t:230",
+      "caller": "$user:owner",
+      "command": "reorder_credentials",
+      "operation_id": "reorder_credentials",
+      "key": "$key:reorder_230",
+      "path_params": {},
+      "body": {
+        "order": [
+          "$credential:grok_r",
+          "$credential:codex_spare",
+          "$credential:codex_dated",
+          "$credential:claude_a"
+        ]
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:31",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:230",
+            "effective_at": "@t:230",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_dated",
+            "cause_id": null,
+            "command_id": "$key:reorder_230",
+            "payload": {}
+          },
+          {
+            "ref": "@event:32",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:230",
+            "effective_at": "@t:230",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "cause_id": null,
+            "command_id": "$key:reorder_230",
+            "payload": {}
+          },
+          {
+            "ref": "@event:33",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:230",
+            "effective_at": "@t:230",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t2_no_reset",
+            "cause_id": "@event:32",
+            "command_id": "$key:reorder_230",
+            "payload": {
+              "kind": "limit_with_no_reset_time"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      },
+      "note": "Move the only candidate with a reset above the builder’s own login. The hold stays open and gets a Needs you item."
+    },
+    {
+      "at": "@t:240",
+      "caller": "$user:owner",
+      "command": "reorder_credentials",
+      "operation_id": "reorder_credentials",
+      "key": "$key:reorder_240",
+      "path_params": {},
+      "body": {
+        "order": [
+          "$credential:grok_r",
+          "$credential:codex_dated",
+          "$credential:claude_a",
+          "$credential:codex_spare"
+        ]
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:34",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_dated",
+            "cause_id": null,
+            "command_id": "$key:reorder_240",
+            "payload": {}
+          },
+          {
+            "ref": "@event:35",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:claude_a",
+            "cause_id": null,
+            "command_id": "$key:reorder_240",
+            "payload": {}
+          },
+          {
+            "ref": "@event:36",
+            "type": "credential.order_changed",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_spare",
+            "cause_id": null,
+            "command_id": "$key:reorder_240",
+            "payload": {}
+          },
+          {
+            "ref": "@event:37",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_limit_no_date",
+            "cause_id": "@event:36",
+            "command_id": "$key:reorder_240",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:codex_dated",
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:38",
+            "type": "credential.switched",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_spare",
+            "cause_id": "@event:37",
+            "command_id": "$key:reorder_240",
+            "payload": {
+              "from_credential_id": "$credential:claude_a",
+              "model": "codex-model-1",
+              "seat_id": "$seat:builder",
+              "review_id": null,
+              "job_id": null
+            }
+          },
+          {
+            "ref": "@event:39",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:240",
+            "effective_at": "@t:240",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t2_no_reset",
+            "cause_id": null,
+            "command_id": "$key:reorder_240",
+            "payload": {
+              "choice": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t2_work",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:37"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_limit",
+            "closing_event_id": "@event:37"
+          }
+        ]
+      },
+      "note": "Move the available spare below the builder’s own login. The hold closes and the work switches to the spare."
+    },
+    {
+      "at": "@t:260",
+      "caller": "$helper:mac",
+      "command": "report_limit",
+      "operation_id": "report_limit",
+      "key": "$key:limit_260",
+      "path_params": {
+        "id": "$credential:codex_spare"
+      },
+      "body": {
+        "credential_id": "$credential:codex_spare",
+        "seat_id": "$seat:builder",
+        "task_id": "$task:2",
+        "review_id": null,
+        "job_id": null,
+        "window": "five_hour",
+        "reset_at": "@t:3860",
+        "observed_at": "@t:259",
+        "tool_version": "0.0.0-example"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:40",
+            "type": "credential.limit_reached",
+            "schema_version": 1,
+            "at": "@t:260",
+            "effective_at": "@t:260",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_spare",
+            "cause_id": null,
+            "command_id": "$key:limit_260",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "review_id": null,
+              "job_id": null,
+              "window": "five_hour",
+              "reset_at": "@t:3860"
+            }
+          },
+          {
+            "ref": "@event:41",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:260",
+            "effective_at": "@t:260",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_limit_with_date",
+            "cause_id": "@event:40",
+            "command_id": "$key:limit_260",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:codex_spare",
+              "rule_check_id": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_limit",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "credential",
+            "subject_id": "$credential:codex_spare",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:41"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "closing_event_id": "@event:41"
+          }
+        ]
+      },
+      "note": "The resumed run on the spare reaches a limit with a reset an hour away."
+    },
+    {
+      "at": "@t:280",
+      "caller": "$helper:mac",
+      "command": "report_reading",
+      "operation_id": "report_reading",
+      "key": "$key:reading_280",
+      "path_params": {
+        "id": "$credential:codex_spare"
+      },
+      "body": {
+        "credential_id": "$credential:codex_spare",
+        "observed_at": "@t:270",
+        "state": "ok",
+        "tool_version": "0.0.0-example",
+        "figures": [
+          {
+            "label": "5-hour window",
+            "kind": "limit",
+            "window": "five_hour",
+            "percent_used": 40,
+            "reset_at": null,
+            "value": null
+          }
+        ],
+        "resets": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:42",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:280",
+            "effective_at": "@t:280",
+            "actor_kind": "app",
+            "actor_id": "$helper:mac",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_limit_with_date",
+            "cause_id": null,
+            "command_id": "$key:reading_280",
+            "payload": {
+              "reason": "credential_limit",
+              "rule_id": null,
+              "credential_id": "$credential:codex_spare",
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t2_work",
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:42"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_limit",
+            "closing_event_id": "@event:42"
+          }
+        ]
+      },
+      "note": "The refused window has room before the stated reset. The hold closes without an inbox event."
+    }
+  ]
+}

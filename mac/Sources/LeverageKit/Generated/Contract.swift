@@ -108,6 +108,7 @@ public enum CommandName: String, Codable, CaseIterable, Sendable {
     case reviewerEligibility = "reviewer_eligibility"
     case commandKeyRetention = "command_key_retention"
     case seatRunPlacement = "seat_run_placement"
+    case usageReadDue = "usage_read_due"
 }
 
 /// registry.json `event_types`.

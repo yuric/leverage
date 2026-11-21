@@ -705,3 +705,42 @@ allows the recovery time ceiling to be cleared (AP-39).
   within each project before making their positions required and unique.
   It checks the question outcome and basis lists, lets job input be
   cleared, and indexes Finishing tasks with no holder by workspace.
+
+## What the Credentials milestone added
+
+The milestone serves the existing owner operations for rename, remove,
+Refresh, Verify all and reorder, and the helper's `report_reading`.
+Refresh and Verify all return their request ids as `helper_request_ids`
+in the completed outcome's result.
+
+- `usage_read_due` is a workspace timer on every sweep. It queues due
+  usage reads and writes no event (CR-10).
+- A reorder writes `credential.order_changed` for each added credential
+  whose position changed, in the new order. A reorder or removal can
+  close credential holds, switch credentials, and open or resolve
+  Needs you items. A limit item also resolves if its hold has a reset
+  time to wait for again (CR-28, CR-30, CR-32).
+- A reading is stored without a credential event. To clear a limit, it
+  must be an `ok` reading observed after the limit was recorded. It needs
+  at least one limit figure for the refused window, and every such figure
+  must be below 100 percent used. When the report named no window, the
+  same test applies to all limit figures. This can end a wait with or
+  without a reset time. A passed Verify still clears a limit with no
+  reset time (CR-14).
+- Add accepts an API token with the fixed mask `••••••••` and a login
+  with a null label. The database clears any older nonconforming labels
+  before enforcing those two values. The helper's successful add result
+  places the credential in the handoff order and queues its first read.
+  The result of `read_usage` writes no event. Verify can record
+  `credential.signed_out` v1 for a rejected or missing token using the
+  existing payload (CR-7, CR-13, CR-29, TK-3).
+- The reading schema limits figures to 32, resets to 16, tool version
+  to 64 characters, and figure labels and string values to 80 characters
+  each. The account reads keep their existing response fields.
+- `readers.json` names the sources and the labels, including US dollars
+  in OpenRouter's money labels and Requests remaining for Claude API and
+  OpenAI API. A tested tool version requires a recorded usage reply.
+  Every reader stays provisional (CR-5, CR-17, RD-3, RD-5, RD-6, RD-7).
+- Trace `24-reading-ends-a-limit-wait` covers when a reading clears a
+  limit, how reorders change a held task's candidates, and the events and
+  steps the task records (CT-3).

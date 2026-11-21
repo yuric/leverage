@@ -31,11 +31,13 @@ class TracesTest < Minitest::Test
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
   # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
-  # rule exists before milestone 4 (milestone 3 plan HT-1).
+  # rule exists before milestone 4 (milestone 3 plan HT-1). Trace 24 uses
+  # a workspace without rules to exercise credential holds (CT-3).
   RULE_FREE = %w[
     09-core-loop-no-rules 10-leases-no-rules 11-limit-handoff-no-rules
     12-signed-out-hold-verify-no-rules 13-limit-next-signed-out-no-rules
     14-handoff-edges-no-rules 15-owner-controls-no-rules
+    24-reading-ends-a-limit-wait
   ].freeze
   # The traces whose workspace was made before the rules arrived: their
   # setup has no rule, and their first command is the one-time write of
