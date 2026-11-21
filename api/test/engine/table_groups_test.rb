@@ -64,7 +64,7 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   test "the Questions and approvals commands are served in their groups" do
     assert_equal 97, Table::COMMANDS.size
-    refute Table.const_defined?(:PENDING, false)
+    assert_equal registry.fetch("commands").sort, (Table::COMMANDS + Table::PENDING).sort
     assert_equal MILESTONE_5_TIMERS, Table::TIMERS.last(2)
     MILESTONE_5.each do |group, commands|
       assert Table.const_defined?(group, false), group
@@ -116,13 +116,13 @@ class TableGroupsTest < ActiveSupport::TestCase
     end
   end
 
-  test "a served name is included, and a later milestone's name is neither included nor found" do
+  test "a served name is included, and an unknown name is neither included nor found" do
     assert Table.include?("claim")
     assert Table.include?(:claim)
     assert Table.include?("add_rule")
-    refute Table.include?("report_reading")
-    assert_raises(Table::UnknownCommand) { Table.entry_for("report_reading") }
-    assert_raises(Table::UnknownCommand) { Table.with_entries("report_reading" => T::Entry) { flunk "ran" } }
+    refute Table.include?("made_up_command")
+    assert_raises(Table::UnknownCommand) { Table.entry_for("made_up_command") }
+    assert_raises(Table::UnknownCommand) { Table.with_entries("made_up_command" => T::Entry) { flunk "ran" } }
   end
 
   test "with_entries temporarily replaces a Questions and approvals entry" do

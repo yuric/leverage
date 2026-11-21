@@ -230,10 +230,9 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
-  # report_reading belongs to milestone 6.
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "report_reading")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "report_reading").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "made_up_command")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "made_up_command").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -294,7 +293,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("promote")
     assert T::Table.include?("add_rule")
     assert T::Table.include?("ask_question")
-    refute T::Table.const_defined?(:PENDING, false)
+    assert_equal Leverage::Contract.registry.fetch("commands").sort, (T::Table::COMMANDS + T::Table::PENDING).sort
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

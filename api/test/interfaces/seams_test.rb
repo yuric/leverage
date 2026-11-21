@@ -36,8 +36,7 @@ class SeamsTest < ActionDispatch::IntegrationTest
 
   test "the unserved operations are the Credentials milestone's seam" do
     ids = unserved.map { |operation| operation.fetch("operation_id") }
-    assert_equal %w[refresh_usage remove_credential rename_credential reorder_credentials report_reading
-                    verify_all_credentials], ids.sort
+    assert_equal Leverage::Http::RouteTable::PENDING.keys.sort, ids.sort
     %w[claim_next_job submit_job_result list_rules add_rule save_rule enable_rule disable_rule revert_rule remove_rule
        rerun_check override_check draft_contract].each { |operation_id| refute_includes ids, operation_id }
   end

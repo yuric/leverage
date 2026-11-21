@@ -3,6 +3,7 @@ require_relative "state_table_test"
 require_relative "state_table_timers_test"
 require_relative "state_table_sign_in_test"
 require_relative "state_table_accounts_test"
+require_relative "state_table_credentials_test"
 require_relative "state_table_handoff_test"
 require_relative "state_table_owner_controls_test"
 require_relative "state_table_rules_test"
@@ -37,7 +38,8 @@ class StateTableAllTest < ActiveSupport::TestCase
     StateTableTest => T::Table::TASK_LOOP,
     StateTableTimersTest => StateTableTimersTest::COMMANDS + StateTableTimersTest::NEW_COMMANDS + StateTableTimersTest::QUESTION_TIMERS,
     StateTableSignInTest => T::Table::SIGN_IN,
-    StateTableAccountsTest => T::Table::ACCOUNTS + StateTableAccountsTest::HANDOFF_ACCOUNTS,
+    StateTableAccountsTest => (T::Table::ACCOUNTS - StateTableCredentialsTest::COMMANDS) + StateTableAccountsTest::HANDOFF_ACCOUNTS,
+    StateTableCredentialsTest => StateTableCredentialsTest::COMMANDS,
     StateTableHandoffTest => StateTableHandoffTest::COMMANDS,
     StateTableOwnerControlsTest => StateTableOwnerControlsTest::COMMANDS,
     StateTableRulesTest => StateTableRulesTest.commands,

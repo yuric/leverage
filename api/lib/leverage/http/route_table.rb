@@ -117,6 +117,16 @@ module Leverage
         "change_workspace_settings" => "v1/owner/settings#update"
       }.freeze
 
+      # Credentials milestone operations staged for the HTTP package (CT-1).
+      PENDING = {
+        "rename_credential" => "v1/owner/credentials#rename",
+        "remove_credential" => "v1/owner/credentials#remove",
+        "reorder_credentials" => "v1/owner/credentials#reorder",
+        "refresh_usage" => "v1/owner/credentials#refresh",
+        "verify_all_credentials" => "v1/owner/credentials#verify_all",
+        "report_reading" => "v1/helper/credentials#readings"
+      }.freeze
+
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)
