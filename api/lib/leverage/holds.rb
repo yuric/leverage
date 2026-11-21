@@ -74,7 +74,7 @@ module Leverage
         open_item(ctx, hold, task: task, facts: facts, cause_id: opened.id, actor_kind: actor_kind, actor_id: actor_id,
           round: round)
       end
-      leases_of(task).each { |subject| Leases.pause(ctx, subject) } if pauses?(reason)
+      leases_of(task).each { |subject| Leases.pause(ctx, subject, at: opened.effective_at) } if pauses?(reason)
       hold
     end
 
