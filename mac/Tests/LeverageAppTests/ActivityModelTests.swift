@@ -126,11 +126,48 @@ struct ActivityModelTests {
         #expect(actual[4] == sentences[4])
     }
 
+    @Test("Everything shows current account names after load and credential events")
+    func credentialNames() async throws {
+        let account = UUID()
+        func row(_ name: String) -> CredentialWithReading {
+            CredentialWithReading(credential: Credential(id: account, provider: .claude, name: name, position: 1),
+                                  reading: nil)
+        }
+        let renamed = Self.event(1, type: .credentialRenamed, subjectID: account)
+        let moved = Self.event(2, type: .credentialOrderChanged, subjectID: account)
+        let live = Locked(false)
+        let initial = row("Initial name")
+        let current = row("Current name")
+        let server = Server(events: [renamed])
+        server.api.script {
+            $0.credentials = {
+                live.value ? CredentialsList(credentials: [current], asOfSeq: 2)
+                           : CredentialsList(credentials: [initial], asOfSeq: 1)
+            }
+            $0.events = { after, limit, wait in
+                if wait != nil { try await ShellFixtures.waitForActivity { live.value && after < 2 } }
+                return Self.page(live.value ? [renamed, moved] : [renamed], after: after, limit: limit)
+            }
+        }
+        let feed = EventFeed(owner: server.api)
+        let model = ActivityModel(api: server.api)
+        model.attach(to: feed)
+        defer { model.detach(); feed.stop() }
+        model.filter = .everything
+        await model.load()
+        #expect(model.entries.map(\.text) == ["You renamed Initial name."])
+
+        live.update { $0 = true }
+        #expect(await ShellFixtures.eventually { model.entries.first?.text == "You moved Current name in the handoff order." })
+        #expect(model.entries.map(\.text) == ["You moved Current name in the handoff order.", "You renamed Current name."])
+    }
+
     private nonisolated static func event(
-        _ seq: Int, taskID: UUID? = nil, type: EventType = .taskCreated
+        _ seq: Int, taskID: UUID? = nil, type: EventType = .taskCreated, subjectID: UUID? = nil
     ) -> EventRecord {
         EventRecord(id: UUID(), workspaceID: UUID(), seq: seq, at: Date(timeIntervalSinceReferenceDate: Double(seq)),
-                    type: type, actorKind: .owner, taskID: taskID)
+                    type: type, actorKind: .owner, taskID: taskID,
+                    subjectKind: subjectID == nil ? nil : .credential, subjectID: subjectID)
     }
 
     private nonisolated static func page(_ events: [EventRecord], after: Int, limit: Int?) -> EventsPage {
