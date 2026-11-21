@@ -4,6 +4,7 @@ require_relative "state_table_timers_test"
 require_relative "state_table_sign_in_test"
 require_relative "state_table_accounts_test"
 require_relative "state_table_credentials_test"
+require_relative "state_table_readings_test"
 require_relative "state_table_handoff_test"
 require_relative "state_table_owner_controls_test"
 require_relative "state_table_rules_test"
@@ -21,7 +22,7 @@ require_relative "state_table_workspace_test"
 # invalid_state pair for its commands; this file proves that together they
 # leave nothing out:
 #
-# - the thirteen groups are the whole Table of 97, each command in exactly one;
+# - the fourteen groups are the whole Table of 103, each command in exactly one;
 # - the state-table test classes cover the Table, each command in exactly one;
 # - the commands the served operations run (Http::RouteTable, the
 #   registry's commands of each operation) are exactly the Table's
@@ -32,14 +33,15 @@ class StateTableAllTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
   TABLE_GROUPS = %i[TASK_LOOP TIMERS SIGN_IN ACCOUNTS HANDOFF OWNER_CONTROLS RULES CHECKS JOBS FINISHING
-                    QUESTIONS PROJECTS WORKSPACE].freeze
+                    QUESTIONS PROJECTS WORKSPACE CREDENTIALS].freeze
 
   CLASSES = {
     StateTableTest => T::Table::TASK_LOOP,
     StateTableTimersTest => StateTableTimersTest::COMMANDS + StateTableTimersTest::NEW_COMMANDS + StateTableTimersTest::QUESTION_TIMERS,
     StateTableSignInTest => T::Table::SIGN_IN,
     StateTableAccountsTest => (T::Table::ACCOUNTS - StateTableCredentialsTest::COMMANDS) + StateTableAccountsTest::HANDOFF_ACCOUNTS,
-    StateTableCredentialsTest => StateTableCredentialsTest::COMMANDS,
+    StateTableCredentialsTest => StateTableCredentialsTest::COMMANDS + StateTableCredentialsTest::NEW_COMMANDS,
+    StateTableReadingsTest => %w[report_reading usage_read_due],
     StateTableHandoffTest => StateTableHandoffTest::COMMANDS,
     StateTableOwnerControlsTest => StateTableOwnerControlsTest::COMMANDS,
     StateTableRulesTest => StateTableRulesTest.commands,
@@ -56,12 +58,12 @@ class StateTableAllTest < ActiveSupport::TestCase
   # operation runs them.
   def app_only = T::Table::COMMANDS.select { |command| StateTableCases.rows(command).all? { |row| row.fetch("who") == %w[app] } }
 
-  test "the thirteen groups are the whole Table of 97, each command in exactly one" do
-    assert_equal 97, T::Table::COMMANDS.size
+  test "the fourteen groups are the whole Table of 103, each command in exactly one" do
+    assert_equal 103, T::Table::COMMANDS.size
     commands = TABLE_GROUPS.flat_map { |group| T::Table.const_get(group) }
     assert_equal commands.uniq, commands, "a command is in two groups"
     assert_equal T::Table::COMMANDS.sort, commands.sort
-    assert_equal 97, commands.size
+    assert_equal 103, commands.size
   end
 
   test "the state-table test classes cover the Table, each command in exactly one" do

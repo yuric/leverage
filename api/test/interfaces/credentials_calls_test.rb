@@ -49,7 +49,7 @@ class CredentialsCallsTest < ActionDispatch::IntegrationTest
     send_call("/not-an-id/rename", body: { "name" => "" })
     assert_transport_error :unprocessable_content, "invalid"
 
-    send_call("/order", body: { "order" => [] })
+    send_call("/order", body: {})
     assert_transport_error :unprocessable_content, "invalid"
   end
 

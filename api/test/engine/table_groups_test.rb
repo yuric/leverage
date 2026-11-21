@@ -63,9 +63,9 @@ class TableGroupsTest < ActiveSupport::TestCase
   }.freeze
 
   test "the Questions and approvals commands are served in their groups" do
-    assert_equal 97, Table::COMMANDS.size
-    assert_equal registry.fetch("commands").sort, (Table::COMMANDS + Table::PENDING).sort
-    assert_equal MILESTONE_5_TIMERS, Table::TIMERS.last(2)
+    assert_equal 103, Table::COMMANDS.size
+    assert_equal registry.fetch("commands").sort, Table::COMMANDS.sort
+    assert_equal MILESTONE_5_TIMERS, Table::TIMERS.drop(11).first(2)
     MILESTONE_5.each do |group, commands|
       assert Table.const_defined?(group, false), group
       assert_equal commands, Table.const_get(group), group
@@ -84,11 +84,27 @@ class TableGroupsTest < ActiveSupport::TestCase
     end
   end
 
-  test "the table names 97 distinct served commands with registry rows" do
+  CREDENTIAL_COMMANDS = %w[rename_credential remove_credential reorder_credentials refresh_usage report_reading].freeze
+  CREDENTIAL_TIMER = "usage_read_due".freeze
+
+  test "the Credentials commands are served with their named entry classes" do
+    refute Table.const_defined?(:PENDING, false)
+    assert_equal CREDENTIAL_COMMANDS, Table::CREDENTIALS
+    assert_equal CREDENTIAL_TIMER, Table::TIMERS.last
+    (CREDENTIAL_COMMANDS + [ CREDENTIAL_TIMER ]).each do |command|
+      assert Table.include?(command), command
+      entry = Table.entry_for(command)
+      assert_equal Table.class_name(command), entry.name
+      assert_equal command, entry.command
+      assert_operator entry, :<, T::Entry
+    end
+  end
+
+  test "the table names 103 distinct served commands with registry rows" do
     with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
       .map { |row| row.fetch("command") }
 
-    assert_equal 97, Table::COMMANDS.size
+    assert_equal 103, Table::COMMANDS.size
     assert_equal Table::COMMANDS.uniq, Table::COMMANDS
     Table::COMMANDS.each do |command|
       assert_includes registry.fetch("commands"), command
@@ -145,8 +161,10 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   test "each entry is implemented and each new timer writes nothing when nothing is due" do
     ctx = Scenario.new.context
-    timers = NEW_TIMERS + MILESTONE_5_TIMERS
-    (NEW_COMMANDS.values.flatten + MILESTONE_5.values.flatten + MILESTONE_5_TIMERS).each do |command|
+    timers = NEW_TIMERS + MILESTONE_5_TIMERS + [ CREDENTIAL_TIMER ]
+    commands = NEW_COMMANDS.values.flatten + MILESTONE_5.values.flatten + MILESTONE_5_TIMERS +
+      CREDENTIAL_COMMANDS + [ CREDENTIAL_TIMER ]
+    commands.each do |command|
       source = Rails.root.join("lib/leverage/transitions/entries/#{command}.rb").read
       refute_match(/not built yet|NotImplementedError/, source, command)
       next unless timers.include?(command)

@@ -41,6 +41,10 @@ class RoutesTest < ActiveSupport::TestCase
     overturn_approval get_workspace_settings change_workspace_settings
   ].freeze
 
+  MILESTONE_6 = %w[
+    rename_credential remove_credential reorder_credentials refresh_usage verify_all_credentials report_reading
+  ].freeze
+
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
   def drawn
@@ -48,8 +52,9 @@ class RoutesTest < ActiveSupport::TestCase
   end
 
   test "the served operations match their milestones, each a registry operation" do
-    assert_equal operations.keys.sort, (RouteTable::ROUTES.keys + RouteTable::PENDING.keys).sort
-    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5).sort, RouteTable::ROUTES.keys.sort
+    refute RouteTable.const_defined?(:PENDING, false)
+    assert_equal operations.keys.sort, RouteTable::ROUTES.keys.sort
+    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6).sort, RouteTable::ROUTES.keys.sort
     RouteTable::ROUTES.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes.each do |route|
       operation = operations.fetch(route.operation_id)

@@ -4,13 +4,14 @@ require_relative "../support/walk"
 # Step partition (PRD test 2, Steps and timing; milestone 2 plan EN-25):
 # for seeded random command sequences, each task's steps touch end to end
 # and sum to its lifetime. 300 walks of at most 120 steps over the
-# commands and timers of milestones 2 to 5 (Walk; milestone 3 plan HT-3:
+# commands and timers of milestones 2 to 6 (Walk; milestone 3 plan HT-3:
 # the twelve new commands, the credential timer and a credential whose
 # reset time the walk moves; milestone 4 plan RT-3: the twenty new
 # commands and timers, a rule set drawn per walk, an orchestrator that
 # answers drawn verdicts or none, a planner, and a step for each row of
 # rule 11's table; milestone 5 plan AT-3: questions, approvals, projects,
-# budgets and the choices in Needs you); SEED and WALKS override.
+# budgets and the choices in Needs you; milestone 6 plan CT-2: credentials
+# and readings); SEED and WALKS override.
 # A failure prints the seed and the walk. The same walks also check the
 # replay (test 1) and the log
 # audit (L894, with RT-4's gate line), which a random sequence reaches in
@@ -86,8 +87,9 @@ class StepPartitionTest < ActiveSupport::TestCase
   WALKS.times do |number|
     seed = SEED + number
     test "walk #{number} (seed #{seed}): each task's steps touch end to end and sum to its lifetime" do
-      walk = Walk.new(seed: seed, steps: STEPS).run
+      walk = Walk.new(seed: seed, steps: STEPS, credentials: true).run
       now = database_now
+      assert_empty walk.credential_step_problems, walk.credential_step_problems.join("\n") + "\n#{walk}"
       assert_empty partition_problems(walk.workspace_id, now), walk.to_s
       assert_empty Leverage::Replay.diff(walk.workspace_id), walk.to_s
       assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
@@ -100,6 +102,33 @@ class StepPartitionTest < ActiveSupport::TestCase
   # and SEED=9 of the first 60 left "resume"), which made the whole suite
   # fail by chance.
   COVERAGE_SEEDS = (10_001..10_020)
+
+  test "the walks complete the credential commands and schedule usage with the workspace timer" do
+    commands = Set.new(%w[rename_credential remove_credential reorder_credentials refresh_usage report_reading usage_read_due])
+    states = Set.new
+    figures = Set.new
+    percentages = Set.new
+    scheduled = false
+    COVERAGE_SEEDS.each do |seed|
+      walk = Walk.new(seed: seed, steps: STEPS, credentials: true).run
+      assert_empty walk.credential_step_problems, walk.credential_step_problems.join("\n") + "\n#{walk}"
+      completed = walk.log.select { |step| step.answer.start_with?("completed") }
+      commands.subtract(completed.map(&:command))
+      scheduled ||= completed.any? { |step| step.command == "usage_read_due" && step.answer.include?("queued") }
+      completed.select { |step| step.command == "report_reading" }.each do |step|
+        states << step.params.fetch("state")
+        step.params.fetch("figures").each do |figure|
+          figures << figure.fetch("window")
+          percentages << figure.fetch("percent_used")
+        end
+      end
+    end
+    assert_empty commands, "the walks never completed these credential commands"
+    assert scheduled, "the usage timer never queued a read"
+    assert_equal Set["ok", "signed_out", "unavailable"], states
+    assert_equal Set["five_hour", "weekly", "spend"], figures
+    assert_equal Set[nil, 0, 40, 99.5, 100], percentages
+  end
 
   test "the walks complete every milestone-3 command and the credential timer, and move a reset" do
     completed = Set.new

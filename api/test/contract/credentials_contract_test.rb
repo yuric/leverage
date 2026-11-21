@@ -72,4 +72,16 @@ class CredentialsContractTest < Minitest::Test
       refute schema.valid?(reading.merge("figures" => [ figure.merge(field => "x" * 81) ])), field
     end
   end
+
+  def test_a_reorder_accepts_the_empty_set_and_still_requires_an_order
+    schema = validator("ReorderCredentialsRequest")
+    assert schema.valid?({ "order" => [] })
+    refute schema.valid?({})
+  end
+
+  def test_the_credentials_list_example_pairs_each_reading_with_its_credential
+    example = schemas.fetch("CredentialsList").fetch("examples").first
+    row = example.fetch("credentials").first
+    assert_equal row.fetch("credential").fetch("id"), row.fetch("reading").fetch("credential_id")
+  end
 end

@@ -79,6 +79,24 @@ class CallerInterfacesTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a helper token cannot send valid owner credential requests" do
+    id = @scenario.credential.id
+    operations = {
+      "rename_credential" => [ { "id" => id }, { "name" => "Made-up rename" } ],
+      "remove_credential" => [ { "id" => id }, nil ],
+      "reorder_credentials" => [ {}, { "order" => [ id ] } ],
+      "refresh_usage" => [ {}, nil ],
+      "verify_all_credentials" => [ {}, nil ]
+    }
+    before = counts
+    operations.each do |operation_id, (ids, body)|
+      call(operation_id, token: @tokens.fetch(:helper), ids: ids, body: body, key: new_key)
+      assert_unauthenticated(operation_id, "a helper token")
+    end
+    assert_equal before, counts
+    assert Credential.exists?(id)
+  end
+
   # EN-20: a session's last use is written at most every five minutes, by
   # the owner's own calls (Transitions::RecordPoll.session).
   test "an owner call records the session's last use, at most every five minutes" do
