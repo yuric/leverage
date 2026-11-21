@@ -229,6 +229,20 @@ struct ContractExamplesTests {
         }
     }
 
+    @Test("a credentials list without a reading keeps the required null fields")
+    func credentialsWithoutReading() throws {
+        let example = try #require(ContractDocument.examples(of: "CredentialsList").first)
+        let list = try LeverageJSON.decoder().decode(CredentialsList.self, from: ContractDocument.data(example))
+        let credential = try #require(list.credentials.first?.credential)
+        let row = CredentialWithReading(credential: credential)
+        let withoutReading = CredentialsList(credentials: [row], asOfSeq: list.asOfSeq)
+        let data = try LeverageJSON.encoder().encode(withoutReading)
+        let written = try JSONDecoder().decode(JSONValue.self, from: data)
+        let schema = try #require(ContractDocument.schema("CredentialsList"))
+        ClientPathsTests.expect(written, fits: schema, at: "CredentialsList")
+        #expect(try LeverageJSON.decoder().decode(CredentialsList.self, from: data) == withoutReading)
+    }
+
     @Test("a token answer is the token the first time and repeated, with none, after",
           arguments: ["OwnerSessionCompleted", "HelperTokenIssuedCompleted",
                       "SeatConnectedCompleted", "SeatTokenPickupCompleted"])
