@@ -34,6 +34,27 @@ module Leverage
         end)
       end
 
+      # The blocking gates enabled when the action was requested. A later
+      # enable or save cannot replace their frozen versions.
+      def action_gate_ids(event)
+        rules = {}
+        versions = {}
+        kinds = %w[rule.created rule.changed rule.reverted rule.enabled rule.disabled rule.removed]
+        Event.where(workspace_id: event.workspace_id, type: kinds).where("seq < ?", event.seq)
+          .order(:seq).pluck(:type, :subject_id, :payload).each do |type, id, payload|
+          versions[id] = payload["rule_version_id"] if payload.key?("rule_version_id")
+          case type
+          when "rule.created" then rules[id] = payload.fetch("enabled")
+          when "rule.enabled" then rules[id] = true
+          when "rule.disabled", "rule.removed" then rules[id] = false
+          end
+        end
+        ids = rules.filter_map { |id, enabled| versions[id] if enabled }
+        RuleVersion.where(workspace_id: event.workspace_id, id: ids, hook: "action.requested").filter_map do |version|
+          version.id if AppCheckers.runs?(version) && EvaluationBuilder.blocking?(version)
+        end
+      end
+
       # The approval policies frozen when the action was requested.
       # Saving a rule leaves that version in place. Turning a rule on again
       # after the request leaves it out of the existing action.

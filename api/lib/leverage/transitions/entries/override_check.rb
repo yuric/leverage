@@ -30,6 +30,7 @@ module Leverage
         ANSWERED = %w[check_error claim_gate_failed rerun_limit].freeze
         CLAIM_HOOK = "task.before_claim".freeze
         ACTION_HOOK = "action.requested".freeze
+        CLEARED = %w[passed not_applicable withdrawn].freeze
         OVERRIDE_ONCE = "override_once".freeze
 
         def load(ctx)
@@ -69,14 +70,29 @@ module Leverage
         def overridable?
           return false if @check.overridden_at || @task.nil? || @task.state == "cancelled"
           if @check.hook == ACTION_HOOK
-            return false unless @task.state == "finishing" && !Gate.approval_check?(@check) && action
-            return @check.result == "failed" if stopped_hold
+            return false unless @task.state == "finishing" && @check.round == @task.round && !Gate.approval_check?(@check) && action
+            return @check.result == "failed" && other_action_gates_cleared? if stopped_hold
 
             return action.state == "requested" && @check.result == "error"
           end
           return true if OVERRIDABLE.include?(@check.result)
 
           @check.result.nil? && answered_holds.any? { |hold| hold.reason == "rerun_limit" }
+        end
+
+        # Let this one failed gate through only when every other gate at
+        # the request was cleared. If another failed, the action stays
+        # stopped and the owner can waive it or send the task for rework.
+        def other_action_gates_cleared?
+          requested = Event.where(workspace_id: @task.workspace_id, task_id: @task.id, round: @task.round,
+            type: ACTION_HOOK, subject_kind: "action", subject_id: action.id).order(:seq).last
+          return false unless requested
+
+          others = Rules::Catalog.action_gate_ids(requested) - [ @check.rule_version_id ]
+          checks = Actions.action_checks(action).where(round: @task.round, hook: ACTION_HOOK, input_hash: @check.input_hash,
+            rule_version_id: others)
+          cleared = checks.where(result: CLEARED).or(checks.where.not(overridden_at: nil)).pluck(:rule_version_id)
+          (others - cleared).empty?
         end
 
         def override_action(ctx)

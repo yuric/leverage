@@ -210,13 +210,13 @@ module Leverage
       end
 
       def write_action_checks(ctx, action, task, planned, jobs, failed:)
-        kept = failed ? planned.map { |check| check.result.nil? ? nil : check } : planned
-        plan = Gating::Evaluation.new(outcome: :completed, frozen_rule_version_ids: [], checks: kept.compact,
-          jobs: failed ? [] : jobs, failures: [], warnings: [], effects: [], holds_to_open: [])
+        jobs = jobs.select { |job| job.kind == "rule_check" } if failed
+        plan = Gating::Evaluation.new(outcome: :completed, frozen_rule_version_ids: [], checks: planned,
+          jobs: jobs, failures: [], warnings: [], effects: [], holds_to_open: [])
         rows = nil
         params = { "action_id" => action.id }
         Finishing.as_app(ctx, "request_action", params) { rows = RuleChecks.write(ctx, plan, task: task) }
-        kept.map { |check| check && rows.shift }
+        rows
       end
 
       def close_action_check_holds(ctx, action, task, decision, trigger)

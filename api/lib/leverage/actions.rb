@@ -58,7 +58,9 @@ module Leverage
       command = rule_check ? "request_action" : (ctx.request.command == "overturn_approval" ? "overturn_approval" : "stop_action")
       event = move(ctx, action, "action.stopped", command: command, task: task, actor_kind: by.first, actor_id: by.last,
         cause_id: (RuleChecks.last_finished(rule_check)&.id if rule_check))
-      withdraw_checks(ctx, action, task)
+      # A gate can stop the action while other gates still run. Their
+      # results are needed before the owner can override the failed gate.
+      withdraw_checks(ctx, action, task) unless rule_check
       holds_for(action, "check_error").each { |hold| Holds.close(ctx, hold: hold, task: task) }
       owner_approval_holds(action).each { |hold| Holds.close(ctx, hold: hold, task: task, choice: "stop") }
       Holds.open(ctx, task: task, reason: "action_stopped", cause_id: event.id, actor_kind: by.first, actor_id: by.last,

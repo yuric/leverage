@@ -213,10 +213,10 @@ class OverrideCheckTest < ActiveSupport::TestCase
     assert_refused("invalid_state", outcome)
   end
 
-  def action_with_gates
+  def action_with_gates(model_versions: 1)
     failed_rule = scenario.rule(hook: "action.requested", checker: "app", checker_function: "minimum_criteria_count",
       parameters: { "minimum_count" => 2 })
-    model_rule = scenario.rule(hook: "action.requested")
+    model_rule = scenario.rule(hook: "action.requested", versions: model_versions)
     task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Send the sample." } ])
     [ task, Action.find_by!(task_id: task.id), failed_rule, model_rule ]
   end
@@ -231,6 +231,22 @@ class OverrideCheckTest < ActiveSupport::TestCase
     assert_refused("invalid_state", outcome)
     assert_empty events
     assert_nil failed.reload.overridden_at
+    assert_equal "stopped", action.reload.state
+  end
+
+  test "a passing row of an older gate version does not clear the frozen gate" do
+    task, action, failed_rule, model_rule = action_with_gates(model_versions: 2)
+    failed = scenario.rule_check(task, rule: failed_rule, subject: action, result: "failed")
+    Leverage::Actions.stop(scenario.context, action, by: [ "app", nil ], rule_check: failed)
+    old = RuleVersion.find_by!(rule_id: model_rule.id, version: 1)
+    dormant = failed.dup
+    dormant.assign_attributes(rule_id: model_rule.id, rule_version_id: old.id, result: "passed")
+    dormant.save!
+
+    outcome, _, events = override(failed)
+
+    assert_refused("invalid_state", outcome)
+    assert_empty events
     assert_equal "stopped", action.reload.state
   end
 
