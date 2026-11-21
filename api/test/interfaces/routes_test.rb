@@ -34,8 +34,17 @@ class RoutesTest < ActiveSupport::TestCase
     rerun_check override_check draft_contract
   ].freeze
 
+  # The thirty operations pending until their controllers are built (AT-6).
+  MILESTONE_5 = %w[
+    ask_question get_question request_access report_cost start_action report_action_done list_decisions
+    list_projects create_project edit_brief pause_project resume_project change_budget delete_project_content
+    change_task_priority change_task_project change_task_cap return_for_rework offer_task_again grant_access
+    delete_task_content answer_question overturn_answer approve_action stop_action waive_action mark_action_done
+    overturn_approval get_workspace_settings change_workspace_settings
+  ].freeze
+
   # Every operation the table names.
-  def named = RouteTable::ROUTES
+  def named = RouteTable::ROUTES.merge(RouteTable::PENDING)
 
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
@@ -43,9 +52,12 @@ class RoutesTest < ActiveSupport::TestCase
     Rails.application.routes.routes.select(&:name).index_by(&:name)
   end
 
-  test "the served operations are milestones 2 and 3's and milestone 4's twelve, each a registry operation" do
-    refute RouteTable.const_defined?(:PENDING, false), "RouteTable::PENDING is gone (RT-6)"
-    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4).sort, named.keys.sort
+  test "the served and pending operations match their milestones, each a registry operation" do
+    assert RouteTable.const_defined?(:PENDING, false)
+    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5).sort, named.keys.sort
+    assert_empty RouteTable::PENDING.keys - MILESTONE_5
+    assert_empty RouteTable::ROUTES.keys & RouteTable::PENDING.keys
+    assert_empty drawn.keys & RouteTable::PENDING.keys
     named.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes(named).each do |route|
       operation = operations.fetch(route.operation_id)
@@ -68,7 +80,8 @@ class RoutesTest < ActiveSupport::TestCase
   end
 
   test "each controller is one of the plans', under v1/agent, v1/owner, v1/helper or the health check" do
-    allowed = %r{\Av1/(agent/(next|commands|tasks|criteria|reviews|jobs)|owner/(setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
+    assert RouteTable.const_defined?(:PENDING, false)
+    allowed = %r{\Av1/(agent/(actions|questions|next|commands|tasks|criteria|reviews|jobs)|owner/(actions|questions|projects|decisions|settings|setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
     named.each_value { |target| assert_match allowed, target.split("#").first }
   end
 

@@ -301,7 +301,10 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("add_rule")
     refute T::Table.include?("ask_question")
     refute T::Table.respond_to?(:known?)
-    refute T::Table.const_defined?(:PENDING, false)
+    assert T::Table.const_defined?(:PENDING, false)
+    assert_equal 29, T::Table::PENDING.size
+    assert_equal 97, (T::Table::COMMANDS + T::Table::PENDING).uniq.size
+    assert_includes T::Table::PENDING, "ask_question"
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

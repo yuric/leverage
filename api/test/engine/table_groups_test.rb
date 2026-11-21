@@ -5,7 +5,8 @@ require "test_helper"
 # and the twelve new operations in Http::RouteTable::PENDING, while the
 # packages that wrote them worked, as milestone 3's did (its HT-6); WP10
 # moved the operations into ROUTES and WP13 the entries into their groups,
-# and both PENDING lists are gone, with PENDING_GROUPS and Table.known?.
+# and both PENDING lists were deleted. Milestone 5 stages its additions
+# in new PENDING lists (AT-6).
 #
 # It also pins the seams the other packages of milestone 4 finished (the
 # hand-over table of plan §4): their names and required arguments, and
@@ -55,19 +56,42 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   # --- Transitions::Table --------------------------------------------------------
 
-  test "neither table keeps a PENDING list, and Table answers only include? (RT-6)" do
-    refute Table.const_defined?(:PENDING, false), "Transitions::Table::PENDING is gone"
-    refute Table.const_defined?(:PENDING_GROUPS, false), "Transitions::Table::PENDING_GROUPS is gone"
-    refute RouteTable.const_defined?(:PENDING, false), "Http::RouteTable::PENDING is gone"
-    refute Table.respond_to?(:known?), "known? answered for pending names; include? is the one question again"
+  # Milestone 5's entries by group (plan §2.1), staged until WP13.
+  PENDING_COMMANDS = %w[
+    request_action grant_action_lease approve_action stop_action start_action report_action_done waive_action
+    mark_action_done offer_task_again return_for_rework overturn_approval ask_question request_access
+    answer_question overturn_answer grant_access report_cost create_project edit_brief pause_project resume_project
+    change_budget change_task_priority change_task_project change_task_cap delete_content change_workspace_settings
+    question_job_queue_timeout question_job_run_timeout
+  ].freeze
+
+  test "the table keeps pending commands out of the served lookup" do
+    assert Table.const_defined?(:PENDING, false)
+    assert_equal PENDING_COMMANDS, Table::PENDING
+    assert_empty Table::COMMANDS & Table::PENDING
+    assert_empty Table::PENDING.select { |command| Table.include?(command) }
+    refute Table.respond_to?(:known?), "include? answers for served commands"
   end
 
-  test "the table is 68 commands, no name twice, each a registry command with rows" do
-    all = Table::COMMANDS
+  test "each pending command has its named entry class" do
+    assert Table.const_defined?(:PENDING, false)
+    Table::PENDING.each do |command|
+      assert_raises(Table::UnknownCommand) { Table.entry_for(command) }
+      entry = Table.class_name(command).safe_constantize
+      assert entry, "no class for #{command}"
+      assert_equal command, entry.command
+      assert_operator entry, :<, T::Entry
+      assert_operator entry, :<, T::JobTimer if command.end_with?("_timeout")
+    end
+  end
+
+  test "the table names 68 served and 29 pending commands, all distinct with registry rows" do
+    assert Table.const_defined?(:PENDING, false)
+    all = Table::COMMANDS + Table::PENDING
     with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
       .map { |row| row.fetch("command") }
 
-    assert_equal 68, all.size
+    assert_equal 97, all.size
     assert_equal all.uniq, all
     all.each do |command|
       assert_includes registry.fetch("commands"), command

@@ -31,7 +31,9 @@ class SeamsTest < ActionDispatch::IntegrationTest
 
   test "every RouteTable key is a registry operation" do
     ids = operations.map { |operation| operation.fetch("operation_id") }
-    Leverage::Http::RouteTable::ROUTES.each_key { |operation_id| assert_includes ids, operation_id }
+    table = Leverage::Http::RouteTable
+    assert table.const_defined?(:PENDING, false)
+    (table::ROUTES.keys + table::PENDING.keys).each { |operation_id| assert_includes ids, operation_id }
   end
 
   # Operations of milestones 5 and 6, which milestone 4 does not serve (its
@@ -40,7 +42,9 @@ class SeamsTest < ActionDispatch::IntegrationTest
   test "later milestones' operations are not served, and milestone 4's twelve are" do
     assert_operator unserved.size, :>, 0
     ids = unserved.map { |operation| operation.fetch("operation_id") }
-    %w[ask_question create_project report_reading reorder_credentials].each do |operation_id|
+    table = Leverage::Http::RouteTable
+    assert table.const_defined?(:PENDING, false)
+    (table::PENDING.keys + %w[report_reading reorder_credentials]).each do |operation_id|
       assert_includes ids, operation_id
     end
     %w[claim_next_job submit_job_result list_rules add_rule save_rule enable_rule disable_rule revert_rule remove_rule
