@@ -159,6 +159,20 @@ class QuestionsApprovalsHttpTest < ActionDispatch::IntegrationTest
     assert item["detail"] == reason, "Needs you did not show the approval reason"
     refute JSON.generate(item.fetch("facts")).include?(reason), "the approval reason reached item facts"
     refute JSON.generate(task_page(task_id).fetch("events")).include?(reason), "the approval reason reached the event log"
+
+    # The inbox can read this item while a later command resolves it. Its
+    # detail must never come from another decision about the same action.
+    old_item = InboxItem.find(item.fetch("id"))
+    completed("return_for_rework", @owner, ids: { "id" => task_id },
+      body: { "criterion_ids" => [ criterion_ids(task_id).fetch("cid") ] })
+    acknowledge_task(task_id)
+    submit_task(task_id)
+    pass_review(start_review(task_id))
+    new_reason = "The new sample needs another review."
+    finish_job(claim_job("approval"), { "decision" => "stop", "reason" => new_reason })
+    assert inbox.sole["detail"] == new_reason, "Needs you did not show the later decision's reason"
+    earlier = Leverage::Reads::Inbox.shapes(@scenario.workspace_id, [ [ old_item, item.fetch("opened_seq") ] ]).sole
+    refute earlier.key?(:detail), "a resolved item picked up the later decision's reason"
   end
 
   test "an orchestrator decision surfaces until read and a read after submit is refused" do
