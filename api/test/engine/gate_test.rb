@@ -209,6 +209,29 @@ class GateTest < ActiveSupport::TestCase
     assert command("claim", @scenario.seat).completed?
   end
 
+  test "a claim still waiting on its checks yields to a newly approved action" do
+    builder = @scenario.seat
+    reviewer = @scenario.seat(role: "reviewer")
+    task, review = ready_for_verdict(builder, reviewer)
+    action = Action.create!(workspace_id: task.workspace_id, task_id: task.id, position: 1,
+      kind: "send", description: "Sample action")
+    assert command("pass_review", reviewer, pass_params(review)).completed?
+
+    ready = @scenario.task(state: "ready")
+    gate = custom_rule("task.before_claim")
+    assert_equal :pending, command("claim", builder).outcome
+    assert_equal builder.id, ready.reload.holder_seat_id
+    assert command("approve_action", @scenario.owner, { "id" => action.id }).completed?
+    assert_nil task.reload.holder_seat_id
+
+    answer_check(gate, ready, "passed")
+
+    assert_equal "ready", ready.reload.state
+    assert_nil ready.holder_seat_id
+    assert_equal builder.id, task.reload.holder_seat_id
+    assert mine(Event).exists?(type: "action.lease_granted", task_id: task.id)
+  end
+
   private
 
   def assert_policy(rule, hook, effect)
