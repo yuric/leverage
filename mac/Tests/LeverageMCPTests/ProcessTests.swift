@@ -38,6 +38,21 @@ struct ProcessTests {
         #expect(omitsConfiguredAddress)
     }
 
+    @Test func anInvalidConfiguredRoleFailsClosedWithoutEchoingTheValue() throws {
+        let suppliedRole = "fixture-unrecognized-role"
+        let child = try MCPChild(environment: [
+            EnvironmentKeys.apiURL: "http://127.0.0.1:1",
+            EnvironmentKeys.seatToken: "fixture-seat-value",
+            EnvironmentKeys.seatRole: suppliedRole
+        ])
+        defer { child.cleanUp() }
+        #expect(try child.waitForExit() != 0)
+        #expect(try child.stdout.fileHandleForReading.readToEnd()?.isEmpty ?? true)
+        let diagnostic = String(decoding: try child.standardError(), as: UTF8.self)
+        let describesInvalidRole = diagnostic.contains(EnvironmentKeys.seatRole) && !diagnostic.contains(suppliedRole)
+        #expect(describesInvalidRole)
+    }
+
     @Test func unreachableAPIIsAToolErrorAndEOFEndsTheSession() throws {
         let endpoint = try UnreachableEndpoint()
         let fakeToken = "process-fixture-\(UUID().uuidString)"

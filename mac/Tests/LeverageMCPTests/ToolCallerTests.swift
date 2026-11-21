@@ -21,8 +21,9 @@ struct ToolCallerTests {
         #expect(first.isError == false)
         #expect(repeatResult.key == key)
         let requests = await fake.requests
-        #expect(requests == Array(repeating: ToolRequest(operation: .askQuestion, path: ["id": taskID],
-                                                          body: body, key: key), count: 2))
+        let sendsIdenticalRequests = requests == Array(repeating: ToolRequest(
+            operation: .askQuestion, path: ["id": taskID], body: body, key: key), count: 2)
+        #expect(sendsIdenticalRequests)
     }
 
     @Test func getNextDefaultsToTwentySecondsAndRejectsInvalidWaits() async throws {

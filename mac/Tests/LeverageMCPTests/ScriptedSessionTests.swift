@@ -105,6 +105,36 @@ struct ScriptedSessionTests {
         }
     }
 
+    @Test func rejectsScalarParamsWithTheRequestID() async throws {
+        try await withSession { client in
+            _ = try client.initialize()
+            try client.send(["jsonrpc": "2.0", "id": 41, "method": "ping", "params": 7])
+            let reply = try #require(try client.receive() as? [String: Any])
+            #expect(reply["id"] as? Int == 41)
+            #expect((reply["error"] as? [String: Any])?["code"] as? Int == -32602)
+        }
+    }
+
+    @Test func apiResponseCannotEchoTheConfiguredSeatToken() async throws {
+        let token = "fixture-secret-\(UUID().uuidString)"
+        try await withSession(transport: { _ in
+            ToolResponse(status: 200, body: .object([
+                "records": .array([.object(["label": .string("prefix-\(token)-suffix")])]),
+                token: .bool(true), "kind": .string("none")
+            ]))
+        }, token: token) { client in
+            _ = try client.initialize()
+            let reply = try client.call(name: "get_next", arguments: ["wait": 0])
+            let content = try #require(reply["content"] as? [[String: Any]])
+            let text = try #require(content.first?["text"] as? String)
+            let containsToken = text.contains(token)
+            #expect(!containsToken)
+            let body = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+            let preservedOtherFields = (body["body"] as? [String: Any])?["kind"] as? String == "none"
+            #expect(preservedOtherFields)
+        }
+    }
+
     @Test func pingInitializationAndListingDoNotRenewActivity() async throws {
         let clock = ManualMCPClock()
         let api = RecordingTransport([claim(taskID)])
@@ -133,6 +163,7 @@ struct ScriptedSessionTests {
             return ToolResponse(status: 500, body: .null)
         },
         caller: ToolCaller? = nil,
+        token: String = "fixture-seat-value",
         _ check: (ScriptedMCPClient) throws -> Void
     ) async throws {
         let input = Pipe()
@@ -147,7 +178,7 @@ struct ScriptedSessionTests {
                 caller: caller ?? ToolCaller(transport: transport),
                 catalog: ToolCatalog(),
                 log: Log(component: "mcp", write: { _ in }),
-                token: "test-seat-token"
+                token: token
             )
             try await server.run()
         }

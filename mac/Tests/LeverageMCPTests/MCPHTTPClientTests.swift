@@ -38,8 +38,10 @@ struct MCPHTTPClientTests {
             let hasAuthorization = request.header("Authorization") == "Bearer fixture-not-a-seat-token"
             #expect(hasAuthorization)
             let bytes = try #require(request.body)
-            #expect(bytes == requests.first?.body)
-            #expect(try LeverageJSON.decoder().decode(JSONValue.self, from: bytes) == .object(body))
+            let retriesIdenticalBytes = bytes == requests.first?.body
+            #expect(retriesIdenticalBytes)
+            let forwardsBody = try LeverageJSON.decoder().decode(JSONValue.self, from: bytes) == .object(body)
+            #expect(forwardsBody)
         }
     }
 }
