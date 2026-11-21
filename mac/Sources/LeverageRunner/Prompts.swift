@@ -18,6 +18,10 @@ enum Prompts {
     static let criterionMarker = "LEVERAGE-CRITERION"
     static let notesMarker = "LEVERAGE-NOTES:"
 
+    static func action(contract: BriefingContract, action: Action, nonce: String) -> String {
+        ""
+    }
+
     /// The answering check (PV-2, PV-3).
     static let ready = "Reply with the single word ready."
 

@@ -52,8 +52,8 @@ struct ContinuationTests {
         harness.next([], then: loop)
 
         #expect(await runToEnd(loop) == 0)
-        #expect(Array(harness.operations.filter { $0 != .heartbeatTask }.prefix(5)) == [
-            .getTaskBriefing, .startCriterion, .passCriterion, .submitTask, .getNext,
+        #expect(Array(harness.operations.filter { $0 != .heartbeatTask }.prefix(6)) == [
+            .getTaskBriefing, .startCriterion, .reportCost, .passCriterion, .submitTask, .getNext,
         ])
         #expect(harness.calls(.getTaskBriefing).first?.id == taskID.contractString)
         #expect(harness.calls(.startCriterion).map(\.cid) == [secondID.contractString])
@@ -72,9 +72,9 @@ struct ContinuationTests {
         harness.next([], then: loop)
 
         #expect(await runToEnd(loop) == 0)
-        #expect(Array(harness.operations.filter { $0 != .heartbeatTask }.prefix(6)) == [
+        #expect(Array(harness.operations.filter { $0 != .heartbeatTask }.prefix(7)) == [
             .getTaskBriefing, .startCriterion, .getTaskBriefing, .acknowledgeTaskBriefing, .startCriterion,
-            .passCriterion,
+            .reportCost, .passCriterion,
         ])
         #expect(harness.calls(.acknowledgeTaskBriefing).map { $0.body?["briefing_hash"]?.stringValue } == ["hash-held"])
         #expect(harness.calls(.submitTask).count == 1)

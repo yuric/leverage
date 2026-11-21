@@ -23,6 +23,9 @@ enum JobPrompts {
     /// The first line of a draft prompt.
     static let draftFirstLine = "LEVERAGE DRAFT"
 
+    static func approval(material: ApprovalMaterial, nonce: String) -> String { "" }
+    static func question(material: QuestionMaterial, nonce: String) -> String { "" }
+
     /// A nonce for one tool run: 12 lower-case hex characters from the
     /// system's random source. Never logged.
     static func makeNonce() -> String {

@@ -163,6 +163,7 @@ struct InterruptionFlowTests {
         #expect(await runToEnd(loop) == 0)
         #expect(driver.runs.filter { $0.purpose == .build }.count == 5, "four runs of the first criterion (three refused), then one")
         #expect(harness.calls(.startCriterion).count == 2, "the retry announces nothing again")
+        #expect(harness.calls(.reportCost).map { $0.body?["tokens"]?.intValue } == [0, 0, 0, 10, 10])
         #expect(harness.calls(.passCriterion).count == 2)
         #expect(harness.calls(.releaseTask).isEmpty)
         #expect(!harness.calls(.heartbeatTask).isEmpty)
