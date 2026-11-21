@@ -645,7 +645,9 @@ allows the recovery time ceiling to be cleared (AP-39).
   the task holds with `action_unconfirmed`. Return for rework closes
   the approval and unconfirmed holds. When the previous builder still
   holds the task and is enabled and unpaused, rework replaces its lease
-  and a waive keeps it (AE-16).
+  and a waive keeps it (AE-16). A re-enabled seat can still hold the
+  task's paused lease. Offer task again replaces that lease. Mark action
+  done keeps it when approved actions remain (AP-19).
 - A question passed on without blocking has a Needs you item with a null
   hold. The answer, overturn and content deletion rows declare which
   cases are accepted and which return `invalid_state` (AP-3, AP-6,
