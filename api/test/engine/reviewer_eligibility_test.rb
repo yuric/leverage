@@ -221,6 +221,30 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
 
   # --- What it runs after -------------------------------------------------------
 
+  test "walk 132052406: an unchanged seat model leaves the waiting review to the eligibility timer" do
+    planner = scenario.seat(role: "planner")
+    scenario.seat(role: "reviewer", credential: @claude)
+    scenario.credential(provider: "codex")
+    scenario.limit_credential(@claude, reset_at: from_now(3600))
+    assert_empty reviewer_eligibility_timer, "the reviewer can run on the fallback account"
+
+    @claude.update!(limited_until: from_now(-1))
+    before = scenario.workspace.reload.last_seq
+    written = events_written do
+      assert_completed(owner_command("change_seat", { "id" => planner.id, "model" => planner.model }))
+    end
+
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
+    assert_empty written
+    assert_empty items
+
+    event = reviewer_eligibility_timer.sole
+    assert_equal [ "inbox.opened", @task.id, nil, { "kind" => ITEM } ],
+      event.attributes.values_at("type", "task_id", "command_id", "payload")
+    assert_equal "in_review", @task.reload.state
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
+  end
+
   test "every workspace-wide command of REEVALUATED_BY re-evaluates every waiting review" do
     reviewer("claude")
     other = scenario.task(state: "in_review", builder: @builder)
@@ -230,7 +254,14 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
 
     workspace_wide.each do |command|
       items.update_all(state: "resolved")
-      written = after_owner_command(command)
+      if command == "change_seat"
+        written = events_written do
+          assert_completed(owner_command(command, { "id" => @builder.id, "name" => "Made-up renamed builder" }))
+        end
+        assert_equal "seat.changed", written.shift.type
+      else
+        written = after_owner_command(command)
+      end
       assert_equal [ @task.id, other.id ].sort, written.map(&:task_id).sort, command
       assert_equal [ "inbox.opened" ], written.map(&:type).uniq, command
     end
