@@ -344,7 +344,7 @@ class CheckReplyFixtures(unittest.TestCase):
     def test_usage_refuses_incomplete_or_mixed_payloads(self):
         for provider, overrides in (("grok_api", {"headers": []}), ("openrouter", {"status": True}),
                                     ("claude_api", {"session": {}}), ("codex", {"session": []}),
-                                    ("codex", {"session": {"account/unknown": "x"}}),
+                                    ("codex", {"session": {"unknown/read": {"result": {}}}}),
                                     ("claude", {"stderr": None}), ("claude", {"settings": []})):
             with self.subTest(provider=provider, keys=sorted(overrides)), tempfile.TemporaryDirectory() as folder:
                 self.root = folder
@@ -430,6 +430,105 @@ class CheckReplyFixtures(unittest.TestCase):
         reply = usage_reply()
         reply["session"]["account/read"]["result"]["account"]["private@example.invalid"] = True
         self.assert_usage_fails(reply, hidden="private@example.invalid")
+
+    def test_private_identifiers_as_json_keys_are_rejected_even_with_null_values(self):
+        reply = usage_reply()
+        fields = reply["session"]["account/usage/read"]["result"]
+        fields.update(account_id="<scrubbed>", org_name=None, workspace_name=None, user_id="<scrubbed>")
+        self.put_usage(reply)
+        self.assert_passes()
+        for key in ("org_made_up_enumerated", "acct_made_up", "workspace_made_up",
+                    "user_made_up", "session-made-up", "req_made_up", "thread-made-up"):
+            with self.subTest(prefix=key.split("_")[0]):
+                fields["details"] = json.dumps([{key: None}])
+                self.assert_usage_fails(reply, hidden=key)
+
+    def test_objects_keyed_by_model_organisation_or_limit_accept_only_placeholder_keys(self):
+        reply = usage_reply()
+        result = reply["session"]["account/rateLimits/read"]["result"]
+        for field in ("rateLimitsByLimitId", "usageByModel", "modelUsage", "per_model", "organizations",
+                      "workspaces"):
+            with self.subTest(field=field):
+                result[field] = {"<scrubbed>": {"primary": {"usedPercent": 4}}}
+                self.put_usage(reply)
+                self.assert_passes()
+                result[field]["private-label"] = {"primary": None}
+                self.assert_usage_fails(reply, hidden="private-label")
+                del result[field]
+        # The reference gives "codex" as an example at exactly this position.
+        result["rateLimitsByLimitId"] = {"codex": {"primary": None}}
+        self.put_usage(reply)
+        self.assert_passes()
+        result["rateLimitsByLimitId"]["codex"]["userId"] = "made-up-private"
+        self.assert_usage_fails(reply, hidden="made-up-private")
+
+    def test_rpc_ids_and_server_messages_are_checked_like_other_payload_fields(self):
+        reply = usage_reply()
+        reply["server_messages"] = [{"id": "<scrubbed>", "method": "example/read", "params": {}}]
+        self.put_usage(reply)
+        self.assert_passes()
+        for mutate in (
+            lambda item: item["session"]["initialize"].update(id=23),
+            lambda item: item["server_messages"][0]["params"].update(configPath="private-directory"),
+            lambda item: item.update(server_messages="wrong type"),
+            lambda item: item["session"].update(initialize={"id": "<scrubbed>"}),
+            lambda item: item["session"]["initialize"].update(error={}),
+            lambda item: item.update(marker="does not match meta"),
+        ):
+            broken = copy.deepcopy(reply)
+            mutate(broken)
+            self.assert_usage_fails(broken)
+
+    def test_an_allowed_header_may_not_carry_an_extra_line_or_a_structured_value(self):
+        for value in ("1\r\nSet-Cookie: made-up", {"id": "<scrubbed>"}, 1):
+            with self.subTest(value=value):
+                reply = usage_reply("openai_api")
+                reply["headers"] = {"X-RateLimit-Remaining-Requests": value}
+                self.assert_usage_fails(reply)
+
+    def test_expectation_records_use_figure_and_reset_wire_fields(self):
+        reply = usage_reply()
+        expect = reply["meta"]["expect"]
+        figure = {"label": "5-hour limit", "kind": "limit", "window": "five_hour",
+                  "percent_used": 42, "reset_at": None, "value": None}
+        reset = {"count": 1, "kind": "full", "expires_at": None}
+        expect.update(figures=[figure], resets=[reset])
+        self.put_usage(reply)
+        self.assert_passes()
+        for records, field, replacement in (("figures", "label", None), ("figures", "kind", "unknown"),
+                                            ("resets", "count", True), ("resets", "kind", "unknown")):
+            with self.subTest(records=records, field=field):
+                broken = copy.deepcopy(reply)
+                broken["meta"]["expect"][records][0][field] = replacement
+                self.assert_usage_fails(broken)
+        del reset["expires_at"]
+        self.assert_usage_fails(reply)
+
+    def test_a_symlink_is_not_a_reply_file_or_provider_folder(self):
+        with tempfile.TemporaryDirectory() as other:
+            reply_path = os.path.join(other, "run-reply.json")
+            with open(reply_path, "w") as handle:
+                json.dump(clean_reply(), handle)
+            claude_path = os.path.join(self.root, "claude")
+            os.mkdir(claude_path)
+            linked_file = os.path.join(claude_path, "run-limit.json")
+            os.symlink(reply_path, linked_file)
+            self.assert_fails("a linked reply file")
+            os.unlink(linked_file)
+            os.rmdir(claude_path)
+            os.symlink(other, claude_path)
+            result = self.check()
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("claude", result.stdout)
+
+    def test_private_filenames_and_duplicate_header_spellings_fail_without_echoing_them(self):
+        reply = usage_reply("openai_api")
+        reply["headers"] = {"x-ratelimit-remaining-requests": "2", "X-RateLimit-Remaining-Requests": "1"}
+        self.assert_usage_fails(reply)
+        self.put(None, "usage-madeup@example.invalid.json", "claude", raw="[]")
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("madeup@example.invalid", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

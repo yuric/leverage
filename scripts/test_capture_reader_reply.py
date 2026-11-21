@@ -147,6 +147,7 @@ class CaptureReaderReply(unittest.TestCase):
         self.assertIn("model turn: no", run.stdout)
         self.assertIn("usedPercent: integer", run.stdout)
         self.assertGreaterEqual(run.stdout.count("<key>"), 3)
+        self.assertFalse((self.decoy / "calls.jsonl").exists())
         [call] = self.calls()
         self.assertEqual(call["argv"], CLAUDE_ARGS)
         self.assertEqual(call["files"], [])
@@ -156,7 +157,6 @@ class CaptureReaderReply(unittest.TestCase):
         self.assertEqual(call["env"]["PATH"].split(os.pathsep)[0], str(self.tools))
         for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "LEVERAGE_TOOL_DIR", "LEVERAGE_TEST_PRIVATE"):
             self.assertNotIn(name, call["env"])
-        self.assertFalse((self.decoy / "calls.jsonl").exists())
         self.assertEqual(list(self.home.iterdir()), [])
         saved = self.read_capture()
         self.assertEqual(saved["meta"]["basis"], "recorded_scrubbed")
