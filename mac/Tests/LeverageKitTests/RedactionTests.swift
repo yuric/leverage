@@ -40,6 +40,22 @@ struct RedactionTests {
         let line = "run of seat 0b4e started; lvs_ alone is not a token; 2 + 2 = 4"
         #expect(Redaction.redact(line) == line)
     }
+
+    @Test("provider key prefixes redact key-shaped values and preserve short words")
+    func providerKeys() {
+        for prefix in ["sk-", "xai-", "AIza"] {
+            let key = prefix + "LVRG-TOKEN-000000000001"
+            let wasRemoved = Redaction.redact("value=\"\(key)\"") == "value=\"[removed]\""
+            let minimumLength = prefix + String(repeating: "Z", count: 16)
+            let minimumWasRemoved = Redaction.redact(minimumLength) == "[removed]"
+            let tooShort = String(minimumLength.dropLast())
+            let shortWasKept = Redaction.redact(tooShort) == tooShort
+            #expect(wasRemoved, "\(prefix)")
+            #expect(minimumWasRemoved, "\(prefix)")
+            #expect(shortWasKept, "\(prefix)")
+        }
+        #expect(Redaction.redact("sk-learn is a package") == "sk-learn is a package")
+    }
 }
 
 @Suite("Log")

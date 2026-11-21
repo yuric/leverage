@@ -17,6 +17,9 @@ public enum EnvironmentKeys {
     /// When set, the only folder searched for providers' tools (the
     /// stand-ins in tests).
     public static let toolDir = "LEVERAGE_TOOL_DIR"
+    public static let tokenStore = ""
+    public static let providerAPIBase = ""
+    public static let readTimeoutSeconds = ""
 
     // Read by the runner.
 

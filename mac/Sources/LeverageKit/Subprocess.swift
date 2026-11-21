@@ -87,6 +87,12 @@ public enum SubprocessError: Error, Equatable, Sendable {
     case startFailed(call: String, errno: Int32)
 }
 
+public enum SubprocessInputError: Error, Equatable, Sendable {
+    case closed
+    case invalidLine
+    case writeFailed(errno: Int32)
+}
+
 public enum Subprocess {
     /// An environment of exactly the `allowing` names that `source` has, and
     /// then the `setting` values, which win.
@@ -106,6 +112,10 @@ public enum Subprocess {
     /// Starts the child. Its result comes from `wait()`.
     public static func start(_ request: SubprocessRequest) throws -> RunningSubprocess {
         try RunningSubprocess(request)
+    }
+
+    public static func startSession(_ request: SubprocessRequest) throws -> RunningSubprocess {
+        try start(request)
     }
 
     /// Runs the child to its end. Cancelling the calling task stops it.
@@ -181,6 +191,14 @@ public final class RunningSubprocess: @unchecked Sendable {
     public func stop() {
         end(because: .stop)
     }
+
+    public func writeLine(_ line: Data) async throws {
+        throw SubprocessInputError.closed
+    }
+
+    public func readLine() async -> Data? { nil }
+
+    public func closeInput() {}
 
     /// The result, once the child has ended and its outputs are read.
     public func wait() async -> SubprocessResult {
