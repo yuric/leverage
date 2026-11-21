@@ -575,7 +575,8 @@ module Leverage
         Array(frozen).each do |version|
           next if cleared?(action, version)
 
-          finding(event, "passed the blocking gate of rule #{version.rule_id} (version #{version.version}) "             "with no earlier check that passed, did not apply, was withdrawn or was overridden")
+          finding(event, "passed the blocking gate of rule #{version.rule_id} (version #{version.version}) " \
+            "with no earlier check that passed, did not apply, was withdrawn or was overridden")
         end
         @approvals << action
       end
