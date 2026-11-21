@@ -10,7 +10,7 @@ struct CredentialCleanup: Sendable {
     let requests: RunningRequests
     let log: Log
 
-    func acceptToken(_ token: String, credentialID: UUID) async {
+    func acceptToken(_ token: ProviderToken, credentialID: UUID) async {
         guard !requests.isForgotten(credentialID) else { return }
         await pending.insert(token, credentialID: credentialID)
         if requests.isForgotten(credentialID) {
@@ -25,17 +25,20 @@ struct CredentialCleanup: Sendable {
         // A cancelled Add may still have been inside a file or vault
         // operation. Wait for it to end before deleting anything.
         for task in work { await task.value }
+        var deletedToken = false
         do {
             try vault.delete(credentialID: credentialID)
+            deletedToken = true
         } catch {
             log.warning("could not delete the saved token of credential \(credentialID.contractString)")
         }
-        if let folder = folders.existing(for: credentialID), owns(folder) {
-            do {
-                try FileManager.default.removeItem(at: folder)
-            } catch {
-                log.warning("could not delete the folder of credential \(credentialID.contractString)")
-            }
+        do {
+            let removals = PendingCredentialRemovals(supportFolder: folders.root.deletingLastPathComponent())
+            let confirmed = try removals.contains(credentialID)
+            try AccountFolderRemoval.remove(credentialID, from: folders, confirmed: confirmed)
+            if confirmed && deletedToken { try removals.complete(credentialID) }
+        } catch {
+            log.warning("could not complete cleanup of credential \(credentialID.contractString)")
         }
     }
 
@@ -64,18 +67,5 @@ struct CredentialCleanup: Sendable {
             throw CocoaError(.fileReadUnknown)
         }
         return Data("\(device):\(inode)\n".utf8)
-    }
-
-    private func owns(_ folder: URL) -> Bool {
-        let files = FileManager.default
-        let marker = marker(in: folder)
-        guard let root = try? files.attributesOfItem(atPath: folders.root.path),
-              root[.type] as? FileAttributeType == .typeDirectory,
-              let expected = try? identity(of: folder),
-              let attributes = try? files.attributesOfItem(atPath: marker.path),
-              attributes[.type] as? FileAttributeType == .typeRegular,
-              (attributes[.size] as? NSNumber)?.intValue == expected.count
-        else { return false }
-        return (try? Data(contentsOf: marker)) == expected
     }
 }

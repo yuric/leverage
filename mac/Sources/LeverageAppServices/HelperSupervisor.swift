@@ -56,6 +56,7 @@ public actor HelperSupervisor: HelperSupervising {
         }
     }
 
+    private let removals: PendingCredentialRemovals
     private let configuration: Configuration
     private let now: @Sendable () -> Date
     private let log: Log
@@ -81,6 +82,7 @@ public actor HelperSupervisor: HelperSupervising {
         now: @escaping @Sendable () -> Date = { Date() },
         log: Log = Log(component: "app")
     ) {
+        removals = PendingCredentialRemovals(supportFolder: configuration.supportFolder)
         self.configuration = configuration
         self.now = now
         self.log = log
@@ -89,7 +91,12 @@ public actor HelperSupervisor: HelperSupervising {
     public func state() async -> HelperState { current }
 
     public func send(_ message: LocalHelperMessage) async throws {
+        if case .forget(let id) = message { try removals.insert(id) }
         guard let child else { throw HelperSendError.notRunning }
+        try await write(message, to: child)
+    }
+
+    private func write(_ message: LocalHelperMessage, to child: RunningSubprocess) async throws {
         let line = try message.encodeLine()
         // Cancelling a session write stops its child. The write to this
         // shared helper must survive cancellation of the caller.
@@ -189,6 +196,14 @@ public actor HelperSupervisor: HelperSupervising {
         Task { [weak self] in
             let result = await started.wait()
             await self?.ended(result, generation: mine)
+        }
+        do {
+            for id in try removals.pending() {
+                guard generation == mine else { break }
+                try await write(.forget(credentialID: id), to: started)
+            }
+        } catch {
+            log.warning("could not send pending credential removals")
         }
         return current
     }
