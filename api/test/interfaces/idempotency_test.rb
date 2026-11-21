@@ -37,7 +37,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   TABLES = [
     Event, Command, Task, Criterion, Evidence, Review, TaskStep, Hold, BriefingAcknowledgement, Seat, Credential,
     HelperRequest, Helper, Session, User, Workspace, InboxItem, Rule, RuleVersion, RuleCheck, RuleCheckAttempt, Job,
-    PendingTransition
+    PendingTransition, Action, Question, Project, BriefEntry
   ].freeze
 
   # One call: who sends it and with what. Each case below returns one.
@@ -100,7 +100,34 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     "remove_rule" => :remove_rule,
     "rerun_check" => :rerun_check,
     "override_check" => :override_check,
-    "draft_contract" => :draft_contract
+    "draft_contract" => :draft_contract,
+    # Milestone 5 (AT-6 and WP13).
+    "ask_question" => :ask_question,
+    "request_access" => :request_access,
+    "report_cost" => :report_cost,
+    "start_action" => :start_action,
+    "report_action_done" => :report_action_done,
+    "create_project" => :create_project,
+    "edit_brief" => :edit_brief,
+    "pause_project" => :pause_project,
+    "resume_project" => :resume_project,
+    "change_budget" => :change_budget,
+    "delete_project_content" => :delete_project_content,
+    "change_task_priority" => :change_task_priority,
+    "change_task_project" => :change_task_project,
+    "change_task_cap" => :change_task_cap,
+    "return_for_rework" => :return_for_rework,
+    "offer_task_again" => :offer_task_again,
+    "grant_access" => :grant_access,
+    "delete_task_content" => :delete_task_content,
+    "answer_question" => :answer_question,
+    "overturn_answer" => :overturn_answer,
+    "approve_action" => :approve_action,
+    "stop_action" => :stop_action,
+    "waive_action" => :waive_action,
+    "mark_action_done" => :mark_action_done,
+    "overturn_approval" => :overturn_approval,
+    "change_workspace_settings" => :change_workspace_settings
   }.freeze
 
   # A second case for an operation that runs two commands.
@@ -163,6 +190,28 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     refute_equal before, after_task
   end
 
+  test "approve_action repeats its refusal after approval becomes available" do
+    task = finishing_task("requested")
+    action = Action.find_by!(task_id: task.id)
+    assert_refusal_repeats("approve_action", owner_call(ids: { "id" => action.id }), "invalid_state") do
+      open_owner_approval(action)
+    end
+  end
+
+  test "start_action repeats its refusal after the builder acknowledges the briefing" do
+    task = finishing_task("approved")
+    assert_refusal_repeats("start_action", action_call(task), "briefing_not_acknowledged") do
+      acknowledge(task, builder_seat)
+    end
+  end
+
+  test "delete_task_content repeats its refusal after the task can be deleted" do
+    task = @scenario.task(state: "backlog")
+    assert_refusal_repeats("delete_task_content", owner_call(ids: { "id" => task.id }), "invalid_state") do
+      engine("cancel", @scenario.owner, { "id" => task.id }, caller_kind: "owner")
+    end
+  end
+
   test "a command that waits stores pending: a repeat answers 202 pending and writes nothing" do
     @scenario.with_shipped_rules
     task = @scenario.task(state: "backlog")
@@ -215,6 +264,29 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     assert_equal "key_reused", response.parsed_body.dig("error", "code")
     assert_response_matches_contract
     assert_equal before, counts, "#{operation}: a reused key wrote something"
+  end
+
+  def assert_refusal_repeats(operation, call_data, code)
+    key = new_key("refused")
+    call(operation, token: call_data.token, key: key, ids: call_data.ids, body: call_data.body)
+    assert_response :conflict
+    assert_response_matches_contract
+    first = response.parsed_body
+    assert_equal code, first.dig("refusal", "code")
+    assert_equal 1, Command.where(key: key, outcome: "refused").count
+
+    yield
+
+    before = counts
+    call(operation, token: call_data.token, key: key, ids: call_data.ids, body: call_data.body)
+    assert_response :conflict
+    assert_response_matches_contract
+    assert_equal first, response.parsed_body
+    assert_equal before, counts
+
+    call(operation, token: call_data.token, key: new_key, ids: call_data.ids, body: call_data.body)
+    assert_response :ok
+    assert_response_matches_contract
   end
 
   # What a repeat answers: the first outcome, or for a token the same ids
@@ -627,4 +699,137 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   end
 
   def report_job_signed_out = helper_call(ids: { "id" => orchestrator_seat.credential_id }, body: job_report_body)
+
+  # --- the cases: milestone 5 ----------------------------------------------
+
+  def ask_question
+    Call.new(token: token(builder_seat), ids: { "id" => working_task.id },
+      body: { "text" => "What should I use?", "assumption" => "Use the sample.", "blocking" => false })
+  end
+
+  def request_access
+    Call.new(token: token(builder_seat), ids: { "id" => working_task.id },
+      body: { "description" => "Open the sample folder." })
+  end
+
+  def report_cost
+    Call.new(token: token(builder_seat), ids: { "id" => working_task.id }, body: { "tokens" => 10, "spend" => 0.01 })
+  end
+
+  def start_action
+    task = finishing_task("approved")
+    acknowledge(task, builder_seat)
+    action_call(task)
+  end
+
+  def report_action_done
+    task = finishing_task("started")
+    acknowledge(task, builder_seat)
+    action_call(task)
+  end
+
+  def create_project
+    owner_call(body: { "name" => "Made-up project", "goal" => "Track the sample.", "budget" => 100 })
+  end
+
+  def edit_brief
+    owner_call(ids: { "id" => @scenario.project.id },
+      body: { "entries" => [ { "kind" => "decision", "text" => "Use the sample." } ] })
+  end
+
+  def pause_project = owner_call(ids: { "id" => @scenario.project.id })
+
+  def resume_project
+    project = @scenario.project
+    engine("pause_project", @scenario.owner, { "id" => project.id }, caller_kind: "owner")
+    owner_call(ids: { "id" => project.id })
+  end
+
+  def change_budget = owner_call(ids: { "id" => @scenario.project.id }, body: { "budget" => 50 })
+
+  def delete_project_content
+    project = @scenario.project(brief: [ { kind: "rule", text: "A made-up brief entry." } ])
+    engine("pause_project", @scenario.owner, { "id" => project.id }, caller_kind: "owner")
+    owner_call(ids: { "id" => project.id })
+  end
+
+  def change_task_priority
+    owner_call(ids: { "id" => @scenario.task.id }, body: { "priority" => "high" })
+  end
+
+  def change_task_project
+    owner_call(ids: { "id" => @scenario.task.id }, body: { "project_id" => @scenario.project.id })
+  end
+
+  def change_task_cap
+    owner_call(ids: { "id" => @scenario.task.id }, body: { "budget_cap" => 25 })
+  end
+
+  def return_for_rework
+    task = finishing_task("stopped")
+    owner_call(ids: { "id" => task.id }, body: { "criterion_ids" => [ build_criteria(task).first.id ] })
+  end
+
+  def offer_task_again = owner_call(ids: { "id" => unconfirmed_task.id })
+
+  def grant_access
+    task = working_task
+    engine("request_access", builder_seat, { "id" => task.id, "description" => "Open the sample folder." })
+    owner_call(ids: { "id" => task.id })
+  end
+
+  def delete_task_content
+    owner_call(ids: { "id" => @scenario.task(state: "cancelled").id })
+  end
+
+  def answer_question
+    question = @scenario.question(working_task, outcome: "passed_on")
+    owner_call(ids: { "id" => question.id }, body: { "answer" => "Use the sample." })
+  end
+
+  def overturn_answer
+    question = @scenario.question(working_task, outcome: "answered")
+    owner_call(ids: { "id" => question.id })
+  end
+
+  def approve_action
+    action = Action.find_by!(task_id: finishing_task("requested").id)
+    open_owner_approval(action)
+    owner_call(ids: { "id" => action.id })
+  end
+
+  def stop_action = owner_action_call(finishing_task("requested"))
+
+  def waive_action = owner_action_call(finishing_task("stopped"))
+
+  def mark_action_done = owner_action_call(unconfirmed_task)
+
+  def overturn_approval
+    task = finishing_task("approved")
+    Action.find_by!(task_id: task.id).update!(approved_by_kind: "seat", approved_by_id: orchestrator_seat.id)
+    owner_action_call(task)
+  end
+
+  def change_workspace_settings = owner_call(body: { "lease_length_seconds" => 900 })
+
+  def finishing_task(state)
+    @scenario.finishing_task(builder: builder_seat,
+      actions: [ { kind: "publish", description: "Publish a sample.", state: state } ])
+  end
+
+  def unconfirmed_task
+    task = finishing_task("approved")
+    engine("release", builder_seat, { "id" => task.id, "reason" => "unable_to_continue" })
+    task
+  end
+
+  def open_owner_approval(action)
+    @scenario.hold(Task.find(action.task_id), reason: "owner_approval", facts: { action_id: action.id })
+  end
+
+  def owner_action_call(task) = owner_call(ids: { "id" => Action.find_by!(task_id: task.id).id })
+
+  def action_call(task)
+    Call.new(token: token(builder_seat), ids: { "id" => task.id, "aid" => Action.find_by!(task_id: task.id).id })
+  end
 end

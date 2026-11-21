@@ -15,8 +15,8 @@ require_relative "gate_support"
 #   a warn model gate      the row's events after check.queued and
 #                          job.queued (RC-16)
 #
-# The rows come from StateTableCases; a row a later milestone reaches
-# (Finishing, an outward action) is not among them.
+# The rows come from StateTableCases, including a passing review for a
+# task with an outward action.
 class StateTableGatedTest < ActiveSupport::TestCase
   include GateSupport
 
@@ -34,8 +34,7 @@ class StateTableGatedTest < ActiveSupport::TestCase
   end
 
   CASES = StateTableCases.for(T::Table::TASK_LOOP).select do |kase|
-    !kase.invalid_state? && GATE_HOOKS.include?(kase.hook) && !kase.not_served? &&
-      !kase.guard.include?("has_outward_action")
+    !kase.invalid_state? && GATE_HOOKS.include?(kase.hook)
   end
 
   test "the gated rows are the four commands at the four hooks" do
@@ -54,7 +53,7 @@ class StateTableGatedTest < ActiveSupport::TestCase
   def assert_gated(kase, kind)
     rule = rule_for(kase.hook, kind)
     with_jobs do
-      caller, params, task = prepare(kase.command)
+      caller, params, task = prepare(kase)
       outcome = command(kase.command, caller, params)
       check = RuleCheck.find_by!(rule_id: rule.id)
       send(:"assert_#{kind}", kase, outcome, task.reload, check)
@@ -120,8 +119,8 @@ class StateTableGatedTest < ActiveSupport::TestCase
     rule
   end
 
-  def prepare(command)
-    case command
+  def prepare(kase)
+    case kase.command
     when "complete_contract"
       task = @scenario.task(state: "backlog")
       [ @owner, contract_params(task), task ]
@@ -131,8 +130,18 @@ class StateTableGatedTest < ActiveSupport::TestCase
       task = ready_to_submit(@builder)
       [ @builder, submit_params(task), task ]
     when "pass_review"
-      task, review = ready_for_verdict(@builder, @reviewer)
+      task, review = verdict_fixture(kase)
       [ @reviewer, pass_params(review), task ]
     end
+  end
+
+  def verdict_fixture(kase)
+    return ready_for_verdict(@builder, @reviewer) unless kase.guard.include?("has_outward_action")
+
+    task = @scenario.task(state: "in_review", builder: @builder, actions: [ { kind: "send" } ])
+    review = @scenario.review(task, reviewer: @reviewer)
+    hash = Leverage::Briefing.hash_for(task, seat: @reviewer, review: review)
+    command("acknowledge_review_briefing", @reviewer, { "id" => review.id, "briefing_hash" => hash })
+    [ task.reload, review.reload ]
   end
 end

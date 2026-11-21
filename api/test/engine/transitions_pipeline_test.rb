@@ -276,15 +276,12 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { T::Precedence.first(%w[made_up_code]) }
   end
 
-  # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
-  # OWNER_CONTROLS, and two timers; milestone 4 (its plan §2.1, RT-6) three
-  # groups, RULES, CHECKS and JOBS, and six timers: 68 commands in nine
-  # groups. Milestone 5's entries wait in Table::PENDING (AT-6).
-  test "the table lists its commands in nine groups, each a registry command with state-table rows" do
+  test "the table lists its commands in thirteen groups, each a registry command with state-table rows" do
+    assert_equal 97, T::Table::COMMANDS.size
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
-               T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS ]
-    assert_equal [ 17, 11, 4, 12, 3, 7, 7, 2, 5 ], groups.map(&:size)
-    assert_equal 68, T::Table::COMMANDS.size
+               T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS, T::Table::FINISHING,
+               T::Table::QUESTIONS, T::Table::PROJECTS, T::Table::WORKSPACE ]
+    assert_equal [ 17, 13, 4, 12, 3, 7, 7, 2, 5, 11, 5, 9, 2 ], groups.map(&:size)
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
@@ -296,11 +293,8 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("claim")
     assert T::Table.include?("promote")
     assert T::Table.include?("add_rule")
-    refute T::Table.include?("ask_question")
-    assert T::Table.const_defined?(:PENDING, false)
-    assert_equal 29, T::Table::PENDING.size
-    assert_equal 97, (T::Table::COMMANDS + T::Table::PENDING).uniq.size
-    assert_includes T::Table::PENDING, "ask_question"
+    assert T::Table.include?("ask_question")
+    refute T::Table.const_defined?(:PENDING, false)
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

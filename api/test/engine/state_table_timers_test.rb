@@ -43,7 +43,7 @@ class StateTableTimersTest < ActiveSupport::TestCase
 
   # A task in the case's state with a builder lease past its due time.
   def due_task(state)
-    task = @scenario.task(state: state)
+    task = task_in(state)
     task.update_columns(lease_due_at: @scenario.database_now - 1)
     task
   end
@@ -51,7 +51,7 @@ class StateTableTimersTest < ActiveSupport::TestCase
   # A review of a task in the case's state, held by a reviewer, past its
   # due time: the task's own review when it has one (In review, Done).
   def due_review(state)
-    task = @scenario.task(state: state)
+    task = task_in(state)
     review = Review.where(task_id: task.id).order(:round).last
     if state == "in_review"
       review = @scenario.review(task)
@@ -63,8 +63,6 @@ class StateTableTimersTest < ActiveSupport::TestCase
   end
 
   StateTableCases.define(self, COMMANDS) do |kase|
-    skip "Finishing needs an outward action, which milestone 2 does not build (SC-3)" if kase.from == "finishing"
-
     case kase.command
     when "builder_lease_expiry"
       task = due_task(kase.from)
@@ -87,7 +85,13 @@ class StateTableTimersTest < ActiveSupport::TestCase
       assert_equal kase.from, task.reload.state
     else
       assert outcome.completed?, "#{kase.name}: #{outcome.refusal&.code}"
-      assert_equal kase.events, written
+      after_expiry = kase.command == "builder_lease_expiry" && kase.from == "finishing" ? %w[hold.opened inbox.opened] : []
+      assert_equal kase.events + after_expiry, written
+      if after_expiry.any?
+        hold = Hold.find_by!(task_id: task.id, reason: "action_unconfirmed", closed_at: nil)
+        item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+        assert_equal [ Action.find_by!(task_id: task.id).id ], item.facts.fetch("action_ids")
+      end
       assert_equal kase.to, task.reload.state if kase.to
       if kase.builder_lease == "ends"
         assert_nil task.lease_due_at
@@ -95,6 +99,12 @@ class StateTableTimersTest < ActiveSupport::TestCase
       end
       assert_nil review.reload.reviewer_seat_id if kase.command == "review_lease_expiry"
     end
+  end
+
+  def task_in(state)
+    return @scenario.task(state: state) unless state == "finishing"
+
+    @scenario.finishing_task(actions: [ { kind: "send", state: "approved" } ])
   end
 
   # --- milestone 4 -------------------------------------------------------------
@@ -105,8 +115,8 @@ class StateTableTimersTest < ActiveSupport::TestCase
 
   # reviewer_eligibility's case is in state_table_reviewer_eligibility_test.rb
   # (WP13), and state_table_all_test.rb proves each is walked once.
-  test "milestone 4's timers are the last six of TIMERS but reviewer_eligibility" do
-    assert_equal NEW_COMMANDS, T::Table::TIMERS.last(6) - %w[reviewer_eligibility]
+  test "milestone 4's timers follow the first five timers and include reviewer_eligibility" do
+    assert_equal NEW_COMMANDS, T::Table::TIMERS.drop(5).first(6) - %w[reviewer_eligibility]
   end
 
   # The job a row's case times out, at its due time: a check's attempt (the
@@ -156,7 +166,9 @@ class StateTableTimersTest < ActiveSupport::TestCase
     end
   end
 
-  StateTableCases.define(self, %w[question_job_queue_timeout question_job_run_timeout]) do |kase|
+  QUESTION_TIMERS = %w[question_job_queue_timeout question_job_run_timeout].freeze
+
+  StateTableCases.define(self, QUESTION_TIMERS) do |kase|
     run = kase.command == "question_job_run_timeout"
     second = kase.guard == %w[second_miss]
     task = scenario.task(state: "working")
