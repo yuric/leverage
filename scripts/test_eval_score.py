@@ -415,5 +415,68 @@ class DecisionScoreTests(unittest.TestCase):
         self.assertIn("360 tool runs in all", err)
 
 
+    def test_held_out_waits_for_final_wording_and_runs_only_once(self):
+        role = self.suite / "role.md"
+        role.write_text("The made-up final role wording.", encoding="utf-8")
+        shipped = self.suite / "shipped.json"
+        shipped.write_text(json.dumps({"rules": [
+            {"key": "orchestrator_approves_actions", "instruction": "The made-up final instruction."}
+        ]}), encoding="utf-8")
+        config = eval_score.read_bar(self.suite)
+        for held_out, subset in ((False, config), (True, config["held_out"])):
+            subset["cases_sha256"] = eval_score.cases_sha256(eval_score.read_cases(self.suite, held_out))
+        (self.suite / "bar.json").write_text(json.dumps(config), encoding="utf-8")
+        wording = {"instruction_sha256": eval_score.instruction_sha256(
+            eval_score.read_json(shipped), config["rule"]), "role_file_sha256": eval_score.role_file_sha256(role)}
+        prior = {"date": "2026-11-20", "tool_runs": 30, "reserved": False,
+                 "cases_sha256": config["cases_sha256"]}
+        history = [dict(prior, **wording, provider=provider) for provider in config["supported_providers"]]
+        options = ("--suite", self.suite, "--runs", self.runs, "--shipped", shipped, "--role-file", role)
+        budget = ("budget", *options, "--providers", "claude", "--held-out")
+
+        def save_history():
+            self.runs.write_text(json.dumps({"runs": history}), encoding="utf-8")
+
+        save_history()
+        code, _, err = run(*budget)
+        self.assertEqual(code, 3, err)
+        self.assertIn("wording has not changed", err)
+        history[0] = dict(history[0], role_file_sha256="a" * 64)
+        history.append(dict(prior, **wording, provider="claude"))
+        history.pop(2)
+        save_history()
+        code, _, err = run(*budget)
+        self.assertEqual(code, 3, err)
+        self.assertIn("gemini has no completed main run", err)
+
+        # A signed-out provider remains an overall miss, while a provider
+        # with a completed main run can still be judged on the held-out set.
+        result = self.suite / "results" / "gemini.json"
+        code, _, err = run("not-run", "--suite", self.suite, "--provider", "gemini", "--shipped", shipped,
+                           "--role-file", role, "--reason", "signed out", "--date", "2026-11-20", "--out", result)
+        self.assertEqual(code, 0, err)
+        code, _, err = run(*budget)
+        self.assertEqual(code, 0, err)
+        self.assertIn("signed out", json.loads(result.read_text(encoding="utf-8"))["reason"])
+
+        code, _, err = run("runs-add", *options, "--provider", "claude", "--date", "2026-11-21", "--held-out")
+        self.assertEqual(code, 0, err)
+        reservation = json.loads(self.runs.read_text(encoding="utf-8"))["runs"][-1]
+        self.assertEqual(reservation["tool_runs"], 12)
+        self.assertTrue(reservation["reserved"])
+        self.assertTrue(reservation["held_out"])
+        self.assertEqual(reservation["cases_sha256"], config["held_out"]["cases_sha256"])
+        self.assertEqual(reservation["role_file_sha256"], wording["role_file_sha256"])
+        code, _, err = run("runs-settle", "--suite", self.suite, "--runs", self.runs, "--provider", "claude",
+                           "--held-out", "--tool-runs", 10)
+        self.assertEqual(code, 0, err)
+        code, _, err = run(*budget)
+        self.assertEqual(code, 3, err)
+        self.assertIn("1 held-out run", err)
+        code, _, err = run("budget", *options, "--providers", "codex")
+        self.assertEqual(code, 3, err)
+        self.assertIn("no further main runs", err)
+
+
 if __name__ == "__main__":
     unittest.main(argv=[sys.argv[0]] + (["-v"] if "-v" in sys.argv[1:] else []))
