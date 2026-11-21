@@ -50,6 +50,29 @@ struct ChangeAgentModelTests {
         return fields
     }
 
+    @Test("Change shows the stored strength and sends only the new rank when it changes")
+    func changeStrength() async {
+        let owner = owner()
+        let seat = Fixtures.seat(Fixtures.ownID, name: "Builder", strengthRank: 2)
+        let model = makeModel(owner, seat: seat)
+        #expect(model.strengthRank == 2)
+        #expect(model.request == nil)
+        model.strengthRank = 3
+        await model.save()
+        #expect(body(owner) == ["strength_rank": .number(3)])
+    }
+
+    @Test("a seat missing a strength reads as Standard without changing the rank on save")
+    func missingStrength() async {
+        let owner = owner()
+        let seat = Fixtures.seat(Fixtures.ownID, name: "Builder", strengthRank: nil)
+        let model = makeModel(owner, seat: seat)
+        #expect(model.strengthRank == 1)
+        model.name = "Renamed builder"
+        await model.save()
+        #expect(body(owner) == ["name": .string("Renamed builder")])
+    }
+
     // MARK: what the sheet starts with
 
     @Test("the sheet starts with the agent's own values and nothing to save")

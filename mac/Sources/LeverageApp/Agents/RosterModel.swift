@@ -21,6 +21,7 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let canStop: Bool
     /// An agent that connects on its own has a landing prompt; one the app runs has none.
     let canCopyLandingPrompt: Bool
+    var canCopyMCPSettings: Bool { false }
     let canPause: Bool
     let canResume: Bool
     let canChange: Bool
@@ -148,7 +149,8 @@ final class RosterModel {
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
         copy: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
-        timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
+        timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
+        apiURL: @escaping @MainActor () async -> URL? = { nil }
     ) {
         self.api = api
         self.noteRead = noteRead
@@ -344,9 +346,11 @@ final class RosterModel {
         }
     }
 
+    func copyMCPSettings(_ id: UUID) async {}
+
     /// Copy landing prompt: fetches the prompt again each time and copies it.
     /// An agent the app runs has none.
-    func copyLandingPrompt(_ id: UUID) async {
+    func copyLandingPrompt(_ id: UUID, connection: LandingPromptConnection = .http) async {
         guard rows.first(where: { $0.id == id })?.canCopyLandingPrompt == true, !busy.contains(id) else { return }
         busy.insert(id)
         defer { busy.remove(id) }

@@ -254,6 +254,70 @@ struct ConnectAgentModelTests {
         #expect(model.shownToken == Fixtures.madeUpToken)
     }
 
+    @Test("Connect sends the strength chosen for an agent on a login")
+    func connectWithStrongerModel() async {
+        let owner = owner(token: nil)
+        let model = makeModel(owner)
+        await model.load()
+        model.name = "Builder on a login"
+        model.strengthRank = 2
+        await model.connect()
+        #expect(body(owner)["strength_rank"] == .number(2))
+    }
+
+    @Test("self-connected agents get the selected prompt and MCP gets separately copyable settings",
+          arguments: LandingPromptConnection.allCases)
+    func connectUsing(_ connection: LandingPromptConnection) async throws {
+        let owner = owner()
+        owner.script {
+            $0.landingPromptForConnection = { _, connection in
+                LandingPrompt(text: "Instructions for \(connection.rawValue).", connection: connection)
+            }
+        }
+        let apiURL = try #require(URL(string: "http://127.0.0.1:49170"))
+        let board = Fixtures.pasteboard()
+        let model = ConnectAgentModel(api: owner, copy: board.copy, onConnected: {}, apiURL: { apiURL })
+        model.mode = .connectsOnItsOwn
+        model.connection = connection
+        model.role = .reviewer
+        model.name = "Independent reviewer"
+        model.strengthRank = 3
+        await model.connect()
+        #expect(body(owner)["strength_rank"] == .number(3))
+        #expect(Fixtures.calls(owner, .getLandingPrompt).last?.query["connection"] == connection.rawValue)
+        #expect(model.landing == .ready("Instructions for \(connection.rawValue)."))
+        #expect(model.shownToken != nil)
+        #expect(board.copied.value.isEmpty)
+        model.copyMCPSettings()
+        if connection == .mcp {
+            let settings = try #require(model.mcpSettings)
+            #expect(board.copied.value == [settings])
+            #expect(settings.contains(apiURL.absoluteString))
+            #expect(settings.contains("reviewer"))
+            #expect(settings.contains("PASTE-THE-TOKEN-HERE"))
+            #expect(settings.contains(Fixtures.madeUpToken) == false)
+        } else {
+            #expect(model.mcpSettings == nil)
+            #expect(board.copied.value.isEmpty)
+        }
+        model.finish()
+        #expect(model.shownToken == nil)
+    }
+
+    @Test("a landing prompt for the wrong connection is rejected")
+    func rejectsWrongPrompt() async {
+        let owner = owner()
+        owner.script {
+            $0.landingPromptForConnection = { _, _ in LandingPrompt(text: "HTTP instructions", connection: .http) }
+        }
+        let model = makeModel(owner)
+        model.mode = .connectsOnItsOwn
+        model.connection = .mcp
+        model.name = "Independent builder"
+        await model.connect()
+        #expect(model.landing == .failed(ShellCopy.somethingWentWrong.text))
+    }
+
     // MARK: a seat the app runs
 
     @Test("connecting on a login sends role, name, the login and its provider; model and effort are null when empty")

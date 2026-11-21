@@ -36,6 +36,7 @@ final class ChangeAgentModel {
             effort = ""
         }
     }
+    var strengthRank = 1
     var enabled: Bool
 
     private(set) var phase: Phase = .editing

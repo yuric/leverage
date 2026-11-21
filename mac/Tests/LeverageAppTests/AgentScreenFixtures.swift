@@ -20,10 +20,10 @@ enum AgentFixtures {
     static func seat(
         _ id: UUID, name: String, role: SeatRole = .builder, provider: Provider = .claude, credential: UUID? = nil,
         run: SeatRunState? = nil, lastPolled: Date? = nil, removed: Date? = nil, enabled: Bool = true,
-        paused: Bool = false, model: String? = nil, effort: String? = nil
+        paused: Bool = false, model: String? = nil, effort: String? = nil, strengthRank: Int? = 1
     ) -> Seat {
         Seat(
-            id: id, name: name, provider: provider, model: model, effort: effort, role: role, strengthRank: 1,
+            id: id, name: name, provider: provider, model: model, effort: effort, role: role, strengthRank: strengthRank,
             credentialID: credential, enabled: enabled, paused: paused, lastPolledAt: lastPolled, runState: run,
             removedAt: removed)
     }

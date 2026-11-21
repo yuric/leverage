@@ -73,6 +73,8 @@ final class ConnectAgentModel {
         didSet { if name != oldValue { nameLine = nil } }
     }
     var provider: Provider = .claude
+    var strengthRank = 1
+    var connection: LandingPromptConnection = .http
     var modelName = ""
     var effort = ""
 
@@ -84,6 +86,9 @@ final class ConnectAgentModel {
     private(set) var landing: Landing = .none
     private(set) var copiedToken = false
     private(set) var copiedPrompt = false
+    private(set) var mcpSettings: String?
+
+    func copyMCPSettings() {}
     private var allLogins: [LoginChoice] = []
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -95,7 +100,8 @@ final class ConnectAgentModel {
 
     init(
         api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
-        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
+        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
+        apiURL: @escaping @MainActor () async -> URL? = { nil }
     ) {
         self.api = api
         self.copy = copy
