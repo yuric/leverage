@@ -12981,6 +12981,8 @@
               "rejected",
               "unreachable",
               "timed_out",
+              "token_store_unavailable",
+              "provider_mismatch",
               null
             ]
           }
@@ -16813,6 +16815,8 @@
               "rejected",
               "unreachable",
               "timed_out",
+              "token_store_unavailable",
+              "provider_mismatch",
               null
             ]
           },

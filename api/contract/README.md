@@ -739,6 +739,11 @@ in the completed outcome's result.
   The result of `read_usage` writes no event. Verify can record
   `credential.signed_out` v1 for a rejected or missing token using the
   existing payload (CR-7, CR-13, CR-29, TK-3).
+- The helper reports `token_store_unavailable` when the Mac cannot read
+  or save a token, and `provider_mismatch` when the token lacks a local
+  binding to the requested provider. Neither signs the credential out.
+  A connection failure is `unreachable`. A token check that receives an
+  unexpected HTTP reply fails with `no_answer`.
 - The reading schema limits figures to 32, resets to 16, tool version
   to 64 characters, and figure labels and string values to 80 characters
   each. The account reads keep their existing response fields.

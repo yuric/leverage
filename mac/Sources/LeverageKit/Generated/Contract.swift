@@ -1050,6 +1050,8 @@ public enum HelperCheckFailure: String, Codable, CaseIterable, Sendable {
     case rejected
     case unreachable
     case timedOut = "timed_out"
+    case tokenStoreUnavailable = "token_store_unavailable"
+    case providerMismatch = "provider_mismatch"
 }
 
 /// How a helper request ended. (openapi.json HelperRequestResult.outcome)
