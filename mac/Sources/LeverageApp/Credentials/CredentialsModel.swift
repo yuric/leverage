@@ -15,7 +15,21 @@ struct CredentialRow: Identifiable, Equatable, Sendable {
     /// A signed-out login can be signed in again (HM-47).
     let canSignInAgain: Bool
 
-    init(_ entry: CredentialWithReading, now: Date, calendar: Calendar = .current, locale: Locale = .current) {
+    enum Action { case rename, verify, signInAgain, remove }
+    let actions: [Action] = []
+    let isSignedOut = false
+    let accountDetails: [String] = []
+    let figures: [FigureTile.Content] = []
+    let resetsLine: String? = nil
+    let ageLine: String? = nil
+    let readingLine: String? = nil
+    let modelLine: String? = nil
+    let tokenLine: String? = nil
+
+    init(
+        _ entry: CredentialWithReading, now: Date, calendar: Calendar = .current, locale: Locale = .current,
+        testedVersions: [String]? = nil
+    ) {
         let credential = entry.credential
         id = credential.id
         name = credential.name
@@ -55,6 +69,27 @@ final class CredentialsModel {
         case signedOut
     }
 
+    struct Group {
+        let provider: Provider
+        let rows: [CredentialRow]
+    }
+
+    struct Section {
+        let kind: CredentialKind
+        let groups: [Group]
+    }
+
+    var sections: [Section] { [] }
+    var pendingRemoval: CredentialRow? { nil }
+    func askToRemove(_ id: UUID) {}
+    func cancelRemoval() {}
+    func remove(_ id: UUID) async {}
+    func rename(_ id: UUID, to name: String) async -> String? { nil }
+    func refresh() async {}
+    func verifyAll() async {}
+    func progress(for id: UUID) -> String? { nil }
+    func keepCurrent(every interval: Duration = .seconds(10)) async { await load() }
+
     private(set) var state: State = .loading
     private(set) var rows: [CredentialRow] = []
     private(set) var verifying: Set<UUID> = []
@@ -74,7 +109,8 @@ final class CredentialsModel {
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, now: @escaping () -> Date = Date.init,
-        timing: FollowTiming = .normal, calendar: Calendar = .current, locale: Locale = .current
+        timing: FollowTiming = .normal, calendar: Calendar = .current, locale: Locale = .current,
+        helper: (any HelperSupervising)? = nil
     ) {
         self.api = api
         self.noteRead = noteRead
