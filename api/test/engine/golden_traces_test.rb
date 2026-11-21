@@ -21,7 +21,8 @@ class GoldenTracesTest < ActiveSupport::TestCase
     "03-stop-rework-pass-approve-done" => [ 5, 1 ],
     "04-two-actions-custom-rule" => [ 5, 0 ],
     "20-questions-and-access" => [ 5, 0 ],
-    "21-money-projects-escalation" => [ 5, 0 ]
+    "21-money-projects-escalation" => [ 5, 0 ],
+    "22-finishing-edges" => [ 5, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).
