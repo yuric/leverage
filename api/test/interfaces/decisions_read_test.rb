@@ -64,7 +64,19 @@ class DecisionsReadTest < CommittingTestCase
     assert_equal [ false, false ], decisions.map { |row| row.fetch("undoable") }
   end
 
-  test "an action announced as started can still be stopped and keeps the started mark afterward" do
+  test "a manual stop of an orchestrator approval is not an overturn" do
+    task = scenario.finishing_task(actions: [ {} ])
+    action = Action.where(task_id: task.id).sole
+    approve(task, action, scenario.orchestrator)
+
+    assert action_command("stop_action", action).completed?
+
+    assert_equal [ "stopped", false, nil, nil ],
+      only_decision.values_at("action_state", "undoable", "overturned_at", "overturn_effect")
+    assert_equal({ "overturned" => false }, event_for(action, "action.stopped").payload)
+  end
+
+  test "overturn stops an action announced as started and retains the started mark" do
     task = scenario.finishing_task(actions: [ {} ])
     action = Action.where(task_id: task.id).sole
     approve(task, action, scenario.orchestrator)
@@ -73,12 +85,17 @@ class DecisionsReadTest < CommittingTestCase
 
     assert_equal [ true, true ], only_decision.values_at("undoable", "started")
 
-    action.update!(state: "stopped")
-    stop = action_event("action.stopped", task, action, actor_kind: "owner", actor_id: scenario.owner.id)
+    assert action_command("overturn_approval", action).completed?
+    stop = event_for(action, "action.stopped")
 
     row = only_decision
     assert_equal [ "stopped", true, false, "stopped" ], row.values_at("action_state", "started", "undoable", "overturn_effect")
     assert_equal stop.at, Time.iso8601(row.fetch("overturned_at"))
+    assert_equal({ "overturned" => true }, stop.payload)
+    repeat = action_command("overturn_approval", action)
+    assert repeat.refused?
+    assert_equal "invalid_state", repeat.refusal.code
+    assert_equal stop.id, event_for(action, "action.stopped").id
   end
 
   test "overturning a completed action records the decision without making it undoable" do
@@ -122,6 +139,12 @@ class DecisionsReadTest < CommittingTestCase
     action.update!(state: "approved", approved_by_kind: "seat", approved_by_id: seat.id)
     action_event("action.approved", task, action, actor_kind: "seat", actor_id: seat.id,
       payload: { lease_seat_id: nil })
+  end
+
+  def action_command(command, action)
+    transitions = Leverage::Transitions
+    transitions.apply(transitions::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+      caller_id: scenario.owner.id, key: SecureRandom.uuid, request_hash: command, params: { "id" => action.id }))
   end
 
   def only_decision
