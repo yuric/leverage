@@ -473,7 +473,9 @@ default).
 
 A developer launch of the app bundle uses `LEVERAGE_TOKEN_STORE=memory`
 to exercise the same local channel without storing tokens. The app passes
-that setting to its helper. The maintainer's separately guarded
+that setting to its helper. The read timeout and provider endpoint
+override are settings for direct helper runs. The app uses the default
+timeout and the catalog endpoints. The maintainer's separately guarded
 `scripts/capture_reader_reply.py` developer check uses a signed-in tool to
 record scrubbed structure outside the repository. Its self-test uses
 stand-ins. The evidence for each login is in

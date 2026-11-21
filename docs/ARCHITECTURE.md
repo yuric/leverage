@@ -947,8 +947,10 @@ All nine contract entries remain provisional.
 | Gemini API token | Catalog GET, documentation and made replies. | Reading state. |
 | Grok API token | Catalog GET, documentation and made replies. | Reading state. |
 
-The workspace sweep queues due reads for active credentials with a live
-helper. A passed Add queues the first read. Refresh queues an active
+The workspace sweep queues up to 50 due reads for active credentials
+whose readings were stored more than nine minutes ago or are missing.
+It requires a helper report in the last 90 seconds. A passed Add queues
+the first read. Refresh queues an active
 credential even if it has a recent reading. Refresh and the sweep end
 abandoned pickups after 90 seconds, so a lost pickup can be retried.
 The helper budgets 15 seconds for a read. The Codex usage session runs

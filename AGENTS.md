@@ -264,7 +264,7 @@ cp .env.example .env
 The API (`api/`):
 
 ```bash
-docker compose build                                 # build the API image
+docker compose build api                             # build the API image
 docker compose run --rm api bin/rails test           # tests, against PostgreSQL
 docker compose run --rm api bin/rails zeitwerk:check # autoloading
 docker compose run --rm -e SEED=1 -e WALKS=1000 api bin/rails test test/engine/step_partition_test.rb  # 1000 random walks

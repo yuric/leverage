@@ -1325,6 +1325,14 @@ passed all three cases, with 33, 23 and 74 events respectively. This
 exercises the Linux-built token path. The hosted x86_64 job remains
 unverified by the local package.
 
+Final integration exercised 124 focused API tests with 985 assertions.
+The full API suite passed 4,208 tests with no failures, errors or skips.
+The Mac suite reported 1,562 tests in 177 suites. Its 29 environment
+gates cover the separately invoked end-to-end cases and real developer
+checks. No gate waits for another package. The Refresh count test now
+scopes its assertion to its own workspace and proves an unrelated
+workspace's old request stays untouched.
+
 The four login providers can be added and verified with stand-ins.
 The app model tests cover the two steps and checks, and the
 cross-process cases cover Add, the automatic first reading and Verify
@@ -2308,7 +2316,7 @@ run is also listed here until the owner has read it.
 | The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
 | Grok | Outside both committed eval runs and untried as an MCP client. After sign-in, the maintainer can run `LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 LEVERAGE_EVAL_PROVIDERS=grok scripts/eval_rule.sh approves-actions`. Both shipped suites must cover and pass Grok for it to appear in the registry. |
 | [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) and [ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md) | Read both Credentials records. |
-| The four-login release line | Stand-ins prove Add and Verify, including the automatic first reading. Add and verify real Claude, Codex and Grok logins, and try the pop-up installer per provider. The earlier real Gemini check remains the evidence for Gemini Add. |
+| The four-login release line | Stand-ins prove Add and Verify, including the automatic first reading. Add and verify real Claude and Codex logins in helper-created folders, and add and verify the first real Grok login. Try the pop-up installers where offered. The earlier real Gemini check remains the evidence for Gemini Add. |
 | Real account usage | Check Codex figures and resets against the tool, compare two accounts of one provider, and check that a read leaves a running account signed in. Claude figures also need a usable recording and an enabled reader. |
 | Claude resets | Check whether the cache entry is in the named file and record the structure of a real grant. The build has never opened a real cache file. |
 | Missing usage sources | Capture a usable Claude quota structure, the Gemini usage screen or another read-only source, and a Grok usage reply after sign-in. |
