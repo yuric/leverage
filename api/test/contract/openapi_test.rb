@@ -19,7 +19,7 @@ class OpenapiTest < Minitest::Test
   }.freeze
   # The owner reads whose shapes wait for track F's queries (IF-18), and the
   # helper request's progress (milestone 2 plan, IN-23). The events tail,
-  # the Needs you list, the setup state and the landing prompt are stable.
+  # the Needs you list, the setup state, the landing prompt and workspace settings are stable.
   PROVISIONAL_READS = %w[
     get_board get_task list_decisions list_seats list_projects list_rules list_credentials get_system_health
     get_helper_request
@@ -229,7 +229,7 @@ class OpenapiTest < Minitest::Test
     provisional = operations.select { |_, _, op| op["x-provisional"] }.map { |_, _, op| op["operationId"] }
     assert_equal PROVISIONAL_READS.sort, provisional.sort
     stable = owner_reads - provisional
-    assert_equal %w[get_landing_prompt get_owner_command get_setup_state list_events list_inbox], stable.sort
+    assert_equal %w[get_landing_prompt get_owner_command get_setup_state get_workspace_settings list_events list_inbox], stable.sort
   end
 
   def test_health_is_infrastructure_outside_the_agent_calls

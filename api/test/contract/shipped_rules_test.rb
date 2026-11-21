@@ -46,9 +46,7 @@ class ShippedRulesTest < Minitest::Test
     end
   end
 
-  # A model rule's instruction is its text once its milestone writes it
-  # (milestone 4 plan RV-2 for "specific details"); until then it names the
-  # milestone that will.
+  # Both model-checked rules ship with instructions (RV-2 and AP-23).
   def test_app_rules_name_a_function_and_model_rules_an_instruction
     rules.each do |entry|
       if entry["checker"] == "app"
@@ -59,12 +57,11 @@ class ShippedRulesTest < Minitest::Test
         assert_nil entry["checker_function"], entry["key"]
         assert_empty entry["parameters"], entry["key"]
         instruction = entry["instruction"]
-        assert(instruction.is_a?(String) ? !instruction.strip.empty? : !instruction["to_be_written_in"].nil?, entry["key"])
+        assert_kind_of String, instruction, entry["key"]
+        refute_empty instruction.strip, entry["key"]
         assert_equal "orchestrator", entry["checker_role"], entry["key"]
       end
     end
-    assert_kind_of String, rule("specific_details")["instruction"]
-    assert_equal "questions_and_approvals", rule("orchestrator_approves_actions")["instruction"]["to_be_written_in"]
   end
 
   def test_parameters_are_typed_with_their_prd_defaults

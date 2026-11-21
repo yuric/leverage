@@ -34,7 +34,13 @@ class ColumnsTest < Minitest::Test
     # Text made from the seat's role, the contract and a template, and the
     # fixed interval it tells the agent (milestone 2 plan, Q-15, the owner's
     # issue 11). A read with no table behind it.
-    "LandingPrompt" => %w[text check_interval_minutes],
+    "LandingPrompt" => %w[text check_interval_minutes connection],
+    # Derived from the action's approval event and the rule check that stopped it.
+    "Action" => %w[approved_at stopped_by_rule_check_id],
+    # The project pause's actor, the count of unfinished tasks and the current brief.
+    "Project" => %w[paused_by open_tasks brief],
+    # True when the question's outcome is overturned.
+    "Question" => %w[overturned],
     # A step's length, closed_at (or the read's as_of for the open one)
     # less opened_at (milestone 4 plan section 2.3).
     "TaskStep" => %w[seconds]
