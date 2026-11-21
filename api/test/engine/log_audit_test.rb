@@ -296,6 +296,21 @@ class LogAuditTest < ActiveSupport::TestCase
     assert(found.any? { |line| line.include?("no command") || line.include?("no timer") }, found.inspect)
   end
 
+  test "a timer and the action requests on either side of a keyed review are audited in sequence" do
+    walk = Walk.new(seed: 1057, steps: 120).run
+    requested = Event.where(workspace_id: walk.workspace_id, type: "action.requested").order(:seq).first!
+    around = Event.where(workspace_id: walk.workspace_id, at: requested.at).order(:seq)
+    earlier_timer = around.where(command_id: nil).where("seq < ?", requested.seq).first
+    later_check = around.where(command_id: nil, type: "check.queued").where("seq > ?", requested.seq).first
+
+    assert earlier_timer, "the command applies a due timer before passing the review"
+    assert later_check, "passing the review queues an action check after action.requested"
+    assert earlier_timer.seq < requested.seq && requested.seq < later_check.seq
+
+    findings = Leverage::LogAudit.call(walk.workspace_id)
+    assert_empty findings, findings.join("\n")
+  end
+
   test "the log of a walk, every event of it written by a command, passes from its first event" do
     walk = Walk.new(seed: 21).run
     assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
