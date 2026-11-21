@@ -211,4 +211,18 @@ class InboxTest < CommittingTestCase
 
     assert_equal before, [ Command.count, Event.count, Workspace.find(scenario.workspace_id).last_seq ]
   end
+
+  test "blocking and nonblocking questions both reach Needs you with the Answer choice" do
+    builder = scenario.seat(role: "builder")
+    task = scenario.task(state: "working", builder: builder)
+    nonblocking = scenario.question(task, outcome: "passed_on", blocking: false)
+    blocking = scenario.question(task, outcome: "passed_on")
+
+    rows = read.fetch("items")
+
+    assert_equal [ nonblocking.id, blocking.id ], rows.map { |item| item.fetch("facts").fetch("question_id") }
+    assert_equal [ [ "answer" ], [ "answer" ] ], rows.map { |item| item.fetch("choices") }
+    assert_nil rows.first.fetch("hold_id")
+    assert_equal Hold.find_by!(task_id: task.id, reason: "owner_question").id, rows.last.fetch("hold_id")
+  end
 end

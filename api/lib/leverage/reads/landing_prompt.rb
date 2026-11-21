@@ -71,7 +71,7 @@ module Leverage
       # such seat or it was removed. Raises AppRunSeat for a seat the app runs
       # and UnusableAddress for a base_url that is not safe to paste. Raises
       # ActiveRecord::RecordNotFound for an unknown workspace.
-      def call(workspace_id, seat_id, base_url:)
+      def call(workspace_id, seat_id, base_url:, connection: "http")
         Snapshot.call(workspace_id) do |_as_of_seq|
           seat = Seat.find_by(workspace_id: workspace_id, id: seat_id, removed_at: nil)
           next nil unless seat

@@ -96,4 +96,28 @@ class BoardReadTest < CommittingTestCase
 
     assert_equal false, card(task)["checking"]
   end
+
+  test "a Finishing card waits for the builder exactly when an action is approved and the task has no holder" do
+    actions = [ { kind: "publish", description: "Publish the sample.", state: "approved" } ]
+    waiting = scenario.finishing_task(holder: false, actions: actions)
+    held = scenario.finishing_task(actions: actions)
+    requested = scenario.finishing_task(actions: [ actions.first.merge(state: "requested") ])
+    ready = scenario.task(state: "ready")
+
+    assert_equal true, card(waiting)["waits_for_builder"]
+    [ held, requested, ready ].each do |task|
+      assert_equal false, card(task)["waits_for_builder"], task.id
+    end
+  end
+
+  test "a card waits for a stronger agent when the task is Ready and has a minimum strength rank" do
+    ready = scenario.task(state: "ready")
+    escalated = scenario.task(state: "ready")
+    working = scenario.task(state: "working")
+    [ escalated, working ].each { |task| task.update_columns(minimum_strength_rank: 2) }
+
+    assert_equal true, card(escalated)["waits_for_stronger_agent"]
+    assert_equal false, card(ready)["waits_for_stronger_agent"]
+    assert_equal false, card(working)["waits_for_stronger_agent"]
+  end
 end

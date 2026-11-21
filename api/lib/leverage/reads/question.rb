@@ -1,9 +1,11 @@
 module Leverage
   module Reads
     module Question
+      Found = Data.define(:row, :body)
+
       module_function
 
-      def call(_seat, _question_id) = {}
+      def call(_seat, _question_id, task_id: nil) = {}
 
       # TaskPage refers to Question without its top-level qualifier.
       # Remove this when WP11 qualifies the model in that reader.
