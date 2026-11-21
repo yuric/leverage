@@ -3,6 +3,7 @@
 # LEVERAGE_REAL_MCP=1 LEVERAGE_REAL_PROVIDER=claude scripts/real_mcp_run.sh claude
 # Optional: API_IMAGE_TAG to reuse an API image, LEVERAGE_E2E_SCRATCH for
 # the Swift build, LEVERAGE_MCP_CHECK_OUT for the two verified artifacts.
+# Set up .env from .env.example as described in AGENTS.md before running.
 # Exit 2 for a refusal, 3 if Claude is absent, 1 for failure, 130 for an
 # interrupt. CI presence, including an empty value, always refuses.
 { set +x; } 2>/dev/null
@@ -71,23 +72,29 @@ def say(message):
 
 
 def stop(child):
-    # Signal the process group so the MCP server opened by Claude ends too.
-    # Each process is started in a new session below.
-    if child.poll() is not None:
-        return
-    try:
-        os.killpg(child.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError:
-        # On macOS the child may have just exited but still need reaping.
-        child.wait(timeout=5)
-        return
+    # A client can leave descendants even after its own exit. A new
+    # session gives each child a group with no unrelated processes.
+    def send(sig):
+        try:
+            os.killpg(child.pid, sig)
+            return True
+        except (ProcessLookupError, PermissionError):
+            # macOS can return EPERM for an exited, unreaped group leader.
+            return False
+
+    send(signal.SIGTERM)
     try:
         child.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        os.killpg(child.pid, signal.SIGKILL)
-        child.wait()
+        send(signal.SIGKILL)
+        child.wait(timeout=5)
+        return
+    deadline = time.monotonic() + 1
+    while send(0):
+        if time.monotonic() >= deadline:
+            send(signal.SIGKILL)
+            break
+        time.sleep(0.05)
 
 
 class LocalOnly(HTTPRedirectHandler):
@@ -119,6 +126,7 @@ class Owner:
                     raise Failed("the API returned an unexpected status")
                 return json.load(response)
         except HTTPError as error:
+            error.close()
             raise Failed(f"the API returned HTTP {error.code}") from None
         except (URLError, TimeoutError, ValueError):
             raise Failed("the API request did not return JSON") from None
@@ -133,7 +141,7 @@ class Owner:
         return self.request(f"/v1/owner/{path}")
 
 
-def denied(output):
+def denied(output, *, diagnostics):
     # Claude's JSON result reports denied tool names. Also handle a denial
     # emitted as a diagnostic while the client is still waiting.
     try:
@@ -146,6 +154,8 @@ def denied(output):
                 r"mcp__leverage(?:__[A-Za-z0-9_]+)?", str(item.get("tool_name"))
             ):
                 return True
+    if not diagnostics:
+        return False
     text = output.decode("utf-8", errors="replace")
     tool = r"(?:mcp__leverage(?:__\w+)?|MCP tool(?: call)?s?)"
     refusal = r"(?:denied|not allowed|not permitted)"
@@ -167,7 +177,7 @@ def check_client(child, deadline):
             streams[stream].extend(data)
             if len(stdout) + len(stderr) > 4 * 1024 * 1024:
                 raise Failed("the client exceeded the output limit")
-            if denied(streams[stream]):
+            if denied(streams[stream], diagnostics=stream is child.stderr):
                 raise Failed("MCP tool calls denied")
     while child.poll() is None:
         check_stop()
@@ -216,7 +226,9 @@ class Check:
             self.environment["API_IMAGE_TAG"] = self.environment["COMPOSE_PROJECT_NAME"]
         self.compose = ["docker", "compose"]
         env_file = ROOT / ".env"
-        self.compose += ["--env-file", str(env_file if env_file.is_file() else ROOT / ".env.example")]
+        if not env_file.is_file():
+            raise Failed("copy .env.example to .env before running the check")
+        self.compose += ["--env-file", str(env_file)]
         self.compose += ["-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "compose.test.yaml")]
         self.scratch = Path(os.environ.get("LEVERAGE_E2E_SCRATCH") or folder / "build").resolve()
         self.compose_started = False
@@ -283,7 +295,8 @@ class Check:
 
     def start_reviewer(self, binary, address, token):
         standins = self.folder / "stand-ins"
-        shutil.copytree(ROOT / "mac/Tests/StandIns", standins)
+        shutil.copytree(ROOT / "mac/Tests/StandIns", standins,
+                        ignore=shutil.ignore_patterns("state", "__pycache__"))
         settings = self.folder / "reviewer-settings"
         settings.mkdir()
         (settings / ".standin-signed-in").touch()
@@ -328,8 +341,7 @@ class Check:
                 try:
                     check_client(child, deadline)
                 finally:
-                    if child.returncode is None:
-                        stop(child)
+                    stop(child)
         finally:
             config.unlink(missing_ok=True)
 
@@ -365,7 +377,10 @@ class Check:
         task = owner.command("tasks", {"title": TITLE, "goal": CRITERION, "state": "backlog"})["task_id"]
         owner.command(f"tasks/{task}/complete-contract", {
             "title": TITLE, "goal": CRITERION, "details": None, "work_reference": str(work),
-            "criteria": [{"text": CRITERION, "kind": "build"}], "actions": [],
+            "criteria": [
+                {"text": CRITERION, "kind": "build"},
+                {"text": "An independent reviewer agrees.", "kind": "review"},
+            ], "actions": [],
             "minimum_strength_rank": None, "budget_cap": None,
         })
         self.start_reviewer(binary / "LeverageRunner", address, reviewer["seat_token"])

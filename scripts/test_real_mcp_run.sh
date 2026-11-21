@@ -236,6 +236,7 @@ class Check(unittest.TestCase):
         )
         for env, args, reason in checks:
             with self.subTest(args=args, reason=reason, variables=tuple(env)):
+                (self.root / "calls").unlink(missing_ok=True)
                 process = self.start(args, env)
                 output = self.read(process)
                 self.assertEqual(process.returncode, 2)
