@@ -145,6 +145,7 @@ struct AddAndReadEndToEndTests {
             $0.type == .credentialVerified && $0.subjectID == claudeTwo.id
         }
         let after = try await rig.owner.credentials()
+        #expect(Set(after.credentials.map(\.credential.id)) == ids)
         #expect(after.credentials.allSatisfy { $0.credential.state == .active })
 
         let calls = try rig.tools.calls()

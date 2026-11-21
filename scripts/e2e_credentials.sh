@@ -94,6 +94,10 @@ for test in "${tests[@]}"; do
     exit 1
   fi
   case_dir=$(dirname "${cases[0]}")
+  if [ ! -f "$case_dir/support/logs/helper.log" ]; then
+    say "$test: the helper log is missing"
+    exit 1
+  fi
 
   say "$test: replay and audit"
   U exec -T api bin/rails leverage:verify_log
@@ -107,7 +111,7 @@ for test in "${tests[@]}"; do
   U exec -T db sh -c 'pg_dump --data-only --no-owner -U "$POSTGRES_USER" leverage_production' \
     >"$folder/dump.sql" 2>"$folder/dump.err"
   U exec -T backup ls -l /backups >"$folder/backups.txt"
-  scan=(python3 -I scripts/secret_scan.py --replies "$root/mac/Tests/StandIns/replies"
+  scan=(python3 -I scripts/secret_scan.py --replies "$case_dir/StandIns/replies"
         --credentials-dump "$folder/dump.sql" --account-email standin.owner@example.invalid
         --secrets "${cases[0]}")
   if [ "$n" -eq 2 ]; then
