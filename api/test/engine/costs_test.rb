@@ -60,6 +60,41 @@ class CostsTest < ActiveSupport::TestCase
     assert_equal "budget", open_hold(@task).reason
   end
 
+  test "one policy check can apply a project pause and a task hold together" do
+    @project.update!(budget: 1)
+    rule = policy("project_paused")
+    gating = Leverage::Gating.implementation
+    original = gating.method(:evaluate)
+    gating.define_singleton_method(:evaluate) do |request|
+      evaluation = original.call(request)
+      task_effect = Leverage::Gating::Effect.new(rule_id: rule.id, hook: request.hook, effect: "task_held")
+      evaluation.with(effects: evaluation.effects + [ task_effect ])
+    end
+
+    events = events_written { assert_completed(seat_command(@builder, "report_cost", cost_params)) }
+
+    assert_equal %w[cost.reported check.finished project.paused hold.opened inbox.opened hold.opened inbox.opened], types(events)
+    assert_equal %w[project_paused budget], Leverage::Holds.open_holds(@task).map(&:reason)
+    assert_equal [ @task.id, @project.id ].sort, InboxItem.where(state: "open", workspace_id: scenario.workspace_id).pluck(:about_id).sort
+
+    later = events_written { assert_completed(seat_command(@builder, "report_cost", cost_params)) }
+    assert_equal %w[cost.reported check.finished], types(later)
+  end
+
+  test "a job's report runs the project budget policy while leaving task spend and its cap alone" do
+    @project.update!(budget: 2)
+    @task.update!(spent: 1)
+    job = scenario.job(kind: "contract_draft", task: @task)
+    policy("project_paused")
+
+    events = events_written { Leverage::Costs.report(scenario.context, task: @task, subject: job, tokens: 30, spend: 2) }
+
+    assert_equal %w[cost.reported check.finished project.paused hold.opened inbox.opened], types(events)
+    assert_equal [ "job", job.id, @project.id ], events.first.values_at(:subject_kind, :subject_id, :project_id)
+    assert_equal [ 1, 2 ], [ @task.reload.spent, @project.reload.spent ]
+    assert_equal [ "project_paused" ], Leverage::Holds.open_holds(@task).map(&:reason)
+  end
+
   test "an existing budget hold is kept when the holder reports again" do
     policy("task_held")
     scenario.hold(@task, reason: "budget")

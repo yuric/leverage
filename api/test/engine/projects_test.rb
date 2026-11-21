@@ -147,10 +147,15 @@ class ProjectsTest < ActiveSupport::TestCase
     destination = scenario.project
     [ @project, destination ].each { |project| assert_completed(owner_command("pause_project", { "id" => project.id })) }
 
-    moved = events_written do
-      assert_completed(owner_command("change_task_project", { "id" => task.id, "project_id" => destination.id }))
+    last = Event.where(workspace_id: scenario.workspace_id).order(:seq).last
+    moved = nil
+    answering(Leverage::WorkspaceLock, :clock, -> { last.at - 0.040 }) do
+      moved = events_written do
+        assert_completed(owner_command("change_task_project", { "id" => task.id, "project_id" => destination.id }))
+      end
     end
     assert_equal %w[task.changed hold.opened hold.closed], types(moved)
+    assert_equal [ last.at + Rational(1, 1_000_000) ], moved.map(&:at).uniq
     assert_equal destination.id, open_hold(task).project_id
     assert_nil task.reload.resume_pending_since
     assert_nil task.lease_due_at
