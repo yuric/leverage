@@ -29,6 +29,8 @@ module Leverage
     # The Needs you item a sign-out opens or that its verification resolves
     # (needs_you.json).
     ACCOUNT_SIGNED_OUT = "account_signed_out".freeze
+    LIMIT_WITH_NO_RESET = "limit_with_no_reset_time".freeze
+    HANDOFF_ORDER_CHANGES = %w[reorder_credentials remove_credential].freeze
 
     module_function
 
@@ -137,6 +139,8 @@ module Leverage
     # out, nothing closes (HE-10): only a credential_limit hold that the
     # sign-out leaves with no due time and no item gets the "Account signed
     # out" item beside it, naming that account (HE-11).
+    # Reorder and Remove also open an item for a limit hold left without a
+    # due time, and resolve its no-reset item when a due time returns (CR-30).
     #
     # tasks:      - the tasks to look at; nil is every task of the
     #               workspace with an open credential hold.
@@ -255,6 +259,17 @@ module Leverage
         InboxItem.where(hold_id: open.id, state: "open", kind: ACCOUNT_SIGNED_OUT, credential_id: verified.id)
           .order(:opened_at).each { |item| resolve(ctx, item, task, choice) }
         open_blocker_item(ctx, open, task, seat, cause)
+      elsif open.reason == "credential_limit" && HANDOFF_ORDER_CHANGES.include?(ctx.request.command)
+        look_at_limit_item(ctx, open, task, seat, cause)
+      end
+    end
+
+    def look_at_limit_item(ctx, open, task, seat, cause)
+      if Candidates.due_at(seat, task, ctx.at)
+        InboxItem.where(hold_id: open.id, state: "open", kind: LIMIT_WITH_NO_RESET)
+          .order(:opened_at, :id).each { |item| resolve(ctx, item, task, nil) }
+      else
+        open_blocker_item(ctx, open, task, seat, cause, at: ctx.at)
       end
     end
 
@@ -263,11 +278,11 @@ module Leverage
     # keeps for the task, else "Limit with no reset time" naming the first
     # such candidate limited with no reset time. No hold event: the hold
     # keeps its reason.
-    def open_blocker_item(ctx, open, task, seat, cause)
+    def open_blocker_item(ctx, open, task, seat, cause, at: nil)
       return if InboxItem.where(hold_id: open.id, state: "open").exists?
 
-      last = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
-      return if Candidates.due_at(seat, task, last)
+      at ||= Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
+      return if Candidates.due_at(seat, task, at)
 
       signed_out = Candidates.signed_out_for(seat, task)
       if signed_out
@@ -362,7 +377,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
+    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :look_at_limit_item, :open_blocker_item, :go_on, :open_signed_out_item,
       :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end

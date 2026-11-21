@@ -53,6 +53,7 @@ class CredentialOrderTest < ActiveSupport::TestCase
     assert @order.exactly_the_added?([ second.id, first.id ])
     refute @order.exactly_the_added?([ first.id ])
     refute @order.exactly_the_added?([ first.id, first.id ])
+    refute @order.exactly_the_added?([ first.id, second.id, first.id ])
     refute @order.exactly_the_added?([ first.id, SecureRandom.uuid ])
     refute @order.exactly_the_added?([ first.id, foreign.id ])
     refute @order.exactly_the_added?([ first.id, second.id, pending.id ])

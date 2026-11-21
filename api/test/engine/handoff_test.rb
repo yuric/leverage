@@ -318,6 +318,36 @@ class HandoffTest < ActiveSupport::TestCase
     assert_nil hold.reload.closed_at
   end
 
+  test "a reading does not do the reorder's standalone item work" do
+    own = scenario.credential
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(own)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    written = events_written { as_helper("report_reading") { |ctx| H.reevaluate(ctx, tasks: [ task ]) } }
+
+    assert_empty written
+    assert_empty InboxItem.where(hold_id: hold.id)
+  end
+
+  test "a reorder does not resolve an account signed-out item when a reset time returns" do
+    dated = scenario.credential
+    own = scenario.credential
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    scenario.sign_out_credential(own)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+    as_helper { |ctx| H.reevaluate(ctx, signed_out: own) }
+    item = InboxItem.find_by!(hold_id: hold.id, kind: "account_signed_out", state: "open")
+
+    written = events_written { after_swapping_positions(dated, own) }
+
+    assert_equal %w[credential.order_changed credential.order_changed], written.map(&:type)
+    assert_equal "open", item.reload.state
+  end
+
   test "a reorder that restores a due time resolves the no-reset item under a clock that steps back" do
     dated = scenario.credential(provider: "codex")
     own = scenario.credential(provider: "claude")
