@@ -1,8 +1,7 @@
 module Leverage
   module Http
     # The operations served, each to its controller and action (milestone 2
-    # plan §2.1, §2.3, IN-1; milestone 3's eleven and milestone 4's twelve
-    # are the last entries).
+    # plan §2.1, §2.3, IN-1; the later milestones are grouped below).
     # config/routes.rb draws one route per entry with the registry's method
     # and path, so no path is typed anywhere else; every other registry
     # operation has no route and answers 404 (test/interfaces/seams_test.rb).
@@ -84,11 +83,8 @@ module Leverage
         "remove_rule" => "v1/owner/rules#remove",
         "rerun_check" => "v1/owner/rule_checks#rerun",
         "override_check" => "v1/owner/rule_checks#override",
-        "draft_contract" => "v1/owner/tasks#draft_contract"
-      }.freeze
-
-      # Milestone 5 operations staged for their controllers (AT-6).
-      PENDING = {
+        "draft_contract" => "v1/owner/tasks#draft_contract",
+        # Milestone 5's thirty (its plan §2.3, AT-6).
         "ask_question" => "v1/agent/questions#create",
         "get_question" => "v1/agent/questions#show",
         "request_access" => "v1/agent/tasks#access",
@@ -120,6 +116,8 @@ module Leverage
         "get_workspace_settings" => "v1/owner/settings#show",
         "change_workspace_settings" => "v1/owner/settings#update"
       }.freeze
+
+      PENDING = {}.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
