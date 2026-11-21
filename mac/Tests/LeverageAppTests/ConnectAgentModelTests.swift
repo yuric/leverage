@@ -265,6 +265,18 @@ struct ConnectAgentModelTests {
         #expect(body(owner)["strength_rank"] == .number(2))
     }
 
+    @Test("Connect does not send a strength outside the three choices", arguments: [0, 4])
+    func connectRejectsUnlistedStrength(_ strength: Int) async {
+        let owner = owner()
+        let model = makeModel(owner)
+        model.mode = .connectsOnItsOwn
+        model.name = "Example agent"
+        model.strengthRank = strength
+        #expect(!model.canConnect)
+        await model.connect()
+        #expect(Fixtures.calls(owner, .connectSeat).isEmpty)
+    }
+
     @Test("self-connected agents get the selected prompt and MCP gets separately copyable settings",
           arguments: LandingPromptConnection.allCases)
     func connectUsing(_ connection: LandingPromptConnection) async throws {
@@ -291,17 +303,19 @@ struct ConnectAgentModelTests {
         model.copyMCPSettings()
         if connection == .mcp {
             let settings = try #require(model.mcpSettings)
+            let containsSeatToken = settings.contains(Fixtures.madeUpToken)
+            try #require(!containsSeatToken)
             #expect(board.copied.value == [settings])
             #expect(settings.contains(apiURL.absoluteString))
             #expect(settings.contains("reviewer"))
             #expect(settings.contains("PASTE-THE-TOKEN-HERE"))
-            #expect(settings.contains(Fixtures.madeUpToken) == false)
         } else {
             #expect(model.mcpSettings == nil)
             #expect(board.copied.value.isEmpty)
         }
         model.finish()
         #expect(model.shownToken == nil)
+        #expect(model.mcpSettings == nil)
     }
 
     @Test("a landing prompt for the wrong connection is rejected")

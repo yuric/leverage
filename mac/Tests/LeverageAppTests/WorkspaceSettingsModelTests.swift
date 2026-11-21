@@ -90,6 +90,52 @@ struct WorkspaceSettingsModelTests {
         #expect(!model.canSave)
     }
 
+    @Test("Save sends all six changed settings and retries the same request with the same key")
+    func saveAndRetry() async throws {
+        let owner = makeOwner()
+        let updated = WorkspaceSettings(
+            leaseLengthSeconds: 900, checkQueueTimeoutSeconds: 180, checkRunTimeoutSeconds: 200,
+            maximumRounds: 5, rerunLimit: 4, recoveryTimeCeilingSeconds: 8000)
+        let attempts = Locked(0)
+        let settings = Locked(initial)
+        owner.script {
+            $0.workspaceSettings = { settings.value }
+            $0.changeWorkspaceSettings = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.timedOut) }
+                settings.update { $0 = updated }
+                return .completed(updated, key: key.value, command: .changeWorkspaceSettings)
+            }
+        }
+        let model = WorkspaceSettingsModel(api: owner)
+        await model.load()
+        let draft: [Field: String] = [
+            .leaseLength: "900", .checkQueueTimeout: "180", .checkRunTimeout: "200",
+            .maximumRounds: "5", .rerunLimit: "4", .recoveryTimeCeiling: "8000",
+        ]
+        model.fields = draft
+        await model.save()
+        #expect(model.state == .failed(.cannotReach))
+        #expect(model.fields == draft)
+        #expect(model.canSave)
+        await model.save()
+        let changes = owner.calls.filter { $0.operation == .changeWorkspaceSettings }
+        try #require(changes.count == 2)
+        #expect(changes[0].key != nil)
+        #expect(changes[0].key == changes[1].key)
+        let body: JSONValue = .object([
+            "lease_length_seconds": .number(900),
+            "check_queue_timeout_seconds": .number(180),
+            "check_run_timeout_seconds": .number(200),
+            "maximum_rounds": .number(5),
+            "rerun_limit": .number(4),
+            "recovery_time_ceiling_seconds": .number(8000),
+        ])
+        #expect(changes.map(\.body) == [body, body])
+        #expect(model.fields == draft)
+        #expect(model.state == .loaded)
+        #expect(!model.canSave)
+    }
+
     @Test("A settings event refreshes clean fields while the owner's draft stays in place")
     func eventRefresh() async throws {
         let owner = makeOwner()

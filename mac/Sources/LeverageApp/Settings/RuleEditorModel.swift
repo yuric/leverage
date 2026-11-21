@@ -29,11 +29,10 @@ final class RuleEditorModel {
         var id: String { key }
     }
 
-    /// The four moments a custom rule may use now; "before anything goes
-    /// out" arrives with outward actions (RD-21).
-    static let offeredHooks: [RuleHook] = [.taskBeforeReady, .taskBeforeClaim, .taskBeforeSubmit, .taskBeforeDone]
-    /// The two scopes offered now (RD-22).
-    static let offeredScopes: [RuleScopeKind] = [.allTasks, .checkerDecides]
+    static let offeredHooks: [RuleHook] = [
+        .taskBeforeReady, .taskBeforeClaim, .taskBeforeSubmit, .taskBeforeDone, .actionRequested,
+    ]
+    static let offeredScopes: [RuleScopeKind] = [.allTasks, .checkerDecides, .namedProjects, .actionKinds]
 
     let mode: Mode
     private(set) var state: State = .editing
@@ -72,6 +71,8 @@ final class RuleEditorModel {
             instruction = version.instruction ?? ""
             hook = version.hook
             scopeKind = version.scope.kind
+            projectIDs = Set(version.scope.projectIDs ?? [])
+            actionKinds = Set(version.scope.actionKinds ?? [])
             onFail = version.onFail
             parameters = (version.parameters ?? [:]).sorted { $0.key < $1.key }.compactMap { key, value in
                 guard case .number(let number) = value, number == number.rounded(), abs(number) < 1e9 else { return nil }
@@ -89,9 +90,7 @@ final class RuleEditorModel {
     var isAdding: Bool { original == nil }
     var canEditName: Bool { original.map { $0.origin == .custom } ?? true }
     var showsInstruction: Bool { original.map { $0.checker == .model } ?? true }
-    var showsScope: Bool {
-        original.map { $0.checker == .model && Self.offeredScopes.contains($0.scope.kind) } ?? true
-    }
+    var showsScope: Bool { original.map { $0.checker == .model } ?? true }
     var showsOnFail: Bool { original.map { $0.kind == .gate } ?? false }
     var showsHook: Bool { isAdding }
     /// Revert goes back to the shipped wording, so it is on a shipped rule only (RD-5).
@@ -115,6 +114,8 @@ final class RuleEditorModel {
     private var isValid: Bool {
         if canEditName, trimmed(name).isEmpty { return false }
         if showsInstruction, trimmed(instruction).isEmpty { return false }
+        if showsScope, scopeKind == .namedProjects, projectIDs.isEmpty { return false }
+        if showsScope, scopeKind == .actionKinds, actionKinds.isEmpty { return false }
         return parameters.allSatisfy { Self.whole($0.text) != nil }
     }
 
@@ -127,6 +128,20 @@ final class RuleEditorModel {
     }
 
     // MARK: the requests
+
+    private func selectedScope(from original: RuleScope? = nil) -> RuleScope {
+        let matching = original?.kind == scopeKind ? original : nil
+        switch scopeKind {
+        case .allTasks, .checkerDecides:
+            return matching ?? RuleScope(kind: scopeKind)
+        case .namedProjects:
+            if let matching, Set(matching.projectIDs ?? []) == projectIDs { return matching }
+            return RuleScope(kind: scopeKind, projectIDs: projectIDs.sorted { $0.contractString < $1.contractString })
+        case .actionKinds:
+            if let matching, Set(matching.actionKinds ?? []) == actionKinds { return matching }
+            return RuleScope(kind: scopeKind, actionKinds: ActionKind.allCases.filter(actionKinds.contains))
+        }
+    }
 
     /// What Save would send now: every field, each as it was unless edited.
     private func saveRequest(from version: RuleVersion) -> SaveRuleRequest {
@@ -141,7 +156,7 @@ final class RuleEditorModel {
             instruction: showsInstruction && instruction != (version.instruction ?? "")
                 ? trimmed(instruction) : version.instruction,
             parameters: values,
-            scope: scopeKind == version.scope.kind ? version.scope : RuleScope(kind: scopeKind),
+            scope: showsScope ? selectedScope(from: version.scope) : version.scope,
             onFail: showsOnFail ? onFail : version.onFail, route: version.route,
             queueTimeoutSeconds: version.queueTimeoutSeconds, runTimeoutSeconds: version.runTimeoutSeconds)
     }
@@ -156,7 +171,7 @@ final class RuleEditorModel {
 
     private var addRequest: AddRuleRequest {
         AddRuleRequest(
-            name: trimmed(name), instruction: trimmed(instruction), hook: hook, scope: RuleScope(kind: scopeKind))
+            name: trimmed(name), instruction: trimmed(instruction), hook: hook, scope: selectedScope())
     }
 
     // MARK: the buttons

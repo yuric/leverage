@@ -62,6 +62,16 @@ struct ChangeAgentModelTests {
         #expect(body(owner) == ["strength_rank": .number(3)])
     }
 
+    @Test("Change does not send a strength outside the three choices", arguments: [0, 4])
+    func changeRejectsUnlistedStrength(_ strength: Int) async {
+        let owner = owner()
+        let model = makeModel(owner)
+        model.strengthRank = strength
+        #expect(!model.canSave)
+        await model.save()
+        #expect(Fixtures.calls(owner, .changeSeat).isEmpty)
+    }
+
     @Test("a seat missing a strength reads as Standard without changing the rank on save")
     func missingStrength() async {
         let owner = owner()

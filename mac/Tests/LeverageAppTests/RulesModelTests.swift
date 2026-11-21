@@ -109,7 +109,7 @@ struct RulesModelTests {
         #expect(line.checkedBy == RulesCopy.checkerModel.text)
         #expect(line.detail.isEmpty)
         #expect(line.detailIsInstruction)
-        #expect(line.notActing == RulesCopy.notActing.text)
+        #expect(line.isOn)
     }
 
     // MARK: the seven rows and their words (RM-1)
@@ -133,7 +133,7 @@ struct RulesModelTests {
             "When a reviewer claims a review", "When a review fails", "When spending is reported",
             "Before anything goes out",
         ])
-        #expect(result.map(\.appliesTo) == Array(repeating: "Every task", count: 7))
+        #expect(result.map { $0.appliesTo() } == Array(repeating: "Every task", count: 7))
         #expect(result.map(\.checkedBy) == [
             "leverage checks this itself", "An agent checks this", "leverage checks this itself",
             "leverage checks this itself", "leverage checks this itself", "leverage checks this itself",
@@ -158,22 +158,17 @@ struct RulesModelTests {
         #expect(result[3].detail == Fixtures.sentences["different_provider_review"])
     }
 
-    @Test("the four rules whose effect is a later version's say so, and the three that act do not")
-    func notActingYet() throws {
-        let result = lines(try Fixtures.shippedRows())
-        let later = "Starts working in a later version of leverage"
-        #expect(result.map(\.notActing) == [nil, nil, later, nil, later, later, later])
-    }
-
     @Test("a rule that is off shows its switch off, and a scope reads in words")
     func switchAndScope() throws {
         let result = try line(row(enabled: false, scope: .checkerDecides))
         #expect(!result.isOn)
-        #expect(result.appliesTo == "The agent that checks decides")
-        let projects = try line(row(scope: RuleScope(kind: .namedProjects, projectIDs: [])))
-        #expect(projects.appliesTo == "Named projects")
+        #expect(result.appliesTo() == "The agent that checks decides")
+        let project = Project(id: Fixtures.id(401), name: "Workshop", goal: "", briefVersion: 1)
+        let other = Project(id: Fixtures.id(402), name: "Other", goal: "", briefVersion: 1)
+        let projects = try line(row(scope: RuleScope(kind: .namedProjects, projectIDs: [project.id])))
+        #expect(projects.appliesTo(projects: [project, other]) == "Tasks in these projects (Workshop)")
         let actions = try line(row(scope: RuleScope(kind: .actionKinds, actionKinds: [.pay])))
-        #expect(actions.appliesTo == "Tasks that end in some outward actions")
+        #expect(actions.appliesTo() == "Tasks that end in Pay")
     }
 
     @Test("a custom rule is not shipped, and its wording shows the date it was saved")

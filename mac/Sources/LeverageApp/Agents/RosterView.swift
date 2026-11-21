@@ -1,3 +1,4 @@
+import LeverageKit
 import SwiftUI
 
 /// The Agents tab (MA-2): a list of the agents with Connect agent above it.
@@ -13,7 +14,8 @@ struct RosterView: View {
         let model = box.model {
             RosterModel(
                 api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
-                copy: Pasteboard.copy)
+                copy: Pasteboard.copy,
+                apiURL: { [server = context.runtime.server] in await MCPSettings.liveAPIAddress(from: server) })
         }
         RosterContent(
             model: model, connect: { isConnecting = true }, openCredentials: { context.navigator.show(.credentials) }
@@ -207,8 +209,17 @@ struct RosterRowView: View {
                     Button(AgentsCopy.change.text) { model.beginChange(row.id) }
                 }
                 if row.canCopyLandingPrompt {
-                    Button(model.copiedPrompt == row.id ? AgentsCopy.copied.text : AgentsCopy.copyLandingPrompt.text) {
-                        Task { await model.copyLandingPrompt(row.id) }
+                    Menu(model.copiedPrompt == row.id ? AgentsCopy.copied.text : AgentsCopy.copyLandingPrompt.text) {
+                        ForEach(LandingPromptConnection.allCases, id: \.self) { connection in
+                            Button(AgentsCopy.connection(connection).text) {
+                                Task { await model.copyLandingPrompt(row.id, connection: connection) }
+                            }
+                        }
+                    }
+                }
+                if row.canCopyMCPSettings {
+                    Button(model.copiedMCPSettings == row.id ? AgentsCopy.copied.text : AgentsCopy.copyMCPSettings.text) {
+                        Task { await model.copyMCPSettings(row.id) }
                     }
                 }
                 Button(AgentsCopy.remove.text) { model.askToRemove(row.id) }

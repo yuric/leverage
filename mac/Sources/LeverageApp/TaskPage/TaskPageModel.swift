@@ -50,6 +50,7 @@ final class TaskPageModel {
             guard !prefilling, draft != oldValue else { return }
             draftTouched = true
             sendKey = nil
+            sendRequest = nil
         }
     }
     private(set) var isBusy = false
@@ -66,8 +67,10 @@ final class TaskPageModel {
     @ObservationIgnored private var prefilling = false
     @ObservationIgnored private var draftTouched = false
     @ObservationIgnored private var sendKey: IdempotencyKey?
+    @ObservationIgnored private var sendRequest: CompleteContractRequest?
     @ObservationIgnored private var allowKey: IdempotencyKey?
     @ObservationIgnored private var cancelKey: IdempotencyKey?
+    @ObservationIgnored private var deleteContentKey: IdempotencyKey?
     @ObservationIgnored private var promoteKey: IdempotencyKey?
     @ObservationIgnored private var holdKey: IdempotencyKey?
     @ObservationIgnored private var resumeKey: IdempotencyKey?
@@ -94,7 +97,7 @@ final class TaskPageModel {
 
     // MARK: what the page shows
 
-    var title: String { page?.task.title ?? "" }
+    var title: String { isContentDeleted ? TaskPageCopy.deletedTask.text : (page?.task.title ?? "") }
     var goal: String { page?.task.goal ?? "" }
     var details: String? { nonEmpty(page?.task.details) }
     var workReference: String? { nonEmpty(page?.task.workReference) }
@@ -172,14 +175,90 @@ final class TaskPageModel {
             accounts: accountNames, ruleChecks: page.ruleChecks, clock: clock)
     }
 
-    var questions: [TaskQuestionRow] { [] }
-    var actions: [TaskActionRow] { [] }
-    var cancelExplanation: String { TaskPageCopy.cancelExplanation.text }
-    var canDeleteContent: Bool { false }
+    var questions: [TaskQuestionRow] {
+        let names = seatNames
+        return (page?.questions ?? []).map { question in
+            let answer = question.outcome == .answered ? nonEmpty(question.answer) : nil
+            return TaskQuestionRow(
+                id: question.id, question: question.text, askedBy: Self.actorName(.seat, question.askingSeatID, names: names)
+                    ?? TaskPageCopy.anAgent.text,
+                answer: answer,
+                answerBy: answer.flatMap { _ in Self.actorName(question.answeredByKind, question.answeredByID, names: names) })
+        }
+    }
+
+    var actions: [TaskActionRow] {
+        let names = seatNames
+        return (page?.actions ?? []).sorted { $0.position < $1.position }.map { action in
+            TaskActionRow(
+                id: action.id, kind: TaskPageCopy.actionKind(action.kind).text, description: action.description,
+                state: TaskPageCopy.actionState(action.state).text,
+                approvedBy: Self.actorName(action.approvedByKind, action.approvedByID, names: names))
+        }
+    }
+
+    private static func actorName(_ kind: ActorKind?, _ id: UUID?, names: [UUID: String]) -> String? {
+        switch kind {
+        case .owner: TaskPageCopy.you.text
+        case .seat: id.flatMap { names[$0] } ?? TaskPageCopy.anAgent.text
+        case .app: TaskPageCopy.leverage.text
+        case nil: nil
+        }
+    }
+
+    var cancelExplanation: String {
+        let explanation = TaskPageCopy.cancelExplanation.text
+        guard page?.anyActionStarted == true else { return explanation }
+        return explanation + "\n\n" + TaskPageCopy.cancelActionStarted.text
+    }
+
+    var isContentDeleted: Bool {
+        page?.events.contains { $0.type == .contentDeleted && $0.taskID == taskID } == true
+    }
+
+    var canDeleteContent: Bool {
+        guard let task = page?.task, !isBusy, !isContentDeleted else { return false }
+        return task.state == .done || task.state == .cancelled
+    }
+
     private(set) var isConfirmingDeleteContent = false
 
-    func askToDeleteContent() {}
-    func confirmDeleteContent() async {}
+    func askToDeleteContent() {
+        guard canDeleteContent else { return }
+        isConfirmingDeleteContent = true
+    }
+
+    func dismissDeleteContent() { isConfirmingDeleteContent = false }
+
+    func confirmDeleteContent() async {
+        dismissDeleteContent()
+        guard canDeleteContent else { return }
+        let key = deleteContentKey ?? IdempotencyKey()
+        deleteContentKey = key
+        let deleted = await run {
+            _ = try await self.api.deleteTaskContent(taskID: self.taskID, key: key).completedResult()
+        }
+        if deleted {
+            deleteContentKey = nil
+            page = nil
+            state = .loading
+            await load()
+        } else if !keyIsKept {
+            deleteContentKey = nil
+        }
+    }
+
+    var canChangeSettings: Bool { page != nil && !isBusy && !isContentDeleted }
+    private(set) var settings: TaskSettingsModel?
+
+    func beginChangingSettings() {
+        guard canChangeSettings, let task = page?.task else { return }
+        settings = TaskSettingsModel(
+            task: task, api: api,
+            didChange: { [weak self] in Task { await self?.load() } })
+    }
+
+    func endChangingSettings() { settings = nil }
 
     // MARK: what the owner can do
 
@@ -204,11 +283,10 @@ final class TaskPageModel {
     /// An idea moves to Backlog (HM-45).
     var canMoveToBacklog: Bool { page?.task.state == .imaginarium && !isBusy }
 
-    /// Pause this task: every state it can be paused from, while it is not already
-    /// paused by the owner (HE-24). Finishing is left out: no task is in it yet (HS-3).
+    /// Pause this task while it can still have work and is not paused by the owner.
     var canPause: Bool {
         guard let state = page?.task.state, !isBusy else { return false }
-        return [.backlog, .ready, .working, .inReview].contains(state) && !hasOwnerPause
+        return [.backlog, .ready, .working, .inReview, .finishing].contains(state) && !hasOwnerPause
     }
 
     /// Continue this task: only while the owner's own pause is open.
@@ -405,17 +483,22 @@ final class TaskPageModel {
 
     /// Send to agents: Complete contract with the form's values (MA-16).
     func sendToAgents() async {
-        guard canSend else { return }
+        guard canSend, let page else { return }
         let key = sendKey ?? IdempotencyKey()
         sendKey = key
-        let request = draft.completeRequest()
+        let request = sendRequest ?? page.retainingContractFields(in: draft.completeRequest())
+        sendRequest = request
         let sent = await run {
             try await self.api.completeContract(taskID: self.taskID, request, key: key).acceptedWhilePending()
         }
         if sent {
             sendKey = nil
+            sendRequest = nil
             draftTouched = false
             await load()
+        } else if !keyIsKept {
+            sendKey = nil
+            sendRequest = nil
         }
     }
 
@@ -469,4 +552,19 @@ final class TaskPageModel {
     /// Whether the last command that failed keeps its key for the next press
     /// (`IdempotencyKey.isKept(after:)`): not after a refusal.
     private var keyIsKept: Bool { lastError.map(IdempotencyKey.isKept(after:)) ?? true }
+}
+
+extension TaskPage {
+    var contractActions: [ActionInput] {
+        actions.sorted { $0.position < $1.position }.map { ActionInput(kind: $0.kind, description: $0.description) }
+    }
+
+    /// The details form edits the written contract and leaves these fields as
+    /// they were read. Complete and Edit accept a whole contract.
+    func retainingContractFields(in request: CompleteContractRequest) -> CompleteContractRequest {
+        CompleteContractRequest(
+            title: request.title, goal: request.goal, details: request.details, criteria: request.criteria,
+            actions: contractActions, minimumStrengthRank: task.minimumStrengthRank, budgetCap: task.budgetCap,
+            workReference: request.workReference)
+    }
 }

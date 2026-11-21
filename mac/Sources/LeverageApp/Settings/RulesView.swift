@@ -1,3 +1,4 @@
+import LeverageKit
 import SwiftUI
 
 /// Settings, Rules (RD-25, RM-2): every rule with its switch, and Add a rule.
@@ -12,7 +13,7 @@ struct RulesView: View {
         let model = box.model { RulesModel(api: context.owner) }
         RulesContent(
             model: model, change: { present(.change($0.row), model: model) },
-            add: { present(.add, model: model) }
+            add: { present(.add, model: model) }, projects: context.paneProjects
         )
         .task {
             model.attach(to: context.feed)
@@ -20,7 +21,9 @@ struct RulesView: View {
         }
         .onDisappear { model.detach() }
         .sheet(item: $presented) { presentation in
-            RuleEditorSheet(model: presentation.model, cancel: { presented = nil })
+            RuleEditorSheet(
+                model: presentation.model, cancel: { presented = nil },
+                projects: context.paneProjects, projectListFailure: context.projectListFailure)
         }
     }
 
@@ -46,6 +49,7 @@ struct RulesContent: View {
     let model: RulesModel
     let change: (RuleLine) -> Void
     let add: () -> Void
+    var projects: [Project] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -68,7 +72,7 @@ struct RulesContent: View {
                         RuleRowView(
                             line: line, isChanging: model.changing.contains(line.id),
                             turn: { on in Task { await model.setEnabled(line.id, to: on) } },
-                            change: { change(line) })
+                            change: { change(line) }, projects: projects)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

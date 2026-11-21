@@ -3,9 +3,7 @@ import LeverageKit
 import Observation
 
 /// The Change sheet of an agent (HM-51, HE-27): its name, model, effort, the
-/// login it runs on (for an agent the app runs) and on or off. Strength rank
-/// and role are not offered: the rank is not shown (MA-11), and a role cannot
-/// change while the agent holds work.
+/// login it runs on (for an agent the app runs), model strength, and on or off.
 ///
 /// Only the fields the owner changed are sent. A model or effort the owner
 /// emptied is sent as null, which is the tool's own default. A new login must
@@ -36,7 +34,7 @@ final class ChangeAgentModel {
             effort = ""
         }
     }
-    var strengthRank = 1
+    var strengthRank: Int
     var enabled: Bool
 
     private(set) var phase: Phase = .editing
@@ -45,6 +43,7 @@ final class ChangeAgentModel {
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let seat: Seat
+    @ObservationIgnored private let originalStrengthRank: Int
     @ObservationIgnored private let allLogins: [ConnectAgentModel.LoginChoice]
     @ObservationIgnored private let onChanged: @MainActor () async -> Void
     @ObservationIgnored private var sent: (request: ChangeSeatRequest, key: IdempotencyKey)?
@@ -62,6 +61,9 @@ final class ChangeAgentModel {
         effort = seat.effort ?? ""
         credentialID = seat.credentialID
         enabled = seat.enabled
+        let stored = seat.strengthRank.flatMap(AgentStrength.init(rawValue:)) ?? .standard
+        originalStrengthRank = stored.rawValue
+        strengthRank = stored.rawValue
     }
 
     var title: String { AgentsCopy.changeTitle.filled(["name": seat.name]) }
@@ -111,7 +113,7 @@ final class ChangeAgentModel {
     /// The change, or nil when nothing differs or the form is not valid: an
     /// empty name, or a login that is not one of the choices.
     var request: ChangeSeatRequest? {
-        guard !trimmedName.isEmpty else { return nil }
+        guard !trimmedName.isEmpty, AgentStrength(rawValue: strengthRank) != nil else { return nil }
         var login: Setting<UUID> = .keep
         if offersLogin, credentialID != seat.credentialID {
             guard let chosen = credentialID, loginChoices.contains(where: { $0.id == chosen }) else { return nil }
@@ -121,6 +123,7 @@ final class ChangeAgentModel {
             name: trimmedName != seat.name ? trimmedName : nil,
             model: Self.setting(modelName, was: seat.model),
             effort: offersEffort ? Self.setting(effort, was: seat.effort) : .keep,
+            strengthRank: strengthRank != originalStrengthRank ? .set(strengthRank) : .keep,
             credentialID: login,
             enabled: enabled != seat.enabled ? enabled : nil)
         return request == ChangeSeatRequest() ? nil : request

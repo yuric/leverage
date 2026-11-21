@@ -14,6 +14,7 @@ enum RulesCopy: OwnerFacingCopy {
 
     // Who a rule applies to, who checks it, and what a failure does.
     case scopeAllTasks, scopeCheckerDecides, scopeNamedProjects, scopeActionKinds
+    case scopeNamedProjectsList, scopeActionKindsList, scopeNoProjects, scopeUnlistedProject
     case checkerApp, checkerModel
     case onFailBlock, onFailWarn
 
@@ -51,8 +52,12 @@ enum RulesCopy: OwnerFacingCopy {
 
         case .scopeAllTasks: "Every task"
         case .scopeCheckerDecides: "The agent that checks decides"
-        case .scopeNamedProjects: "Named projects"
-        case .scopeActionKinds: "Tasks that end in some outward actions"
+        case .scopeNamedProjects: "Tasks in these projects"
+        case .scopeActionKinds: "Tasks that end in"
+        case .scopeNamedProjectsList: "Tasks in these projects ({name})"
+        case .scopeActionKindsList: "Tasks that end in {name}"
+        case .scopeNoProjects: "There are no projects to choose."
+        case .scopeUnlistedProject: "Project no longer listed"
         case .checkerApp: "leverage checks this itself"
         case .checkerModel: "An agent checks this"
         case .onFailBlock: "Stop the task"
@@ -110,5 +115,24 @@ enum RulesCopy: OwnerFacingCopy {
         case .namedProjects: .scopeNamedProjects
         case .actionKinds: .scopeActionKinds
         }
+    }
+
+    static func scopeDescription(_ scope: RuleScope, projects: [Project]) -> String {
+        switch scope.kind {
+        case .namedProjects:
+            let ids = Set(scope.projectIDs ?? [])
+            let names = projects.filter { ids.contains($0.id) && $0.contentDeletedAt == nil }.map(\.name)
+            if !names.isEmpty {
+                return scopeNamedProjectsList.filled(["name": names.joined(separator: ", ")])
+            }
+        case .actionKinds:
+            let names = (scope.actionKinds ?? []).map { TaskPageCopy.actionKind($0).text }
+            if !names.isEmpty {
+                return scopeActionKindsList.filled(["name": names.joined(separator: ", ")])
+            }
+        case .allTasks, .checkerDecides:
+            break
+        }
+        return scopeWords(scope.kind).text
     }
 }

@@ -46,6 +46,7 @@ struct ChangeAgentForm: View {
                 TextField(AgentsCopy.defaultModel.text, text: $model.modelName)
                     .textFieldStyle(.roundedBorder)
             }
+            AgentStrengthPicker(selection: $model.strengthRank)
             if model.offersEffort {
                 FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
                     TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
@@ -91,6 +92,22 @@ struct ChangeAgentForm: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(!model.canSave)
+        }
+    }
+}
+
+struct AgentStrengthPicker: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        FormField(label: AgentsCopy.strengthLabel.text) {
+            Picker(AgentsCopy.strengthLabel.text, selection: $selection) {
+                ForEach(AgentStrength.allCases, id: \.self) { strength in
+                    Text(strength.copy.text).tag(strength.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
     }
 }
