@@ -441,7 +441,7 @@ class DecisionScoreTests(unittest.TestCase):
         code, _, err = run(*budget)
         self.assertEqual(code, 3, err)
         self.assertIn("wording has not changed", err)
-        history[0] = dict(history[0], role_file_sha256="a" * 64)
+        history.append(dict(history[0], role_file_sha256="a" * 64))
         history.append(dict(prior, **wording, provider="claude"))
         history.pop(2)
         save_history()
