@@ -772,6 +772,10 @@ with a test that failed first:
 
 ### The Questions and approvals milestone
 
+- **Reviewer eligibility after a seat request.** Walk 132052406 exposed an
+  inbox event attributed to an unchanged seat request. Change seat now
+  triggers the re-evaluation when it writes `seat.changed`. The workspace
+  timer covers account resets (contract decision SM-42).
 - **Overturn after an action is done.** The former question 8 is settled by a
   durable `action.overturn_recorded` event, with the owner as actor and
   the action as subject. The task and action stay as recorded before.

@@ -69,6 +69,10 @@ module Leverage
 
       written = after_events(ctx)
       command = entry.command.to_s
+      # An unchanged seat request writes no event. The sweep handles
+      # eligibility changes that happened without a command, such as a reset.
+      return written if command == "change_seat" && ctx.events.none? { |event| event.type == "seat.changed" }
+
       written += reevaluate(ctx) if REEVALUATED_BY.include?(command) && !TASK_ROWS.include?(command)
       written
     end

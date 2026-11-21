@@ -179,3 +179,8 @@ once it makes its first release.
 ### Changed
 
 - Pull requests are welcome at any time; opening an issue first is optional.
+
+### Fixed
+
+- Saving an unchanged seat leaves reviewer eligibility updates to the
+  timer sweep.
