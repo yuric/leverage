@@ -91,7 +91,13 @@ public actor HelperSupervisor: HelperSupervising {
     public func state() async -> HelperState { current }
 
     public func send(_ message: LocalHelperMessage) async throws {
-        if case .forget(let id) = message { try removals.insert(id) }
+        if case .forget(let id) = message {
+            do {
+                try removals.insert(id)
+            } catch {
+                log.warning("could not record a pending credential removal")
+            }
+        }
         guard let child else { throw HelperSendError.notRunning }
         try await write(message, to: child)
     }

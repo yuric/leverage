@@ -50,7 +50,8 @@ final class HelperRuntime: Sendable {
     /// Does one request; nil when the helper is stopping.
     func handle(_ request: HelperRequest) async -> HelperRequestResult? {
         guard !Task.isCancelled else { return nil }
-        if let credentialID = request.credentialID, cleanup.requests.isForgotten(credentialID) {
+        if request.kind != .stopSeat, let credentialID = request.credentialID,
+           cleanup.requests.isForgotten(credentialID) {
             return await rejectForgotten(request)
         }
         let result: HelperRequestResult

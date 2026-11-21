@@ -35,7 +35,11 @@ struct CredentialCleanup: Sendable {
         do {
             let removals = PendingCredentialRemovals(supportFolder: folders.root.deletingLastPathComponent())
             let confirmed = try removals.contains(credentialID)
-            try AccountFolderRemoval.remove(credentialID, from: folders, confirmed: confirmed)
+            do {
+                try AccountFolderRemoval.remove(credentialID, from: folders, confirmed: confirmed)
+            } catch AccountFolderRemoval.Refusal.ownershipUnproven {
+                log.warning("kept the settings folder of credential \(credentialID.contractString) because ownership could not be verified")
+            }
             if confirmed && deletedToken { try removals.complete(credentialID) }
         } catch {
             log.warning("could not complete cleanup of credential \(credentialID.contractString)")

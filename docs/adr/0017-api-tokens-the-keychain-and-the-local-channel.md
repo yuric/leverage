@@ -22,10 +22,13 @@ The file-based Security API uses the user's default Keychain for insertion
 and search list for lookups. The standard setup uses the login Keychain.
 The helper uses the in-memory vault for development, Linux and smoke.
 
-Remove records the confirmed credential ID locally and sends a forget
-message. The helper cancels work for that ID, deletes the matching
-Keychain item and removes the credential's own settings folder. The
-helper clears the pending ID only after cleanup succeeds. See
+Remove tries to record the confirmed credential ID locally and sends a
+forget message to a running helper even if recording fails. The helper
+cancels work that uses the credential. A seat stop can still run. The
+helper deletes the matching Keychain item and removes the credential's
+own settings folder. It clears the pending ID once token deletion
+succeeds and folder cleanup either finishes or declines to remove a
+folder whose ownership it cannot verify. See
 [Deployment](../DEPLOY.md#where-things-live) for upgrade and interrupted
 cleanup behavior.
 

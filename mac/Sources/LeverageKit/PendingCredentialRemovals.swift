@@ -6,8 +6,9 @@ import Darwin
 import Glibc
 #endif
 
-/// The app records a confirmed Remove before sending forget. Only the helper
-/// clears the record, after it has finished both local deletions.
+/// The app tries to record a confirmed Remove before sending forget. The
+/// helper clears the record after deleting the token and removing or
+/// leaving an unverified settings folder.
 public struct PendingCredentialRemovals: Sendable {
     private let support: URL
     private let flags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC

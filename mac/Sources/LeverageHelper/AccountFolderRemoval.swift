@@ -10,44 +10,45 @@ import Glibc
 /// Removes one credential's direct child of the app's private accounts
 /// directory. Pin each directory before using its children.
 enum AccountFolderRemoval {
+    enum Refusal: Error {
+        case ownershipUnproven
+    }
+
     private static let flags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
 
     static func remove(_ id: UUID, from folders: AccountFolders, confirmed: Bool) throws {
-        let base = open(folders.root.deletingLastPathComponent().path, flags)
-        guard base >= 0 else {
-            if errno == ENOENT { return }
-            throw CocoaError(.fileReadUnknown)
-        }
+        guard let base = try openDirectory(folders.root.deletingLastPathComponent().path, from: AT_FDCWD)
+        else { return }
         defer { close(base) }
         let baseInfo = try metadata(base)
         guard baseInfo.st_uid == geteuid(), baseInfo.st_mode & 0o022 == 0 else {
-            throw CocoaError(.fileReadNoPermission)
+            throw Refusal.ownershipUnproven
         }
-        let root = openat(base, "accounts", flags)
-        guard root >= 0 else {
-            if errno == ENOENT { return }
-            throw CocoaError(.fileReadNoPermission)
-        }
+        guard let root = try openDirectory("accounts", from: base) else { return }
         defer { close(root) }
         let rootInfo = try metadata(root)
         guard rootInfo.st_uid == geteuid(), rootInfo.st_mode & 0o077 == 0 else {
-            throw CocoaError(.fileReadNoPermission)
+            throw Refusal.ownershipUnproven
         }
 
         let name = id.contractString
-        let account = openat(root, name, flags)
-        guard account >= 0 else {
-            if errno == ENOENT { return }
-            throw CocoaError(.fileReadNoPermission)
-        }
+        guard let account = try openDirectory(name, from: root) else { return }
         defer { close(account) }
         let info = try metadata(account)
         guard info.st_uid == geteuid(), info.st_dev == rootInfo.st_dev,
               try owned(account, info: info, confirmed: confirmed) else {
-            throw CocoaError(.fileWriteNoPermission)
+            throw Refusal.ownershipUnproven
         }
         try empty(account, device: info.st_dev)
         try unlinkDirectory(name, from: root, matching: info)
+    }
+
+    private static func openDirectory(_ name: String, from parent: Int32) throws -> Int32? {
+        let fd = openat(parent, name, flags)
+        if fd >= 0 { return fd }
+        if errno == ENOENT { return nil }
+        if errno == ELOOP || errno == ENOTDIR { throw Refusal.ownershipUnproven }
+        throw CocoaError(.fileReadUnknown)
     }
 
     private static func metadata(_ fd: Int32) throws -> stat {

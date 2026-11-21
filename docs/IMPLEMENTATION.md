@@ -841,7 +841,10 @@ with a test that failed first:
   at the end. Remove refuses live references. Reorder and Remove
   reassess credential holds and the associated Needs you item.
 - **CR-31.** The helper forgets removed credentials through standard
-  input. It clears the locally queued ID after cleanup succeeds.
+  input. A stop request for a removed seat remains eligible after forget.
+  The app sends forget to the running helper even if recording the
+  pending ID fails. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md)
+  records how the helper acknowledges cleanup.
 - **CR-33.** Codex counts its available rate-limit reset credits as
   full resets and groups credits with the same expiry.
 - **CR-38.** The row describes the configured handoff model. Model,

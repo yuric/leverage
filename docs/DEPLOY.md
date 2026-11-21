@@ -134,12 +134,16 @@ search list affects where the file-based Security API stores and finds
 the item. A rebuilt app may prompt for Keychain access. Tokens stay on
 this Mac. If an item has no saved provider, Remove and Add it again.
 
-Remove first deletes the server row and its readings. The app records
-the confirmed credential ID in its support folder and asks the helper
-to delete the Keychain item or the login's settings folder, including
-folders made by earlier versions. Shared Mac sign-ins are kept. Pending
-cleanup is sent again when the helper starts and cleared after the
-helper finishes it.
+Remove first deletes the server row and its readings. The app tries to
+record the confirmed credential ID in the support folder and sends the
+cleanup request to the running helper even if recording fails. The
+helper deletes the Keychain item and removes settings folders it can
+verify, including private folders made by earlier versions. A folder
+whose ownership leverage cannot verify is kept, as are shared Mac
+sign-ins. The app resends pending cleanup when the helper starts. The
+helper clears the pending ID after deleting any saved token and either
+removing the folder, finding it absent or keeping it because ownership
+could not be verified.
 Readings are kept with their credential. The sweep deletes finished
 and failed read requests after seven days.
 

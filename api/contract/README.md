@@ -721,9 +721,10 @@ in the completed outcome's result.
 - A reorder writes `credential.order_changed` for each added credential
   whose rank among added credentials changed, in the new order. Reorder
   and Remove can close credential holds, switch credentials, and resolve or open
-  Needs you items. Remove keeps unfinished `stop_seat` requests so the
-  helper can still stop the run. A limit item also resolves if its hold
-  has a reset time to wait for again (CR-28, CR-30, CR-32).
+  Needs you items. Remove keeps unfinished `stop_seat` requests. The
+  helper can finish a seat stop after forgetting its credential. A limit
+  item also resolves if its hold has a reset time to wait for again
+  (CR-28, CR-30, CR-32).
 - Reorder can resolve an item whose login is no longer a candidate.
   The hold keeps its original reason and subject.
 - Add and Rename trim surrounding whitespace and require a nonblank name

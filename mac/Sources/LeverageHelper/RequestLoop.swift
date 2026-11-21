@@ -134,7 +134,9 @@ final class RunningRequests: @unchecked Sendable {
                 await work()
                 finish(request.id)
             }
-            tasks[request.id] = Running(credentialID: request.credentialID, task: task)
+            // Stopping a run is seat work even when the request carries a credential ID.
+            let credentialID = request.kind == .stopSeat ? nil : request.credentialID
+            tasks[request.id] = Running(credentialID: credentialID, task: task)
         }
     }
 
