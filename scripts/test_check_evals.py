@@ -520,6 +520,13 @@ class ApprovalCheckTests(unittest.TestCase):
                 self.assertFails("cases:", "cases_sha256")
                 self.copy.write_case(path, case)
 
+    def test_an_approval_candidate_must_match_the_action_at_its_position(self):
+        path = self.copy.approval_cases()[0]
+        case = self.copy.case(path)
+        case["action"]["description"] = "A different outward action."
+        self.copy.write_case(path, case)
+        self.assertFails("cases:", case["id"], "does not match the contract action at its position")
+
     def test_an_approval_result_against_another_instruction_fails(self):
         path = self.copy.approval_result_path("claude")
         result = self.copy.case(path)
