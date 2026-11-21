@@ -151,6 +151,7 @@ public enum EventType: String, Codable, CaseIterable, Sendable {
     case actionWaived = "action.waived"
     case actionWithdrawn = "action.withdrawn"
     case actionRevoked = "action.revoked"
+    case actionOverturnRecorded = "action.overturn_recorded"
     case checkQueued = "check.queued"
     case checkStarted = "check.started"
     case checkFinished = "check.finished"
@@ -772,6 +773,8 @@ public enum RuleHook: String, Codable, CaseIterable, Sendable {
 public enum ContractLists {
     /// registry.json `lists.orchestrator_tested_providers`. The login providers whose tool's default model passed the eval suite (RV-5). It refuses nothing: the app says "Not tested for checking tasks." beside every other choice.
     public static let orchestratorTestedProviders: [Provider] = [.claude, .codex, .gemini]
+    /// registry.json `lists.important_event_types`. The event types shown by the Important filter in Activity.
+    public static let importantEventTypes: [EventType] = [.taskCreated, .taskClaimed, .taskSubmitted, .taskReassigned, .taskReturnedForRework, .taskDone, .taskCancelled, .reviewPassed, .reviewFailed, .actionApproved, .actionStopped, .actionStarted, .actionReportedDone, .actionMarkedDone, .actionWaived, .actionWithdrawn, .actionRevoked, .actionOverturnRecorded, .questionAnswered, .questionOverturned, .inboxOpened, .checkOverridden, .credentialLimitReached, .credentialSignedOut, .credentialSwitched, .projectCreated, .projectPaused, .projectResumed, .projectBudgetChanged, .ruleChanged, .ruleEnabled, .ruleDisabled, .ruleReverted, .ruleRemoved, .seatConnected, .seatRemoved, .workspaceSettingsChanged, .contentDeleted]
 }
 
 /// The methods the contract allows.
@@ -861,6 +864,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
     case changeBudget = "change_budget"
     case deleteProjectContent = "delete_project_content"
     case changeWorkspaceSettings = "change_workspace_settings"
+    case getWorkspaceSettings = "get_workspace_settings"
     case connectSeat = "connect_seat"
     case pauseSeat = "pause_seat"
     case resumeSeat = "resume_seat"
@@ -971,6 +975,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
         case .changeBudget: return (.post, "/v1/owner/projects/{id}/budget", .owner, .owner)
         case .deleteProjectContent: return (.post, "/v1/owner/projects/{id}/delete-content", .owner, .owner)
         case .changeWorkspaceSettings: return (.post, "/v1/owner/settings", .owner, .owner)
+        case .getWorkspaceSettings: return (.get, "/v1/owner/settings", .owner, .owner)
         case .connectSeat: return (.post, "/v1/owner/seats", .owner, .owner)
         case .pauseSeat: return (.post, "/v1/owner/seats/{id}/pause", .owner, .owner)
         case .resumeSeat: return (.post, "/v1/owner/seats/{id}/resume", .owner, .owner)
