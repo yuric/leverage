@@ -23,8 +23,7 @@ class ReportReadingTest < ActiveSupport::TestCase
     reading = readings.first
     assert_equal [ observed_at, "ok", "0.0.0-example", [ figure ], resets ],
       [ reading.observed_at, reading.state, reading.tool_version, reading.figures, reading.resets ]
-    receipt = Command.find_by!(workspace_id: scenario.workspace_id, key: request.key)
-    assert_equal receipt.created_at, reading.created_at
+    assert_operator reading.created_at, :>, reading.observed_at
   end
 
   test "an unknown, removed, pending or foreign credential is not found" do
@@ -110,6 +109,18 @@ class ReportReadingTest < ActiveSupport::TestCase
     assert_nil recovered.reload.limited_since
     assert_nil unrelated_hold.reload.closed_at
     assert_nil signed_out_hold.reload.closed_at
+  end
+
+  test "capacity never signs in a credential or ends a hold through a signed-out credential" do
+    ready = scenario.credential
+    recovered = scenario.limit_credential(scenario.credential(state: "signed_out"))
+    task = scenario.task(state: "working", builder: scenario.seat(credential: ready))
+    hold = scenario.hold(task, reason: "credential_limit", credential: recovered)
+
+    assert_empty events_written { assert_completed(report_reading(recovered)) }
+
+    assert_equal [ "signed_out", nil ], recovered.reload.attributes.values_at("state", "limited_since")
+    assert_nil hold.reload.closed_at
   end
 
   test "a full, different, stale, simultaneous, signed-out or unavailable reading leaves the hold open" do

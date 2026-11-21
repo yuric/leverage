@@ -8,9 +8,8 @@ module Leverage
   # the workspace lock like every other write.
   #
   # Milestone 4 (its plan WP7): the sweep also applies the job timers
-  # (Timers::JOB_TIMERS) to jobs no command has touched, and fires
-  # orchestrator_offline and reviewer_eligibility on every run through
-  # Timers.apply_workspace, at the run's own time.
+  # (Timers::JOB_TIMERS) to jobs no command has touched. It fires the
+  # workspace timers listed below through Timers.apply_workspace.
   #
   # A pass goes through every workspace. In each, every timer runs as its
   # own command through Transitions.apply, by the app, in bounded batches:
@@ -25,9 +24,9 @@ module Leverage
     PURGE_EVERY = 3600
     BATCH = 100
     LOG = "leverage.sweep".freeze
-    # The workspace timers of milestone 4, fired after seat_run_placement:
+    # Workspace timers fired after seat_run_placement:
     # orchestrator_offline then sees the checks this run's timers erred.
-    WORKSPACE_TIMERS = %w[orchestrator_offline reviewer_eligibility].freeze
+    WORKSPACE_TIMERS = %w[orchestrator_offline reviewer_eligibility usage_read_due].freeze
 
     module_function
 
@@ -48,8 +47,8 @@ module Leverage
     # milestone 3 plan rule 8, HE-23); the job timers due before any lease
     # of their task; the two leases, whose end closes a credential hold due
     # later; then the job timers the leases left (Timers.due_jobs). Then it
-    # fires seat_run_placement, which runs on every sweep (HD-4), and the two
-    # workspace timers of milestone 4, purges the old command keys when
+    # fires seat_run_placement, which runs on every sweep (HD-4), and the
+    # workspace timers listed above, purges the old command keys when
     # purge is true, and records the run. Returns the SweepRun.
     def sweep_workspace(workspace_id, purge: false, batch: BATCH)
       touched = []

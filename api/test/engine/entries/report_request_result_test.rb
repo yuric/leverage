@@ -259,6 +259,19 @@ class ReportRequestResultTest < ActiveSupport::TestCase
     assert_refused("invalid_state", report(request, result_body(checks: [])))
   end
 
+  test "a request with no result must have the failed state, credential and finish time recorded by Remove" do
+    credential = @scenario.credential
+    no_credential = queue_request("install_tool", state: "failed")
+    no_credential.update!(finished_at: @scenario.database_now)
+    no_finish_time = queue_request("read_usage", credential: credential, state: "failed")
+    finished = queue_request("read_usage", credential: credential, state: "finished")
+    finished.update!(finished_at: @scenario.database_now)
+
+    [ no_credential, no_finish_time, finished ].each do |request|
+      assert_refused("invalid_state", report(request, result_body(checks: [])))
+    end
+  end
+
   test "a request that already reported a failure is invalid_state" do
     credential = @scenario.credential
     request = queue_request("read_usage", credential: credential, state: "picked_up",
@@ -299,6 +312,15 @@ class ReportRequestResultTest < ActiveSupport::TestCase
         assert_equal before, credential.reload.attributes
       end
     end
+  end
+
+  test "a token Verify that reports a failed login check does not sign out the token" do
+    credential = @scenario.token_credential
+    request = queue_request("verify", credential: credential, state: "picked_up")
+    result = result_body(outcome: "failed", checks: [ check("signed_in", passed: false, failure: "not_signed_in") ])
+
+    assert_empty events_written { assert_completed(report(request, result)) }
+    assert_equal "active", credential.reload.state
   end
 
   test "a request of another workspace is not found" do
