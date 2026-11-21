@@ -15,7 +15,7 @@ struct HeartbeatPumpTests {
             if tick == 1 { _ = await caller.call(claim, arguments: [:]) }
             if tick == 13 { _ = await caller.call(next, arguments: ["wait": .number(0)]) }
         }
-        let pump = HeartbeatPump(caller: caller, sleep: schedule.sleep)
+        let pump = HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now)
         await pump.run()
 
         let requests = await fake.requests
@@ -36,7 +36,7 @@ struct HeartbeatPumpTests {
         let review = try #require(ToolCatalog().tool(named: "claim_next_review"))
         _ = await caller.call(review, arguments: [:])
         let schedule = ManualSchedule(clock: clock, ticks: 3)
-        await HeartbeatPump(caller: caller, sleep: schedule.sleep).run()
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now).run()
         let requests = await fake.requests
         #expect(requests.map(\.operation) == [.claimNextReview, .heartbeatReview])
         #expect(requests.last?.path == ["id": reviewID])
@@ -52,7 +52,7 @@ struct HeartbeatPumpTests {
         let claim = try #require(ToolCatalog().tool(named: "claim_next_task"))
         _ = await caller.call(claim, arguments: [:])
         let schedule = ManualSchedule(clock: clock, ticks: 3)
-        await HeartbeatPump(caller: caller, sleep: schedule.sleep).run()
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now).run()
 
         #expect(await fake.requests.map(\.operation) ==
                 [.claimNextTask, .heartbeatTask, .heartbeatTask, .heartbeatTask])
@@ -67,7 +67,7 @@ struct HeartbeatPumpTests {
         let next = try #require(ToolCatalog().tool(named: "get_next"))
         _ = await caller.call(next, arguments: ["wait": .number(0)])
         let schedule = ManualSchedule(clock: clock, ticks: 2)
-        await HeartbeatPump(caller: caller, sleep: schedule.sleep).run()
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now).run()
         #expect(await fake.requests.map(\.operation) == [.getNext])
     }
 }
