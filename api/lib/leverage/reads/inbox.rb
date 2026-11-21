@@ -47,7 +47,7 @@ module Leverage
         stops = action_stop_details(workspace_id, items)
         items.map do |item, seq|
           shape = Shapes.inbox_item(item, seq)
-          detail = access[item.hold_id] || stops[item.facts["action_id"]]
+          detail = access[item.hold_id] || stops[item.hold_id]
           shape[:detail] = detail if detail
           if item.kind == COUNTED
             shape[:facts] = item.facts.merge("waiting_checks" => count)
@@ -64,10 +64,11 @@ module Leverage
       end
 
       def action_stop_details(workspace_id, items)
-        ids = items.filter_map { |item, _seq| item.facts["action_id"] if item.kind == "stopped_action" }
-        Action.where(workspace_id: workspace_id, id: ids, state: "stopped")
+        ids = items.filter_map { |item, _seq| item.hold_id if item.kind == "stopped_action" }
+        Hold.where(workspace_id: workspace_id, id: ids, reason: "action_stopped", closed_at: nil)
+          .joins("INNER JOIN actions ON actions.id = holds.action_id AND actions.workspace_id = holds.workspace_id")
           .joins("INNER JOIN jobs ON jobs.id = actions.approval_job_id AND jobs.workspace_id = actions.workspace_id")
-          .where(jobs: { kind: "approval", state: "finished" }).pluck("actions.id", "jobs.result")
+          .where(jobs: { kind: "approval", state: "finished" }).pluck("holds.id", "jobs.result")
           .filter_map { |id, result| [ id, result["reason"] ] if result&.fetch("decision", nil) == "stop" }.to_h
       end
 
