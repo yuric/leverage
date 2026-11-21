@@ -299,6 +299,93 @@ struct HandoffModelTests {
         #expect(ordersSent(by: owner).isEmpty)
     }
 
+    @Test("a reload updates the drag hint when positions change and clears it if its target disappears")
+    func reloadUpdatesDropPreview() async {
+        let owner = owner(three())
+        let model = makeModel(owner)
+        await model.load()
+        let first = Fixtures.loginID
+        let target = thirdID
+        model.previewDrop(of: first, over: target)
+        #expect(model.dropPreview?.hint == "Drop to make Claude, Personal number 3.")
+        owner.script {
+            $0.credentials = {
+                CredentialsList(credentials: [
+                    Fixtures.account(Fixtures.secondLoginID, name: "Team", provider: .codex, position: 1),
+                    Fixtures.account(target, name: "Work", provider: .grok, position: 2),
+                    Fixtures.account(first, name: "Personal", position: 3),
+                ], asOfSeq: 12)
+            }
+        }
+        await model.load()
+        #expect(model.dropPreview?.targetID == target)
+        #expect(model.dropPreview?.hint == "Drop to make Claude, Personal number 2.")
+        #expect(model.dropPreview?.above == true)
+        owner.script {
+            $0.credentials = {
+                CredentialsList(credentials: [Fixtures.account(first, name: "Personal", position: 1)], asOfSeq: 13)
+            }
+        }
+        await model.load()
+        #expect(model.dropPreview == nil)
+    }
+
+    @Test("a read during a move leaves the optimistic order in place until the command answers")
+    func defersReadDuringMove() async {
+        let initial = three()
+        let owner = owner(initial)
+        let model = makeModel(owner)
+        await model.load()
+        let first = Fixtures.loginID
+        let second = Fixtures.secondLoginID
+        let last = thirdID
+        let saved = Locked(false)
+        owner.script {
+            $0.credentials = {
+                if saved.value {
+                    return CredentialsList(credentials: [
+                        Fixtures.account(second, name: "Team", provider: .codex, position: 1),
+                        Fixtures.account(first, name: "Personal", position: 2),
+                        Fixtures.account(last, name: "Updated", provider: .grok, position: 3),
+                    ], asOfSeq: 12)
+                }
+                return CredentialsList(credentials: initial, asOfSeq: 11)
+            }
+            $0.reorderCredentials = { _, key in
+                await model.load()
+                await MainActor.run {
+                    #expect(model.rows.map(\.id) == [second, first, last])
+                    #expect(model.rows.map(\.name).last == "Grok, Work")
+                }
+                saved.update { $0 = true }
+                return .completed(nil, key: key.value, command: .reorderCredentials)
+            }
+        }
+        await model.moveDown(first)
+        #expect(model.rows.map(\.name) == ["Codex, Team", "Claude, Personal", "Grok, Updated"])
+        #expect(owner.calls.filter { $0.operation == .listCredentials }.count == 2)
+        // Release the scripted closure's reference to the model.
+        saveReorders(owner)
+    }
+
+    @Test("only an unanswered reorder of the same list keeps its command key")
+    func retryKey() async {
+        let owner = owner(three())
+        let model = makeModel(owner)
+        await model.load()
+        owner.script { $0.reorderCredentials = { _, _ in throw URLError(.timedOut) } }
+
+        let first = Fixtures.loginID
+        await model.moveDown(first)
+        await model.moveDown(first)
+        await model.moveUp(thirdID)
+        let calls = owner.calls.filter { $0.operation == .reorderCredentials }
+        #expect(calls.count == 3)
+        #expect(calls.first?.key != nil)
+        #expect(calls.map(\.key).prefix(2).allSatisfy { $0 == calls.first?.key })
+        #expect(calls.last?.key != calls.first?.key)
+    }
+
     @Test("an optimistic reorder keeps each row's state and a 422 restores the old order")
     func rollsBackInvalidOrder() async {
         let first = Fixtures.loginID

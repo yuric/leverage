@@ -267,7 +267,7 @@ struct CopyTests {
 
     // MARK: the Needs you sentences (HM-24, HM-28, HM-29)
 
-    @Test("the Needs you sentences are the ones HM-24 names")
+    @Test("the Needs you sentences follow HM-24 and CR-14")
     func needsYouSentences() {
         #expect(NeedsYouCopy.empty.text == "Nothing needs you right now.")
         #expect(NeedsYouCopy.signedOutHeading.text == "{account} is signed out")
@@ -279,7 +279,7 @@ struct CopyTests {
         #expect(NeedsYouCopy.limitHeading.text == "{account} is at its limit")
         #expect(
             NeedsYouCopy.limitBody.text
-                == "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues. If the agent's time on the task runs out first, the task goes back to waiting for any agent.")
+                == "{task} is waiting. {provider} did not say when {account} is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials.")
         #expect(NeedsYouCopy.sentBackHeading.text == "{task} was sent back {count} times")
         #expect(NeedsYouCopy.letItTryOnceMore.text == "Let it try once more")
         #expect(NeedsYouCopy.changeTask.text == "Change the task")
