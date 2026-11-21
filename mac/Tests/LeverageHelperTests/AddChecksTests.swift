@@ -5,6 +5,10 @@ import Testing
 
 @testable import LeverageHelper
 
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 /// The three login checks of Add credential and Verify (L602-L606, IN-23,
 /// PV-3, PV-4, CL-19), per provider, against the stand-ins.
 @Suite("Add checks", .timeLimit(.minutes(Patience.minutes(1))))
@@ -235,5 +239,58 @@ struct AddChecksTests {
         #expect(result.outcome == .failed)
         #expect(result.checks.last == HelperCheckResult(check: .signedIn, passed: false, failure: .notSignedIn))
         #expect(rig.folders.existing(for: credential) == nil)
+    }
+}
+
+extension AddChecksTests {
+    @Test("Add and Verify dispatch a token to its one check and never make a folder or start a provider tool")
+    func tokenAddAndVerify() async throws {
+        let rig = try HelperRig()
+        let pending = PendingTokens()
+        let vault = MemoryTokenVault()
+        let credential = UUID()
+        let token = "LVRG-TOKEN-000000000703"
+        await pending.insert(token, credentialID: credential)
+        let stub = StubURLProtocol.session(host: "generativelanguage.googleapis.com", answer: .init(status: 200, json: "{}"))
+        defer { stub.invalidateAndCancel() }
+        let transport = try ProviderHTTP(
+            executableURL: URL(fileURLWithPath: "/test/LeverageHelper"), environment: [:],
+            protocolClasses: [StubURLProtocol.self])
+        let checks = AddChecks(
+            api: rig.api, settings: rig.settings, timings: fastTimings, prober: FixedPrompt(answer: false), log: quietLog,
+            tokens: TokenChecks(pending: pending, vault: vault, http: transport, timeout: Patience.scaled(.seconds(30))))
+        let params = HelperRequestParams(provider: .geminiApi, credentialKind: .apiToken)
+
+        let added = await checks.add(helperRequest(.runAddChecks, credential: credential, params: params))
+        let verified = await checks.verify(helperRequest(.verify, credential: credential, params: params))
+
+        let passed = [HelperCheckResult(check: .tokenWorks, passed: true)]
+        #expect(added.checks == passed && verified.checks == passed)
+        #expect(added.outcome == .finished && verified.outcome == .finished)
+        #expect(rig.folders.existing(for: credential) == nil)
+        #expect(try rig.tools.calls().isEmpty)
+        #expect(StubURLProtocol.requests(host: "generativelanguage.googleapis.com").count == 2)
+    }
+
+    @Test("account facts are asked for after the login checks pass")
+    func factsFollowLoginChecks() async throws {
+        let rig = try HelperRig()
+        let credential = UUID()
+        let folder = try rig.folders.createFresh(for: credential)
+        try rig.tools.signIn("claude", accountFolder: folder)
+        let request = verifyRequest(.claude, credential: credential)
+        let sawPassedChecks = Locked(false)
+        let checks = AddChecks(api: rig.api, settings: rig.settings, timings: fastTimings, prober: FixedPrompt(answer: true),
+                               log: quietLog, facts: AccountFacts(read: { account in
+            sawPassedChecks.value = account.accountFolder == folder
+                && rig.progress(of: request.id).filter { $0.state == .passed }.map(\.check)
+                == [.toolInstalled, .signedIn, .testPrompt]
+            return .init(plan: "stand-in-plan")
+        }))
+
+        let result = await checks.verify(request)
+        #expect(allPassed(result))
+        #expect(sawPassedChecks.value)
+        #expect(result.plan == "stand-in-plan")
     }
 }

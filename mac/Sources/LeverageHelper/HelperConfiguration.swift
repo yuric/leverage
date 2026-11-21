@@ -31,6 +31,7 @@ struct HelperConfiguration: Sendable, CustomStringConvertible, CustomDebugString
 
     let settings: HelperSettings
     let helperToken: String
+    let readTimeout: Duration = .seconds(15)
 
     /// `executablePath` is the helper's own program; the runner is looked
     /// for beside it unless `LEVERAGE_RUNNER_PATH` names it.
@@ -92,6 +93,8 @@ struct HelperTimings: Sendable {
     var logLimitBytes: Int = 5 << 20
     /// How often a run's log size is looked at.
     var logCheckEvery: Duration = .seconds(60)
+
+    var readLimit: Duration = .seconds(15)
 
     static let standard = HelperTimings()
 }

@@ -316,16 +316,22 @@ struct RequestLoopTests {
 
     // MARK: The helper's own dispatch
 
-    @Test("the helper answers the kind this milestone does not serve, read_usage, with a failed result")
-    func unservedKinds() async throws {
+    @Test("the helper dispatches read_usage and reports an unavailable reading for a login with no reader")
+    func dispatchesUsage() async throws {
         let rig = try HelperRig()
+        rig.api.script {
+            $0.reportReading = { _, _, key in
+                .completed(.object([:]), key: key.value, command: .reportReading)
+            }
+        }
         let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
 
-        // open_sign_in is served from milestone 3 (HE-36); usage readers are
-        // milestone 6's.
-        let result = await runtime.handle(helperRequest(.readUsage, credential: UUID()))
-        #expect(result?.outcome == .failed)
-        #expect(rig.api.calls.isEmpty)
+        let result = await runtime.handle(helperRequest(
+            .readUsage, credential: UUID(), params: .init(provider: .gemini, credentialKind: .login)))
+
+        #expect(result?.checks == [HelperCheckResult(check: .readingTaken, passed: true)])
+        #expect(rig.calls(.reportReading).count == 1)
+        #expect(try rig.tools.calls().isEmpty)
     }
 
     @Test("the helper sends each kind to the part that does it")

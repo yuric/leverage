@@ -36,6 +36,9 @@ struct AddChecks: Sendable {
     let timings: HelperTimings
     let prober: any TestPrompting
     let log: Log
+    var cleanup: CredentialCleanup? = nil
+    var tokens: TokenChecks? = nil
+    var facts = AccountFacts()
 
     var locator: ToolLocator { ToolLocator(settings: settings, timings: timings) }
     var folders: AccountFolders { AccountFolders(supportFolder: settings.supportFolder) }

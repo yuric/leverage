@@ -19,11 +19,15 @@ final class HelperRuntime: Sendable {
     let checks: AddChecks
     let signInAgain: SignInAgain
     let installer: ToolInstaller
+    let cleanup: CredentialCleanup
     private let loopTask = LoopTask()
 
     init(
         api: any HelperAPI, settings: HelperSettings, timings: HelperTimings, log: Log,
-        prober: (any TestPrompting)? = nil, fetch: ToolInstaller.Fetch? = nil
+        prober: (any TestPrompting)? = nil, fetch: ToolInstaller.Fetch? = nil,
+        pending: PendingTokens = PendingTokens(), vault: any TokenVault = MemoryTokenVault(),
+        http: ProviderHTTP = ProviderHTTP(), usageReaders: UsageReaders.Lookup = UsageReaders.reader(for:),
+        testedVersions: @escaping @Sendable (Provider) -> [String] = { $0.testedToolVersions }
     ) {
         self.api = api
         self.settings = settings
@@ -33,6 +37,9 @@ final class HelperRuntime: Sendable {
         let prober = prober ?? RunnerProbe(timings: timings)
         checks = AddChecks(api: api, settings: settings, timings: timings, prober: prober, log: log)
         signInAgain = SignInAgain(api: api, settings: settings, timings: timings, prober: prober, log: log)
+        cleanup = CredentialCleanup(
+            folders: AccountFolders(supportFolder: settings.supportFolder), pending: pending, vault: vault,
+            requests: RunningRequests(), log: log)
         installer = ToolInstaller(settings: settings, timings: timings, fetch: fetch)
     }
 
