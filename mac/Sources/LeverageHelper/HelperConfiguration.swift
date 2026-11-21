@@ -31,7 +31,8 @@ struct HelperConfiguration: Sendable, CustomStringConvertible, CustomDebugString
 
     let settings: HelperSettings
     let helperToken: String
-    let readTimeout: Duration = .seconds(15)
+    let readTimeout: Duration
+    let providerHTTP: ProviderHTTP
 
     /// `executablePath` is the helper's own program; the runner is looked
     /// for beside it unless `LEVERAGE_RUNNER_PATH` names it.
@@ -40,6 +41,9 @@ struct HelperConfiguration: Sendable, CustomStringConvertible, CustomDebugString
             throw Failure.missingHelperToken
         }
         helperToken = token
+        providerHTTP = try ProviderHTTP(executableURL: URL(fileURLWithPath: executablePath), environment: environment)
+        let configuredLimit = environment[EnvironmentKeys.readTimeoutSeconds].flatMap(Int.init)
+        readTimeout = .seconds(configuredLimit.flatMap { (1...15).contains($0) ? $0 : nil } ?? 15)
 
         func value(_ name: String) -> String? {
             environment[name].flatMap { $0.isEmpty ? nil : $0 }
@@ -52,6 +56,7 @@ struct HelperConfiguration: Sendable, CustomStringConvertible, CustomDebugString
                 .appendingPathComponent("LeverageRunner").path
         var own = environment
         own[EnvironmentKeys.helperToken] = nil
+        own[EnvironmentKeys.providerAPIBase] = nil
         settings = HelperSettings(
             apiBaseURL: Configuration(environment: environment).apiBaseURL,
             supportFolder: URL(fileURLWithPath: support, isDirectory: true),
@@ -103,7 +108,7 @@ struct HelperTimings: Sendable {
 enum HelperExitCode {
     /// Stopped by a signal, or because the app is gone.
     static let stopped: Int32 = 0
-    /// The configuration was not usable (no helper token).
+    /// The configuration was not usable.
     static let configuration: Int32 = 2
     /// The helper's token was ended (`401`); the app issues another (PK-4).
     static let unauthorized: Int32 = 3

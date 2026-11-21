@@ -85,7 +85,7 @@ struct UsageReadTests {
         let started = Locked(false)
         let read = UsageRead(
             api: rig.api, settings: rig.settings, timings: fastTimings, http: ProviderHTTP(), vault: MemoryTokenVault(),
-            log: quietLog, readers: { _ in ProbeReader(started: started) }, testedVersions: { _ in ["0.0.1"] })
+            log: quietLog, readers: { _ in ProbeReader(started: started) }, testedVersions: { _ in ["9876.5432.1098"] })
 
         _ = await read.run(loginRequest(UUID()))
         #expect(readings.value.first?.state == .unavailable)
@@ -105,7 +105,7 @@ struct UsageReadTests {
         let version = try #require(await ToolLocator(settings: rig.settings, timings: fastTimings).locate(entry)).version
         var timings = fastTimings
         timings.readLimit = .seconds(2)
-        let child = Locked<RunningSubprocess?>(nil)
+        let child = Locked<ReadProcess?>(nil)
         let read = UsageRead(
             api: rig.api, settings: rig.settings, timings: timings, http: ProviderHTTP(), vault: MemoryTokenVault(),
             log: quietLog, readers: { _ in HungUsageReader(child: child) }, testedVersions: { _ in [version] })
@@ -113,9 +113,10 @@ struct UsageReadTests {
         let result = await read.run(loginRequest(credential))
         #expect(readings.value.first?.state == .unavailable)
         #expect(result.checks == [HelperCheckResult(check: .readingTaken, passed: false, failure: .timedOut)])
-        let process = try #require(child.value)
-        #expect(!isAlive(process.processID))
-        #expect((await process.wait()).endedBy == .stop)
+        let started = try #require(child.value)
+        #expect(!isAlive(started.process.processID))
+        #expect(await eventually(within: 5) { !isAlive(started.descendant) })
+        #expect((await started.process.wait()).endedBy == .stop)
     }
 
     @Test("an unanswered token request reports unavailable and a timed out result")
@@ -163,13 +164,33 @@ func loginRequest(_ credential: UUID, provider: Provider = .claude, kind: Helper
     helperRequest(kind, credential: credential, params: .init(provider: provider, credentialKind: .login))
 }
 
+struct ReadProcess: Sendable {
+    let process: RunningSubprocess
+    let descendant: Int32
+}
+
 struct HungUsageReader: UsageReader {
-    let child: Locked<RunningSubprocess?>
+    let child: Locked<ReadProcess?>
 
     func read(_ account: ReaderAccount) async throws -> UsageReading {
-        let process = try startSleeper()
-        child.value = process
-        return await withTaskCancellationHandler {
+        // The descendant also exits if the test process is lost.
+        let script = """
+            (while kill -0 "$1" 2>/dev/null; do /bin/sleep 0.1; done) &
+            child=$!
+            trap 'wait "$child"; exit 0' TERM
+            printf '%s\\n' "$child"
+            wait "$child"
+            """
+        let process = try Subprocess.startSession(.init(
+            executable: "/bin/sh", arguments: ["-c", script, "sh", String(ProcessInfo.processInfo.processIdentifier)],
+            environment: [:], gracePeriod: .seconds(1)))
+        return try await withTaskCancellationHandler {
+            guard let line = await process.readLine(), let pid = Int32(String(decoding: line, as: UTF8.self)), pid > 1 else {
+                process.stop()
+                _ = await process.wait()
+                throw CocoaError(.fileReadUnknown)
+            }
+            child.value = ReadProcess(process: process, descendant: pid)
             _ = await process.wait()
             return UsageReading(state: .unavailable)
         } onCancel: {

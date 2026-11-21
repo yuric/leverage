@@ -38,7 +38,7 @@ struct CredentialCleanupTests {
         let rig = try HelperRig()
         _ = UsageReadTests.recordReadings(rig)
         let credential = UUID()
-        let child = Locked<RunningSubprocess?>(nil)
+        let child = Locked<ReadProcess?>(nil)
         let entry = try #require(ProviderCatalog.entry(for: "claude"))
         let version = try #require(await ToolLocator(settings: rig.settings, timings: fastTimings).locate(entry)).version
         var timings = fastTimings
@@ -57,15 +57,29 @@ struct CredentialCleanupTests {
             child.value != nil || !rig.calls(.reportRequestResult).isEmpty
         }
         try #require(settled)
-        let process = try #require(child.value)
-        defer { process.stop() }
+        let started = try #require(child.value)
+        defer { started.process.stop() }
         await runtime.cleanup.forget(credential)
-        #expect(!isAlive(process.processID))
+        #expect(!isAlive(started.process.processID))
+        #expect(await eventually(within: 5) { !isAlive(started.descendant) })
         #expect(rig.calls(.reportRequestResult).isEmpty)
+
         let toolCalls = try rig.tools.calls().count
-        for (kind, check) in [(HelperRequestKind.verify, HelperCheck.signedIn), (.openSignIn, .signedIn),
-                              (.readUsage, .readingTaken)] {
-            let result = await runtime.handle(loginRequest(credential, kind: kind))
+        let verify = loginRequest(credential, kind: .verify)
+        let signIn = loginRequest(credential, kind: .openSignIn)
+        let read = loginRequest(credential)
+        let later = RequestLoopTests.Queue([.success(verify), .success(signIn), .success(read)])
+        let reports = Locked<[UUID: HelperRequestResult]>([:])
+        rig.api.script {
+            $0.next = { _ in try await later.next() }
+            $0.reportRequestResult = { id, result, key in
+                reports.update { $0[id] = result }
+                return .completed(.object([:]), key: key.value, command: .reportRequestResult)
+            }
+        }
+        #expect(await eventually { reports.value.count == 3 })
+        for (request, check) in [(verify, HelperCheck.signedIn), (signIn, .signedIn), (read, .readingTaken)] {
+            let result = reports.value[request.id]
             #expect(result?.checks == [HelperCheckResult(check: check, passed: false, failure: .notSignedIn)])
         }
         #expect(try rig.tools.calls().count == toolCalls)

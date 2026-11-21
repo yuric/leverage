@@ -31,13 +31,15 @@ struct TokenVaultsTests {
         #endif
     }
 
-    @Test("the app-bundle guard identifies an ancestor of the executable")
+    @Test("the app-bundle guard identifies the bundle's executable directory")
     func bundleGuard() {
         #expect(TokenVaults.isBundled(executableURL: bundleExecutable))
         let executableNamedLikeABundle = URL(fileURLWithPath: "/Example/Leverage.app")
         #expect(!TokenVaults.isBundled(executableURL: executableNamedLikeABundle))
         let nonBundle = URL(fileURLWithPath: "/Example/Leverage.app-copy/Contents/MacOS/LeverageHelper")
         #expect(!TokenVaults.isBundled(executableURL: nonBundle))
+        let testRunner = URL(fileURLWithPath: "/Example/Xcode.app/Contents/Developer/bin/swiftpm-testing-helper")
+        #expect(!TokenVaults.isBundled(executableURL: testRunner))
     }
 
     @Test("memory vault stores, replaces and deletes by credential ID")

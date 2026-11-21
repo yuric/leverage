@@ -9,7 +9,13 @@ import Testing
 struct LocalChannelTests {
     @Test func tokenAndForgetSurviveFramingAndEOF() async throws {
         let rig = try HelperRig()
-        let pending = PendingTokens()
+        let clock = Locked(ContinuousClock.now)
+        let pending = PendingTokens(now: { clock.value }, sleep: { deadline in
+            // Expire an absent take immediately without expiring a newly
+            // delivered token during this test.
+            if deadline - clock.value <= .seconds(5) { clock.value = deadline }
+            else { try await Task.sleep(for: Patience.scaled(.seconds(60))) }
+        })
         let vault = MemoryTokenVault()
         let log = CapturedLog()
         let runtime = HelperRuntime(
@@ -47,8 +53,9 @@ struct LocalChannelTests {
         try later.fileHandleForWriting.close()
         await LocalChannel(cleanup: runtime.cleanup, log: log.log).run(input: later.fileHandleForReading)
 
-        let observed = Task { await pending.take(credentialID: kept) }
-        let delivered = await observed.value == token
+        let delivered = await pending.take(credentialID: kept) == token
+        let ignored = await pending.take(credentialID: forgotten) == nil
+        #expect(ignored)
         #expect(delivered)
         let erased = try vault.read(credentialID: forgotten) == nil
         #expect(erased)

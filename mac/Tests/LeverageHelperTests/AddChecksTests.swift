@@ -43,8 +43,6 @@ struct AddChecksTests {
 
         #expect(allPassed(result))
         #expect(result.toolVersion?.isEmpty == false)
-        // IN-25: the helper reports no plan and no email in this milestone.
-        #expect(result.plan == nil && result.accountEmail == nil)
 
         let states = rig.progress(of: request.id).filter { $0.check == .signedIn }.map(\.state)
         #expect(states.contains(.waitingForSignIn))
@@ -170,7 +168,7 @@ struct AddChecksTests {
 
     // MARK: What leaves the helper
 
-    @Test("no leverage token reaches a tool, and nothing a status prints reaches the server")
+    @Test("no leverage token reaches a tool, and check progress does not carry account facts or raw status")
     func nothingSecretLeaves() async throws {
         let rig = try HelperRig()
 

@@ -22,19 +22,28 @@ struct RequestLoop: Sendable {
     let timings: HelperTimings
     let log: Log
     let handle: Handle
+    let running: RunningRequests
 
-    init(api: any HelperAPI, timings: HelperTimings, log: Log, handle: @escaping Handle) {
+    init(
+        api: any HelperAPI, timings: HelperTimings, log: Log, running: RunningRequests = RunningRequests(),
+        handle: @escaping Handle
+    ) {
         self.api = api
         self.timings = timings
         self.log = log
         self.handle = handle
+        self.running = running
     }
 
     /// Runs until `401` or until the calling task is cancelled; the
     /// requests still running are cancelled then too.
     func run() async -> LoopEnd {
-        let running = RunningRequests()
-        defer { running.cancelAll() }
+        let end = await poll()
+        await running.cancelAll()
+        return end
+    }
+
+    private func poll() async -> LoopEnd {
         while !Task.isCancelled {
             let next: HelperNext
             do {
@@ -50,7 +59,8 @@ struct RequestLoop: Sendable {
                 continue
             }
             guard let request = next.request else { continue }
-            running.start(request.id) {
+            running.start(request) {
+                guard !Task.isCancelled else { return }
                 log.info("doing \(request.kind.rawValue) request \(request.id.contractString)")
                 guard let result = await handle(request), !Task.isCancelled else { return }
                 await report(result, of: request)
@@ -108,16 +118,23 @@ struct RequestLoop: Sendable {
 /// The requests being done, by id, so a request handed out again while it
 /// runs is not done twice.
 final class RunningRequests: @unchecked Sendable {
-    private let lock = NSLock()
-    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private struct Running {
+        let credentialID: UUID?
+        let task: Task<Void, Never>
+    }
 
-    func start(_ id: UUID, _ work: @escaping @Sendable () async -> Void) {
+    private let lock = NSLock()
+    private var tasks: [UUID: Running] = [:]
+    private var forgotten: Set<UUID> = []
+
+    func start(_ request: HelperRequest, _ work: @escaping @Sendable () async -> Void) {
         lock.withLock {
-            guard tasks[id] == nil else { return }
-            tasks[id] = Task { [self] in
+            guard tasks[request.id] == nil else { return }
+            let task = Task { [self] in
                 await work()
-                finish(id)
+                finish(request.id)
             }
+            tasks[request.id] = Running(credentialID: request.credentialID, task: task)
         }
     }
 
@@ -125,8 +142,20 @@ final class RunningRequests: @unchecked Sendable {
         lock.withLock { _ = tasks.removeValue(forKey: id) }
     }
 
-    func cancelAll() {
-        let all = lock.withLock { Array(tasks.values) }
+    func isForgotten(_ credentialID: UUID) -> Bool {
+        lock.withLock { forgotten.contains(credentialID) }
+    }
+
+    func forget(_ credentialID: UUID) -> [Task<Void, Never>] {
+        lock.withLock {
+            guard forgotten.insert(credentialID).inserted else { return [] }
+            return tasks.values.filter { $0.credentialID == credentialID }.map(\.task)
+        }
+    }
+
+    func cancelAll() async {
+        let all = lock.withLock { tasks.values.map(\.task) }
         for task in all { task.cancel() }
+        for task in all { await task.value }
     }
 }
