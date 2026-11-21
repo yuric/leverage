@@ -86,6 +86,52 @@ struct ToolCallerTests {
         #expect(!answer.isError)
     }
 
+    @Test func retryingAPassFromAnEarlierSessionCannotReopenTheCriterion() async throws {
+        let key = "fixture-earlier-pass"
+        let fake = RecordingTransport([ToolResponse(status: 200, body: .object([
+            "key": .string(key), "command": .string("pass_criterion"), "outcome": .string("completed")
+        ])), completed()])
+        let caller = ToolCaller(transport: fake.send)
+        let pass = try #require(catalog.tool(named: "pass_criterion"))
+        let answer = await caller.call(pass, arguments: [
+            "id": .string(taskID), "cid": .string(criterionID), "idempotency_key": .string(key),
+            "evidence": .object(["note": .string("fixture evidence")])
+        ])
+        #expect(!answer.isError)
+        #expect(answer.key?.value == key)
+        let requests = await fake.requests
+        #expect(requests.map(\.operation) == [.getCommand, .passCriterion])
+        #expect(requests.first?.path == ["key": key])
+    }
+
+    @Test func newExplicitPassKeyGetsAStartThenRetryReusesThePassKey() async throws {
+        let fake = RecordingTransport([ToolResponse(status: 404, body: .null), completed(), completed(), completed()])
+        let caller = ToolCaller(transport: fake.send)
+        let pass = try #require(catalog.tool(named: "pass_criterion"))
+        let key = "fixture-new-pass"
+        let arguments: [String: JSONValue] = [
+            "id": .string(taskID), "cid": .string(criterionID), "idempotency_key": .string(key),
+            "evidence": .object(["note": .string("fixture evidence")])
+        ]
+        let first = await caller.call(pass, arguments: arguments)
+        let replay = await caller.call(pass, arguments: arguments)
+        #expect(!first.isError && !replay.isError)
+        let requests = await fake.requests
+        #expect(requests.map(\.operation) == [.getCommand, .startCriterion, .passCriterion, .passCriterion])
+        #expect(requests.suffix(2).allSatisfy { $0.key?.value == key })
+    }
+
+    @Test func aPolledRefusalRetainsItsHTTPStatusAndReportsAToolError() async throws {
+        let apiRefusal = refused(.notHolder)
+        let fake = RecordingTransport([ToolResponse(status: 200, body: apiRefusal.body)])
+        let caller = ToolCaller(transport: fake.send)
+        let poll = try #require(catalog.tool(named: "get_command"))
+        let reply = await caller.call(poll, arguments: ["key": .string("fixture-command")])
+        #expect(reply.isError)
+        #expect(reply.response?.status == 200)
+        #expect(reply.response?.body["refusal"]?["code"] == .string("not_holder"))
+    }
+
     @Test func refusedCriterionStartPreventsThePass() async throws {
         let fake = RecordingTransport([refused(.notHolder)])
         let caller = ToolCaller(transport: fake.send)
