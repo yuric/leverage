@@ -88,6 +88,48 @@ class LogAuditTest < ActiveSupport::TestCase
     assert(found.any? { |line| line.include?("task.ready") && line.include?("gate") }, found.inspect)
   end
 
+  test "approval before the same round's passing review is found" do
+    scenario = Scenario.new
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.approved", task: task, round: 1, subject: action, payload: { lease_seat_id: nil })
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("action.approved") && line.include?("review.passed") }, found.inspect)
+  end
+
+  test "a passing check written after approval cannot clear the action's frozen gate" do
+    scenario = Scenario.new
+    rule = scenario.rule(hook: "action.requested")
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+    scenario.rule_check(task, rule: rule, subject: action, result: "passed")
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    assert(found.any? { |line| line.include?("action.approved") && line.include?(rule.id) }, found.inspect)
+  end
+
+  test "start and report without approval and Done with an open action are found" do
+    scenario = Scenario.new
+    task = scenario.finishing_task(holder: false, actions: [
+      { kind: "send", description: "Made-up send." }, { kind: "publish", description: "Made-up publish." }
+    ])
+    action = Action.where(task_id: task.id).order(:position).first
+    after = scenario.workspace.reload.last_seq
+    scenario.append("action.started", task: task, subject: action)
+    scenario.append("action.reported_done", task: task, subject: action)
+    scenario.append("task.done", task: task)
+
+    found = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+    %w[action.started action.reported_done].each do |type|
+      assert(found.any? { |line| line.include?(type) && line.include?("action.approved") }, found.inspect)
+    end
+    assert(found.any? { |line| line.include?("task.done") && line.include?("unresolved action") }, found.inspect)
+  end
+
   # RC-50, RD-12: review claim-next writes the provider rule's applied row
   # for the review it skips, on that review's task, and claims another.
   test "a review claim-next that skips one task's review and claims another's passes" do
