@@ -1,3 +1,4 @@
+import Foundation
 import LeverageKit
 import Testing
 @testable import LeverageMCP
@@ -132,6 +133,72 @@ struct ToolCallerTests {
         #expect(reply.response?.body["refusal"]?["code"] == .string("not_holder"))
     }
 
+    @Test(arguments: [false, true])
+    func replayingAnOldClaimCannotRedirectTheHeartbeat(crossSession: Bool) async throws {
+        let priorClaim = claim(taskID)
+        let answers = crossSession
+            ? [claim(otherTaskID), priorClaim, priorClaim, completed()]
+            : [priorClaim, completed(), claim(otherTaskID), priorClaim, completed()]
+        let fake = RecordingTransport(answers)
+        let caller = ToolCaller(transport: fake.send)
+        let claim = try #require(catalog.tool(named: "claim_next_task"))
+        let release = try #require(catalog.tool(named: "release_task"))
+        let oldKey: String
+        if crossSession {
+            oldKey = "fixture-old-key"
+        } else {
+            let first = await caller.call(claim, arguments: [:])
+            oldKey = try #require(first.key?.value)
+            _ = await caller.call(release, arguments: ["id": .string(taskID)])
+        }
+        _ = await caller.call(claim, arguments: [:])
+        let replay = await caller.call(claim, arguments: ["idempotency_key": .string(oldKey)])
+        #expect(!replay.isError)
+        #expect(replay.response?.body["result"]?["task"]?["id"] == .string(taskID))
+        await caller.heartbeat()
+        let last = await fake.requests.last
+        #expect(last?.operation == .heartbeatTask)
+        #expect(last?.path == ["id": otherTaskID])
+    }
+
+    @Test func replayingAReleaseCannotClearANewLeaseOnTheSameTask() async throws {
+        let fake = RecordingTransport([claim(taskID), completed(), claim(taskID), completed(), completed()])
+        let caller = ToolCaller(transport: fake.send)
+        let claim = try #require(catalog.tool(named: "claim_next_task"))
+        let release = try #require(catalog.tool(named: "release_task"))
+        _ = await caller.call(claim, arguments: [:])
+        let first = await caller.call(release, arguments: ["id": .string(taskID)])
+        let key = try #require(first.key)
+        _ = await caller.call(claim, arguments: [:])
+        let repeated = await caller.call(release, arguments: ["id": .string(taskID),
+                                                              "idempotency_key": .string(key.value)])
+        #expect(!repeated.isError)
+        await caller.heartbeat()
+        #expect(await fake.requests.last?.operation == .heartbeatTask)
+    }
+
+    @Test func uncertainAutomaticStartKeepsItsOwnKeyAndReturnsThePassKey() async throws {
+        let fake = UncertainStartTransport()
+        let caller = ToolCaller(transport: fake.send)
+        let pass = try #require(catalog.tool(named: "pass_criterion"))
+        var arguments: [String: JSONValue] = [
+            "id": .string(taskID), "cid": .string(criterionID),
+            "evidence": .object(["note": .string("fixture evidence")])
+        ]
+        let first = await caller.call(pass, arguments: arguments)
+        let passKey = try #require(first.key)
+        #expect(first.isError)
+        arguments["idempotency_key"] = .string(passKey.value)
+        let retry = await caller.call(pass, arguments: arguments)
+        #expect(!retry.isError)
+        #expect(retry.key == passKey)
+        let requests = await fake.requests
+        try #require(requests.map(\.operation) == [.startCriterion, .startCriterion, .passCriterion])
+        #expect(requests[0].key == requests[1].key)
+        #expect(requests[0].key != passKey)
+        #expect(requests[2].key == passKey)
+    }
+
     @Test func refusedCriterionStartPreventsThePass() async throws {
         let fake = RecordingTransport([refused(.notHolder)])
         let caller = ToolCaller(transport: fake.send)
@@ -179,5 +246,17 @@ struct ToolCallerTests {
         let refusedDone = await caller.call(done, arguments: args)
         #expect(refusedStart.isError && refusedDone.isError)
         #expect(await fake.requests.map(\.operation) == [.startAction])
+    }
+}
+
+
+private actor UncertainStartTransport {
+    private(set) var requests: [ToolRequest] = []
+
+    func send(_ request: ToolRequest) async throws -> ToolResponse {
+        requests.append(request)
+        if requests.count == 1 { throw URLError(.timedOut) }
+        if request.operation == .getCommand { return ToolResponse(status: 404, body: .null) }
+        return completed()
     }
 }
