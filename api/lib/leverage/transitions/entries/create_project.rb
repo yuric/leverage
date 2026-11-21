@@ -2,8 +2,9 @@ module Leverage
   module Transitions
     module Entries
       class CreateProject < Entry
-        def perform(_ctx)
-          raise NotImplementedError, "not built yet"
+        def perform(ctx)
+          params = ctx.request.params
+          Projects.create(ctx, name: params.fetch("name"), goal: params["goal"], budget: params["budget"])
         end
       end
     end

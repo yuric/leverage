@@ -5,7 +5,7 @@ module Leverage
   # what a seat must read before it works on a task or a review.
   #
   # Its parts, each with a version: the project brief (empty, version 0,
-  # while tasks have no project, SC-8), the seat's role file (RoleFiles,
+  # while a task has no project), the seat's role file (RoleFiles,
   # version the release) and the task's contract (contract_version), then
   # the rules Gating.briefing_rules returns, each as {kind: "rule", id:
   # the rule's id, version: its current version number} (milestone 4,
@@ -13,8 +13,8 @@ module Leverage
   # Gating::CanonicalJson.dump of the parts as {kind, id, version}, in that
   # order: only a change to a part of this task's briefing changes it, so
   # saving, switching or removing a rule in it does, and nothing else
-  # about rules does. The work reference and a failed review's notes are
-  # outside it.
+  # about rules does. The work reference, review notes and answered
+  # questions are outside it.
   #
   # The answer's rules carry each rule's version id, key, name and text: a
   # model rule's instruction, or an app rule's sentence (Rules::Sentences,
@@ -39,25 +39,28 @@ module Leverage
     # review: - the Review, when subject is its Task.
     def hash_for(subject, positional_seat = nil, seat: positional_seat, review: nil)
       task, review = task_and_review(subject, review)
-      Digest::SHA256.hexdigest(Gating::CanonicalJson.dump(parts(task, seat, review)))
+      parts_hash(task, seat, review, project_for(task)&.brief_version || 0)
     end
 
     # The briefing in the contract's Briefing shape (string keys).
     def for(subject, positional_seat = nil, seat: positional_seat, review: nil)
       task, review = task_and_review(subject, review)
       rules = briefing_rules(task, seat, review)
+      project = project_for(task)
+      brief_version = project&.brief_version || 0
       {
-        "hash" => hash_for(task, seat: seat, review: review),
+        "hash" => parts_hash(task, seat, review, brief_version),
         "versions" => {
           "rule_version_ids" => rules.map { |rule| rule.fetch("rule_version_id") },
-          "brief_version" => brief_version(task),
+          "brief_version" => brief_version,
           "role_file_version" => RoleFiles.version,
           "contract_version" => task.contract_version
         },
         "rules" => rules,
-        "brief" => [],
+        "brief" => Projects.brief(project),
         "role_file" => RoleFiles.text(seat.role),
-        "contract" => contract(task)
+        "contract" => contract(task),
+        "answers" => answers(task)
       }
     end
 
@@ -119,10 +122,14 @@ module Leverage
       hashes.include?(hash_for(task, seat: seat, review: review)) ? :current : :changed
     end
 
+    def parts_hash(task, seat, review, brief_version)
+      Digest::SHA256.hexdigest(Gating::CanonicalJson.dump(parts(task, seat, review, brief_version)))
+    end
+
     # The parts the hash covers, in order.
-    def parts(task, seat, review)
+    def parts(task, seat, review, brief_version)
       [
-        { "kind" => "brief", "id" => task.project_id, "version" => brief_version(task) },
+        { "kind" => "brief", "id" => task.project_id, "version" => brief_version },
         { "kind" => "role_file", "id" => seat.role, "version" => RoleFiles.version },
         { "kind" => "contract", "id" => task.id, "version" => task.contract_version }
       ] + rule_parts(task, seat, review)
@@ -158,16 +165,20 @@ module Leverage
       checks.to_h { |check| [ check.id, "#{names[check.rule_version_id]}: #{check.reason.presence || "No reason given."}" ] }
     end
 
-    # The project brief's version: 0 while the task has no project.
-    def brief_version(task)
-      return 0 unless task.project_id
+    def project_for(task)
+      task.project_id && Project.find_by(id: task.project_id, workspace_id: task.workspace_id)
+    end
 
-      Project.where(id: task.project_id).pick(:brief_version) || 0
+    # The current answers are shared with a question job's earlier answers.
+    def answers(task)
+      Question.where(workspace_id: task.workspace_id, task_id: task.id, outcome: "answered")
+        .order(:asked_at, :id).map do |question|
+        { "text" => question.text.to_s, "answer" => question.answer.to_s, "basis" => question.basis }
+      end
     end
 
     # The contract part (IF-25): the goal, the details, the criteria in
-    # order with their evidence, and the outward actions (none in milestone
-    # 2, SC-3).
+    # order with their evidence, and the outward actions.
     def contract(task)
       criteria = Criterion.where(workspace_id: task.workspace_id, task_id: task.id, removed_at: nil).order(:position).to_a
       evidence = Evidence.where(workspace_id: task.workspace_id, criterion_id: criteria.map(&:id)).order(:created_at, :id)
@@ -177,8 +188,32 @@ module Leverage
         "goal" => task.goal.to_s,
         "details" => task.details,
         "criteria" => criteria.map { |criterion| criterion_json(criterion, evidence.fetch(criterion.id, [])) },
-        "actions" => []
+        "actions" => actions(task)
       }
+    end
+
+    def actions(task)
+      rows = Action.where(workspace_id: task.workspace_id, task_id: task.id).order(:position).to_a
+      return [] if rows.empty?
+
+      events = Event.where(workspace_id: task.workspace_id, task_id: task.id)
+      history = events.where(subject_kind: "action", subject_id: rows.map(&:id), type: %w[action.approved action.stopped])
+        .order(:seq).index_by { |event| [ event.subject_id, event.type ] }
+      stop_causes = rows.filter_map do |row|
+        history[[ row.id, "action.stopped" ]]&.cause_id if row.state == "stopped"
+      end
+      checks = events.where(id: stop_causes, type: "check.finished", subject_kind: "rule_check")
+        .where("payload ->> 'result' = ?", "failed").pluck(:id, :subject_id).to_h
+      rows.map { |row| action_json(row, history, checks) }
+    end
+
+    def action_json(row, history, checks)
+      approval = history[[ row.id, "action.approved" ]]
+      stop = history[[ row.id, "action.stopped" ]] if row.state == "stopped"
+      { "id" => row.id, "task_id" => row.task_id, "kind" => row.kind, "description" => row.description.to_s,
+        "state" => row.state, "approved_by_kind" => row.approved_by_kind, "approved_by_id" => row.approved_by_id,
+        "approved_at" => approval&.at&.utc&.iso8601(6), "position" => row.position,
+        "stopped_by_rule_check_id" => checks[stop&.cause_id] }
     end
 
     def criterion_json(criterion, evidence)
@@ -198,7 +233,7 @@ module Leverage
       [ subject, review ]
     end
 
-    private_class_method :parts, :rule_parts, :briefing_rules, :failed_rule_notes, :brief_version, :contract, :criterion_json,
-      :task_and_review
+    private_class_method :parts, :parts_hash, :rule_parts, :briefing_rules, :failed_rule_notes, :contract, :criterion_json,
+      :task_and_review, :project_for, :action_json
   end
 end
