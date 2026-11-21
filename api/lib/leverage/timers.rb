@@ -57,32 +57,32 @@ module Leverage
     # it as the command's effective_at.
     EFFECTIVE_AT = "effective_at".freeze
 
-    # The job timers (timers.json): the kind of job each reads, the state it
-    # must be in, and which of its due times (job_due_at) it reads. An
-    # approval job is milestone 5's and question jobs have timers of their
-    # own there (DB-31).
+    # Approval jobs and ordinary rule checks share the check timers and
+    # the attempt's rule-version timeouts. WP6 adds the question timers.
+    CHECK_JOB_KINDS = Contract.jobs.fetch("jobs").filter_map do |job|
+      job.fetch("kind") if job.fetch("queue_timer") == "check_queue_timeout"
+    end.freeze
+
+    # The kinds, active state and deadline each served job timer reads.
     JOB_TIMERS = {
-      "check_queue_timeout" => { kind: "rule_check", state: "queued", due: :queue }.freeze,
-      "check_run_timeout" => { kind: "rule_check", state: "claimed", due: :run }.freeze,
-      "contract_draft_job_queue_timeout" => { kind: "contract_draft", state: "queued", due: :queue }.freeze,
-      "contract_draft_job_run_timeout" => { kind: "contract_draft", state: "claimed", due: :run }.freeze
+      "check_queue_timeout" => { kinds: CHECK_JOB_KINDS, state: "queued", due: :queue }.freeze,
+      "check_run_timeout" => { kinds: CHECK_JOB_KINDS, state: "claimed", due: :run }.freeze,
+      "contract_draft_job_queue_timeout" => { kinds: %w[contract_draft].freeze, state: "queued", due: :queue }.freeze,
+      "contract_draft_job_run_timeout" => { kinds: %w[contract_draft].freeze, state: "claimed", due: :run }.freeze
     }.freeze
 
-    # job_due_at in SQL, for the sweep and for a command's due timers: the
-    # attempt's times and the rule version's own timeouts for a check, the
-    # job's own times for a draft, the workspace's timeouts otherwise.
-    JOB_DUE_SQL = {
-      "rule_check" => {
-        queue: "rule_check_attempts.queued_at + COALESCE(rule_versions.queue_timeout_seconds, " \
-               "workspaces.check_queue_timeout_seconds) * interval '1 second'",
-        run: "rule_check_attempts.started_at + COALESCE(rule_versions.run_timeout_seconds, " \
-             "workspaces.check_run_timeout_seconds) * interval '1 second'"
-      }.freeze,
-      "contract_draft" => {
-        queue: "jobs.queued_at + workspaces.check_queue_timeout_seconds * interval '1 second'",
-        run: "jobs.claimed_at + workspaces.check_run_timeout_seconds * interval '1 second'"
-      }.freeze
+    # Use the same check-attempt and workspace timeouts as job_due_at.
+    CHECK_DUE_SQL = {
+      queue: "rule_check_attempts.queued_at + COALESCE(rule_versions.queue_timeout_seconds, " \
+             "workspaces.check_queue_timeout_seconds) * interval '1 second'",
+      run: "rule_check_attempts.started_at + COALESCE(rule_versions.run_timeout_seconds, " \
+           "workspaces.check_run_timeout_seconds) * interval '1 second'"
     }.freeze
+    WORKSPACE_JOB_DUE_SQL = {
+      queue: "jobs.queued_at + workspaces.check_queue_timeout_seconds * interval '1 second'",
+      run: "jobs.claimed_at + workspaces.check_run_timeout_seconds * interval '1 second'"
+    }.freeze
+    JOB_DUE_SQL = CHECK_JOB_KINDS.index_with(CHECK_DUE_SQL).merge("contract_draft" => WORKSPACE_JOB_DUE_SQL).freeze
     CHECK_JOINS = "JOIN rule_check_attempts ON rule_check_attempts.job_id = jobs.id " \
                   "JOIN rule_checks ON rule_checks.id = rule_check_attempts.rule_check_id " \
                   "JOIN rule_versions ON rule_versions.id = rule_checks.rule_version_id".freeze
@@ -293,15 +293,18 @@ module Leverage
     end
 
     # Runs one timer entry inside the current command: its refusals (the
-    # state table's), then perform. A refused timer writes nothing. Returns
-    # whether it ran.
+    # state table's), then perform. Finishing receives its own app context
+    # so lease grants caused by a timer carry no caller key. Returns
+    # whether the timer ran.
     def apply(ctx, entry)
       entry.load(ctx)
-      return false if Transitions::Precedence.first(entry.refusals(ctx))
-
-      Transitions::Gate.call(ctx, entry)
-      entry.perform(ctx)
-      true
+      refused = Transitions::Precedence.first(entry.refusals(ctx))
+      unless refused
+        Transitions::Gate.call(ctx, entry)
+        entry.perform(ctx)
+      end
+      as_timer(ctx, entry.command, ctx.at) { |timer_ctx| Finishing.after_command(timer_ctx) }
+      !refused
     end
 
     # The tasks a command touches: the one its params name (directly or
@@ -366,7 +369,7 @@ module Leverage
 
     # The job timer that reads this job now (its kind and state), or nil.
     def job_timer_for(job)
-      JOB_TIMERS.find { |_timer, spec| spec.fetch(:kind) == job.kind && spec.fetch(:state) == job.state }&.first
+      JOB_TIMERS.find { |_timer, spec| spec.fetch(:kinds).include?(job.kind) && spec.fetch(:state) == job.state }&.first
     end
 
     # The job's due time for this timer (job_due_at), or nil.
@@ -387,8 +390,10 @@ module Leverage
     # more (job.requeued on its job). An attempt the owner ran again, or
     # one run again after a withdrawal or an error, misses for the first
     # time (WP7's reading; trace 18, command 13).
+    def check_job?(job) = CHECK_JOB_KINDS.include?(job.kind)
+
     def second_miss?(job)
-      return job.attempt_number >= 2 unless job.kind == "rule_check"
+      return job.attempt_number >= 2 unless check_job?(job)
 
       attempt = RuleCheckAttempt.find_by(job_id: job.id)
       previous = attempt && RuleCheckAttempt.find_by(rule_check_id: attempt.rule_check_id,
@@ -409,10 +414,11 @@ module Leverage
     # (timer_due_at), oldest due first.
     def job_timer_scope(scope, timer, at)
       spec = JOB_TIMERS.fetch(timer)
-      due = JOB_DUE_SQL.fetch(spec.fetch(:kind)).fetch(spec.fetch(:due))
+      kinds = spec.fetch(:kinds)
+      due = JOB_DUE_SQL.fetch(kinds.first).fetch(spec.fetch(:due))
       scope = scope.joins("JOIN workspaces ON workspaces.id = jobs.workspace_id")
-      scope = scope.joins(CHECK_JOINS) if spec.fetch(:kind) == "rule_check"
-      scope.where(kind: spec.fetch(:kind), state: spec.fetch(:state)).where("#{due} <= ?", at)
+      scope = scope.joins(CHECK_JOINS) if CHECK_JOB_KINDS.include?(kinds.first)
+      scope.where(kind: kinds, state: spec.fetch(:state)).where("#{due} <= ?", at)
         .select("jobs.*, #{due} AS timer_due_at").order(Arel.sql("timer_due_at, jobs.id"))
     end
 

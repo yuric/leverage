@@ -34,6 +34,7 @@ class JobsAnyKindTest < ActiveSupport::TestCase
     action = Action.create!(workspace_id: @task.workspace_id, task_id: @task.id, position: 1, kind: "send", state: "requested")
     rule = @scenario.rule(hook: "action.requested", queue_timeout_seconds: 71, run_timeout_seconds: 109)
     check = @scenario.rule_check(@task, rule: rule, subject: action, attempts: 0)
+    seat = @scenario.orchestrator
     request = Leverage::Transitions::Request.new(command: "request_action", workspace_id: @task.workspace_id,
       caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
     ctx = @scenario.context(request: request)
@@ -46,7 +47,6 @@ class JobsAnyKindTest < ActiveSupport::TestCase
     assert_empty Leverage::Timers.due_jobs(@task.workspace_id, queue_due - 1.second, "check_queue_timeout", limit: 1)
     assert_equal [ job ], Leverage::Timers.due_jobs(@task.workspace_id, queue_due, "check_queue_timeout", limit: 1)
 
-    seat = @scenario.orchestrator
     Leverage::Jobs.claim(ctx, job, seat)
     Leverage::RuleChecks.start(ctx, check, job: job, seat: seat)
     run_due = attempt.reload.started_at + 109

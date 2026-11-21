@@ -20,7 +20,8 @@ module Leverage
   #      failed-gate effect (milestone 4 plan §2.1, rules 1 to 8).
   #   6. entry.perform changes rows and writes events through EventLog;
   #      then ReviewerEligibility.after_command looks at what it changed
-  #      (milestone 4 plan SM-42).
+  #      (milestone 4 plan SM-42). Finishing.after_command runs once after
+  #      the outer command's outcome is decided, including refusals (AE-2).
   #   7. Idempotency.store writes the commands row, for a refusal too, so
   #      the timer events of step 3 and the rule checks of step 5 commit
   #      with it (test 7, RE-7). A command whose key now names a pending
@@ -112,6 +113,7 @@ module Leverage
           entry.load(ctx)
           refusal = Precedence.first(refusals(ctx, entry))
           outcome = refusal ? Outcome.refused(refusal) : gated(ctx, entry, timing)
+          Finishing.after_command(ctx)
           pending = PendingTransitions.for_request(request)
           outcome = Outcome.new(outcome: :pending) if pending && !outcome.refused?
           unless request.by_app?

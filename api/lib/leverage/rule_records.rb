@@ -230,13 +230,23 @@ module Leverage
     end
 
     def reenter_waiting(ctx, checks)
-      checks.select(&:pending_transition_id).group_by(&:pending_transition_id).each do |pending_id, withdrawn|
-        pending = PendingTransition.find_by(id: pending_id, state: "pending")
-        next unless pending
-        next if Holds.held?(Task.find(pending.task_id))
+      waiting = checks.group_by do |check|
+        if check.pending_transition_id
+          [ :transition, check.pending_transition_id ]
+        elsif check.subject_kind == "action"
+          [ :action, check.subject_id ]
+        end
+      end
+      waiting.except(nil).each do |(kind, id), withdrawn|
+        if kind == :transition
+          pending = PendingTransition.find_by(id: id, workspace_id: ctx.workspace.id, state: PendingTransitions::PENDING)
+          next unless pending
+          next if Holds.held?(Task.find(pending.task_id))
+        end
 
-        trigger = Gating::Trigger.new(kind: :rule_switched_off, rule_check_id: withdrawn.last.id)
-        PendingTransitions.reenter(ctx, pending, trigger)
+        check = withdrawn.last
+        trigger = Gating::Trigger.new(kind: :rule_switched_off, rule_check_id: check.id)
+        CheckReentry.after(ctx, check, trigger)
       end
     end
 

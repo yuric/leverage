@@ -51,6 +51,9 @@ module Leverage
 
       module_function
 
+      def request_action(_ctx, _action) = nil
+      def reenter_action(_ctx, _action, _trigger) = nil
+
       # Returns the Result, or nil when the row has no hook.
       def call(ctx, entry)
         hook = entry.hook

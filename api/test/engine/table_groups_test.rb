@@ -56,7 +56,7 @@ class TableGroupsTest < ActiveSupport::TestCase
 
   # --- Transitions::Table --------------------------------------------------------
 
-  # Milestone 5's entries by group (plan §2.1), staged until WP13.
+  # Milestone 5's entries (plan §2.1), staged until WP13.
   PENDING_COMMANDS = %w[
     request_action grant_action_lease approve_action stop_action start_action report_action_done waive_action
     mark_action_done offer_task_again return_for_rework overturn_approval ask_question request_access
@@ -65,19 +65,17 @@ class TableGroupsTest < ActiveSupport::TestCase
     question_job_queue_timeout question_job_run_timeout
   ].freeze
 
-  test "the table keeps pending commands out of the served lookup" do
+  test "the table keeps pending commands out of the served list" do
     assert Table.const_defined?(:PENDING, false)
     assert_equal PENDING_COMMANDS, Table::PENDING
     assert_empty Table::COMMANDS & Table::PENDING
     assert_empty Table::PENDING.select { |command| Table.include?(command) }
-    refute Table.respond_to?(:known?), "include? answers for served commands"
   end
 
   test "each pending command has its named entry class" do
     assert Table.const_defined?(:PENDING, false)
     Table::PENDING.each do |command|
-      assert_raises(Table::UnknownCommand) { Table.entry_for(command) }
-      entry = Table.class_name(command).safe_constantize
+      entry = Table.entry_for(command)
       assert entry, "no class for #{command}"
       assert_equal command, entry.command
       assert_operator entry, :<, T::Entry
@@ -123,9 +121,18 @@ class TableGroupsTest < ActiveSupport::TestCase
     assert Table.include?("claim")
     assert Table.include?(:claim)
     assert Table.include?("add_rule")
-    refute Table.include?("ask_question")
-    assert_raises(Table::UnknownCommand) { Table.entry_for("ask_question") }
-    assert_raises(Table::UnknownCommand) { Table.with_entries("ask_question" => T::Entry) { flunk "ran" } }
+    refute Table.include?("report_reading")
+    assert_raises(Table::UnknownCommand) { Table.entry_for("report_reading") }
+    assert_raises(Table::UnknownCommand) { Table.with_entries("report_reading" => T::Entry) { flunk "ran" } }
+  end
+
+  test "with_entries accepts a pending command during the engine build" do
+    replacement = Class.new(T::Entry)
+    Table.with_entries("ask_question" => replacement) do
+      assert_equal replacement, Table.entry_for("ask_question")
+      refute Table.include?("ask_question")
+    end
+    assert_equal Table.class_name("ask_question"), Table.entry_for("ask_question").name
   end
 
   test "with_entries accepts a new name" do

@@ -84,13 +84,12 @@ module Leverage
           @review.update!(verdict: "failed", failed_criteria: @failed.map(&:id), notes: @params["notes"],
             failed_rule_check_id: @failed_rule_check_id)
           @failed.each { |criterion| criterion.update!(state: "open", passed_at: nil, passed_by_seat_id: nil) }
-          spend = BigDecimal(@params.fetch("spend", 0).to_s)
           if @free
-            @task.update!(state: "working", holder_seat_id: @builder.id, spent: @task.spent + spend)
+            @task.update!(state: "working", holder_seat_id: @builder.id)
             Leases.grant(ctx, @task)
           else
             Leases.end_lease(ctx, @task)
-            @task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil, spent: @task.spent + spend)
+            @task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil)
           end
 
           failed = ctx.emit("review.failed", task: @task, subject: @review,
@@ -98,9 +97,8 @@ module Leverage
                        lease_seat_id: @free ? @builder.id : nil,
                        wait_cause: @free ? nil : Candidates.wait_cause(@task, ctx.at) })
           @failed.each { |criterion| ctx.emit("criterion.reopened", task: @task, subject: criterion, payload: {}) }
-          ctx.emit("cost.reported", task: @task, subject: @review,
-            payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
-          add_to_project(spend)
+          Costs.report(ctx, task: @task, subject: @review,
+            tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
           place_fresh_lease(ctx, failed) if @free
 
           reached = @task.round + 1
@@ -112,15 +110,6 @@ module Leverage
         end
 
         private
-
-        # The verdict's spend runs cost.reported for the task's project
-        # (L513): it adds to the project's spent, as the replay rebuilds it.
-        def add_to_project(spend)
-          return unless @task.project_id
-
-          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
-          project.update!(spent: project.spent + spend)
-        end
 
         def load_builder(ctx)
           @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)

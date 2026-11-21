@@ -7,7 +7,7 @@ module Leverage
     # as a new job (and, for a rule check, a new attempt); a second miss
     # (Timers.second_miss?) times it out for good: a check's result is then
     # error, and an error on a blocking rule leaves its transition pending
-    # under check_error (PendingTransitions.reenter with the trigger
+    # under check_error (CheckReentry.after with the trigger
     # check_timed_out, rule 9 of the plan's §2.1), while a draft just ends
     # and its task stays in Backlog.
     #
@@ -71,7 +71,7 @@ module Leverage
 
       def miss(ctx, job)
         second = Timers.second_miss?(job)
-        job.kind == "rule_check" ? check_miss(ctx, job, second) : draft_miss(ctx, job, second)
+        Timers.check_job?(job) ? check_miss(ctx, job, second) : draft_miss(ctx, job, second)
       end
 
       # The rows of state_machine.json: first_miss job.timed_out,
@@ -83,8 +83,7 @@ module Leverage
         return RuleChecks.new_attempt(ctx, check, job: Jobs.requeue(ctx, job)) unless second
 
         RuleChecks.error(ctx, check)
-        pending = check.pending_transition_id && PendingTransition.find_by(id: check.pending_transition_id, state: "pending")
-        PendingTransitions.reenter(ctx, pending, Gating::Trigger.new(kind: CHECK_TIMED_OUT, rule_check_id: check.id)) if pending
+        CheckReentry.after(ctx, check, Gating::Trigger.new(kind: CHECK_TIMED_OUT, rule_check_id: check.id))
       end
 
       # first_miss job.timed_out, job.requeued; second_miss job.timed_out.

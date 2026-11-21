@@ -4,6 +4,8 @@ module Leverage
   module ReviewRounds
     module_function
 
-    def failed_count(_task) = 0
+    def failed_count(task)
+      Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: "failed").count
+    end
   end
 end

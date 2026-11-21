@@ -1,11 +1,10 @@
 module Leverage
   module Transitions
-    # The commands, each with its entry (milestone 2 plan §2.1, EN-2;
-    # milestone 3 plan §2.1; milestone 4 plan §2.1): the one list, in nine
-    # named groups the state-table tests use. An entry is the class
+    # The served commands, in the groups the state-table tests use.
+    # Pending entries are available to the engine packages during milestone 5.
+    # An entry is the class
     # Leverage::Transitions::Entries::<Command>, in
-    # transitions/entries/<command>.rb, resolved when first used. A command
-    # of a later milestone is not here: it has no entry and no route.
+    # transitions/entries/<command>.rb, resolved when first used.
     module Table
       # A command with no entry.
       class UnknownCommand < StandardError; end
@@ -32,6 +31,15 @@ module Leverage
       JOBS = %w[draft_contract claim_job submit_job_result report_job_limit report_job_signed_out].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS).freeze
 
+      # Milestone 5 entries staged for the engine packages (AT-6).
+      PENDING = %w[
+        request_action grant_action_lease approve_action stop_action start_action report_action_done waive_action
+        mark_action_done offer_task_again return_for_rework overturn_approval ask_question request_access
+        answer_question overturn_answer grant_access report_cost create_project edit_brief pause_project
+        resume_project change_budget change_task_priority change_task_project change_task_cap delete_content
+        change_workspace_settings question_job_queue_timeout question_job_run_timeout
+      ].freeze
+
       @overrides = {}
 
       class << self
@@ -46,7 +54,7 @@ module Leverage
         def entry_for(command)
           command = command.to_s
           return @overrides.fetch(command) if @overrides.key?(command)
-          raise UnknownCommand, "#{command} has no entry" unless include?(command)
+          raise UnknownCommand, "#{command} has no entry" unless known?(command)
 
           class_name(command).constantize
         end
@@ -54,7 +62,7 @@ module Leverage
         # Tests only: answers these entries for these commands inside the
         # block, so the pipeline can be proven before the real entries exist.
         def with_entries(entries)
-          unknown = entries.keys.map(&:to_s).reject { |command| include?(command) }
+          unknown = entries.keys.map(&:to_s).reject { |command| known?(command) }
           raise UnknownCommand, "commands with no entry: #{unknown.join(", ")}" unless unknown.empty?
 
           saved = @overrides
@@ -63,6 +71,10 @@ module Leverage
         ensure
           @overrides = saved if saved
         end
+
+        private
+
+        def known?(command) = include?(command) || PENDING.include?(command)
       end
     end
   end

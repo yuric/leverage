@@ -53,7 +53,7 @@ module Leverage
           pending = PendingTransition.find_by(id: @check.pending_transition_id, state: "pending")
           if pending
             trigger = Gating::Trigger.new(kind: :check_overridden, rule_check_id: @check.id)
-            PendingTransitions.reenter(ctx, pending, trigger) unless Holds.held?(@task)
+            CheckReentry.after(ctx, @check, trigger) unless Holds.held?(@task)
           else
             notify_refused_command(ctx)
           end

@@ -117,12 +117,22 @@ class Scenario
     end
   end
 
-  # A project, with project.created. Tasks have no project in milestone 2
-  # (SC-8); a trace's setup may still name one.
-  def project(name: "Made-up project", id: nil, **columns)
+  # A project, with project.created. budget: is a project column; brief:
+  # is one brief edit with ordered { kind:, text: } entries.
+  def project(name: "Made-up project", id: nil, brief: [], **columns)
     transaction do
       project = Project.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, name: name, **columns)
       append("project.created", project_id: project.id, actor_kind: "owner", actor_id: owner.id)
+      if brief.any?
+        version = project.brief_version + 1
+        project.update!(brief_version: version)
+        brief.each_with_index do |entry, index|
+          row = BriefEntry.create!(workspace_id: workspace_id, project_id: project.id, position: index + 1,
+            author_kind: "owner", author_id: owner.id, **entry)
+          append("brief.changed", subject: row, project_id: project.id, actor_kind: "owner", actor_id: owner.id,
+            payload: { brief_version: version })
+        end
+      end
       project
     end
   end
@@ -138,11 +148,17 @@ class Scenario
   #   cancelled             task.created, task.cancelled
   #
   # criteria: the kinds of the contract's criteria, in order. builder and
-  # reviewer default to new seats of that role.
+  # reviewer default to new seats of that role. actions: the ordered
+  # { kind:, description: } entries of a Ready, Working or In review task.
+  # For a Finishing task and later action states, use finishing_task.
   def task(state: "backlog", builder: nil, reviewer: nil, criteria: %w[build review], title: "A made-up task",
            goal: "A made-up goal.", details: nil, priority: "normal", work_reference: "~/work/made-up", project: nil,
-           id: nil)
+           id: nil, actions: [])
     raise ArgumentError, "Scenario#task builds #{TASK_STATES.join(", ")}, not #{state}" unless TASK_STATES.include?(state)
+
+    if actions.any? && !%w[ready working in_review].include?(state)
+      raise ArgumentError, "outward actions here need a Ready, Working or In review task"
+    end
 
     reach = TASK_STATES.index(state)
     transaction do
@@ -153,7 +169,7 @@ class Scenario
       if state == "cancelled"
         move(task, "cancelled", "task.cancelled", actor_kind: "owner", actor_id: owner.id)
       elsif reach >= TASK_STATES.index("ready")
-        contract(task, criteria)
+        contract(task, criteria, actions: actions)
         claim(task, builder || seat(role: "builder")) if reach >= TASK_STATES.index("working")
         submit(task) if reach >= TASK_STATES.index("in_review")
         pass(task, reviewer || seat(role: "reviewer")) if state == "done"
@@ -235,18 +251,65 @@ class Scenario
     seat.reload
   end
 
-  # A task in Finishing, which no command can reach until milestone 5
-  # (milestone 3 plan HS-3), for the tests that prove a row from Finishing
-  # is refused invalid_state. It is built to Working (builder holds it,
-  # with its lease) and moved to Finishing with task.changed, an event no
-  # step reads; no outward action row is made (SC-3). Returns the Task.
-  def finishing_task(builder: nil)
+  # A Finishing task, by way of a passing review. Each action specification
+  # can name kind, description, and state (default requested). holder:
+  # controls whether the builder has an action lease. The old no-actions
+  # call still builds the synthetic Finishing task used by milestone 3.
+  def finishing_task(builder: nil, holder: nil, actions: nil, **options)
+    return legacy_finishing_task(builder, holder != false, **options) if actions.nil?
+    raise ArgumentError, "a Finishing task needs an outward action" if actions.empty?
+
     transaction do
-      row = task(state: "working", builder: builder)
+      reviewer = options.delete(:reviewer) || seat(role: "reviewer")
+      row = task(state: "in_review", builder: builder, reviewer: reviewer, actions: actions.map { |action| action.except(:state) },
+        **options)
+      pass_review(row, reviewer)
       row.update!(state: "finishing")
-      append("task.changed", task: row, actor_kind: "owner", actor_id: owner.id,
-        payload: { priority: row.priority, project_id: row.project_id, budget_cap: row.budget_cap })
+      records = Action.where(task_id: row.id).order(:position).to_a
+      states = actions.map { |action| action.fetch(:state, "requested") }
+      pairs = records.zip(states)
+      lease_candidate = pairs.rfind { |_action, state| %w[approved started].include?(state) }&.first
+      holder = lease_candidate.present? && states.none? { |state| %w[requested stopped].include?(state) } if holder.nil?
+      if holder && lease_candidate.nil?
+        raise ArgumentError, "a Finishing lease needs an approved action"
+      end
+
+      pairs.each do |action, state|
+        request_outward_action(row, action, reviewer) unless state == "contracted"
+      end
+      pairs.each do |action, state|
+        finish_action_setup(row, action, state, grant: holder && action == lease_candidate)
+      end
       row.reload
+    end
+  end
+
+  # A question and the events of its outcome. The asking seat defaults to
+  # the holder, then the task's builder. An answered question defaults to
+  # an orchestrator answer; pass an owner User as answerer for an owner
+  # answer. Passed-on questions have an item, with a hold if blocking.
+  def question(task, outcome: "open", answerer: nil, blocking: true, asking_seat: nil,
+               text: "What should I use?", assumption: nil, answer: "Use the sample.", basis: nil)
+    asking_seat ||= Seat.find(task.holder_seat_id || task.builder_seat_id)
+    unless Leverage::Contract.list("question_outcomes").include?(outcome)
+      raise ArgumentError, "unknown question outcome #{outcome.inspect}"
+    end
+
+    transaction do
+      ctx = context
+      row = Question.create!(workspace_id: workspace_id, task_id: task.id, asking_seat_id: asking_seat.id,
+        text: text, assumption: assumption, blocking: blocking, asked_at: ctx.at)
+      ctx.emit("question.asked", task: task, subject: row, actor_kind: "seat", actor_id: asking_seat.id,
+        payload: { blocking: blocking })
+      case outcome
+      when "passed_on"
+        row.update!(outcome: outcome)
+        pass_question_on(context, task, row)
+      when "answered", "overturned"
+        answerer ||= orchestrator
+        record_question_answer(task, row, answerer, answer, basis, outcome)
+      end
+      row
     end
   end
 
@@ -387,7 +450,7 @@ class Scenario
   #                                (job.finished, check.finished).
   #
   # The reason is on the row only. hook and round default to the version's
-  # and the task's; subject is a Seat or a Review (or nil); pending a
+  # and the task's; subject is the hook's subject (or nil); pending a
   # PendingTransition. Returns the RuleCheck.
   def rule_check(task, rule:, result: nil, reason: nil, effect: nil, attempts: 1, started: false, checker: nil, hook: nil,
                  round: nil, subject: nil, input_hash: nil, pending: nil)
@@ -415,14 +478,15 @@ class Scenario
   def job(kind:, task:, target: task, state: "queued", seat: nil, seat_role: nil, attempt_number: 1, input: {})
     raise ArgumentError, "a #{state} job needs the seat that claimed it" if %w[claimed finished].include?(state) && seat.nil?
 
+    seat_role ||= Leverage::Contract.jobs.fetch("jobs").find { |definition| definition.fetch("kind") == kind }&.fetch("claimer_role")
     transaction do
       at = database_now
       job = Job.create!(workspace_id: workspace_id, kind: kind, task_id: task&.id, project_id: task&.project_id,
         target_kind: Leverage::EventLog.kind_of(target), target_id: target.id,
-        seat_role: seat_role || (kind == "contract_draft" ? "planner" : "orchestrator"), state: "queued", queued_at: at,
+        seat_role: seat_role, state: "queued", queued_at: at,
         input: input, attempt_number: attempt_number)
       job_event("job.queued", job, task, payload: { kind: kind })
-      claim_job(job, task, seat) if seat
+      claim_job(job, task, seat) if seat && state != "queued"
       job.update!(state: state, finished_at: (at if %w[finished timed_out withdrawn].include?(state)))
       { "finished" => "job.finished", "timed_out" => "job.timed_out", "withdrawn" => "job.withdrawn" }[state]
         &.then { |type| job_event(type, job, task) }
@@ -456,6 +520,100 @@ class Scenario
   end
 
   private
+
+  def legacy_finishing_task(builder, holder, **options)
+    transaction do
+      row = task(state: "working", builder: builder, **options)
+      row.update!(state: "finishing", holder_seat_id: (row.holder_seat_id if holder), lease_due_at: (row.lease_due_at if holder))
+      append("task.changed", task: row, actor_kind: "owner", actor_id: owner.id,
+        payload: { priority: row.priority, project_id: row.project_id, budget_cap: row.budget_cap })
+      row.reload
+    end
+  end
+
+  def request_outward_action(task, action, reviewer)
+    action.update!(state: "requested")
+    record_action_event("action.requested", task, action, actor_kind: "seat", actor_id: reviewer.id)
+  end
+
+  def finish_action_setup(task, action, state, grant:)
+    owner_actor = { actor_kind: "owner", actor_id: owner.id }
+    builder_actor = { actor_kind: "seat", actor_id: task.builder_seat_id }
+    case state
+    when "contracted", "requested"
+      nil
+    when "approved", "started", "done"
+      ctx = context
+      action.update!(state: "approved", approved_by_kind: "owner", approved_by_id: owner.id)
+      if grant
+        task.update!(holder_seat_id: task.builder_seat_id)
+        Leverage::Leases.grant(ctx, task)
+      end
+      record_action_event("action.approved", task, action, ctx: ctx, **owner_actor,
+        payload: { lease_seat_id: (task.builder_seat_id if grant) })
+      if %w[started done].include?(state)
+        action.update!(state: "started")
+        record_action_event("action.started", task, action, **builder_actor)
+      end
+      if state == "done"
+        action.update!(state: state)
+        record_action_event("action.reported_done", task, action, **builder_actor)
+      end
+    when "stopped"
+      action.update!(state: state)
+      record_action_event("action.stopped", task, action, **owner_actor)
+      hold(task, reason: "action_stopped", facts: { action_id: action.id, rule_check_id: nil, any_action_started: false })
+    when "waived"
+      action.update!(state: state)
+      record_action_event("action.waived", task, action, **owner_actor, payload: { lease_seat_id: nil })
+    when "revoked"
+      action.update!(state: state)
+      record_action_event("action.revoked", task, action, **owner_actor)
+    else
+      raise ArgumentError, "unknown action state #{state.inspect}"
+    end
+  end
+
+  # EventLog inserts the event before calling Steps. Keep the fixture event
+  # even while the step tracker intentionally refuses these action events.
+  def record_action_event(type, task, action, ctx: context, **fields)
+    ctx.emit(type, task: task, subject: action, **fields, command_id: nil)
+  rescue Leverage::Steps::Unsupported
+    Event.find_by!(workspace_id: workspace_id, seq: ctx.workspace.last_seq, type: type, subject_id: action.id)
+  end
+
+  def pass_question_on(ctx, task, question)
+    facts = { question_id: question.id }
+    if question.blocking
+      Leverage::Holds.open(ctx, task: task, reason: "owner_question", facts: facts)
+    else
+      definition = Leverage::Holds.needs_you_item("owner_question")
+      inbox = InboxItem.create!(workspace_id: workspace_id, kind: definition.fetch("item"), about_kind: "task",
+        about_id: task.id, facts: facts, opened_at: ctx.at,
+        choices: definition.fetch("choices").map { |choice| choice.fetch("choice") })
+      ctx.emit("inbox.opened", task: task, subject: inbox, actor_kind: "app", actor_id: nil, payload: { kind: inbox.kind })
+    end
+  end
+
+  def record_question_answer(task, question, answerer, answer, basis, outcome)
+    ctx = context
+    actor_kind = answerer.is_a?(User) ? "owner" : "seat"
+    basis ||= if actor_kind == "owner"
+      "owner"
+    elsif outcome == "overturned"
+      "decision"
+    else
+      "record"
+    end
+    question.update!(outcome: "answered", answer: answer, basis: basis, answered_at: ctx.at,
+      answered_by_kind: actor_kind, answered_by_id: answerer.id)
+    ctx.emit("question.answered", task: task, subject: question, actor_kind: actor_kind, actor_id: answerer.id,
+      payload: { basis: basis })
+    if outcome == "overturned"
+      question.update!(outcome: outcome)
+      append("question.overturned", task: task, subject: question, actor_kind: "owner", actor_id: owner.id)
+    end
+  end
 
   # One rule of a golden trace's setup: its id, key, switch, current
   # version and that version's id. A shipped rule's fields are
@@ -513,7 +671,7 @@ class Scenario
         queued_at: job.queued_at)
       append("check.queued", task: task, subject: check, payload: check_payload(check).merge(attempt_number: number,
         job_id: job.id, blocking: blocking, claimant_seat_id: nil, pending_transition_id: check.pending_transition_id,
-        action_id: nil))
+        action_id: (check.subject_id if check.subject_kind == "action")))
       job_event("job.queued", job, task, payload: { kind: "rule_check" }) if number == 1
       previous = job
     end
@@ -580,16 +738,19 @@ class Scenario
     append(type, task: task, payload: payload, **actor)
   end
 
-  def contract(task, kinds)
+  def contract(task, kinds, actions:)
     criteria = kinds.each_with_index.map do |kind, index|
       Criterion.create!(workspace_id: workspace_id, task_id: task.id, position: index + 1, kind: kind,
         text: "Made-up criterion #{index + 1}.")
+    end
+    action_ids = actions.map.with_index(1) do |attributes, position|
+      Action.create!(workspace_id: workspace_id, task_id: task.id, position: position, **{ kind: "publish" }.merge(attributes)).id
     end
     task.update!(contract_version: 1)
     append("task.contract_changed", task: task, actor_kind: "owner", actor_id: owner.id,
       payload: { contract_version: 1, minimum_strength_rank: task.minimum_strength_rank,
                  added_criterion_ids: criteria.map(&:id), reset_criterion_ids: [],
-                 removed_criterion_ids: [], added_action_ids: [], removed_action_ids: [] })
+                 removed_criterion_ids: [], added_action_ids: action_ids, removed_action_ids: [] })
     move(task, "ready", "task.ready", payload: { wait_cause: nil }, actor_kind: "owner", actor_id: owner.id)
   end
 
@@ -614,11 +775,15 @@ class Scenario
   end
 
   def pass(task, reviewer)
+    pass_review(task, reviewer)
+    move(task, "done", "task.done", actor_kind: "seat", actor_id: reviewer.id)
+  end
+
+  def pass_review(task, reviewer)
     review = review(task, reviewer: reviewer)
     review.update!(verdict: "passed", lease_due_at: nil)
     Criterion.where(task_id: task.id, kind: "review", removed_at: nil).update_all(state: "passed", passed_at: database_now,
       passed_by_seat_id: reviewer.id)
     append("review.passed", task: task, subject: review, actor_kind: "seat", actor_id: reviewer.id)
-    move(task, "done", "task.done", actor_kind: "seat", actor_id: reviewer.id)
   end
 end

@@ -51,13 +51,11 @@ module Leverage
           Criterion.where(task_id: @task.id, kind: "review", removed_at: nil).find_each do |criterion|
             criterion.update!(state: "passed", passed_at: ctx.at, passed_by_seat_id: @seat.id)
           end
-          spend = BigDecimal(@params.fetch("spend", 0).to_s)
-          @task.update!(state: "done", holder_seat_id: nil, spent: @task.spent + spend)
+          @task.update!(state: "done", holder_seat_id: nil)
           ctx.emit("review.passed", task: @task, subject: @review, payload: {})
           ctx.emit("task.done", task: @task, payload: {})
-          ctx.emit("cost.reported", task: @task, subject: @review,
-            payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
-          add_to_project(spend)
+          Costs.report(ctx, task: @task, subject: @review,
+            tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
           @result = nil
         end
 
@@ -71,17 +69,6 @@ module Leverage
           failed.refusals(ctx)
           Gate.outcome(ctx, failed, Gate.call(ctx, failed))
           @result = failed.result
-        end
-
-        private
-
-        # The verdict's spend runs cost.reported for the task's project
-        # (L513): it adds to the project's spent, as the replay rebuilds it.
-        def add_to_project(spend)
-          return unless @task.project_id
-
-          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
-          project.update!(spent: project.spent + spend)
         end
       end
     end

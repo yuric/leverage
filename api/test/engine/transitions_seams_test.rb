@@ -100,6 +100,7 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
 
     assert_empty calls
   end
+
   test "Finishing sees the command once after it performs and does not run again for a repeated key" do
     calls = nil
     T::Table.with_entries("add_task" => OneEvent) do
@@ -145,5 +146,4 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
     assert_equal [ "builder_lease_expiry", nil ], [ ctx.request.command, ctx.request.key ]
     assert_includes ctx.events.map(&:type), "task.lease_expired"
   end
-
 end

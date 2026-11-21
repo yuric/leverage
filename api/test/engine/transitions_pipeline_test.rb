@@ -230,12 +230,10 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
-  # ask_question is milestone 5's. promote was the example until milestone
-  # 3 gave it an entry (milestone 3 plan HT-6), add_rule until milestone 4
-  # did (its plan RT-6, §0.1 fact 3).
+  # report_reading belongs to milestone 6.
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "ask_question")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "ask_question").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "report_reading")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "report_reading").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -281,8 +279,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   # Milestone 3 (its plan §2.1, HT-6) adds two groups, HANDOFF and
   # OWNER_CONTROLS, and two timers; milestone 4 (its plan §2.1, RT-6) three
   # groups, RULES, CHECKS and JOBS, and six timers: 68 commands in nine
-  # groups. Its twenty waited in Table::PENDING while they were built, and
-  # that list and Table.known? are gone.
+  # groups. Milestone 5's entries wait in Table::PENDING (AT-6).
   test "the table lists its commands in nine groups, each a registry command with state-table rows" do
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
                T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS ]
@@ -300,7 +297,6 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("promote")
     assert T::Table.include?("add_rule")
     refute T::Table.include?("ask_question")
-    refute T::Table.respond_to?(:known?)
     assert T::Table.const_defined?(:PENDING, false)
     assert_equal 29, T::Table::PENDING.size
     assert_equal 97, (T::Table::COMMANDS + T::Table::PENDING).uniq.size

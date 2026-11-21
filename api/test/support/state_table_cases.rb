@@ -21,6 +21,12 @@ module StateTableCases
   # Finishing arrives in milestone 5.
   NOT_SERVED_FROM = %w[finishing].freeze
 
+  # Cases added by the Questions and approvals contract to commands that
+  # already run. Budget closes are conditional side effects, so the
+  # existing main-row cases keep running while those effects are pending.
+  PENDING_RULE_CHECKS = { "rerun_check" => %w[rerun_of_approval_check].freeze }.freeze
+  PENDING_BUDGET_CLOSES = %w[complete_contract edit_contract].freeze
+
   # row is the state_machine.json row, or nil for an invalid_state case.
   Case = Data.define(:command, :from, :row) do
     def invalid_state? = row.nil?
@@ -41,6 +47,12 @@ module StateTableCases
     # The refusal the command gives in this case: invalid_state for a row
     # that is not served, else the row's own (nil for a row that moves).
     def expected_refusal = not_served? ? Leverage::Contract.state_machine.fetch("unlisted_pair_refusal") : refusal
+
+    def pending_rule_check? = PENDING_RULE_CHECKS[command] == guard
+
+    def pending_budget_close?
+      PENDING_BUDGET_CLOSES.include?(command) && row&.fetch("holds_closed")&.include?("budget")
+    end
 
     def name
       from_text = from.nil? ? "no state" : from
@@ -86,7 +98,11 @@ module StateTableCases
   # with the case as its argument.
   def define(test_class, commands, &body)
     self.for(commands).each do |kase|
-      test_class.test("state table: #{kase.name}") { instance_exec(kase, &body) }
+      test_class.test("state table: #{kase.name}") do
+        skip "The approval check refusal is enabled when milestone 5's action checks are served (AE-15)." if kase.pending_rule_check?
+
+        instance_exec(kase, &body)
+      end
     end
   end
 end

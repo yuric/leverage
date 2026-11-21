@@ -21,10 +21,6 @@ module Leverage
   # names them: a writer that runs inside a timer passes its effective time,
   # the app as actor and no key (EVENT_FIELDS).
   module Jobs
-    # The job kinds milestone 4 queues and hands out (milestone 4 plan
-    # §1.2: questions and approvals are milestone 5's).
-    HANDED_OUT = %w[rule_check contract_draft].freeze
-
     # The event fields a caller may name for every event a writer here
     # writes.
     EVENT_FIELDS = %i[effective_at actor_kind actor_id command_id cause_id].freeze
@@ -138,7 +134,7 @@ module Leverage
     # --- who may claim, and what --------------------------------------------
 
     # L545 for a job's seat: enabled, not paused, not removed, of a role
-    # that claims a kind handed out now.
+    # that claims a job kind.
     def active?(seat)
       !seat.nil? && seat.enabled && !seat.paused && seat.removed_at.nil? && kinds_for(seat.role).any?
     end
@@ -174,11 +170,9 @@ module Leverage
         task_id: nil)
     end
 
-    # The job kinds a role claims (IF-13, jobs.json claimer_role), of those
-    # handed out now.
+    # The job kinds a role claims (IF-13, jobs.json claimer_role).
     def kinds_for(role)
-      Contract.jobs.fetch("jobs").select { |job| job.fetch("claimer_role") == role }.map { |job| job.fetch("kind") } &
-        HANDED_OUT
+      Contract.jobs.fetch("jobs").select { |job| job.fetch("claimer_role") == role }.map { |job| job.fetch("kind") }
     end
 
     # The tasks the seat ever claimed as a builder (RC-49, RD-36).
