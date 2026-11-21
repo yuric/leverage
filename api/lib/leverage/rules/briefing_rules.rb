@@ -3,8 +3,7 @@ module Leverage
     # The rules of a briefing (PRD L470; RC-31; milestone 4 plan RD-8): every
     # rule that acts and whose fixed scope covers the task, with may_apply
     # false, and every "let the checker decide" rule, with may_apply true,
-    # each with its current version. Rules that do not act yet, and rules
-    # that are off or removed, are left out. A reviewer's briefing has the
+    # each with its current version. A reviewer's briefing has the
     # same rules (RC-31): the seat and the review change nothing here. The
     # order is Catalog's. It reads only.
     module BriefingRules

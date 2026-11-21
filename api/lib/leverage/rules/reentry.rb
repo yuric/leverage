@@ -79,7 +79,7 @@ module Leverage
       # current inputs. While one runs or has ended in error it waits (the
       # error under check_error); a failed one stops the action; when every
       # gate has cleared, the approval policy is planned (Decision#checks
-      # and #jobs). No command reaches action.requested before milestone 5.
+      # and #jobs).
       #
       # Returns a Gating::Decision. Raises ActiveRecord::RecordNotFound for
       # an id that names no action.
@@ -89,7 +89,7 @@ module Leverage
         request = action_request(made, task)
         input_hash = Gating.input_hash(hook: ACTION_HOOK, inputs: request.inputs)
         rows = RuleCheck.where(workspace_id: made.workspace_id, task_id: task.id, hook: ACTION_HOOK, subject_kind: "action",
-          subject_id: made.id, input_hash: input_hash).to_a
+          subject_id: made.id, round: request.round, input_hash: input_hash).to_a
         versions = RuleVersion.where(id: rows.map(&:rule_version_id)).index_by(&:id)
         rules = Rule.where(id: rows.map(&:rule_id)).index_by(&:id)
         gates = rows.filter_map do |row|

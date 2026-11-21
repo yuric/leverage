@@ -231,7 +231,7 @@ module Leverage
       end
 
       test "an app rule whose function is not built plans nothing at its hook (RD-8)" do
-        scenario.with_shipped_rules
+        app_gate("review.failed", "unbuilt")
         task = scenario.task(state: "in_review")
         review = Review.find_by!(task_id: task.id)
 

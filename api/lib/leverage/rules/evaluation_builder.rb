@@ -72,7 +72,7 @@ module Leverage
             gates, policies = entries.partition { |entry| entry.version.kind == "gate" }
             gates.each { |entry| plan_rule(entry) }
             if @failures.empty? && @pending
-              deferred = policies.map { |entry| entry.rule.id }
+              deferred = policies.filter_map { |entry| entry.rule.id if covered?(entry.version) }
             elsif @failures.empty?
               policies.each { |entry| plan_rule(entry) }
             end
@@ -121,7 +121,7 @@ module Leverage
 
       def fresh(entry)
         version = entry.version
-        if Scope.coverage(version, @task, @request.inputs) == :not_covered
+        if !covered?(version)
           plan(entry, result: "not_applicable") unless quiet_policy?(version)
         elsif version.checker == "model"
           plan_model(entry)
@@ -131,6 +131,8 @@ module Leverage
           plan_app_gate(entry)
         end
       end
+
+      def covered?(version) = Scope.covers?(version, @task, @request.inputs)
 
       def plan_model(entry)
         version = entry.version
@@ -162,12 +164,13 @@ module Leverage
 
       def plan_app_policy(entry)
         answer = AppCheckers.check(entry.version, request: @request, task: @task)
-        if answer.effect
-          plan(entry, result: "applied", effect: answer.effect, reason: answer.reason)
-          @effects << effect(entry, answer.effect)
-        elsif !quiet_policy?(entry.version)
-          plan(entry, result: "applied", reason: answer.reason)
-        end
+        effects = Array(answer.effect)
+        return if effects.empty? && quiet_policy?(entry.version)
+
+        # One check is recorded per rule and report. The plan can apply
+        # both budget effects, with the project pause first on the row.
+        plan(entry, result: "applied", effect: effects.first, reason: answer.reason)
+        effects.each { |value| @effects << effect(entry, value) }
       end
 
       # Adds a planned row and returns its index.
@@ -222,8 +225,10 @@ module Leverage
         # names none, the owner while no seat holds the task (ready to start,
         # an outward action) and the builder at the other moments (L464,
         # RD-24, RC-48).
-        def route(version)
-          version.route || (%w[task.before_ready action.requested].include?(version.hook) ? "owner" : "builder")
+        def route(version) = version.route || default_route(version.hook)
+
+        def default_route(hook)
+          %w[task.before_ready action.requested].include?(hook) ? "owner" : "builder"
         end
       end
     end

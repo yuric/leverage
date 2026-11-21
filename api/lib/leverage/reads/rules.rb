@@ -4,8 +4,8 @@ module Leverage
     # L395, L423; milestone 4 plan §2.3, RD-8, RD-26, RD-62): every rule of
     # the workspace that is not removed, switched on or off, each with its
     # current version, the moment it runs at, its one sentence when an app
-    # checks it, whether it acts in this version of leverage, and its
-    # counts. One Snapshot, so the rules and their counts are one moment of
+    # checks it, whether the engine supports it, and its counts.
+    # One Snapshot, so the rules and their counts are one moment of
     # the log.
     #
     # Order: the shipped rules in shipped_rules.json's order, then the

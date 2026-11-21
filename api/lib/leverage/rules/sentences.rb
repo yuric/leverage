@@ -3,8 +3,7 @@ module Leverage
     # One fixed sentence per checker_function (PRD L344; milestone 4 plan
     # RD-62), filled from a version's parameters: the sentence Settings
     # shows for an app rule and, in a briefing, its instruction. A model
-    # rule's text is its instruction, so it has none here. The three
-    # functions that do not act yet have sentences for Settings only.
+    # rule's text is its instruction, so it has none here.
     module Sentences
       SENTENCES = {
         "minimum_criteria_count" => lambda do |parameters|
@@ -12,12 +11,14 @@ module Leverage
           "Every task needs at least #{count} acceptance #{count == 1 ? "criterion" : "criteria"} besides the review."
         end,
         "refuse_reviewer_of_building_provider" => ->(_) { "An agent on a provider that built the task may not review it." },
-        "route_question" => ->(_) { "Workers ask the orchestrator before they ask you." },
+        "route_question" => ->(_) { "Agents ask the agent that checks tasks before they ask you." },
         "escalate_after_failed_reviews" => lambda do |parameters|
           threshold = Integer(parameters.fetch("threshold", 2))
-          "After #{threshold} failed #{threshold == 1 ? "review" : "reviews"} a task moves to a stronger model."
+          "After #{threshold} failed #{threshold == 1 ? "review" : "reviews"} a task goes to a stronger agent."
         end,
-        "pause_project_at_budget" => ->(_) { "A project pauses when it reaches its budget." }
+        "pause_project_at_budget" => lambda do |_|
+          "A project pauses when its reported spending reaches its budget, and a task when it reaches its own limit."
+        end
       }.freeze
 
       module_function

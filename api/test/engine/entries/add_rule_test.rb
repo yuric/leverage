@@ -4,8 +4,8 @@ require_relative "../../support/trace_runner"
 
 # Entries::AddRule (PRD L342, L423; milestone 4 plan RD-4, RD-21 to RD-24):
 # the owner adds a custom rule, a model-checked gate that blocks, at one of
-# the four moments a task can reach. Before anything goes out arrives with
-# outward actions, and two scopes wait for projects: each is 422 invalid.
+# the five moments a task can reach. Scope values must fit their kind
+# and any projects they name must belong to the workspace.
 class AddRuleTest < ActiveSupport::TestCase
   include RuleSupport
 
