@@ -42,7 +42,7 @@ class ContentDeletionTest < ActiveSupport::TestCase
       first = ready_to_submit(builder)
       second = ready_to_submit(own_seat)
       keys = [ first, second ].map do |task|
-        reason = task.id == first.id ? mark : "Other made-up reason."
+        reason = mark
         gating([ rule, { app_result: "failed", reason: reason } ]) if checker == "app"
         Leverage::Gating.implementation = Leverage::Rules::Engine.new if checker == "model"
         holder = Seat.find(task.holder_seat_id)
@@ -61,6 +61,11 @@ class ContentDeletionTest < ActiveSupport::TestCase
         assert refusal.reason == reason, "the original outcome records the gate reason"
         key
       end
+      if checker == "model"
+        repeated = command("submit", builder, submit_params(first))
+        assert_refused("blocked_by_rule", repeated)
+        cached_key = @key
+      end
       other_builder = Seat.find(second.holder_seat_id)
       other_refusal = command_receipt(other_builder, keys.last).outcome.refusal
       assert_completed owner_command("cancel", { id: first.id })
@@ -71,6 +76,10 @@ class ContentDeletionTest < ActiveSupport::TestCase
       assert receipt.outcome.refusal.reason.nil?, "command read retained deleted content"
       assert_equal [ "blocked_by_rule", rule.id ], [ receipt.outcome.refusal.code, receipt.outcome.refusal.rule_id ]
       assert command_receipt(other_builder, keys.last).outcome.refusal == other_refusal, "another task's outcome changed"
+      if cached_key
+        cached = command_receipt(builder, cached_key)
+        assert cached.outcome.refusal.reason.nil?, "cached decision retained deleted content"
+      end
       refute RuleCheck.where(task_id: first.id).where.not(reason: nil).exists?
     end
   end

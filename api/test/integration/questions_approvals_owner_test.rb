@@ -119,6 +119,7 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
   test "a task page keeps its criterion but omits evidence after deleting the evidence contents" do
     task = create_task
     builder = @scenario.seat
+    start_audit
     claim(builder, task)
     criterion = Criterion.find_by!(task_id: task.id, kind: "build")
     ids = path(task).merge("cid" => criterion.id)

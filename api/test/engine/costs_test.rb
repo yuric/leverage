@@ -40,6 +40,32 @@ class CostsTest < ActiveSupport::TestCase
     end
   end
 
+  test "a check can finish when its cost puts the waiting verdict over the project spending limit" do
+    reviewer = own_seat(role: "reviewer")
+    orchestrator = scenario.orchestrator
+    task = scenario.task(state: "in_review", project: @project)
+    review = scenario.review(task, reviewer: reviewer)
+    scenario.rule(hook: "task.before_done")
+    @project.update!(spent: 99_999_998.999999)
+    Leverage::Gating.implementation = Leverage::Rules::Engine.new
+    hash = Leverage::Briefing.hash_for(task, seat: reviewer, review: review)
+    assert_completed(seat_command(reviewer, "acknowledge_review_briefing", { "id" => review.id, "briefing_hash" => hash }))
+    verdict = { "id" => review.id, "verdict" => "passed", "notes" => "Sample review.",
+      "failed_criteria" => [], "tokens" => 0, "spend" => 1 }
+    key = new_key
+    assert_equal :pending, seat_command(reviewer, "pass_review", verdict, key: key).outcome
+    job = Job.find(assert_completed(claim_job(orchestrator)).result.fetch("job_id"))
+
+    assert_completed(submit_result(orchestrator, job, { "result" => "passed", "reason" => "Sample reason." }, spend: 1))
+
+    assert_equal "finished", job.reload.state
+    assert_equal "invalid_state", Command.find_by!(key: key).refusal.fetch("code")
+    assert_nil review.reload.verdict
+    assert_equal BigDecimal("99999999.999999"), @project.reload.spent
+    assert_completed(seat_command(reviewer, "pass_review", verdict.merge("spend" => 0)))
+    assert_equal "done", task.reload.state
+  end
+
   test "a seat can report under a hold without acknowledging while a submit waits on a check" do
     scenario.hold(@task, reason: "owner_hold")
     pending = scenario.pending_transition(@task, command: "submit", requester: @builder)

@@ -40,7 +40,7 @@ class QuestionsTest < ActiveSupport::TestCase
   end
 
   test "only a builder holding the task with the current acknowledgement may ask" do
-    assert_refused("forbidden", ask(seat: own_seat(role: "reviewer")))
+    assert_refused("not_holder", ask(seat: own_seat(role: "reviewer")))
     assert_refused("not_holder", ask(seat: own_seat))
     assert_refused("briefing_not_acknowledged", ask)
     acknowledge
@@ -167,6 +167,17 @@ class QuestionsTest < ActiveSupport::TestCase
     assert written.all? { |event| event.actor_kind == "app" && event.command_id.nil? }
     assert_equal [ "open", "timed_out" ], [ question.reload.outcome, job.reload.state ]
     assert_equal 2, Job.find_by!(target_id: question.id, state: "queued").attempt_number
+  end
+
+  test "older questions on Done tasks are neither offered nor replayed as work" do
+    task = scenario.task(state: "done", builder: own_seat)
+    question = scenario.question(task)
+    queued = scenario.job(kind: "question", task: task, target: question)
+    claimed = scenario.job(kind: "question", task: task, target: question, state: "claimed", seat: @orchestrator)
+    assert_nil Leverage::Jobs.held(@orchestrator)
+    refute Leverage::Jobs.claim_material_available?(claimed, @orchestrator, at: scenario.database_now)
+    assert_refused("not_eligible", claim_job(@orchestrator))
+    assert_equal "queued", queued.reload.state
   end
 
   test "the asking seat marks only a delivered answer as read and overturn makes it unread again" do
