@@ -74,6 +74,14 @@ class JobInputsQuestionTest < ActiveSupport::TestCase
     end
   end
 
+  test "the job's question must belong to the task it names" do
+    task = @scenario.task(state: "working")
+    other_task = @scenario.task(state: "working")
+    question = @scenario.question(other_task, assumption: "Use the sample.")
+
+    assert_raises(ActiveRecord::RecordNotFound) { question_input(task, question) }
+  end
+
   private
 
   def question_input(task, question)

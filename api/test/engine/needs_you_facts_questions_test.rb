@@ -27,6 +27,18 @@ class NeedsYouFactsQuestionsTest < ActiveSupport::TestCase
     assert_equal({ "question_id" => question.id }, item.facts)
   end
 
+  test "only the builder who holds the task can request access" do
+    params = { "id" => @task.id, "description" => "Read the sample folder." }
+    other_builder = own_seat
+    reviewer = own_seat(role: "reviewer")
+
+    assert_empty events_written {
+      assert_refused("not_holder", seat_command(other_builder, "request_access", params))
+      assert_refused("forbidden", seat_command(reviewer, "request_access", params))
+    }
+    assert_empty task_holds
+  end
+
   test "two access requests open two Needs you items and one grant resolves both" do
     [ "Read the example folder.", "Read the example index." ].each do |description|
       assert_completed(seat_command(@builder, "request_access", { "id" => @task.id, "description" => description }))
@@ -59,6 +71,32 @@ class NeedsYouFactsQuestionsTest < ActiveSupport::TestCase
     resolutions = events.select { |event| event.type == "inbox.resolved" }
     assert_equal item_ids.sort, resolutions.map(&:subject_id).sort
     assert_equal [ { "choice" => "mark_access_granted" } ] * 2, resolutions.map(&:payload)
+  end
+
+  test "granting access leaves other holds in place" do
+    other_hold = scenario.hold(@task, reason: "owner_hold")
+    assert_completed(seat_command(@builder, "request_access", { "id" => @task.id, "description" => "Read the sample folder." }))
+
+    assert_completed(owner_command("grant_access", { "id" => @task.id }))
+
+    assert_equal [ other_hold.id ], task_holds.where(closed_at: nil).ids
+    assert_nil @task.reload.lease_due_at
+    assert_nil @task.resume_pending_since
+  end
+
+  test "answering one blocking question closes only the hold for that question" do
+    first = scenario.question(@task, outcome: "passed_on")
+    second = scenario.question(@task, outcome: "passed_on")
+    first_item, second_item = [ first, second ].map do |question|
+      open_items("question_passed_on").find_by!("facts ->> 'question_id' = ?", question.id)
+    end
+
+    assert_completed(owner_command("answer_question", { "id" => second.id, "answer" => "Use the second sample." }))
+
+    assert_equal [ second_item.hold_id ], task_holds.where.not(closed_at: nil).pluck(:id)
+    assert_equal [ "open", "resolved" ], [ first_item.reload.state, second_item.reload.state ]
+    assert_nil @task.reload.lease_due_at
+    assert_nil @task.resume_pending_since
   end
 
   private

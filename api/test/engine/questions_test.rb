@@ -79,14 +79,14 @@ class QuestionsTest < ActiveSupport::TestCase
     assert_equal (job.reload.claimed_at + scenario.workspace.check_run_timeout_seconds).utc.iso8601(6), claim.result.fetch("run_due_at")
   end
 
-  test "to_owner writes the applied check and the nonblocking item with that check as cause" do
+  test "to_owner writes the applied check and the non-blocking item caused by the question" do
     use_policy("to_owner")
     acknowledge
     written = events_written { assert_completed(ask) }
 
     assert_equal %w[question.asked check.finished inbox.opened], types(written)
     assert_equal [ "applied", "to_owner" ], written[1].payload.values_at("result", "effect")
-    assert_equal written[1].id, written.last.cause_id
+    assert_equal written.first.id, written.last.cause_id
     assert_empty Job.where(task_id: @task.id)
     assert_equal "passed_on", Question.find(written.first.subject_id).outcome
   end
@@ -140,6 +140,21 @@ class QuestionsTest < ActiveSupport::TestCase
     assert_completed(submit_result(@orchestrator, job, answer.merge("answer" => "é" * limit)))
   end
 
+  test "a result must either carry an answer and its basis or pass on without either" do
+    question, job = question_job
+    malformed = [
+      { "outcome" => "answered", "answer" => nil, "basis" => "record" },
+      { "outcome" => "answered", "answer" => "A sample reply.", "basis" => nil },
+      { "outcome" => "passed_on", "answer" => "A sample reply.", "basis" => nil },
+      { "outcome" => "passed_on", "answer" => nil, "basis" => "decision" }
+    ]
+
+    assert_empty events_written {
+      malformed.each { |result| assert_raises(T::Invalid) { submit_result(@orchestrator, job, result) } }
+    }
+    assert_equal [ "open", "claimed" ], [ question.reload.outcome, job.reload.state ]
+  end
+
   test "a result that arrives after its run timeout commits the miss and is refused" do
     question, job = question_job
     job.update!(claimed_at: scenario.database_now - scenario.workspace.check_run_timeout_seconds - 1)
@@ -158,8 +173,9 @@ class QuestionsTest < ActiveSupport::TestCase
     question = scenario.question(@task, outcome: "answered", answerer: @orchestrator)
     mark = T::MarkQuestionRead
     open_question = scenario.question(@task)
+    other = own_seat
     written = events_written do
-      refute mark.call(question, seat: own_seat)
+      refute mark.call(question, seat: other)
       refute mark.call(open_question, seat: @builder)
       assert_nil question.reload.read_at
       assert mark.call(question, seat: @builder)
@@ -172,6 +188,23 @@ class QuestionsTest < ActiveSupport::TestCase
     assert_completed(owner_command("overturn_answer", { "id" => question.id }))
     assert_equal [ "overturned", answer, nil ], question.reload.attributes.values_at("outcome", "answer", "read_at")
     assert mark.call(question, seat: @builder)
+  end
+
+  test "an answer read before overturn does not clear the notice of the overturn" do
+    question = scenario.question(@task, outcome: "answered", answerer: @orchestrator)
+    assert_completed(owner_command("overturn_answer", { "id" => question.id }))
+
+    refute T::MarkQuestionRead.call(question)
+    assert_nil question.reload.read_at
+    assert T::MarkQuestionRead.call(question)
+  end
+
+  test "a read after the lease deadline leaves the answer unread" do
+    question = scenario.question(@task, outcome: "answered", answerer: @orchestrator)
+    scenario.make_due(@task)
+
+    refute T::MarkQuestionRead.call(question, seat: @builder)
+    assert_nil question.reload.read_at
   end
 
   test "the ask, route and answer clocks follow the workspace lock when the database clock steps back" do

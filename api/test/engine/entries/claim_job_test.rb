@@ -129,6 +129,21 @@ class ClaimJobTest < ActiveSupport::TestCase
     assert_equal (job.reload.claimed_at + 300).utc.iso8601(6), outcome.result.fetch("run_due_at")
   end
 
+  test "a seat that changes jobs role cannot reclaim question material or take a second job" do
+    seat = own_seat(role: "orchestrator")
+    task = scenario.task(state: "working")
+    question = scenario.question(task)
+    question_job = scenario.job(kind: "question", task: task, target: question)
+    assert_equal question_job.id, assert_completed(claim_job(seat)).result.fetch("job_id")
+    draft_job = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog"))
+
+    assert_completed(owner_command("change_seat", { "id" => seat.id, "role" => "planner" }))
+
+    assert_nil Leverage::Jobs.next_for(seat.reload, at: scenario.database_now)
+    assert_refused("not_eligible", claim_job(seat))
+    assert_equal [ "claimed", "queued" ], [ question_job.reload.state, draft_job.reload.state ]
+  end
+
   test "a seat that built a task cannot claim its question job after becoming an orchestrator" do
     former_builder = own_seat
     task = scenario.task(state: "working", builder: former_builder)
