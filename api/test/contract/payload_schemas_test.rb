@@ -95,6 +95,8 @@ module PayloadRules
     "question.answered" => %w[basis],
     # Replay: the holder after an approval or a delayed grant (SM-7, SM-8).
     "action.approved" => %w[lease_seat_id],
+    # Decided for you: tell Overturn approval from other stops (DB-51).
+    "action.stopped" => %w[overturned],
     "action.lease_granted" => %w[lease_seat_id],
     # Replay: the provisional holder and the check step's subject (DB-43,
     # SM-41); the rule_checks row's subject and input hash, which replay into

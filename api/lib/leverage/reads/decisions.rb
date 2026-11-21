@@ -56,7 +56,8 @@ module Leverage
         subsequent_approval = later.any? { |candidate| candidate.type == "action.approved" }
         same_approval = later.take_while { |candidate| !%w[action.approved action.withdrawn].include?(candidate.type) }
         overturned = same_approval.find do |candidate|
-          candidate.type == "action.overturn_recorded" || (candidate.type == "action.stopped" && candidate.actor_kind == "owner")
+          candidate.type == "action.overturn_recorded" ||
+            (candidate.type == "action.stopped" && candidate.payload["overturned"] == true)
         end
         # An edit can remove an action definition after a return for rework.
         # Its decision is still in the log, but the definition's text is gone.

@@ -561,7 +561,7 @@ class Scenario
       end
     when "stopped"
       action.update!(state: state)
-      record_action_event("action.stopped", task, action, **owner_actor)
+      record_action_event("action.stopped", task, action, **owner_actor, payload: { overturned: false })
       hold(task, reason: "action_stopped", facts: { action_id: action.id, rule_check_id: nil, any_action_started: false })
     when "waived"
       action.update!(state: state)

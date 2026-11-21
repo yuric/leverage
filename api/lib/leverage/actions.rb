@@ -57,7 +57,7 @@ module Leverage
       task = task_of(action)
       command = rule_check ? "request_action" : (ctx.request.command == "overturn_approval" ? "overturn_approval" : "stop_action")
       event = move(ctx, action, "action.stopped", command: command, task: task, actor_kind: by.first, actor_id: by.last,
-        cause_id: (RuleChecks.last_finished(rule_check)&.id if rule_check))
+        cause_id: (RuleChecks.last_finished(rule_check)&.id if rule_check), payload: { overturned: command == "overturn_approval" })
       # A gate can stop the action while other gates still run. Their
       # results are needed before the owner can override the failed gate.
       withdraw_checks(ctx, action, task) unless rule_check
@@ -197,10 +197,10 @@ module Leverage
       end || raise(ArgumentError, "action cannot move from #{action.state} by #{event}")
     end
 
-    def move(ctx, action, event, command: nil, task: task_of(action), fields: {}, **as)
+    def move(ctx, action, event, command: nil, task: task_of(action), fields: {}, payload: {}, **as)
       row = transition!(action, event, command)
       action.update!(state: row.fetch("to"), **fields)
-      ctx.emit(event, task: task, subject: action, payload: {}, **as)
+      ctx.emit(event, task: task, subject: action, payload: payload, **as)
     end
 
     def remove_definition(action)

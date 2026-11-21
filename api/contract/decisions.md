@@ -387,6 +387,13 @@ Where two inventories chose differently, the decision names the conflict.
   state. Complete contract can preserve an existing action without
   recording it again, so its event cannot reconstruct the initial rows.
   The field is added to `v1` in place under DB-48.
+- **DB-51** `[shape]` Added by Questions and approvals. The
+  `action.stopped` payload carries `overturned`, true when Overturn
+  approval stops an open action and false for other stops. Decided for
+  you uses the field to distinguish an overturn from a Stop action
+  command. A done action's overturn still writes `action.overturn_recorded`
+  (AP-13). The field is added to `v1` in place under DB-48. The reader
+  treats a stop without the field as a stop without an overturn.
 
 ## State machine (SM)
 

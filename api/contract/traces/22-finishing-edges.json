@@ -4000,7 +4000,7 @@
             "subject_id": "$action:t2_1",
             "cause_id": null,
             "command_id": "$key:overturn_approval_51",
-            "payload": {}
+            "payload": {"overturned": true}
           },
           {
             "ref": "@event:107",
@@ -4195,7 +4195,7 @@
             "subject_id": "$action:t2_2",
             "cause_id": null,
             "command_id": "$key:stop_action_53",
-            "payload": {}
+            "payload": {"overturned": false}
           },
           {
             "ref": "@event:113",
@@ -5390,7 +5390,7 @@
             "subject_id": "$action:t3_1",
             "cause_id": null,
             "command_id": "$key:stop_action_69",
-            "payload": {}
+            "payload": {"overturned": false}
           },
           {
             "ref": "@event:144",
@@ -7300,7 +7300,7 @@
             "subject_id": "$action:t4_1",
             "cause_id": "@event:195",
             "command_id": "$key:submit_job_result_94",
-            "payload": {}
+            "payload": {"overturned": false}
           },
           {
             "ref": "@event:198",

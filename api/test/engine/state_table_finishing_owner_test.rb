@@ -123,7 +123,7 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
 
   def stop(ctx, action, by:)
     assert_equal ctx.actor, by
-    stopped = write_action(ctx, action, "action.stopped", "stopped")
+    stopped = write_action(ctx, action, "action.stopped", "stopped", overturned: ctx.request.command == "overturn_approval")
     Leverage::Holds.open(ctx, task: @task, reason: "action_stopped", cause_id: stopped.id,
       actor_kind: by.first, actor_id: by.last,
       facts: { action_id: action.id, rule_check_id: nil, any_action_started: false })
