@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-21",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "exec",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--json",
+      "--sandbox",
+      "workspace-write",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "-C",
+      "<work folder>",
+      "-o",
+      "<answer file>"
+    ],
+    "shows": "a limit on the 5-hour window that states no reset time",
+    "expect": "limit",
+    "expect_window": "five_hour",
+    "expect_reset": "none",
+    "marker": "LVRG-REPLY-600000000002"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-600000000002\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"error\", \"message\": \"You've hit your 5-hour usage limit.\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"You've hit your 5-hour usage limit.\"}}\n",
+  "stderr": ""
+}

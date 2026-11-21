@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "provider": "gemini_api",
+    "tool": "gemini_api",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Unauthorized token",
+    "expect": {
+      "state": "signed_out",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c00000b"
+  },
+  "status": 401,
+  "headers": {},
+  "body": {
+    "error": {
+      "message": "LVRG-REPLY-60002c00000b"
+    }
+  }
+}

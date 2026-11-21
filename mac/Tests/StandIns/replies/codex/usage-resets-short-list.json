@@ -1,0 +1,119 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-21",
+    "basis": "made_from_schema",
+    "kind": "usage",
+    "command": [
+      "app-server"
+    ],
+    "shows": "Three available credits with only one listed",
+    "expect": {
+      "state": "ok",
+      "figures": [
+        {
+          "label": "5-hour window",
+          "kind": "limit",
+          "window": "five_hour",
+          "percent_used": 30,
+          "reset_at": "2026-01-01T05:00:00Z",
+          "value": null
+        },
+        {
+          "label": "Weekly window",
+          "kind": "limit",
+          "window": "weekly",
+          "percent_used": 12,
+          "reset_at": "2026-01-08T00:00:00Z",
+          "value": null
+        },
+        {
+          "label": "Lifetime tokens",
+          "kind": "activity",
+          "window": null,
+          "percent_used": null,
+          "reset_at": null,
+          "value": 1234567
+        },
+        {
+          "label": "Peak daily tokens",
+          "kind": "activity",
+          "window": null,
+          "percent_used": null,
+          "reset_at": null,
+          "value": 89000
+        }
+      ],
+      "resets": [
+        {
+          "kind": "full",
+          "count": 1,
+          "expires_at": "2026-02-01T00:00:00Z"
+        },
+        {
+          "kind": "full",
+          "count": 2,
+          "expires_at": null
+        }
+      ]
+    },
+    "marker": "LVRG-REPLY-600000000009"
+  },
+  "session": {
+    "initialize": {
+      "result": {
+        "codexHome": "<scrubbed>",
+        "userAgent": "codex-standin LVRG-REPLY-600000000009",
+        "platformFamily": "unix",
+        "platformOs": "macos"
+      }
+    },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "apiKey"
+        },
+        "requiresOpenaiAuth": true,
+        "userId": null
+      }
+    },
+    "account/rateLimits/read": {
+      "result": {
+        "rateLimits": {
+          "primary": {
+            "windowDurationMins": 300,
+            "usedPercent": 30,
+            "resetsAt": 1767243600
+          },
+          "secondary": {
+            "windowDurationMins": 10080,
+            "usedPercent": 12,
+            "resetsAt": 1767830400
+          }
+        },
+        "rateLimitResetCredits": {
+          "availableCount": 3,
+          "credits": [
+            {
+              "id": "<scrubbed>",
+              "expiresAt": 1769904000,
+              "grantedAt": 1767225600,
+              "resetType": "codexRateLimits",
+              "status": "available"
+            }
+          ]
+        }
+      }
+    },
+    "account/usage/read": {
+      "result": {
+        "summary": {
+          "lifetimeTokens": 1234567,
+          "peakDailyTokens": 89000
+        }
+      }
+    }
+  }
+}

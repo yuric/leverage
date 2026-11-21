@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-21",
+    "basis": "made_from_schema",
+    "kind": "usage",
+    "command": [
+      "app-server"
+    ],
+    "shows": "A signed-out account and refused usage requests",
+    "expect": {
+      "state": "signed_out",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60000000000c"
+  },
+  "session": {
+    "initialize": {
+      "result": {
+        "codexHome": "<scrubbed>",
+        "userAgent": "codex-standin LVRG-REPLY-60000000000c",
+        "platformFamily": "unix",
+        "platformOs": "macos"
+      }
+    },
+    "account/read": {
+      "result": {
+        "account": null,
+        "requiresOpenaiAuth": true,
+        "userId": null
+      }
+    },
+    "account/rateLimits/read": {
+      "error": {
+        "code": -32000,
+        "message": "Sign-in required"
+      }
+    },
+    "account/usage/read": {
+      "error": {
+        "code": -32000,
+        "message": "Sign-in required"
+      }
+    }
+  }
+}

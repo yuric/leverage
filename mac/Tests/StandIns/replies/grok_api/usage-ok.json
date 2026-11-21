@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "grok_api",
+    "tool": "grok_api",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Active key",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c00000c"
+  },
+  "status": 200,
+  "headers": {},
+  "body": {
+    "name": "LVRG-REPLY-60002c00000c",
+    "api_key_blocked": false,
+    "api_key_disabled": false,
+    "team_blocked": false
+  }
+}
