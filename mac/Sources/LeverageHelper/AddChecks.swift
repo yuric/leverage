@@ -142,7 +142,7 @@ struct AddChecks: Sendable {
             return await run.fail(.testPrompt, .noAnswer)
         }
         await run.pass(.testPrompt)
-        if !Task.isCancelled {
+        if mode != .signInAgain, !Task.isCancelled {
             run.facts = await facts.read(ReaderAccount(
                 entry: entry, tool: tool, accountFolder: folder,
                 environment: locator.toolEnvironment(entry, toolPath: tool.path, accountFolder: folder),
