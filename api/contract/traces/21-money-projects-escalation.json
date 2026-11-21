@@ -3055,7 +3055,7 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:73"
+            "opening_event_id": "@event:75"
           }
         ],
         "steps_closed": [
