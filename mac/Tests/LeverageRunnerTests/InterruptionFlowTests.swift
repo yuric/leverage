@@ -79,6 +79,24 @@ struct InterruptionFlowTests {
         #expect(harness.calls(.getNext).count == 1, "the loop ends: no next item is asked for")
     }
 
+    @Test("a cost refusal on a task that ended does not hide the account's limit")
+    func limitDespiteCostRefusal() async throws {
+        let harness = try Harness()
+        let loop = builder(harness, driver: driver(first: try failedRun("run-limit-five-hour.json")),
+                           interruption: interruption())
+        harness.api.script {
+            $0.reportCost = { _, _, _ in Fixture.refused(.taskCancelled, .reportCost) }
+        }
+        harness.next([NextItem(kind: .task)], then: loop)
+
+        #expect(await runToEnd(loop) == 5)
+        #expect(loop.endReport?.kind == .limit)
+        #expect(loop.endReport?.taskID == taskID)
+        #expect(harness.calls(.reportCost).count == 1)
+        #expect(harness.calls(.releaseTask).isEmpty)
+        #expect(harness.calls(.passCriterion).isEmpty)
+    }
+
     @Test("after the account stops no heartbeat is sent")
     func noHeartbeatAfter() async throws {
         let harness = try Harness()

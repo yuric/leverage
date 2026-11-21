@@ -52,8 +52,10 @@ struct FinishingFlowTests {
             Action(id: id, taskID: taskID, kind: .publish, description: description, state: state, position: position)
         }
 
-        func briefing(_ actions: [Action], hash: String = "hash-finishing") -> BriefingResponse {
-            let criterion = Fixture.criterion(taskID, 1, "The proof page is complete.", state: .passed)
+        func briefing(
+            _ actions: [Action], hash: String = "hash-finishing", criterionState: CriterionState = .passed
+        ) -> BriefingResponse {
+            let criterion = Fixture.criterion(taskID, 1, "The proof page is complete.", state: criterionState)
             let briefing = Briefing(
                 hash: hash, versions: BriefingVersions(roleFileVersion: "0.0.0", contractVersion: 1),
                 roleFile: "You build what the contract asks.",
@@ -263,6 +265,27 @@ struct FinishingFlowTests {
         setup.expectActions(.reportActionDone, [first, second])
         setup.expectCosts(2)
         #expect(try setup.touches() == "1\n2\n")
+    }
+
+    @Test("if the owner reworks a task after the action item was offered, the new briefing drives build work")
+    func staleActionItem() async throws {
+        let setup = try Setup()
+        let action = setup.action("Publish the proof page.", 1, .contracted)
+        try setup.serve([setup.briefing([action], hash: "hash-rework", criterionState: .open)])
+        setup.harness.api.script {
+            $0.startCriterion = { _, _, _ in Fixture.done(.startCriterion) }
+            $0.passCriterion = { _, _, _, _ in Fixture.done(.passCriterion) }
+            $0.submitTask = { _, _, _ in Fixture.done(.submit) }
+        }
+        let loop = try setup.loop()
+        setup.harness.next([setup.next(.action)], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(setup.operations == [
+            .getNext, .getTaskBriefing, .acknowledgeTaskBriefing, .startCriterion,
+            .reportCost, .passCriterion, .submitTask, .getNext,
+        ])
+        #expect(try setup.touches().isEmpty)
     }
 
     @Test("a run launched with a Finishing task does its remaining approved action")

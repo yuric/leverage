@@ -261,9 +261,11 @@ struct QuestionAndApprovalJobTests {
         let calls = try setup.drivers.tools.calls()
         #expect(calls.count == count)
         #expect(Set(calls.map(\.cwd)).count == count)
+        // TemporaryFolder uses realpath, which is also the form the stand-in's getcwd returns.
+        let jobs = setup.harness.workRoot.appendingPathComponent("jobs", isDirectory: true).path
         let nonces = try calls.map { call in
-            let root = setup.harness.workRoot.resolvingSymlinksInPath().path
-            #expect(call.cwd.hasPrefix(root + "/jobs/"))
+            let parent = URL(fileURLWithPath: call.cwd, isDirectory: true).deletingLastPathComponent().path
+            #expect(parent == jobs)
             #expect(!FileManager.default.fileExists(atPath: call.cwd))
             let tools = try #require(call.argv.firstIndex(of: "--tools"))
             #expect(call.argv.dropFirst(tools + 1).first == "")
