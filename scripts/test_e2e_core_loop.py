@@ -87,7 +87,7 @@ class Run:
     def close(self):
         self._folder.cleanup()
 
-    def run(self, call_value="nothing secret here", **extra):
+    def run(self, call_value="nothing secret here", *, script=SCRIPT, **extra):
         environment = {
             "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.root),
@@ -98,7 +98,7 @@ class Run:
             **extra,
         }
         result = subprocess.run(
-            ["bash", str(SCRIPT)], cwd=ROOT, env=environment, capture_output=True, text=True,
+            ["bash", str(script)], cwd=ROOT, env=environment, capture_output=True, text=True,
             check=False, timeout=120)
         return result.returncode, result.stdout + result.stderr
 
@@ -144,6 +144,48 @@ class EndToEndScriptTests(unittest.TestCase):
         self.assertNotEqual(code, 0, output)
         self.assertIn("calls.jsonl", output)
         self.assertNotIn(SECRET, output)
+
+
+COPIED_REPLY_LINE = "made-up reply body generated only in the test's stand-in copy"
+FAKE_CREDENTIALS_SWIFT = """#!/bin/sh
+if [ "$1" = test ]; then
+  folder="$LEVERAGE_E2E_DIR/credentials"
+  mkdir -p "$folder/support/logs" "$folder/StandIns/replies/codex"
+  printf '%s\\n' "$FAKE_SECRET" >"$folder/secrets.txt"
+  printf '{"meta":{"kind":"usage","marker":"LVRG-REPLY-000000000001"},"stdout":"%s"}\\n' \
+    "$FAKE_REPLY_LINE" >"$folder/StandIns/replies/codex/usage-test-only.json"
+  if [ -z "${FAKE_NO_HELPER_LOG:-}" ]; then
+    printf '%s\\n' "$FAKE_HELPER_LINE" >"$folder/support/logs/helper.log"
+  fi
+fi
+"""
+
+
+class CredentialsScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.run_ = Run()
+        self.addCleanup(self.run_.close)
+        (self.run_.bin / "swift").write_text(FAKE_CREDENTIALS_SWIFT, encoding="utf-8")
+
+    def run_credentials(self, **extra):
+        return self.run_.run(
+            script=HERE / "e2e_credentials.sh", LEVERAGE_E2E_ONLY="AddAndReadEndToEndTests",
+            API_IMAGE_TAG="made-up-tag", FAKE_REPLY_LINE=COPIED_REPLY_LINE, **extra)
+
+    def test_the_helper_log_is_required_and_the_failed_run_is_removed(self):
+        code, output = self.run_credentials(FAKE_NO_HELPER_LOG="1")
+        self.assertEqual(code, 1, output)
+        self.assertIn("the helper log is missing", output)
+        self.assertEqual(list(self.run_.tmp.iterdir()), [])
+        calls = self.run_.docker_calls()
+        self.assertTrue(any("down --volumes" in arguments for _tag, _project, arguments in calls))
+
+    def test_copied_reply_content_in_the_helper_log_fails_the_run(self):
+        code, output = self.run_credentials(FAKE_HELPER_LINE=COPIED_REPLY_LINE)
+        self.assertEqual(code, 1, output)
+        self.assertIn("helper.log", output)
+        self.assertIn("usage-test-only.json", output)
+        self.assertNotIn(COPIED_REPLY_LINE, output)
 
 
 # A docker that notes the mode of the backup folder it is handed, then
