@@ -71,7 +71,8 @@ TOKENS = [
 HOME_PATH = re.compile(r"(/Users/|/home/)(?!Shared\b)[^/\s\"']+|(?<![\w/~])~[A-Za-z0-9._-]*/")
 # The words of a field's name that mark it as an account's detail, whatever
 # else the name holds (plan_type, rateLimitTier, organization_name, orgUuid).
-NAMED_WORDS = {"email", "plan", "org", "organization", "organisation", "account", "tier", "subscription"}
+NAMED_WORDS = {"email", "plan", "org", "organization", "organisation", "account", "tier", "subscription",
+               "access", "display", "name", "refresh", "session"}
 UUID = re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 REQUEST_ID = re.compile(r"\breq_[0-9A-Za-z]{8,}")
 HEX_RUN = re.compile(r"(?i)(?<![0-9a-z])[0-9a-f]{16,}(?![0-9a-z])")
@@ -173,8 +174,8 @@ def private_id_key(key):
     return match is not None and match[1].lower().replace("-", "_") not in FIELD_SUFFIXES
 
 
-def usage_named_field(key):
-    """RD-8 adds identifiers, private names, token fields and filesystem paths."""
+def private_field(key):
+    """Match account details, identifiers, credentials and filesystem paths."""
     words = key_words(key)
     return (named_field(key) or bool(words & {"id", "ids", "uuid", "uuids", "workspace", "team",
                                               "path", "paths", "directory", "directories", "dir",
@@ -210,7 +211,7 @@ def usage_private_value(provider, path, value, marker):
         return not scrubbed(value, marker)
     if isinstance(value, dict) and data_keyed_field(key):
         return False  # Its children are checked by their keys as well as their values.
-    return usage_named_field(key) and not scrubbed(value, marker)
+    return private_field(key) and not scrubbed(value, marker)
 
 
 def scan_value(value, path, marker, provider, usage, found):
@@ -228,7 +229,7 @@ def scan_value(value, path, marker, provider, usage, found):
                 found.add("an object keyed by account, model or limit data needs placeholder keys")
             child = (*path, key)
             private = (usage_private_value(provider, child, inner, marker) if usage else
-                       path[:1] in (("stdout",), ("stderr",)) and named_field(key) and not scrubbed(inner, marker))
+                       path[:1] in (("stdout",), ("stderr",)) and private_field(key) and not scrubbed(inner, marker))
             if private:
                 found.add("an account, identifier, credential or path field holds a non-placeholder value")
             scan_value(inner, child, marker, provider, usage, found)
