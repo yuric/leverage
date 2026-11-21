@@ -13,6 +13,18 @@ require_relative "../support/walk"
 class LogAuditTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
+  test "releasing a lease after the last approved action was overturned leaves the stopped action" do
+    walk = Walk.new(seed: 10_101, steps: 120).run
+    events = Event.where(workspace_id: walk.workspace_id)
+    overturned = events.where(type: "action.stopped").where("payload->>'overturned' = 'true'").order(:seq).last
+    assert overturned, "the walk must overturn the approval"
+    release = events.where(task_id: overturned.task_id, type: "task.released").where("seq > ?", overturned.seq).order(:seq).first
+    assert release, "the builder must release the same task after the overturn"
+    refute events.where(command_id: release.command_id, type: "hold.opened")
+      .where("payload->>'reason' = 'action_unconfirmed'").exists?
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+  end
+
   def run_trace(name)
     TraceRunner.new(name).run.tap { |runner| assert_empty runner.failures, runner.failures.join("\n") }
   end
