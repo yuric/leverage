@@ -5,6 +5,12 @@ import Testing
 
 @testable import LeverageHelper
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
 @Suite("Login readers", .timeLimit(.minutes(Patience.minutes(1))))
 struct LoginReaderTests {
     @Test("signed-out accounts stop after version and status", arguments: [Provider.claude, .codex])
@@ -16,7 +22,7 @@ struct LoginReaderTests {
         try rig.tools.write(scenario: .init(usage: [.init(tool: tool, version: version)]))
         let readings = UsageReadTests.recordReadings(rig)
 
-        let result = await usageRead(rig).run(loginRequest(credential, provider: provider))
+        let result = await usageRead(rig, readers: Self.capturedReader).run(loginRequest(credential, provider: provider))
 
         #expect(result.outcome == .finished)
         let reading = try #require(readings.value.first)
@@ -28,7 +34,7 @@ struct LoginReaderTests {
         #expect(calls.map(\.argv) == [["--version"], provider == .claude ? ["auth", "status"] : ["login", "status"]])
     }
 
-    @Test("Refresh starts no tool for a login without a reader", arguments: [Provider.gemini, .grok])
+    @Test("Refresh starts no tool for a login without a reader", arguments: [Provider.claude, .gemini, .grok])
     func noReader(provider: Provider) async throws {
         let rig = try HelperRig()
         let readings = UsageReadTests.recordReadings(rig)
@@ -60,9 +66,9 @@ struct LoginReaderTests {
         }
         try rig.tools.write(scenario: .init(usage: [.init(tool: tool, version: version)] + scenarios))
         let readings = UsageReadTests.recordReadings(rig)
-        let enteredDirectories = Locked<[URL]>([])
+        let enteredDirectories = Locked<[String]>([])
         let read = usageRead(rig, readers: { provider in
-            UsageReaders.reader(for: provider).map { InspectWorkingFolder(reader: $0, entered: enteredDirectories) }
+            Self.capturedReader(provider).map { InspectWorkingFolder(reader: $0, entered: enteredDirectories) }
         })
 
         for id in ids {
@@ -95,9 +101,15 @@ struct LoginReaderTests {
         }
         let accountVariable = provider == .claude ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME"
         #expect(calls.map { $0.env[accountVariable] } == folders.map { Optional($0.path) })
-        let canonicalPaths = directories.map { $0.resolvingSymlinksInPath().path }
-        #expect(calls.map(\.cwd) == canonicalPaths)
-        #expect(directories.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        #expect(calls.map(\.cwd) == directories)
+        if provider == .claude {
+            let args = [
+                "-p", "/usage", "--output-format", "json", "--no-session-persistence",
+                "--permission-mode", "dontAsk", "--strict-mcp-config", "--setting-sources", "user", "--tools", "",
+            ]
+            #expect(calls.map(\.argv) == [args, args])
+        }
+        #expect(directories.allSatisfy { !FileManager.default.fileExists(atPath: $0) })
         let reads = rig.support.appendingPathComponent("reads", isDirectory: true)
         #expect(try FileManager.default.contentsOfDirectory(atPath: reads.path).isEmpty)
     }
@@ -119,18 +131,25 @@ struct LoginReaderTests {
             })
     }
 
+    private static func capturedReader(_ provider: Provider) -> (any UsageReader)? {
+        if provider == .claude { return ClaudeUsageReader() }
+        return UsageReaders.reader(for: provider)
+    }
+
     private func standIn(for provider: Provider) -> (String, String) {
         provider == .claude ? ("claude", "2.1.325 (Claude Code)") : ("codex", "codex-cli 0.169.0")
     }
 
     private struct InspectWorkingFolder: UsageReader {
         let reader: any UsageReader
-        let entered: Locked<[URL]>
+        let entered: Locked<[String]>
 
         func read(_ account: ReaderAccount) async throws -> UsageReading {
             let files = FileManager.default
             #expect(try files.contentsOfDirectory(atPath: account.workingDirectory.path).isEmpty)
-            entered.update { $0.append(account.workingDirectory.resolvingSymlinksInPath()) }
+            let canonicalPath = try #require(realpath(account.workingDirectory.path, nil))
+            defer { free(canonicalPath) }
+            entered.update { $0.append(String(cString: canonicalPath)) }
             let reading = try await reader.read(account)
             try Data().write(to: account.workingDirectory.appendingPathComponent("reader-work"))
             return reading

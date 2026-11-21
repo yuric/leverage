@@ -23,5 +23,11 @@ protocol UsageReader: Sendable {
 enum UsageReaders {
     typealias Lookup = @Sendable (Provider) -> (any UsageReader)?
 
-    static func reader(for provider: Provider) -> (any UsageReader)? { nil }
+    static func reader(for provider: Provider) -> (any UsageReader)? {
+        switch provider {
+        case .codex: CodexUsageReader()
+        // Claude's recorded envelope has no recoverable quota grammar.
+        default: nil
+        }
+    }
 }

@@ -49,7 +49,7 @@ struct ClaudeResetCacheTests {
     @Test("the top-level cache is read without mistaking quoted text, braces or nested keys for a field")
     func topLevelOnly() throws {
         let nested = #""sample":[{"cachedUsageUtilization":null,"text":"a quote \" and }, ]"},true,null,-7.4e+2]"#
-        let id = "SYNTHETIC-ACCOUNT-DETAIL"
+        let id = "SYNTHETIC-ACCOUNT-DETAIL-三"
         let secret = "SYNTHETIC-KEY-MATERIAL"
         let json = #"{\#(nested),"accountId":"\#(id)","cached\u0055sageUtilization":\#(entry),"other":"\#(secret)"}"#
         let resets: [Reset]? = ClaudeResetCache.read(data: Data(json.utf8), now: now)
@@ -113,5 +113,11 @@ struct ClaudeResetCacheTests {
         let alias = root.path("linked-account")
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: other)
         #expect(ClaudeResetCache.read(accountFolder: alias, now: now) == nil)
+        let linkedRoot = root.path("linked-root")
+        try FileManager.default.createSymbolicLink(at: linkedRoot, withDestinationURL: root.url)
+        #expect(ClaudeResetCache.read(accountFolder: linkedRoot.appendingPathComponent("other"), now: now) == nil)
+        let hardLink = try root.folder("another")
+        try FileManager.default.linkItem(at: real, to: hardLink.appendingPathComponent(".claude.json"))
+        #expect(ClaudeResetCache.read(accountFolder: hardLink, now: now) == nil)
     }
 }

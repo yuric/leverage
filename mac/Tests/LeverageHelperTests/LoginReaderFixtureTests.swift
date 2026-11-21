@@ -72,7 +72,7 @@ struct LoginReaderFixtureTests {
         }
     }
 
-    @Test("Gemini and Grok have no login readers", arguments: [Provider.gemini, .grok])
+    @Test("logins without supported usage replies have no registered reader", arguments: [Provider.claude, .gemini, .grok])
     func providersWithoutReaders(provider: Provider) {
         #expect(UsageReaders.reader(for: provider) == nil)
     }
