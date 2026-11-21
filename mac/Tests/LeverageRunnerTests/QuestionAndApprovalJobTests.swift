@@ -252,7 +252,10 @@ struct QuestionAndApprovalJobTests {
         }
         var timing = RunnerTiming.fast()
         timing.jobPollInterval = .milliseconds(100)
-        let driver = try setup.drivers.driver(tool, timeout: Int(Patience.scaled(.seconds(5)).components.seconds))
+        // The stand-in answers once the first poll has written its gate. The
+        // limit only has to outlast a loaded machine's first poll: a run cut
+        // short answers pass_to_owner, which is not what this test is about.
+        let driver = try setup.drivers.driver(tool, timeout: Int(Patience.scaled(.seconds(30)).components.seconds))
         let flow = JobFlow(context: setup.harness.context(driver: driver, timing: timing))
 
         #expect(try await flow.claim() == .finished)
