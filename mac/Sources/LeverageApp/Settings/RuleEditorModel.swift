@@ -42,6 +42,8 @@ final class RuleEditorModel {
     var instruction: String
     var hook: RuleHook
     var scopeKind: RuleScopeKind
+    var projectIDs: Set<UUID> = []
+    var actionKinds: Set<ActionKind> = []
     var onFail: RuleOnFail?
     var parameters: [ParameterField]
 
