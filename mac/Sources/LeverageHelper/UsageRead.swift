@@ -38,7 +38,7 @@ struct UsageRead: Sendable {
         } catch let error as ProviderHTTP.Failure {
             observation = Observation(failure: error.checkFailure)
         } catch {
-            observation = Observation(failure: .unreachable)
+            observation = Observation(failure: .noAnswer)
         }
 
         check.toolVersion = observation.version
@@ -50,8 +50,9 @@ struct UsageRead: Sendable {
             let result = try await api.reportReading(credentialID: credential, reading, key: IdempotencyKey())
             _ = try result.completedResult()
         } catch {
+            if Task.isCancelled || error is CancellationError { return check.result(.failed) }
             log.warning("could not report a reading for credential \(credential.contractString)")
-            return await check.fail(.readingTaken, observation.failure ?? .unreachable)
+            return await check.fail(.readingTaken, observation.failure ?? .noAnswer)
         }
         if let failure = observation.failure {
             return await check.fail(.readingTaken, failure)

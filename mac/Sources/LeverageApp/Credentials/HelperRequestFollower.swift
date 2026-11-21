@@ -78,12 +78,14 @@ extension CredentialsCopy {
     /// The one line for a request that failed: which tool, and what it did
     /// not do.
     static func failureLine(for request: HelperRequest, provider: Provider) -> String {
+        guard let failure = request.failedCheck?.failure else { return failedGeneric.text }
+        if provider.kind == .apiToken {
+            return AddTokenCopy.failureLine(for: failure, provider: ProviderNames.name(provider))
+        }
         let tool = ProviderNames.tool(provider)
-        guard let failed = request.failedCheck, let failure = failed.failure else { return failedGeneric.text }
         let copy: CredentialsCopy
         switch failure {
-        case .tokenStoreUnavailable, .providerMismatch:
-            return AddTokenCopy.failureLine(for: failure, provider: ProviderNames.name(provider))
+        case .tokenStoreUnavailable, .providerMismatch: return failedGeneric.text
         case .notInstalled: copy = .failNotInstalled
         case .notSignedIn: copy = .failNotSignedIn
         case .noAnswer: copy = .failNoAnswer

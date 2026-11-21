@@ -43,10 +43,9 @@ struct TokenChecks: Sendable {
             }
             await check.pass(.tokenWorks)
             return check.result(.finished)
-        } catch let failure as ProviderHTTP.Failure {
-            return await check.fail(.tokenWorks, failure.checkFailure)
         } catch {
-            return await check.fail(.tokenWorks, .unreachable)
+            if Task.isCancelled || error is CancellationError { return check.result(.failed) }
+            return await check.fail(.tokenWorks, (error as? ProviderHTTP.Failure)?.checkFailure ?? .noAnswer)
         }
     }
 

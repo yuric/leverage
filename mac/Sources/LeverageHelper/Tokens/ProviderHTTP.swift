@@ -17,7 +17,7 @@ struct ProviderHTTP: Sendable {
 
     struct Failure: Error, Equatable {
         enum Code: String, Sendable {
-            case invalidOverride, unsupportedProvider, invalidTestToken, redirect, bodyTooLarge, unreachable, timedOut
+            case invalidOverride, unsupportedProvider, invalidTestToken, redirect, bodyTooLarge, invalidResponse, unreachable, timedOut
         }
 
         let host: String
@@ -27,7 +27,7 @@ struct ProviderHTTP: Sendable {
             switch code {
             case .timedOut: .timedOut
             case .unreachable: .unreachable
-            case .invalidOverride, .unsupportedProvider, .invalidTestToken, .redirect, .bodyTooLarge: .noAnswer
+            case .invalidOverride, .unsupportedProvider, .invalidTestToken, .redirect, .bodyTooLarge, .invalidResponse: .noAnswer
             }
         }
     }
@@ -110,7 +110,7 @@ struct ProviderHTTP: Sendable {
                 throw Failure(host: host, code: .timedOut)
             }
             defer { group.cancelAll() }
-            guard let reply = try await group.next() else { throw Failure(host: host, code: .unreachable) }
+            guard let reply = try await group.next() else { throw Failure(host: host, code: .invalidResponse) }
             return reply
         }
         try Task.checkCancellation()
@@ -175,7 +175,7 @@ private final class ProviderReplyTransfer: NSObject, URLSessionDataDelegate, @un
         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
     ) {
         guard let http = response as? HTTPURLResponse else {
-            finish(.failure(Failure(host: host, code: .unreachable)))
+            finish(.failure(Failure(host: host, code: .invalidResponse)))
             completionHandler(.cancel)
             return
         }
@@ -199,13 +199,21 @@ private final class ProviderReplyTransfer: NSObject, URLSessionDataDelegate, @un
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        if (error as? URLError)?.code == .timedOut {
-            finish(.failure(Failure(host: host, code: .timedOut)))
-        } else if error == nil, let status {
+        if error == nil, let status {
             finish(.success(Response(status: status, headers: headers, body: body)))
-        } else {
-            finish(.failure(Failure(host: host, code: .unreachable)))
+            return
         }
+        let code: Failure.Code
+        switch (error as? URLError)?.code {
+        case .timedOut: code = .timedOut
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
+             .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
+             .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid, .clientCertificateRejected,
+             .clientCertificateRequired, .internationalRoamingOff, .dataNotAllowed, .callIsActive:
+            code = .unreachable
+        default: code = .invalidResponse
+        }
+        finish(.failure(Failure(host: host, code: code)))
     }
 
     private func finish(_ result: Result<Response, any Error>) {
