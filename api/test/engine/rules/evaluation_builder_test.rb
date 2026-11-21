@@ -78,6 +78,23 @@ module Leverage
         assert_empty evaluation.jobs
       end
 
+      test "moving a task into a named projects scope runs its gate on the same inputs" do
+        project = scenario.project
+        task = scenario.task(state: "ready")
+        seat = scenario.seat
+        rule = model_gate("task.before_claim", scope_kind: "named_projects", scope_values: [ project.id ])
+        request = request_for(task, "task.before_claim", subject: seat, requester: seat)
+        input_hash = Gating.input_hash(hook: request.hook, inputs: request.inputs)
+        scenario.rule_check(task, rule: rule, subject: seat, result: "not_applicable", input_hash: input_hash)
+
+        task.update!(project_id: project.id)
+        evaluation = evaluate(request_for(task, "task.before_claim", subject: seat, requester: seat))
+
+        assert_equal :pending, evaluation.outcome
+        assert_equal [ "rule_check" ], evaluation.jobs.map(&:kind)
+        assert_equal [ input_hash ], evaluation.checks.map(&:input_hash)
+      end
+
       test "a let-the-checker-decide rule goes to the checker in the same job (L366)" do
         model_gate("task.before_ready", scope_kind: "checker_decides", route: "owner")
         evaluation = evaluate(ready_request(scenario.task))

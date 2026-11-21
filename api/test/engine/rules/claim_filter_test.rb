@@ -56,6 +56,23 @@ module Leverage
         assert_empty filter(seat, :task).excluded_task_ids
       end
 
+      test "moving a task out of a named projects scope makes its cached claim failure irrelevant" do
+        project = scenario.project
+        seat = scenario.seat
+        task = scenario.task(state: "ready", project: project)
+        rule = model_gate("task.before_claim", scope_kind: "named_projects", scope_values: [ project.id ])
+        claim_check(task, seat, rule)
+        assert_equal [ task.id ], filter(seat, :task).excluded_task_ids
+
+        task.update!(project_id: nil)
+
+        assert_empty filter(seat, :task).excluded_task_ids
+        evaluation = Gating.evaluate(request_for(task, "task.before_claim", subject: seat, requester: seat))
+        assert_empty evaluation.failures
+        assert_empty evaluation.jobs
+        assert_equal :completed, evaluation.outcome
+      end
+
       test "a review the provider rule keeps from this seat is skipped, by next and by claim-next alike (RD-12)" do
         scenario.with_shipped_rules
         claude_task = scenario.task(state: "in_review", builder: scenario.seat(credential: scenario.credential(provider: "claude")))

@@ -45,6 +45,11 @@ class GatingEngineTest < ActiveSupport::TestCase
       requester_id: nil, command_key: nil)
   end
 
+  def requested_action(kind: "publish", project: nil)
+    task = scenario.finishing_task(project: project, actions: [ { kind: kind, description: "Publish a made-up page." } ])
+    [ task, Action.find_by!(task_id: task.id) ]
+  end
+
   def action_check(task, made, rule, result, overridden: false)
     hash = Leverage::Gating.input_hash(hook: "action.requested", inputs: action_request(task, made).inputs)
     row = scenario.rule_check(task, rule: rule, result: result, subject: made, input_hash: hash)
@@ -160,6 +165,47 @@ class GatingEngineTest < ActiveSupport::TestCase
 
     decision = gating.reenter_action(action_id: made.id, trigger: trigger(:check_finished, check))
     assert_equal :complete, decision.action
+    assert_equal [ "approval" ], decision.jobs.map(&:kind)
+  end
+
+  test "enabling the approval rule after the action was requested cannot give that action an approval job" do
+    approval = scenario.rule(key: "orchestrator_approves_actions", origin: "shipped", enabled: false)
+    gate = action_gate
+    task, made = requested_action
+    initial = gating.evaluate(action_request(task, made))
+    assert_equal :pending, initial.outcome
+    assert_empty initial.deferred_rule_ids
+
+    approval.update!(enabled: true)
+    scenario.append("rule.enabled", subject: approval)
+    settled = action_check(task, made, gate, "passed")
+    decision = gating.reenter_action(action_id: made.id, trigger: trigger(:check_finished, settled))
+
+    assert_equal :complete, decision.action
+    assert_empty decision.jobs
+  end
+
+  test "approval uses the rule version and project scope frozen when the action was requested" do
+    project = scenario.project
+    approval = scenario.rule(key: "orchestrator_approves_actions", origin: "shipped",
+      scope_kind: "named_projects", scope_values: [ project.id ])
+    first = scenario.current_version(approval)
+    gate = action_gate
+    task, made = requested_action(project: project)
+    assert_equal [ approval.id ], gating.evaluate(action_request(task, made)).deferred_rule_ids
+
+    other = scenario.project(name: "Another made-up project")
+    second = RuleVersion.create!(first.attributes.except("id", "created_at").merge("version" => 2,
+      "scope_values" => [ other.id ], "instruction" => "A changed made-up instruction."))
+    approval.update!(current_version: 2)
+    scenario.append("rule.changed", subject: approval, payload: { rule_version_id: second.id, version: 2 })
+    task.update!(project_id: other.id)
+    settled = action_check(task, made, gate, "passed")
+
+    decision = gating.reenter_action(action_id: made.id, trigger: trigger(:check_finished, settled))
+
+    assert_equal :complete, decision.action
+    assert_equal [ first.id ], decision.checks.map(&:rule_version_id)
     assert_equal [ "approval" ], decision.jobs.map(&:kind)
   end
 
