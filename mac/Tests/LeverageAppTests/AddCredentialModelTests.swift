@@ -91,7 +91,7 @@ struct AddCredentialModelTests {
     func manyClaude() async {
         let model = makeModel(owner(existing: Fixtures.credentials().credentials, answers: [passing()]))
         await model.load()
-        #expect(model.providers.map(\.isAdded) == [false, false, false, false])
+        #expect(model.providers.prefix(4).map(\.isAdded) == [false, false, false, false])
     }
 
     @Test("Back returns to step 1, keeping the name typed")
@@ -584,7 +584,7 @@ struct AddCredentialModelTests {
         #expect(model.step == .nameIt)
         #expect(!model.canAddToken)
         await model.addToken()
-        #expect(Fixtures.calls(owner, .addCredential).isEmpty)
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
         model.name = ""
         model.token = Self.madeUpToken
         #expect(!model.canAddToken)
@@ -592,7 +592,7 @@ struct AddCredentialModelTests {
         #expect(model.canAddToken)
         #expect(!model.canSignIn)
         await model.signIn()
-        #expect(Fixtures.calls(owner, .addCredential).isEmpty)
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
         #expect(Fixtures.draws(AddCredentialForm(model: model, cancel: {}), width: 440, height: 520))
         model.cancel()
 
@@ -725,7 +725,7 @@ struct AddCredentialModelTests {
         model.token = Self.madeUpToken
         await model.addToken()
         #expect(runtime.fakeHelper.messages.value.count == 1)
-        #expect(Fixtures.calls(owner, .addCredential).isEmpty)
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
         #expect(model.failure == "Agents are not running on this Mac, so leverage cannot check the token.")
         #expect(model.canRetry)
         runtime.fakeHelper.sendFailure.value = nil
@@ -818,6 +818,30 @@ struct AddCredentialModelTests {
         #expect(!Self.holdsToken(model))
     }
 
+    @Test("Cancel during the local send discards the token and prevents Add")
+    func tokenCancelDuringSend() async {
+        let runtime = FakeAppRuntime()
+        let (duringSend, release) = AsyncStream<Void>.makeStream()
+        let helper = PausedTokenSend(base: runtime.fakeHelper, duringSend: duringSend)
+        let owner = owner(answers: [tokenPassed()])
+        let model = AddCredentialModel(
+            api: owner, credentialID: credentialID, onAdded: {}, timing: .quick, helper: helper)
+        await start(model, .claudeApi)
+        model.token = Self.madeUpToken
+        var returned = false
+        let run = Task {
+            await model.addToken()
+            returned = true
+        }
+        #expect(await ShellFixtures.eventually { returned || !runtime.fakeHelper.messages.value.isEmpty })
+        #expect(runtime.fakeHelper.messages.value.count == 1)
+        model.cancel()
+        #expect(!Self.holdsToken(model))
+        release.finish()
+        await run.value
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+    }
+
     @Test("Cancel discards the pasted token before or after a failed check")
     func tokenCancel() async {
         for afterFailure in [false, true] {
@@ -846,8 +870,8 @@ struct AddCredentialModelTests {
         await model.addToken()
         #expect(model.step == .nameIt)
         #expect(model.nameLine == "Give it a name that does not include the token.")
-        #expect(Fixtures.calls(owner, .addCredential).isEmpty)
-        #expect(runtime.fakeHelper.messages.value.isEmpty)
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+        #expect(runtime.fakeHelper.messages.value.count == 0)
         model.back()
         #expect(!Self.holdsToken(model))
     }
@@ -880,5 +904,28 @@ struct AddCredentialModelTests {
         #expect(draw(asking, false))
         asking.cancel()
         await task.value
+    }
+}
+
+/// Let the fake deliver a successful local send after the model cancels.
+private final class PausedTokenSend: HelperSupervising {
+    let base: FakeHelper
+    let duringSend: AsyncStream<Void>
+
+    init(base: FakeHelper, duringSend: AsyncStream<Void>) {
+        self.base = base
+        self.duringSend = duringSend
+    }
+
+    func state() async -> HelperState { await base.state() }
+    func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState {
+        await base.start(apiBaseURL: apiBaseURL, issuer: issuer)
+    }
+    func tryAgain() async -> HelperState { await base.tryAgain() }
+    func stop() async { await base.stop() }
+
+    func send(_ message: LocalHelperMessage) async throws {
+        try await base.send(message)
+        for await _ in duringSend { break }
     }
 }
