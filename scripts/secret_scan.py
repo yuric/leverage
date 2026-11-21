@@ -331,6 +331,10 @@ def main(argv):
     parser.add_argument("--events-dump", action="append", default=[], metavar="FILE")
     parser.add_argument("--not-in-logs", action="append", default=[], metavar="WORD")
     parser.add_argument("--logs", action="append", default=[], metavar="PATH")
+    parser.add_argument("--credentials-dump", metavar="FILE")
+    parser.add_argument("--account-email", action="append", default=[], metavar="VALUE")
+    parser.add_argument("--provider-api-record", metavar="FILE")
+    parser.add_argument("--token-markers", metavar="FILE")
     parser.add_argument("paths", nargs="*", metavar="PATH")
     # The end-to-end scripts add each test's folders between the options.
     arguments = parser.parse_intermixed_args(argv)
