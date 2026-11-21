@@ -11,7 +11,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
     // Account signed out.
     case signedOutHeading, signedOutBody, signInAgain, signInWaiting, signInWaitingGemini
     // Limit with no reset time.
-    case limitHeading, limitBody
+    case limitHeading, limitBody, limitBodyAutomatic
     // Sent back too many times.
     case sentBackHeading, sentBackBody, letItTryOnceMore, changeTask, cancelTask
     case cancelQuestion, cancelConfirm, cancelKeep
@@ -60,6 +60,8 @@ enum NeedsYouCopy: OwnerFacingCopy {
 
         case .limitHeading: "{account} is at its limit"
         case .limitBody:
+            "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues."
+        case .limitBodyAutomatic:
             "{task} is waiting. {provider} did not say when {account} is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."
 
         case .sentBackHeading: "{task} was sent back {count} times"

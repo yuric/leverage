@@ -5,7 +5,7 @@ import LeverageKit
 /// accounts, from the board and the credentials reads. Never an email.
 struct NeedsYouNames: Sendable {
     var tasks: [UUID: String] = [:]
-    var credentials: [UUID: Credential] = [:]
+    var credentials: [UUID: CredentialWithReading] = [:]
     var pages: [UUID: TaskPage] = [:]
     var seats: [UUID: Seat] = [:]
     var projects: [UUID: Project] = [:]
@@ -23,18 +23,25 @@ struct NeedsYouNames: Sendable {
 
     /// "Claude, Personal": the provider and the name, never the email.
     func accountName(_ id: UUID?) -> String {
-        guard let credential = id.flatMap({ credentials[$0] }) else { return NeedsYouCopy.anAccount.text }
+        guard let credential = id.flatMap({ credentials[$0]?.credential }) else { return NeedsYouCopy.anAccount.text }
         return "\(ProviderNames.name(credential.provider)), \(credential.name)"
     }
 
-    func provider(of id: UUID?) -> Provider? { id.flatMap { credentials[$0]?.provider } }
+    func provider(of id: UUID?) -> Provider? { id.flatMap { credentials[$0]?.credential.provider } }
+
+    func canReadUsage(for id: UUID?) -> Bool {
+        guard let entry = id.flatMap({ credentials[$0] }), let version = entry.reading?.toolVersion else { return false }
+        return entry.credential.provider.testedToolVersions.contains(version)
+    }
 
     /// The sentence that names the account the Orchestrator offline item
     /// says is the cause, with what holds it back (L401): signed out, at its
     /// limit until a time, or, when neither is known, the account alone.
     func offlineCause(_ id: UUID) -> String {
         let account = accountName(id)
-        guard let credential = credentials[id] else { return NeedsYouCopy.offlineCause.filled(["account": account]) }
+        guard let credential = credentials[id]?.credential else {
+            return NeedsYouCopy.offlineCause.filled(["account": account])
+        }
         if credential.state == .signedOut { return NeedsYouCopy.offlineCauseSignedOut.filled(["account": account]) }
         if credential.isLimited(at: clock.now()), let until = credential.limitedUntil {
             return NeedsYouCopy.offlineCauseLimitUntil.filled(
@@ -103,7 +110,7 @@ struct NeedsYouNames: Sendable {
         let list = try await owner.credentials()
         var names = NeedsYouNames()
         for entry in board.tasks { names.tasks[entry.task.id] = entry.task.title }
-        for entry in list.credentials { names.credentials[entry.credential.id] = entry.credential }
+        for entry in list.credentials { names.credentials[entry.credential.id] = entry }
         return (names, min(board.asOfSeq, list.asOfSeq))
     }
 }
@@ -223,7 +230,8 @@ enum NeedsYouWords {
             return NeedsYouCopy.signedOutBody.filled(["task": task, "account": account])
         case .limitWithNoResetTime:
             let provider = names.provider(of: credential).map(ProviderNames.name) ?? NeedsYouCopy.anAccount.text
-            return NeedsYouCopy.limitBody.filled(["task": task, "account": account, "provider": provider])
+            let copy = names.canReadUsage(for: credential) ? NeedsYouCopy.limitBodyAutomatic : NeedsYouCopy.limitBody
+            return copy.filled(["task": task, "account": account, "provider": provider])
         case .pastRoundLimit: return NeedsYouCopy.sentBackBody.text
         case .refusedForEveryAgent: return NeedsYouCopy.refusedBody.filled(["task": task])
         case .checkPastRerunLimit: return NeedsYouCopy.rerunBody.filled(["task": task])
