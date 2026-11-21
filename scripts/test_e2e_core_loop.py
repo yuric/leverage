@@ -40,7 +40,11 @@ printf '%s|%s|%s\\n' "${API_IMAGE_TAG:-}" "${COMPOSE_PROJECT_NAME:-}" "$*" >>"$F
 case "$*" in
   *" up "*) [ -n "${FAKE_UP_FAILS:-}" ] && exit 1; exit 0 ;;
   *" port api 3000"*) echo "127.0.0.1:40001"; exit 0 ;;
-  *"pg_dump"*) echo "COPY public.made_up (id) FROM stdin;"; exit 0 ;;
+  *"pg_dump"*)
+    printf '%s\\n' 'COPY public.credentials (id, plan, account_email) FROM stdin;'
+    printf '1\\t\\\\N\\t%s\\n' 'standin.owner@example.invalid'
+    printf '%s\\n' '\\.'
+    exit 0 ;;
 esac
 exit 0
 """
