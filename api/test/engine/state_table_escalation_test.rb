@@ -22,7 +22,7 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
     before = mine(Event).maximum(:at)
 
     answering(Leverage::WorkspaceLock, :clock, -> { before - 1 }) do
-      without_reassignment_projection do
+      with_reassignment_projection do
         assert command(escalation.command, @reviewer, fail_params(review, task)).completed?
       end
     end
@@ -51,7 +51,7 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
     gating([ before_done, { app_result: "failed" } ], [ escalation_rule, { effect: "escalated" } ])
     task, review = ready_for_verdict(@builder, @reviewer)
 
-    without_reassignment_projection do
+    with_reassignment_projection do
       assert command("pass_review", @reviewer, pass_params(review)).completed?
     end
 
@@ -88,6 +88,9 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
   test "a builder an approved action waits for cannot claim another Ready task" do
     ready = @scenario.task(state: "ready")
     assert_equal "task", next_kind(@builder)
+    login = @scenario.credential
+    @scenario.limit_credential(login)
+    @scenario.seat(role: "builder", credential: login)
     finishing = @scenario.finishing_task(builder: @builder, holder: false,
       actions: [ { kind: "publish", description: "Write a made-up line.", state: "approved" } ])
     waiting = ->(seat) { seat.id == @builder.id ? [ finishing ] : [] }
@@ -95,6 +98,7 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
     answering(Leverage::Finishing, :waiting_for, waiting) do
       refute_equal "task", next_kind(@builder)
       assert_equal "not_eligible", claim_refusal(@builder)
+      assert_equal "credential_limit", Leverage::Candidates.wait_cause(ready, @scenario.database_now)
     end
 
     assert_equal "ready", ready.reload.state
@@ -127,9 +131,11 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
 
   def seat_headers(seat) = { "Authorization" => "Bearer #{@scenario.token_for(seat)}" }
 
-  # WP4 owns the task.reassigned step projection. Keep the normal event
-  # writer and stub only that event's projection in this package's tests.
-  def without_reassignment_projection(&)
+  # WP4 owns the task.reassigned step projection. Until that event is
+  # handled, exercise the event writer with just its projection stubbed.
+  def with_reassignment_projection(&)
+    return yield if Leverage::Steps::HANDLED.include?("task.reassigned")
+
     original = Leverage::Steps.method(:on_event)
     projecting = ->(ctx, event) { original.call(ctx, event) unless event.type == "task.reassigned" }
     answering(Leverage::Steps, :on_event, projecting, &)

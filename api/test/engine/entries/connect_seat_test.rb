@@ -127,6 +127,12 @@ class ConnectSeatTest < ActiveSupport::TestCase
     assert_equal 3, Seat.find(outcome.result.fetch("seat_id")).strength_rank
   end
 
+  test "a whole number written with a decimal point is an integer in the request schema" do
+    outcome = assert_completed(owner_command("connect_seat", body(provider: "grok", strength_rank: 2.0)))
+
+    assert_equal 2, Seat.find(outcome.result.fetch("seat_id")).strength_rank
+  end
+
   test "connecting refuses ranks outside Standard, Stronger and Strongest" do
     assert_no_difference -> { Seat.where(workspace_id: @scenario.workspace_id).count } do
       [ 0, 4, 2.5, "2", false ].each do |rank|
