@@ -6,9 +6,12 @@ import Observation
 @MainActor
 @Observable
 final class Navigator {
-    enum Place: Equatable, Sendable { case board, needsYou, agents, credentials, handoff, settings }
+    enum Place: Equatable, Sendable {
+        case board, needsYou, decided, activity, agents, credentials, handoff, settings, projects
+    }
 
     private(set) var place: Place = .board
+    var boardFilter = BoardFilter()
     /// The task whose page is open in the content area (MA-9); nil shows the
     /// screen of `place`.
     private(set) var openTaskID: UUID?
@@ -24,6 +27,8 @@ final class Navigator {
         openTaskID = nil
         editRequest = nil
     }
+
+    func selectProject(_ id: UUID?) {}
 
     /// Opens a task's page, with a way back to the board (MA-9). `editing`
     /// asks the page to open the contract editor once it has read the task

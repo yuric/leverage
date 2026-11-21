@@ -67,6 +67,7 @@ struct AppShell: View {
         case .credentials: CredentialsView()
         case .handoff: HandoffView()
         case .settings: RulesView()
+        case .decided, .activity, .projects: EmptyView()
         }
     }
 }

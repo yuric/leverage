@@ -38,6 +38,7 @@ struct Toolbar: View {
         case .credentials: ShellCopy.tabCredentials
         case .handoff: ShellCopy.tabHandoff
         case .settings: ShellCopy.tabSettings
+        case .decided, .activity, .projects: ShellCopy.tabBoard
         }
     }
 }
