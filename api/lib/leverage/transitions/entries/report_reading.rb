@@ -5,6 +5,8 @@ module Leverage
       # recovered account could end (CR-14, IF-37). The reading itself has
       # no event. The controller checks the body's schema before dispatch.
       class ReportReading < Entry
+        attr_reader :capacity_restored
+
         def load(ctx)
           @params = ctx.request.params
           @credential = Credential.added.find_by(id: @params["id"], workspace_id: ctx.workspace.id)
@@ -23,7 +25,8 @@ module Leverage
           return unless ReadingCapacity.shown?(@credential, reading)
 
           @credential.update!(limited_since: nil, limited_until: nil, updated_at: ctx.at)
-          Handoff.reevaluate(ctx, tasks: waiting_for_capacity(ctx)) if Candidates.available?(@credential, ctx.at)
+          @capacity_restored = Candidates.available?(@credential, ctx.at)
+          Handoff.reevaluate(ctx, tasks: waiting_for_capacity(ctx)) if @capacity_restored
         end
 
         private

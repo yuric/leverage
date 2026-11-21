@@ -418,6 +418,11 @@ module Leverage
       task = tasks.first unless tasks.size > 1
       state = task && states[task]
       types = events.map(&:type)
+      # Reorder can write for several credentials. Remove has one target.
+      if types.count("credential.removed") > 1
+        return [ "wrote credential.removed more than once" ]
+      end
+
       fresh = events.any? { |event| (event.payload || {})[LEASE_FIELD] }
       observed = task ? observe(state, events) : nil
       rows = named.select { |row| row.fetch("from").nil? || row.fetch("from") == state }

@@ -9,8 +9,10 @@ module Leverage
     # A card names the account a task waits for, and when it resets, in one
     # of three cases (milestone 3 plan HM-40, HE-15, HE-16):
     #
-    # - a hold names a credential (credential_limit, credential_signed_out):
-    #   that account, and its reset time unless it is signed out;
+    # - an open credential_limit hold: the current candidate that resets
+    #   first, or the candidate the owner can act on when none has a reset;
+    #   a credential_signed_out hold names the account recorded on it,
+    #   with a reset time if the account is active;
     # - a Ready task with no hold whose wait_ready step names
     #   credential_limit: no builder can take it for want of an account
     #   (HE-35), so the account that resets first, or the limited one when
@@ -105,15 +107,21 @@ module Leverage
       # The account each task waits for and when it resets, as the card and
       # the task page say it: task id => { waiting_for_credential_id:,
       # waiting_until: }. open_holds maps a task id to its open holds. A hold
-      # that names a credential says which, and its reset time only while
-      # the account is active; a task with no hold asks AccountWaits.
+      # records the credential it opened for. An open limit hold's display
+      # follows the holder's current candidates, including after a reorder.
       def waiting(workspace_id, tasks, open_holds)
         held = tasks.to_h { |task| [ task.id, open_holds.fetch(task.id, []).find(&:credential_id) ] }.compact
-        credentials = Credential.where(id: held.values.map(&:credential_id)).index_by(&:id)
+        holder_ids = tasks.filter_map { |task| task.holder_seat_id if held[task.id]&.reason == "credential_limit" }
+        holders = Seat.where(workspace_id: workspace_id, id: holder_ids).index_by(&:id)
+        recorded_ids = held.values.reject { |hold| hold.reason == "credential_limit" }.map(&:credential_id)
+        credentials = Credential.where(workspace_id: workspace_id, id: recorded_ids).index_by(&:id)
         waits = AccountWaits.new(workspace_id, tasks.select { |task| open_holds.fetch(task.id, []).empty? })
 
         tasks.to_h do |task|
-          account, until_ = if (hold = held[task.id])
+          hold = held[task.id]
+          account, until_ = if hold&.reason == "credential_limit"
+            waits.limit_hold(holders[task.holder_seat_id], task)
+          elsif hold
             credential = credentials[hold.credential_id]
             [ hold.credential_id, (credential.limited_until if credential && credential.state == "active") ]
           else
@@ -123,13 +131,12 @@ module Leverage
         end
       end
 
-      # Which account a Ready or In review task with no hold waits for
-      # (HM-40, HE-15, HE-16). It loads what it needs once and answers for
-      # each task from Candidates, the one reading of L672.
+      # Which account a task waits for, from Candidates, the one reading
+      # of L672. It loads seats and work for unheld Ready and In review
+      # tasks once (HM-40, HE-15, HE-16).
       class AccountWaits
         def initialize(workspace_id, tasks)
           @now = ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
-          # tasks are the ones with no hold: a held task's card says what its hold says.
           @ready = tasks.select { |task| task.state == "ready" }
           @in_review = tasks.select { |task| task.state == "in_review" }
           @asked = (@ready + @in_review).to_set(&:id)
@@ -149,6 +156,14 @@ module Leverage
           when "ready" then ready(task)
           when "in_review" then in_review(task)
           end
+        end
+
+        def limit_hold(seat, task)
+          reset = Candidates.earliest_reset(seat, task, @now)
+          return [ reset.id, reset.limited_until ] if reset
+
+          blocker = Candidates.signed_out_for(seat, task) || Candidates.limited_with_no_reset_for(seat, task, @now)
+          [ blocker&.id, nil ]
         end
 
         private

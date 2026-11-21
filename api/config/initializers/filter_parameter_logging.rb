@@ -4,7 +4,8 @@
 # Use this to limit dissemination of sensitive information.
 # See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
 Rails.application.config.filter_parameters += [
-  :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
+  :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc,
+  /\A(?:name|plan)\z/
 ]
 
 # A leverage token (lvs_ seat, lvh_ helper, lvo_ owner session; milestone 2
@@ -22,7 +23,8 @@ end
 # rule's name and instruction, a checker's reason, an override reason, notes,
 # evidence; PRD, Privacy; milestone 4 plan RT-8): the log keeps each
 # parameter's key, and its value only when the value is an id. Numbers and
-# true or false are kept; they are never content.
+# true or false are kept; they are never content. Names and plans are
+# filtered above even when they look like ids.
 LEVERAGE_ID_IN_TEXT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 Rails.application.config.filter_parameters << lambda do |_key, value|
   value.replace("[FILTERED]") if value.is_a?(String) && !value.frozen? && !value.match?(LEVERAGE_ID_IN_TEXT)

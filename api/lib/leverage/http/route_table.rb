@@ -124,9 +124,6 @@ module Leverage
         "report_reading" => "v1/helper/credentials#readings"
       }.freeze
 
-      # The seam assertion keeps this until API integration (CT-1).
-      PENDING = {}.freeze
-
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)

@@ -69,6 +69,10 @@ module Leverage
           end
         end
 
+        def usage_or_removed?
+          @request.kind == "read_usage" || removed_request?
+        end
+
         private
 
         # Remove ends unfinished requests without a result. An ordinary

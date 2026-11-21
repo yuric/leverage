@@ -8,9 +8,9 @@ require_relative "http_calls"
 #
 # The setup the trace names is built over HTTP too, the way the app and
 # the helper build it: the owner issues the helper's token, adds the logins
-# in the trace's order (the helper reports their checks passed; a login the
-# setup has signed out is then verified and found signed out, as Verify
-# does), and connects each seat on its login (the helper picks the seat's
+# in the trace's order (the helper passes their checks and takes their first
+# reading; a login the setup has signed out is then verified and found signed
+# out), and connects each seat on its login (the helper picks the seat's
 # token up, reports its run started and the start request finished). Only
 # the owner and the session come from Scenario, because a test worker's
 # database may already hold an owner.
@@ -123,11 +123,21 @@ class HttpTraceRunner < TraceRunner
         body: { "check" => check, "state" => "passed", "failure" => nil, "install" => nil })
     end
     http("report_request_result", token: @helper_token, ids: { "id" => request.fetch("id") }, body: finished(names))
+    take_first_reading(id)
     @test.assert_equal "active", Credential.find(id).state
     @test.assert_equal row.fetch("position"), Credential.find(id).position, "#{row.fetch("id")}: the order of adding"
     bind_symbol(row.fetch("id"), id, "setup")
     sign_out_by_verify(id) if row.fetch("state") == "signed_out"
     @test.assert_nil row["limited_until"], "#{row.fetch("id")}: a limited setup login is not built over HTTP"
+  end
+
+  def take_first_reading(id)
+    request = next_request("read_usage")
+    @test.assert_equal id, request.fetch("credential_id")
+    http("report_reading", token: @helper_token, ids: { "id" => id },
+      body: { "credential_id" => id, "observed_at" => scenario.database_now.utc.iso8601(6), "state" => "unavailable",
+              "tool_version" => nil, "figures" => [], "resets" => nil })
+    http("report_request_result", token: @helper_token, ids: { "id" => request.fetch("id") }, body: finished(%w[reading_taken]))
   end
 
   def sign_out_by_verify(id)

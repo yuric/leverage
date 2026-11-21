@@ -12911,15 +12911,14 @@
       "ReorderCredentialsRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Every credential id, in the new handoff order.",
+        "description": "Every added credential id, in the new handoff order. An empty workspace may send an empty order.",
         "properties": {
           "order": {
             "type": "array",
             "items": {
               "type": "string",
               "format": "uuid"
-            },
-            "minItems": 1
+            }
           }
         },
         "required": [
@@ -15437,7 +15436,7 @@
                   "last_verified_at": "2026-01-01T00:00:00Z"
                 },
                 "reading": {
-                  "credential_id": "00000000-0000-4000-8000-000000000239",
+                  "credential_id": "00000000-0000-4000-8000-000000000238",
                   "observed_at": "2026-01-01T00:00:00Z",
                   "state": "ok",
                   "tool_version": "example",

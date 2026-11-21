@@ -16,7 +16,7 @@ module Leverage
       TIMERS = %w[
         builder_lease_expiry review_lease_expiry command_key_retention credential_hold_release seat_run_placement
         check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
-        orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout
+        orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout usage_read_due
       ].freeze
       SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token].freeze
       ACCOUNTS = %w[
@@ -38,11 +38,9 @@ module Leverage
         change_task_project change_task_cap
       ].freeze
       WORKSPACE = %w[delete_content change_workspace_settings].freeze
+      CREDENTIALS = %w[rename_credential remove_credential reorder_credentials refresh_usage report_reading].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS +
-        FINISHING + QUESTIONS + PROJECTS + WORKSPACE).freeze
-
-      # Credentials milestone entries staged for the engine packages (CT-1).
-      PENDING = %w[rename_credential remove_credential reorder_credentials refresh_usage report_reading usage_read_due].freeze
+        FINISHING + QUESTIONS + PROJECTS + WORKSPACE + CREDENTIALS).freeze
 
       @overrides = {}
 
@@ -55,11 +53,9 @@ module Leverage
 
         # The entry class of a command. Raises UnknownCommand for a command
         # with no entry.
-        def entry_for(command, allow_pending: false)
+        def entry_for(command)
           command = command.to_s
-          unless include?(command) || (allow_pending && PENDING.include?(command))
-            raise UnknownCommand, "#{command} has no entry"
-          end
+          raise UnknownCommand, "#{command} has no entry" unless include?(command)
           return @overrides.fetch(command) if @overrides.key?(command)
 
           class_name(command).constantize
@@ -68,7 +64,7 @@ module Leverage
         # Tests only: answers these entries for these commands inside the
         # block, so the pipeline can be proven before the real entries exist.
         def with_entries(entries)
-          unknown = entries.keys.map(&:to_s).reject { |command| known?(command) }
+          unknown = entries.keys.map(&:to_s).reject { |command| include?(command) }
           raise UnknownCommand, "commands with no entry: #{unknown.join(", ")}" unless unknown.empty?
 
           saved = @overrides
@@ -77,10 +73,6 @@ module Leverage
         ensure
           @overrides = saved if saved
         end
-
-        private
-
-        def known?(command) = include?(command) || PENDING.include?(command)
       end
     end
   end

@@ -151,7 +151,7 @@ class OwnerReadsTest < CommittingTestCase
     credential = scenario.credential
     reset = Time.current.change(usec: 0) + 3600
     credential.update_columns(limited_since: Time.current.change(usec: 0), limited_until: reset)
-    task = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    task = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: credential))
     ActiveRecord::Base.transaction do
       Leverage::Holds.open(scenario.context, task: task, reason: "credential_limit", credential_id: credential.id)
     end
@@ -382,12 +382,12 @@ class OwnerReadsTest < CommittingTestCase
     scenario.limit_credential(own)
     hold = scenario.hold(task, reason: "credential_limit", credential: own, facts: { credential_id: own.id })
     step = TaskStep.where(task_id: task.id, closed_at: nil).sole
-    before = [ hold.attributes, step.attributes ]
-    assert_equal [{ "waiting_for_credential_id" => own.id, "waiting_until" => nil }] * 2, page_and_card(task)
+    before = [ hold.reload.attributes, step.attributes ]
+    assert_equal [ { "waiting_for_credential_id" => own.id, "waiting_until" => nil } ] * 2, page_and_card(task)
 
     reorder_credentials(own, later, soon)
 
-    assert_equal [{ "waiting_for_credential_id" => soon.id, "waiting_until" => reset.utc.iso8601(6) }] * 2, page_and_card(task)
+    assert_equal [ { "waiting_for_credential_id" => soon.id, "waiting_until" => reset.utc.iso8601(6) } ] * 2, page_and_card(task)
     assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
   end
 
@@ -400,13 +400,25 @@ class OwnerReadsTest < CommittingTestCase
     scenario.limit_credential(dated, reset_at: reset)
     hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
     step = TaskStep.where(task_id: task.id, closed_at: nil).sole
-    before = [ hold.attributes, step.attributes ]
-    assert_equal [{ "waiting_for_credential_id" => dated.id, "waiting_until" => reset.utc.iso8601(6) }] * 2, page_and_card(task)
+    before = [ hold.reload.attributes, step.attributes ]
+    assert_equal [ { "waiting_for_credential_id" => dated.id, "waiting_until" => reset.utc.iso8601(6) } ] * 2, page_and_card(task)
 
     reorder_credentials(dated, own)
 
-    assert_equal [{ "waiting_for_credential_id" => own.id, "waiting_until" => nil }] * 2, page_and_card(task)
+    expected = [ { "waiting_for_credential_id" => own.id, "waiting_until" => nil } ] * 2
+    assert_equal expected, page_and_card(task), "the remaining login has no reset time"
+    scenario.sign_out_credential(own)
+    assert_equal expected, page_and_card(task), "the remaining login now needs sign-in"
     assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
+  end
+
+  test "both reads omit the account once its reset passed while the hold is still open" do
+    own = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    scenario.limit_credential(own, reset_at: scenario.database_now - 1)
+    scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    assert_equal [ { "waiting_for_credential_id" => nil, "waiting_until" => nil } ] * 2, page_and_card(task)
   end
 
   test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do

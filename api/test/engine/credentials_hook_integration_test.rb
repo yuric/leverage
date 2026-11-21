@@ -78,6 +78,18 @@ class CredentialsHookIntegrationTest < ActiveSupport::TestCase
     assert_empty events_written { assert_completed owner_command("reorder_credentials", { "order" => [ @credential.id ] }) }.map(&:type)
   end
 
+  test "a changed order that gives the waiting builder a candidate can grant its action lease" do
+    own = scenario.credential
+    builder = scenario.seat(credential: own)
+    task = scenario.finishing_task(builder: builder, holder: false, actions: [ { kind: "send", state: "approved" } ])
+    scenario.limit_credential(own, seat: builder)
+    refute Leverage::Finishing.builder_free?(task)
+
+    events = events_written { assert_completed owner_command("reorder_credentials", { "order" => [ own.id, @credential.id ] }) }
+    assert_includes events.map(&:type), "action.lease_granted"
+    assert_equal builder.id, task.reload.holder_seat_id
+  end
+
   private
 
   def report(request, **fields)
