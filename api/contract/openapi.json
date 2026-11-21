@@ -5337,6 +5337,37 @@
       }
     },
     "/v1/owner/settings": {
+      "get": {
+        "operationId": "get_workspace_settings",
+        "summary": "Reads the workspace settings.",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "owner",
+        "x-leverage-command": [
+          "read"
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The workspace settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          }
+        }
+      },
       "post": {
         "operationId": "change_workspace_settings",
         "summary": "Changes the workspace settings.",
@@ -5705,7 +5736,7 @@
       "get": {
         "operationId": "get_landing_prompt",
         "summary": "Reads the landing prompt of a seat that connects on its own.",
-        "description": "The text the owner pastes into an agent that connects on its own: where the server is, how the agent signs in, the calls its role may make, and the defaults it confirms with its user (milestone 2 plan Q-15, the owner's issue 11). It never contains the seat's token, which is shown once by connect_seat. It can be read again at any time.",
+        "description": "The owner pastes this text into an agent that connects on its own. The HTTP form gives the server address and the calls the role may make. The MCP form lists the role’s tools. Either form gives defaults the agent confirms with its user. The seat’s token is shown once by connect_seat.",
         "tags": [
           "owner"
         ],
@@ -5716,6 +5747,19 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/PathId"
+          },
+          {
+            "name": "connection",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http",
+                "mcp"
+              ],
+              "default": "http"
+            },
+            "description": "The HTTP prompt names the server address. The MCP prompt names the tools the seat can call."
           }
         ],
         "security": [
@@ -5735,7 +5779,7 @@
             }
           },
           "400": {
-            "description": "400 `malformed`: the address the request came in on (its Host) cannot be put in a pasted command.",
+            "description": "400 `malformed` when the Host of an HTTP landing prompt cannot be put in a pasted command.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8070,6 +8114,24 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "approved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stopped_by_rule_check_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         },
         "required": [
@@ -8079,7 +8141,10 @@
           "description",
           "state",
           "approved_by_kind",
-          "approved_by_id"
+          "approved_by_id",
+          "approved_at",
+          "position",
+          "stopped_by_rule_check_id"
         ],
         "examples": [
           {
@@ -8089,7 +8154,10 @@
             "description": "example",
             "state": "contracted",
             "approved_by_kind": "owner",
-            "approved_by_id": "00000000-0000-4000-8000-000000000013"
+            "approved_by_id": "00000000-0000-4000-8000-000000000013",
+            "approved_at": null,
+            "position": 1,
+            "stopped_by_rule_check_id": null
           }
         ]
       },
@@ -8380,7 +8448,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Action"
-            }
+            },
+            "description": "The outward actions with their current state in contract order."
           }
         },
         "required": [
@@ -8423,7 +8492,10 @@
                 "description": "example",
                 "state": "contracted",
                 "approved_by_kind": "owner",
-                "approved_by_id": "00000000-0000-4000-8000-000000000030"
+                "approved_by_id": "00000000-0000-4000-8000-000000000030",
+                "approved_at": null,
+                "position": 1,
+                "stopped_by_rule_check_id": null
               }
             ]
           }
@@ -8474,7 +8546,7 @@
       "Briefing": {
         "type": "object",
         "additionalProperties": false,
-        "description": "What a seat reads before it works. The work reference is not part of it and not of the hash.",
+        "description": "What a seat reads before it works. Question answers are outside the briefing hash.",
         "properties": {
           "hash": {
             "type": "string",
@@ -8500,6 +8572,13 @@
           },
           "contract": {
             "$ref": "#/components/schemas/BriefingContract"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnsweredQuestion"
+            },
+            "description": "The task’s answered questions outside the briefing hash. An overturned answer is omitted."
           }
         },
         "required": [
@@ -8508,7 +8587,8 @@
           "rules",
           "brief",
           "role_file",
-          "contract"
+          "contract",
+          "answers"
         ],
         "examples": [
           {
@@ -8574,10 +8654,14 @@
                   "description": "example",
                   "state": "contracted",
                   "approved_by_kind": "owner",
-                  "approved_by_id": "00000000-0000-4000-8000-000000000045"
+                  "approved_by_id": "00000000-0000-4000-8000-000000000045",
+                  "approved_at": null,
+                  "position": 1,
+                  "stopped_by_rule_check_id": null
                 }
               ]
-            }
+            },
+            "answers": []
           }
         ]
       },
@@ -8672,10 +8756,14 @@
                     "description": "example",
                     "state": "contracted",
                     "approved_by_kind": "owner",
-                    "approved_by_id": "00000000-0000-4000-8000-000000000059"
+                    "approved_by_id": "00000000-0000-4000-8000-000000000059",
+                    "approved_at": null,
+                    "position": 1,
+                    "stopped_by_rule_check_id": null
                   }
                 ]
-              }
+              },
+              "answers": []
             },
             "work_reference": "example",
             "review_notes": []
@@ -8744,10 +8832,14 @@
                     "description": "example",
                     "state": "contracted",
                     "approved_by_kind": "owner",
-                    "approved_by_id": "00000000-0000-4000-8000-000000000059"
+                    "approved_by_id": "00000000-0000-4000-8000-000000000059",
+                    "approved_at": null,
+                    "position": 1,
+                    "stopped_by_rule_check_id": null
                   }
                 ]
-              }
+              },
+              "answers": []
             },
             "work_reference": "example",
             "review_notes": [
@@ -8896,10 +8988,14 @@
                     "description": "example",
                     "state": "contracted",
                     "approved_by_kind": "owner",
-                    "approved_by_id": "00000000-0000-4000-8000-000000000078"
+                    "approved_by_id": "00000000-0000-4000-8000-000000000078",
+                    "approved_at": null,
+                    "position": 1,
+                    "stopped_by_rule_check_id": null
                   }
                 ]
-              }
+              },
+              "answers": []
             },
             "work_reference": "example",
             "credential_id": null,
@@ -9114,10 +9210,14 @@
                     "description": "example",
                     "state": "contracted",
                     "approved_by_kind": "owner",
-                    "approved_by_id": "00000000-0000-4000-8000-000000000101"
+                    "approved_by_id": "00000000-0000-4000-8000-000000000101",
+                    "approved_at": null,
+                    "position": 1,
+                    "stopped_by_rule_check_id": null
                   }
                 ]
-              }
+              },
+              "answers": []
             },
             "work_reference": "example",
             "credential_id": null,
@@ -9196,6 +9296,21 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "asked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answered_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "overturned": {
+            "type": "boolean",
+            "description": "The question’s outcome is overturned."
           }
         },
         "required": [
@@ -9209,7 +9324,10 @@
           "answer",
           "basis",
           "answered_by_kind",
-          "answered_by_id"
+          "answered_by_id",
+          "asked_at",
+          "answered_at",
+          "overturned"
         ],
         "examples": [
           {
@@ -9223,7 +9341,10 @@
             "answer": "example",
             "basis": "record",
             "answered_by_kind": "owner",
-            "answered_by_id": "00000000-0000-4000-8000-000000000105"
+            "answered_by_id": "00000000-0000-4000-8000-000000000105",
+            "asked_at": "2026-01-01T00:00:00Z",
+            "answered_at": null,
+            "overturned": false
           }
         ]
       },
@@ -9586,34 +9707,7 @@
           "criteria": {
             "type": "array",
             "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "build",
-                    "review"
-                  ]
-                },
-                "state": {
-                  "type": "string",
-                  "enum": [
-                    "open",
-                    "started",
-                    "passed"
-                  ]
-                }
-              },
-              "required": [
-                "text",
-                "kind",
-                "state"
-              ]
+              "$ref": "#/components/schemas/CheckCriterion"
             }
           }
         },
@@ -9908,18 +10002,61 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "material": {
+            "$ref": "#/components/schemas/QuestionMaterial"
           }
         },
         "required": [
           "question_id",
           "task_id",
-          "project_id"
+          "project_id",
+          "material"
         ],
         "examples": [
           {
             "question_id": "00000000-0000-4000-8000-000000000112",
             "task_id": "00000000-0000-4000-8000-000000000113",
-            "project_id": "00000000-0000-4000-8000-000000000114"
+            "project_id": "00000000-0000-4000-8000-000000000114",
+            "material": {
+              "role_file": "Made-up role file.",
+              "question": {
+                "text": "Which made-up label should the button use?",
+                "assumption": "Use Continue.",
+                "blocking": false
+              },
+              "contract": {
+                "title": "Made-up task",
+                "goal": "Add a made-up button to the made-up page.",
+                "details": null,
+                "criteria": [
+                  {
+                    "text": "The button is on the page.",
+                    "kind": "build",
+                    "state": "open"
+                  },
+                  {
+                    "text": "A reviewer has checked the work.",
+                    "kind": "review",
+                    "state": "open"
+                  }
+                ],
+                "actions": [
+                  {
+                    "kind": "publish",
+                    "description": "Publish the made-up page to the named workspace."
+                  }
+                ]
+              },
+              "brief": [],
+              "earlier_answers": [
+                {
+                  "text": "Which made-up color should the button use?",
+                  "answer": "Blue.",
+                  "basis": "decision"
+                }
+              ]
+            }
           }
         ]
       },
@@ -9939,7 +10076,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 4000
           },
           "basis": {
             "type": [
@@ -9988,20 +10126,62 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "material": {
+            "$ref": "#/components/schemas/ApprovalMaterial"
           }
         },
         "required": [
           "action_id",
           "rule_check_id",
           "task_id",
-          "project_id"
+          "project_id",
+          "material"
         ],
         "examples": [
           {
             "action_id": "00000000-0000-4000-8000-000000000115",
             "rule_check_id": "00000000-0000-4000-8000-000000000116",
             "task_id": "00000000-0000-4000-8000-000000000117",
-            "project_id": "00000000-0000-4000-8000-000000000118"
+            "project_id": "00000000-0000-4000-8000-000000000118",
+            "material": {
+              "role_file": "Made-up role file.",
+              "instruction": "Made-up instruction.",
+              "action": {
+                "kind": "publish",
+                "description": "Publish the made-up page to the named workspace.",
+                "position": 1
+              },
+              "contract": {
+                "title": "Made-up task",
+                "goal": "Add a made-up button to the made-up page.",
+                "details": null,
+                "criteria": [
+                  {
+                    "text": "The button is on the page.",
+                    "kind": "build",
+                    "state": "open"
+                  },
+                  {
+                    "text": "A reviewer has checked the work.",
+                    "kind": "review",
+                    "state": "open"
+                  }
+                ],
+                "actions": [
+                  {
+                    "kind": "publish",
+                    "description": "Publish the made-up page to the named workspace."
+                  }
+                ]
+              },
+              "quoted": [
+                {
+                  "label": "review_notes",
+                  "text": "The made-up review passed."
+                }
+              ]
+            }
           }
         ]
       },
@@ -10018,7 +10198,8 @@
             ]
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 500
           }
         },
         "required": [
@@ -10831,7 +11012,7 @@
               "string",
               "null"
             ],
-            "description": "A model-checked rule's instruction; null for an app-checked rule, and for a shipped model rule whose instruction is not written yet (shipped_rules.json's placeholder `to_be_written_in`, which is never sent)."
+            "description": "A model-checked rule’s instruction. App-checked rules and stored versions from before a shipped instruction was written can have null here."
           },
           "parameters": {
             "type": [
@@ -11244,6 +11425,34 @@
           "brief_version": {
             "type": "integer",
             "minimum": 0
+          },
+          "brief": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BriefEntry"
+            }
+          },
+          "paused_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "owner",
+              "budget",
+              null
+            ]
+          },
+          "open_tasks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "content_deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
@@ -11253,7 +11462,11 @@
           "budget",
           "spent",
           "paused",
-          "brief_version"
+          "brief_version",
+          "brief",
+          "paused_by",
+          "open_tasks",
+          "content_deleted_at"
         ],
         "examples": [
           {
@@ -11263,7 +11476,11 @@
             "budget": 0.0,
             "spent": 0.0,
             "paused": false,
-            "brief_version": 1
+            "brief_version": 1,
+            "brief": [],
+            "paused_by": null,
+            "open_tasks": 0,
+            "content_deleted_at": null
           }
         ]
       },
@@ -11418,30 +11635,36 @@
         "properties": {
           "lease_length_seconds": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 300,
+            "maximum": 86400
           },
           "check_queue_timeout_seconds": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 30,
+            "maximum": 3600
           },
           "check_run_timeout_seconds": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 60,
+            "maximum": 3600
           },
           "maximum_rounds": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 20
           },
           "rerun_limit": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 20
           },
           "recovery_time_ceiling_seconds": {
             "type": [
               "integer",
               "null"
             ],
-            "minimum": 1
+            "minimum": 60,
+            "maximum": 86400
           }
         },
         "required": [],
@@ -11661,7 +11884,8 @@
               "integer",
               "null"
             ],
-            "minimum": 0
+            "minimum": 1,
+            "maximum": 3
           },
           "credential_id": {
             "type": [
@@ -11716,7 +11940,8 @@
               "integer",
               "null"
             ],
-            "minimum": 0
+            "minimum": 1,
+            "maximum": 3
           },
           "credential_id": {
             "type": [
@@ -13148,6 +13373,7 @@
               "action.waived",
               "action.withdrawn",
               "action.revoked",
+              "action.overturn_recorded",
               "check.queued",
               "check.started",
               "check.finished",
@@ -13736,6 +13962,14 @@
               "null"
             ],
             "description": "The reason of the failed check behind an open contract_incomplete hold, or null (RD-27)."
+          },
+          "waits_for_builder": {
+            "type": "boolean",
+            "description": "The Finishing task has an approved action and no holder."
+          },
+          "waits_for_stronger_agent": {
+            "type": "boolean",
+            "description": "The Ready task has a minimum strength rank."
           }
         },
         "required": [
@@ -13746,7 +13980,9 @@
           "waiting_until",
           "inbox_item",
           "checking",
-          "check_reason"
+          "check_reason",
+          "waits_for_builder",
+          "waits_for_stronger_agent"
         ],
         "examples": [
           {
@@ -13777,7 +14013,9 @@
             "waiting_until": "2026-01-01T00:00:00Z",
             "inbox_item": null,
             "checking": false,
-            "check_reason": null
+            "check_reason": null,
+            "waits_for_builder": false,
+            "waits_for_stronger_agent": false
           }
         ]
       },
@@ -13838,7 +14076,9 @@
                 "waiting_until": "2026-01-01T00:00:00Z",
                 "inbox_item": null,
                 "checking": false,
-                "check_reason": null
+                "check_reason": null,
+                "waits_for_builder": false,
+                "waits_for_stronger_agent": false
               },
               {
                 "task": {
@@ -13885,7 +14125,9 @@
                   "resolved_at": "2026-01-01T00:00:00Z"
                 },
                 "checking": false,
-                "check_reason": null
+                "check_reason": null,
+                "waits_for_builder": false,
+                "waits_for_stronger_agent": false
               }
             ],
             "as_of_seq": 12,
@@ -14464,6 +14706,10 @@
               "not_written"
             ],
             "description": "Where a contract draft stands: none asked, a job queued, a planner writing it, or no draft written after the second miss (milestone 4 plan RD-37)."
+          },
+          "any_action_started": {
+            "type": "boolean",
+            "description": "An outward action was announced as started or is done."
           }
         },
         "required": [
@@ -14486,7 +14732,8 @@
           "as_of",
           "rule_checks",
           "pending",
-          "draft"
+          "draft",
+          "any_action_started"
         ],
         "examples": [
           {
@@ -14537,7 +14784,10 @@
                 "description": "example",
                 "state": "contracted",
                 "approved_by_kind": "owner",
-                "approved_by_id": "00000000-0000-4000-8000-000000000216"
+                "approved_by_id": "00000000-0000-4000-8000-000000000216",
+                "approved_at": null,
+                "position": 1,
+                "stopped_by_rule_check_id": null
               }
             ],
             "questions": [
@@ -14552,7 +14802,10 @@
                 "answer": "example",
                 "basis": "record",
                 "answered_by_kind": "owner",
-                "answered_by_id": "00000000-0000-4000-8000-000000000220"
+                "answered_by_id": "00000000-0000-4000-8000-000000000220",
+                "asked_at": "2026-01-01T00:00:00Z",
+                "answered_at": null,
+                "overturned": false
               }
             ],
             "holds": [
@@ -14685,7 +14938,8 @@
               }
             ],
             "pending": null,
-            "draft": "none"
+            "draft": "none",
+            "any_action_started": false
           }
         ]
       },
@@ -14804,20 +15058,109 @@
           },
           "undoable": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "question",
+              "approval"
+            ]
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_title": {
+            "type": "string"
+          },
+          "seat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "summary": {
+            "type": "string",
+            "description": "The question text, or the outward action’s kind and description."
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The answer for a question."
+          },
+          "action_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "contracted",
+              "requested",
+              "approved",
+              "started",
+              "stopped",
+              "waived",
+              "revoked",
+              "done",
+              null
+            ]
+          },
+          "started": {
+            "type": "boolean",
+            "description": "The action was announced as started."
+          },
+          "overturned_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "overturn_effect": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "stopped",
+              "recorded_only",
+              "answer_withdrawn",
+              null
+            ]
           }
         },
         "required": [
           "question_id",
           "action_id",
           "decided_at",
-          "undoable"
+          "undoable",
+          "kind",
+          "task_id",
+          "task_title",
+          "seat_id",
+          "summary",
+          "outcome",
+          "action_state",
+          "started",
+          "overturned_at",
+          "overturn_effect"
         ],
         "examples": [
           {
             "question_id": "00000000-0000-4000-8000-000000000226",
-            "action_id": "00000000-0000-4000-8000-000000000227",
+            "action_id": null,
             "decided_at": "2026-01-01T00:00:00Z",
-            "undoable": false
+            "undoable": false,
+            "kind": "question",
+            "task_id": "00000000-0000-4000-8000-000000000993",
+            "task_title": "Made-up task",
+            "seat_id": "00000000-0000-4000-8000-000000000994",
+            "summary": "Which made-up label should the button use?",
+            "outcome": "Blue.",
+            "action_state": null,
+            "started": false,
+            "overturned_at": null,
+            "overturn_effect": null
           }
         ]
       },
@@ -14841,9 +15184,19 @@
             "decisions": [
               {
                 "question_id": "00000000-0000-4000-8000-000000000228",
-                "action_id": "00000000-0000-4000-8000-000000000229",
+                "action_id": null,
                 "decided_at": "2026-01-01T00:00:00Z",
-                "undoable": false
+                "undoable": false,
+                "kind": "question",
+                "task_id": "00000000-0000-4000-8000-000000000993",
+                "task_title": "Made-up task",
+                "seat_id": "00000000-0000-4000-8000-000000000994",
+                "summary": "Which made-up label should the button use?",
+                "outcome": "Blue.",
+                "action_state": null,
+                "started": false,
+                "overturned_at": null,
+                "overturn_effect": null
               }
             ]
           }
@@ -14921,7 +15274,11 @@
                 "budget": 0.0,
                 "spent": 0.0,
                 "paused": false,
-                "brief_version": 1
+                "brief_version": 1,
+                "brief": [],
+                "paused_by": null,
+                "open_tasks": 0,
+                "content_deleted_at": null
               }
             ]
           }
@@ -15305,10 +15662,14 @@
                       "description": "example",
                       "state": "contracted",
                       "approved_by_kind": "owner",
-                      "approved_by_id": "00000000-0000-4000-8000-000000000258"
+                      "approved_by_id": "00000000-0000-4000-8000-000000000258",
+                      "approved_at": null,
+                      "position": 1,
+                      "stopped_by_rule_check_id": null
                     }
                   ]
-                }
+                },
+                "answers": []
               },
               "work_reference": "example",
               "credential_id": null,
@@ -15517,10 +15878,14 @@
                       "description": "example",
                       "state": "contracted",
                       "approved_by_kind": "owner",
-                      "approved_by_id": "00000000-0000-4000-8000-000000000278"
+                      "approved_by_id": "00000000-0000-4000-8000-000000000278",
+                      "approved_at": null,
+                      "position": 1,
+                      "stopped_by_rule_check_id": null
                     }
                   ]
-                }
+                },
+                "answers": []
               },
               "work_reference": "example",
               "credential_id": null,
@@ -16207,7 +16572,7 @@
       "LandingPrompt": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `text` is plain text made from the seat's role and name, the server address, the calls the role may make and the defaults; it never holds a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job: an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
+        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `connection` gives the chosen form. `text` gives the role and its defaults, with the server address and calls for HTTP or the tool names for MCP. Neither form includes a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job: an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
         "properties": {
           "text": {
             "type": "string",
@@ -16219,16 +16584,25 @@
               1,
               20
             ]
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp"
+            ]
           }
         },
         "required": [
           "text",
-          "check_interval_minutes"
+          "check_interval_minutes",
+          "connection"
         ],
         "examples": [
           {
             "text": "You are the builder seat Example of leverage. Read your role file, your briefing and your rules before any work.",
-            "check_interval_minutes": 20
+            "check_interval_minutes": 20,
+            "connection": "http"
           }
         ]
       },
@@ -16570,6 +16944,349 @@
             "review_id": "00000000-0000-4000-8000-000000000310",
             "round": 0,
             "notes": "The second criterion does not hold yet."
+          }
+        ]
+      },
+      "CheckCriterion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "build",
+              "review"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "started",
+              "passed"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "kind",
+          "state"
+        ],
+        "examples": [
+          {
+            "text": "The button is on the page.",
+            "kind": "build",
+            "state": "open"
+          }
+        ]
+      },
+      "ActionJobContract": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The task’s contract with the outward actions it names.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "details": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckCriterion"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionInput"
+            }
+          }
+        },
+        "required": [
+          "title",
+          "goal",
+          "details",
+          "criteria",
+          "actions"
+        ],
+        "examples": [
+          {
+            "title": "Made-up task",
+            "goal": "Add a made-up button to the made-up page.",
+            "details": null,
+            "criteria": [
+              {
+                "text": "The button is on the page.",
+                "kind": "build",
+                "state": "open"
+              },
+              {
+                "text": "A reviewer has checked the work.",
+                "kind": "review",
+                "state": "open"
+              }
+            ],
+            "actions": [
+              {
+                "kind": "publish",
+                "description": "Publish the made-up page to the named workspace."
+              }
+            ]
+          }
+        ]
+      },
+      "AnsweredQuestion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "record",
+              "decision",
+              "owner"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "answer",
+          "basis"
+        ],
+        "examples": [
+          {
+            "text": "Which made-up color should the button use?",
+            "answer": "Blue.",
+            "basis": "decision"
+          }
+        ]
+      },
+      "QuestionMaterial": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The task’s own contract, project brief and earlier answers that have not been overturned.",
+        "properties": {
+          "role_file": {
+            "type": "string"
+          },
+          "question": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "assumption": {
+                "type": "string"
+              },
+              "blocking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "text",
+              "assumption",
+              "blocking"
+            ]
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ActionJobContract"
+          },
+          "brief": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BriefEntry"
+            }
+          },
+          "earlier_answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnsweredQuestion"
+            }
+          }
+        },
+        "required": [
+          "role_file",
+          "question",
+          "contract",
+          "brief",
+          "earlier_answers"
+        ],
+        "examples": [
+          {
+            "role_file": "Made-up role file.",
+            "question": {
+              "text": "Which made-up label should the button use?",
+              "assumption": "Use Continue.",
+              "blocking": false
+            },
+            "contract": {
+              "title": "Made-up task",
+              "goal": "Add a made-up button to the made-up page.",
+              "details": null,
+              "criteria": [
+                {
+                  "text": "The button is on the page.",
+                  "kind": "build",
+                  "state": "open"
+                },
+                {
+                  "text": "A reviewer has checked the work.",
+                  "kind": "review",
+                  "state": "open"
+                }
+              ],
+              "actions": [
+                {
+                  "kind": "publish",
+                  "description": "Publish the made-up page to the named workspace."
+                }
+              ]
+            },
+            "brief": [],
+            "earlier_answers": [
+              {
+                "text": "Which made-up color should the button use?",
+                "answer": "Blue.",
+                "basis": "decision"
+              }
+            ]
+          }
+        ]
+      },
+      "ApprovalMaterial": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The approval instruction, the action in contract order and quoted notes and evidence from its task.",
+        "properties": {
+          "role_file": {
+            "type": "string"
+          },
+          "instruction": {
+            "type": "string"
+          },
+          "action": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "publish",
+                  "pay",
+                  "send",
+                  "delete"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "kind",
+              "description",
+              "position"
+            ]
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ActionJobContract"
+          },
+          "quoted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "enum": [
+                    "handoff_note",
+                    "review_notes",
+                    "evidence"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "text"
+              ]
+            }
+          }
+        },
+        "required": [
+          "role_file",
+          "instruction",
+          "action",
+          "contract",
+          "quoted"
+        ],
+        "examples": [
+          {
+            "role_file": "Made-up role file.",
+            "instruction": "Made-up instruction.",
+            "action": {
+              "kind": "publish",
+              "description": "Publish the made-up page to the named workspace.",
+              "position": 1
+            },
+            "contract": {
+              "title": "Made-up task",
+              "goal": "Add a made-up button to the made-up page.",
+              "details": null,
+              "criteria": [
+                {
+                  "text": "The button is on the page.",
+                  "kind": "build",
+                  "state": "open"
+                },
+                {
+                  "text": "A reviewer has checked the work.",
+                  "kind": "review",
+                  "state": "open"
+                }
+              ],
+              "actions": [
+                {
+                  "kind": "publish",
+                  "description": "Publish the made-up page to the named workspace."
+                }
+              ]
+            },
+            "quoted": [
+              {
+                "label": "review_notes",
+                "text": "The made-up review passed."
+              }
+            ]
           }
         ]
       }

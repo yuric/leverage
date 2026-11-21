@@ -251,7 +251,7 @@ The log is one table that the server appends to. No row is ever updated or delet
 | Review | `review.started`, `review.released`, `review.lease_expired`, `review.passed`, `review.failed` |
 | Holds | `hold.opened`, `hold.closed`, each with a reason and, where one applies, the rule or the credential that caused it |
 | Questions | `question.asked`, `question.answered` (from the record, by the orchestrator or by the owner), `question.overturned` |
-| Outward actions | `action.requested`, `action.approved`, `action.lease_granted` (the builder an approved action waited for gets its fresh lease), `action.stopped`, `action.started`, `action.reported_done`, `action.marked_done` (by the owner), `action.waived`, `action.withdrawn` (an action put back to contracted by a return for rework), `action.revoked` (by Cancel only) |
+| Outward actions | `action.requested`, `action.approved`, `action.lease_granted` (the builder an approved action waited for gets its fresh lease), `action.stopped`, `action.started`, `action.reported_done`, `action.marked_done` (by the owner), `action.waived`, `action.withdrawn` (an action put back to contracted by a return for rework), `action.revoked` (by Cancel only), `action.overturn_recorded` (the owner overturned an approval whose action was already done) |
 | Rule checks | `check.queued`, `check.started`, `check.finished` (with the result, `withdrawn` included), `check.overridden` |
 | Rules | `rule.created`, `rule.changed`, `rule.enabled`, `rule.disabled`, `rule.reverted`, `rule.removed` |
 | Jobs | `job.queued`, `job.claimed`, `job.finished`, `job.timed_out`, `job.requeued`, `job.withdrawn` |

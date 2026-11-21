@@ -227,7 +227,8 @@ class RuleChecksContractTest < Minitest::Test
     assert_equal %w[contract instruction may_answer_not_applicable moment quoted role_file], material.fetch("required").sort
     contract = schemas.fetch("CheckContract")
     assert_equal %w[criteria details goal title], contract.fetch("required").sort
-    criterion = contract.dig("properties", "criteria", "items")
+    criterion_ref = contract.dig("properties", "criteria", "items", "$ref")
+    criterion = schemas.fetch(criterion_ref.delete_prefix("#/components/schemas/"))
     assert_equal %w[kind state text], criterion.fetch("required").sort
     assert_equal registry.dig("lists", "criterion_kinds"), criterion.dig("properties", "kind", "enum")
     assert_equal registry.dig("lists", "criterion_states"), criterion.dig("properties", "state", "enum")
