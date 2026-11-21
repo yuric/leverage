@@ -65,6 +65,8 @@ Ask your user anything you need to know before you start: where the work is, wha
 - `task`: there is a task for you. Claim it.
 - `rework`: your work was sent back. Read the briefing again, confirm it, and fix what it names.
 - `resume`: the task you have is no longer paused. Carry on.
+- `answer`: there is an answer to a question you asked. Read it with `get_question` while the task is yours.
+- `action`: the review passed and the task has approved outward actions. Read and confirm the briefing. Call `start_action` before each approved action, and `report_action_done` after carrying it out. Follow the contract's order.
 <% end -%>
 - `briefing_changed`: read the briefing again and confirm it.
 <% end -%>

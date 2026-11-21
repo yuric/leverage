@@ -53,10 +53,11 @@ module Leverage
       event
     end
 
-    def stop(ctx, action, by:, rule_check: nil, reason: nil)
+    def stop(ctx, action, by:, rule_check: nil, approval_job_id: nil)
       task = task_of(action)
       command = rule_check ? "request_action" : (ctx.request.command == "overturn_approval" ? "overturn_approval" : "stop_action")
-      event = move(ctx, action, "action.stopped", command: command, task: task, actor_kind: by.first, actor_id: by.last,
+      fields = approval_job_id ? { approval_job_id: approval_job_id } : {}
+      event = move(ctx, action, "action.stopped", command: command, task: task, actor_kind: by.first, actor_id: by.last, fields: fields,
         cause_id: (RuleChecks.last_finished(rule_check)&.id if rule_check), payload: { overturned: command == "overturn_approval" })
       # A gate can stop the action while other gates still run. Their
       # results are needed before the owner can override the failed gate.

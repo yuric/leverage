@@ -117,8 +117,6 @@ module Leverage
         "change_workspace_settings" => "v1/owner/settings#update"
       }.freeze
 
-      PENDING = {}.freeze
-
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
       Route = Data.define(:operation_id, :verb, :path, :to)

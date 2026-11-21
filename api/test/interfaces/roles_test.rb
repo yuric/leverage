@@ -174,8 +174,9 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     task = working_task(@builder)
     question = @scenario.question(task, outcome: "answered", blocking: false)
     ids = { "id" => task.id, "qid" => question.id }
+    other_seats = [ @scenario.seat(role: "builder"), @reviewer, *job_seats.values ]
     before = counts
-    [ @scenario.seat(role: "builder"), @reviewer, *job_seats.values ].each do |seat|
+    other_seats.each do |seat|
       call("get_question", token: token(seat), ids: ids)
       assert_response :conflict
       assert_equal "not_holder", response.parsed_body.fetch("code")

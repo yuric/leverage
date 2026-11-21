@@ -71,7 +71,7 @@ module Leverage
           requester_kind: requester.is_a?(User) ? "owner" : "seat", requester_id: requester.id, command_key: key,
           params: params.to_h.deep_stringify_keys)
         ctx.as_requester(requested, cause_id: nil) do
-          entry = Table.entry_for(command, allow_pending: true).new(command.to_s)
+          entry = Table.entry_for(command).new(command.to_s)
           entry.load(ctx)
           refusal = Precedence.first(refusals(ctx, entry))
           next :refused if refusal
@@ -100,7 +100,7 @@ module Leverage
       private
 
       def run(request)
-        entry_class = Table.entry_for(request.command, allow_pending: true)
+        entry_class = Table.entry_for(request.command)
         started = monotonic
         timing = { lock_wait: 0.0, writes: 0.0, gate: 0.0 }
         outcome = ActiveRecord::Base.transaction(requires_new: true) do

@@ -291,6 +291,7 @@
     "rerun_of_approval_check",
     "builder_free", "builder_busy", "last_open_action", "not_last_open_action",
     "held_action_unconfirmed", "held_action_stopped", "no_action_started", "action_started",
+    "needs_action_unconfirmed_hold",
     "reviewer_holds_review", "has_outward_action", "no_outward_action", "escalates",
     "does_not_escalate", "credential_differs", "stopped_by_check",
     "adds_to_imaginarium", "adds_to_backlog", "not_held_action_unconfirmed", "no_reviewer_holds_review",

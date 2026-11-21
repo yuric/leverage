@@ -659,6 +659,16 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The seat did not ask the question or no longer holds the task (not_holder).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -13674,6 +13684,10 @@
           "facts": {
             "type": "object",
             "description": "The ids and flags the item names, validated against the item's facts schema in needs_you.json."
+          },
+          "detail": {
+            "type": "string",
+            "description": "The access request description or the reason an approval job stopped an action, when available to the owner. This content is absent from event payloads."
           },
           "state": {
             "type": "string",

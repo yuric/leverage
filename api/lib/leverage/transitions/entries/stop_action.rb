@@ -9,14 +9,16 @@ module Leverage
         end
 
         def refusals(ctx)
-          asked = ctx.request.caller_kind == "owner" ||
-            (@action.state == "requested" && Actions.approval_job_check(ctx, @action)&.effect == "stopped")
+          if @action.state == "requested" && ctx.request.caller_kind == "seat"
+            @approval_check = Actions.approval_job_check(ctx, @action)
+          end
+          asked = ctx.request.caller_kind == "owner" || @approval_check&.effect == "stopped"
           allowed = asked && Actions.allows?(@action, command)
           [ state_refusal(@task.state), ("invalid_state" unless allowed) ].compact
         end
 
         def perform(ctx)
-          Actions.stop(ctx, @action, by: ctx.actor)
+          Actions.stop(ctx, @action, by: ctx.actor, approval_job_id: (ctx.request.params["job_id"] if @approval_check))
         end
       end
     end

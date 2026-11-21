@@ -29,8 +29,9 @@ class ColumnsTest < Minitest::Test
     # The criterion's evidence rows, in the briefing's contract part (IF-25).
     "Criterion" => %w[evidence],
     # The seq of the item's inbox.opened event, so that after_seq on the
-    # Needs you list has a meaning (IF-18).
-    "InboxItem" => %w[opened_seq],
+    # Needs you list has a meaning (IF-18). Detail comes from the access
+    # hold or the stopped action's approval job.
+    "InboxItem" => %w[opened_seq detail],
     # Text made from the seat's role, the contract and a template, and the
     # fixed interval it tells the agent (milestone 2 plan, Q-15, the owner's
     # issue 11). A read with no table behind it.

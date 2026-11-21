@@ -181,8 +181,7 @@ module Leverage
       apply_task_timers(ctx, due_candidates(ctx))
     end
 
-    # Whether the command is a timer's own: any timer of timers.json
-    # (Table::TIMERS, and milestone 5's question timers).
+    # Whether the command is a timer's own: any timer of timers.json.
     def timer_command?(command) = TIMER_COMMANDS.include?(command.to_s)
 
     # Applies the due lease timers on every task and review a seat holds,
@@ -255,7 +254,7 @@ module Leverage
 
     def apply_job_timer(ctx, timer, job, applied)
       applied << job.id
-      entry = Transitions::Table.entry_for(timer, allow_pending: true).new(timer, targets: [ job ])
+      entry = Transitions::Table.entry_for(timer).new(timer, targets: [ job ])
       apply(ctx, entry)
     end
 
