@@ -84,6 +84,21 @@ class ReturnForReworkTest < ActiveSupport::TestCase
     assert_equal [ @review.id ], events.select { |event| event.type == "criterion.reopened" }.map(&:subject_id)
   end
 
+  test "returning to Ready releases a paused builder and closes its seat hold" do
+    scenario.pause_seat(@builder)
+    seat_hold = scenario.hold(@task, reason: "seat_paused")
+    written = events_written do
+      with_rework_seams(holds_task: false) { assert_completed(rework([])) }
+    end
+
+    assert_equal [ "ready", nil, nil, nil ],
+      @task.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id", "lease_time_left_while_paused")
+    assert seat_hold.reload.closed_at, "the old builder cannot resume a task it no longer holds"
+    closed = written.find { |event| event.type == "hold.closed" && event.subject_id == seat_hold.id }
+    assert closed
+    assert_equal [ "owner", scenario.owner.id, 0 ], [ closed.actor_kind, closed.actor_id, closed.round ]
+  end
+
   test "rejects a malformed criterion id and a criterion from another task" do
     foreign = Criterion.find_by!(task_id: scenario.task(state: "ready").id, kind: "build")
     events = events_written do
@@ -110,11 +125,11 @@ class ReturnForReworkTest < ActiveSupport::TestCase
     end
   end
 
-  def with_rework_seams(withdraw: ->(_ctx, _task) { }, &block)
+  def with_rework_seams(withdraw: ->(_ctx, _task) { }, holds_task: true, &block)
     steps = Leverage::Steps.method(:on_event)
     track = ->(ctx, event) { steps.call(ctx, event) unless event.type == "task.returned_for_rework" }
     with_methods(Leverage::Steps, on_event: track) do
-      with_methods(Leverage::Finishing, builder_free?: ->(*) { false }, builder_holds_task?: ->(*) { true }) do
+      with_methods(Leverage::Finishing, builder_free?: ->(*) { false }, builder_holds_task?: ->(*) { holds_task }) do
         with_methods(Leverage::Actions, any_started?: ->(*) { false }, withdraw_open: withdraw, &block)
       end
     end
