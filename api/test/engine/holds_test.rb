@@ -88,6 +88,21 @@ class HoldsTest < ActiveSupport::TestCase
     assert H.pausing?(task)
   end
 
+  test "a late question timeout pauses the lease at the hold's effective time" do
+    task = working_task
+    due = @scenario.database_now + 1.minute
+    task.update!(lease_due_at: due + 30.seconds)
+    ctx = context(at: due + 2.minutes)
+
+    Leverage::Timers.as_timer(ctx, "question_job_queue_timeout", due) do |timer|
+      H.open(timer, task: task, reason: "owner_question", facts: { question_id: SecureRandom.uuid })
+    end
+
+    assert_equal due, ctx.events.find { |event| event.type == "hold.opened" }.effective_at
+    assert_nil task.reload.lease_due_at
+    assert_equal 30, left(task)
+  end
+
   test "a hold that pauses also stops the reviewer's lease clock on the open review (DB-20)" do
     task = @scenario.task(state: "in_review", builder: @builder)
     review = @scenario.review(task, reviewer: @reviewer)
