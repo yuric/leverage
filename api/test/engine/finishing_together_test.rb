@@ -176,7 +176,9 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     assert seat("release", @builder, "id" => occupied.id, "reason" => "unable_to_continue").completed?
 
     assert_equal @builder.id, task.reload.holder_seat_id
-    assert_equal @builder.id, event(task, "action.lease_granted").payload.fetch("lease_seat_id")
+    granted = event(task, "action.lease_granted")
+    assert_equal @builder.id, granted.payload.fetch("lease_seat_id")
+    assert_equal event(occupied, "task.released").id, granted.cause_id
     assert_equal "action", Leverage::Reads::NextItem.call(@builder).fetch("kind")
   end
 
