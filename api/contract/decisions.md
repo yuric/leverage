@@ -519,6 +519,9 @@ Where two inventories chose differently, the decision names the conflict.
   holder loses the task (`task.released`, reason
   `seat_disabled`/`seat_removed`, to Ready). The Working case is not in
   the PRD, so it is proposed as P-6 and its row is `status: proposed`.
+  Release and lease expiry in Finishing also open `action_unconfirmed`
+  when approved or started actions remain and that hold is not already
+  open. A stopped action remains stopped after its builder leaves.
   M-G34.
 - **SM-31** `[owner]` + P-8 A task's cap change writes `task.changed` with
   a `budget_cap` field; P-8 adds "cap" to the PRD note "(priority,
