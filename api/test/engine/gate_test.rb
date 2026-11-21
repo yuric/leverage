@@ -5,10 +5,8 @@ require_relative "gate_support"
 # RT-4): with the production gating, the rules engine, no command commits
 # the move a gate guards while an enabled blocking gate in its frozen set
 # has not passed. Each of the four gate hooks a task can reach is tested
-# with an app gate and with a model gate, on and off; and the one policy
-# whose rule acts in this milestone, the provider rule at review.assign,
-# on and off. The other hooks are named here as tested in milestone 5,
-# from the same list as RD-8.
+# with an app gate and with a model gate, on and off. The action gate
+# and all five policy hooks also run here through their real commands.
 #
 # Every rule here is a custom rule written as rows (Scenario#rule), so the
 # app gate is the built function minimum_criteria_count at the hook under
@@ -21,9 +19,7 @@ class GateTest < ActiveSupport::TestCase
   MOVES = { "task.before_ready" => "task.ready", "task.before_claim" => "task.claimed",
             "task.before_submit" => "task.submitted", "task.before_done" => "review.passed" }.freeze
 
-  # The hooks whose rules act only from milestone 5 (RD-8, RD-9): tested
-  # on and off then.
-  LATER = %w[action.requested review.failed question.asked cost.reported].freeze
+  POLICY_HOOKS = %w[review.assign action.requested review.failed question.asked cost.reported].freeze
 
   setup do
     @scenario = Scenario.new
@@ -37,8 +33,8 @@ class GateTest < ActiveSupport::TestCase
     refute defined?(Leverage::Gating::NoRules), "NoRules is deleted with the switch (milestone 4 plan §2.1)"
   end
 
-  test "every hook is tested here or named as milestone 5's" do
-    assert_equal Leverage::Contract.registry.fetch("hooks").sort, (MOVES.keys + %w[review.assign] + LATER).sort
+  test "every hook is covered" do
+    assert_equal Leverage::Contract.registry.fetch("hooks").sort, (MOVES.keys + POLICY_HOOKS).sort
   end
 
   MOVES.each_key do |hook|
@@ -116,7 +112,113 @@ class GateTest < ActiveSupport::TestCase
     refute mine(RuleCheck).exists?
   end
 
+  [ true, false ].each do |enabled|
+    label = enabled ? "on" : "off"
+
+    test "action.requested: approval policy #{label} waits for the blocking gate" do
+      policy = @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped", enabled: enabled)
+      gate = custom_rule("action.requested")
+      task, review = ready_for_verdict(@scenario.seat, @scenario.seat(role: "reviewer"))
+      action = Action.create!(workspace_id: task.workspace_id, task_id: task.id, position: 1,
+        kind: "send", description: "Sample action")
+      reviewer = Seat.find(review.reviewer_seat_id)
+      assert command("pass_review", reviewer, pass_params(review)).completed?
+
+      invalid = command("approve_action", @scenario.owner, { "id" => action.id })
+      assert_equal "invalid_state", invalid.refusal&.code
+      refute mine(Event).exists?(type: "action.approved")
+      assert_empty mine(Job).where(kind: "approval")
+
+      answer_check(gate, task, "passed")
+      if enabled
+        job = mine(Job).find_by!(kind: "approval")
+        assert_equal policy.id, ::RuleCheck.find(job.target_id).rule_id
+        assert_equal "requested", action.reload.state
+        orchestrator = @scenario.orchestrator
+        assert_equal job.id, command("claim_job", orchestrator).result.fetch("job_id")
+        assert command("submit_job_result", orchestrator, { "id" => job.id,
+          "result" => { "decision" => "approve", "reason" => "Sample reason" }, "tokens" => 0, "spend" => 0 }).completed?
+      else
+        assert_empty mine(RuleCheck).where(rule_id: policy.id)
+        assert command("approve_action", @scenario.owner, { "id" => action.id }).completed?
+      end
+      assert_equal "approved", action.reload.state
+    end
+
+    test "question.asked: routing policy #{label} selects who gets the question" do
+      rule = @scenario.rule(key: "ask_orchestrator_first", origin: "shipped", enabled: enabled)
+      @scenario.orchestrator
+      builder = @scenario.seat
+      task = ready_to_submit(builder)
+
+      assert command("ask_question", builder, { "id" => task.id, "text" => "Which sample?",
+        "assumption" => "First sample", "blocking" => true }).completed?
+
+      assert_equal enabled, mine(Job).exists?(kind: "question")
+      assert_equal !enabled, mine(Hold).exists?(reason: "owner_question")
+      assert_policy(rule, "question.asked", enabled ? "to_orchestrator" : nil)
+    end
+
+    test "review.failed: escalation policy #{label} selects the next builder" do
+      rule = @scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", enabled: enabled,
+        parameters: { "threshold" => 1 })
+      @scenario.seat(strength_rank: 2)
+      reviewer = @scenario.seat(role: "reviewer")
+      task, review = ready_for_verdict(@scenario.seat, reviewer)
+      criterion = Criterion.find_by!(task_id: task.id, kind: "build")
+
+      assert command("fail_review", reviewer, pass_params(review).merge("verdict" => "failed",
+        "failed_criteria" => [ criterion.id ])).completed?
+
+      assert_equal enabled, mine(Event).exists?(type: "task.reassigned")
+      assert_equal(enabled ? "ready" : "working", task.reload.state)
+      assert_policy(rule, "review.failed", enabled ? "escalated" : nil)
+    end
+
+    test "cost.reported: budget policy #{label} applies at the project budget" do
+      rule = @scenario.rule(key: "project_budget_pause", origin: "shipped", enabled: enabled)
+      builder = @scenario.seat
+      project = @scenario.project(budget: 10)
+      task = @scenario.task(state: "working", builder: builder, project: project)
+
+      assert command("report_cost", builder, { "id" => task.id, "tokens" => 1, "spend" => 10 }).completed?
+
+      assert_equal 10, project.reload.spent
+      assert_equal enabled, project.paused
+      assert_equal enabled, mine(Hold).exists?(reason: "project_paused")
+      assert_policy(rule, "cost.reported", enabled ? "project_paused" : nil)
+    end
+  end
+
+  test "changing project keeps an existing claim hold but re-enabling the rule respects the new scope" do
+    project = @scenario.project
+    task = @scenario.task(state: "ready", project: project)
+    rule = custom_rule("task.before_claim", scope_kind: "named_projects", scope_values: [ project.id ])
+    3.times do
+      assert_equal :pending, command("claim", @scenario.seat).outcome
+      answer_check(rule, task, "failed")
+    end
+
+    assert mine(Hold).exists?(task_id: task.id, rule_id: rule.id, reason: "claim_gate_failed", closed_at: nil)
+    assert command("change_task_project", @scenario.owner, { "id" => task.id, "project_id" => nil }).completed?
+    assert mine(Hold).exists?(task_id: task.id, rule_id: rule.id, reason: "claim_gate_failed", closed_at: nil)
+    assert command("disable_rule", @scenario.owner, { "id" => rule.id }).completed?
+    assert command("enable_rule", @scenario.owner, { "id" => rule.id }).completed?
+
+    refute mine(Hold).exists?(task_id: task.id, rule_id: rule.id, reason: "claim_gate_failed", closed_at: nil)
+    assert command("claim", @scenario.seat).completed?
+  end
+
   private
+
+  def assert_policy(rule, hook, effect)
+    checks = mine(RuleCheck).where(rule_id: rule.id, hook: hook)
+    if effect
+      assert_equal [ "applied", effect ], checks.sole.attributes.values_at("result", "effect")
+    else
+      assert_empty checks
+    end
+  end
 
   # Sends the command whose hook is under test, on a task built to just
   # before it. Returns [task, outcome].
@@ -158,7 +260,7 @@ class GateTest < ActiveSupport::TestCase
   # The orchestrator claims the check's job and answers it.
   def answer_check(rule, task, result)
     orchestrator = @scenario.orchestrator
-    check = mine(RuleCheck).find_by!(rule_id: rule.id, task_id: task.id)
+    check = mine(RuleCheck).where(rule_id: rule.id, task_id: task.id, result: nil).sole
     claimed = command("claim_job", orchestrator, {})
     assert_equal :completed, claimed.outcome
     job = mine(Job).find_by!(target_id: check.id, state: "claimed")

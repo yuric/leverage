@@ -182,6 +182,29 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     assert_equal "action", Leverage::Reads::NextItem.call(@builder).fetch("kind")
   end
 
+  test "a late blocking question timeout pauses the lease before the later lease expiry" do
+    task = @scenario.task(state: "working", builder: @builder)
+    question = @scenario.question(task, blocking: true)
+    job = @scenario.job(kind: "question", task: task, target: question, attempt_number: 2)
+    deadline = Leverage::Timers.job_due_at(job, :queue)
+    task.update!(lease_due_at: deadline + 30)
+    lock = Leverage::WorkspaceLock
+    original = lock.method(:clock)
+    lock.define_singleton_method(:clock) { deadline + 90 }
+
+    assert seat("report_cost", @builder, "id" => task.id, "spend" => 0, "tokens" => 0).completed?
+
+    assert_equal "working", task.reload.state
+    assert_equal @builder.id, task.holder_seat_id
+    assert_nil task.lease_due_at
+    assert_equal 30, task.lease_time_left_while_paused
+    assert_equal deadline, event(task, "hold.opened").effective_at
+    assert_nil event(task, "task.lease_expired")
+    assert_equal "passed_on", question.reload.outcome
+  ensure
+    lock.define_singleton_method(:clock, original) if original
+  end
+
   private
 
   def pass_review(*kinds)
