@@ -219,6 +219,15 @@ class ConstraintsTest < ActiveSupport::TestCase
     assert_accepted { credential(name: "work", kind: "api_token", provider: "claude_api") }
   end
 
+  test "CR-7: a credential can store only the fixed mask or null" do
+    assert_accepted { credential(masked_label: nil) }
+    assert_accepted { credential(kind: "api_token", provider: "claude_api", masked_label: "••••••••") }
+    assert_rejected { credential(masked_label: "abcd") }
+
+    id = credential
+    assert_rejected { sql("UPDATE credentials SET masked_label = $1 WHERE id = $2", "•••••••", id) }
+  end
+
   test "at most one Gemini login per workspace; Gemini API tokens are not limited" do
     credential(provider: "gemini")
     assert_rejected(ActiveRecord::RecordNotUnique) { credential(provider: "gemini") }

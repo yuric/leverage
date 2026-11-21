@@ -53,6 +53,17 @@ class ReadersTest < Minitest::Test
     end
   end
 
+  def test_reader_versions_require_a_usage_capture_and_contain_only_version_numbers
+    readers.each { |reader| assert_empty version_errors(reader), reader.fetch("provider") }
+
+    reader = by_provider.fetch("codex")
+    recorded = reader.merge("capture" => reader.fetch("capture").merge("usage" => "recorded"))
+    unrecorded = reader.merge("capture" => reader.fetch("capture").merge("usage" => "none"))
+    assert_empty version_errors(recorded.merge("tested_tool_versions" => [ "1.2.3" ]))
+    refute_empty version_errors(recorded.merge("tested_tool_versions" => [ "1.2.3-beta" ]))
+    refute_empty version_errors(unrecorded.merge("tested_tool_versions" => [ "1.2.3" ]))
+  end
+
   def test_figures_and_resets_use_registry_vocabularies
     lists = registry.fetch("lists")
     readers.each do |reader|
@@ -74,6 +85,9 @@ class ReadersTest < Minitest::Test
       example = reader.fetch("example_reading")
       assert_empty schema.validate(example).map { |e| e.fetch("error") }, reader["provider"]
       assert_includes registry.dig("lists", "reading_states"), example["state"]
+      example.fetch("figures").each do |figure|
+        assert_includes reader.fetch("figures"), figure.slice("label", "kind", "window"), reader["provider"]
+      end
     end
   end
 
@@ -113,6 +127,8 @@ class ReadersTest < Minitest::Test
   end
 
   private
+
+  def version_errors(_reader) = []
 
   def each_key(node, &block)
     case node

@@ -7,11 +7,11 @@ class TimersTest < Minitest::Test
   include ContractTestHelpers
 
   # Plan TM-1, the timers the contract item "the timer list" asks for, and
-  # the workspace timer the Handoff milestone adds (milestone 3 plan HD-4).
+  # the workspace timers added in Handoff (HD-4) and Credentials (CR-10).
   TIMERS = %w[builder_lease_expiry review_lease_expiry check_queue_timeout check_run_timeout
               question_job_queue_timeout question_job_run_timeout contract_draft_job_queue_timeout
               contract_draft_job_run_timeout credential_hold_release orchestrator_offline reviewer_eligibility
-              command_key_retention seat_run_placement].freeze
+              command_key_retention seat_run_placement usage_read_due].freeze
 
   def timers = Leverage::Contract.timers.fetch("timers")
   def event_types = registry["event_types"].map { |entry| entry["type"] }
