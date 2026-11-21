@@ -56,13 +56,13 @@ ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-20 |
 | **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2) and Handoff (milestone 3) |
-| **Next** | The Rule checks milestone (milestone 4): built on `feat/rule-checks` with every check passing on the owner's Mac; its pull request: None yet |
+| **Next** | The Rule checks milestone (milestone 4): built on `feat/rule-checks` with every check passing on the owner's Mac and in CI; its pull request is [#15](https://github.com/yuric/leverage/pull/15) |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 4 rule checks | `feat/rule-checks` | None yet | Built; every check of its plan passes on the owner's Mac but the link check, which runs only in CI; not yet pushed; its adversarial review is next |
+| Milestone 4 rule checks | `feat/rule-checks` | [#15](https://github.com/yuric/leverage/pull/15) | In review: every check of its plan passes on the owner's Mac and in CI; its adversarial review and the review of its fixes are done and every confirmed finding is fixed |
 
 ## Milestones
 
@@ -77,7 +77,7 @@ the PRD's milestone list. How the build is run locally is in
 | 1 | Contract | Merged | #12 | Adds `api/contract/`, the migrations and the gating interface, and the eleven PRD changes P-1 to P-11. The format is [ADR 0003](adr/0003-contract-format.md); the choices made for the owner are question 7 |
 | 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 11 |
 | 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 12. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
-| 4 | Rule checks | In progress | None yet | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 13. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
+| 4 | Rule checks | In review | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 13. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
 | 5 | Questions and approvals | Not started | | |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
 | 7 | Analytics page | Not in this build | | See question 1 |
