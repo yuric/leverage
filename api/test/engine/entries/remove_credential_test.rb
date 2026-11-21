@@ -83,7 +83,7 @@ class RemoveCredentialTest < ActiveSupport::TestCase
     end
     other_request = scenario.helper_request(kind: "read_usage", credential: other)
     history = finished + [ other, other_reading, other_request ]
-    before = history.map(&:attributes)
+    before = history.map { |row| row.reload.attributes }
 
     key = new_key
     written = events_written { assert_completed(remove(credential.id, key: key)) }
@@ -159,7 +159,8 @@ class RemoveCredentialTest < ActiveSupport::TestCase
       assert_empty events_written { repeated = assert_completed(remove(fallback.id, key: key)) }
     end
     assert_empty repeated_handoff
-    assert_equal outcome.result, repeated.result
+    assert_nil outcome.result
+    assert_nil repeated.result
     assert_equal [ item.id ], InboxItem.where(hold_id: hold.id).pluck(:id)
   end
 

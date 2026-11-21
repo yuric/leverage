@@ -24,7 +24,7 @@ class RenameCredentialTest < ActiveSupport::TestCase
     assert_nil Command.find_by!(key: request.key).result
     assert_equal name, credential.reload.name
 
-    assert_empty events_written { assert_equal outcome.result, T.apply(request).result }
+    assert_empty events_written { assert_nil T.apply(request).result }
   end
 
   test "refuses a name used by another credential of the same provider and kind" do
