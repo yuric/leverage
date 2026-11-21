@@ -380,6 +380,13 @@ Where two inventories chose differently, the decision names the conflict.
   added to `v1` in place, as DB-48's was: no released build wrote the
   event. Every golden trace's `hold.opened` gained it; traces 07, 17, 18
   and 19 name the check on those holds.
+- **DB-50** `[shape]` Added by Questions and approvals. The
+  `task.created` payload carries `added_action_ids`, the IDs of any
+  outward actions supplied to Add task, in contract order. With no
+  actions the list is empty. Replay starts these actions in `contracted`
+  state. Complete contract can preserve an existing action without
+  recording it again, so its event cannot reconstruct the initial rows.
+  The field is added to `v1` in place under DB-48.
 
 ## State machine (SM)
 

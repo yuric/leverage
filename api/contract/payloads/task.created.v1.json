@@ -8,11 +8,17 @@
     "state": {
       "description": "The state the task was created in.",
       "enum": ["imaginarium", "backlog"]
+    },
+    "added_action_ids": {
+      "description": "IDs of the contracted outward actions added with the task, in contract order.",
+      "type": "array",
+      "items": {"type": "string", "format": "uuid"},
+      "uniqueItems": true
     }
   },
-  "required": ["state"],
+  "required": ["state", "added_action_ids"],
   "examples": [
-    {"state": "backlog"},
-    {"state": "imaginarium"}
+    {"state": "backlog", "added_action_ids": ["a6d4f1b8-2c97-4e3d-8b50-1f7e9c2a6d35"]},
+    {"state": "imaginarium", "added_action_ids": []}
   ]
 }

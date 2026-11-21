@@ -95,7 +95,10 @@ module Leverage
     REFUSED_MAY_WRITE = /\A(check|hold|inbox|job)\./
     # What a command writes when it is sent and then waits (RE-3).
     WAITING_MAY_WRITE = REFUSED_MAY_WRITE
-    JOB_TIMERS = %w[check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout].freeze
+    JOB_TIMERS = %w[
+      check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
+      question_job_queue_timeout question_job_run_timeout
+    ].freeze
     # The workspace timers and the one-time write, by what their events name.
     ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility" }.freeze
     INSTALL = "install_shipped_rules".freeze
@@ -106,11 +109,15 @@ module Leverage
     GATED = { "complete_contract" => [ "task.ready", "task.before_ready" ], "claim" => [ "task.claimed", "task.before_claim" ],
               "submit" => [ "task.submitted", "task.before_submit" ], "pass_review" => [ "review.passed", "task.before_done" ] }.freeze
     CLEARED = %w[passed not_applicable withdrawn].freeze
+    ACTION_HOOK = "action.requested".freeze
+    ACTION_WORK = %w[action.started action.reported_done].freeze
+    ACTION_COMPLETE = %w[done waived].freeze
     # A command that runs another entry as its requester inside it (RE-6:
     # a planner's draft result is Complete contract): its events are its
     # own row's and, on the task, the other entry's.
     RUN_AS = { "submit_job_result" => "complete_contract" }.freeze
     OWN_ONLY = %w[job. cost.reported].freeze
+    ACTION_RESULTS = { "action.approved" => "approve_action", "action.stopped" => "stop_action" }.freeze
     LEASE_FIELD = "lease_seat_id".freeze
 
     Group = Data.define(:command_id, :at, :events)
@@ -132,7 +139,7 @@ module Leverage
         end
         note(group, audit)
       end
-      findings + step_findings(workspace_id, after_seq) + time_findings(workspace_id, after_seq)
+      findings + action_findings(workspace_id, after_seq) + step_findings(workspace_id, after_seq) + time_findings(workspace_id, after_seq)
     end
 
     # --- commands --------------------------------------------------------------
@@ -150,11 +157,44 @@ module Leverage
     end
 
     def audit_group(workspace_id, group, states, audit)
-      return timer_groups(group, states) if group.command_id.nil?
-
-      row = command_row(workspace_id, group)
-      pending = waiting(workspace_id, group.command_id, row)
+      row = command_row(workspace_id, group) if group.command_id
       label = "command #{group.command_id} (seq #{group.events.first.seq})"
+      grants, events = separate_lease_grants(group.events) unless row&.command == "grant_action_lease"
+      if grants.present?
+        group = Group.new(command_id: group.command_id, at: group.at, events: events)
+      end
+
+      findings = if group.events.empty?
+        []
+      elsif group.command_id.nil?
+        timer_groups(group, states)
+      else
+        pending = waiting(workspace_id, group.command_id, row)
+        command_findings(group, row, pending, states, audit, label)
+      end
+      Array(grants).each do |grant|
+        findings.concat(named(label, [ "grant_action_lease" ], grant, states))
+      end
+      findings
+    end
+
+    # Finishing may grant an approved action a lease after a command,
+    # even on another task or when the command was refused.
+    def separate_lease_grants(events)
+      leases = events.select { |event| event.type == "action.lease_granted" }.to_h { |event| [ event.id, [ event ] ] }
+      return [ [], events ] if leases.empty?
+
+      own = events.reject do |event|
+        next true if leases.key?(event.id)
+        next false unless event.type == "credential.switched" && leases.key?(event.cause_id)
+
+        leases.fetch(event.cause_id) << event
+        true
+      end
+      [ leases.values, own ]
+    end
+
+    def command_findings(group, row, pending, states, audit, label)
       first = audit.fetch(:seen).add?([ group.command_id, row&.id ])
       findings = gate_findings(group, row, pending, audit, label)
       return findings + completion(group, pending, states, label) if pending && !first
@@ -176,6 +216,14 @@ module Leverage
 
     def named(label, names, events, states)
       problems = names.map { |name| match(name, events, states) }
+      if names.include?("submit_job_result") && events.any? { |event| event.type == "job.finished" }
+        action = events.find { |event| ACTION_RESULTS.key?(event.type) }
+        if action
+          theirs, mine = events.partition { |event| event == action || event.cause_id == action.id }
+          theirs.concat(mine.select { |event| %w[hold.opened inbox.opened].include?(event.type) && event.task_id == action.task_id })
+          problems << match("submit_job_result", mine, states) + match(ACTION_RESULTS.fetch(action.type), theirs, states)
+        end
+      end
       names.filter_map { |name| RUN_AS[name] && [ name, RUN_AS[name] ] }.each do |own, other|
         mine, theirs = events.partition { |event| event.type.start_with?(*OWN_ONLY) }
         next if theirs.empty?
@@ -257,8 +305,18 @@ module Leverage
       lease = types.filter_map { |type| TIMER_EVENTS[type] }.first
       return [ lease ] if lease
       return JOB_TIMERS if types.include?("job.timed_out")
+      return [ "grant_action_lease" ] if types.include?("action.lease_granted")
+      return [ "request_action" ] if events.any? { |event| action_request_event?(event) }
 
       [ credential_release(events) ].compact
+    end
+
+    def action_request_event?(event)
+      case event.type
+      when "check.queued", "check.finished" then event.payload["hook"] == ACTION_HOOK
+      when "hold.opened" then event.payload["reason"] == "owner_approval"
+      else false
+      end
     end
 
     # credential_hold_release when the events close a credential hold.
@@ -301,7 +359,9 @@ module Leverage
         # it may write on another task.
         own = (events.find { |event| event.task_id && !allowed.include?(event.type) } || events.first).task_id
         others = events.select { |event| event.task_id && event.task_id != own }
-        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| allowed.include?(event.type) }
+        unless others.all? { |event| allowed.include?(event.type) || cross_task_side_event?(event, events) }
+          return [ "touches #{tasks.size} tasks" ]
+        end
 
         events -= others
         tasks = [ own ]
@@ -317,14 +377,32 @@ module Leverage
       return [ "has no row from #{state.inspect} that writes #{types.join(", ")}" ] if kept.empty?
 
       allowed = kept.flat_map { |row| row.fetch("events") + extra_events(row) }.to_set
-      stray = (types + others.map(&:type)).reject { |type| allowed.include?(type) || side_types.include?(type) }
+      stray = (events + others).reject do |event|
+        allowed.include?(event.type) || side_types.include?(event.type) || action_override?(name, event, events)
+      end
       problems = []
-      problems << "wrote #{stray.uniq.join(", ")}, which no matched row allows" unless stray.empty?
+      problems << "wrote #{stray.map(&:type).uniq.join(", ")}, which no matched row allows" unless stray.empty?
       stateful = kept.select { |row| row.fetch("from") || row.fetch("to") }
       if task && stateful.any? && stateful.none? { |row| (row.fetch("to") || row.fetch("from")) == observed }
         problems << "led #{task} from #{state.inspect} to #{observed.inspect}, which no matched row allows"
       end
       problems
+    end
+
+    # An override approves the stopped action under the action machine.
+    # The approval names the specific check override that caused it.
+    def action_override?(name, event, events)
+      return false unless name == "override_check" && event.type == "action.approved"
+
+      events.any? do |cause|
+        cause.id == event.cause_id && cause.type == "check.overridden" && cause.task_id == event.task_id
+      end
+    end
+
+    def cross_task_side_event?(event, events)
+      event.type == "hold.opened" && event.payload["reason"] == "project_paused" && events.any? do |pause|
+        pause.type == "project.paused" && pause.project_id == event.project_id && pause.id == event.cause_id
+      end
     end
 
     # The rows whose events were all written; on a tie, the rows the fresh
@@ -382,7 +460,8 @@ module Leverage
       @rows_of[name] ||= begin
         rows = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
         failed_review = rows.any? { |row| failed_gates[row.fetch("hook")] == "failed_review" } ? rows_of("fail_review") : []
-        rows + rows.filter_map { |row| failed_gate_row(row) } + failed_review
+        failed_action = name == "request_action" ? rows_of("stop_action") : []
+        rows + rows.filter_map { |row| failed_gate_row(row) } + failed_review + failed_action
       end
     end
 
@@ -401,16 +480,115 @@ module Leverage
     # What a group tells the audit for later groups: rule switches and
     # versions, and each task's round.
     def note(group, audit)
-      rules = audit.fetch(:rules)
       group.events.each do |event|
-        payload = event.payload || {}
-        case event.type
-        when "rule.created" then rules[event.subject_id] = { enabled: payload["enabled"], version_id: payload["rule_version_id"] }
-        when "rule.changed", "rule.reverted" then rules.fetch(event.subject_id)[:version_id] = payload["rule_version_id"]
-        when "rule.enabled", "rule.disabled" then rules.fetch(event.subject_id)[:enabled] = event.type == "rule.enabled"
-        when "rule.removed" then rules.fetch(event.subject_id)[:enabled] = false
-        when "review.failed" then audit.fetch(:rounds)[event.task_id] += 1
+        note_rule(event, audit.fetch(:rules))
+        audit.fetch(:rounds)[event.task_id] += 1 if %w[review.failed task.returned_for_rework].include?(event.type)
+      end
+    end
+
+    def note_rule(event, rules)
+      payload = event.payload || {}
+      case event.type
+      when "rule.created" then rules[event.subject_id] = { enabled: payload["enabled"], version_id: payload["rule_version_id"] }
+      when "rule.changed", "rule.reverted" then rules.fetch(event.subject_id)[:version_id] = payload["rule_version_id"]
+      when "rule.enabled", "rule.disabled" then rules.fetch(event.subject_id)[:enabled] = event.type == "rule.enabled"
+      when "rule.removed" then rules.fetch(event.subject_id)[:enabled] = false
+      end
+    end
+
+    # --- outward actions (AT-4) -------------------------------------------------
+
+    # A command can complete a pending command under a different key between
+    # two of its own events. The action audit follows seq, so neither that
+    # grouping nor a later check result can clear an earlier approval.
+    def action_findings(workspace_id, after_seq)
+      events = Event.where(workspace_id: workspace_id)
+      return [] unless events.where(type: [ ACTION_HOOK, "action.approved", "task.done", *ACTION_WORK ]).exists?
+
+      ActionAudit.new(workspace_id, after_seq).call
+    end
+
+    class ActionAudit
+      def initialize(workspace_id, after_seq)
+        @workspace_id = workspace_id
+        @after_seq = after_seq
+        @rules = {}
+        @gate_versions = RuleVersion.where(workspace_id: workspace_id, hook: ACTION_HOOK)
+          .select { |version| LogAudit.blocking_gate?(version, ACTION_HOOK) }.index_by(&:id)
+        @check_ids = RuleCheck.where(workspace_id: workspace_id, hook: ACTION_HOOK).pluck(:id).to_set
+        @reviews = Set.new
+        @requests = {}
+        @approvals = Set.new
+        @actions = Hash.new { |tasks, task_id| tasks[task_id] = {} }
+        @checks = {}
+        @action_checks = Hash.new { |gates, key| gates[key] = [] }
+        @findings = []
+      end
+
+      def call
+        Replay.each_event(@workspace_id) do |event|
+          LogAudit.note_rule(event, @rules)
+          observe(event) if event.task_id
         end
+        @findings
+      end
+
+      private
+
+      def observe(event)
+        round = [ event.task_id, event.round ]
+        action = [ *round, event.subject_id ]
+        case event.type
+        when "review.passed"
+          @reviews << round
+        when ACTION_HOOK
+          @requests[action] = @rules.values.filter_map { |rule| @gate_versions[rule[:version_id]] if rule[:enabled] }
+        when "check.queued", "check.finished"
+          note_check(event, round)
+        when "check.overridden"
+          @checks[event.subject_id][:overridden] = true if @checks.key?(event.subject_id)
+        when "action.approved"
+          approve(event, round, action)
+        when *ACTION_WORK
+          finding(event, "has no earlier action.approved for the action in the same round") unless @approvals.include?(action)
+        when "task.done"
+          open = @actions[event.task_id].reject { |_, row| ACTION_COMPLETE.include?(row.fetch("state")) }
+          finding(event, "has unresolved action IDs #{open.keys.join(", ")}") if open.any?
+        end
+        Replay.project_actions(@actions[event.task_id], event)
+      end
+
+      def note_check(event, round)
+        payload = event.payload
+        return unless payload["hook"] == ACTION_HOOK && payload["subject_kind"] == "action" && @check_ids.include?(event.subject_id)
+
+        key = [ *round, payload["subject_id"], payload["rule_version_id"] ]
+        row = @checks[event.subject_id] ||= { overridden: false }
+        @action_checks[key] << event.subject_id unless @action_checks[key].include?(event.subject_id)
+        row[:result] = payload["result"]
+      end
+
+      def approve(event, round, action)
+        finding(event, "has no earlier review.passed for the same round") unless @reviews.include?(round)
+        frozen = @requests[action]
+        finding(event, "has no earlier action.requested for the action in the same round") unless frozen
+        Array(frozen).each do |version|
+          next if cleared?(action, version)
+
+          finding(event, "passed the blocking gate of rule #{version.rule_id} (version #{version.version}) "             "with no earlier check that passed, did not apply, was withdrawn or was overridden")
+        end
+        @approvals << action
+      end
+
+      def cleared?(action, version)
+        @action_checks[[ *action, version.id ]].any? do |id|
+          row = @checks.fetch(id)
+          row[:overridden] || CLEARED.include?(row[:result])
+        end
+      end
+
+      def finding(event, problem)
+        @findings << "seq #{event.seq}: #{event.type} #{problem}" if event.seq > @after_seq
       end
     end
 

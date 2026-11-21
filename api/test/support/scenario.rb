@@ -165,7 +165,7 @@ class Scenario
       first = state == "imaginarium" ? "imaginarium" : "backlog"
       task = Task.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, project_id: project&.id, title: title,
         goal: goal, details: details, work_reference: work_reference, priority: priority, state: first)
-      append("task.created", task: task, actor_kind: "owner", actor_id: owner.id, payload: { state: first })
+      append("task.created", task: task, actor_kind: "owner", actor_id: owner.id, payload: { state: first, added_action_ids: [] })
       if state == "cancelled"
         move(task, "cancelled", "task.cancelled", actor_kind: "owner", actor_id: owner.id)
       elsif reach >= TASK_STATES.index("ready")

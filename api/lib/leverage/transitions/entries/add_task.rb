@@ -38,8 +38,8 @@ module Leverage
           task = Task.create!(workspace_id: ctx.workspace.id, project_id: @project&.id, title: @params["title"], goal: @params["goal"],
             details: @params["details"], work_reference: @params["work_reference"].presence,
             priority: @params["priority"] || "normal", state: @state)
-          Actions.create_for(task, Array(@params["actions"]))
-          ctx.emit("task.created", task: task, payload: { state: @state })
+          definitions = Actions.create_for(task, Array(@params["actions"]))
+          ctx.emit("task.created", task: task, payload: { state: @state, added_action_ids: definitions.added_ids })
           Projects.hold_if_paused(ctx, task)
           @result = { "task_id" => task.id }
         end

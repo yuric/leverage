@@ -22,7 +22,7 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
   class OneEvent < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog" })
+      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
       @result = { "task_id" => task.id }
     end
   end

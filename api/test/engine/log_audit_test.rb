@@ -112,6 +112,23 @@ class LogAuditTest < ActiveSupport::TestCase
     assert(found.any? { |line| line.include?("action.approved") && line.include?(rule.id) }, found.inspect)
   end
 
+  test "an override clears the frozen gate only for approvals written after it" do
+    scenario = Scenario.new
+    rule = scenario.rule(hook: "action.requested")
+    task = scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Made-up send." } ])
+    action = Action.find_by!(task_id: task.id)
+    check = scenario.rule_check(task, rule: rule, subject: action, result: "failed")
+    before = scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+    scenario.append("check.overridden", task: task, subject: check, actor_kind: "owner", actor_id: scenario.owner.id)
+    after = scenario.append("action.approved", task: task, subject: action, payload: { lease_seat_id: nil })
+
+    gate_findings = Leverage::LogAudit.call(scenario.workspace_id, after_seq: before.seq - 1)
+      .select { |line| line.include?("action.approved") && line.include?(rule.id) }
+    assert_equal 1, gate_findings.size, gate_findings.inspect
+    assert_match(/seq #{before.seq}: /, gate_findings.sole)
+    refute_match(/seq #{after.seq}: /, gate_findings.sole)
+  end
+
   test "start and report without approval and Done with an open action are found" do
     scenario = Scenario.new
     task = scenario.finishing_task(holder: false, actions: [

@@ -39,7 +39,7 @@ class AddTaskTest < ActiveSupport::TestCase
       task.attributes.values_at("title", "goal", "details", "work_reference", "priority", "state", "round",
         "contract_version", "holder_seat_id", "project_id")
     event = written.sole
-    assert_equal [ "task.created", "owner", @owner.id, task.id, 0, nil, { "state" => "backlog" } ],
+    assert_equal [ "task.created", "owner", @owner.id, task.id, 0, nil, { "state" => "backlog", "added_action_ids" => [] } ],
       [ event.type, event.actor_kind, event.actor_id, event.task_id, event.round, event.subject_kind, event.payload ]
   end
 
@@ -55,7 +55,7 @@ class AddTaskTest < ActiveSupport::TestCase
     task = Task.find(outcome.result.fetch("task_id"))
     assert_equal "imaginarium", task.state
     event = written.sole
-    assert_equal [ "task.created", { "state" => "imaginarium" } ], [ event.type, event.payload ]
+    assert_equal [ "task.created", { "state" => "imaginarium", "added_action_ids" => [] } ], [ event.type, event.payload ]
     assert_equal [ [ "idea", event.id ] ], TaskStep.where(task_id: task.id).pluck(:kind, :opening_event_id)
   end
 

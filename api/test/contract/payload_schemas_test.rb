@@ -59,8 +59,8 @@ module PayloadRules
   # The fields replay and the PRD's stated facts need, by type. Cited by
   # PRD section (What the replay test rebuilds = "Replay") and plan decision.
   REQUIRED_FIELDS = {
-    # Replay: tasks.state; Add task lands in Imaginarium or Backlog.
-    "task.created" => %w[state],
+    # Replay: tasks.state and initial actions.state (DB-50).
+    "task.created" => %w[state added_action_ids],
     # Replay: tasks.contract_version, tasks.minimum_strength_rank (DB-48),
     # criteria.state, actions.state (DB-19).
     "task.contract_changed" => %w[

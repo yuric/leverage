@@ -271,8 +271,12 @@ class ReplayTest < ActiveSupport::TestCase
     project.update_columns(paused: true, spent: 0.25)
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
 
-    project.update_columns(spent: 1)
-    assert(Leverage::Replay.diff(scenario.workspace_id).any? { |line| line.include?("projects #{project.id} spent") })
+    scenario.append("project.resumed", project_id: project.id, actor_kind: "owner", actor_id: scenario.owner.id)
+    found = Leverage::Replay.diff(scenario.workspace_id)
+    assert(found.any? { |line| line.include?("projects #{project.id} paused") }, found.inspect)
+    project.update_columns(paused: false, spent: 1)
+    found = Leverage::Replay.diff(scenario.workspace_id)
+    assert(found.any? { |line| line.include?("projects #{project.id} spent") }, found.inspect)
   end
 
   test "the replay changes nothing: the tables are as they were after a diff" do
