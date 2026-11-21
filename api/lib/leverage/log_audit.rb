@@ -320,9 +320,29 @@ module Leverage
       return [ lease ] if lease
       return JOB_TIMERS if types.include?("job.timed_out")
       return [ "grant_action_lease" ] if types.include?("action.lease_granted")
+      return [ "orchestrator_offline" ] if events.any? { |event| recovered_claim_hold?(event) }
       return [ "request_action" ] if events.any? { |event| action_request_event?(event) }
 
       [ credential_release(events) ].compact
+    end
+
+    # The orchestrator may return before its offline item was opened. Its
+    # only timer event can be the close of an errored claim's check_error
+    # hold (RC-37). Use the check's history, since the next claim may have
+    # changed its result by the time the log is audited.
+    def recovered_claim_hold?(event)
+      return false unless event.type == "hold.closed" && event.actor_kind == "app" && event.payload["reason"] == "check_error"
+
+      earlier = Event.where(workspace_id: event.workspace_id, task_id: event.task_id).where("seq < ?", event.seq)
+      opened = earlier.where(subject_kind: "hold", subject_id: event.subject_id, type: %w[hold.opened hold.closed]).order(:seq).last
+      return false unless opened&.type == "hold.opened" && opened.payload["reason"] == "check_error"
+
+      check_id = opened.payload["rule_check_id"]
+      return false unless check_id
+
+      check = earlier.where(subject_kind: "rule_check", subject_id: check_id, type: %w[check.queued check.finished check.overridden])
+        .order(:seq).last
+      check&.type == "check.finished" && check.payload.values_at("hook", "result") == %w[task.before_claim error]
     end
 
     def action_request_event?(event)
