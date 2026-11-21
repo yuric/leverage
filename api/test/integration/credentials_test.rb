@@ -28,6 +28,22 @@ class CredentialsTest < ActionDispatch::IntegrationTest
     refute Command.exists?(workspace_id: @scenario.workspace_id, key: key)
   end
 
+  test "an observation too far ahead is invalid and the owner sees the subsequent valid reading" do
+    helper = complete("issue_helper_token", body: { "name" => "Made-up helper" }).fetch("helper_token")
+    id = @scenario.credential.id
+    now = @scenario.database_now.round(6)
+    call("report_reading", token: helper, ids: id_path(id), key: new_key("ahead"),
+      body: reading(id, observed_at: now + 2.minutes, percent_used: 99))
+    assert_response :unprocessable_content
+    assert_response_matches_contract
+    assert_equal "invalid", response.parsed_body.dig("error", "code")
+
+    valid = reading(id, observed_at: now, percent_used: 25)
+    complete("report_reading", token: helper, ids: id_path(id), body: valid)
+    assert_equal valid, list_credentials.sole.fetch("reading")
+    assert_equal 1, CredentialReading.where(credential_id: id).count
+  end
+
   test "credential changes go through all three interfaces and the log replays and passes its audit" do
     @helper = complete("issue_helper_token", body: { "name" => "Made-up helper" }).fetch("helper_token")
     spare = add_account("Spare login", "claude")
