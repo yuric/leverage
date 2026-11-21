@@ -18,11 +18,12 @@ struct NeedsYouRow: Identifiable, Equatable, Sendable {
     /// The rule and the rule check the item names, for its buttons.
     var ruleID: UUID?
     var checkID: UUID?
+    var actionMayHaveStarted = false
 }
 
 /// The Needs you screen (HM-21, HM-24): the open items from `list_inbox`, a
 /// row for each, and the commands of its buttons. An item of a kind the app
-/// cannot open yet is one plain line with no button.
+/// cannot read in full remains visible.
 @MainActor
 @Observable
 final class NeedsYouModel {
@@ -36,6 +37,7 @@ final class NeedsYouModel {
 
     private(set) var state: State = .loading
     private(set) var rows: [NeedsYouRow] = []
+    @ObservationIgnored private var items: [UUID: InboxItem] = [:]
     /// The row whose Cancel task is waiting for the owner's answer.
     private(set) var confirmingCancel: UUID?
     private(set) var waitingForSignIn: Set<UUID> = []
@@ -141,9 +143,10 @@ final class NeedsYouModel {
             // The names first: their position is where the events tail starts,
             // so an event between the two reads is delivered again, not lost.
             var seq: Int?
+            var readNames = NeedsYouNames()
             do {
                 let read = try await NeedsYouNames.read(from: api)
-                names = read.names
+                readNames = read.names
                 seq = read.asOfSeq
             } catch is CancellationError {
                 throw CancellationError()
@@ -151,13 +154,15 @@ final class NeedsYouModel {
                 throw error
             } catch {
                 // Without names the items still show, with plain stand-ins.
-                names = NeedsYouNames()
             }
             let page = try await api.listInbox(afterSeq: nil, wait: nil)
             let open = page.items.filter { $0.state == .open }.sorted { $0.openedSeq < $1.openedSeq }
-            names = await names.checkingOrchestrator(for: open, from: api)
-            let notes = try await readRuleNotes(for: open)
+            readNames = await readNames.checkingOrchestrator(for: open, from: api)
+            readNames = try await readNames.addingDetails(for: open, from: api)
+            let notes = try await readRuleNotes(for: open, names: readNames)
             guard mine == generation else { return }
+            names = readNames
+            items = Dictionary(uniqueKeysWithValues: open.map { ($0.id, $0) })
             (checkNotes, ruleNames) = notes
             rows = open.map { row(for: $0) }
             let live = Set(rows.map(\.id))
@@ -165,6 +170,7 @@ final class NeedsYouModel {
             if let confirming = confirmingCancel, !live.contains(confirming) { confirmingCancel = nil }
             if let asking = letThroughRow, !live.contains(asking) { dismissLetThrough() }
             if let asking = confirmingTurnOff, !live.contains(asking) { confirmingTurnOff = nil }
+            if let prompt, !hasChoice(prompt.action, on: prompt.id) { dismissPrompt() }
             state = .loaded
             if let seq { noteRead(seq) }
         } catch is CancellationError {
@@ -188,8 +194,10 @@ final class NeedsYouModel {
     /// A task's page is read once however many of its checks are named, and
     /// the rules list only when a name is still missing. A read that fails
     /// leaves the row without them; a 401 or a cancel ends the load.
-    private func readRuleNotes(for items: [InboxItem]) async throws -> ([UUID: CheckNote], [UUID: String]) {
-        let ruleItems = items.filter { NeedsYouWords.namesARule($0.kind) }
+    private func readRuleNotes(
+        for items: [InboxItem], names: NeedsYouNames
+    ) async throws -> ([UUID: CheckNote], [UUID: String]) {
+        let ruleItems = items.filter { NeedsYouWords.namesARule($0.kind) || $0.kind == .stoppedAction }
         guard !ruleItems.isEmpty else { return ([:], [:]) }
         var notes: [UUID: CheckNote] = [:]
         var tasks: [UUID] = []
@@ -198,7 +206,13 @@ final class NeedsYouModel {
         }
         for task in tasks {
             do {
-                for check in try await api.task(id: task).ruleChecks {
+                let page: TaskPage
+                if let read = names.pages[task] {
+                    page = read
+                } else {
+                    page = try await api.task(id: task)
+                }
+                for check in page.ruleChecks {
                     let reason = check.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
                     notes[check.id] = CheckNote(
                         ruleName: check.ruleName, reason: reason.flatMap { $0.isEmpty ? nil : $0 })
@@ -233,11 +247,12 @@ final class NeedsYouModel {
             id: item.id, kind: item.kind, taskID: NeedsYouWords.taskID(of: item),
             credentialID: NeedsYouWords.credentialID(of: item),
             heading: NeedsYouWords.heading(for: item, names: names),
-            body: NeedsYouWords.body(for: item, names: names), buttons: NeedsYouWords.buttons(for: item))
+            body: NeedsYouWords.body(for: item, names: names), buttons: NeedsYouWords.buttons(for: item, names: names))
         row.ruleName = note?.ruleName ?? rule.flatMap { ruleNames[$0] }
         row.reason = note?.reason
         row.ruleID = rule
         row.checkID = check
+        row.actionMayHaveStarted = NeedsYouWords.hasStarted(item, page: names.page(for: item))
         return row
     }
 
@@ -254,16 +269,106 @@ final class NeedsYouModel {
         subscription = nil
     }
 
+    // MARK: Sheets
+
+    struct Prompt: Identifiable {
+        let id: UUID
+        let action: NeedsYouButton.Action
+    }
+
+    private(set) var prompt: Prompt?
     var promptText = ""
     var selectedCriterionIDs: Set<UUID> = []
 
-    func confirmPrompt() async {}
+    var reworkCriteria: [Criterion] {
+        guard let prompt, let item = items[prompt.id] else { return [] }
+        return names.page(for: item)?.criteria.filter { $0.kind == .build } ?? []
+    }
+
+    private var trimmedPrompt: String { promptText.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var canConfirmPrompt: Bool {
+        guard let prompt, !isBusy(prompt.id), hasChoice(prompt.action, on: prompt.id) else { return false }
+        switch prompt.action {
+        case .answerDifferently: return !trimmedPrompt.isEmpty
+        case .returnForRework: return true
+        case .raiseCap, .changeBudget: return trimmedPrompt.isEmpty || enteredAmount != nil
+        default: return false
+        }
+    }
+
+    private var enteredAmount: Decimal? {
+        let parts = trimmedPrompt.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...2).contains(parts.count), let whole = parts.first, !whole.isEmpty,
+              parts.count == 1 || (1...2).contains(parts[1].count),
+              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } })
+        else { return nil }
+        return Decimal(string: trimmedPrompt, locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    private func showPrompt(_ action: NeedsYouButton.Action, on id: UUID) {
+        promptText = ""
+        selectedCriterionIDs = []
+        prompt = Prompt(id: id, action: action)
+    }
+
+    func dismissPrompt() {
+        prompt = nil
+        promptText = ""
+        selectedCriterionIDs = []
+    }
+
+    func confirmPrompt() async {
+        guard canConfirmPrompt, let prompt, let item = items[prompt.id] else { return }
+        let id = prompt.id
+        switch prompt.action {
+        case .answerDifferently:
+            guard let question = item.questionID else { return }
+            await answer(question, with: trimmedPrompt, on: id)
+        case .returnForRework:
+            guard let task = NeedsYouWords.taskID(of: item) else { return }
+            let criteria = reworkCriteria.map(\.id).filter(selectedCriterionIDs.contains)
+            await command(on: id, name: "rework-\(criteria)") { key in
+                _ = try await self.api.returnForRework(
+                    taskID: task, ReturnForReworkRequest(criterionIDs: criteria), key: key
+                ).completedResult()
+                self.dismissPrompt()
+            }
+        case .raiseCap:
+            guard let task = NeedsYouWords.taskID(of: item) else { return }
+            let request = ChangeTaskCapRequest(budgetCap: enteredAmount)
+            await command(on: id, name: "cap-\(trimmedPrompt)") { key in
+                _ = try await self.api.changeTaskCap(taskID: task, request, key: key).completedResult()
+                self.dismissPrompt()
+            }
+        case .changeBudget:
+            let request = ChangeBudgetRequest(budget: enteredAmount)
+            await command(on: id, name: "budget-\(trimmedPrompt)") { key in
+                _ = try await self.api.changeBudget(projectID: item.aboutID, request, key: key).completedResult()
+                self.dismissPrompt()
+            }
+        default: return
+        }
+    }
+
+    private func answer(_ question: UUID, with text: String, on id: UUID) async {
+        await command(on: id, name: "answer-\(text)") { key in
+            _ = try await self.api.answerQuestion(
+                questionID: question, AnswerQuestionRequest(answer: text), key: key
+            ).completedResult()
+            if self.prompt?.id == id { self.dismissPrompt() }
+        }
+    }
+
+    private func hasChoice(_ action: NeedsYouButton.Action, on id: UUID) -> Bool {
+        rows.first { $0.id == id }?.buttons.contains { $0.action == action } == true
+    }
 
     // MARK: the buttons
 
     /// Runs a button of a row. A button the row does not have sends nothing.
     func perform(_ action: NeedsYouButton.Action, on rowID: UUID) async {
-        guard let row = rows.first(where: { $0.id == rowID }), row.buttons.contains(where: { $0.action == action }),
+        guard let row = rows.first(where: { $0.id == rowID }), hasChoice(action, on: rowID),
               !busy.contains(rowID)
         else { return }
         switch action {
@@ -280,7 +385,40 @@ final class NeedsYouModel {
             guard row.ruleID != nil else { return }
             confirmingTurnOff = rowID
         case .connectAgent: openAgents()
-        default: break
+        case .answerDifferently, .returnForRework, .raiseCap, .changeBudget:
+            showPrompt(action, on: rowID)
+        case .keepAssumption:
+            guard let item = items[rowID],
+                  let question = NeedsYouWords.question(in: item, page: names.page(for: item)) else { return }
+            await answer(question.id, with: question.assumption, on: rowID)
+        case .approve:
+            guard let id = items[rowID]?.actionID else { return }
+            await run(on: rowID, command: .approveAction, subject: id) { try await self.api.approveAction(actionID: id, key: $0) }
+        case .stop:
+            guard let id = items[rowID]?.actionID else { return }
+            await run(on: rowID, command: .stopAction, subject: id) { try await self.api.stopAction(actionID: id, key: $0) }
+        case .markDone(let id):
+            await run(on: rowID, command: .markActionDone, subject: id) { try await self.api.markActionDone(actionID: id, key: $0) }
+        case .waive(let id):
+            await run(on: rowID, command: .waiveAction, subject: id) { try await self.api.waiveAction(actionID: id, key: $0) }
+        case .offerAgain:
+            guard let id = row.taskID else { return }
+            await run(on: rowID, command: .offerTaskAgain, subject: id) { try await self.api.offerTaskAgain(taskID: id, key: $0) }
+        case .grantAccess:
+            guard let id = row.taskID else { return }
+            await run(on: rowID, command: .grantAccess, subject: id) { try await self.api.grantAccess(taskID: id, key: $0) }
+        case .resumeProject:
+            guard let id = items[rowID]?.aboutID else { return }
+            await run(on: rowID, command: .resumeProject, subject: id) { try await self.api.resumeProject(projectID: id, key: $0) }
+        }
+    }
+
+    private func run(
+        on row: UUID, command operation: CommandName, subject: UUID,
+        _ send: (IdempotencyKey) async throws -> PlainOutcome
+    ) async {
+        await command(on: row, name: "\(operation.rawValue)-\(subject)") { key in
+            _ = try await send(key).completedResult()
         }
     }
 

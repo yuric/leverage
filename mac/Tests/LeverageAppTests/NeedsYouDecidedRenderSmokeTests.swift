@@ -25,6 +25,44 @@ struct NeedsYouDecidedRenderSmokeTests {
         #expect(drawsSomething(DecidedView().environment(context)))
     }
 
+    @Test("loaded question and decision rows and their confirmations draw")
+    func loadedScreens() async throws {
+        let taskID = NeedsYouFixtures.taskID
+        let questionID = UUID()
+        let question = Question(
+            id: questionID, taskID: taskID, askingSeatID: TaskScreenFixtures.builderID,
+            text: "Which label?", assumption: "Blue", blocking: true, outcome: .passedOn)
+        let item = NeedsYouFixtures.item(
+            .questionPassedOn, seq: 31, choices: [.answer], facts: ["question_id": .string(questionID.contractString)])
+        let owner = NeedsYouFixtures.owner(open: Locked([item]))
+        let page = TaskPage(
+            task: TaskScreenFixtures.summary(.working, id: taskID), questions: [question],
+            reviewerSeatExists: true, asOfSeq: 31)
+        let decision = Decision(
+            questionID: UUID(), decidedAt: .distantPast, undoable: true, kind: .question, taskID: taskID,
+            taskTitle: "Correct the totals", seatID: UUID(), summary: "Which line?", outcome: "The blue line.")
+        owner.script {
+            $0.task = { _ in page }
+            $0.listDecisions = { DecisionsList(decisions: [decision]) }
+        }
+        let needs = NeedsYouModel(api: owner, noteRead: { _ in }, openTask: { _ in })
+        await needs.load()
+        let row = try #require(needs.rows.first)
+        // ImageRenderer omits the native scroll view. Render its populated row directly.
+        #expect(drawsSomething(NeedsYouRowView(row: row, model: needs)))
+        await needs.perform(.answerDifferently, on: item.id)
+        try #require(needs.prompt != nil)
+        #expect(drawsSomething(AnswerSheet(model: needs, row: row)))
+
+        let decided = DecidedModel(api: owner)
+        await decided.load()
+        #expect(drawsSomething(DecidedRowView(decision: decision, model: decided)))
+        decided.requestUndo(decision)
+        try #require(decided.confirming != nil)
+        #expect(drawsSomething(
+            DecidedRowView(decision: decision, model: decided).environment(\.colorScheme, .dark)))
+    }
+
     private func drawsSomething(_ view: some View) -> Bool {
         let renderer = ImageRenderer(content: view.frame(width: 900, height: 620).background(Color.white))
         renderer.scale = 1

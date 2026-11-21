@@ -158,6 +158,77 @@ struct DecidedModelTests {
         }
     }
 
+    @Test("a decision event refreshes the list through the shared event feed")
+    func followsDecisions() async {
+        let owner = FakeOwnerAPI()
+        let read = Locked<[Decision]>([])
+        let events = Locked<[EventRecord]>([])
+        owner.script {
+            $0.board = { TaskScreenFixtures.board([], asOfSeq: 30) }
+            $0.listDecisions = { DecisionsList(decisions: read.value) }
+            $0.events = { _, _, _ in
+                while true {
+                    if let event = events.update({ $0.isEmpty ? nil : $0.removeFirst() }) {
+                        return EventsPage(events: [event], nextAfterSeq: event.seq)
+                    }
+                    try await Task.sleep(for: .milliseconds(2))
+                }
+            }
+        }
+        let feed = EventFeed(owner: owner)
+        let model = DecidedModel(api: owner)
+        let watcher = Task { await model.watch(using: feed) }
+        defer {
+            watcher.cancel()
+            feed.stop()
+        }
+        #expect(await ShellFixtures.eventually { model.state == .loaded })
+        let decision = Decision(
+            questionID: UUID(), decidedAt: Date(), undoable: true, kind: .question, taskID: UUID(),
+            taskTitle: "Correct the totals", seatID: UUID(), summary: "Which label?", outcome: "Blue")
+        read.value = [decision]
+        events.value = [TaskScreenFixtures.event(.questionAnswered, seq: 31, taskID: decision.taskID)]
+        #expect(await ShellFixtures.eventually { model.rows.first == decision })
+    }
+
+    @Test("A completed approval can be recorded once while remaining marked as irreversible")
+    func recordObjection() async throws {
+        let done = decision(.approval, time: 1, undoable: false, state: .done, started: true)
+        let closed = decision(.approval, time: 2, undoable: false, state: .stopped)
+        let current = Locked([done, closed])
+        let owner = owner(current)
+        owner.script { script in
+            script.overturnApproval = { _, key in
+                current.value = [Decision(
+                    actionID: done.actionID, decidedAt: done.decidedAt, undoable: false, kind: .approval,
+                    taskID: done.taskID, taskTitle: done.taskTitle, seatID: done.seatID, summary: done.summary,
+                    actionState: .done, started: true, overturnedAt: Date(timeIntervalSince1970: 3),
+                    overturnEffect: .recordedOnly), closed]
+                return .completed(nil, key: key.value, command: .overturnApproval)
+            }
+        }
+        let model = DecidedModel(api: owner)
+        await model.load()
+
+        #expect(model.mark(for: done) == "Cannot be undone")
+        #expect(!model.canUndo(done))
+        #expect(model.canRecordObjection(done))
+        #expect(!model.canUndo(closed))
+        #expect(!model.canRecordObjection(closed))
+        model.requestUndo(closed)
+        #expect(model.confirming == nil)
+
+        model.requestUndo(done)
+        #expect(model.confirming == done)
+        #expect(commands(owner).isEmpty)
+        await model.confirmUndo()
+
+        #expect(commands(owner).map(\.operation) == [.overturnApproval])
+        let recorded = try #require(model.rows.first { $0.actionID == done.actionID })
+        #expect(!model.canRecordObjection(recorded))
+        #expect(model.effect(for: recorded) == "Recorded. Publishing had already happened, so nothing changed.")
+    }
+
     private func owner(_ decisions: Locked<[Decision]>) -> FakeOwnerAPI {
         let owner = FakeOwnerAPI()
         owner.script { script in

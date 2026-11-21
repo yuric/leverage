@@ -90,8 +90,8 @@ struct NeedsYouModelTests {
         let row = try? #require(model.rows.first)
         #expect(row?.buttons.isEmpty == true)
         #expect(row?.kind == .approval)
-        #expect(row?.heading == "Fix the totals on the invoice page needs you, and leverage cannot open this kind of item yet.")
-        #expect(row?.body == "")
+        #expect(row?.heading == "An action needs your approval")
+        #expect(row?.body == "The details could not be read.")
     }
 
     @Test("rows are in the order the items opened, and no sentence carries an email or a banned word")
@@ -233,7 +233,6 @@ struct NeedsYouModelTests {
             #expect(model.rows.first?.buttons.map(\.label) == labels, "\(kind)")
         }
         #expect(NeedsYouWords.isShown(.orchestratorOffline))
-
     }
 
     @Test("a button is offered only when the item's own choices include it")
@@ -805,7 +804,8 @@ extension NeedsYouModelTests {
 
     private func milestoneFive(
         _ kind: NeedsYouItem, blocking: Bool = false, started: Bool = false,
-        checked: Bool = false, enabled: Bool = true, ownerApproved: Bool = false
+        checked: Bool = false, enabled: Bool = true, ownerApproved: Bool = false,
+        approvalState: ActionState = .requested
     ) -> (NeedsYouModel, FakeOwnerAPI, InboxItem) {
         let action = ["action_id": JSONValue.string(Self.actionID.contractString)]
         let choices: [InboxChoice]
@@ -843,7 +843,7 @@ extension NeedsYouModelTests {
         let actionState: ActionState = switch kind {
         case .stoppedAction: .stopped
         case .unconfirmedAction: started ? .started : .approved
-        default: .requested
+        default: approvalState
         }
         let page = TaskPage(
             task: TaskScreenFixtures.summary(.finishing, id: Fixtures.taskID, builder: Self.builderID),
@@ -940,6 +940,15 @@ extension NeedsYouModelTests {
         expectCall(owner, .stopAction, id: Self.actionID)
     }
 
+    @Test("an unrefreshed approval item cannot approve an action the task now shows as stopped")
+    func staleApprovalItem() async {
+        let (model, owner, item) = milestoneFive(.approval, approvalState: .stopped)
+        await model.load()
+        #expect(model.rows.first?.buttons.isEmpty == true)
+        await model.perform(.approve, on: item.id)
+        #expect(Fixtures.calls(owner, .approveAction).isEmpty)
+    }
+
     @Test("a stopped action never offers Approve and rework sends only the chosen build criteria")
     func milestoneStopped() async throws {
         let (model, owner, item) = milestoneFive(.stoppedAction, checked: true)
@@ -1031,6 +1040,7 @@ extension NeedsYouModelTests {
         await taskModel.load()
         let taskRow = try #require(taskModel.rows.first)
         #expect(taskRow.heading == "Fix the totals on the invoice page reached its spending limit")
+        #expect(taskRow.body == "$0.00 reported")
         #expect(taskRow.buttons.map(\.label) == ["Raise the limit", "Cancel task"])
         await taskModel.perform(.raiseCap, on: taskItem.id)
         taskModel.promptText = "25.375"
@@ -1047,6 +1057,7 @@ extension NeedsYouModelTests {
         await projectModel.load()
         let projectRow = try #require(projectModel.rows.first)
         #expect(projectRow.heading == "Invoices reached its budget")
+        #expect(projectRow.body == "$0.00 reported")
         #expect(projectRow.buttons.map(\.label) == ["Change the budget", "Continue anyway"])
         await projectModel.perform(.changeBudget, on: projectItem.id)
         projectModel.promptText = ""
