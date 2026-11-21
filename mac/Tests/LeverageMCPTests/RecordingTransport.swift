@@ -37,6 +37,14 @@ func claim(_ id: String, kind: String = "task") -> ToolResponse {
     completed(.object([kind: .object(["id": .string(id)])]))
 }
 
+func nextItem(_ kind: NextKind, task: String? = nil, review: String? = nil) -> ToolResponse {
+    ToolResponse(status: 200, body: .object([
+        "kind": .string(kind.rawValue),
+        "id": task.map(JSONValue.string) ?? .null,
+        "review_id": review.map(JSONValue.string) ?? .null,
+    ]))
+}
+
 func briefing(actionState: String) -> ToolResponse {
     ToolResponse(status: 200, body: .object([
         "briefing": .object(["contract": .object([

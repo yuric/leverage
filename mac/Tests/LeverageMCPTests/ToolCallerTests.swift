@@ -162,6 +162,37 @@ struct ToolCallerTests {
         #expect(last?.path == ["id": otherTaskID])
     }
 
+    @Test(arguments: [false, true])
+    func retryingAPendingClaimFromAnEarlierSessionLearnsItsLease(settledBeforeRetry: Bool) async throws {
+        let pendingBody = JSONValue.object([
+            "command": .string("claim"), "outcome": .string("pending"), "result": .null,
+        ])
+        let lookup = ToolResponse(status: 200, body: pendingBody)
+        let completedClaim = claim(taskID)
+        let fake = RecordingTransport(settledBeforeRetry ? [lookup, completedClaim] : [
+            lookup, ToolResponse(status: 202, body: pendingBody), completedClaim,
+        ])
+        let caller = ToolCaller(transport: fake.send)
+        let claimTool = try #require(catalog.tool(named: "claim_next_task"))
+        let poll = try #require(catalog.tool(named: "get_command"))
+        let key = "fixture-earlier-pending-claim"
+
+        let retry = await caller.call(claimTool, arguments: ["idempotency_key": .string(key)])
+        #expect(retry.response?.status == (settledBeforeRetry ? 200 : 202))
+        if !settledBeforeRetry {
+            let settled = await caller.call(poll, arguments: ["key": .string(key)])
+            #expect(settled.response?.body["outcome"] == .string("completed"))
+        }
+
+        await caller.heartbeat()
+        let requests = await fake.requests
+        let expected: [ContractOperation] = settledBeforeRetry
+            ? [.getCommand, .claimNextTask, .heartbeatTask]
+            : [.getCommand, .claimNextTask, .getCommand, .heartbeatTask]
+        #expect(requests.map(\.operation) == expected)
+        #expect(requests.last?.path == ["id": taskID])
+    }
+
     @Test func replayingAReleaseCannotClearANewLeaseOnTheSameTask() async throws {
         let fake = RecordingTransport([claim(taskID), completed(), claim(taskID), completed(), completed()])
         let caller = ToolCaller(transport: fake.send)

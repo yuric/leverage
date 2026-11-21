@@ -34,6 +34,39 @@ struct HeldWorkTests {
         #expect(!held.hasStartedAction(task: taskID, action: actionID))
     }
 
+    @Test func ambiguousRefusalsKeepTheLeaseAndItsObservedActionStart() {
+        var held = HeldWork()
+        let path = ["id": taskID, "aid": actionID]
+        held.observe(ToolRequest(operation: .getTaskBriefing, path: ["id": taskID]),
+                     response: briefing(actionState: "started"))
+        #expect(held.hasStartedAction(task: taskID, action: actionID))
+
+        held.observe(ToolRequest(operation: .startAction, path: path), response: refused(.invalidState))
+        #expect(held.item == .task(taskID))
+        #expect(held.hasStartedAction(task: taskID, action: actionID))
+
+        let questionRefusal = ToolResponse(status: 409, body: .object(["code": .string("not_holder")]))
+        held.observe(ToolRequest(operation: .getQuestion, path: ["id": taskID, "qid": actionID]),
+                     response: questionRefusal)
+        #expect(held.item == .task(taskID))
+        #expect(held.hasStartedAction(task: taskID, action: actionID))
+
+        held.observe(ToolRequest(operation: .heartbeatTask, path: ["id": taskID]), response: refused(.notHolder))
+        #expect(held.item == nil)
+    }
+
+    @Test(arguments: [NextKind.action, .rework, .resume, .briefingChanged])
+    func nextNoticeKeepsStartsOnlyWhenItDoesNotReplaceTheLease(kind: NextKind) {
+        var held = HeldWork()
+        held.observe(ToolRequest(operation: .getTaskBriefing, path: ["id": taskID]),
+                     response: briefing(actionState: "started"))
+        held.observe(ToolRequest(operation: .getNext), response: nextItem(kind, task: taskID))
+
+        #expect(held.item == .task(taskID))
+        #expect(held.hasStartedAction(task: taskID, action: actionID) ==
+                (kind == .resume || kind == .briefingChanged))
+    }
+
     @Test func completedPendingClaimIsLearnedAndPendingSubmitDoesNotDropTheLease() throws {
         var held = HeldWork()
         let claimKey = try #require(IdempotencyKey("fixture-pending-claim"))

@@ -60,9 +60,39 @@ struct HeartbeatPumpTests {
         #expect(clock.now() == .seconds(183))
     }
 
-    @Test func activityWithoutHeldWorkDoesNotHeartbeat() async throws {
+    @Test(arguments: [NextKind.action, .rework, .resume, .briefingChanged])
+    func nextNoticeStartsHeartbeatingTheTask(kind: NextKind) async throws {
         let clock = ManualMCPClock()
-        let fake = RecordingTransport()
+        let fake = RecordingTransport([nextItem(kind, task: taskID)])
+        let caller = ToolCaller(transport: fake.send, now: clock.now)
+        let next = try #require(ToolCatalog(role: .builder).tool(named: "get_next"))
+        _ = await caller.call(next, arguments: ["wait": .number(0)])
+        let schedule = ManualSchedule(clock: clock, ticks: 1)
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now).run()
+
+        let requests = await fake.requests
+        #expect(requests.map(\.operation) == [.getNext, .heartbeatTask])
+        #expect(requests.last?.path == ["id": taskID])
+    }
+
+    @Test func changedReviewBriefingStartsHeartbeatingTheReview() async throws {
+        let clock = ManualMCPClock()
+        let fake = RecordingTransport([nextItem(.briefingChanged, task: taskID, review: reviewID)])
+        let caller = ToolCaller(transport: fake.send, now: clock.now)
+        let next = try #require(ToolCatalog(role: .reviewer).tool(named: "get_next"))
+        _ = await caller.call(next, arguments: ["wait": .number(0)])
+        let schedule = ManualSchedule(clock: clock, ticks: 1)
+        await HeartbeatPump(caller: caller, sleep: schedule.sleep, now: clock.now).run()
+
+        let requests = await fake.requests
+        #expect(requests.map(\.operation) == [.getNext, .heartbeatReview])
+        #expect(requests.last?.path == ["id": reviewID])
+    }
+
+    @Test(arguments: [NextKind.none, .task, .review])
+    func offersWithoutHeldWorkDoNotHeartbeat(kind: NextKind) async throws {
+        let clock = ManualMCPClock()
+        let fake = RecordingTransport([nextItem(kind)])
         let caller = ToolCaller(transport: fake.send, now: clock.now)
         let next = try #require(ToolCatalog().tool(named: "get_next"))
         _ = await caller.call(next, arguments: ["wait": .number(0)])

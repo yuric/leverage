@@ -134,12 +134,19 @@ class ClaimJobTest < ActiveSupport::TestCase
     task = scenario.task(state: "working")
     question = scenario.question(task)
     question_job = scenario.job(kind: "question", task: task, target: question)
-    assert_equal question_job.id, assert_completed(claim_job(seat)).result.fetch("job_id")
+    key = new_key
+    original = assert_completed(claim_job(seat, key: key))
+    assert_equal question_job.id, original.result.fetch("job_id")
+    repeated = events_written { assert_equal original, claim_job(seat, key: key) }
+    assert_empty repeated
     draft_job = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog"))
 
     assert_completed(owner_command("change_seat", { "id" => seat.id, "role" => "planner" }))
 
     assert_nil Leverage::Jobs.next_for(seat.reload, at: scenario.database_now)
+    stored = Leverage::Reads::CommandOutcome.call(workspace_id: seat.workspace_id, caller_kind: "seat",
+      caller_id: seat.id, key: key)
+    assert_refused("not_eligible", stored.outcome)
     assert_refused("not_eligible", claim_job(seat))
     assert_equal [ "claimed", "queued" ], [ question_job.reload.state, draft_job.reload.state ]
   end

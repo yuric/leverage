@@ -27,6 +27,26 @@ class ContentDeletionTest < ActiveSupport::TestCase
     assert_equal before.slice(*unchanged), snapshot(unchanged)
   end
 
+  test "task deletion removes its claim inputs while retaining the command key" do
+    task = scenario.task(state: "done")
+    other_task = scenario.task(state: "done")
+    seat = own_seat(role: "orchestrator")
+    requested = [ task, other_task ].map do |item|
+      Command.create!(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id,
+        command: "claim_job", key: new_key, request_hash: "a" * 64, outcome: "completed",
+        result: { "job_id" => SecureRandom.uuid, "input" => { "task_id" => item.id, "material" => "Made-up content" } })
+    end
+    target, neighbor = requested
+    before = target.attributes
+    other_before = neighbor.attributes
+
+    assert_completed owner_command("delete_content", { task_id: task.id })
+
+    expected = before.merge("result" => before.fetch("result").except("input"))
+    assert_equal expected, target.reload.attributes
+    assert_equal other_before, neighbor.reload.attributes
+  end
+
   test "deletion appends under the stepped-back clock and keeps replay, event history, and steps intact" do
     task = scenario.task(state: "done", project: scenario.project, details: "Made-up detail")
     before_events = Event.where(workspace_id: scenario.workspace_id).order(:seq).map(&:attributes)

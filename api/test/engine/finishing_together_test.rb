@@ -370,6 +370,81 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     assert_equal "briefing_not_acknowledged", action_call("start_action", task, first).refusal&.code
   end
 
+  test "offer after re-enabling a retained builder leaves a signed-out login on hold" do
+    login = @scenario.credential
+    @builder = @scenario.seat(credential: login)
+    task, = two_approved_actions
+    assert apply("report_signed_out", "helper", @scenario.helper, "id" => login.id, "credential_id" => login.id,
+      "seat_id" => @builder.id, "task_id" => task.id, "observed_at" => @scenario.database_now.utc.iso8601(6),
+      "tool_version" => "0.0.0-example").completed?
+    assert owner("change_seat", @builder, "enabled" => false).completed?
+    assert owner("change_seat", @builder, "enabled" => true).completed?
+
+    assert owner("offer_task_again", task).completed?
+
+    assert_equal [ "credential_signed_out" ], Leverage::Holds.open_holds(task).map(&:reason)
+    assert_equal @builder.id, task.reload.holder_seat_id
+    assert_nil task.lease_due_at
+    assert_equal @scenario.workspace.lease_length_seconds, task.lease_time_left_while_paused
+  end
+
+  test "a former builder cannot take an unconfirmed action after changing roles" do
+    task, action, = two_approved_actions
+    acknowledge(task)
+    assert action_call("start_action", task, action).completed?
+    assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
+    assert owner("change_seat", @builder, "role" => "reviewer").completed?
+
+    rejected = owner("offer_task_again", task)
+    item = Leverage::Reads::TaskPage.call(@scenario.workspace_id, task.id).fetch(:inbox_items)
+      .find { |candidate| candidate[:kind] == "unconfirmed_action" }
+
+    assert_equal "invalid_state", rejected.refusal&.code
+    refute_includes item.fetch(:choices), "offer_again"
+    assert owner("mark_action_done", action).completed?
+  end
+
+  test "changing the role of a paused previous builder opens an unconfirmed action" do
+    task = pass_review("send")
+    action = Action.find_by!(task_id: task.id)
+    assert owner("pause_seat", @builder).completed?
+    assert owner("approve_action", action).completed?
+    assert_nil task.reload.holder_seat_id
+    assert_empty Leverage::Holds.open_holds(task)
+
+    assert owner("change_seat", @builder, "role" => "reviewer").completed?
+
+    assert_equal [ "action_unconfirmed" ], Leverage::Holds.open_holds(task).map(&:reason)
+    assert owner("mark_action_done", action).completed?
+    assert_equal "done", task.reload.state
+  end
+
+  test "waiving an action withdraws its errored gate and leaves other approved work available" do
+    @scenario.rule(hook: "action.requested", scope_kind: "action_kinds", scope_values: [ "send" ])
+    task = pass_review("send", "publish")
+    action, other = Leverage::Actions.for_task(task).to_a
+    assert owner("approve_action", other).completed?
+    check = RuleCheck.find_by!(subject_id: action.id)
+    attempts = Job.where(task_id: task.id, kind: "rule_check")
+    deadline = Leverage::Timers.job_due_at(attempts.sole, :queue)
+    at_workspace_time(deadline) { assert app("check_queue_timeout").completed? }
+    deadline = Leverage::Timers.job_due_at(attempts.find_by!(attempt_number: 2), :queue)
+    at_workspace_time(deadline) do
+      assert Leverage::Transitions::RecordPoll.seat(@orchestrator)
+      assert app("check_queue_timeout").completed?
+    end
+    hold = Hold.find_by!(task_id: task.id, reason: "check_error", rule_check_id: check.id, closed_at: nil)
+    item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+
+    at_workspace_time(deadline + 1) { assert owner("waive_action", action).completed? }
+
+    assert_equal "withdrawn", check.reload.result
+    assert hold.reload.closed_at
+    assert_equal "resolved", item.reload.state
+    assert_equal "approved", other.reload.state
+    assert_equal @builder.id, task.reload.holder_seat_id
+  end
+
   test "the second approval timeout leaves the owner the decision when the orchestrator returns" do
     @scenario.rule(key: "orchestrator_approves_actions", origin: "shipped")
     task = pass_review("send")
