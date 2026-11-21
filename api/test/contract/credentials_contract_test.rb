@@ -55,6 +55,13 @@ class CredentialsContractTest < Minitest::Test
     refute schema.valid?(token.merge("masked_label" => "abcd"))
   end
 
+  def test_progress_and_results_accept_local_token_failures
+    %w[HelperCheckProgress HelperCheckResult].each do |schema|
+      failures = schemas.fetch(schema).fetch("properties").fetch("failure").fetch("enum")
+      %w[token_store_unavailable provider_mismatch].each { |failure| assert_includes failures, failure }
+    end
+  end
+
   def test_a_helper_reading_accepts_the_bounds_and_refuses_larger_values
     schema = validator("CredentialReading")
     example = schemas.fetch("CredentialReading").fetch("examples").first

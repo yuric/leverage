@@ -20,7 +20,8 @@ struct TokenChecksTests {
         (200, "{\"api_key_blocked\":true}", .rejected),
         (200, "{\"api_key_disabled\":true}", .rejected),
         (200, "{\"team_blocked\":true}", .rejected),
-        (401, "{}", .rejected), (403, "{}", .rejected), (503, "{}", .unreachable),
+        (401, "{}", .rejected), (403, "{}", .rejected), (503, "{}", .noAnswer),
+        (200, "invalid", .noAnswer), (302, "{}", .noAnswer),
     ])
     func response(status: Int, body: String, failure: HelperCheckFailure?) async throws {
         try await exercise(answer: .init(status: status, json: body), failure: failure)
@@ -62,6 +63,72 @@ struct TokenChecksTests {
         #expect(!rig.everythingSent().contains("LVRG-TOKEN-"))
     }
 
+    @Test("a local store failure during Add, Verify or a reading has its own result")
+    func vaultFailure() async throws {
+        let rig = try HelperRig()
+        let observations = UsageReadTests.recordReadings(rig)
+        let stub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
+        defer { stub.invalidateAndCancel() }
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
+                                    vault: UnavailableTokenVault(), http: try stubTransport())
+        for kind in [HelperRequestKind.runAddChecks, .verify, .readUsage] {
+            let id = UUID()
+            if kind == .runAddChecks { try await paste(into: runtime, id: id, provider: provider) }
+            let request = helperRequest(kind, credential: id, params: .init(provider: provider, credentialKind: .apiToken))
+            let result = await runtime.handle(request)
+            #expect(result?.checks.last?.failure?.rawValue == "token_store_unavailable")
+            #expect(rig.progress(of: request.id).last?.failure?.rawValue == "token_store_unavailable")
+        }
+        #expect(StubURLProtocol.requests(host: host).count == 1)
+        #expect(observations.value.map(\.state) == [.unavailable])
+    }
+
+    @Test("Add, Verify and usage require the provider chosen on this Mac")
+    func selectedProvider() async throws {
+        let rig = try HelperRig()
+        let observations = UsageReadTests.recordReadings(rig)
+        let chosen = Provider.openaiApi
+        let chosenHost = "api.openai.com"
+        let chosenStub = StubURLProtocol.session(host: chosenHost, answer: .init(status: 200, json: "{}"))
+        let otherStub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
+        defer { chosenStub.invalidateAndCancel(); otherStub.invalidateAndCancel() }
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
+                                    http: try stubTransport())
+        let id = UUID()
+        func run(_ kind: HelperRequestKind, for provider: Provider) async -> HelperRequestResult? {
+            await runtime.handle(helperRequest(kind, credential: id,
+                                               params: .init(provider: provider, credentialKind: .apiToken)))
+        }
+
+        try await paste(into: runtime, id: id, provider: chosen)
+        let add = await run(.runAddChecks, for: provider)
+        #expect(add?.checks.last?.failure?.rawValue == "provider_mismatch")
+        try await paste(into: runtime, id: id, provider: chosen)
+        #expect(await run(.runAddChecks, for: chosen)?.outcome == .finished)
+        for kind in [HelperRequestKind.verify, .readUsage] {
+            #expect(await run(kind, for: provider)?.checks.last?.failure?.rawValue == "provider_mismatch")
+        }
+        #expect(StubURLProtocol.requests(host: host).isEmpty)
+        #expect(StubURLProtocol.requests(host: chosenHost).count == 1)
+        #expect(observations.value.map(\.state) == [.unavailable])
+    }
+
+    private func stubTransport() throws -> ProviderHTTP {
+        try ProviderHTTP(executableURL: URL(fileURLWithPath: "/test/LeverageHelper"), environment: [:],
+                         protocolClasses: [StubURLProtocol.self])
+    }
+
+    private func paste(into runtime: HelperRuntime, id: UUID, provider: Provider) async throws {
+        var line = try JSONSerialization.data(withJSONObject: [
+            "version": 1, "kind": "token", "credential_id": id.uuidString, "token": token, "provider": provider.rawValue,
+        ])
+        line.append(0x0A)
+        let input = Pipe()
+        try input.fileHandleForWriting.write(contentsOf: line)
+        try input.fileHandleForWriting.close()
+        await LocalChannel(cleanup: runtime.cleanup, log: quietLog).run(input: input.fileHandleForReading)
+    }
+
     @Test("a missing pasted token times out, and Verify with no saved token is not signed in")
     func missingToken() async throws {
         let rig = try HelperRig()
@@ -85,4 +152,10 @@ struct TokenChecksTests {
         }
         #expect(StubURLProtocol.requests(host: host).isEmpty)
     }
+}
+
+private struct UnavailableTokenVault: TokenVault {
+    func store(_ token: String, credentialID: UUID) throws { throw CocoaError(.fileWriteNoPermission) }
+    func read(credentialID: UUID) throws -> String? { throw CocoaError(.fileReadNoPermission) }
+    func delete(credentialID: UUID) throws {}
 }

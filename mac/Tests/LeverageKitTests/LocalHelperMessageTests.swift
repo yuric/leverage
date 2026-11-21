@@ -55,10 +55,13 @@ struct LocalHelperMessageTests {
             #"{"version":1,"credential_id":"\#(credentialID)"}"#,
             #"{"version":"1","kind":"forget","credential_id":"\#(credentialID)"}"#,
             #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":false}"#,
+            #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)"}"#,
+            #"{"version":1,"kind":"token","credential_id":"\#(credentialID)","token":"\#(madeUpToken)","provider":"codex"}"#,
             "not JSON",
         ]
         for line in lines {
-            #expect(refuses(Data(line.utf8)))
+            let refused = refuses(Data(line.utf8))
+            #expect(refused)
         }
         let valid = try LocalHelperMessage.forget(credentialID: credentialID).encodeLine()
         #expect(refuses(valid + Data([0x0A])))

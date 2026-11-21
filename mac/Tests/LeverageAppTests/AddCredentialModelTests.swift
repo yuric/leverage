@@ -631,7 +631,7 @@ struct AddCredentialModelTests {
         let added = Locked(0)
         let model = makeModel(owner, added: added, runtime: runtime)
         await start(model, .openaiApi, name: "  Team  ")
-        model.token = Self.madeUpToken
+        model.token = "  " + Self.madeUpToken + "\n"
         #expect(Self.holdsToken(model))
         #expect(model.checks.map(\.state) == [.waiting])
         #expect(model.checks.map(\.check) == [.tokenWorks])
@@ -671,6 +671,7 @@ struct AddCredentialModelTests {
     @Test("a failed token check has its own line and Retry sends the same ID and a new key")
     func tokenRetry() async throws {
         let cases: [(HelperCheckFailure, String)] = [
+            (.noAnswer, "OpenRouter could not complete the token check."),
             (.rejected, "OpenRouter rejected this token."),
             (.unreachable, "OpenRouter could not be reached. Check this Mac's internet connection."),
             (.timedOut, "OpenRouter took too long to check the token."),

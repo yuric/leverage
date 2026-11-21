@@ -82,8 +82,9 @@ struct CodexAppServerTests {
         ])
     }
 
-    @Test("the reader closes stdin and joins the server and its process group")
-    func closesAndReaps() async throws {
+    @Test("completed replies survive EOF, a shutdown error, or a server waiting after EOF",
+          arguments: ["clean", "error", "wait"])
+    func closesAndReaps(afterEOF: String) async throws {
         let rig = try HelperRig()
         let account = try makeAccount(rig)
         // This stand-in waits for EOF before exiting. Its child retains the
@@ -91,7 +92,7 @@ struct CodexAppServerTests {
         // alone cannot account for its exit while this assertion is running.
         let standIn = """
             #!/usr/bin/env python3
-            import json, os, pathlib, subprocess, sys
+            import json, os, pathlib, subprocess, sys, time
 
             child_code = '''
             import os, sys, time
@@ -118,6 +119,12 @@ struct CodexAppServerTests {
                 if "id" in call:
                     print(json.dumps({"id": call["id"], "result": replies[call["method"]]}), flush=True)
             pathlib.Path("stdin-closed").touch()
+            if "\(afterEOF)" == "wait":
+                deadline = time.monotonic() + 3
+                while os.getppid() != 1 and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                pathlib.Path("server-wait-ended").touch()
+            sys.exit(7 if "\(afterEOF)" == "error" else 0)
             """
         let tool = rig.tools.tool("codex")
         try Data(standIn.utf8).write(to: tool, options: .atomic)
@@ -128,6 +135,7 @@ struct CodexAppServerTests {
         #expect(reading.state == .ok)
         let work = account.workingDirectory
         #expect(FileManager.default.fileExists(atPath: work.appendingPathComponent("stdin-closed").path))
+        #expect(!FileManager.default.fileExists(atPath: work.appendingPathComponent("server-wait-ended").path))
         let pids = try String(contentsOf: work.appendingPathComponent("pids"), encoding: .utf8)
             .split(separator: " ").compactMap { Int32($0) }
         try #require(pids.count == 2)
