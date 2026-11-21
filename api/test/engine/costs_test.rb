@@ -27,6 +27,19 @@ class CostsTest < ActiveSupport::TestCase
     assert_equal [ 1, 1 ], [ @task.reload.spent, @project.reload.spent ]
   end
 
+  test "spend that would overflow either total is invalid and keeps both totals and the log intact" do
+    [ @task, @project ].each do |nearly_full|
+      assert_completed(seat_command(@builder, "report_cost", cost_params.merge("spend" => 0)))
+      nearly_full.update!(spent: 99_999_999.999999)
+      before = [ @task.reload.spent, @project.reload.spent ]
+      assert_empty events_written {
+        assert_raises(T::Invalid) { seat_command(@builder, "report_cost", cost_params.merge("spend" => 0.000001)) }
+      }
+      assert_equal before, [ @task.reload.spent, @project.reload.spent ]
+      nearly_full.update!(spent: 0)
+    end
+  end
+
   test "a seat can report under a hold without acknowledging while a submit waits on a check" do
     scenario.hold(@task, reason: "owner_hold")
     pending = scenario.pending_transition(@task, command: "submit", requester: @builder)

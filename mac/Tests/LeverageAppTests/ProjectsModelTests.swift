@@ -105,6 +105,20 @@ struct ProjectsModelTests {
         #expect(calls[1].body == .object(["budget": .null]))
     }
 
+    @Test("project budgets accept the local decimal separator within the stored range")
+    func localizedBudgetRange() {
+        let model = ProjectsModel(api: FakeOwnerAPI(), locale: Locale(identifier: "de_DE"))
+        #expect(model.budgetRequest("99999999,99")?.budget == Decimal(string: "99999999.99"))
+        for invalid in ["100000000,00", "12.50", "12,505"] {
+            #expect(model.budgetRequest(invalid) == nil)
+        }
+    }
+
+    @Test("project delete confirmation accounts for backups")
+    func deleteCopy() {
+        #expect(ProjectsCopy.deleteExplanation.text.contains("Backups"))
+    }
+
     @Test("pause and resume send the matching command and refresh the project")
     func pauseAndResume() async {
         let (owner, rows, projects) = model(startingWith: [Self.project()])

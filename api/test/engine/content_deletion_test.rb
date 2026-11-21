@@ -1,8 +1,10 @@
 require "test_helper"
 require_relative "entries/accounts_support"
+require_relative "gate_support"
 
 class ContentDeletionTest < ActiveSupport::TestCase
   include AccountsSupport
+  include GateSupport
 
   setup { use_scenario }
 
@@ -25,6 +27,52 @@ class ContentDeletionTest < ActiveSupport::TestCase
       assert_equal expected, row.reload.attributes, "#{row.class} keeps every non-content field"
     end
     assert_equal before.slice(*unchanged), snapshot(unchanged)
+  end
+
+  %w[app model].each do |checker|
+    test "task deletion removes the #{checker} gate reason from command outcomes without changing another task" do
+      builder = own_seat
+      mark = "MADE-UP-GATE-CONTENT"
+      rule = if checker == "app"
+        app_rule("task.before_submit")
+      else
+        custom_rule("task.before_submit")
+      end
+
+      first = ready_to_submit(builder)
+      second = ready_to_submit(own_seat)
+      keys = [ first, second ].map do |task|
+        reason = task.id == first.id ? mark : "Other made-up reason."
+        gating([ rule, { app_result: "failed", reason: reason } ]) if checker == "app"
+        Leverage::Gating.implementation = Leverage::Rules::Engine.new if checker == "model"
+        holder = Seat.find(task.holder_seat_id)
+        outcome = command("submit", holder, submit_params(task))
+        key = @key
+        if checker == "model"
+          assert_equal :pending, outcome.outcome
+          orchestrator = scenario.orchestrator
+          job_id = assert_completed(command("claim_job", orchestrator)).result.fetch("job_id")
+          assert_completed(command("submit_job_result", orchestrator, { "id" => job_id, "tokens" => 0, "spend" => 0,
+            "result" => { "result" => "failed", "reason" => reason } }))
+        end
+
+        refusal = command_receipt(holder, key).outcome.refusal
+        assert_equal [ "blocked_by_rule", rule.id ], [ refusal.code, refusal.rule_id ]
+        assert refusal.reason == reason, "the original outcome records the gate reason"
+        key
+      end
+      other_builder = Seat.find(second.holder_seat_id)
+      other_refusal = command_receipt(other_builder, keys.last).outcome.refusal
+      assert_completed owner_command("cancel", { id: first.id })
+      assert_completed owner_command("delete_content", { task_id: first.id })
+
+      receipt = command_receipt(builder, keys.first)
+      assert receipt.row.refusal["reason"].nil?, "stored command retained deleted content"
+      assert receipt.outcome.refusal.reason.nil?, "command read retained deleted content"
+      assert_equal [ "blocked_by_rule", rule.id ], [ receipt.outcome.refusal.code, receipt.outcome.refusal.rule_id ]
+      assert command_receipt(other_builder, keys.last).outcome.refusal == other_refusal, "another task's outcome changed"
+      refute RuleCheck.where(task_id: first.id).where.not(reason: nil).exists?
+    end
   end
 
   test "task deletion removes its claim inputs while retaining the command key" do
@@ -145,6 +193,10 @@ class ContentDeletionTest < ActiveSupport::TestCase
   end
 
   private
+
+  def command_receipt(seat, key)
+    Leverage::Reads::CommandOutcome.call(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id, key: key)
+  end
 
   def saved_claim(command, seat, result)
     Command.create!(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id, command: command,

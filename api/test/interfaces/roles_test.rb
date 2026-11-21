@@ -170,6 +170,21 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "task holder refusals precede role and state refusals on question, access and action calls" do
+    task = @scenario.task(state: "working", builder: @builder, actions: [ { kind: "publish" } ])
+    action = Action.find_by!(task_id: task.id)
+    [ @reviewer, job_seats.fetch("orchestrator") ].each do |seat|
+      %w[ask_question request_access report_cost].each do |operation|
+        refused(operation, seat, codes: %w[not_holder], ids: task_ids(operation, task), body: task_body(operation, task))
+      end
+    end
+    [ @reviewer, @scenario.seat(role: "builder") ].each do |seat|
+      ACTION_CALLS.each_key do |operation|
+        refused(operation, seat, codes: %w[not_holder], ids: { "id" => task.id, "aid" => action.id })
+      end
+    end
+  end
+
   test "get_question: only the builder who asked and still holds the task can read the answer" do
     task = working_task(@builder)
     question = @scenario.question(task, outcome: "answered", blocking: false)

@@ -13,12 +13,12 @@ private typealias Fixtures = NeedsYouFixtures
 struct NeedsYouModelTests {
     private func makeModel(
         _ owner: FakeOwnerAPI, reads: Locked<[Int]> = Locked([]), opened: Locked<[UUID]> = Locked([]),
-        agents: Locked<Int> = Locked(0)
+        agents: Locked<Int> = Locked(0), locale: Locale = Locale(identifier: "en_US")
     ) -> NeedsYouModel {
         NeedsYouModel(
             api: owner, noteRead: { seq in reads.update { $0.append(seq) } },
             openTask: { id in opened.update { $0.append(id) } }, openAgents: { agents.update { $0 += 1 } },
-            timing: .quick)
+            timing: .quick, locale: locale)
     }
 
     private func owner(_ items: [InboxItem]) -> FakeOwnerAPI {
@@ -805,7 +805,8 @@ extension NeedsYouModelTests {
     private func milestoneFive(
         _ kind: NeedsYouItem, blocking: Bool = false, started: Bool = false,
         checked: Bool = false, enabled: Bool = true, ownerApproved: Bool = false,
-        approvalState: ActionState = .requested
+        approvalState: ActionState = .requested, description: String = "the release notes",
+        locale: Locale = Locale(identifier: "en_US")
     ) -> (NeedsYouModel, FakeOwnerAPI, InboxItem) {
         let action = ["action_id": JSONValue.string(Self.actionID.contractString)]
         let choices: [InboxChoice]
@@ -857,7 +858,7 @@ extension NeedsYouModelTests {
             actions: [
                 OutwardAction(
                     id: Self.actionID, taskID: Fixtures.taskID, kind: .publish,
-                    description: "the release notes", state: actionState),
+                    description: description, state: actionState),
                 OutwardAction(
                     id: Self.secondActionID, taskID: Fixtures.taskID, kind: .send,
                     description: "the invoice", state: .approved, approvedByKind: .owner, position: 2),
@@ -895,7 +896,7 @@ extension NeedsYouModelTests {
             $0.changeBudget = { _, _, key in TaskScreenFixtures.plain(.changeBudget, key: key) }
             $0.resumeProject = { _, key in TaskScreenFixtures.plain(.resumeProject, key: key) }
         }
-        return (makeModel(owner), owner, item)
+        return (makeModel(owner, locale: locale), owner, item)
     }
 
     private func expectCall(
@@ -938,6 +939,18 @@ extension NeedsYouModelTests {
         await model.perform(.stop, on: item.id)
         expectCall(owner, .approveAction, id: Self.actionID)
         expectCall(owner, .stopAction, id: Self.actionID)
+    }
+
+    @Test("an action sentence uses its verb once in the approval and unconfirmed item")
+    func actionSentence() async {
+        let (approval, _, _) = milestoneFive(.approval, description: "Publish the sample page.")
+        await approval.load()
+        #expect(approval.rows.first?.heading == "Publish the sample page?")
+
+        let (unconfirmed, _, _) = milestoneFive(.unconfirmedAction, description: "Publish the sample page.")
+        await unconfirmed.load()
+        #expect(unconfirmed.rows.first?.body.contains("publish the sample page.") == true)
+        #expect(unconfirmed.rows.first?.body.localizedCaseInsensitiveContains("publish publish") == false)
     }
 
     @Test("an unrefreshed approval item cannot approve an action the task now shows as stopped")
@@ -1032,6 +1045,25 @@ extension NeedsYouModelTests {
         await model.perform(.cancelTask, on: item.id)
         await model.confirmCancel()
         expectCall(owner, .cancelTask, id: Fixtures.taskID)
+    }
+
+    @Test("Needs you validates and sends amounts in the Mac’s number format",
+          arguments: [NeedsYouItem.taskBudgetReached, .projectBudgetReached])
+    func localizedBudget(kind: NeedsYouItem) async {
+        let (model, owner, item) = milestoneFive(kind, locale: Locale(identifier: "de_DE"))
+        let isCap = kind == .taskBudgetReached
+        let operation: ContractOperation = isCap ? .changeTaskCap : .changeBudget
+        await model.load()
+        await model.perform(isCap ? .raiseCap : .changeBudget, on: item.id)
+        for invalid in ["100000000,00", "100000000", "12.50", "12,505"] {
+            model.promptText = invalid
+            #expect(!model.canConfirmPrompt)
+        }
+        model.promptText = "12,50"
+        #expect(model.canConfirmPrompt)
+        await model.confirmPrompt()
+        expectCall(owner, operation, id: isCap ? Fixtures.taskID : Self.projectID,
+                   body: .object([isCap ? "budget_cap" : "budget": .number(12.5)]))
     }
 
     @Test("task and project budget items send dollar amounts, and a blank project budget clears the limit")

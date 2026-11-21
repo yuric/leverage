@@ -116,6 +116,44 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
     assert_log_consistent
   end
 
+  test "a task page keeps its criterion but omits evidence after deleting the evidence contents" do
+    task = create_task
+    builder = @scenario.seat
+    claim(builder, task)
+    criterion = Criterion.find_by!(task_id: task.id, kind: "build")
+    ids = path(task).merge("cid" => criterion.id)
+    send_command("start_criterion", caller: builder, ids: ids)
+    send_command("pass_criterion", caller: builder, ids: ids,
+      body: { "evidence" => { "kind" => "note", "value" => "Made-up evidence." } })
+    assert_equal 1, read("get_task", ids: path(task)).fetch("criteria").find { |row| row["id"] == criterion.id }.fetch("evidence").size
+
+    send_command("cancel_task", ids: path(task))
+    send_command("delete_task_content", ids: path(task))
+
+    row = read("get_task", ids: path(task)).fetch("criteria").find { |entry| entry["id"] == criterion.id }
+    assert_equal "passed", row.fetch("state")
+    assert_empty row.fetch("evidence")
+    assert_log_consistent
+  end
+
+  test "money outside the persisted range is invalid before a project or task is changed" do
+    project = @scenario.project(budget: 25)
+    task = create_task
+    cases = [
+      [ "create_project", {}, { "name" => "Made-up project", "budget" => 1_000_000_000 } ],
+      [ "change_budget", path(project), { "budget" => 1_000_000_000 } ],
+      [ "change_task_cap", path(task), { "budget_cap" => 99_999_999.9999999 } ]
+    ]
+    cases.each do |operation, ids, body|
+      call(operation, token: auth(nil), ids: ids, key: new_key, body: body, check_request: false)
+      assert_equal 422, response.status, operation
+      assert_equal "invalid", response.parsed_body.dig("error", "code")
+      assert_response_matches_contract
+    end
+    assert_equal 25, project.reload.budget
+    assert_nil task.reload.budget_cap
+  end
+
   test "the workspace settings read and a newly granted lease use the saved length" do
     builder = @scenario.seat
     start_audit

@@ -59,6 +59,21 @@ class StateTableQuestionsTest < ActiveSupport::TestCase
     end
   end
 
+  %w[done cancelled].each do |state|
+    test "an orchestrator's answer cannot be withdrawn or replaced after #{state}" do
+      task = task_in(state)
+      answered = scenario.question(task, outcome: "answered", basis: "decision", asking_seat: @builder)
+      overturned = scenario.question(task, outcome: "overturned", basis: "decision", asking_seat: @builder)
+
+      assert_empty events_written {
+        assert_refused("invalid_state", owner_command("overturn_answer", { "id" => answered.id }))
+        assert_refused("invalid_state", owner_command("answer_question", { "id" => overturned.id, "answer" => "Sample answer." }))
+      }
+      assert_equal "answered", answered.reload.outcome
+      assert_equal "overturned", overturned.reload.outcome
+    end
+  end
+
   StateTableCases.define(self, %w[answer_question]) do |kase|
     task = task_in("done")
     outcomes = kase.refusal ? %w[open answered] : %w[passed_on overturned]

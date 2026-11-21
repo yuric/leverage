@@ -37,7 +37,7 @@ final class TaskSettingsModel {
     private var saved: [Field: Change]
     private var retries: [Field: (change: Change, key: IdempotencyKey)] = [:]
 
-    init(task: TaskSummary, api: any OwnerAPI, didChange: @escaping @MainActor () -> Void) {
+    init(task: TaskSummary, api: any OwnerAPI, locale: Locale = .current, didChange: @escaping @MainActor () -> Void) {
         taskID = task.id
         self.api = api
         self.didChange = didChange

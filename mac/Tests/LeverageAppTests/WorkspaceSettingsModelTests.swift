@@ -21,6 +21,13 @@ struct WorkspaceSettingsModelTests {
         return owner
     }
 
+    @Test("Recovery settings name the wait being measured and count failed reviews")
+    func settingsCopy() {
+        #expect(WorkspaceSettingsCopy.label(for: .maximumRounds).text.contains("failed reviews"))
+        #expect(WorkspaceSettingsCopy.label(for: .recoveryTimeCeiling).text.contains("limit or sign-out"))
+        #expect(WorkspaceSettingsCopy.hint(for: .recoveryTimeCeiling).contains("measures"))
+    }
+
     @Test("The six saved values are shown, and an untouched form sends no command")
     func readsSettings() async {
         let owner = makeOwner()

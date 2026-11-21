@@ -323,6 +323,95 @@ class FinishingTogetherTest < ActiveSupport::TestCase
     end
   end
 
+  %w[change_seat remove_seat].product(%w[mark_action_done waive_action]).each do |loss, settlement|
+    test "#{settlement} keeps remaining actions unconfirmed after #{loss}" do
+      task, first, other = two_approved_actions
+      acknowledge(task)
+      assert owner(loss, @builder, loss == "change_seat" ? { "enabled" => false } : {}).completed?
+
+      assert owner(settlement, first).completed?
+
+      holds = Leverage::Holds.open_holds(task)
+      assert_equal [ "action_unconfirmed" ], holds.map(&:reason)
+      hold = holds.sole
+      item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+      assert_equal "unconfirmed_action", item.kind
+      assert_equal [ other.id ], item.facts.fetch("action_ids")
+      assert_equal "approved", other.reload.state
+      %w[start_action report_action_done].each do |command|
+        assert_equal "on_hold", action_call(command, task, other).refusal&.code
+      end
+    end
+  end
+
+  test "cancel takes precedence over an action's state for its former holder" do
+    task, first, = two_approved_actions
+    acknowledge(task)
+    assert action_call("start_action", task, first).completed?
+    assert owner("cancel", task).completed?
+
+    %w[start_action report_action_done].each do |command|
+      assert_equal "task_cancelled", action_call(command, task, first).refusal&.code
+    end
+  end
+
+  test "an Approval item is answered by Stop before the stopped action can be waived" do
+    task = pass_review("publish")
+    action = Action.find_by!(task_id: task.id)
+    item = InboxItem.find_by!(about_id: task.id, kind: "approval", state: "open")
+
+    assert_equal "invalid_state", owner("waive_action", action).refusal&.code
+    assert_equal "open", item.reload.state
+    assert_equal "requested", action.reload.state
+
+    assert owner("stop_action", action, "reason" => "Sample stop").completed?
+    resolution = Event.where(subject_id: item.id, type: "inbox.resolved").sole
+    assert_equal "stop", resolution.payload.fetch("choice")
+    assert owner("waive_action", action).completed?
+    assert_equal "done", task.reload.state
+  end
+
+  %w[review report_action_done waive_action].product(%w[queued claimed]).each do |completion, state|
+    test "a #{state} question job is withdrawn when #{completion} ends its task" do
+      if completion == "review"
+        task = @scenario.task(state: "in_review", builder: @builder, reviewer: @reviewer)
+      else
+        task = pass_review("publish")
+        action = Action.find_by!(task_id: task.id)
+        assert owner("approve_action", action).completed?
+        acknowledge(task)
+      end
+      question = @scenario.question(task, blocking: true)
+      job = @scenario.job(kind: "question", task: task, target: question, attempt_number: 2, state: state,
+        seat: (state == "claimed" ? @orchestrator : nil))
+      deadline = Leverage::Timers.job_due_at(job, state == "queued" ? :queue : :run)
+
+      case completion
+      when "review"
+        assert_passed_review(task)
+      when "report_action_done"
+        assert action_call("start_action", task, action).completed?
+        assert action_call("report_action_done", task, action).completed?
+      when "waive_action"
+        assert owner("waive_action", action).completed?
+      end
+
+      assert_equal "done", task.reload.state
+      if state == "claimed"
+        submitted = seat("submit_job_result", @orchestrator, "id" => job.id, "tokens" => 0, "spend" => 0,
+          "result" => { "outcome" => "passed_on", "basis" => nil, "answer" => nil })
+        assert_equal "invalid_state", submitted.refusal&.code
+      end
+      timer = state == "queued" ? "question_job_queue_timeout" : "question_job_run_timeout"
+      at_workspace_time(deadline + 1) { assert app(timer).completed? }
+
+      assert_equal "withdrawn", job.reload.state
+      assert_equal "open", question.reload.outcome
+      assert_empty Leverage::Holds.open_holds(task)
+      assert_empty InboxItem.where(about_id: task.id, state: "open")
+    end
+  end
+
   test "mark done closes the unconfirmed hold while a different action still needs a decision" do
     task, first, other = two_approved_actions
     assert seat("release", @builder, "id" => task.id, "reason" => "unable_to_continue").completed?
@@ -516,13 +605,17 @@ class FinishingTogetherTest < ActiveSupport::TestCase
   def pass_review(*kinds)
     task = @scenario.task(state: "in_review", builder: @builder, reviewer: @reviewer,
       actions: kinds.map { |kind| { kind: kind, description: "Sample action" } })
+    assert_passed_review(task)
+    assert_equal(kinds.empty? ? "done" : "finishing", task.reload.state)
+    task
+  end
+
+  def assert_passed_review(task)
     review = @scenario.review(task, reviewer: @reviewer)
     assert seat("acknowledge_review_briefing", @reviewer, "id" => review.id,
       "briefing_hash" => Leverage::Briefing.hash_for(task, seat: @reviewer, review: review)).completed?
     assert seat("pass_review", @reviewer, "id" => review.id, "verdict" => "passed",
       "failed_criteria" => [], "notes" => "Sample review", "tokens" => 0, "spend" => 0).completed?
-    assert_equal(kinds.empty? ? "done" : "finishing", task.reload.state)
-    task
   end
 
   def acknowledge(task)

@@ -25,8 +25,7 @@ class DecisionsReadTest < CommittingTestCase
     approval, answer = rows
     assert_equal [ "approval", finishing.id, finishing.title, seat.id, nil, "approved", false, nil, nil, true ],
       approval.values_at(*%w[kind task_id task_title seat_id outcome action_state started overturned_at overturn_effect undoable])
-    assert_includes approval.fetch("summary").downcase, "publish"
-    assert_includes approval.fetch("summary"), action.description
+    assert_equal action.description, approval.fetch("summary")
     assert_equal decision.at, Time.iso8601(approval.fetch("decided_at"))
 
     assert_equal [ "question", task.id, task.title, seat.id, question.text, question.answer, nil, false, nil, nil, true ],

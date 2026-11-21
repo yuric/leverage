@@ -64,7 +64,7 @@ final class NeedsYouModel {
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
         openTask: @escaping @MainActor (UUID) -> Void, openAgents: @escaping @MainActor () -> Void = {},
-        timing: FollowTiming = .normal
+        timing: FollowTiming = .normal, locale: Locale = .current
     ) {
         self.api = api
         self.noteRead = noteRead

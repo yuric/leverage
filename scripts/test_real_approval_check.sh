@@ -7,6 +7,7 @@ python3 -I - "$root" "${1:-$root/scripts/real_approval_check.sh}" <<'PY'
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -179,7 +180,10 @@ elif name == "docker":
         assert args[-3:] == ["db", "api", "sweep"]
     elif operation == "logs" and (work / "fault").read_text() == "leaked-token":
         print("lvs_mock_" + "0" * 24)
-    elif operation not in {"logs", "down"}:
+    elif operation == "down":
+        assert "--volumes" in args
+        (work / "compose-down").touch()
+    elif operation != "logs":
         sys.exit(7)
 elif name == "swift":
     scratch = Path(args[args.index("--scratch-path") + 1])
@@ -192,6 +196,7 @@ elif name == "swift":
         (products / "LeverageRunner").symlink_to(Path(sys.argv[0]).with_name("runner-shim"))
 elif name == "LeverageRunner":
     role = os.environ["LEVERAGE_SEAT_ROLE"]
+    (work / f"{role}-pid").write_text(str(os.getpid()))
     assert os.environ["LEVERAGE_SEAT_TOKEN"].startswith("lvs_mock_")
     tool = Path(os.environ["LEVERAGE_TOOL_PATH"])
     if role == "orchestrator":
@@ -288,6 +293,48 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
     traced = run(["claude"], {"CI": "1"}, tracing=True)
     check(traced.returncode == 2 and traced.stderr.startswith("real_approval_check:"),
           "the script printed an inherited shell trace line")
+
+    (work / "fault").write_text("hangup")
+    hangup_tmp = work / "hangup-tmp"
+    hangup_tmp.mkdir()
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        server.tasks, server.pages = {}, {}
+        server.rules = {ident(90): {"key": "orchestrator_approves_actions", "id": ident(90), "enabled": True}}
+        server.fault, server.first_page_reads, server.marker_file = "hangup", 0, work / "hangup-task-folder"
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        variables = {"LEVERAGE_REAL_PROVIDER": "claude", "FIXTURE_PORT": str(server.server_port),
+                     "LEVERAGE_E2E_SCRATCH": str(work / "scratch-hangup"), "TMPDIR": str(hangup_tmp)}
+        child = subprocess.Popen([bash, str(script), "claude"], cwd=root, env=env | variables,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        pid_files = [work / f"{role}-pid" for role in roles]
+        try:
+            deadline = monotonic() + 10
+            while child.poll() is None and not all(path.exists() for path in pid_files) and monotonic() < deadline:
+                sleep(0.01)
+            check(all(path.exists() for path in pid_files), "SIGHUP: three runners did not start")
+            child.send_signal(signal.SIGHUP)
+            child.wait(timeout=12)
+            check(child.returncode == 130, f"SIGHUP: expected exit 130, got {child.returncode}")
+            check((work / "compose-down").exists(), "SIGHUP: compose cleanup did not run")
+            check(not any(hangup_tmp.iterdir()), "SIGHUP: temporary run folder survived")
+            for path in pid_files:
+                if path.exists():
+                    try:
+                        os.kill(int(path.read_text()), 0)
+                    except ProcessLookupError:
+                        pass
+                    else:
+                        check(False, f"SIGHUP: {path.stem} survived")
+        finally:
+            # The red run can leave shims holding the child's output pipes.
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            child.communicate(timeout=3)
+            server.shutdown()
+            thread.join()
 
     for index, (fault, expected_status, message) in enumerate([
         ("none", 0, "passed"),

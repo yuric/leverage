@@ -79,6 +79,7 @@ struct TaskPageQuestionsApprovalsTests {
 
     @Test("Delete content is offered for Done and Cancelled until deleted, then reads the remaining record")
     func deleteContent() async {
+        #expect(TaskPageCopy.deleteContentExplanation.text.contains("Backups"))
         for state in TaskState.allCases {
             let (model, owner) = await loaded(page(state))
             let finished = state == .done || state == .cancelled
@@ -147,7 +148,7 @@ struct TaskSettingsModelTests {
     func changedFields() async {
         let owner = configuredOwner()
         var updates = 0
-        let model = TaskSettingsModel(task: task, api: owner, didChange: { updates += 1 })
+        let model = TaskSettingsModel(task: task, api: owner, locale: Locale(identifier: "en_US"), didChange: { updates += 1 })
         #expect(model.capText == "12.50")
         #expect(!model.canSave)
         _ = await model.save()
@@ -173,7 +174,7 @@ struct TaskSettingsModelTests {
     @Test("Spending limit validates a dollar amount before sending it")
     func validatesCap() async {
         let owner = configuredOwner()
-        let model = TaskSettingsModel(task: task, api: owner, didChange: {})
+        let model = TaskSettingsModel(task: task, api: owner, locale: Locale(identifier: "en_US"), didChange: {})
         for bad in ["-12.00", "5.0001", "12x", "1e2", "100000000.00"] {
             model.capText = bad
             #expect(!model.canSave)
@@ -187,12 +188,23 @@ struct TaskSettingsModelTests {
         #expect(owner.calls.last?.body == .object(["budget_cap": .number(10.25)]))
     }
 
+    @Test("Task spending limits show and take amounts in the Mac’s number format")
+    func localizedCap() async {
+        let owner = configuredOwner()
+        let model = TaskSettingsModel(task: task, api: owner, locale: Locale(identifier: "de_DE"), didChange: {})
+        #expect(model.capText == "12,50")
+        #expect(!model.canSave)
+        model.capText = "13,25"
+        #expect(await model.save())
+        #expect(owner.calls.last?.body == .object(["budget_cap": .number(13.25)]))
+    }
+
     @Test("After an unanswered second command a retry skips the first and retains the second key")
     func retriesUnansweredChange() async throws {
         let owner = configuredOwner()
         owner.script { $0.changeTaskProject = { _, _, _ in throw URLError(.timedOut) } }
         var updates = 0
-        let model = TaskSettingsModel(task: task, api: owner, didChange: { updates += 1 })
+        let model = TaskSettingsModel(task: task, api: owner, locale: Locale(identifier: "en_US"), didChange: { updates += 1 })
         model.priority = .high
         model.projectID = nil
         model.capText = "40"
