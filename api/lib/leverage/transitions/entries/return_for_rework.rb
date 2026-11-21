@@ -32,6 +32,7 @@ module Leverage
           holds = action_holds
           Leases.end_lease(ctx, @task)
           fresh = @row.fetch("builder_lease") == "fresh"
+          releases_builder = !fresh && @task.holder_seat_id.present?
           seat_id = @builder.id if fresh
           @task.update!(state: @row.fetch("to"), holder_seat_id: seat_id, builder_seat_id: seat_id, resume_pending_since: nil)
           Leases.grant(ctx, @task, paused: Holds.pausing?(@task)) if fresh
@@ -41,6 +42,7 @@ module Leverage
           reopen_criteria(ctx)
           Actions.withdraw_open(ctx, @task)
           close_action_holds(ctx, holds, wait_cause)
+          Holds.close_seat_bound(ctx, @task, cause: returned, wait_cause: wait_cause) if releases_builder
           place_lease(ctx, returned) if fresh
           @task.update!(round: @task.round + 1, resume_pending_since: nil)
           @result = nil
