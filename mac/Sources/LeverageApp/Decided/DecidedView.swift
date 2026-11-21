@@ -81,7 +81,7 @@ struct DecidedRowView: View {
     }
 
     private func confirmation(for decision: Decision) -> some View {
-        let recordedOnly = model.canRecordObjection(decision)
+        let recordedOnly = decision.kind == .approval && decision.actionState == .done
         let prompt: DecidedCopy = if recordedOnly {
             .recordObjectionQuestion
         } else {

@@ -16,6 +16,7 @@ final class DecidedModel {
     private(set) var confirming: Decision?
     private(set) var busy = false
     private(set) var failure: ShellCopy?
+    private var tasksAcceptingObjections: Set<UUID> = []
     var answer = ""
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -34,7 +35,20 @@ final class DecidedModel {
         let mine = generation
         do {
             let decisions = try await api.listDecisions().decisions
+            let taskIDs = Set(decisions.filter(isUnrecordedCompletedApproval).map(\.taskID))
+            let tasks = taskIDs.isEmpty ? [] : ((try? await api.board().tasks) ?? [])
             guard mine == generation, !Task.isCancelled else { return }
+            // A completed action can still belong to a cancelled task, which
+            // has no record-only transition. The board includes those tasks.
+            tasksAcceptingObjections = Set(tasks.compactMap { row in
+                let task = row.task
+                let allowed = task.state == .finishing || task.state == .done
+                return allowed && taskIDs.contains(task.id) ? task.id : nil
+            })
+            if let confirming, isUnrecordedCompletedApproval(confirming), !busy,
+               !tasksAcceptingObjections.contains(confirming.taskID) {
+                clearConfirmation()
+            }
             rows = decisions.sorted { $0.decidedAt > $1.decidedAt }
             state = .loaded
         } catch is CancellationError {
@@ -93,6 +107,10 @@ final class DecidedModel {
     }
 
     func canRecordObjection(_ decision: Decision) -> Bool {
+        isUnrecordedCompletedApproval(decision) && tasksAcceptingObjections.contains(decision.taskID)
+    }
+
+    private func isUnrecordedCompletedApproval(_ decision: Decision) -> Bool {
         decision.kind == .approval && decision.actionID != nil && decision.actionState == .done
             && decision.overturnedAt == nil && decision.overturnEffect == nil
     }
