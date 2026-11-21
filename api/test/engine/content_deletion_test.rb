@@ -59,12 +59,21 @@ class ContentDeletionTest < ActiveSupport::TestCase
     outside = scenario.task(state: "working")
     old_project_claim = saved_claim("claim_job", own_seat(role: "orchestrator"),
       "job_id" => SecureRandom.uuid, "input" => { "task_id" => outside.id, "project_id" => project.id, "material" => "Sample brief" })
+    former_project_builder = saved_claim("claim", own_seat(role: "builder"),
+      "task" => { "id" => outside.id, "project_id" => project.id },
+      "briefing" => { "brief" => [{ "project_id" => project.id, "text" => "Sample brief" }] })
+    former_project_reviewer = saved_claim("claim_review", own_seat(role: "reviewer"),
+      "review" => { "id" => SecureRandom.uuid, "task_id" => outside.id },
+      "briefing" => { "brief" => [{ "project_id" => project.id, "text" => "Sample brief" }] })
 
     assert_completed owner_command("delete_content", { project_id: project.id })
 
     assert_equal({ "task" => { "id" => task.id } }, claim.reload.result)
     assert_equal({ "review" => review_identity }, review.reload.result)
     refute old_project_claim.reload.result.key?("input")
+    [ former_project_builder, former_project_reviewer ].each do |receipt|
+      assert_empty receipt.reload.result.dig("briefing", "brief")
+    end
     [ claim, review, old_project_claim ].each do |receipt|
       assert_equal "not_eligible", Leverage::Idempotency.outcome_of(receipt).refusal&.code
     end
