@@ -1335,7 +1335,8 @@ passed all three cases, with 33, 23 and 74 events respectively. This
 exercises the Linux-built token path. The hosted x86_64 job remains
 unverified by the local package.
 
-Final integration exercised 124 focused API tests with 985 assertions.
+Before the adversarial review, final integration exercised 124 focused
+API tests with 985 assertions.
 The full API suite passed 4,208 tests with no failures, errors or skips.
 The 1,000-walk gate reported 1,007 tests and 8,073 assertions.
 The Mac suite reported 1,562 tests in 177 suites. Its 29 environment
@@ -1343,6 +1344,13 @@ gates cover the separately invoked end-to-end cases and real developer
 checks. No gate waits for another package. The Refresh count test now
 scopes its assertion to its own workspace and proves an unrelated
 workspace's old request stays untouched.
+
+After the review fixes, the API suite passed 4,227 tests on each of
+three seeds. The 1,000-walk gate passed 1,007 tests. The full Mac suite
+passed 1,572 tests in 177 suites, and the pinned arm64 Linux build ran
+all three Credentials cases with replay, audit and secret scans.
+All five end-to-end scripts passed three consecutive Mac runs each.
+The standalone restore drill and bundled app smoke check passed.
 
 The four login providers can be added and verified with stand-ins.
 The app model tests cover the two steps and checks, and the
