@@ -160,6 +160,33 @@ public struct CredentialsList: Codable, Equatable, Sendable {
     }
 }
 
+/// `RenameCredentialRequest`.
+public struct RenameCredentialRequest: Encodable, Equatable, Sendable {
+    public let name: String
+
+    public init(name: String) {
+        self.name = name
+    }
+}
+
+/// `ReorderCredentialsRequest`: every credential id in the new handoff order.
+public struct ReorderCredentialsRequest: Encodable, Equatable, Sendable {
+    public let order: [UUID]
+
+    public init(order: [UUID]) {
+        self.order = order
+    }
+}
+
+/// The helper requests queued or reused by Refresh or Verify all.
+public struct QueuedRequests: Codable, Equatable, Sendable {
+    public let helperRequestIDs: [UUID]
+
+    public init(helperRequestIDs: [UUID]) {
+        self.helperRequestIDs = helperRequestIDs
+    }
+}
+
 /// `AddCredentialResult`: the credential's id and the helper request that
 /// runs its checks (IN-23, IN-24).
 public struct AddCredentialResult: Codable, Equatable, Sendable {

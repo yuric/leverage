@@ -82,6 +82,13 @@ public struct StandInTools: Sendable {
         try encoder.encode(scenario).write(to: state.appendingPathComponent("scenario.json"))
     }
 
+    public func writeProviderAPIScenario(tokens: [String: StandInScenario.TokenDirective]) throws -> URL {
+        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        let url = state.appendingPathComponent("provider-api-scenario.json")
+        try Data("{}".utf8).write(to: url)
+        return url
+    }
+
     /// Plays the owner signing in: for a tool with an account folder, that
     /// folder; for `agy` and `grok`, or with no folder, the Mac's one sign-in.
     public func signIn(_ tool: String, accountFolder: URL? = nil) throws {
@@ -197,6 +204,18 @@ public struct StandInScenario: Encodable, Sendable {
         }
     }
 
+    public struct UsageDirective: Encodable, Sendable {
+        public init(
+            tool: String, account: URL? = nil, reply: String? = nil, settings: String? = nil,
+            staleSettings: Bool? = nil, neverAnswers: Bool? = nil, version: String? = nil, codexHome: URL? = nil
+        ) {}
+    }
+
+    public enum TokenDirective: Sendable {
+        case reply(String)
+        case neverAnswers
+    }
+
     /// Round r of review follows `reviews[r]`, then the last entry.
     public var reviews: [Review]
     /// A review does not answer until `state/<gateFile>` exists.
@@ -207,7 +226,7 @@ public struct StandInScenario: Encodable, Sendable {
 
     public init(
         reviews: [Review] = [], gateFile: String? = nil, builder: Builder = .evidence,
-        directives: [Directive] = []
+        directives: [Directive] = [], usage: [UsageDirective] = []
     ) {
         self.reviews = reviews
         self.gateFile = gateFile

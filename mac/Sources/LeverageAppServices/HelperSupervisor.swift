@@ -87,6 +87,10 @@ public actor HelperSupervisor: HelperSupervising {
 
     public func state() async -> HelperState { current }
 
+    public func send(_ message: LocalHelperMessage) async throws {
+        throw HelperSendError.notRunning
+    }
+
     public func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState {
         switch current {
         case .starting, .running, .restarting: return current

@@ -130,6 +130,28 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         try await transport.command(.verifyCredential, path: ["id": credentialID.contractString], key: key)
     }
 
+    public func renameCredential(credentialID: UUID, _ request: RenameCredentialRequest, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func removeCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func refreshUsage(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func verifyAllCredentials(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        throw LeverageClientError.invalidBody
+    }
+
+    public func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw LeverageClientError.invalidBody
+    }
+
     public func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome {
         try await transport.command(
             .installTool, path: ["provider": provider.rawValue], body: InstallToolRequest(), key: key)

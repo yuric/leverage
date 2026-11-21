@@ -93,6 +93,17 @@ public protocol OwnerAPI: Sendable {
         -> CommandOutcome<AddCredentialResult>
     /// `verify_credential`; the result's `helperRequestID` is the request to follow.
     func verifyCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `rename_credential`.
+    func renameCredential(credentialID: UUID, _ request: RenameCredentialRequest, key: IdempotencyKey)
+        async throws -> PlainOutcome
+    /// `remove_credential`.
+    func removeCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `refresh_usage`: the helper requests that will read the current usage.
+    func refreshUsage(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests>
+    /// `verify_all_credentials`: the helper requests for verifying all added credentials.
+    func verifyAllCredentials(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests>
+    /// `reorder_credentials`.
+    func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws -> PlainOutcome
     /// `sign_in_again`; the result's `helperRequestID` is the request to
     /// follow (HE-36). Refused for anything but an added login.
     func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome

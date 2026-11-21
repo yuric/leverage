@@ -79,6 +79,11 @@ public final class FakeHelperAPI: HelperAPI, @unchecked Sendable {
             .reportRunStopped(seatID, report, key)
     }
 
+    public func reportReading(credentialID: UUID, _ reading: CredentialReading, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        throw FakeAPIError.notScripted(.reportReading)
+    }
+
     public func reportLimit(credentialID: UUID, _ report: LimitReport, key: IdempotencyKey) async throws
         -> PlainOutcome {
         try await record(.reportLimit, Self.id(credentialID), key: key, body: report)

@@ -25,6 +25,7 @@ SCRIPT = HERE / "generate_swift_contract.py"
 REGISTRY = ROOT / "api" / "contract" / "registry.json"
 OPENAPI = ROOT / "api" / "contract" / "openapi.json"
 HOOKS = ROOT / "api" / "contract" / "hooks.json"
+READERS = ROOT / "api" / "contract" / "readers.json"
 OUTPUT = ROOT / "mac" / "Sources" / "LeverageKit" / "Generated" / "Contract.swift"
 AGENT_TOOLS = OUTPUT.with_name("AgentTools.swift")
 ROLES = ROOT / "api" / "contract" / "roles.json"
@@ -101,6 +102,26 @@ def check_agent_tools(cases, registry, openapi):
                             set(alternative.get("required", [])) for alternative in result["oneOf"]])
 
 
+def check_readers(cases, swift, readers):
+    for property_name, values in (
+        ("testedToolVersions", lambda reader: reader["tested_tool_versions"]),
+        ("figureLabels", lambda reader: [figure["label"] for figure in reader["figures"]]),
+    ):
+        property_match = re.search(
+            rf"^    public var {property_name}: \[String\] \{{\n(.*?)^    \}}",
+            swift, re.MULTILINE | re.DOTALL)
+        body = property_match[1] if property_match else ""
+        entries = re.findall(r"^        case \.(\w+): return (\[.*\])$", body, re.MULTILINE)
+        actual = {name: json.loads(array) for name, array in entries}
+        cases.check(f"{property_name} has exactly one case for each of the nine readers",
+                    len(entries) == len(actual) == len(readers) == 9)
+        for reader in readers:
+            provider = reader["provider"]
+            name = re.sub(r"_(.)", lambda match: match[1].upper(), provider)
+            cases.check(f"{property_name} matches readers.json for {provider}",
+                        actual.get(name) == values(reader))
+
+
 class Cases:
     def __init__(self):
         self.failures = []
@@ -136,6 +157,7 @@ def main():
                 swift == committed, "the outputs differ")
 
     check_agent_tools(cases, registry, openapi)
+    check_readers(cases, swift, load(READERS)["readers"])
 
     cases.check("important event types are exposed as a typed list in registry order",
                 "importantEventTypes: [EventType] = [" + ", ".join(

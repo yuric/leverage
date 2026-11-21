@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import LeverageTestSupport
 import Testing
 @testable import LeverageKit
@@ -192,6 +195,32 @@ struct ClientPathsTests {
         "verify_credential": ClientCall(path: ["id": F.id(F.credential)]) {
             _ = try await $0.owner.verifyCredential(credentialID: F.credential, key: F.key("verify_credential"))
         },
+        "rename_credential": ClientCall(path: ["id": F.id(F.credential)]) {
+            _ = try await $0.owner.renameCredential(
+                credentialID: F.credential, RenameCredentialRequest(name: "Renamed login"), key: F.key("rename_credential"))
+        },
+        "remove_credential": ClientCall(path: ["id": F.id(F.credential)]) {
+            _ = try await $0.owner.removeCredential(credentialID: F.credential, key: F.key("remove_credential"))
+        },
+        "refresh_usage": ClientCall {
+            let result = try await $0.owner.refreshUsage(key: F.key("refresh_usage")).completedResult()
+            #expect(result?.helperRequestIDs == [F.request])
+        },
+        "verify_all_credentials": ClientCall {
+            let result = try await $0.owner.verifyAllCredentials(key: F.key("verify_all_credentials")).completedResult()
+            #expect(result?.helperRequestIDs == [F.request])
+        },
+        "reorder_credentials": ClientCall {
+            _ = try await $0.owner.reorderCredentials(
+                ReorderCredentialsRequest(order: [F.credential, F.seat]), key: F.key("reorder_credentials"))
+        },
+        "report_reading": ClientCall(path: ["id": F.id(F.credential)]) {
+            let figure = Figure(label: "Requests remaining", kind: .allowance, window: nil,
+                                percentUsed: nil, resetAt: nil, value: .number(0))
+            let reading = CredentialReading(credentialID: F.credential, observedAt: F.observed, state: .ok,
+                                            toolVersion: nil, figures: [figure], resets: nil)
+            _ = try await $0.helper.reportReading(credentialID: F.credential, reading, key: F.key("report_reading"))
+        },
         "install_tool": ClientCall(path: ["provider": "codex"]) {
             _ = try await $0.owner.installTool(provider: .codex, key: F.key("install_tool"))
         },
@@ -372,7 +401,15 @@ struct ClientPathsTests {
         let host = "op-\(operation.replacingOccurrences(of: "_", with: "-")).test"
         // The stub answers with the contract's first 200 example.
         let component = try #require(ContractDocument.responses(of: operation).first { $0.status == "200" }?.component)
-        let example = try #require(ContractDocument.examples(of: component).first)
+        var example = try #require(ContractDocument.examples(of: component).first)
+        if operation == "refresh_usage" || operation == "verify_all_credentials" {
+            // These operations specify the result in prose rather than in a separate schema.
+            var fields = try #require(example.objectValue)
+            let commands = try #require(entry["commands"]?.arrayValue)
+            fields["command"] = try #require(commands.first)
+            fields["result"] = .object(["helper_request_ids": .array([.string(F.id(F.request))])])
+            example = .object(fields)
+        }
         let body = try ContractDocument.data(example)
         let session = StubURLProtocol.session(host: host, answer: .init(status: 200, body: body))
 
@@ -434,6 +471,9 @@ struct ClientPathsTests {
             #expect(sent.header("Content-Type") == "application/json")
             let json = try JSONDecoder().decode(JSONValue.self, from: bodyData)
             Self.expect(json, fits: schema, at: schemaName)
+            if operation == "reorder_credentials" {
+                #expect(json["order"]?.arrayValue == [.string(F.id(F.credential)), .string(F.id(F.seat))])
+            }
             let text = String(decoding: bodyData, as: UTF8.self)
             let ids = text.matches(of: /[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/)
             for id in ids {

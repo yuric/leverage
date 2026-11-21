@@ -384,6 +384,28 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         try await record(.verifyCredential, Self.id(credentialID), key: key).verifyCredential(credentialID, key)
     }
 
+    public func renameCredential(credentialID: UUID, _ request: RenameCredentialRequest, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        throw FakeAPIError.notScripted(.renameCredential)
+    }
+
+    public func removeCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        throw FakeAPIError.notScripted(.removeCredential)
+    }
+
+    public func refreshUsage(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        throw FakeAPIError.notScripted(.refreshUsage)
+    }
+
+    public func verifyAllCredentials(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        throw FakeAPIError.notScripted(.verifyAllCredentials)
+    }
+
+    public func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        throw FakeAPIError.notScripted(.reorderCredentials)
+    }
+
     public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await record(.signInAgain, Self.id(credentialID), key: key).signInAgain(credentialID, key)
     }

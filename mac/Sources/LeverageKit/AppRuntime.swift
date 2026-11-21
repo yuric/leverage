@@ -37,6 +37,10 @@ public enum HelperState: Equatable, Sendable {
     case stopped
 }
 
+public enum HelperSendError: Error, Equatable, Sendable {
+    case notRunning
+}
+
 /// Starts the server and reports its state.
 public protocol ServerSupervising: AnyObject, Sendable {
     func state() async -> ServerState
@@ -51,6 +55,8 @@ public protocol HelperSupervising: AnyObject, Sendable {
     func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState
     /// After `stoppedTrying`: starts counting again and starts the helper.
     func tryAgain() async -> HelperState
+    /// Sends a local message to the running helper. Throws if no helper is running.
+    func send(_ message: LocalHelperMessage) async throws
     /// Asks the helper to stop and waits for it, at most ten seconds.
     func stop() async
 }
@@ -173,6 +179,7 @@ private final class UnavailableHelper: HelperSupervising {
     func state() async -> HelperState { .notStarted }
     func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState { .notStarted }
     func tryAgain() async -> HelperState { .notStarted }
+    func send(_ message: LocalHelperMessage) async throws {}
     func stop() async {}
 }
 

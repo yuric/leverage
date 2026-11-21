@@ -303,6 +303,29 @@ struct SessionGuard: OwnerAPI {
         try await guarded { try await base.landingPrompt(seatID: seatID, connection: connection) }
     }
 
+    // The Credentials milestone's calls.
+
+    func renameCredential(credentialID: UUID, _ request: RenameCredentialRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await guarded { try await base.renameCredential(credentialID: credentialID, request, key: key) }
+    }
+
+    func removeCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.removeCredential(credentialID: credentialID, key: key) }
+    }
+
+    func refreshUsage(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        try await guarded { try await base.refreshUsage(key: key) }
+    }
+
+    func verifyAllCredentials(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        try await guarded { try await base.verifyAllCredentials(key: key) }
+    }
+
+    func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await guarded { try await base.reorderCredentials(request, key: key) }
+    }
+
 }
 
 /// The helper's token comes from `issue_helper_token`: this hands any
