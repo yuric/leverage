@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Write the contract's fixed lists as Swift enums for the Mac side.
 
-api/contract/registry.json is the authority for the fixed lists, and
+api/contract/registry.json is the authority for the fixed lists,
+api/contract/hooks.json for the hooks' moment names, and
 api/contract/openapi.json for the few closed values that only the interface
 schema has. The Mac side reads them as Swift enums in one generated file,
 mac/Sources/LeverageKit/Generated/Contract.swift, which is changed only by
@@ -20,13 +21,19 @@ What is written:
     Mac side reads: a provider's kind and group, whether a seat may
     choose a release reason, and whether a hold reason puts its task in
     Blocked;
+  * the hooks, as RuleHook, with each one's moment name (hooks.json) and
+    whether an owner's rule may use it (registry `custom_rule_hooks`);
+  * the lists that name values of another list, as constants in
+    ContractLists (a list of providers is a list of `Provider`, which may
+    be empty, so it is no enum);
   * the operations, as ContractOperation with each one's method, path,
     caller and tag, so that no path is typed in Swift (IN-1);
   * the interface schema's own enums in OPENAPI_ENUMS (transport error
     codes, helper checks and their states and failures, and a few more).
 
-The registry keys in SERVER_ONLY (hooks, guards, timers' due-time sources,
-policy effects, job kinds) are the server's machinery and are not written.
+The registry keys in SERVER_ONLY (guards, timers' due-time sources, policy
+effects, job kinds) are the server's machinery and are not written; `hooks`
+and `custom_rule_hooks` are read for RuleHook.
 Any other registry key fails, so nothing is left out silently.
 
 A value becomes a lower camel case case name (`in_review` -> `inReview`,
@@ -37,8 +44,8 @@ lower snake case (dots allowed), or two values with one case name, fail.
 Usage:
   python3 scripts/generate_swift_contract.py           # write the file
   python3 scripts/generate_swift_contract.py --check   # compare, write nothing
-Options --registry, --openapi and --output replace the three paths (for the
-self-test). Standard library only; exits 0 on success, 1 otherwise.
+Options --registry, --openapi, --hooks and --output replace the four paths
+(for the self-test). Standard library only; exits 0 on success, 1 otherwise.
 """
 
 import argparse
@@ -50,6 +57,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = ROOT / "api" / "contract" / "registry.json"
 DEFAULT_OPENAPI = ROOT / "api" / "contract" / "openapi.json"
+DEFAULT_HOOKS = ROOT / "api" / "contract" / "hooks.json"
 DEFAULT_OUTPUT = ROOT / "mac" / "Sources" / "LeverageKit" / "Generated" / "Contract.swift"
 
 VALUE = re.compile(r"^[a-z][a-z0-9]*(?:[._][a-z0-9]+)*$")
@@ -102,6 +110,17 @@ LIST_NAMES = {
     "command_outcomes": "OutcomeKind",
 }
 
+# Lists under the registry's "lists" whose values name values of another list
+# and that may be empty: (key, Swift constant, Swift type, the registry list
+# that holds the values, what each value must be there). They are written as
+# constants in ContractLists, not as enums.
+LIST_REFERENCES = [
+    ("orchestrator_tested_providers", "orchestratorTestedProviders", "Provider", "credential_providers",
+     "provider", "login",
+     "The login providers whose tool's default model passed the eval suite (RV-5). "
+     "It refuses nothing: the app says \"Not tested for checking tasks.\" beside every other choice."),
+]
+
 # Registry keys that are lists of names, or of objects with a name field:
 # (key, the field that holds the value or None, Swift name).
 NAMED_LISTS = [
@@ -117,7 +136,8 @@ NAMED_LISTS = [
     ("credential_providers", "provider", "Provider"),
 ]
 
-SERVER_ONLY = {"hooks", "custom_rule_hooks", "guards", "due_time_sources", "policy_effects", "job_kinds"}
+SERVER_ONLY = {"guards", "due_time_sources", "policy_effects", "job_kinds"}
+HOOK_KEYS = {"hooks", "custom_rule_hooks"}
 
 # Closed values only the interface schema has: (Swift name, component, the
 # property path inside it, a sentence for the comment).
@@ -130,6 +150,11 @@ OPENAPI_ENUMS = [
     ("RunStopReason", "RunStoppedReport", ["stop_reason"], "Why a seat's run stopped."),
     ("OrchestratorState", "SystemHealth", ["orchestrator"], "Whether the orchestrator is set up and online."),
     ("LogNameKind", "LogName", ["kind"], "What a name in a task's log belongs to."),
+    ("CheckVerdict", "RuleCheckJobResult", ["result"], "What a checker may answer (RV-3)."),
+    ("DraftState", "TaskPage", ["draft"], "Where a contract draft stands on the task page (RD-37)."),
+    ("JobKind", "ClaimJobResult", ["kind"], "What a job asks of the seat that claims it."),
+    ("QuotedLabel", "QuotedText", ["label"], "The label of a piece of task text a checker is given (RD-31)."),
+    ("RuleEffect", "TaskRuleCheck", ["effect"], "What an applied rule did (RD-28)."),
 ]
 
 SWIFT_KEYWORDS = {
@@ -209,13 +234,14 @@ def registry_enums(registry):
     lists = registry.get("lists")
     if not isinstance(lists, dict):
         raise Problem("registry.json: lists is missing")
-    known = {"lists", "operations"} | SERVER_ONLY | {key for key, _, _ in NAMED_LISTS}
+    known = {"lists", "operations"} | SERVER_ONLY | HOOK_KEYS | {key for key, _, _ in NAMED_LISTS}
     unknown = sorted(set(registry) - known)
     if unknown:
         raise Problem(
             "registry.json: no Swift reading of " + ", ".join(unknown)
             + "; add it to NAMED_LISTS or SERVER_ONLY in scripts/generate_swift_contract.py")
-    missing = sorted(set(lists) - set(LIST_NAMES))
+    references = {entry[0] for entry in LIST_REFERENCES}
+    missing = sorted(set(lists) - set(LIST_NAMES) - references)
     if missing:
         raise Problem(
             "registry.json lists: no Swift name for " + ", ".join(missing)
@@ -247,9 +273,67 @@ def registry_enums(registry):
             extra += "\n    public var group: ProviderGroup { facts.group }"
         blocks.append(enum_block(swift_name, values, f"registry.json `{key}`.", extra=extra))
 
-    for key in sorted(lists):
+    for key in sorted(set(lists) - references):
         blocks.append(enum_block(LIST_NAMES[key], lists[key], f"registry.json `lists.{key}`."))
     return blocks
+
+
+def list_references(registry):
+    """ContractLists: the lists that name values of another list."""
+    lists = registry["lists"]
+    lines = ["/// registry.json `lists` that name values of another list.", "public enum ContractLists {"]
+    for key, constant, swift_type, source, field, kind, comment in LIST_REFERENCES:
+        if key not in lists:
+            raise Problem(f"registry.json lists: {key} is missing")
+        values = lists[key]
+        if not isinstance(values, list):
+            raise Problem(f"registry.json lists: {key} is not a list")
+        known = {entry[field]: entry for entry in registry.get(source, [])}
+        for value in values:
+            if value not in known:
+                raise Problem(f"registry.json lists.{key}: {value!r} is not in {source}")
+            if known[value].get("kind") != kind:
+                raise Problem(f"registry.json lists.{key}: {value!r} is not a {kind}")
+        if len(set(values)) != len(values):
+            raise Problem(f"registry.json lists.{key}: a value is listed twice")
+        cases = ", ".join(f".{case_name(value)}" for value in values)
+        lines += [f"    /// registry.json `lists.{key}`. {comment}",
+                  f"    public static let {constant}: [{swift_type}] = [{cases}]"]
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def hook_enum(registry, hooks):
+    """RuleHook: the nine hooks, with their moment names and who may use them."""
+    names = registry.get("hooks")
+    if not isinstance(names, list):
+        raise Problem("registry.json: hooks is missing")
+    entries = {}
+    for entry in hooks.get("hooks", []):
+        entries[entry.get("hook")] = entry
+    for name in names:
+        if name not in entries:
+            raise Problem(f"hooks.json: no entry for the hook {name}")
+        moment = entries[name].get("moment_name")
+        if not isinstance(moment, str) or not moment.strip() or '"' in moment or "\\" in moment:
+            raise Problem(f"hooks.json: the hook {name} has no usable moment_name")
+    for name in entries:
+        if name not in names:
+            raise Problem(f"hooks.json: the hook {name} is not in registry.json hooks")
+    moments = [entries[name]["moment_name"] for name in names]
+    if len(set(moments)) != len(moments):
+        raise Problem("hooks.json: two hooks have one moment_name")
+    custom = registry.get("custom_rule_hooks", [])
+    for name in custom:
+        if name not in names:
+            raise Problem(f"registry.json custom_rule_hooks: {name} is not in hooks")
+    extra = switch_property(
+        "momentName: String", "When the hook runs, in the owner's words (hooks.json `moment_name`).",
+        [(name, f'"{entries[name]["moment_name"]}"') for name in names])
+    extra += "\n\n" + switch_property(
+        "isCustomAllowed: Bool", "Whether an owner's own rule may use the hook (registry `custom_rule_hooks`).",
+        [(name, "true" if name in custom else "false") for name in names])
+    return enum_block("RuleHook", names, "registry.json `hooks`.", extra=extra)
 
 
 def operation_enum(registry):
@@ -306,8 +390,9 @@ def openapi_enums(openapi):
     return blocks
 
 
-def generate(registry, openapi):
-    blocks = registry_enums(registry) + operation_enum(registry) + openapi_enums(openapi)
+def generate(registry, openapi, hooks):
+    blocks = (registry_enums(registry) + [hook_enum(registry, hooks), list_references(registry)]
+              + operation_enum(registry) + openapi_enums(openapi))
     return HEADER + "\n" + "\n\n".join(blocks) + "\n"
 
 
@@ -316,12 +401,14 @@ def main(argv):
     parser.add_argument("--check", action="store_true", help="compare with the file and write nothing")
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--openapi", type=Path, default=DEFAULT_OPENAPI)
+    parser.add_argument("--hooks", type=Path, default=DEFAULT_HOOKS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args(argv)
     try:
         registry = json.loads(arguments.registry.read_text(encoding="utf-8"))
         openapi = json.loads(arguments.openapi.read_text(encoding="utf-8"))
-        text = generate(registry, openapi)
+        hooks = json.loads(arguments.hooks.read_text(encoding="utf-8"))
+        text = generate(registry, openapi, hooks)
     except (OSError, ValueError, KeyError, TypeError, Problem) as error:
         print(f"generate_swift_contract: {error}", file=sys.stderr)
         return 1

@@ -1270,7 +1270,8 @@
             "payload": {
               "reason": "credential_limit",
               "rule_id": null,
-              "credential_id": "$credential:grok_z"
+              "credential_id": "$credential:grok_z",
+              "rule_check_id": null
             }
           },
           {
@@ -1571,7 +1572,8 @@
             "payload": {
               "reason": "credential_limit",
               "rule_id": null,
-              "credential_id": "$credential:grok_z"
+              "credential_id": "$credential:grok_z",
+              "rule_check_id": null
             }
           }
         ],
@@ -1888,7 +1890,8 @@
             "payload": {
               "reason": "credential_limit",
               "rule_id": null,
-              "credential_id": "$credential:claude_o"
+              "credential_id": "$credential:claude_o",
+              "rule_check_id": null
             }
           }
         ],

@@ -128,6 +128,14 @@ final class AddTaskModel {
     @ObservationIgnored private var completeKey: IdempotencyKey?
     @ObservationIgnored private var ideaKey: IdempotencyKey?
     @ObservationIgnored private var createdTaskID: UUID?
+    @ObservationIgnored private var rulesRead = false
+
+    /// The keys of the two shipped rules the form's words follow.
+    private static let acceptanceCriteriaKey = "acceptance_criteria"
+    private static let providerRuleKey = "different_provider_review"
+
+    private(set) var acceptanceCriteriaRuleOn = false
+    private(set) var providerRuleOn = false
 
     init(api: any OwnerAPI, onSaved: @escaping @MainActor () -> Void) {
         self.api = api
@@ -154,6 +162,25 @@ final class AddTaskModel {
     /// Whether Save as an idea is on: there is a title, nothing is being sent,
     /// and Save task has not already added this task to Backlog.
     var canSaveAsIdea: Bool { canSave && createdTaskID == nil }
+
+    /// Reads the rules once when the form opens, for its hint and its footnote
+    /// (RM-3). The words are a nicety: a list that cannot be read leaves them as
+    /// milestone 2 had them, and the form works all the same.
+    func loadRules() async {
+        guard !rulesRead else { return }
+        rulesRead = true
+        guard let list = try? await api.listRules() else { return }
+        acceptanceCriteriaRuleOn = list.rules.contains { $0.rule.key == Self.acceptanceCriteriaKey && $0.rule.enabled }
+        providerRuleOn = list.rules.contains { $0.rule.key == Self.providerRuleKey && $0.rule.enabled }
+    }
+
+    /// The line under the criteria: while the acceptance-criteria rule is on it
+    /// says an empty task waits in Backlog (RD-27).
+    var criteriaHint: AddTaskCopy { acceptanceCriteriaRuleOn ? .criteriaHintRuleOn : .criteriaHint }
+
+    /// The line under the form: while the provider rule is on it says another
+    /// provider reviews (RD-27).
+    var footnote: AddTaskCopy { providerRuleOn ? .footnoteProviderRule : .footnote }
 
     /// Whether the criteria typed would be left out of an idea (HM-48).
     var ideaDropsCriteria: Bool { draft.hasTypedCriteria }
@@ -189,11 +216,20 @@ final class AddTaskModel {
             guard let taskID = createdTaskID else { return }
             let key = completeKey ?? IdempotencyKey()
             completeKey = key
-            _ = try await api.completeContract(taskID: taskID, draft.completeRequest(), key: key).completedResult()
+            try await api.completeContract(taskID: taskID, draft.completeRequest(), key: key).acceptedWhilePending()
             state = .saved
             onSaved()
         } catch {
             state = .failed(ShellCopy.sentence(for: error))
         }
+    }
+}
+
+extension CommandOutcome {
+    /// Whether the server took the command: completed, or still waiting for the
+    /// checks of a rule, which is not a failure (RD-27). A refusal throws.
+    func acceptedWhilePending() throws {
+        if outcome == .pending { return }
+        _ = try completedResult()
     }
 }

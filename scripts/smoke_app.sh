@@ -15,9 +15,12 @@
 # must answer "ok" on the port the app wrote to <support>/server/.env.
 # Then it signs up a made-up owner (the backup dumps no database without a
 # workspace), and within the same time again the first dump must be in
-# <support>/backups (mode 0700), with mode 0600. Then it stops the app,
-# removes the compose project with its volume, and deletes the support
-# folder, whether the check passed or not.
+# <support>/backups (mode 0700), with mode 0600. Signing up wrote the seven
+# shipped rules (milestone 4 plan RD-2): the database must hold exactly
+# seven, and still seven after a second start of the api container, whose
+# entrypoint writes the shipped rules of a workspace that has none (Q-12).
+# Then it stops the app, removes the compose project with its volume, and
+# deletes the support folder, whether the check passed or not.
 #
 # Options:
 #   --app PATH       the bundle to start (default: dist/Leverage.app)
@@ -194,6 +197,27 @@ mode() { stat -f '%Lp' "$1"; }
 [ "$(mode "$dump")" = 600 ] || fail "${dump#"$support"/} has mode $(mode "$dump"), not 600"
 [ -s "$dump" ] || fail "${dump#"$support"/} is empty"
 say "after $(( $(date +%s) - dump_started )) s more the first backup is ${dump#"$support"/} ($(wc -c <"$dump" | tr -d ' ') bytes, mode 600)"
+
+# The shipped rules: seven at sign-up, and no second set when the api
+# container starts again on the same database.
+C() { docker compose --project-directory "$server" -f "$server/compose.yaml" -p "$project" "$@"; }
+rules() {
+  # shellcheck disable=SC2016 # expanded by the db container's shell
+  C exec -T db sh -c 'psql -U "$POSTGRES_USER" -d leverage_production -tAc "select count(*) from rules"' \
+    | tr -d '[:space:]'
+}
+count=$(rules) || fail "could not count the rules"
+[ "$count" = 7 ] || fail "the database holds $count rules after sign-up, not the seven shipped ones"
+say "sign-up wrote the seven shipped rules"
+C restart api >/dev/null 2>&1 || fail "the api container did not start again"
+deadline=$(( $(date +%s) + timeout ))
+until curl -fsS --max-time 2 "http://127.0.0.1:$port/v1/health" 2>/dev/null | grep -q '"status": *"ok"'; do
+  [ "$(date +%s)" -lt "$deadline" ] || fail "GET /v1/health did not answer ok within ${timeout} s of the second start"
+  sleep 1
+done
+count=$(rules) || fail "could not count the rules"
+[ "$count" = 7 ] || fail "the database holds $count rules after a second start, not seven"
+say "a second start of the api container wrote no second set of rules"
 
 say "stopping the app and removing $project"
 stop_app

@@ -58,6 +58,16 @@ public enum EnvironmentKeys {
     /// by the smoke run and by nothing else (plan HM-27).
     public static let notifications = "LEVERAGE_NOTIFICATIONS"
 
+    // Read by `LeverageRunner eval` and `scripts/eval_rule.sh`, and by nothing
+    // else (plan section 2.4).
+
+    /// The name of the eval suite; without it neither runs.
+    public static let eval = "LEVERAGE_EVAL"
+    /// `1` for a run on real tools. A run needs exactly one of this and
+    /// `LEVERAGE_TOOL_DIR` (the stand-ins). Only the managing agent's run
+    /// sets it.
+    public static let evalReal = "LEVERAGE_EVAL_REAL"
+
     // Read by tests.
 
     /// Switches the end-to-end tests on.

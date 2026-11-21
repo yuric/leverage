@@ -14,6 +14,10 @@ require_relative "../support/http_calls"
 # The one exception is IN-9's: a repeat of sign-out answers 401 and writes
 # nothing, because the session that would prove who asks is what the first
 # call ended.
+#
+# Milestone 4 (its plan §1.1, L920, WP13) adds the eleven mutating calls
+# it serves and the two reports that name a job, and a command that waits:
+# its repeat answers 202 pending, as the first did, and writes nothing.
 class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
   include HttpCalls
@@ -32,7 +36,8 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   # Every table a command can write, counted before and after a repeat.
   TABLES = [
     Event, Command, Task, Criterion, Evidence, Review, TaskStep, Hold, BriefingAcknowledgement, Seat, Credential,
-    HelperRequest, Helper, Session, User, Workspace, InboxItem
+    HelperRequest, Helper, Session, User, Workspace, InboxItem, Rule, RuleVersion, RuleCheck, RuleCheckAttempt, Job,
+    PendingTransition
   ].freeze
 
   # One call: who sends it and with what. Each case below returns one.
@@ -83,11 +88,28 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     "resume_task" => :resume_task,
     "pause_seat" => :pause_seat,
     "resume_seat" => :resume_seat,
-    "change_seat" => :change_seat
+    "change_seat" => :change_seat,
+    # Milestone 4 (its plan §2.3, L920).
+    "claim_next_job" => :claim_next_job,
+    "submit_job_result" => :submit_check_result,
+    "add_rule" => :add_rule,
+    "save_rule" => :save_rule,
+    "enable_rule" => :enable_rule,
+    "disable_rule" => :disable_rule,
+    "revert_rule" => :revert_rule,
+    "remove_rule" => :remove_rule,
+    "rerun_check" => :rerun_check,
+    "override_check" => :override_check,
+    "draft_contract" => :draft_contract
   }.freeze
 
   # A second case for an operation that runs two commands.
-  MORE_CASES = { "give_verdict (failed)" => [ "give_verdict", :give_failed_verdict ] }.freeze
+  MORE_CASES = {
+    "give_verdict (failed)" => [ "give_verdict", :give_failed_verdict ],
+    "submit_job_result (a draft)" => [ "submit_job_result", :submit_draft_result ],
+    "report_limit (a job)" => [ "report_limit", :report_job_limit ],
+    "report_signed_out (a job)" => [ "report_signed_out", :report_job_signed_out ]
+  }.freeze
 
   setup do
     @scenario = Scenario.new
@@ -139,6 +161,29 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     assert_equal first, response.parsed_body, "a stored refusal is final for its key"
     assert_equal after_task, counts
     refute_equal before, after_task
+  end
+
+  test "a command that waits stores pending: a repeat answers 202 pending and writes nothing" do
+    @scenario.with_shipped_rules
+    task = @scenario.task(state: "backlog")
+    key = new_key("pending")
+    call("complete_contract", token: @scenario.owner_token, key: key, ids: { "id" => task.id }, body: contract_body)
+    assert_response :accepted
+    assert_response_matches_contract
+    first = response.parsed_body
+    assert_equal "pending", first.fetch("outcome")
+
+    before = counts
+    call("complete_contract", token: @scenario.owner_token, key: key, ids: { "id" => task.id }, body: contract_body)
+    assert_response :accepted
+    assert_equal first, response.parsed_body
+    assert_equal before, counts, "a repeat of a waiting command's key wrote something"
+
+    call("complete_contract", token: @scenario.owner_token, key: key, ids: { "id" => task.id }, body: contract_body,
+      raw: JSON.pretty_generate(contract_body))
+    assert_response :unprocessable_entity
+    assert_equal "key_reused", response.parsed_body.dig("error", "code")
+    assert_equal before, counts
   end
 
   private
@@ -472,4 +517,114 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     owner_call(ids: { "id" => builder_seat.id },
       body: { "name" => "Made-up agent #{SecureRandom.hex(3)}", "model" => nil, "effort" => "high", "strength_rank" => 2 })
   end
+
+  # --- the cases: milestone 4 ----------------------------------------------
+
+  def orchestrator_seat
+    @orchestrator ||= @scenario.orchestrator(credential: @scenario.credential(provider: "codex"))
+  end
+
+  def planner_seat = @planner ||= @scenario.planner(credential: @scenario.credential(provider: "claude"))
+
+  # A rule check in the queue: Complete contract waits for a blocking model
+  # rule at "ready to start" (RE-2), the only rule of the workspace.
+  def queued_check_job
+    @scenario.rule(hook: "task.before_ready", route: "owner")
+    task = @scenario.task(state: "backlog")
+    outcome = T.apply(T::Request.new(command: "complete_contract", workspace_id: @scenario.workspace_id,
+      caller_kind: "owner", caller_id: @scenario.owner.id, key: new_key("setup"), request_hash: SecureRandom.hex(32),
+      params: contract_body.merge("id" => task.id)))
+    assert_equal :pending, outcome.outcome, "setup complete_contract waits for its check"
+    Job.find_by!(workspace_id: @scenario.workspace_id, task_id: task.id, state: "queued")
+  end
+
+  def claimed(job, seat)
+    engine("claim_job", seat, {})
+    job.reload
+  end
+
+  def claim_next_job
+    queued_check_job
+    Call.new(token: token(orchestrator_seat))
+  end
+
+  def submit_check_result
+    job = claimed(queued_check_job, orchestrator_seat)
+    Call.new(token: token(orchestrator_seat), ids: { "id" => job.id },
+      body: { "result" => { "result" => "passed", "reason" => "Made-up reason." }, "tokens" => 120, "spend" => 0 })
+  end
+
+  # A planner's draft in a workspace with no rule: its Complete contract
+  # completes at once (RE-6).
+  def submit_draft_result
+    task = @scenario.task(state: "backlog")
+    engine("draft_contract", @scenario.owner, { "id" => task.id }, caller_kind: "owner")
+    job = claimed(Job.find_by!(workspace_id: @scenario.workspace_id, task_id: task.id, state: "queued"), planner_seat)
+    Call.new(token: token(planner_seat), ids: { "id" => job.id },
+      body: { "result" => contract_body, "tokens" => 900, "spend" => 0 })
+  end
+
+  def rule_scope = { "kind" => "all_tasks", "project_ids" => [], "action_kinds" => [] }
+
+  def add_rule
+    owner_call(body: { "name" => "Names the page #{SecureRandom.hex(3)}", "instruction" => "The goal names the page.",
+                       "hook" => "task.before_submit", "scope" => rule_scope })
+  end
+
+  def save_rule
+    rule = @scenario.rule
+    owner_call(ids: { "id" => rule.id },
+      body: { "name" => "Names the page", "instruction" => "The goal names the page it changes.", "parameters" => nil,
+              "scope" => rule_scope, "on_fail" => "block", "route" => "builder", "queue_timeout_seconds" => nil,
+              "run_timeout_seconds" => nil })
+  end
+
+  def enable_rule = owner_call(ids: { "id" => @scenario.rule(enabled: false).id })
+
+  def disable_rule = owner_call(ids: { "id" => @scenario.rule.id })
+
+  def revert_rule
+    owner_call(ids: { "id" => @scenario.rule(key: "acceptance_criteria", origin: "shipped", versions: 2,
+      parameters: { "minimum_count" => 3 }).id })
+  end
+
+  def remove_rule = owner_call(ids: { "id" => @scenario.rule.id })
+
+  def rerun_check
+    rule = @scenario.rule
+    task = @scenario.task(state: "working", builder: builder_seat)
+    check = @scenario.rule_check(task, rule: rule, result: "error", started: true)
+    owner_call(ids: { "id" => check.id })
+  end
+
+  # The acceptance-criteria rule fails a contract with no build criterion:
+  # the contract is kept under contract_incomplete (RD-10), and the failed
+  # check is what the owner lets through.
+  def override_check
+    @scenario.with_shipped_rules(off: %w[specific_details])
+    task = @scenario.task(state: "backlog")
+    body = contract_body.merge("criteria" => [ { "text" => "An independent reviewer agrees.", "kind" => "review" } ])
+    engine("complete_contract", @scenario.owner, body.merge("id" => task.id), caller_kind: "owner")
+    check = RuleCheck.find_by!(task_id: task.id, result: "failed")
+    owner_call(ids: { "id" => check.id }, body: { "reason" => "Made-up reason to let it through." })
+  end
+
+  def draft_contract = owner_call(ids: { "id" => @scenario.task(state: "backlog").id })
+
+  # The helper's two reports about the job the orchestrator holds on its
+  # own login, with a second login below it to hand over to.
+  def job_report_body
+    job = claimed(queued_check_job, orchestrator_seat)
+    @scenario.credential(provider: "grok")
+    { "credential_id" => orchestrator_seat.credential_id, "seat_id" => orchestrator_seat.id, "task_id" => nil,
+      "review_id" => nil, "job_id" => job.id, "observed_at" => @scenario.database_now.utc.iso8601(6),
+      "tool_version" => "0.0.0-made-up" }
+  end
+
+  def report_job_limit
+    body = job_report_body.merge("window" => "five_hour", "reset_at" => (@scenario.database_now + 3600).utc.iso8601(6))
+    helper_call(ids: { "id" => orchestrator_seat.credential_id }, body: body)
+  end
+
+  def report_job_signed_out = helper_call(ids: { "id" => orchestrator_seat.credential_id }, body: job_report_body)
 end

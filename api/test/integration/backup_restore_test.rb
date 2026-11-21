@@ -23,6 +23,7 @@ class BackupRestoreTest < CommittingTestCase
 
   setup do
     BackupRun.delete_all
+    @started = ActiveRecord::Base.lease_connection.select_value("SELECT clock_timestamp()")
     @folder = Dir.mktmpdir("backup-restore-test")
     @original = ActiveRecord::Base.connection_db_config
     @scratch = "#{@original.database}_restored_#{SecureRandom.hex(3)}"
@@ -34,6 +35,11 @@ class BackupRestoreTest < CommittingTestCase
       Open3.capture2e(tool_env, "dropdb", *tool_args, "--maintenance-db=postgres", "--if-exists", "--force", name)
     end
     BackupRun.delete_all
+    # A walk's owner lets checks through once (milestone 4 plan RT-3), and
+    # rule_checks.overridden_by_user_id references users, which the owner
+    # tests of this worker delete (WP11's request 5): this test's commits
+    # leave no override behind.
+    RuleCheck.where.not(overridden_by_user_id: nil).where(created_at: @started..).update_all(overridden_by_user_id: nil)
     FileUtils.rm_rf(@folder)
   end
 

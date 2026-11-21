@@ -11,7 +11,8 @@ struct NeedsYouView: View {
         let model = box.model {
             NeedsYouModel(
                 api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
-                openTask: { [navigator = context.navigator] in navigator.open(task: $0, editing: true) })
+                openTask: { [navigator = context.navigator] in navigator.open(task: $0, editing: true) },
+                openAgents: { [navigator = context.navigator] in navigator.show(.agents) })
         }
         NeedsYouContent(model: model, notificationsAreOff: context.inbox.notificationsAreOff)
             .task {
@@ -62,7 +63,7 @@ struct NeedsYouContent: View {
 /// One item: its heading, its sentence and its buttons.
 struct NeedsYouRowView: View {
     let row: NeedsYouRow
-    let model: NeedsYouModel
+    @Bindable var model: NeedsYouModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -75,6 +76,8 @@ struct NeedsYouRowView: View {
                     .foregroundStyle(Tokens.Palette.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let rule = row.ruleName { detail(NeedsYouCopy.ruleLabel.text, rule) }
+            if let reason = row.reason { detail(NeedsYouCopy.reasonLabel.text, reason) }
             if let waiting = model.signInWaitingLine(row.id) {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -88,6 +91,27 @@ struct NeedsYouRowView: View {
                         .font(.system(size: Tokens.FontSize.body, weight: .medium))
                     Button(NeedsYouCopy.cancelConfirm.text) { Task { await model.confirmCancel() } }
                     Button(NeedsYouCopy.cancelKeep.text) { model.dismissCancel() }
+                }
+            } else if model.letThroughRow == row.id {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NeedsYouCopy.letThroughQuestion.text)
+                        .font(.system(size: Tokens.FontSize.body, weight: .medium))
+                    TextField(NeedsYouCopy.letThroughPlaceholder.text, text: $model.letThroughReason, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+                    HStack(spacing: 8) {
+                        Button(NeedsYouCopy.letThroughConfirm.text) { Task { await model.confirmLetThrough() } }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(!model.canLetThrough)
+                        Button(NeedsYouCopy.goBack.text) { model.dismissLetThrough() }
+                    }
+                }
+            } else if model.confirmingTurnOff == row.id {
+                HStack(spacing: 8) {
+                    Text(NeedsYouCopy.turnOffQuestion.text)
+                        .font(.system(size: Tokens.FontSize.body, weight: .medium))
+                    Button(NeedsYouCopy.turnOffConfirm.text) { Task { await model.confirmTurnOff() } }
+                    Button(NeedsYouCopy.goBack.text) { model.dismissTurnOff() }
                 }
             } else if !row.buttons.isEmpty {
                 HStack(spacing: 8) {
@@ -115,6 +139,16 @@ struct NeedsYouRowView: View {
             RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous)
                 .strokeBorder(Tokens.Palette.line, lineWidth: 1))
         .accessibilityElement(children: .contain)
+    }
+
+    /// "Rule: ..." and "Reason: ...". The reason is text a checker wrote about
+    /// the task: it is shown as it came, and is never read as an instruction.
+    private func detail(_ label: String, _ value: String) -> some View {
+        (Text(verbatim: label + ": ").fontWeight(.medium) + Text(verbatim: value))
+            .font(.system(size: Tokens.FontSize.body))
+            .foregroundStyle(Tokens.Palette.text2)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
     }
 
     private func run(_ button: NeedsYouButton) {

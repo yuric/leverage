@@ -86,6 +86,9 @@ enum CardWording {
         switch state {
         case .imaginarium:
             line = BoardCopy.lineNotStarted.text
+        case .backlog where task.checking:
+            line = BoardCopy.lineCheckingDetails.text
+            chip = CardChip(text: BoardCopy.chipCheckingDetails.text, tone: .info)
         case .backlog:
             line = BoardCopy.lineNeedsDetails.text
             chip = CardChip(text: BoardCopy.chipNeedsDetails.text, tone: .wait)
@@ -118,6 +121,9 @@ enum CardWording {
         if let waitReason, let copy = BoardCopy.chip(for: waitReason) {
             let stops: Set<HoldReason> = [.roundsExceeded, .actionStopped, .checkError, .credentialSignedOut]
             chip = CardChip(text: copy.text, tone: stops.contains(waitReason) ? .stop : .wait)
+        } else if task.checking, state != .backlog, state != .done, state != .cancelled {
+            // A command of the task waits for its checks and nothing else holds it (RD-27).
+            chip = CardChip(text: BoardCopy.chipBeingChecked.text, tone: .info)
         }
 
         var note: String?
@@ -132,6 +138,15 @@ enum CardWording {
             }
         } else if state == .inReview, !reviewerSeatExists {
             note = BoardCopy.noteNoReviewer.text
+        }
+        if note == nil {
+            // A failed check leaves the card saying what it said, with the reason beside it (RD-27); a hold a
+            // rule opened says what to do. The reason is text a model wrote: shown as it is, never acted on.
+            if let reason = task.checkReason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                note = reason
+            } else if let waitReason, let copy = BoardCopy.note(for: waitReason) {
+                note = copy.text
+            }
         }
         return CardContent(statusLine: statusLine, chip: chip, note: note)
     }

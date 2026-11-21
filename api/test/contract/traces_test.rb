@@ -11,9 +11,10 @@ class TracesTest < Minitest::Test
   include ContractTestHelpers
 
   # The eight traces plan IF-33 names, the two the core loop's plan adds
-  # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13), and
-  # the five the handoff milestone adds, also with no rules (milestone 3
-  # plan HT-1; PRD R-7).
+  # for a workspace with no rules (milestone 2 plan, TS-8; PRD Q-13), the
+  # five the handoff milestone adds, also with no rules (milestone 3 plan
+  # HT-1; PRD R-7), and the four the rule checks milestone adds (milestone
+  # 4 plan RT-1).
   NAMES = %w[
     01-happy-path 02-failed-review-rework 03-stop-rework-pass-approve-done
     04-two-actions-custom-rule 05-limit-handoff 06-signed-out-hold-verify
@@ -22,6 +23,8 @@ class TracesTest < Minitest::Test
     11-limit-handoff-no-rules 12-signed-out-hold-verify-no-rules
     13-limit-next-signed-out-no-rules 14-handoff-edges-no-rules
     15-owner-controls-no-rules
+    16-model-gate-and-draft 17-submit-rule-rerun-and-override
+    18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
   # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
@@ -31,6 +34,10 @@ class TracesTest < Minitest::Test
     12-signed-out-hold-verify-no-rules 13-limit-next-signed-out-no-rules
     14-handoff-edges-no-rules 15-owner-controls-no-rules
   ].freeze
+  # The traces whose workspace was made before the rules arrived: their
+  # setup has no rule, and their first command is the one-time write of
+  # the shipped rules (milestone 4 plan RD-2, RT-1).
+  INSTALLED = %w[19-provider-rule-offline-and-jobs].freeze
 
   START = Time.utc(2026, 11, 19, 9, 0, 0)
   SYMBOL = /\A\$([a-z][a-z_]*):[a-z0-9][a-z0-9_]*\z/
@@ -59,6 +66,7 @@ class TracesTest < Minitest::Test
       @steps = Leverage::Contract.steps["steps"].to_h { |entry| [ entry["kind"], entry ] }
       @close_without_opening = Leverage::Contract.steps["close_without_opening"]
       @hold_steps = @registry["hold_reasons"].to_h { |entry| [ entry["reason"], entry["step"] ] }
+      @failed_gates = Leverage::Contract.hooks["hooks"].to_h { |entry| [ entry["hook"], entry["failed_gate"] ] }
       @events = trace["commands"].flat_map { |command| command["expect"]["events"] }
       @by_ref = @events.to_h { |event| [ event["ref"], event ] }
       @command_of = {}
@@ -192,9 +200,28 @@ class TracesTest < Minitest::Test
       end
       rows = state_rows(command_names(command), @state[target]).reject { |row| row["refusal"] }
       fail_state(index, "#{command["command"]} is not allowed from #{@state[target]}") if rows.empty?
-      odd = command["expect"]["events"].map { |event| event["type"] }.reject { |type| type.start_with?("check.", "job.") }
-      fail_state(index, "a pending command writes only rule check and job events, not #{odd}") unless odd.empty?
+      odd = command["expect"]["events"].reject { |event| written_while_pending?(event, rows) }.map { |event| event["type"] }
+      fail_state(index, "a pending command writes only rule check and job events, and what its rows allow beside them, not #{odd}") unless odd.empty?
       @pending[command["key"]] = { task: target, names: command_names(command), from: @state[target], index: index }
+    end
+
+    # What a command that answers pending may write: its checks and jobs;
+    # the holds its rows open or close with their items (Complete contract
+    # first closes contract_incomplete, L175; a fourth run on changed inputs
+    # opens rerun_limit instead of queueing, milestone 4 plan RD-45); and a
+    # job result's own row (job.finished, cost.reported), whose Complete
+    # contract waits (milestone 4 plan RE-6).
+    def written_while_pending?(event, rows)
+      type = event["type"]
+      return true if type.start_with?("check.", "job.")
+      return true if rows.any? { |row| row["from"].nil? && row["events"].include?(type) }
+
+      case type
+      when "hold.opened" then rows.any? { |row| row["holds_opened"].include?(event["payload"]["reason"]) }
+      when "hold.closed" then rows.any? { |row| row["holds_closed"].include?(event["payload"]["reason"]) }
+      when "inbox.opened", "inbox.resolved" then rows.any? { |row| row["side_events"].any? { |entry| entry["event"] == type } }
+      else false
+      end
     end
 
     def check_completed(command, index, target, holds_before)
@@ -237,8 +264,10 @@ class TracesTest < Minitest::Test
       end
       events.each do |event|
         cause = @by_ref[event["cause_id"]]
-        unless cause && cause["type"] == "check.finished"
-          fail_state(index, "#{event["ref"]} completes #{key}: its cause_id names the check.finished event")
+        # L241, and milestone 4 plan RE-3: the check.finished or the
+        # check.overridden that settled it.
+        unless cause && %w[check.finished check.overridden].include?(cause["type"])
+          fail_state(index, "#{event["ref"]} completes #{key}: its cause_id names the check.finished or check.overridden event")
         end
         fail_state(index, "#{event["ref"]} completes a transition on another task") unless event["task_id"] == pending[:task]
       end
@@ -262,7 +291,22 @@ class TracesTest < Minitest::Test
     end
 
     def state_rows(names, state)
-      names.flat_map { |name| @rows.fetch(name, []) }.select { |row| row["from"].nil? || row["from"] == state }
+      rows = names.flat_map { |name| @rows.fetch(name, []) }.select { |row| row["from"].nil? || row["from"] == state }
+      rows + rows.filter_map { |row| failed_gate_row(row) }
+    end
+
+    # A gate that fails at a hook whose failed gate is
+    # hold_contract_incomplete (hooks.json) still commits the contract
+    # change, then holds the task with contract_incomplete, which stays in
+    # its state: the command reads completed, at once or when a model check
+    # fails later (milestone 4 plan section 2.1, rule 7; RD-10). The row
+    # this reads as is the gated row with that change and the hold as its
+    # events, and its from-state as its to-state.
+    def failed_gate_row(row)
+      return if row["refusal"] || @failed_gates[row["hook"]] != "hold_contract_incomplete"
+
+      row.merge("events" => (row["events"] & [ "task.contract_changed" ]) + [ "hold.opened" ], "to" => row["from"],
+                "holds_opened" => [ "contract_incomplete" ])
     end
 
     # Finds the rows of names, from state, that the events of one task fit,
@@ -522,9 +566,14 @@ class TracesTest < Minitest::Test
       ids = setup.values_at("users", "helpers", "credentials", "seats", "projects", "rules").flatten.map { |row| row["id"] }
       assert_empty duplicates(ids), name
       rules = setup["rules"]
-      assert_equal RULE_FREE.include?(name), rules.empty?, "#{name}: only the rule-free traces have no rules"
+      assert_equal (RULE_FREE + INSTALLED).include?(name), rules.empty?, "#{name}: only the rule-free traces and those that install the rules have no rules"
       unless rules.empty?
         shipped.each { |key| assert_equal 1, rules.count { |rule| rule["key"] == key && rule["origin"] == "shipped" }, "#{name}: #{key}" }
+      end
+      if INSTALLED.include?(name)
+        first = trace["commands"].first
+        assert_equal [ "install_shipped_rules", "app" ], first.values_at("command", "caller"), "#{name}: the rules are written first"
+        assert_equal shipped.map { |key| "$rule:#{key}" }, first["expect"]["events"].map { |event| event["subject_id"] }, name
       end
       rules.each do |rule|
         assert_includes [ true, false ], rule["enabled"], "#{name}: #{rule["id"]}"
@@ -641,6 +690,7 @@ class TracesTest < Minitest::Test
   def test_actors_and_command_ids_follow_the_event_record
     traces.each do |name, trace|
       keys = []
+      callers = {}
       trace["commands"].each_with_index do |command, index|
         command["expect"]["events"].each do |event|
           where = "#{name} command #{index + 1} #{event["ref"]}"
@@ -650,10 +700,14 @@ class TracesTest < Minitest::Test
           when /\A\$helper:/
             assert_equal [ "app", command["caller"], command["key"] ], event.values_at("actor_kind", "actor_id", "command_id"), "#{where}: a helper report's events (plan IF-37)"
           else
+            # Events that complete a pending transition carry its requester
+            # as actor, whoever's command writes them (milestone 4 plan
+            # RE-3).
+            who = (event["command_id"] != command["key"] && callers[event["command_id"]]) || command["caller"]
             if event["actor_kind"] == "app"
               assert_nil event["actor_id"], where
             else
-              assert_equal [ SYMBOL.match(command["caller"])[1] == "user" ? "owner" : "seat", command["caller"] ], event.values_at("actor_kind", "actor_id"), where
+              assert_equal [ SYMBOL.match(who)[1] == "user" ? "owner" : "seat", who ], event.values_at("actor_kind", "actor_id"), where
             end
             refute_nil event["command_id"], "#{where}: only events of the server's own requests carry no key" if event["actor_kind"] != "app"
             # L241: all events of one command share its key, and events that
@@ -669,6 +723,7 @@ class TracesTest < Minitest::Test
           end
         end
         keys << command["key"] if command["key"]
+        callers[command["key"]] = command["caller"] if command["key"]
       end
     end
   end
@@ -1004,5 +1059,242 @@ class TracesTest < Minitest::Test
     assert_equal [ "refused", "lease_expired", commands[expiry]["at"] ], [ late["expect"]["outcome"], late["expect"]["refusal"]["code"], late["at"] ]
     assert_includes types_of(trace["name"]), "task.cancelled"
     assert commands.any? { |command| command.dig("expect", "refusal", "code") == "task_cancelled" }
+  end
+
+  # Milestone 4 plan RT-1: what each of the four traces of the rule checks
+  # milestone shows.
+  def commands_of(name) = Leverage::Contract.trace(name)["commands"]
+  def types(command) = command["expect"]["events"].map { |event| event["type"] }
+  def payloads(events, type) = events.select { |event| event["type"] == type }.map { |event| event["payload"] }
+
+  def test_trace_16_holds_a_contract_a_model_check_failed_and_completes_a_planners_draft
+    name = "16-model-gate-and-draft"
+    commands = commands_of(name)
+    events = all_events(Leverage::Contract.trace(name))
+    first = commands.find { |command| command["command"] == "complete_contract" }
+    assert_equal "pending", first["expect"]["outcome"]
+    failed = commands.find { |command| command["command"] == "submit_job_result" && payloads(command["expect"]["events"], "check.finished").any? { |payload| payload["result"] == "failed" } }
+    completion = failed["expect"]["events"].select { |event| event["command_id"] == first["key"] }
+    assert_equal %w[task.contract_changed hold.opened], completion.map { |event| event["type"] }, "RD-10: the change is kept and the task held"
+    assert_equal "contract_incomplete", completion.last["payload"]["reason"]
+    second = commands.select { |command| command["command"] == "complete_contract" }[1]
+    assert_equal [ "pending", "hold.closed" ], [ second["expect"]["outcome"], types(second).first ], "L175: Complete contract first closes contract_incomplete"
+    assert events.any? { |event| event["type"] == "task.ready" && event["command_id"] == second["key"] }
+    draft = commands.find { |command| command["command"] == "draft_contract" }
+    assert_equal [ { "kind" => "contract_draft" } ], payloads(draft["expect"]["events"], "job.queued")
+    planner = commands.find { |command| command["command"] == "submit_job_result" && command["body"]["result"].key?("criteria") }
+    assert_equal "pending", planner["expect"]["outcome"], "RE-6: the planner's result waits on the check"
+    ready = events.find { |event| event["type"] == "task.ready" && event["command_id"] == planner["key"] }
+    assert_equal planner["caller"], ready["actor_id"], "RE-3: the planner is the requester"
+    assert commands.any? { |command| command["expect"]["steps_opened"].any? { |step| step["kind"] == "draft" } }, "SM-24"
+  end
+
+  def test_trace_17_lets_a_submit_through_once_saves_a_wording_and_waits_at_the_rerun_limit
+    name = "17-submit-rule-rerun-and-override"
+    commands = commands_of(name)
+    events = all_events(Leverage::Contract.trace(name))
+    rule = commands.first
+    assert_equal [ "add_rule", "task.before_submit" ], [ rule["command"], rule["body"]["hook"] ]
+    overridden = commands.index { |command| command["command"] == "override_check" }
+    resend = commands[overridden + 1]
+    assert_equal [ "submit", %w[task.submitted] ], [ resend["command"], types(resend) ], "L382: the stored result is reused and completes"
+    versions = payloads(events, "check.queued").select { |payload| payload["hook"] == "task.before_submit" && payload["blocking"] }.map { |payload| payload["rule_version_id"] }.uniq
+    assert_equal 2, versions.size, "L911: the checks before the save keep the first wording"
+    held = commands.find { |command| command["expect"]["outcome"] == "pending" && types(command).include?("hold.opened") }
+    assert_equal [ "rerun_limit", false ], [ payloads(held["expect"]["events"], "hold.opened").first["reason"], types(held).include?("job.queued") ], "RD-45"
+    hashes = payloads(events, "check.queued").select { |payload| payload["blocking"] }.map { |payload| payload["input_hash"] }
+    assert_equal 4, hashes.uniq.size, "one hash in round 0 and three distinct ones in round 1 before the limit"
+    release = commands.find { |command| command["command"] == "override_check" && command["expect"]["events"].any? { |event| event["command_id"] == held["key"] } }
+    assert_equal %w[check.overridden hold.closed inbox.resolved task.submitted], types(release), "RD-45: the override completes it in place"
+    warn = commands.find { |command| command["command"] == "submit" && payloads(command["expect"]["events"], "check.queued").any? { |payload| !payload["blocking"] } }
+    assert_equal %w[check.queued job.queued task.submitted], types(warn), "RC-16: a warn check lets the submit through"
+    assert payloads(events, "check.finished").any? { |payload| payload["result"] == "failed" && payload["rule_version_id"].end_with?("_3") }
+  end
+
+  def test_trace_18_has_a_provisional_claim_the_claim_gate_hold_a_done_gate_and_each_end_of_a_waiting_command
+    name = "18-claim-gate-done-gate-and-ends"
+    commands = commands_of(name)
+    events = all_events(Leverage::Contract.trace(name))
+    claimed = events.find { |event| event["type"] == "task.claimed" }
+    claim = commands.find { |command| command["key"] == claimed["command_id"] }
+    assert_equal [ "claim", "pending" ], [ claim["command"], claim["expect"]["outcome"] ], "L390: a provisional claim"
+    # Rule 11: the waiting command is cancelled first, then the task or the
+    # review is taken away.
+    release = commands.find { |command| command["command"] == "release" }
+    assert_equal %w[check.finished job.withdrawn task.released], types(release), "SM-13"
+    opened = events.find { |event| event["type"] == "hold.opened" && event["payload"]["reason"] == "claim_gate_failed" }
+    assert opened, "L393"
+    failed_seats = events.select { |event| event["type"] == "check.finished" && event["payload"]["hook"] == "task.before_claim" && event["payload"]["result"] == "failed" }.map { |event| event["payload"]["subject_id"] }
+    assert_equal 3, failed_seats.uniq.size
+    off = commands.find { |command| command["command"] == "disable_rule" && types(command).include?("hold.closed") }
+    assert_equal "turn_rule_off", payloads(off["expect"]["events"], "inbox.resolved").first["choice"]
+    review_failed = events.find { |event| event["type"] == "review.failed" }
+    refute_nil review_failed["payload"]["failed_rule_check_id"], "SM-6"
+    { "builder_lease_expiry" => "task.lease_expired", "review_lease_expiry" => "review.lease_expired", "cancel" => "task.cancelled" }.each do |command_name, type|
+      ending = commands.select { |command| command["command"] == command_name }.last
+      assert_equal [ "check.finished", "job.withdrawn", type ], types(ending), "rule 11: #{command_name}"
+      assert_equal "withdrawn", payloads(ending["expect"]["events"], "check.finished").first["result"]
+    end
+    late = commands.select { |command| command["command"] == "submit_job_result" && command["expect"]["outcome"] == "refused" }
+    assert_equal [ "invalid_state" ] * 2, late.map { |command| command["expect"]["refusal"]["code"] }, "RD-41: a withdrawn job's result"
+    assert_equal "task_cancelled", commands.last["expect"]["refusal"]["code"], "L919"
+  end
+
+  def test_trace_19_installs_the_rules_and_shows_the_provider_rule_the_offline_orchestrator_and_jobs
+    name = "19-provider-rule-offline-and-jobs"
+    trace = Leverage::Contract.trace(name)
+    commands = trace["commands"]
+    events = all_events(trace)
+    assert_equal [ "rule.created" ] * 7, types(commands.first)
+    refused = commands.select { |command| command["command"] == "claim_review" && command["expect"]["outcome"] == "refused" }
+    assert_equal [ "not_eligible" ] * 2, refused.map { |command| command["expect"]["refusal"]["code"] }
+    applied = refused.map { |command| payloads(command["expect"]["events"], "check.finished").first }
+    assert_equal [ %w[review.assign applied refused] ] * 2, applied.map { |payload| payload.values_at("hook", "result", "effect") }, "RD-12"
+    cause = refused.first["expect"]["steps_opened"].first
+    assert_equal [ "wait_review", "rule", "$rule:different_provider_review" ], cause.values_at("kind", "cause_kind", "cause_rule_id"), "RD-11"
+    assert_empty refused.last["expect"]["steps_opened"], "RD-11: once per wait"
+    providers = trace["setup"]["credentials"].to_h { |row| [ row["id"], row["provider"] ] }
+    switched = events.find { |event| event["type"] == "credential.switched" && event["payload"]["job_id"].nil? }
+    second = trace["setup"]["seats"].find { |seat| seat["role"] == "reviewer" && seat["provider"] == providers[switched["subject_id"]] }
+    assert_includes refused.map { |command| command["caller"] }, second["id"], "L912: a provider reached by handoff"
+    item = events.find { |event| event["type"] == "inbox.opened" && event["payload"]["kind"] == "no_reviewer_eligible" }
+    timer = commands.find { |command| command["command"] == "reviewer_eligibility" }
+    assert_equal [ item["subject_id"] ], timer["expect"]["events"].map { |event| event["subject_id"] }, "RD-51: resolved by the timer"
+    released = commands.find { |command| command["command"] == "report_limit" && command["body"]["review_id"] }
+    assert_equal %w[credential.limit_reached review.released inbox.opened], types(released), "L913"
+    assert commands.any? { |command| command["command"] == "check_run_timeout" && types(command) == %w[job.timed_out job.requeued check.queued] }
+    assert commands.any? { |command| command["command"] == "rerun_check" }
+    offline = commands.select { |command| command["command"] == "orchestrator_offline" }
+    assert_equal [ %w[inbox.opened], %w[inbox.resolved check.queued job.queued] ], offline.map { |command| types(command) }, "RD-16, RD-19"
+    jobs = commands.select { |command| command["command"] == "report_job_limit" }
+    assert_equal [ %w[credential.limit_reached credential.switched], %w[credential.limit_reached] ], jobs.map { |command| types(command) }, "RD-40"
+  end
+
+  # A helper report runs the rows of the work it names, as a verdict runs
+  # pass_review or fail_review (README, The state table): one that names a
+  # job runs report_job_limit or report_job_signed_out (milestone 4 plan
+  # section 2.1, the twenty entries; the controller picks it from the
+  # body), and one that names none runs milestone 3's report_limit or
+  # report_signed_out, which answer 404 for a job (HE-33).
+  def test_a_report_that_names_a_job_runs_the_job_report
+    jobs = 0
+    traces.each do |name, trace|
+      trace["commands"].each_with_index do |command, index|
+        next unless %w[report_limit report_signed_out].include?(command["operation_id"])
+
+        job = command["body"]["job_id"]
+        expected = job ? command["operation_id"].sub("report_", "report_job_") : command["operation_id"]
+        assert_equal expected, command["command"], "#{name} command #{index + 1}"
+        jobs += 1 if job
+      end
+    end
+    assert_operator jobs, :>=, 2, "trace 19 reports a job's limit with and without a candidate"
+  end
+
+  # A check's input hash stands for its hook's hashed inputs (hooks.json
+  # hashed_inputs; README, A check's identity), so within a trace one set
+  # of inputs carries one digest, two sets two digests, and every attempt
+  # of a check the digest of its first. The inputs are read back from the
+  # trace as Leverage::HookInputs reads them from the rows: the request of
+  # the command that first writes the check, and the task's contract
+  # version, live criteria, their states and every evidence attached, in
+  # order, before that command. It holds for every trace.
+  def test_one_set_of_hashed_inputs_carries_one_digest
+    NAMES.each { |name| assert_equal [], input_hash_failures(Leverage::Contract.trace(name)), name }
+  end
+
+  # Trace 07's two checks at task.before_ready hash one request, and carry
+  # the engine's own hash of it: Gating.input_hash of the goal, details,
+  # criteria and actions the request sends (Leverage::HookInputs).
+  def test_trace_07_carries_the_real_digest_of_its_request
+    commands = commands_of("07-pending-gate-check-error-override")
+    request = commands.find { |command| command["command"] == "complete_contract" }
+    digests = request["expect"]["events"].select { |event| event["type"].start_with?("check.") }
+      .map { |event| event["payload"]["input_hash"] }
+    body = request["body"]
+    inputs = { "goal" => body["goal"], "details" => body["details"],
+               "criteria" => body["criteria"].map { |criterion| criterion.slice("text", "kind") },
+               "actions" => body["actions"].map { |action| action.slice("kind", "description") } }
+    assert_equal 2, digests.size
+    assert_equal [ Leverage::Gating.input_hash(hook: "task.before_ready", inputs: inputs) ] * 2, digests
+  end
+
+  def input_hash_failures(trace)
+    requests = trace["commands"].select { |command| command["key"] }.to_h { |command| [ command["key"], command ] }
+    rows = TaskRows.new
+    first = {}
+    digests = Hash.new { |hash, key| hash[key] = Set.new }
+    inputs = Hash.new { |hash, key| hash[key] = Set.new }
+    failures = []
+    trace["commands"].each_with_index do |command, index|
+      command["expect"]["events"].select { |event| %w[check.queued check.finished].include?(event["type"]) }.each do |event|
+        check = event["subject_id"]
+        digest = event["payload"]["input_hash"]
+        if first.key?(check)
+          failures << "command #{index + 1}: #{check} carries another digest than its first" unless first[check] == digest
+          next
+        end
+        first[check] = digest
+        request = requests[event["command_id"]] or next
+        hashed = rows.hashed_inputs(event, request["body"]) or next
+        digests[hashed] << digest
+        inputs[[ event["payload"]["hook"], digest ]] << hashed
+      end
+      rows.apply(command)
+    end
+    digests.each { |hashed, set| failures << "#{hashed.first}: one set of inputs carries #{set.size} digests" if set.size > 1 }
+    inputs.each { |(hook, digest), set| failures << "#{hook}: #{digest[0, 8]} is the digest of #{set.size} sets of inputs" if set.size > 1 }
+    failures
+  end
+
+  # What the trace has written so far of each task's contract version,
+  # criteria and evidence: the rows HookInputs hashes.
+  class TaskRows
+    def initialize
+      @version = {}
+      @criteria = Hash.new { |hash, key| hash[key] = [] }
+      @states = {}
+      @evidence = Hash.new { |hash, key| hash[key] = [] }
+    end
+
+    # [hook, inputs] for the check event's hook, as the request body and
+    # the rows before its command give them; nil for a hook not read here.
+    def hashed_inputs(event, body)
+      payload = event["payload"]
+      task = event["task_id"]
+      inputs = case payload["hook"]
+      when "task.before_ready" then contract(body["result"] || body)
+      when "task.before_claim" then [ @version[task], payload["subject_id"] ]
+      when "task.before_submit"
+        [ @version[task], @criteria[task].map { |id| [ id, @states[id], @evidence[id] ] }, body["handoff_note"] ]
+      when "task.before_done"
+        [ @version[task], body["verdict"], body["notes"], @criteria[task].reject { |id| @evidence[id].empty? }.map { |id| [ id, @evidence[id] ] } ]
+      when "review.assign" then [ payload["subject_id"] ]
+      end
+      inputs && [ payload["hook"], inputs ]
+    end
+
+    def apply(command)
+      command["expect"]["events"].each do |event|
+        payload = event["payload"]
+        task = event["task_id"]
+        case event["type"]
+        when "task.contract_changed"
+          @version[task] = payload["contract_version"]
+          @criteria[task] = @criteria[task] - payload["removed_criterion_ids"] + payload["added_criterion_ids"]
+          (payload["added_criterion_ids"] + payload["reset_criterion_ids"]).each { |id| @states[id] = "open" }
+        when "criterion.passed" then @states[event["subject_id"]] = "passed"
+        when "criterion.reopened" then @states[event["subject_id"]] = "open"
+        when "evidence.attached" then @evidence[payload["criterion_id"]] << [ payload["kind"], command["body"].dig("evidence", "value") ]
+        end
+      end
+    end
+
+    private
+
+    def contract(body)
+      [ body["goal"], body["details"], Array(body["criteria"]).map { |criterion| criterion.values_at("text", "kind") },
+        Array(body["actions"]).map { |action| action.values_at("kind", "description") } ]
+    end
   end
 end

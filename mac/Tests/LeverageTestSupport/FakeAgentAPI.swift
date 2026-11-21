@@ -53,6 +53,12 @@ public final class FakeAgentAPI: AgentAPI, @unchecked Sendable {
         public var giveVerdict: @Sendable (UUID, GiveVerdictRequest, IdempotencyKey) async throws -> PlainOutcome = {
             _, _, _ in throw FakeAPIError.notScripted(.giveVerdict)
         }
+        public var claimNextJob: @Sendable (IdempotencyKey) async throws -> CommandOutcome<JobClaim> = { _ in
+            throw FakeAPIError.notScripted(.claimNextJob)
+        }
+        public var submitJobResult: @Sendable (UUID, JobResultRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.submitJobResult)
+        }
 
         public init() {}
     }
@@ -153,5 +159,15 @@ public final class FakeAgentAPI: AgentAPI, @unchecked Sendable {
     public func giveVerdict(reviewID: UUID, _ request: GiveVerdictRequest, key: IdempotencyKey) async throws
         -> PlainOutcome {
         try await record(.giveVerdict, Self.id(reviewID), key: key, body: request).giveVerdict(reviewID, request, key)
+    }
+
+    public func claimNextJob(key: IdempotencyKey) async throws -> CommandOutcome<JobClaim> {
+        try await record(.claimNextJob, key: key).claimNextJob(key)
+    }
+
+    public func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.submitJobResult, Self.id(jobID), key: key, body: request)
+            .submitJobResult(jobID, request, key)
     }
 }

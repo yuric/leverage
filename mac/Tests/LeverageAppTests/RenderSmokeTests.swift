@@ -98,7 +98,7 @@ struct RenderSmokeTests {
     @Test("the side pane and the toolbar draw for each place the owner can be")
     func paneAndToolbar() async {
         let (_, context) = await readyModel()
-        for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff] {
+        for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff, .settings] {
             context.navigator.show(place)
             #expect(drawsSomething(render(SidePane(context: context))), "\(place)")
             #expect(drawsSomething(render(Toolbar(context: context), height: 80)), "\(place)")
@@ -116,6 +116,7 @@ struct RenderSmokeTests {
         #expect(drawsSomething(render(RosterView().environment(context))))
         #expect(drawsSomething(render(CredentialsView().environment(context))))
         #expect(drawsSomething(render(NeedsYouView().environment(context))))
+        #expect(drawsSomething(render(RulesView().environment(context))))
     }
 
     @Test("the Needs you screen draws empty, with each kind of item, and with the notifications line, in both appearances")

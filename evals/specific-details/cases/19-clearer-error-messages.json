@@ -1,0 +1,29 @@
+{
+  "id": "19-clearer-error-messages",
+  "label": "failed",
+  "category": "nothing_to_check",
+  "why": "The form and the kind of change are named, but clearer and good are opinions no reviewer could check.",
+  "contract": {
+    "title": "Plainer error messages",
+    "goal": "Rewrite the error messages of the Hollowbrook RSVP form in plain language.",
+    "details": "Guests find the current messages confusing.",
+    "criteria": [
+      {
+        "text": "The messages are clearer.",
+        "kind": "build"
+      },
+      {
+        "text": "Everything about the form is good.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

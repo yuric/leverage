@@ -11,18 +11,19 @@ enum BoardCopy: OwnerFacingCopy {
 
     // A card's status line.
     case lineNotStarted, lineNeedsDetails, lineWaitingForAgent, lineBuilding, lineReviewing, lineFinished
-    case lineCancelled, linePaused, anAgent
+    case lineCancelled, linePaused, anAgent, lineCheckingDetails
 
     // A card's chip for the state it is in.
-    case chipNeedsDetails, chipNew, chipInReview, chipDone, chipCancelled
+    case chipNeedsDetails, chipNew, chipInReview, chipDone, chipCancelled, chipCheckingDetails, chipBeingChecked
 
     // A card's chip for what a task waits on.
     case chipHasQuestion, chipNeedsApproval, chipNeedsAccess, chipOverBudget, chipProjectPaused, chipCheckFailed
-    case chipSentBack, chipActionStopped, chipNeedsLook, chipNoAgentCanTake, chipPausedByYou, chipAgentPaused
+    case chipSentBack, chipActionStopped, chipNeedsLook, chipEveryAgentTurnedAway, chipCheckedTooManyTimes, chipPausedByYou, chipAgentPaused
     case chipNoLoginLeft, chipLoginSignedOut
 
     // A card's note.
     case noteNoReviewer, noteWaitingForAccount, noteWaitingForAccountNoTime, noteAccountSignedOut, anAccount
+    case noteCheckCouldNotRun, noteEveryAgentTurnedAway, noteCheckedTooManyTimes
 
     var text: String {
         switch self {
@@ -46,12 +47,15 @@ enum BoardCopy: OwnerFacingCopy {
         case .lineCancelled: "Cancelled"
         case .linePaused: "Paused, was {lane}"
         case .anAgent: "An agent"
+        case .lineCheckingDetails: "Waiting for the check to finish"
 
         case .chipNeedsDetails: "Needs details"
         case .chipNew: "New"
         case .chipInReview: "In review"
         case .chipDone: "Done"
         case .chipCancelled: "Cancelled"
+        case .chipCheckingDetails: "Checking the details"
+        case .chipBeingChecked: "Being checked"
 
         case .chipHasQuestion: "Has a question"
         case .chipNeedsApproval: "Needs approval"
@@ -62,7 +66,8 @@ enum BoardCopy: OwnerFacingCopy {
         case .chipSentBack: "Sent back too many times"
         case .chipActionStopped: "Action stopped"
         case .chipNeedsLook: "Needs a look"
-        case .chipNoAgentCanTake: "No agent can take it"
+        case .chipEveryAgentTurnedAway: "Every agent was turned away"
+        case .chipCheckedTooManyTimes: "Checked too many times"
         case .chipPausedByYou: "Paused by you"
         case .chipAgentPaused: "Agent paused"
         case .chipNoLoginLeft: "No login left"
@@ -73,6 +78,12 @@ enum BoardCopy: OwnerFacingCopy {
         case .noteWaitingForAccountNoTime: "Waiting for {account}. It did not say when it is available again."
         case .noteAccountSignedOut: "{account} is signed out. Sign in again to continue."
         case .anAccount: "an account"
+        case .noteCheckCouldNotRun:
+            "A check could not run on this task. Open it to run the check again or let it through once."
+        case .noteEveryAgentTurnedAway:
+            "A check turned away every agent that tried to take this task. Open it to see why."
+        case .noteCheckedTooManyTimes:
+            "A check ran on this work too many times. Open the task to let it through once or to change the details."
         }
     }
 
@@ -90,12 +101,22 @@ enum BoardCopy: OwnerFacingCopy {
         case .roundsExceeded: .chipSentBack
         case .actionStopped: .chipActionStopped
         case .actionUnconfirmed: .chipNeedsLook
-        case .claimGateFailed: .chipNoAgentCanTake
-        case .rerunLimit: .chipNeedsLook
+        case .claimGateFailed: .chipEveryAgentTurnedAway
+        case .rerunLimit: .chipCheckedTooManyTimes
         case .ownerHold: .chipPausedByYou
         case .seatPaused: .chipAgentPaused
         case .credentialLimit: .chipNoLoginLeft
         case .credentialSignedOut: .chipLoginSignedOut
+        }
+    }
+
+    /// The sentence under a card that waits on a check, for the three holds a rule opens.
+    static func note(for reason: HoldReason) -> BoardCopy? {
+        switch reason {
+        case .checkError: .noteCheckCouldNotRun
+        case .claimGateFailed: .noteEveryAgentTurnedAway
+        case .rerunLimit: .noteCheckedTooManyTimes
+        default: nil
         }
     }
 }

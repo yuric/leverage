@@ -1,5 +1,5 @@
 require "test_helper"
-require_relative "entries/handoff_support"
+require_relative "entries/jobs_support"
 
 # Test 3 (PRD L836) for the handoff rows (milestone 3 plan HT-2, HS-3): the
 # two reports and the credential_hold_release timer, every task state, from
@@ -9,8 +9,13 @@ require_relative "entries/handoff_support"
 # ranks before invalid_state (not_holder, HE-9): the test asserts that
 # invalid_state is among the entry's refusals and that the answer is the
 # first by precedence.
+#
+# Milestone 4 (its plan §2.1 rule 11): a reviewer's row with no candidate
+# releases the review, and a pass of it that waits on a model check is
+# cancelled first with invalid_state (PendingTransitions.cancel, WP4's).
+# The case of each such row sets up the waiting pass and asserts the call.
 class StateTableHandoffTest < ActiveSupport::TestCase
-  include HandoffSupport
+  include JobsSupport
 
   COMMANDS = %w[report_limit report_signed_out credential_hold_release].freeze
 
@@ -79,8 +84,17 @@ class StateTableHandoffTest < ActiveSupport::TestCase
     task = task_in(kase.from)
     review = scenario.review(task, reviewer: @reviewer) if kase.guard.include?("reviewer_holds_review")
     hold_on(task) if kase.command == "credential_hold_release"
-    written = events_written { assert_completed(apply(kase, params_for(kase, task, review: review))) }
+    releases = review && !available
+    pending = scenario.pending_transition(task, command: "pass_review", requester: @reviewer, params: { "id" => review.id }) if releases
+    written = nil
+    cancelled = answering(Leverage::PendingTransitions, :cancel) do
+      answering(Leverage::PendingTransitions, :of, ->(asked) { pending if asked.id == task.id }) do
+        written = events_written { assert_completed(apply(kase, params_for(kase, task, review: review))) }
+      end
+    end
 
+    expected_cancels = releases ? [ [ pending.id, "invalid_state" ] ] : []
+    assert_equal expected_cancels, cancelled.map { |call| [ call.arguments[1].id, call.arguments[2] ] }, kase.name
     expected = kase.events.dup
     expected << "inbox.opened" if kase.command == "report_signed_out" && kase.conditional_events.any? && !review
     assert_equal expected, written.map(&:type), kase.name

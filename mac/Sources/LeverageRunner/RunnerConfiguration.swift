@@ -7,8 +7,7 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     /// A variable that must be set is missing or empty.
     case missing(String)
     case notAbsolute(String)
-    /// The seat's role is one this milestone does not run (planner and
-    /// orchestrator arrive with jobs, milestone 4).
+    /// Not one of the four seat roles.
     case unsupportedRole(String)
     /// Not one of the four logins.
     case unsupportedProvider(String)
@@ -43,6 +42,28 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
         case .twoWorksToContinue:
             "\(EnvironmentKeys.continueTaskID) and \(EnvironmentKeys.continueReviewID) are both set"
         case .workNotForRole(let name): "\(name) is not work for this seat's role"
+        }
+    }
+}
+
+/// What the runner's arguments ask for: a seat's run (none), the probe, the
+/// version, or the eval harness (milestone 4 plan section 2.2).
+enum RunnerSubcommand: Equatable, Sendable {
+    case seat
+    case probe
+    case version
+    /// `eval` and the arguments after it, for `EvalRun`.
+    case eval([String])
+    case unknown(String)
+
+    /// `arguments` without the program's own name.
+    init(arguments: [String]) {
+        switch arguments.first {
+        case nil: self = .seat
+        case "probe": self = .probe
+        case "--version": self = .version
+        case "eval": self = .eval(Array(arguments.dropFirst()))
+        case let other?: self = .unknown(other)
         }
     }
 }
@@ -153,7 +174,10 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
         guard let roleName = environment[EnvironmentKeys.seatRole], !roleName.isEmpty else {
             throw RunnerConfigurationError.missing(EnvironmentKeys.seatRole)
         }
-        guard let role = SeatRole(rawValue: roleName), role == .builder || role == .reviewer else {
+        // A planner and an orchestrator run jobs (milestone 4): their tool
+        // runs are the answering check, never a reviewer's plan mode, so no
+        // provider is refused for them (§0.1 fact 27, RV-5).
+        guard let role = SeatRole(rawValue: roleName) else {
             throw RunnerConfigurationError.unsupportedRole(roleName)
         }
         let tool = try ToolConfiguration(environment: environment)

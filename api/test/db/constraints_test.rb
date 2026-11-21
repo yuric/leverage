@@ -110,6 +110,50 @@ class ConstraintsTest < ActiveSupport::TestCase
     assert_accepted { pending_transition(task_id, state: "completed") }
   end
 
+  # Milestone 4 plan RE-2: a pending transition keeps the request it will
+  # complete with, and the column is emptied when it leaves pending. The
+  # request is content, so it never holds a token (as commands.result).
+  test "RE-2: a pending transition's request is kept only while it is pending" do
+    request = { "title" => "Made-up task", "criteria" => [ { "text" => "It opens", "kind" => "build" } ] }
+    kept = nil
+    assert_accepted { kept = insert("pending_transitions", workspace_id: workspace, task_id: task, command_key: SecureRandom.uuid,
+      command: "complete_contract", requester_kind: "owner", requester_id: SecureRandom.uuid, params: request) }
+    %w[completed refused cancelled].each do |state|
+      assert_rejected { sql("UPDATE pending_transitions SET state = $1 WHERE id = $2", state, kept) }
+      assert_rejected do
+        insert("pending_transitions", workspace_id: workspace, task_id: task, command_key: SecureRandom.uuid,
+          command: "submit", requester_kind: "seat", requester_id: SecureRandom.uuid, state: state, params: request)
+      end
+      assert_accepted { pending_transition(task, state: state) }
+    end
+    assert_accepted { sql("UPDATE pending_transitions SET state = 'completed', params = NULL WHERE id = $1", kept) }
+  end
+
+  test "RE-2: a pending transition's request refuses any token key" do
+    pending = ->(params) {
+      insert("pending_transitions", workspace_id: workspace, task_id: task, command_key: SecureRandom.uuid,
+        command: "submit", requester_kind: "seat", requester_id: SecureRandom.uuid, params: params)
+    }
+    assert_rejected { pending.call({ "seat_token" => "made-up" }) }
+    assert_rejected { pending.call({ "note" => { "Token" => "made-up" } }) }
+    assert_rejected { pending.call([ { "helper_token" => "made-up" } ]) }
+    assert_accepted { pending.call({ "handoff_note" => "made-up", "tokens" => 12 }) }
+    assert_accepted { pending.call(nil) }
+  end
+
+  # Milestone 4 plan §2.3 and DB-31: each try of a check or a draft is a job
+  # of its own, and the job says which try it is; the first is 1.
+  test "a job is its check's or its draft's first try unless it says otherwise" do
+    job = ->(values) {
+      insert("jobs", { workspace_id: workspace, kind: "contract_draft", task_id: task, target_kind: "task",
+        target_id: SecureRandom.uuid, seat_role: "planner", queued_at: Time.current, input: {} }.merge(values))
+    }
+    first = job.call({})
+    assert_equal 1, sql("SELECT attempt_number FROM jobs WHERE id = $1", first).rows.first.first
+    assert_accepted { job.call(attempt_number: 2) }
+    assert_rejected { job.call(attempt_number: nil) }
+  end
+
   test "C18: a seat holds at most one task and reviews at most one review" do
     seat_id = seat
     task(holder_seat_id: seat_id, state: "working")

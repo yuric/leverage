@@ -1,0 +1,25 @@
+{
+  "id": "10-fixture-short-but-specific-2",
+  "label": "passed",
+  "category": "short_but_specific",
+  "why": "Fixture case 10 of the scorer's tests, labelled passed.",
+  "contract": {
+    "title": "Fixture task 10",
+    "goal": "Add a button labelled Fixture 10 to the made-up settings page.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The settings page shows a button labelled Fixture 10.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

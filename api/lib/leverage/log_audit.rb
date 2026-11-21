@@ -43,7 +43,37 @@ module Leverage
   # touch several tasks. Any other touches its own task (its first event's),
   # and beside it only the side events a row writes on another task: the
   # "Account signed out" item a sign-out opens on another task's
-  # credential_limit hold (HE-11, OTHER_TASK).
+  # credential_limit hold (HE-11, OTHER_TASK), and the provider rule's
+  # applied rows review claim-next writes on the tasks of the reviews it
+  # skips (RC-50, RD-12; OTHER_TASK_OF).
+  #
+  # Milestone 4 (its plan RE-3, RT-4):
+  #
+  # A command that waits on a model check (a pending transition with its
+  # key) writes, when it is sent, only rule check, job, hold and Needs you
+  # events; its own row's events come later, under its key, in whichever
+  # command or timer brings the last result (RE-3), and are matched then
+  # as the waiting command's rows from the task's state. Events under a
+  # key at another time than the command's own are allowed only when a
+  # pending transition of that key exists. A job result whose Complete
+  # contract waits (RE-6) is matched as the job result. A gate that fails
+  # at a hook whose failed gate is hold_contract_incomplete reads as the
+  # gated row with the contract change and the hold, and its from-state as
+  # its to-state (rule 7, RD-10), as the traces' test reads it.
+  #
+  # Events with no key also come from the job timers (job.timed_out), from
+  # the workspace timers orchestrator_offline and reviewer_eligibility
+  # (their Needs you items name them) and from the one-time write of the
+  # shipped rules (rule.created). One command may apply several timers of
+  # a task: each timer's events share its effective time.
+  #
+  # The gate (RT-4, test 4): no task.ready, task.claimed, task.submitted or
+  # review.passed is written by a command that had, at its hook, an
+  # enabled blocking gate in its frozen set (the pending transition's, or
+  # the rules on at that point of the log; a frozen rule turned off or
+  # removed before the move is not enabled) without a rule check row of
+  # that version, hook, round and subject that passed, did not apply, was
+  # withdrawn or was overridden.
   #
   # Steps. Each task's rows, in the order they opened: the first opens at
   # task.created, each closes where the next opens (the same time, in the
@@ -57,8 +87,30 @@ module Leverage
     CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
     ROW_ONLY = %w[credential.switched].freeze
     OTHER_TASK = %w[inbox.opened].freeze
+    # A command's events on other tasks than its own, by command: review
+    # claim-next records the provider rule's applied row for each review it
+    # skips, on that review's task (RC-50, RD-12).
+    OTHER_TASK_OF = { "claim_review" => %w[check.finished] }.freeze
     TERMINAL = %w[task.done task.cancelled].freeze
-    REFUSED_MAY_WRITE = /\A(check|hold|inbox)\./
+    REFUSED_MAY_WRITE = /\A(check|hold|inbox|job)\./
+    # What a command writes when it is sent and then waits (RE-3).
+    WAITING_MAY_WRITE = REFUSED_MAY_WRITE
+    JOB_TIMERS = %w[check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout].freeze
+    # The workspace timers and the one-time write, by what their events name.
+    ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility" }.freeze
+    INSTALL = "install_shipped_rules".freeze
+    # The withdrawals a timer that ends a waiting command writes before its
+    # lease end (rule 11).
+    CANCEL_EVENTS = %w[check.finished job.withdrawn hold.closed inbox.resolved].freeze
+    # The moves a gate guards (RT-4), the command that writes each, and its hook.
+    GATED = { "complete_contract" => [ "task.ready", "task.before_ready" ], "claim" => [ "task.claimed", "task.before_claim" ],
+              "submit" => [ "task.submitted", "task.before_submit" ], "pass_review" => [ "review.passed", "task.before_done" ] }.freeze
+    CLEARED = %w[passed not_applicable withdrawn].freeze
+    # A command that runs another entry as its requester inside it (RE-6:
+    # a planner's draft result is Complete contract): its events are its
+    # own row's and, on the task, the other entry's.
+    RUN_AS = { "submit_job_result" => "complete_contract" }.freeze
+    OWN_ONLY = %w[job. cost.reported].freeze
     LEASE_FIELD = "lease_seat_id".freeze
 
     Group = Data.define(:command_id, :at, :events)
@@ -69,69 +121,144 @@ module Leverage
     # commands after it (the log before it is still folded for the tasks'
     # states), for a log whose start was built by a test's Scenario.
     def call(workspace_id, after_seq: 0)
-      states = {}
+      audit = { states: {}, rounds: Hash.new(0), rules: {}, seen: Set.new }
+      states = audit.fetch(:states)
       findings = []
       groups(workspace_id).each do |group|
         if group.events.first.seq > after_seq
-          findings.concat(audit_group(workspace_id, group, states))
+          findings.concat(audit_group(workspace_id, group, states, audit))
         else
           group.events.each { |event| states[event.task_id] = observe(states[event.task_id], [ event ]) if event.task_id }
         end
+        note(group, audit)
       end
       findings + step_findings(workspace_id, after_seq) + time_findings(workspace_id, after_seq)
     end
 
     # --- commands --------------------------------------------------------------
 
+    # The workspace's events cut into one group per command (its key and its
+    # at: the lock makes one command's events share at), in the order each
+    # group's first event was written. A waiting command's events written
+    # inside another command are a group of their own (RE-3).
     def groups(workspace_id)
-      result = []
+      result = {}
       Replay.each_event(workspace_id) do |event|
-        last = result.last
-        if last && last.command_id == event.command_id && last.at == event.at
-          last.events << event
-        else
-          result << Group.new(command_id: event.command_id, at: event.at, events: [ event ])
-        end
+        (result[[ event.command_id, event.at ]] ||= Group.new(command_id: event.command_id, at: event.at, events: [])).events << event
       end
-      result
+      result.values
     end
 
-    def audit_group(workspace_id, group, states)
+    def audit_group(workspace_id, group, states, audit)
       return timer_groups(group, states) if group.command_id.nil?
 
       row = command_row(workspace_id, group)
+      pending = waiting(workspace_id, group.command_id, row)
       label = "command #{group.command_id} (seq #{group.events.first.seq})"
-      if row&.outcome == "refused"
-        own = group.events.map(&:type).grep_v(REFUSED_MAY_WRITE)
+      first = audit.fetch(:seen).add?([ group.command_id, row&.id ])
+      findings = gate_findings(group, row, pending, audit, label)
+      return findings + completion(group, pending, states, label) if pending && !first
+      return findings + later_without_pending(group, row, states, label) if !first && row&.outcome != "refused"
+
+      ran_now = pending && row && row.command != pending.command
+      if (row&.outcome == "refused" && !ran_now) || (pending && row && row.command == pending.command)
+        allowed = row&.outcome == "refused" ? REFUSED_MAY_WRITE : WAITING_MAY_WRITE
+        own = group.events.map(&:type).grep_v(allowed)
         advance(group.events, states)
-        return own.empty? ? [] : [ "#{label}: #{row.command} was refused but wrote #{own.uniq.join(", ")}" ]
+        verb = row&.outcome == "refused" ? "was refused" : "waited"
+        return findings if own.empty?
+
+        return findings + [ "#{label}: #{row&.command || pending.command} #{verb} but wrote #{own.uniq.join(", ")}" ]
       end
       names = row ? [ row.command ] : candidates(group.events.first.type)
-      problems = names.map { |name| match(name, group.events, states) }
-      advance(group.events, states)
-      best = problems.min_by(&:size)
-      return [] if best.empty?
+      findings + named(label, names, group.events, states)
+    end
 
-      [ "#{label}: #{names.join(" or ")} #{best.join("; ")}" ]
+    def named(label, names, events, states)
+      problems = names.map { |name| match(name, events, states) }
+      names.filter_map { |name| RUN_AS[name] && [ name, RUN_AS[name] ] }.each do |own, other|
+        mine, theirs = events.partition { |event| event.type.start_with?(*OWN_ONLY) }
+        next if theirs.empty?
+
+        problems << match(own, mine, states) + match(other, theirs, states)
+      end
+      advance(events, states)
+      best = problems.min_by(&:size)
+      best.empty? ? [] : [ "#{label}: #{names.join(" or ")} #{best.join("; ")}" ]
+    end
+
+    # The pending transition a command's key stored, if it ever waited.
+    def waiting(workspace_id, key, row)
+      return unless row
+
+      PendingTransition.where(workspace_id: workspace_id, command_key: key).order(:created_at).first
+    end
+
+    # A waiting command's own events, written later under its key (RE-3):
+    # its rows from the task's state, with the gate's events beside them.
+    def completion(group, pending, states, label)
+      named(label, [ pending.command ], group.events, states)
+    end
+
+    # Events under a key at another time than its command's own, with no
+    # pending transition of that key (RE-3 allows none).
+    def later_without_pending(group, row, states, label)
+      advance(group.events, states)
+      [ "#{label}: #{row&.command || "a command"} wrote #{group.events.map(&:type).uniq.join(", ")} under its key " \
+        "at another time than its own, though it never waited (RE-3)" ]
     end
 
     def timer_groups(group, states)
+      name = workspace_timer(group.events)
+      return named("events with no command (seq #{group.events.first.seq})", [ name ], group.events, states) if name
+
       group.events.group_by(&:task_id).flat_map do |task_id, task_events|
         timer_runs(task_events).flat_map { |events| timer_run(task_id, events, states) }
       end
     end
 
-    # A task's events with no key, cut before each lease end: what each
+    # The workspace timer or the one-time write a group of events with no
+    # key belongs to, by what they name, or nil. A group with a lease end
+    # is task timers': the "No reviewer is eligible" item beside a
+    # review.lease_expired is that timer's side event (SM-42), and a
+    # command applies no workspace timer.
+    def workspace_timer(events)
+      return INSTALL if events.any? { |event| event.type == "rule.created" }
+      return if events.any? { |event| TIMER_EVENTS.key?(event.type) }
+
+      kinds = events.select { |event| event.type.start_with?("inbox.") }.filter_map do |event|
+        event.type == "inbox.opened" ? (event.payload || {})["kind"] : InboxItem.find_by(id: event.subject_id)&.kind
+      end
+      kinds.filter_map { |kind| ITEM_TIMERS[kind] }.first
+    end
+
+    # A task's events with no key, cut where the effective time changes
+    # (each timer's events carry its due time) and before each lease end
+    # that is not the end of the withdrawals before it (rule 11): what each
     # timer a command applied wrote, in the order it applied them.
-    def timer_runs(events) = events.slice_before { |event| TIMER_EVENTS.key?(event.type) }.to_a
+    def timer_runs(events)
+      events.slice_when do |earlier, later|
+        earlier.effective_at != later.effective_at ||
+          (TIMER_EVENTS.key?(later.type) && !CANCEL_EVENTS.include?(earlier.type))
+      end.to_a
+    end
 
     def timer_run(task_id, events, states)
       types = events.map(&:type)
-      name = types.filter_map { |type| TIMER_EVENTS[type] }.first || credential_release(events)
+      names = timer_names(events)
       label = "events with no command (seq #{events.first.seq}, #{types.uniq.join(", ")})"
-      problems = name ? match(name, events, states) : [ "no timer writes them" ]
+      problems = names.empty? ? [ "no timer writes them" ] : names.map { |name| match(name, events, states) }.min_by(&:size)
       advance(events, states) if task_id
-      problems.empty? ? [] : [ "#{label}: #{name || "no command"} #{problems.join("; ")}" ]
+      problems.empty? ? [] : [ "#{label}: #{names.join(" or ").presence || "no command"} #{problems.join("; ")}" ]
+    end
+
+    def timer_names(events)
+      types = events.map(&:type)
+      lease = types.filter_map { |type| TIMER_EVENTS[type] }.first
+      return [ lease ] if lease
+      return JOB_TIMERS if types.include?("job.timed_out")
+
+      [ credential_release(events) ].compact
     end
 
     # credential_hold_release when the events close a credential hold.
@@ -165,13 +292,16 @@ module Leverage
     # state their task was in; empty when a row fits.
     def match(name, events, states)
       tasks = events.filter_map(&:task_id).uniq
-      named = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
+      named = rows_of(name)
       stateless = named.any? && named.none? { |row| row.fetch("from") || row.fetch("to") }
       others = []
       if tasks.size > 1 && !stateless
-        own = events.first.task_id
+        allowed = OTHER_TASK + OTHER_TASK_OF.fetch(name, [])
+        # The command's own task is that of its first event that is not one
+        # it may write on another task.
+        own = (events.find { |event| event.task_id && !allowed.include?(event.type) } || events.first).task_id
         others = events.select { |event| event.task_id && event.task_id != own }
-        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| OTHER_TASK.include?(event.type) }
+        return [ "touches #{tasks.size} tasks" ] unless others.all? { |event| allowed.include?(event.type) }
 
         events -= others
         tasks = [ own ]
@@ -240,6 +370,88 @@ module Leverage
 
     def all_rows
       @all_rows ||= Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
+    end
+
+    # A command's rows that complete, with the row a failed
+    # hold_contract_incomplete gate reads as (rule 7, RD-10): the gated
+    # row's contract change and the hold, staying in its state; and, where
+    # the failed gate is failed_review, fail_review's rows (SM-6: a failed
+    # review in full).
+    def rows_of(name)
+      @rows_of ||= {}
+      @rows_of[name] ||= begin
+        rows = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
+        failed_review = rows.any? { |row| failed_gates[row.fetch("hook")] == "failed_review" } ? rows_of("fail_review") : []
+        rows + rows.filter_map { |row| failed_gate_row(row) } + failed_review
+      end
+    end
+
+    def failed_gate_row(row)
+      return unless failed_gates[row.fetch("hook")] == "hold_contract_incomplete"
+
+      row.merge("events" => (row.fetch("events") & [ "task.contract_changed" ]) + [ "hold.opened" ], "to" => row.fetch("from"))
+    end
+
+    def failed_gates
+      @failed_gates ||= Contract.hooks.fetch("hooks").to_h { |entry| [ entry.fetch("hook"), entry["failed_gate"] ] }
+    end
+
+    # --- the gate (RT-4) ---------------------------------------------------------
+
+    # What a group tells the audit for later groups: rule switches and
+    # versions, and each task's round.
+    def note(group, audit)
+      rules = audit.fetch(:rules)
+      group.events.each do |event|
+        payload = event.payload || {}
+        case event.type
+        when "rule.created" then rules[event.subject_id] = { enabled: payload["enabled"], version_id: payload["rule_version_id"] }
+        when "rule.changed", "rule.reverted" then rules.fetch(event.subject_id)[:version_id] = payload["rule_version_id"]
+        when "rule.enabled", "rule.disabled" then rules.fetch(event.subject_id)[:enabled] = event.type == "rule.enabled"
+        when "rule.removed" then rules.fetch(event.subject_id)[:enabled] = false
+        when "review.failed" then audit.fetch(:rounds)[event.task_id] += 1
+        end
+      end
+    end
+
+    def gate_findings(group, row, pending, audit, label)
+      command = pending&.command || row&.command
+      other = RUN_AS[command]
+      command = other if other && group.events.any? { |event| event.type == GATED.fetch(other).first }
+      move, hook = GATED[command]
+      return [] unless move
+
+      group.events.select { |event| event.type == move }.flat_map do |event|
+        versions = frozen(pending, audit).select { |version| blocking_gate?(version, hook) }
+        versions.reject { |version| cleared?(event, version, hook, audit.fetch(:rounds)[event.task_id]) }.map do |version|
+          "#{label}: #{move} past the blocking gate of rule #{version.rule_id} (version #{version.version}) " \
+            "with no check that passed, did not apply, was withdrawn or was overridden"
+        end
+      end
+    end
+
+    # The rule versions the command was asked with whose rules are on at
+    # this point of the log: its pending transition's (a frozen rule
+    # turned off or removed since no longer blocks, L380, L976, even when
+    # its check had already failed), or the rules on now. A frozen rule
+    # the log never created (a test's setup) counts as on.
+    def frozen(pending, audit)
+      rules = audit.fetch(:rules)
+      return RuleVersion.where(id: rules.values.select { |rule| rule[:enabled] }.pluck(:version_id)).to_a unless pending
+
+      RuleVersion.where(id: pending.frozen_rule_version_ids).to_a.reject { |version| rules[version.rule_id]&.fetch(:enabled) == false }
+    end
+
+    def blocking_gate?(version, hook)
+      version.hook == hook && version.kind == "gate" && version.on_fail != "warn" && Rules::AppCheckers.runs?(version)
+    end
+
+    def cleared?(event, version, hook, round)
+      scope = RuleCheck.where(workspace_id: event.workspace_id, task_id: event.task_id, rule_version_id: version.id, hook: hook,
+        round: round)
+      scope = scope.where(subject_kind: "seat", subject_id: event.payload.fetch("seat_id")) if hook == "task.before_claim"
+      scope = scope.where(subject_kind: "review", subject_id: event.subject_id) if hook == "task.before_done"
+      scope.where(result: CLEARED).or(scope.where.not(overridden_at: nil)).exists?
     end
 
     def extra_events(row)
@@ -321,15 +533,16 @@ module Leverage
       end
     end
 
-    # The command each step's opening and closing event belongs to: its
-    # command_id and at. Within one command a step changes at most once and
+    # The command each step's opening and closing event belongs to: its at,
+    # which the workspace lock makes one command's own (a waiting command's
+    # events written inside it carry another key, RE-3). Within one command a step changes at most once and
     # in place (steps.json), so a step may close at one event of a command
     # and the next open at a later one of the same command (a failed review
     # at the round limit closes review at review.failed and opens wait_owner
     # at hold.opened).
     def command_of(steps)
       ids = steps.flat_map { |step| [ step.opening_event_id, step.closing_event_id ] }.compact
-      Event.where(id: ids).pluck(:id, :command_id, :at).to_h { |id, command_id, at| [ id, [ command_id, at ] ] }
+      Event.where(id: ids).pluck(:id, :at).to_h
     end
 
     def steps_of(task_id)

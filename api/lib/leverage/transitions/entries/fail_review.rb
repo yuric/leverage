@@ -48,12 +48,21 @@ module Leverage
           @failed = Criterion.where(task_id: @task.id, kind: "build", removed_at: nil, id: named).order(:position).to_a
           raise Invalid, "A failed review names the builder criteria that failed." if named.empty? || @failed.size != named.size
 
-          @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)
-          # A lease of the builder's that is past its due time has ended
-          # (EN-14): its timer is written first, so builder_free reads it
-          # ended whether or not the sweep has run.
-          Timers.apply_held_by(ctx, @builder)
-          @free = Eligibility.builder_free?(@builder, @task, at: ctx.at)
+          load_builder(ctx)
+        end
+
+        # A pass whose gate at task.before_done failed (milestone 4 plan
+        # SM-6, §2.1 rule 7): the same rows, with the review criterion as
+        # the failed criterion and the rule's check as failed_rule_check_id;
+        # the pass's request (notes, tokens, spend) is the verdict's.
+        def load_for_gate(ctx, review:, seat:, check:)
+          @params = ctx.request.params
+          @seat = seat
+          @review = review
+          @task = Task.find_by!(id: review.task_id, workspace_id: ctx.workspace.id)
+          @failed = Criterion.where(task_id: @task.id, kind: "review", removed_at: nil).order(:position).to_a
+          @failed_rule_check_id = check&.id
+          load_builder(ctx)
         end
 
         def refusals(_ctx)
@@ -72,7 +81,8 @@ module Leverage
 
         def perform(ctx)
           Leases.end_lease(ctx, @review)
-          @review.update!(verdict: "failed", failed_criteria: @failed.map(&:id), notes: @params["notes"])
+          @review.update!(verdict: "failed", failed_criteria: @failed.map(&:id), notes: @params["notes"],
+            failed_rule_check_id: @failed_rule_check_id)
           @failed.each { |criterion| criterion.update!(state: "open", passed_at: nil, passed_by_seat_id: nil) }
           spend = BigDecimal(@params.fetch("spend", 0).to_s)
           if @free
@@ -84,12 +94,13 @@ module Leverage
           end
 
           failed = ctx.emit("review.failed", task: @task, subject: @review,
-            payload: { failed_criterion_ids: @failed.map(&:id), failed_rule_check_id: nil,
+            payload: { failed_criterion_ids: @failed.map(&:id), failed_rule_check_id: @failed_rule_check_id,
                        lease_seat_id: @free ? @builder.id : nil,
                        wait_cause: @free ? nil : Candidates.wait_cause(@task, ctx.at) })
           @failed.each { |criterion| ctx.emit("criterion.reopened", task: @task, subject: criterion, payload: {}) }
           ctx.emit("cost.reported", task: @task, subject: @review,
             payload: { tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0) })
+          add_to_project(spend)
           place_fresh_lease(ctx, failed) if @free
 
           reached = @task.round + 1
@@ -101,6 +112,24 @@ module Leverage
         end
 
         private
+
+        # The verdict's spend runs cost.reported for the task's project
+        # (L513): it adds to the project's spent, as the replay rebuilds it.
+        def add_to_project(spend)
+          return unless @task.project_id
+
+          project = Project.find_by!(id: @task.project_id, workspace_id: @task.workspace_id)
+          project.update!(spent: project.spent + spend)
+        end
+
+        def load_builder(ctx)
+          @builder = @task.builder_seat_id && Seat.find_by(id: @task.builder_seat_id, workspace_id: ctx.workspace.id)
+          # A lease of the builder's that is past its due time has ended
+          # (EN-14): its timer is written first, so builder_free reads it
+          # ended whether or not the sweep has run.
+          Timers.apply_held_by(ctx, @builder)
+          @free = Eligibility.builder_free?(@builder, @task, at: ctx.at)
+        end
 
         # HD-1, HE-14: the fresh lease is on the builder's first available
         # candidate; a switch when it is not the one last recorded.

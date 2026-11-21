@@ -41,6 +41,11 @@ module V1
       def hold = control("hold_task", "hold")
       def resume = control("resume_task", "resume")
 
+      # Draft contract (milestone 4 plan §2.3, RD-37): asks a planner to draft
+      # the task's contract. It takes no body; the entry queues the job and
+      # answers its id.
+      def draft_contract = control("draft_contract", "draft_contract")
+
       private
 
       # operation_id names the body to check, command the entry to run.

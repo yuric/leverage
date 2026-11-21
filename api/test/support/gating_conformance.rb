@@ -213,9 +213,13 @@ module GatingConformance
     end
   end
 
+  # Each scenario is built before the block whose writes are counted: a
+  # real implementation's scenario is rows in a database, which are
+  # writes, and only the call's own statements are measured.
   def test_conformance_evaluation_and_reads_write_nothing
     statements = []
-    statements += writes_during { gating.evaluate(build_scenario(:blocking_model_gate)[:request]) }
+    scenario = build_scenario(:blocking_model_gate)
+    statements += writes_during { gating.evaluate(scenario[:request]) }
     scenario = build_scenario(:provider_rule_on)
     statements += writes_during do
       gating.provider_allowed?(task_id: scenario[:task_id], provider: scenario[:built_provider])

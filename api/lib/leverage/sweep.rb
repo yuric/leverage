@@ -7,6 +7,11 @@ module Leverage
   # leaves one sweep_runs row, the proof it is alive (L404), written under
   # the workspace lock like every other write.
   #
+  # Milestone 4 (its plan WP7): the sweep also applies the job timers
+  # (Timers::JOB_TIMERS) to jobs no command has touched, and fires
+  # orchestrator_offline and reviewer_eligibility on every run through
+  # Timers.apply_workspace, at the run's own time.
+  #
   # A pass goes through every workspace. In each, every timer runs as its
   # own command through Transitions.apply, by the app, in bounded batches:
   # one batch is one transaction under the workspace lock, so a command
@@ -20,6 +25,9 @@ module Leverage
     PURGE_EVERY = 3600
     BATCH = 100
     LOG = "leverage.sweep".freeze
+    # The workspace timers of milestone 4, fired after seat_run_placement:
+    # orchestrator_offline then sees the checks this run's timers erred.
+    WORKSPACE_TIMERS = %w[orchestrator_offline reviewer_eligibility].freeze
 
     module_function
 
@@ -37,18 +45,26 @@ module Leverage
 
     # Applies the due task timers of one workspace, batch by batch: the
     # credential hold release first (a hold due before its task's lease;
-    # milestone 3 plan rule 8, HE-23), then the two leases, whose end closes
-    # a credential hold due later. Then it fires seat_run_placement, which
-    # runs on every sweep (HD-4), purges the old command keys when purge is
-    # true, and records the run. Returns the SweepRun.
+    # milestone 3 plan rule 8, HE-23); the job timers due before any lease
+    # of their task; the two leases, whose end closes a credential hold due
+    # later; then the job timers the leases left (Timers.due_jobs). Then it
+    # fires seat_run_placement, which runs on every sweep (HD-4), and the two
+    # workspace timers of milestone 4, purges the old command keys when
+    # purge is true, and records the run. Returns the SweepRun.
     def sweep_workspace(workspace_id, purge: false, batch: BATCH)
       touched = []
       touched += repeat(workspace_id, Timers::CREDENTIAL_HOLD, "released_task_ids", batch)
+      touched += job_timers(workspace_id, batch)
       touched += repeat(workspace_id, Timers::BUILDER_LEASE, "expired_task_ids", batch)
       expired_reviews = repeat(workspace_id, Timers::REVIEW_LEASE, "expired_review_ids", batch)
       touched += Review.where(id: expired_reviews).pluck(:task_id) unless expired_reviews.empty?
+      touched += job_timers(workspace_id, batch)
       timer(workspace_id, Timers::SEAT_RUN_PLACEMENT)
       fired = 1
+      WORKSPACE_TIMERS.each do |name|
+        Timers.apply_workspace(workspace_id, name, at: database_now)
+        fired += 1
+      end
       if purge
         loop { break unless timer(workspace_id, "command_key_retention", "limit" => batch * 10).result.fetch("more") }
         fired += 1
@@ -94,6 +110,13 @@ module Leverage
         caller_id: nil, key: nil, request_hash: nil, params: params))
     end
 
+    # Runs each job timer until a batch comes back short; returns the tasks
+    # of the jobs they timed out.
+    def job_timers(workspace_id, batch)
+      jobs = Timers::JOB_TIMERS.keys.flat_map { |command| repeat(workspace_id, command, "timed_out_job_ids", batch) }
+      jobs.empty? ? [] : Job.where(id: jobs).where.not(task_id: nil).pluck(:task_id)
+    end
+
     # Runs a task timer until a batch comes back short; returns the ids its
     # result lists in field. No lock is taken when nothing is due.
     def repeat(workspace_id, command, field, batch)
@@ -115,6 +138,7 @@ module Leverage
       case command
       when Timers::BUILDER_LEASE then Timers.due_tasks(workspace_id, at, states, limit: 1).any?
       when Timers::CREDENTIAL_HOLD then Timers.due_credential_holds(workspace_id, at, states, limit: 1).any?
+      when *Timers::JOB_TIMERS.keys then Timers.due_jobs(workspace_id, at, command, limit: 1).any?
       else Timers.due_reviews(workspace_id, at, states, limit: 1).any?
       end
     end

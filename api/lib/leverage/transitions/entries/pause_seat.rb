@@ -12,6 +12,11 @@ module Leverage
       # due time is its timer's. The row's No reviewer is eligible side
       # events are milestone 4's (SM-42).
       #
+      # Milestone 4 (plan §2.1 rule 11, RD-13): a provisional claim of the
+      # seat, which has no lease, is cancelled with invalid_state after
+      # seat.paused and no hold opens for it; a builder's pending submit is
+      # kept, and seat_paused opens as before (L378).
+      #
       # A removed or unknown seat is 404; a seat already paused is
       # invalid_state.
       #
@@ -32,14 +37,16 @@ module Leverage
           @seat.update!(paused: true)
           paused = ctx.emit("seat.paused", subject: @seat, payload: {})
           held_tasks(ctx).each { |task| Holds.open(ctx, task: task, reason: "seat_paused", cause_id: paused.id) }
+          SeatRuns.cancel_provisional_claim(ctx, @seat)
           @result = nil
         end
 
         private
 
-        # The tasks the seat holds with a live or paused lease.
+        # The tasks the seat holds with a live or paused lease: not a Ready
+        # task, which is a provisional claim and has none.
         def held_tasks(ctx)
-          Task.where(workspace_id: @seat.workspace_id, holder_seat_id: @seat.id).order(:created_at)
+          Task.where(workspace_id: @seat.workspace_id, holder_seat_id: @seat.id).where.not(state: "ready").order(:created_at)
             .select { |task| SeatRuns.lease_live?(ctx, task) }
         end
       end

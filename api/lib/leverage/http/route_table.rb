@@ -1,7 +1,8 @@
 module Leverage
   module Http
     # The operations served, each to its controller and action (milestone 2
-    # plan §2.1, §2.3, IN-1; milestone 3's eleven are the last entries).
+    # plan §2.1, §2.3, IN-1; milestone 3's eleven and milestone 4's twelve
+    # are the last entries).
     # config/routes.rb draws one route per entry with the registry's method
     # and path, so no path is typed anywhere else; every other registry
     # operation has no route and answers 404 (test/interfaces/seams_test.rb).
@@ -70,7 +71,20 @@ module Leverage
         "resume_task" => "v1/owner/tasks#resume",
         "pause_seat" => "v1/owner/seats#pause",
         "resume_seat" => "v1/owner/seats#resume",
-        "change_seat" => "v1/owner/seats#change"
+        "change_seat" => "v1/owner/seats#change",
+        # Milestone 4's twelve (its plan §2.3, RT-6).
+        "claim_next_job" => "v1/agent/jobs#claim_next",
+        "submit_job_result" => "v1/agent/jobs#result",
+        "list_rules" => "v1/owner/rules#index",
+        "add_rule" => "v1/owner/rules#create",
+        "save_rule" => "v1/owner/rules#versions",
+        "enable_rule" => "v1/owner/rules#enable",
+        "disable_rule" => "v1/owner/rules#disable",
+        "revert_rule" => "v1/owner/rules#revert",
+        "remove_rule" => "v1/owner/rules#remove",
+        "rerun_check" => "v1/owner/rule_checks#rerun",
+        "override_check" => "v1/owner/rule_checks#override",
+        "draft_contract" => "v1/owner/tasks#draft_contract"
       }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",

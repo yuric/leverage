@@ -130,6 +130,22 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         public var installTool: @Sendable (Provider, IdempotencyKey) async throws -> PlainOutcome = { _, _ in
             throw FakeAPIError.notScripted(.installTool)
         }
+        public var listRules: @Sendable () async throws -> RulesList = { throw FakeAPIError.notScripted(.listRules) }
+        public var addRule: @Sendable (AddRuleRequest, IdempotencyKey) async throws -> PlainOutcome = { _, _ in
+            throw FakeAPIError.notScripted(.addRule)
+        }
+        public var saveRule: @Sendable (UUID, SaveRuleRequest, IdempotencyKey) async throws -> PlainOutcome = {
+            _, _, _ in throw FakeAPIError.notScripted(.saveRule)
+        }
+        public var enableRule: IDCommand = { _, _ in throw FakeAPIError.notScripted(.enableRule) }
+        public var disableRule: IDCommand = { _, _ in throw FakeAPIError.notScripted(.disableRule) }
+        public var revertRule: IDCommand = { _, _ in throw FakeAPIError.notScripted(.revertRule) }
+        public var removeRule: IDCommand = { _, _ in throw FakeAPIError.notScripted(.removeRule) }
+        public var rerunCheck: IDCommand = { _, _ in throw FakeAPIError.notScripted(.rerunCheck) }
+        public var overrideCheck: @Sendable (UUID, OverrideCheckRequest, IdempotencyKey) async throws
+            -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.overrideCheck) }
+        public var draftContract: @Sendable (UUID, IdempotencyKey) async throws
+            -> CommandOutcome<DraftContractResult> = { _, _ in throw FakeAPIError.notScripted(.draftContract) }
 
         public init() {}
     }
@@ -299,5 +315,49 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
     public func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome {
         try await record(.installTool, ["provider": provider.rawValue], key: key, body: InstallToolRequest())
             .installTool(provider, key)
+    }
+
+    public func listRules() async throws -> RulesList {
+        try await record(.listRules).listRules()
+    }
+
+    public func addRule(_ request: AddRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.addRule, key: key, body: request).addRule(request, key)
+    }
+
+    public func saveRule(ruleID: UUID, _ request: SaveRuleRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.saveRule, Self.id(ruleID), key: key, body: request).saveRule(ruleID, request, key)
+    }
+
+    public func enableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.enableRule, Self.id(ruleID), key: key).enableRule(ruleID, key)
+    }
+
+    public func disableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.disableRule, Self.id(ruleID), key: key).disableRule(ruleID, key)
+    }
+
+    public func revertRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.revertRule, Self.id(ruleID), key: key).revertRule(ruleID, key)
+    }
+
+    public func removeRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.removeRule, Self.id(ruleID), key: key).removeRule(ruleID, key)
+    }
+
+    public func rerunCheck(checkID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.rerunCheck, Self.id(checkID), key: key).rerunCheck(checkID, key)
+    }
+
+    public func overrideCheck(checkID: UUID, _ request: OverrideCheckRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.overrideCheck, Self.id(checkID), key: key, body: request)
+            .overrideCheck(checkID, request, key)
+    }
+
+    public func draftContract(taskID: UUID, key: IdempotencyKey) async throws
+        -> CommandOutcome<DraftContractResult> {
+        try await record(.draftContract, Self.id(taskID), key: key).draftContract(taskID, key)
     }
 }

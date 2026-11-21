@@ -255,6 +255,79 @@ struct DriverTests {
         #expect(throws: CancellationError.self) { try result.get() }
     }
 
+    // MARK: A job's check run (milestone 4, plan section 2.2, RD-33, RD-34)
+
+    /// What only a build or a review passes: an editing or planning mode.
+    static let forbidden = ["--mode", "plan", "acceptEdits", "accept-edits", "workspace-write"]
+
+    /// The merged check arguments, with the job's time limit where the tool
+    /// takes one (`agy --print-timeout`).
+    static func checkArguments(_ test: Case, prompt: String, folder: String, seconds: Int) -> [String] {
+        expectedArguments(test, .check, prompt: prompt, folder: folder)
+            .map { $0 == "120s" ? "\(seconds)s" : $0 }
+    }
+
+    @Test("a job's check run has the merged check arguments and the job's time limit; never a mode that edits or plans, Gemini's --mode plan included (§0.1 facts 15, 27)", arguments: cases)
+    func jobCheckArguments(test: Case) async throws {
+        let setup = try Setup()
+        try setup.signIn(test)
+        let request = ToolRunRequest(
+            prompt: Prompts.ready, folder: setup.work, purpose: .check, timeLimitSeconds: 45, seatModel: false)
+        _ = try await setup.driver(test).execute(request)
+        let argv = Self.normalised(try setup.lastCall().argv)
+        #expect(argv == Self.checkArguments(test, prompt: Prompts.ready, folder: setup.work.path, seconds: 45))
+        #expect(!argv.contains { Self.forbidden.contains($0) })
+    }
+
+    @Test("a job's check run passes the seat's model and effort when they are set, and nothing else changes",
+          arguments: cases)
+    func jobCheckModel(test: Case) async throws {
+        let setup = try Setup()
+        try setup.signIn(test)
+        let request = ToolRunRequest(
+            prompt: Prompts.ready, folder: setup.work, purpose: .check, timeLimitSeconds: 45, seatModel: true)
+        _ = try await setup.driver(test, model: "model-x", effort: "high").execute(request)
+        let argv = Self.normalised(try setup.lastCall().argv)
+        let base = Self.checkArguments(test, prompt: Prompts.ready, folder: setup.work.path, seconds: 45)
+        #expect(Array(argv.prefix(base.count)) == base)
+        let provider = try #require(Provider(rawValue: test.provider))
+        let modelFlag = ["claude": "--model", "agy": "--model"][test.tool] ?? "-m"
+        var extra = [modelFlag, "model-x"]
+        if ProviderCatalog.takesEffort(provider) { extra += ["--effort", "high"] }
+        #expect(Array(argv.dropFirst(base.count)) == extra)
+        #expect(!argv.contains { Self.forbidden.contains($0) })
+        // The probe's answering check never takes the seat's model.
+        _ = try await setup.driver(test, model: "model-x", effort: "high")
+            .run(prompt: Prompts.ready, in: setup.work, purpose: .check)
+        #expect(Self.normalised(try setup.lastCall().argv)
+            == Self.expectedArguments(test, .check, prompt: Prompts.ready, folder: setup.work.path))
+    }
+
+    @Test("a job's time limit ends the tool, and never lengthens the configuration's")
+    func jobTimeLimit() async throws {
+        let setup = try Setup()
+        let test = Self.cases[0]
+        try setup.signIn(test)
+        try setup.tools.write(scenario: StandInScenario(gateFile: "never-opened"))
+        let started = ContinuousClock.now
+        let ran = try await setup.driver(test, timeout: 30).execute(ToolRunRequest(
+            prompt: Self.reviewPrompt, folder: setup.work, purpose: .check, timeLimitSeconds: 1))
+        guard case .failed(.timedOut, _) = ran else {
+            Issue.record("expected the run to time out, got \(ran)")
+            return
+        }
+        #expect(ContinuousClock.now - started < .seconds(15), "the job's one second, not the configuration's 30")
+        // A job's limit longer than the configuration's is the configuration's.
+        let gemini = Self.cases[2]
+        try setup.signIn(gemini)
+        let answered = try await setup.driver(gemini, timeout: 60).execute(ToolRunRequest(
+            prompt: Prompts.ready, folder: setup.work, purpose: .check, timeLimitSeconds: 600))
+        #expect(answered == .answered(ToolAnswer(text: "ready\n", tokens: gemini.tokens)))
+        let argv = try setup.lastCall().argv
+        let index = try #require(argv.firstIndex(of: "--print-timeout"))
+        #expect(argv.dropFirst(index + 1).first == "60s")
+    }
+
     @Test("the provider's shape is chosen by the provider")
     func shapes() {
         #expect(ProviderShapes.shape(for: .claude) is ClaudeDriver)

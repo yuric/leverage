@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../gate_support"
 
 # Review fails (PRD Lifecycle L91, Rework and escalation L127-L131;
 # milestone 2 plan EN-9, EN-12, EN-13, EN-28): at review.failed, the named
@@ -97,7 +98,8 @@ class FailReviewTest < ActiveSupport::TestCase
     assert_equal %w[review.failed criterion.reopened cost.reported hold.opened inbox.opened], types
     failed = written.first
     opened, inbox = written.last(2)
-    assert_equal [ "app", nil, failed.id, 2, { "reason" => "rounds_exceeded", "rule_id" => nil, "credential_id" => nil } ],
+    assert_equal [ "app", nil, failed.id, 2, { "reason" => "rounds_exceeded", "rule_id" => nil, "credential_id" => nil,
+                                                  "rule_check_id" => nil } ],
       [ opened.actor_kind, opened.actor_id, opened.cause_id, opened.round, opened.payload ]
     assert_equal [ opened.id, { "kind" => "past_round_limit" } ], [ inbox.cause_id, inbox.payload ]
     hold = Hold.find_by!(task_id: @task.id, reason: "rounds_exceeded", closed_at: nil)
@@ -221,5 +223,38 @@ class FailReviewTest < ActiveSupport::TestCase
     failed = written.first
     assert_equal [ nil, "credential_limit" ], failed.payload.values_at("lease_seat_id", "wait_cause")
     assert_not_includes written.map(&:type), "credential.switched"
+  end
+end
+
+# fail_review's rows for a pass whose gate failed (milestone 4 plan SM-6,
+# §2.1 rule 7): load_for_gate names the review criterion and the check.
+class FailReviewGatedTest < ActiveSupport::TestCase
+  include GateSupport
+
+  setup do
+    @scenario = Scenario.new
+    @builder = @scenario.seat(role: "builder", credential: @scenario.credential)
+    @reviewer = @scenario.seat(role: "reviewer", credential: @scenario.credential(provider: "codex"))
+  end
+
+  test "the rows of a failed gate: the review criterion reopened, failed_rule_check_id on the review and the event, the round up" do
+    rule = custom_rule("task.before_done")
+    task, review = ready_for_verdict(@builder, @reviewer)
+    check = @scenario.rule_check(task, rule: rule, result: "failed", subject: review)
+    request = T::Request.new(command: "pass_review", workspace_id: @scenario.workspace_id, caller_kind: "seat",
+      caller_id: @reviewer.id, key: "k-verdict", request_hash: nil, params: pass_params(review))
+    events = ActiveRecord::Base.transaction(requires_new: true) do
+      ctx = @scenario.context(request: request)
+      entry = T::Entries::FailReview.new
+      entry.load_for_gate(ctx, review: review, seat: @reviewer, check: check)
+      entry.perform(ctx)
+      ctx.events
+    end
+
+    assert_equal %w[review.failed criterion.reopened cost.reported], events.map(&:type)
+    review_criterion = Criterion.find_by!(task_id: task.id, kind: "review")
+    assert_equal [ [ review_criterion.id ], check.id ], events.first.payload.values_at("failed_criterion_ids", "failed_rule_check_id")
+    assert_equal check.id, review.reload.failed_rule_check_id
+    assert_equal [ 1, "working" ], task.reload.values_at(:round, :state)
   end
 end

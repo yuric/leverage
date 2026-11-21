@@ -8,6 +8,31 @@ module Leverage
     # alone), and the account the task waits for and when it resets, from
     # Board.waiting, the reading its board card uses (HE-15, HE-16). One
     # snapshot, so the page and as_of_seq are one moment of the log.
+    #
+    # Milestone 4 (its plan §2.3) adds:
+    #
+    # - steps, lifetime_seconds and as_of: the Timing section (TaskTimeline),
+    #   measured to the database's time read inside the snapshot, so no
+    #   step it shows can start after it (L322, L898);
+    # - rule_checks: the checklist, one line per check row in order of
+    #   creation, each with the version it ran, that version's name and the
+    #   date it was saved (an earlier check keeps its own after a Save,
+    #   L911), its attempts, the queue and run seconds of its last attempt
+    #   (RuleTiming's arithmetic; null while not known), and the two buttons
+    #   of RD-28: "Let it through once" (can_override) on a blocking gate's
+    #   failed or errored row and on the row held at the re-run limit
+    #   (RD-45), "Run it again" (can_rerun) on a blocking gate's errored
+    #   row; neither once the row is overridden, nor on a done or cancelled
+    #   task. A warn rule's failure let its command through (L337), and a
+    #   policy's row is no failure, so neither has a button (RD-49);
+    # - pending: the task's waiting command (Board.pending_transitions, the
+    #   reading the board card's checking uses), since when, and the rules
+    #   whose checks it still waits on: those with no result, or errored,
+    #   and not overridden;
+    # - draft: where a contract draft stands (RD-37), from the task's
+    #   latest contract_draft job: queued, writing while a planner holds
+    #   it, not_written after the second miss while the task is still in
+    #   Backlog, none otherwise.
     module TaskPage
       UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
@@ -24,6 +49,10 @@ module Leverage
         end
       end
 
+      # The checks a button is offered on (RD-28).
+      LET_THROUGH = %w[failed error].freeze
+      ENDED = %w[done cancelled].freeze
+
       def page(workspace_id, task, as_of_seq)
         criteria = Criterion.where(task_id: task.id, removed_at: nil).order(:position, :id).to_a
         evidence = Evidence.where(criterion_id: criteria.map(&:id)).order(:created_at, :id).group_by(&:criterion_id)
@@ -33,6 +62,8 @@ module Leverage
           .order(:opened_at, :id).to_a
         holds = Hold.where(task_id: task.id).order(:opened_at, :id).to_a
         waiting = Board.waiting(workspace_id, [ task ], { task.id => holds.select { |hold| hold.closed_at.nil? } })
+        as_of = TaskTimeline.database_now
+        steps = TaskTimeline.call(workspace_id, task.id, as_of: as_of)
 
         { task: Shapes.task_summary(task),
           criteria: criteria.map { |criterion| Shapes.criterion(criterion, evidence.fetch(criterion.id, [])) },
@@ -46,7 +77,67 @@ module Leverage
           names: names(workspace_id, task, reviews, events),
           recovery_times: RecoveryTimes.call(workspace_id, task_id: task.id),
           reviewer_seat_exists: Board.reviewer_seat?(workspace_id),
-          as_of_seq: as_of_seq }
+          as_of_seq: as_of_seq,
+          steps: steps, lifetime_seconds: TaskTimeline.lifetime_seconds(steps), as_of: Shapes.time(as_of),
+          rule_checks: rule_checks(task, holds),
+          pending: pending(Board.pending_transitions(workspace_id, [ task.id ])[task.id]),
+          draft: draft(task) }
+      end
+
+      # The checklist (RD-28): every rule check of the task.
+      def rule_checks(task, holds)
+        checks = RuleCheck.where(workspace_id: task.workspace_id, task_id: task.id).order(:created_at, :id).to_a
+        versions = RuleVersion.where(id: checks.map(&:rule_version_id).uniq).index_by(&:id)
+        rows = RuleCheckAttempt.where(rule_check_id: checks.map(&:id)).order(:attempt_number).group_by(&:rule_check_id)
+        timed = RuleTiming.attempts(checks.map(&:id))
+        at_limit = holds.select { |hold| hold.closed_at.nil? && hold.reason == "rerun_limit" }.to_set(&:rule_check_id)
+        live = !ENDED.include?(task.state)
+        checks.map do |check|
+          version = versions.fetch(check.rule_version_id)
+          checklist_line(check, version, rows.fetch(check.id, []), timed.fetch(check.id, []).last,
+            live && blocking?(version) && check.overridden_at.nil?, at_limit.include?(check.id))
+        end
+      end
+
+      def checklist_line(check, version, attempts, last, actionable, at_limit)
+        { id: check.id, rule_id: check.rule_id, rule_name: version.name, rule_version_id: version.id, version: version.version,
+          version_saved_at: Shapes.time(version.created_at), hook: check.hook, moment_name: Rules.moment_name(check.hook),
+          round: check.round, checker: version.checker, on_fail: version.on_fail, result: check.result,
+          effect: check.effect, reason: check.reason,
+          attempts: attempts.map do |attempt|
+            { attempt_number: attempt.attempt_number, queued_at: Shapes.time(attempt.queued_at),
+              started_at: Shapes.time(attempt.started_at), finished_at: Shapes.time(attempt.finished_at) }
+          end,
+          queue_seconds: RuleTiming.number(last && RuleTiming.queue_seconds(last)),
+          run_seconds: RuleTiming.number(last && RuleTiming.run_seconds(last)),
+          overridden_at: Shapes.time(check.overridden_at), overridden_by_user_id: check.overridden_by_user_id,
+          override_reason: check.override_reason,
+          can_override: actionable && (LET_THROUGH.include?(check.result) || (check.result.nil? && at_limit)),
+          can_rerun: actionable && check.result == "error" }
+      end
+
+      # A gate whose failure stops the command (L337).
+      def blocking?(version) = version.kind == "gate" && version.on_fail == "block"
+
+      # PendingCommand, or nil.
+      def pending(transition)
+        return nil unless transition
+
+        rule_ids = RuleCheck.where(pending_transition_id: transition.id, overridden_at: nil)
+          .where("result IS NULL OR result = 'error'").order(:created_at, :id).pluck(:rule_id).uniq
+        { command: transition.command, since: Shapes.time(transition.created_at), waiting_on_rule_ids: rule_ids }
+      end
+
+      # Where a contract draft stands (RD-37).
+      def draft(task)
+        job = Job.where(workspace_id: task.workspace_id, task_id: task.id, kind: "contract_draft")
+          .order(:queued_at, :attempt_number, :created_at, :id).last
+        case job&.state
+        when "queued" then "queued"
+        when "claimed" then "writing"
+        when "timed_out" then job.attempt_number >= 2 && task.state == "backlog" ? "not_written" : "none"
+        else "none"
+        end
       end
 
       # The seats and credentials the task's events, the task row and its

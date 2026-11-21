@@ -1,13 +1,21 @@
 require "test_helper"
 require_relative "entries/call_spy"
+require_relative "entries/pending_ends_support"
 
 # Leverage::SeatRuns (milestone 2 plan §2.1, IN-17, IN-30, IN-40, IF-21,
 # L148; milestone 3 plan HD-1, HD-3, HD-4, HD-10, HE-5, HE-35): where a
 # seat's run belongs, the one start request that puts it there, and what a
 # stopped, interrupted or removed run changes, called inside a command's
 # transaction.
+#
+# Milestone 4 (plan WP5b, §2.1 rule 11): a stopped run, a treated-as-stopped
+# run (reconcile), a removed seat and a disabled seat call
+# PendingTransitions.cancel, with invalid_state, for the pending pass of the
+# review they release, the pending submit of the Working task they release
+# and the provisional claim they hold, before the release's event.
 class SeatRunsTest < ActiveSupport::TestCase
   include CallSpy
+  include PendingEndsSupport
 
   setup do
     @scenario = Scenario.new
@@ -272,5 +280,104 @@ class SeatRunsTest < ActiveSupport::TestCase
   def placed(seat)
     placement = Leverage::SeatRuns.placement(seat)
     [ placement.credential&.id, placement.work&.id ]
+  end
+
+  test "a stopped run cancels the pending pass of the review it releases, before review.released" do
+    reviewer = @scenario.seat(role: "reviewer", credential: @scenario.credential, run_state: "running")
+    task = @scenario.task(state: "in_review")
+    @scenario.review(task, reviewer: reviewer)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    context = ctx
+    events = nil
+    calls = recording_cancels { events = Leverage::SeatRuns.run_stopped(context, reviewer) }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal %w[review.released], events.map(&:type)
+  end
+
+  test "a stopped run cancels for the review it releases and for none when it holds none, keeping the actor it is given" do
+    reviewer = @scenario.seat(role: "reviewer", credential: @scenario.credential, run_state: "running")
+    task = @scenario.task(state: "in_review")
+    @scenario.review(task, reviewer: reviewer)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    calls = recording_cancels do
+      events = Leverage::SeatRuns.run_stopped(ctx, reviewer, actor_kind: "app", actor_id: nil)
+      assert_equal [ [ "app", nil ] ], events.map { |event| [ event.actor_kind, event.actor_id ] }
+    end
+
+    assert_equal [ pending.id ], calls.map(&:pending_id)
+
+    idle = @scenario.seat(role: "reviewer", credential: @scenario.credential, run_state: "running")
+    assert_empty recording_cancels { Leverage::SeatRuns.run_stopped(ctx, idle) }
+  end
+
+  test "a run treated as stopped by a new helper token cancels the pending pass of its review (reconcile)" do
+    reviewer = @scenario.seat(role: "reviewer", credential: @scenario.credential, run_state: "running")
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: reviewer)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    calls = recording_cancels { Leverage::SeatRuns.reconcile(ctx) }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_nil review.reload.reviewer_seat_id
+  end
+
+  test "a removed seat cancels its pending submit and its pending pass, each before its release" do
+    builder = @scenario.seat(role: "builder")
+    working = @scenario.task(state: "working", builder: builder)
+    submit = @scenario.pending_transition(working, command: "submit", requester: builder)
+    reviewer = @scenario.seat(role: "reviewer")
+    in_review = @scenario.task(state: "in_review")
+    @scenario.review(in_review, reviewer: reviewer)
+    pass = @scenario.pending_transition(in_review, command: "pass_review", requester: reviewer)
+    context = ctx
+    removed = context.emit("seat.removed", subject: builder)
+    calls = recording_cancels do
+      Leverage::SeatRuns.removed(context, builder, cause: removed)
+      Leverage::SeatRuns.removed(context, reviewer, cause: removed)
+    end
+
+    assert_equal [ Cancelled.new(submit.id, "invalid_state", %w[seat.removed]),
+                   Cancelled.new(pass.id, "invalid_state", %w[seat.removed task.released]) ], calls
+  end
+
+  test "release_working_task cancels a pending submit with invalid_state before task.released, and answers task.released" do
+    builder = @scenario.seat(role: "builder")
+    task = @scenario.task(state: "working", builder: builder)
+    pending = @scenario.pending_transition(task, command: "submit", requester: builder)
+    context = ctx
+    released = nil
+    calls = recording_cancels { released = Leverage::SeatRuns.release_working_task(context, builder, reason: "seat_disabled") }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal "task.released", released.type
+  end
+
+  test "release_working_task cancels a provisional claim in Ready and answers nil: the withdrawal is all the task gets" do
+    builder = @scenario.seat(role: "builder")
+    task = @scenario.task(state: "ready")
+    task.update!(holder_seat_id: builder.id)
+    pending = @scenario.pending_transition(task, command: "claim", requester: builder)
+    context = ctx
+    released = :unset
+    calls = recording_cancels { released = Leverage::SeatRuns.release_working_task(context, builder, reason: "seat_removed") }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_nil released
+    assert_empty context.events
+  end
+
+  test "release_working_task cancels nothing for a seat that holds no pending transition, or whose lease has ended" do
+    builder = @scenario.seat(role: "builder")
+    @scenario.make_due(@scenario.task(state: "working", builder: builder))
+    ended = @scenario.seat(role: "builder")
+    @scenario.pending_transition(@scenario.make_due(@scenario.task(state: "working", builder: ended)),
+      command: "submit", requester: ended)
+    calls = recording_cancels do
+      Leverage::SeatRuns.release_working_task(ctx, builder, reason: "seat_disabled")
+      Leverage::SeatRuns.release_working_task(ctx, ended, reason: "seat_disabled")
+    end
+
+    assert_empty calls, "a lease past its due time is its timer's, which cancels what is pending"
   end
 end

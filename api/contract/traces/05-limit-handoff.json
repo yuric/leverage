@@ -225,7 +225,7 @@
         "refusal": null,
         "events": [
           {"ref": "@event:13", "type": "credential.limit_reached", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "app", "actor_id": "$helper:mac", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "credential", "subject_id": "$credential:codex_h", "cause_id": null, "command_id": "$key:helper_limit_900", "payload": {"seat_id": "$seat:builder", "review_id": null, "job_id": null, "window": "five_hour", "reset_at": "@t:3000"}},
-          {"ref": "@event:14", "type": "hold.opened", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "app", "actor_id": "$helper:mac", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_limit", "cause_id": "@event:13", "command_id": "$key:helper_limit_900", "payload": {"reason": "credential_limit", "rule_id": null, "credential_id": "$credential:claude_a"}}
+          {"ref": "@event:14", "type": "hold.opened", "schema_version": 1, "at": "@t:900", "effective_at": "@t:900", "actor_kind": "app", "actor_id": "$helper:mac", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "hold", "subject_id": "$hold:t1_limit", "cause_id": "@event:13", "command_id": "$key:helper_limit_900", "payload": {"reason": "credential_limit", "rule_id": null, "credential_id": "$credential:claude_a", "rule_check_id": null}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "wait_limit", "step_class": "waiting", "round": 0, "subject_kind": "credential", "subject_id": "$credential:claude_a", "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:14"}

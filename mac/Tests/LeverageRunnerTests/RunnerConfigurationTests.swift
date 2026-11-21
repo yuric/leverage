@@ -96,10 +96,10 @@ struct RunnerConfigurationTests {
         #expect(refusal { $0["LEVERAGE_SEAT_TOKEN"] = "" } == .missing("LEVERAGE_SEAT_TOKEN"))
     }
 
-    @Test("a role other than builder or reviewer, or a provider that is not a login, is refused")
+    @Test("a role that is not one of the four, or a provider that is not a login, is refused")
     func roleAndProvider() {
         #expect(refusal { $0["LEVERAGE_SEAT_ROLE"] = nil } == .missing("LEVERAGE_SEAT_ROLE"))
-        #expect(refusal { $0["LEVERAGE_SEAT_ROLE"] = "planner" } == .unsupportedRole("planner"))
+        #expect(refusal { $0["LEVERAGE_SEAT_ROLE"] = "auditor" } == .unsupportedRole("auditor"))
         #expect(refusal { $0["LEVERAGE_PROVIDER"] = "claude_api" } == .unsupportedProvider("claude_api"))
         #expect(refusal { $0["LEVERAGE_PROVIDER"] = nil } == .missing("LEVERAGE_PROVIDER"))
     }
@@ -224,5 +224,38 @@ struct RunnerConfigurationTests {
         values["LEVERAGE_SEAT_ROLE"] = nil
         let tool = try ToolConfiguration(environment: values)
         #expect(tool.provider == .claude)
+    }
+
+    // Milestone 4: the planner and the orchestrator are run like a builder
+    // (plan section 2.2, §0.1 fact 12), on any login, Gemini's included:
+    // a job's run is the answering check, never agy's plan mode (fact 27).
+    @Test("the planner and the orchestrator are run, on every login", arguments: ["planner", "orchestrator"])
+    func jobRoles(role: String) throws {
+        for provider in ["claude", "codex", "gemini", "grok"] {
+            var values = environment(provider, role: role)
+            if provider == "gemini" || provider == "grok" { values["LEVERAGE_SETTINGS_DIR"] = nil }
+            let configuration = try RunnerConfiguration(environment: values)
+            #expect(configuration.role.rawValue == role)
+        }
+    }
+
+    @Test("a job role is started to continue no task and no review")
+    func jobRoleContinues() {
+        let task = UUID().contractString
+        #expect(refusal({ $0["LEVERAGE_CONTINUE_TASK_ID"] = task }, base: environment(role: "orchestrator"))
+            == .workNotForRole("LEVERAGE_CONTINUE_TASK_ID"))
+        #expect(refusal({ $0["LEVERAGE_CONTINUE_REVIEW_ID"] = task }, base: environment(role: "planner"))
+            == .workNotForRole("LEVERAGE_CONTINUE_REVIEW_ID"))
+    }
+
+    @Test("the arguments name a seat's run, the probe, the version, or eval with what follows it")
+    func subcommands() {
+        #expect(RunnerSubcommand(arguments: []) == .seat)
+        #expect(RunnerSubcommand(arguments: ["probe"]) == .probe)
+        #expect(RunnerSubcommand(arguments: ["--version"]) == .version)
+        #expect(RunnerSubcommand(arguments: ["eval"]) == .eval([]))
+        #expect(RunnerSubcommand(arguments: ["eval", "--inputs", "/tmp/in.jsonl", "--provider", "claude"])
+            == .eval(["--inputs", "/tmp/in.jsonl", "--provider", "claude"]))
+        #expect(RunnerSubcommand(arguments: ["evaluate"]) == .unknown("evaluate"))
     }
 }

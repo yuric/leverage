@@ -175,7 +175,7 @@ one file for each number in the type's `schema_versions`. Every file follows
 handles every listed version. Old events are never rewritten. Until the
 first release of leverage no log holds an event a released build wrote, so
 a version may still change in place; each such change is recorded in
-[decisions.md](decisions.md) (DB-48 is the first).
+[decisions.md](decisions.md) (DB-48 is the first, DB-49 the second).
 
 ## The event record
 
@@ -192,8 +192,15 @@ authority. How its fields are filled:
   command, so its events carry the helper's key. Events the server writes on
   its own carry none.
 - `at` is the database clock, read once after the workspace lock, and every
-  event of one command shares it. `effective_at` equals `at` except for a
-  timer's events, which carry the due time.
+  event of one command shares it. When the clock reads earlier than one
+  microsecond after the workspace's last event's `at` (it can step back),
+  `at` is that instead, so `at` strictly increases from one command to the
+  next and two commands never share it.
+- `effective_at` equals `at` except for a timer's events, which carry the
+  due time, or the latest `effective_at` of the task's events when that is
+  later. An event a workspace timer writes on a task takes effect no
+  earlier than that task's latest event either. So `effective_at` never
+  decreases within a task.
 
 ## The state table
 
@@ -244,7 +251,12 @@ To cell "X, once ..." also names the state the task starts from.
 
 Traces 01 to 08 run in a workspace with the shipped rules; 09 to 15 run in
 a workspace with no rule at all, as the core loop creates it, so their
-`setup.rules` is empty.
+`setup.rules` is empty. The Rule checks milestone's 16 to 19 run with the
+shipped rules too: 16 with all seven on, 17 and 18 with "Every task needs
+specific details" off and the custom rules their own commands add, and 19
+with none, its first command writing them (`install_shipped_rules`).
+Trace 18 sets a 300-second lease, so that a lease ends before a claimed
+check's run timeout.
 
 Each `traces/<nn>-<name>.json` follows `meta/trace.schema.json`: a `setup`
 (settings, users, helpers, credentials, seats, projects and rules that
@@ -282,15 +294,30 @@ How the traces write what the PRD leaves to the writer:
   event of a seat's or the owner's command carries that command's key, or
   the key of the pending command it completes.
 - **A check's identity** (`subject_kind`, `subject_id`, `input_hash`) is
-  in `check.queued` and `check.finished`; the traces' hashes are made-up
-  digests, the same for every attempt of one check.
+  in `check.queued` and `check.finished`. In a trace one set of hashed
+  inputs carries one digest, the same for every attempt of one check, and
+  two sets two digests. The digests are made up, except trace 07's: its
+  two checks hash one request and carry the engine's own hash of it.
   `action.lease_granted` carries actor `app` and the key of the command that
   frees the builder.
 - **A pending transition's completion** carries the original requester's
   key, and its `cause_id` is the `check.finished` that completed it, even
-  inside another caller's command.
+  inside another caller's command. The check held at the re-run limit
+  never ran and writes no `check.finished` until it is withdrawn, so a
+  completion the owner's "Let it through once" on it gives names that
+  `check.overridden` (milestone 4 plan RD-45, RE-3; trace 17).
 - **Order** inside a command: the hook's check events, the row's events,
-  `cost.reported`, then the other side events.
+  `cost.reported`, then the other side events. Two exceptions (milestone 4
+  plan section 2.1): a waiting command ended from outside (rule 11) writes
+  its withdrawals first (`check.finished` withdrawn, `job.withdrawn`) and
+  then the row's own event (`task.released`, `task.lease_expired`,
+  `review.lease_expired`, `task.cancelled`; trace 18); and Complete
+  contract closes an open `contract_incomplete` hold first (L175), before
+  the hook's check events (trace 16). A job result writes `job.finished`,
+  the check's `check.finished`, `cost.reported`, then the holds and items,
+  then the requester's completion; a planner's draft that waits writes
+  `job.finished` and `cost.reported`, then its Complete contract's check
+  and job events (RE-6).
 - **Round**: every event of a command carries the task's round before the
   command; `review.failed` and `task.returned_for_rework` raise it for what
   follows, and a step they open carries the new round.
@@ -462,3 +489,129 @@ One field is named after its column, not as the plan wrote it: the plan's
 `Seat.running_on_credential_id` is `Seat.run_credential_id`, because a
 JSON field is the Data model's column name (see Names) and
 `columns_test.rb` holds every field of `Seat` to a column of `seats`.
+
+## What the Rule checks milestone added
+
+The Rule checks milestone serves twelve operations that were already in
+the contract (`claim_next_job`, `submit_job_result`, `list_rules`,
+`add_rule`, `save_rule`, `enable_rule`, `disable_rule`, `revert_rule`,
+`remove_rule`, `rerun_check`, `override_check`, `draft_contract`), and
+milestone 3's `report_limit` and `report_signed_out` now also take a
+report that names a job. It adds no event type, hold reason, refusal or
+check result. What it added and changed, each from the milestone 4 plan
+(section 2.3), those that touch what was not provisional first:
+
+- **The shipped instruction.** `shipped_rules.json` gives "Every task
+  needs specific details" its instruction (RV-2). The placeholder
+  `to_be_written_in` stays only for the rule that approves outward
+  actions, and `meta/shipped_rules.schema.json` takes a string there.
+  The server writes that rule's version with no instruction, so
+  `list_rules` sends `null` there, as `RuleVersion` says; it never sends
+  the placeholder.
+- **One command and its Lifecycle row**, `install_shipped_rules` (RD-2):
+  a registry `commands` entry, the `CommandName` enum, and a
+  `state_machine.json` group with `source: prd` that copies the PRD's
+  row "Write the shipped rules": actor `app`, no key, `rule.created` for
+  each shipped rule, and the re-evaluation of "No reviewer is eligible"
+  (SM-42). No operation runs it: `bin/rails
+  leverage:install_shipped_rules` applies it before the server starts to
+  each workspace with no `rules` row. SM-33, the shipped rules'
+  `rule.created` as a workspace's first events, holds for workspaces
+  created from this milestone on; an older workspace gets them from this
+  command, after its earlier events.
+- **`create_owner`'s row** writes `rule.created` for each shipped rule,
+  with the owner as actor and the command's key (L434, RD-1). Its note no
+  longer says the workspace starts with no rule.
+- **Two guards**, `rerun_queues` and `rerun_of_claim_check`, one family
+  (`rerun_target`) on `rerun_check`: an errored check at
+  `task.before_claim` has already lapsed its provisional claim, so Run it
+  again closes its `check_error` hold and queues nothing (RD-42).
+- **Side events on rows that exist.** `claim_review` may write
+  `check.finished`, the provider rule's `applied` row with effect
+  `refused` for a review claim-next skips (RD-12). `disable_rule` and
+  `remove_rule` close `rerun_limit` too, resolve the items of the holds
+  they close, and say that a waiting command whose last check they
+  withdraw completes in place under its requester's key (RD-45).
+  `override_check`'s note says the same of the check held at the re-run
+  limit; `submit_job_result` may open `rerun_limit` (a planner's
+  contract, RE-6); `orchestrator_offline` says when its item opens and
+  that only errored checks are queued again (RD-16, RD-19).
+- **A waiting command ended from outside** (plan section 2.1, rule 11).
+  `release_review`, `review_lease_expiry`, `report_run_stopped`,
+  `issue_helper_token` (which treats a running seat's run as stopped) and
+  the reviewer rows of `report_limit` and `report_signed_out` with no
+  candidate left withdraw the checks and jobs of a pending pass and close
+  the `check_error` and `rerun_limit` holds they opened; `pause_seat`
+  withdraws a provisional claim's check and job; the builder's `release`
+  from Working, `change_seat` and `remove_seat` close `rerun_limit` too.
+  `timers.json`'s `review_lease_expiry` gains the same events.
+  `get_command`'s description says which of RC-17's three codes each
+  ending gives; RC-17 is unchanged.
+- **`steps.json`**: `wait_review` closes and opens again at the provider
+  rule's `check.finished`, so the new step names the rule as its cause
+  (RD-11).
+- **Job shapes**: `ClaimJobResult.run_due_at` (RD-34);
+  `RuleCheckJobInput.material`, a `CheckMaterial` (the role file, the
+  instruction, the moment, whether "not applicable" is allowed, the
+  contract as a `CheckContract`, and the other task text as a list of
+  `QuotedText`), and `ContractDraftJobInput.material`, a `DraftMaterial`
+  (RD-30, RD-31, RD-37); `RuleCheckJobResult.reason` at most 500
+  characters (RD-31). `claim_next_job` and `submit_job_result` say what a
+  seat that already holds a job gets and what a late result answers
+  (RD-40, RD-41).
+- **Descriptions**: `BriefingRule.instruction` holds an app rule's
+  sentence (RD-62); `BriefingResponse.review_notes` carries a rule's
+  name and reason after a failed check at "when the review has passed"
+  (RD-38).
+- **A registry list**, `lists.orchestrator_tested_providers`: the login
+  providers whose tool's default model passed the eval suite (RV-5).
+  The managing agent's run of the suite set it to `claude`, `codex` and
+  `gemini`; `scripts/check_evals.py` holds it equal to the results that
+  met the bar. It refuses nothing, and `meta/registry.schema.json` lets
+  it be empty.
+- **`needs_you.json`**: the `orchestrator_offline` item opens only while
+  a check waits (RD-16); `facts.waiting_checks` is the count now (RD-18);
+  `facts.role` keeps `planner`, which is never written (RD-20).
+- **Provisional reads**: `RuleWithVersion` gains `sentence`,
+  `moment_name`, `acts` and `stats` (a `RuleStats`, RD-26); `TaskPage`
+  gains `steps` (a list of `TaskStep`), `lifetime_seconds`, `as_of`,
+  `rule_checks` (a list of `TaskRuleCheck`, each with its
+  `RuleCheckAttempt` list), `pending` (a `PendingCommand` or null) and
+  `draft`; `BoardTask` gains `checking` and `check_reason`;
+  `SystemHealth` gains `waiting_checks`, and its `orchestrator` keeps its
+  three values with a new description (RD-17, RD-18).
+- **Schema**: one migration adds `pending_transitions.params`, the
+  request a pending transition completes with, with checks that it is
+  null unless the state is `pending` and that it holds no token key
+  (RE-2), and `jobs.attempt_number`, integer, 1 by default (DB-31).
+- **Gating**: `PlannedHold.rule_check_id` may be an index into
+  `Evaluation#checks`, as `Failure.rule_check_ref` already may. No
+  signature changed.
+- **After the milestone's adversarial review**: every task-text field of
+  the requests has a `maxLength` and every list of them a `maxItems`
+  (`CompleteContractRequest`, `AddTaskRequest`, `CriterionInput`,
+  `ActionInput`, `SubmitTaskRequest`, `GiveVerdictRequest`,
+  `PassCriterionRequest`'s evidence, `OverrideCheckRequest`,
+  `AddRuleRequest`, `SaveRuleRequest`, `ReturnForReworkRequest`), so a
+  longer body is `422 invalid` before any check is queued: a checker's
+  tool gets the task text as one argument, which the Mac refuses past
+  1 MiB. The limits count characters, not bytes, and not the evidence
+  rows a task gathers, so they make a prompt over the runner's 512 KiB
+  rare, not impossible: such a check starts no tool and ends in `error`
+  after its two run timeouts. `LandingPrompt.check_interval_minutes` is
+  20, or 1 for an orchestrator, which counts as offline 90 seconds after
+  its last poll (L401), and for a planner, whose presence is not read: a
+  draft it does not claim or finish in time is queued once more, then
+  dropped (L399). The `cancel` rows withdraw every check of the task with
+  no result and no override, a warn rule's too, and every queued or
+  claimed job of the task, a contract draft's among them (L207; review
+  finding 6), not only a pending transition's. `enable_rule` may open
+  `claim_gate_failed` again with its item, for a Ready task that three
+  seats failed the rule on (L166, L393). The heartbeat's description says
+  what a provisional claimant's heartbeat answers, and the report calls
+  no longer say a report that names a job is 404. The shipped rule "Two
+  failed reviews move a task to a stronger model" is "Repeated failed
+  reviews move a task to a stronger model" (PRD L443).
+
+Line numbers in the notes this milestone added are those of
+`docs/PRD.md` at the merge of milestone 3, as the plan cites them.

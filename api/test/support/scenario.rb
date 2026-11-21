@@ -17,6 +17,12 @@
 # run (where a seat's run is), finishing_task (HS-3), and a seat's run on
 # its own credential by default.
 #
+# Milestone 4 adds (its plan, WP1, RT-2): with_shipped_rules, rule (a
+# custom rule and its versions), current_version, rule_check (with its
+# attempts and their jobs), job (in any state), pending_transition (with
+# its request), orchestrator and planner, and seed's rules. A workspace
+# still has no rule row unless a test asks for one (RT-2).
+#
 # Every value is made up. Each method returns the row it made.
 class Scenario
   PASSWORD = "made-up-password-1".freeze
@@ -285,14 +291,17 @@ class Scenario
   end
 
   # Builds a golden trace's setup (TS-8), already bound by TraceBinder:
-  # settings, users, helpers, credentials, seats and projects with their
-  # ids, and the events they imply. Rules arrive in milestone 4.
+  # settings, users, helpers, rules, credentials, seats and projects with
+  # their ids, and the events they imply. The rules come right after the
+  # owner, so their rule.created are the workspace's first events but the
+  # owner's (SM-33). A shipped rule's version fields are Rules::Shipped's;
+  # a custom rule's are on its row (seed_rule).
   def seed(setup)
-    raise ArgumentError, "rules arrive in milestone 4 (EN-4)" unless Array(setup["rules"]).empty?
-
+    Array(setup["rules"]).each { |row| seed_rule_fields(row) } # refuses a rule it cannot build before writing anything
     workspace.update!(setup.fetch("settings", {}))
     Array(setup["users"]).each { |user| owner(id: user.fetch("id")) }
     Array(setup["helpers"]).each { |row| helper(id: row.fetch("id"), name: row.fetch("name")) }
+    Array(setup["rules"]).each { |row| seed_rule(row) }
     Array(setup["credentials"]).each do |row|
       @positions = [ @positions, row.fetch("position") - 1 ].max
       credential(**row.transform_keys(&:to_sym).except(:state), added: row.fetch("state") == "active")
@@ -300,6 +309,137 @@ class Scenario
     Array(setup["seats"]).each { |row| seat(**row.transform_keys(&:to_sym)) }
     Array(setup["projects"]).each { |row| project(**row.transform_keys(&:to_sym)) }
     self
+  end
+
+  # --- milestone 4: rules, checks, jobs, pending transitions -----------------
+
+  # The version fields of a custom rule a test does not name (DB-28): a
+  # blocking model gate checked by the orchestrator, every task, its
+  # failures to the builder.
+  CUSTOM_RULE = { name: "A made-up rule", hook: "task.before_submit", kind: "gate", checker: "model",
+                  scope_kind: "all_tasks", scope_values: [], checker_function: nil, parameters: {},
+                  instruction: "Made-up instruction: pass work that says what it changed.", checker_role: "orchestrator",
+                  on_fail: "block", route: "builder", queue_timeout_seconds: nil, run_timeout_seconds: nil }.freeze
+
+  # The seven shipped rules (Rules::Shipped), each at version 1 with
+  # rule.created by the owner, as create_owner writes them (L434). off:
+  # the keys created switched off. Returns the Rules, in shipped order.
+  def with_shipped_rules(off: [])
+    Leverage::Rules::Shipped.all.map do |record|
+      rule(key: record.key, origin: "shipped", enabled: !off.include?(record.key), **record.version_fields.except(:key, :origin))
+    end
+  end
+
+  # A rule with versions 1 to versions, all with the same fields: a custom
+  # rule (key custom_ and its id, RD-23) unless origin: "shipped" and a key
+  # are given. rule.created by the owner for version 1, rule.changed for
+  # each later one. fields: rule_versions columns over CUSTOM_RULE (a
+  # shipped rule's come from Rules::Shipped when not given). Returns the
+  # Rule.
+  def rule(key: nil, origin: "custom", enabled: true, versions: 1, id: nil, version_id: nil, **fields)
+    id ||= SecureRandom.uuid
+    key ||= "custom_#{id}"
+    base = origin == "shipped" ? Leverage::Rules::Shipped.find(key).version_fields.except(:key, :origin) : CUSTOM_RULE
+    values = base.merge(fields)
+    # A custom app rule has a function, not an instruction (RD-6).
+    values = values.merge(instruction: nil, checker_role: nil).merge(fields) if origin != "shipped" && values[:checker] == "app"
+    transaction do
+      rule = Rule.create!(id: id, workspace_id: workspace_id, key: key, enabled: enabled, current_version: versions)
+      (1..versions).each do |number|
+        version = RuleVersion.create!(id: (version_id if number == versions) || SecureRandom.uuid, workspace_id: workspace_id,
+          rule_id: rule.id, version: number, key: key, origin: origin, author_kind: "owner", author_id: owner.id, **values)
+        if number == 1
+          append("rule.created", subject: rule, actor_kind: "owner", actor_id: owner.id,
+            payload: { rule_version_id: version.id, version: 1, enabled: enabled })
+        else
+          append("rule.changed", subject: rule, actor_kind: "owner", actor_id: owner.id,
+            payload: { rule_version_id: version.id, version: number })
+        end
+      end
+      rule
+    end
+  end
+
+  # The rule's current version row.
+  def current_version(rule)
+    RuleVersion.find_by!(rule_id: rule.id, version: rule.reload.current_version)
+  end
+
+  # An orchestrator seat, and a planner seat (milestone 4's two job roles).
+  def orchestrator(**options) = seat(role: "orchestrator", **options)
+
+  def planner(**options) = seat(role: "planner", **options)
+
+  # A rule check of the rule's current version on a task, with its
+  # attempts, as the app writes them:
+  #
+  #   an app rule (checker "app")  one attempt queued, started and finished
+  #                                at once, no job, and check.finished
+  #                                (result required, DB-30);
+  #   a model rule                 one rule_check job per attempt (DB-31):
+  #                                check.queued and, for the first,
+  #                                job.queued; each earlier attempt's job
+  #                                timed out and requeued (trace 07). The
+  #                                last attempt is queued; started: true
+  #                                has the checker (default a new
+  #                                orchestrator) claim it (job.claimed,
+  #                                check.started); a result finishes it
+  #                                (job.finished, check.finished).
+  #
+  # The reason is on the row only. hook and round default to the version's
+  # and the task's; subject is a Seat or a Review (or nil); pending a
+  # PendingTransition. Returns the RuleCheck.
+  def rule_check(task, rule:, result: nil, reason: nil, effect: nil, attempts: 1, started: false, checker: nil, hook: nil,
+                 round: nil, subject: nil, input_hash: nil, pending: nil)
+    version = current_version(rule)
+    app = version.checker == "app"
+    raise ArgumentError, "an app check is written with its result" if app && result.nil?
+
+    transaction do
+      check = RuleCheck.create!(workspace_id: workspace_id, task_id: task.id, project_id: task.project_id, rule_id: rule.id,
+        rule_version_id: version.id, hook: hook || version.hook, round: round || task.round,
+        subject_kind: subject && Leverage::EventLog.kind_of(subject), subject_id: subject&.id,
+        input_hash: input_hash || SecureRandom.hex(32), result: result, effect: effect, reason: reason,
+        pending_transition_id: pending&.id)
+      app ? app_attempt(task, check) : model_attempts(task, check, attempts, started || !result.nil?, checker)
+      finish_check(task, check) if result
+      check
+    end
+  end
+
+  # A job of kind on a task, in state: queued (job.queued), claimed by seat
+  # (+ job.claimed), finished (+ job.finished), timed_out (+ job.timed_out,
+  # claimed first when a seat is named) or withdrawn (+ job.withdrawn,
+  # likewise). target defaults to the task (a contract draft's), seat_role
+  # to the kind's (orchestrator, or planner for a draft). Returns the Job.
+  def job(kind:, task:, target: task, state: "queued", seat: nil, seat_role: nil, attempt_number: 1, input: {})
+    raise ArgumentError, "a #{state} job needs the seat that claimed it" if %w[claimed finished].include?(state) && seat.nil?
+
+    transaction do
+      at = database_now
+      job = Job.create!(workspace_id: workspace_id, kind: kind, task_id: task&.id, project_id: task&.project_id,
+        target_kind: Leverage::EventLog.kind_of(target), target_id: target.id,
+        seat_role: seat_role || (kind == "contract_draft" ? "planner" : "orchestrator"), state: "queued", queued_at: at,
+        input: input, attempt_number: attempt_number)
+      job_event("job.queued", job, task, payload: { kind: kind })
+      claim_job(job, task, seat) if seat
+      job.update!(state: state, finished_at: (at if %w[finished timed_out withdrawn].include?(state)))
+      { "finished" => "job.finished", "timed_out" => "job.timed_out", "withdrawn" => "job.withdrawn" }[state]
+        &.then { |type| job_event(type, job, task) }
+      job
+    end
+  end
+
+  # A pending transition of a task: the command waiting, its requester (a
+  # Seat or the owner's User), the requester's key, the rule versions
+  # frozen for it and the request it will complete with (RE-2). The row
+  # only: no event records a pending transition. Returns the
+  # PendingTransition.
+  def pending_transition(task, command:, requester:, key: nil, params: {}, frozen_rule_version_ids: [], state: "pending")
+    PendingTransition.create!(workspace_id: workspace_id, task_id: task.id, command: command,
+      command_key: key || "key-#{SecureRandom.hex(6)}", requester_kind: requester.is_a?(User) ? "owner" : "seat",
+      requester_id: requester.id, frozen_rule_version_ids: frozen_rule_version_ids, state: state,
+      params: (params if state == "pending"))
   end
 
   # A Context holding the workspace lock in the current transaction: what
@@ -316,6 +456,107 @@ class Scenario
   end
 
   private
+
+  # One rule of a golden trace's setup: its id, key, switch, current
+  # version and that version's id. A shipped rule's fields are
+  # Rules::Shipped's; a custom rule's row carries them (name, hook, kind,
+  # checker, scope {kind, values}, instruction, checker_function,
+  # parameters, checker_role, on_fail, route, the two timeouts).
+  def seed_rule(row)
+    rule(key: row.fetch("key"), origin: row.fetch("origin"), enabled: row.fetch("enabled"),
+      versions: row.fetch("current_version"), id: row.fetch("id"), version_id: row.fetch("current_version_id"),
+      **seed_rule_fields(row))
+  end
+
+  # The version fields a setup's rule row gives. Raises ArgumentError for
+  # a custom rule that names none (name and hook at least), or a shipped
+  # key Rules::Shipped does not know.
+  def seed_rule_fields(row)
+    shipped = row.fetch("origin") == "shipped"
+    Leverage::Rules::Shipped.find(row.fetch("key")) if shipped
+    fields = row.except("id", "key", "origin", "enabled", "current_version", "current_version_id", "scope")
+      .transform_keys(&:to_sym)
+    if (scope = row["scope"])
+      fields[:scope_kind] = scope.fetch("kind")
+      fields[:scope_values] = scope.fetch("values")
+    end
+    unless shipped || (fields[:name] && fields[:hook])
+      raise ArgumentError, "the setup's custom rule #{row.fetch("key")} names no version fields (name, hook, ...)"
+    end
+
+    fields
+  rescue KeyError => error
+    raise ArgumentError, error.message
+  end
+
+  def app_attempt(task, check)
+    at = database_now
+    RuleCheckAttempt.create!(workspace_id: workspace_id, rule_check_id: check.id, attempt_number: 1, queued_at: at,
+      started_at: at, finished_at: at)
+  end
+
+  # The model attempts of a check, each with its job; the last one claimed
+  # by checker when claimed is true.
+  def model_attempts(task, check, count, claimed, checker)
+    previous = nil
+    blocking = RuleVersion.find(check.rule_version_id).on_fail != "warn"
+    (1..count).each do |number|
+      if previous
+        previous.update!(state: "timed_out", finished_at: database_now)
+        job_event("job.timed_out", previous, task)
+        job_event("job.requeued", previous, task)
+      end
+      job = Job.create!(workspace_id: workspace_id, kind: "rule_check", task_id: task.id, project_id: task.project_id,
+        target_kind: "rule_check", target_id: check.id, seat_role: "orchestrator", state: "queued", queued_at: database_now,
+        input: {}, attempt_number: number)
+      RuleCheckAttempt.create!(workspace_id: workspace_id, rule_check_id: check.id, attempt_number: number, job_id: job.id,
+        queued_at: job.queued_at)
+      append("check.queued", task: task, subject: check, payload: check_payload(check).merge(attempt_number: number,
+        job_id: job.id, blocking: blocking, claimant_seat_id: nil, pending_transition_id: check.pending_transition_id,
+        action_id: nil))
+      job_event("job.queued", job, task, payload: { kind: "rule_check" }) if number == 1
+      previous = job
+    end
+    return unless claimed
+
+    seat = checker || orchestrator
+    claim_job(previous, task, seat)
+    RuleCheckAttempt.find_by!(rule_check_id: check.id, attempt_number: count)
+      .update!(started_at: previous.claimed_at, checker_seat_id: seat.id)
+    append("check.started", task: task, subject: check, actor_kind: "seat", actor_id: seat.id,
+      payload: { attempt_number: count })
+  end
+
+  # Ends a check with its result: the last attempt finishes, its job too.
+  def finish_check(task, check)
+    attempt = RuleCheckAttempt.where(rule_check_id: check.id).order(:attempt_number).last
+    at = database_now
+    attempt.update!(finished_at: at) unless attempt.finished_at
+    if attempt.job_id
+      job = Job.find(attempt.job_id)
+      job.update!(state: "finished", finished_at: at)
+      job_event("job.finished", job, task)
+    end
+    append("check.finished", task: task, subject: check, payload: check_payload(check).merge(result: check.result,
+      effect: check.effect, wait_cause: nil))
+  end
+
+  def check_payload(check)
+    { hook: check.hook, rule_id: check.rule_id, rule_version_id: check.rule_version_id, subject_kind: check.subject_kind,
+      subject_id: check.subject_id, input_hash: check.input_hash }
+  end
+
+  def claim_job(job, task, seat)
+    job.update!(state: "claimed", claimed_by_seat_id: seat.id, claimed_at: database_now, credential_id: seat.credential_id)
+    job_event("job.claimed", job, task, actor_kind: "seat", actor_id: seat.id,
+      payload: { credential_id: seat.credential_id, model: seat.model.presence })
+  end
+
+  def job_event(type, job, task, payload: {}, actor_kind: "app", actor_id: nil)
+    fields = { subject: job, payload: payload, actor_kind: actor_kind, actor_id: actor_id }
+    fields[:task] = task if task
+    append(type, **fields)
+  end
 
   def transaction(&block)
     ActiveRecord::Base.transaction(requires_new: true, &block)

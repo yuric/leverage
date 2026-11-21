@@ -28,23 +28,27 @@ class StateTableTest < ActiveSupport::TestCase
 
   StateTableCases.define(self, T::Table::TASK_LOOP) do |kase|
     reason = not_served(kase)
-    skip "not reachable before a later milestone: #{reason}" if reason
+    skip reason if reason
 
     kase.invalid_state? ? assert_invalid_state(kase) : assert_row(kase)
   end
 
   private
 
-  # Why a case cannot be reached before a later milestone (milestone 3 serves
-  # no row from Finishing either, its plan HS-3), or nil.
+  # Why a case is skipped, or nil: a row a later milestone reaches
+  # (milestone 3 serves no row from Finishing either, its plan HS-3).
   def not_served(kase)
-    return "Finishing needs an outward action (SC-3)" if kase.from == "finishing"
-    return "no rule escalates (EN-5)" if kase.guard.include?("escalates")
-    return "an outward action (SC-3)" if kase.guard.include?("has_outward_action")
-    return "a provisional claim needs a model check at task.before_claim (EN-5)" if kase.command == "release" && kase.from == "ready" && !kase.invalid_state?
+    return "not reachable before milestone 5: Finishing needs an outward action (SC-3)" if kase.from == "finishing"
+    return "not reachable before milestone 5: no rule escalates (RD-8)" if kase.guard.include?("escalates")
+    return "not reachable before milestone 5: an outward action (SC-3)" if kase.guard.include?("has_outward_action")
 
     nil
   end
+
+  # Events a row's command writes before its own because it ends a waiting
+  # command first (milestone 4 plan §2.1, rule 11): releasing a provisional
+  # claim withdraws its running check and the check's job.
+  CANCELLED_FIRST = { %w[release ready] => %w[check.finished job.withdrawn] }.freeze
 
   def assert_row(kase)
     caller, params, task = prepare(kase.command, kase.from, valid: true, guard: kase.guard)
@@ -52,7 +56,8 @@ class StateTableTest < ActiveSupport::TestCase
     assert outcome.completed?, "#{kase.name}: #{outcome.refusal&.code}"
 
     types = Event.where(command_id: @key).order(:seq).pluck(:type)
-    assert_equal kase.events + SIDE_EVENTS.fetch(kase.command, []), types
+    first = CANCELLED_FIRST.fetch([ kase.command, kase.from ], [])
+    assert_equal first + kase.events + SIDE_EVENTS.fetch(kase.command, []), types
     task ||= Task.find(outcome.result.fetch("task_id")) if outcome.result&.key?("task_id")
     task ||= Task.find(outcome.result.dig("task", "id")) if outcome.result&.key?("task")
     task ||= Review.find(outcome.result.dig("review", "id")).then { |review| Task.find(review.task_id) } if outcome.result&.key?("review")
@@ -107,6 +112,7 @@ class StateTableTest < ActiveSupport::TestCase
       [ @builder, { "id" => task.id, "briefing_hash" => Leverage::Briefing.hash_for(task, seat: @builder) }, task ]
     when "heartbeat", "release"
       task = task_in(from || "working")
+      claim_provisionally(task) if valid && command == "release" && from == "ready"
       params = { "id" => task.id }
       params["reason"] = "unable_to_continue" if command == "release"
       [ @builder, params, task ]
@@ -181,6 +187,14 @@ class StateTableTest < ActiveSupport::TestCase
 
     apply("acknowledge_review_briefing", @reviewer, "id" => review.id,
       "briefing_hash" => Leverage::Briefing.hash_for(task, seat: @reviewer, review: review))
+  end
+
+  # A provisional claim of a Ready task by the builder (RE-5): a model
+  # gate at task.before_claim makes the claim wait on its check.
+  def claim_provisionally(task)
+    @scenario.rule(hook: "task.before_claim")
+    outcome = apply("claim", @builder, {})
+    assert_equal [ :pending, @builder.id ], [ outcome.outcome, task.reload.holder_seat_id ]
   end
 
   def hold_for_rounds(task)

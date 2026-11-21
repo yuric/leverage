@@ -688,7 +688,8 @@
             "payload": {
               "reason": "credential_limit",
               "rule_id": null,
-              "credential_id": "$credential:claude_a"
+              "credential_id": "$credential:claude_a",
+              "rule_check_id": null
             }
           }
         ],

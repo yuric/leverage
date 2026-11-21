@@ -1,0 +1,25 @@
+{
+  "id": "03-recipe-print-style",
+  "label": "passed",
+  "category": "specific",
+  "why": "The goal says what to add and where, the details say what to hide and keep, and the criterion is a print anyone can make.",
+  "contract": {
+    "title": "Print a recipe on one page",
+    "goal": "Add a print stylesheet to the recipe pages of the Larkspur Kitchen blog so that a printed recipe fits on one A4 page.",
+    "details": "Readers print recipes to cook from. When printing, hide the site header, the comments and the advertisements; keep the title, the ingredients and the steps.",
+    "criteria": [
+      {
+        "text": "Printing the Barley Soup recipe to PDF gives one A4 page with its title, ingredients and steps, and no header, comments or advertisements.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

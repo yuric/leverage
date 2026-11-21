@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../provider_world"
 
 # Claim review (PRD Lifecycle L89, L506; milestone 2 plan EN-7, EN-23;
 # DB-20): a reviewer seat claims the oldest open review at review.assign;
@@ -10,7 +11,7 @@ class ClaimReviewTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
   # Records the hooks gating is asked at.
-  class Recording < Leverage::Gating::NoRules
+  class Recording < Leverage::Rules::Engine
     attr_reader :hooks
 
     def initialize
@@ -20,6 +21,21 @@ class ClaimReviewTest < ActiveSupport::TestCase
 
     def evaluate(request)
       @hooks << request.hook
+      super
+    end
+  end
+
+  # Records the requests gating is asked.
+  class RecordingRequests < Leverage::Rules::Engine
+    attr_reader :requests
+
+    def initialize
+      super
+      @requests = []
+    end
+
+    def evaluate(request)
+      @requests << request
       super
     end
   end
@@ -122,5 +138,48 @@ class ClaimReviewTest < ActiveSupport::TestCase
     assert_equal [ grok.id, "grok-model-1" ], result.values_at("credential_id", "model")
     assert_equal({ "credential_id" => grok.id, "model" => "grok-model-1" }, written.sole.payload)
     assert_equal grok.id, @review.reload.credential_id
+  end
+
+  # hooks.json: review.assign is about the seat, and hashes its id (RC-26).
+  test "gating is asked at review.assign about the seat: the seat is the subject and its id the hashed input" do
+    gating = RecordingRequests.new
+    Leverage::Gating.implementation = gating
+    assert apply(@reviewer).completed?
+
+    request = gating.requests.sole
+    assert_equal [ "review.assign", @task.id, 0, "seat", @reviewer.id, "seat", @reviewer.id, @key ],
+      [ request.hook, request.task_id, request.round, request.subject_kind, request.subject_id, request.requester_kind,
+        request.requester_id, request.command_key ]
+    assert_equal({ "seat_id" => @reviewer.id }, request.inputs)
+  end
+
+  # RD-50, L451: the provider compared is that of the account the review
+  # would run on: the reviewer's run's, which the claim records.
+  test "a reviewer whose run is on another provider's login claims a review its own provider built (RD-50)" do
+    own = @scenario.credential(provider: "claude")
+    below = @scenario.credential(provider: "grok", model: "grok-model-1")
+    seat = @scenario.seat(role: "reviewer", credential: own)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
+    @scenario.run(seat, on: below)
+    # The rule's row, which the briefing the claim answers with reads.
+    Leverage::Gating.implementation = ProviderWorld.for(@scenario.rule(key: "different_provider_review", origin: "shipped"))
+
+    result = apply(seat).result
+    assert_equal [ below.id, "grok-model-1" ], result.values_at("credential_id", "model")
+    assert_equal seat.id, @review.reload.reviewer_seat_id
+  end
+
+  test "a reviewer whose run is on a login of a provider that built the task claims nothing (RD-50, L912)" do
+    own = @scenario.credential(provider: "codex")
+    below = @scenario.credential(provider: "claude")
+    seat = @scenario.seat(role: "reviewer", credential: own)
+    @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
+    @scenario.run(seat, on: below)
+    # The rule's row, which the skip row RuleChecks.write records names
+    # (rule_checks.rule_id is a foreign key).
+    Leverage::Gating.implementation = ProviderWorld.for(@scenario.rule(key: "different_provider_review", origin: "shipped"))
+
+    assert_equal "not_eligible", apply(seat).refusal.code
+    assert_nil @review.reload.reviewer_seat_id
   end
 end

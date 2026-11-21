@@ -73,10 +73,16 @@ module DbRows
     @seq = (@seq || 0) + 1
   end
 
+  # An event row, and the workspace's last_seq moved to its seq as
+  # EventLog.append moves it: rows a test commits stay in the worker's
+  # database, and the app must be able to append after them.
   def event(type: "task.created", task_id: nil, **values)
     defaults = { workspace_id: workspace, seq: next_seq, at: Time.current, effective_at: Time.current,
       type: type, schema_version: 1, actor_kind: "app", task_id: task_id, round: task_id && 0, payload: {} }
-    insert("events", defaults.merge(values))
+    row = defaults.merge(values)
+    insert("events", row).tap do
+      sql("UPDATE workspaces SET last_seq = GREATEST(last_seq, $1) WHERE id = $2", row[:seq], row[:workspace_id])
+    end
   end
 
   # A task and its task.created event, in the current transaction.

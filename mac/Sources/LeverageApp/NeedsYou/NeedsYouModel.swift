@@ -11,6 +11,13 @@ struct NeedsYouRow: Identifiable, Equatable, Sendable {
     let heading: String
     let body: String
     let buttons: [NeedsYouButton]
+    /// The rule the item is about, by its name; nil when it names none or the read could not say.
+    var ruleName: String?
+    /// What the check said, as the checker wrote it: data, never an instruction.
+    var reason: String?
+    /// The rule and the rule check the item names, for its buttons.
+    var ruleID: UUID?
+    var checkID: UUID?
 }
 
 /// The Needs you screen (HM-21, HM-24): the open items from `list_inbox`, a
@@ -41,20 +48,75 @@ final class NeedsYouModel {
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private let openTask: @MainActor (UUID) -> Void
     @ObservationIgnored private let timing: FollowTiming
+    @ObservationIgnored private let openAgents: @MainActor () -> Void
     /// The key of each command sent, kept until the server has answered it.
     @ObservationIgnored private var keys: [String: IdempotencyKey] = [:]
     @ObservationIgnored private var names = NeedsYouNames()
+    /// What the rule items name, read each time the screen reads (the rule of
+    /// each check, by the check's id, and the name of each rule, by its id).
+    @ObservationIgnored private var checkNotes: [UUID: CheckNote] = [:]
+    @ObservationIgnored private var ruleNames: [UUID: String] = [:]
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
-        openTask: @escaping @MainActor (UUID) -> Void, timing: FollowTiming = .normal
+        openTask: @escaping @MainActor (UUID) -> Void, openAgents: @escaping @MainActor () -> Void = {},
+        timing: FollowTiming = .normal
     ) {
         self.api = api
         self.noteRead = noteRead
         self.openTask = openTask
+        self.openAgents = openAgents
         self.timing = timing
+    }
+
+    // MARK: Let it through once, and Turn the rule off
+
+    /// The row whose "Let it through once" is waiting for the owner's reason.
+    private(set) var letThroughRow: UUID?
+    var letThroughReason = ""
+    /// The row whose "Turn the rule off" is waiting for the owner's answer.
+    private(set) var confirmingTurnOff: UUID?
+
+    private var trimmedReason: String { letThroughReason.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Whether the reason is written and nothing else is out for the row.
+    var canLetThrough: Bool {
+        guard let id = letThroughRow else { return false }
+        return !trimmedReason.isEmpty && !busy.contains(id)
+    }
+
+    func dismissLetThrough() {
+        letThroughRow = nil
+        letThroughReason = ""
+    }
+
+    /// Sends the owner's reason with the override of the check the item
+    /// names. The reason is kept, with a plain line on the row, when the
+    /// command did not work.
+    func confirmLetThrough() async {
+        guard canLetThrough, let id = letThroughRow, let check = rows.first(where: { $0.id == id })?.checkID else {
+            return
+        }
+        let reason = trimmedReason
+        await command(on: id, name: "let-through-\(reason)") { key in
+            _ = try await self.api.overrideCheck(checkID: check, OverrideCheckRequest(reason: reason), key: key)
+                .completedResult()
+            self.dismissLetThrough()
+        }
+    }
+
+    func dismissTurnOff() { confirmingTurnOff = nil }
+
+    /// Turn the rule off, after the owner confirmed: it ends the rule's
+    /// checks in flight and lets the work they held continue.
+    func confirmTurnOff() async {
+        guard let id = confirmingTurnOff, let rule = rows.first(where: { $0.id == id })?.ruleID else { return }
+        confirmingTurnOff = nil
+        await command(on: id, name: "turn-off") { key in
+            _ = try await self.api.disableRule(ruleID: rule, key: key).completedResult()
+        }
     }
 
     func isWaitingForSignIn(_ id: UUID) -> Bool { waitingForSignIn.contains(id) }
@@ -92,12 +154,17 @@ final class NeedsYouModel {
                 names = NeedsYouNames()
             }
             let page = try await api.listInbox(afterSeq: nil, wait: nil)
+            let open = page.items.filter { $0.state == .open }.sorted { $0.openedSeq < $1.openedSeq }
+            names = await names.checkingOrchestrator(for: open, from: api)
+            let notes = try await readRuleNotes(for: open)
             guard mine == generation else { return }
-            rows = page.items.filter { $0.state == .open }.sorted { $0.openedSeq < $1.openedSeq }
-                .map { row(for: $0) }
+            (checkNotes, ruleNames) = notes
+            rows = open.map { row(for: $0) }
             let live = Set(rows.map(\.id))
             failures = failures.filter { live.contains($0.key) }
             if let confirming = confirmingCancel, !live.contains(confirming) { confirmingCancel = nil }
+            if let asking = letThroughRow, !live.contains(asking) { dismissLetThrough() }
+            if let asking = confirmingTurnOff, !live.contains(asking) { confirmingTurnOff = nil }
             state = .loaded
             if let seq { noteRead(seq) }
         } catch is CancellationError {
@@ -111,12 +178,67 @@ final class NeedsYouModel {
         }
     }
 
+    /// A check as the task page reads it: the rule's name and what the check said.
+    private struct CheckNote {
+        let ruleName: String
+        let reason: String?
+    }
+
+    /// Reads the rule's name and the reason for each item that names a rule.
+    /// A task's page is read once however many of its checks are named, and
+    /// the rules list only when a name is still missing. A read that fails
+    /// leaves the row without them; a 401 or a cancel ends the load.
+    private func readRuleNotes(for items: [InboxItem]) async throws -> ([UUID: CheckNote], [UUID: String]) {
+        let ruleItems = items.filter { NeedsYouWords.namesARule($0.kind) }
+        guard !ruleItems.isEmpty else { return ([:], [:]) }
+        var notes: [UUID: CheckNote] = [:]
+        var tasks: [UUID] = []
+        for item in ruleItems where NeedsYouWords.checkID(of: item) != nil {
+            if let task = NeedsYouWords.taskID(of: item), !tasks.contains(task) { tasks.append(task) }
+        }
+        for task in tasks {
+            do {
+                for check in try await api.task(id: task).ruleChecks {
+                    let reason = check.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    notes[check.id] = CheckNote(
+                        ruleName: check.ruleName, reason: reason.flatMap { $0.isEmpty ? nil : $0 })
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as TransportError where error.code == .unauthenticated {
+                throw error
+            } catch {}
+        }
+        var rules: [UUID: String] = [:]
+        let missing = ruleItems.contains { item in
+            NeedsYouWords.checkID(of: item).flatMap { notes[$0] } == nil && NeedsYouWords.ruleID(of: item) != nil
+        }
+        if missing {
+            do {
+                for row in try await api.listRules().rules { rules[row.rule.id] = row.version.name }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as TransportError where error.code == .unauthenticated {
+                throw error
+            } catch {}
+        }
+        return (notes, rules)
+    }
+
     private func row(for item: InboxItem) -> NeedsYouRow {
-        NeedsYouRow(
+        let check = NeedsYouWords.checkID(of: item)
+        let rule = NeedsYouWords.ruleID(of: item)
+        let note = check.flatMap { checkNotes[$0] }
+        var row = NeedsYouRow(
             id: item.id, kind: item.kind, taskID: NeedsYouWords.taskID(of: item),
             credentialID: NeedsYouWords.credentialID(of: item),
             heading: NeedsYouWords.heading(for: item, names: names),
             body: NeedsYouWords.body(for: item, names: names), buttons: NeedsYouWords.buttons(for: item))
+        row.ruleName = note?.ruleName ?? rule.flatMap { ruleNames[$0] }
+        row.reason = note?.reason
+        row.ruleID = rule
+        row.checkID = check
+        return row
     }
 
     /// Reads again each time the events tail delivers a batch.
@@ -144,6 +266,15 @@ final class NeedsYouModel {
         case .allowAnotherTry: await allowAnotherTry(row)
         case .changeTask: if let task = row.taskID { openTask(task) }
         case .cancelTask: confirmingCancel = rowID
+        case .letThroughOnce:
+            guard row.checkID != nil else { return }
+            letThroughRow = rowID
+            letThroughReason = ""
+        case .runAgain: await runAgain(row)
+        case .turnRuleOff:
+            guard row.ruleID != nil else { return }
+            confirmingTurnOff = rowID
+        case .connectAgent: openAgents()
         }
     }
 
@@ -155,6 +286,13 @@ final class NeedsYouModel {
         confirmingCancel = nil
         await command(on: id, name: "cancel") { key in
             _ = try await self.api.cancelTask(taskID: task, key: key).completedResult()
+        }
+    }
+
+    private func runAgain(_ row: NeedsYouRow) async {
+        guard let check = row.checkID else { return }
+        await command(on: row.id, name: "rerun") { key in
+            _ = try await self.api.rerunCheck(checkID: check, key: key).completedResult()
         }
     }
 

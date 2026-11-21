@@ -4,7 +4,8 @@ import LeverageKit
 /// What a tool run is for. It decides what the tool may do (CL-8): a build
 /// may edit files in its folder, a review and the answering check may not.
 enum ToolPurpose: String, Sendable, CaseIterable {
-    /// The answering check of the add flow and of `LeverageRunner probe`.
+    /// The answering check of the add flow and of `LeverageRunner probe`,
+    /// and a job's run (milestone 4): read-only, no `--mode plan`.
     case check
     case build
     case review
@@ -51,15 +52,45 @@ enum ToolRun: Equatable, Sendable {
     case failed(ToolFailure, ToolRunRecord?)
 }
 
+/// One tool run: the prompt, the folder, what it is for, and the limits a
+/// caller may set on it (milestone 4 plan section 2.2, RD-34).
+struct ToolRunRequest: Equatable, Sendable {
+    let prompt: String
+    let folder: URL
+    let purpose: ToolPurpose
+    /// The run's own time limit in whole seconds: a job's ends 10 seconds
+    /// before its `run_due_at`. It never lengthens the configuration's
+    /// limit; nil is the configuration's.
+    let timeLimitSeconds: Int?
+    /// Whether the seat's model and effort are passed. A build and a review
+    /// pass them; the probe's answering check never does; a job's check run
+    /// does, so that the model the owner chose judges (RV-5).
+    let seatModel: Bool
+
+    init(prompt: String, folder: URL, purpose: ToolPurpose, timeLimitSeconds: Int? = nil, seatModel: Bool? = nil) {
+        self.prompt = prompt
+        self.folder = folder
+        self.purpose = purpose
+        self.timeLimitSeconds = timeLimitSeconds
+        self.seatModel = seatModel ?? (purpose != .check)
+    }
+}
+
 /// Runs one prompt in a folder. `execute` gives the answer or the failure
 /// with its record; cancelling the calling task ends the tool and
 /// everything it started, and throws `CancellationError`, the one error it
 /// throws.
 protocol ToolDriver: Sendable {
-    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun
+    func execute(_ request: ToolRunRequest) async throws -> ToolRun
 }
 
 extension ToolDriver {
+    /// A run with the configuration's limit, and the seat's model unless it
+    /// is the answering check (milestone 2's form).
+    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
+        try await execute(ToolRunRequest(prompt: prompt, folder: folder, purpose: purpose))
+    }
+
     /// The answer, or the failure thrown as a `ToolFailure` (the probe's
     /// and milestone 2's form).
     func run(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolAnswer {
@@ -75,7 +106,7 @@ struct ShapeInput: Sendable {
     let prompt: String
     let folder: String
     let purpose: ToolPurpose
-    /// Nil for the check, which runs on the tool's defaults.
+    /// Nil for the probe's check, which runs on the tool's defaults.
     let model: String?
     let effort: String?
     /// Where the tool writes its last message, for a tool that does.
@@ -154,7 +185,8 @@ struct ProcessToolDriver: ToolDriver {
         self.shape = shape
     }
 
-    func execute(prompt: String, in folder: URL, purpose: ToolPurpose) async throws -> ToolRun {
+    func execute(_ request: ToolRunRequest) async throws -> ToolRun {
+        let prompt = request.prompt, folder = request.folder, purpose = request.purpose
         // Codex writes its last message to a file of its own, kept outside the
         // work folder and removed after the run.
         var scratch: URL?
@@ -173,18 +205,20 @@ struct ProcessToolDriver: ToolDriver {
         defer { if let scratch { try? FileManager.default.removeItem(at: scratch) } }
         let outputFile = scratch?.appendingPathComponent("last-message.txt")
 
-        let seat = purpose != .check
+        let seat = request.seatModel
+        // A caller's limit (a job's, RD-34) only ever shortens the run.
+        let seconds = max(1, min(request.timeLimitSeconds ?? tool.timeoutSeconds, tool.timeoutSeconds))
         let input = ShapeInput(
             prompt: prompt, folder: folder.path, purpose: purpose,
             model: seat ? tool.model : nil, effort: seat ? tool.effort : nil,
-            outputFile: outputFile?.path, timeoutSeconds: tool.timeoutSeconds)
-        let request = SubprocessRequest(
+            outputFile: outputFile?.path, timeoutSeconds: seconds)
+        let subprocess = SubprocessRequest(
             executable: tool.toolPath, arguments: shape.arguments(input), environment: tool.toolEnvironment,
-            workingDirectory: folder.path, timeLimit: .seconds(tool.timeoutSeconds))
+            workingDirectory: folder.path, timeLimit: .seconds(seconds))
 
         let result: SubprocessResult
         do {
-            result = try await Subprocess.run(request)
+            result = try await Subprocess.run(subprocess)
         } catch let error as SubprocessError {
             return .failed(.couldNotStart(Self.reason(error)), nil)
         }

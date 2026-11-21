@@ -97,9 +97,11 @@ Where two inventories chose differently, the decision names the conflict.
 - **DB-4** `[shape]` The workspace lock is `SELECT … FROM workspaces WHERE
   id = $1 FOR UPDATE` as each writing transaction's first statement; the
   counter is `workspaces.last_seq bigint not null default 0`.
-- **DB-5** `[shape]` `at` is `clock_timestamp()` read once after the lock
-  (writer behaviour, Core loop; the contract fixes the type and records
-  the rule in `README.md`).
+- **DB-5** `[shape]` `at` is `clock_timestamp()` read once after the lock,
+  raised to one microsecond after the `at` of the workspace's last event
+  when the clock reads earlier, so `at` strictly increases across commands
+  (writer behaviour, Core loop, the floor since milestone 4; the contract
+  fixes the type and records the rule in `README.md`).
 - **DB-6** `[shape]` The state rule is a `DEFERRABLE INITIALLY DEFERRED`
   constraint trigger after insert or update of `tasks.state` that requires
   an `events` row for that task written by the current transaction,
@@ -329,9 +331,16 @@ Where two inventories chose differently, the decision names the conflict.
   `action.lease_granted` (P-1), `task.returned_for_rework` and
   `hold.closed` (Offer task again, or Mark action done with approved
   actions left) when their payload's `lease_seat_id` is not null; the
-  provisional holder is set by `check.queued` at `task.before_claim`
-  (`claimant_seat_id`) and cleared by that check's `check.finished` with
-  `failed`, `error` or `withdrawn`, by a `hold.opened` on the task, and by
+  provisional holder is set by the `check.queued` of a blocking check at
+  `task.before_claim` (`claimant_seat_id`) and cleared by the
+  `check.finished` of the last of the claim's blocking checks still
+  running when one of them is `failed` or `error`, or every one
+  `withdrawn` (the engine decides a pending claim only then; milestone 4
+  WP20); a warn rule's check sets and settles nothing. When every one
+  passed and the command that settled the last writes no `task.claimed`,
+  the claim was refused for a seat that may no longer claim and the
+  provisional holder is cleared after that command (milestone 4 review,
+  finding 7). It is also cleared by a `hold.opened` on the task, and by
   `task.released`; holder cleared by `task.submitted`, `task.released`,
   `task.lease_expired`, `task.returned`, `task.cancelled` and `task.done`.
   Settles D-G48, M-G7, M-G31.
@@ -357,6 +366,20 @@ Where two inventories chose differently, the decision names the conflict.
   no build of leverage has been released, so no log holds a `v1` event
   without it. Every golden trace's `task.contract_changed` gained
   `"minimum_strength_rank": null`, the value its command sends.
+- **DB-49** `[shape]` Added by the Rule checks milestone (its plan
+  RD-45; WP0T's request 2, settled by WP12). `hold.opened` carries
+  `rule_check_id`, the rule check the hold is about, for the reasons
+  `check_error`, `claim_gate_failed` and `rerun_limit`, and null for every
+  other reason. The check held at the re-run limit is planned
+  with no attempt and no job, so no `check.*` event names it until it is
+  let through or withdrawn: without the field the replay meets a
+  `rule_checks` row the log does not make (L369, test 1). A
+  `rerun_limit` hold's `hold.opened` also sets that row's result back to
+  none: a row withdrawn when its waiting command ended (a release) and
+  met again is held again, not run (milestone 4 review, finding 2). The field was
+  added to `v1` in place, as DB-48's was: no released build wrote the
+  event. Every golden trace's `hold.opened` gained it; traces 07, 17, 18
+  and 19 name the check on those holds.
 
 ## State machine (SM)
 

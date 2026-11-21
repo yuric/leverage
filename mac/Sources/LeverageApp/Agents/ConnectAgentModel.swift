@@ -56,8 +56,8 @@ final class ConnectAgentModel {
         }
     }
 
-    /// The roles Connect offers (MA-10). The planner and the orchestrator arrive with the jobs they take.
-    static let roles: [SeatRole] = [.builder, .reviewer]
+    /// The roles Connect offers (MA-10): the planner and the orchestrator are connected like a builder.
+    static let roles: [SeatRole] = [.builder, .reviewer, .planner, .orchestrator]
 
     var mode: Mode = .runOnLogin {
         didSet { if mode != oldValue { clearFormLines() } }
@@ -89,15 +89,26 @@ final class ConnectAgentModel {
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let copy: @MainActor (String) -> Void
     @ObservationIgnored private let onConnected: @MainActor () -> Void
+    @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var sent: (request: ConnectSeatRequest, key: IdempotencyKey)?
     @ObservationIgnored private var connectedSeatID: UUID?
 
     init(
-        api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void
+        api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
+        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
     ) {
         self.api = api
         self.copy = copy
         self.onConnected = onConnected
+        self.testedProviders = testedProviders
+    }
+
+    /// Whether the sheet says an orchestrator is not tested for checking tasks (RV-5).
+    var showsNotTestedNote: Bool {
+        role == .orchestrator
+            && OrchestratorTesting.isUntested(
+                provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
+                tested: testedProviders)
     }
 
     // MARK: the form

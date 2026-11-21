@@ -118,6 +118,11 @@ struct ConnectAgentForm: View {
                         .textFieldStyle(.roundedBorder)
                 }
             }
+            if model.showsNotTestedNote {
+                Text(AgentsCopy.notTestedForChecking.text)
+                    .font(.system(size: Tokens.FontSize.small, weight: .medium))
+                    .foregroundStyle(Tokens.Tone.wait.foreground)
+            }
         }
     }
 

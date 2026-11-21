@@ -2,8 +2,11 @@ require "test_helper"
 
 # Add task (PRD Lifecycle L77; milestone 2 plan SC-3, SC-4, SC-8): the owner
 # adds a task to the Backlog, or to the Imaginarium now that Promote exists
-# (milestone 3 plan HE-24), and task.created is written. A project, criteria
-# and outward actions are 422 invalid in this milestone.
+# (milestone 3 plan HE-24), and task.created is written. Criteria and
+# outward actions are 422 invalid; a project is accepted when it is a row of
+# the workspace (milestone 4 plan RD-52: the golden traces' tasks name the
+# project their setup holds), and 422 invalid otherwise. No command makes a
+# project until milestone 5.
 class AddTaskTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
@@ -61,10 +64,26 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
   end
 
-  test "a project, criteria and outward actions are 422 invalid (SC-8, SC-3)" do
+  test "a project of the workspace is the task's, and task.created carries it (RD-52)" do
     project = @scenario.project
-    [ body(project_id: project.id),
-      body(criteria: [ { "text" => "Made-up.", "kind" => "build" } ]),
+    outcome = apply(body(project_id: project.id))
+
+    assert outcome.completed?
+    task = Task.find(outcome.result.fetch("task_id"))
+    assert_equal project.id, task.project_id
+    assert_equal [ [ "task.created", project.id, task.id ] ], written.map { |event| [ event.type, event.project_id, event.task_id ] }
+  end
+
+  test "a project id that names no project of the workspace is 422 invalid (RD-52)" do
+    elsewhere = Scenario.new.project
+    [ SecureRandom.uuid, elsewhere.id, "not-a-uuid" ].each do |project_id|
+      assert_raises(T::Invalid, project_id) { apply(body(project_id: project_id)) }
+    end
+    assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
+  end
+
+  test "criteria and outward actions are 422 invalid (SC-3)" do
+    [ body(criteria: [ { "text" => "Made-up.", "kind" => "build" } ]),
       body(actions: [ { "kind" => "publish", "description" => "Made-up." } ]) ].each do |params|
       assert_raises(T::Invalid) { apply(params) }
     end

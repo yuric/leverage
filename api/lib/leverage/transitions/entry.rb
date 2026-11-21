@@ -45,7 +45,7 @@ module Leverage
 
       # The fields of Gating::Request that only the entry knows: task_id,
       # project_id, round, subject_kind, subject_id and the hook's hashed
-      # inputs. Gating::NoRules reads none of them.
+      # inputs. The engine reads none of them for a workspace with no rule.
       def gate_request_fields(_ctx)
         { task_id: nil, project_id: nil, round: nil, subject_kind: nil, subject_id: nil, inputs: {} }
       end

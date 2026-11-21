@@ -157,7 +157,10 @@ class HandoffContractTest < Minitest::Test
       description = operation(id).fetch("description")
       assert_includes description, "`result` is null", id
       assert_includes description, "get_helper_next", id
-      assert_includes description, "HE-33", id
+      # HE-33's 404 for a report that names a job ended when jobs arrived
+      # (milestone 4 review, finding 15): such a report runs the job's command.
+      assert_match(/With `job_id` set it runs report_job_/, description, id)
+      refute_includes description, "404", id
     end
     description = operation("sign_in_again").fetch("description")
     assert_includes description, "helper_request_id"

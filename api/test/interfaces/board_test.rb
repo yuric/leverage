@@ -1,0 +1,99 @@
+require "test_helper"
+
+# The board card's milestone 4 fields (get_board; milestone 4 plan §2.3,
+# RD-27): checking, while a transition of the task is pending and no hold
+# is open ("Checking the details"), and check_reason, the reason of the
+# failed check behind an open contract_incomplete hold ("Needs details").
+# Read from the rows Scenario builds through Reads::Board (a Snapshot:
+# CommittingTestCase) and held to openapi.json's BoardTask.
+class BoardReadTest < CommittingTestCase
+  include OpenapiAssertions
+
+  def board
+    json = JSON.parse(JSON.generate(Leverage::Reads::Board.call(scenario.workspace_id)))
+    json.fetch("tasks").each { |card| assert_matches_component("BoardTask", card) }
+    json
+  end
+
+  def card(task) = board.fetch("tasks").find { |candidate| candidate.dig("task", "id") == task.id }
+
+  def page(task) = JSON.parse(JSON.generate(Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id)))
+
+  def owner = scenario.owner
+
+  # A Backlog task whose Complete contract waits on a model check: the
+  # owner's request is stored, the task stays in Backlog (RE-2).
+  def checking_task
+    task = scenario.task(state: "backlog")
+    [ task, scenario.pending_transition(task, command: "complete_contract", requester: owner,
+      params: { "goal" => "A made-up goal." }) ]
+  end
+
+  test "a card is checking while a transition of its task is pending and no hold is open" do
+    task, = checking_task
+    quiet = scenario.task(state: "backlog")
+
+    assert_equal true, card(task)["checking"]
+    assert_equal false, card(quiet)["checking"]
+  end
+
+  test "a card is not checking while a hold is open on the task, nor once the transition is no longer pending" do
+    task, pending = checking_task
+    hold = scenario.hold(task, reason: "check_error", item: false)
+    assert_equal false, card(task)["checking"], "the hold's waiting step is open, not check (L378)"
+
+    ActiveRecord::Base.transaction { Leverage::Holds.close(scenario.context, hold: hold, task: task) }
+    assert_equal true, card(task)["checking"]
+
+    pending.update_columns(state: "completed", params: nil)
+    assert_equal false, card(task)["checking"]
+  end
+
+  test "check_reason is the reason of the failed check behind an open contract_incomplete hold, and null otherwise" do
+    rule = scenario.rule(hook: "task.before_ready")
+    task = scenario.task(state: "backlog")
+    check = scenario.rule_check(task, rule: rule, result: "failed", reason: "Made-up reason: say what done looks like.")
+    other = scenario.task(state: "backlog")
+    assert_nil card(task)["check_reason"]
+
+    hold = scenario.hold(task, reason: "contract_incomplete", item: false)
+    hold.update_columns(rule_id: rule.id, rule_check_id: check.id)
+    owner_hold = scenario.hold(other, reason: "owner_hold", item: false)
+    owner_hold.update_columns(rule_id: rule.id, rule_check_id: check.id)
+
+    assert_equal "Made-up reason: say what done looks like.", card(task)["check_reason"]
+    assert_nil card(other)["check_reason"], "only a contract_incomplete hold says why the contract is incomplete"
+
+    ActiveRecord::Base.transaction { Leverage::Holds.close(scenario.context, hold: hold, task: task) }
+    assert_nil card(task)["check_reason"]
+  end
+
+  test "a contract_incomplete hold that names no check has no reason" do
+    task = scenario.task(state: "backlog")
+    scenario.hold(task, reason: "contract_incomplete", item: false)
+
+    assert_nil card(task)["check_reason"]
+  end
+
+  test "the card says checking exactly when the task page names a waiting command and no hold is open: one reading" do
+    waiting, = checking_task
+    held, = checking_task
+    scenario.hold(held, reason: "owner_hold", item: false)
+    quiet = scenario.task(state: "ready")
+
+    [ waiting, held, quiet ].each do |task|
+      page = page(task)
+      open_hold = page["holds"].any? { |hold| hold["closed_at"].nil? }
+      assert_equal !page["pending"].nil? && !open_hold, card(task)["checking"], task.id
+    end
+  end
+
+  test "another workspace's transitions never make a card checking" do
+    task = scenario.task(state: "backlog")
+    elsewhere = Scenario.new
+    foreign = elsewhere.task(state: "backlog")
+    elsewhere.pending_transition(foreign, command: "complete_contract", requester: elsewhere.owner)
+
+    assert_equal false, card(task)["checking"]
+  end
+end

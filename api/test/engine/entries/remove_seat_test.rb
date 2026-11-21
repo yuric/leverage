@@ -1,6 +1,7 @@
 require "test_helper"
 require_relative "accounts_support"
 require_relative "call_spy"
+require_relative "pending_ends_support"
 
 # remove_seat (PRD L148, L823; milestone 2 plan IN-17, IN-40, SC-10): writes
 # seat.removed, sets removed_at, ends the token at once, clears wanted
@@ -11,9 +12,17 @@ require_relative "call_spy"
 # seat-bound holds of the task it loses close after task.released, which
 # then leaves the wait_ready cause to hold.closed (milestone 3 plan §2.1
 # rule 7, HE-35).
+#
+# What the seat held is taken away from a waiting command (milestone 4 plan
+# §2.1 rule 11): a pending submit, a pending pass or a provisional claim of
+# the removed seat is cancelled with invalid_state, through
+# PendingTransitions.cancel, after seat.removed and before the task or the
+# review is released. A job the seat holds as a checker or a planner is left
+# to its run timeout: no job event is written for it.
 class RemoveSeatTest < ActiveSupport::TestCase
   include AccountsSupport
   include CallSpy
+  include PendingEndsSupport
 
   setup { use_scenario }
 
@@ -120,5 +129,61 @@ class RemoveSeatTest < ActiveSupport::TestCase
     assert_equal [ [ task.id, released.id, nil ] ],
       calls.map { |call| [ call.arguments.last.id, call.keywords[:cause].id, call.keywords[:wait_cause] ] },
       "no other builder exists, so the cause is not credential_limit (HE-35)"
+  end
+
+  test "a builder's pending submit is cancelled with invalid_state after seat.removed and before task.released" do
+    seat = own_seat
+    task = @scenario.task(state: "working", builder: seat)
+    pending = @scenario.pending_transition(task, command: "submit", requester: seat)
+    written = nil
+    calls = recording_cancels { written = events_written { assert_completed(remove(seat)) } }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", %w[seat.removed]) ], calls
+    assert_equal %w[seat.removed task.released], written.map(&:type)
+  end
+
+  test "a reviewer's pending pass is cancelled with invalid_state after seat.removed and before review.released" do
+    seat = own_seat(role: "reviewer")
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: seat)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: seat)
+    written = nil
+    calls = recording_cancels { written = events_written { assert_completed(remove(seat)) } }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", %w[seat.removed]) ], calls
+    assert_equal %w[seat.removed review.released], written.map(&:type)
+    assert_nil review.reload.reviewer_seat_id
+  end
+
+  test "a provisional claimant's claim is cancelled with invalid_state; the cancel is all the task gets" do
+    seat = own_seat
+    task = @scenario.task(state: "ready")
+    task.update!(holder_seat_id: seat.id)
+    pending = @scenario.pending_transition(task, command: "claim", requester: seat)
+    written = nil
+    calls = recording_cancels { written = events_written { assert_completed(remove(seat)) } }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", %w[seat.removed]) ], calls
+    assert_equal %w[seat.removed], written.map(&:type), "a provisional claim has no lease and no task.claimed to undo"
+  end
+
+  test "a seat with nothing pending cancels nothing, and a Working task whose lease has ended is left to its timer" do
+    seat = own_seat
+    @scenario.make_due(@scenario.task(state: "working", builder: seat))
+    reviewer = own_seat(role: "reviewer")
+    @scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer)
+
+    assert_empty recording_cancels { assert_completed(remove(seat)); assert_completed(remove(reviewer)) }
+  end
+
+  test "an orchestrator's claimed job is left to its run timeout: no job event, the job still claimed" do
+    orchestrator = @scenario.orchestrator
+    task = @scenario.task(state: "ready")
+    @scenario.rule_check(task, rule: @scenario.rule(hook: "task.before_claim"), started: true, checker: orchestrator)
+    job = Job.where(claimed_by_seat_id: orchestrator.id).sole
+    written = events_written { assert_completed(remove(orchestrator)) }
+
+    assert_equal %w[seat.removed], written.map(&:type)
+    assert_equal [ "claimed", orchestrator.id ], Job.find(job.id).attributes.values_at("state", "claimed_by_seat_id")
   end
 end

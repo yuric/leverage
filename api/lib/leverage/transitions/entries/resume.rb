@@ -7,8 +7,10 @@ module Leverage
       # choice that answers it. Without an owner_hold it is invalid_state
       # (the row's guard not_held_owner_hold). Holds.close runs the lease
       # clocks again when no pausing hold is left, and marks resume pending
-      # when no hold is left on a task a seat holds. The rows from Finishing
-      # are not served until milestone 5: invalid_state.
+      # when no hold is left on a task a seat holds, and gates the task's
+      # pending transition again when this was the last hold (L378,
+      # milestone 4 plan §2.1 rule 9). The rows from Finishing are not
+      # served until milestone 5: invalid_state.
       #
       # Params: id (the task).
       class Resume < Entry

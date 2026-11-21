@@ -1,8 +1,8 @@
 module Leverage
   module Transitions
     # The commands, each with its entry (milestone 2 plan §2.1, EN-2;
-    # milestone 3 plan §2.1): the one list, in six named groups the
-    # state-table tests use. An entry is the class
+    # milestone 3 plan §2.1; milestone 4 plan §2.1): the one list, in nine
+    # named groups the state-table tests use. An entry is the class
     # Leverage::Transitions::Entries::<Command>, in
     # transitions/entries/<command>.rb, resolved when first used. A command
     # of a later milestone is not here: it has no entry and no route.
@@ -17,6 +17,8 @@ module Leverage
       ].freeze
       TIMERS = %w[
         builder_lease_expiry review_lease_expiry command_key_retention credential_hold_release seat_run_placement
+        check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
+        orchestrator_offline reviewer_eligibility
       ].freeze
       SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token].freeze
       ACCOUNTS = %w[
@@ -25,7 +27,10 @@ module Leverage
       ].freeze
       HANDOFF = %w[report_limit report_signed_out sign_in_again].freeze
       OWNER_CONTROLS = %w[promote edit_contract hold resume pause_seat resume_seat change_seat].freeze
-      COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS).freeze
+      RULES = %w[add_rule save_rule enable_rule disable_rule revert_rule remove_rule install_shipped_rules].freeze
+      CHECKS = %w[rerun_check override_check].freeze
+      JOBS = %w[draft_contract claim_job submit_job_result report_job_limit report_job_signed_out].freeze
+      COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS).freeze
 
       @overrides = {}
 

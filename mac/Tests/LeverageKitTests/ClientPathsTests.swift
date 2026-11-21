@@ -19,6 +19,9 @@ private enum Fixture {
     static let seat = UUID(uuidString: "00000000-0000-4000-8000-0000000000A4")!
     static let credential = UUID(uuidString: "00000000-0000-4000-8000-0000000000A5")!
     static let request = UUID(uuidString: "00000000-0000-4000-8000-0000000000A6")!
+    static let job = UUID(uuidString: "00000000-0000-4000-8000-0000000000A7")!
+    static let rule = UUID(uuidString: "00000000-0000-4000-8000-0000000000A8")!
+    static let check = UUID(uuidString: "00000000-0000-4000-8000-0000000000A9")!
     static let observed = Date(timeIntervalSince1970: 1_767_225_600.5)
 
     static func id(_ uuid: UUID) -> String { uuid.uuidString.lowercased() }
@@ -230,6 +233,54 @@ struct ClientPathsTests {
                     name: "Made-up builder", role: .reviewer, model: .set("made-up-model"), effort: .clear,
                     strengthRank: .set(2), credentialID: .set(F.credential), enabled: true),
                 key: F.key("change_seat"))
+        },
+        // Agent and owner, Rule checks milestone
+        "claim_next_job": ClientCall { _ = try await $0.agent.claimNextJob(key: F.key("claim_next_job")) },
+        "submit_job_result": ClientCall(path: ["id": F.id(F.job)]) {
+            _ = try await $0.agent.submitJobResult(
+                jobID: F.job,
+                JobResultRequest(
+                    result: .ruleCheck(RuleCheckVerdict(result: .failed, reason: "Made-up reason.")),
+                    tokens: 120, spend: 0),
+                key: F.key("submit_job_result"))
+        },
+        "list_rules": ClientCall { _ = try await $0.owner.listRules() },
+        "add_rule": ClientCall {
+            _ = try await $0.owner.addRule(
+                AddRuleRequest(
+                    name: "Made-up rule", instruction: "Every task names its page.", hook: .taskBeforeReady,
+                    scope: .checkerDecides),
+                key: F.key("add_rule"))
+        },
+        "save_rule": ClientCall(path: ["id": F.id(F.rule)]) {
+            _ = try await $0.owner.saveRule(
+                ruleID: F.rule,
+                SaveRuleRequest(
+                    name: "Made-up rule", instruction: "Every task names its page.", scope: .allTasks,
+                    onFail: .block, route: .builder),
+                key: F.key("save_rule"))
+        },
+        "enable_rule": ClientCall(path: ["id": F.id(F.rule)]) {
+            _ = try await $0.owner.enableRule(ruleID: F.rule, key: F.key("enable_rule"))
+        },
+        "disable_rule": ClientCall(path: ["id": F.id(F.rule)]) {
+            _ = try await $0.owner.disableRule(ruleID: F.rule, key: F.key("disable_rule"))
+        },
+        "revert_rule": ClientCall(path: ["id": F.id(F.rule)]) {
+            _ = try await $0.owner.revertRule(ruleID: F.rule, key: F.key("revert_rule"))
+        },
+        "remove_rule": ClientCall(path: ["id": F.id(F.rule)]) {
+            _ = try await $0.owner.removeRule(ruleID: F.rule, key: F.key("remove_rule"))
+        },
+        "rerun_check": ClientCall(path: ["id": F.id(F.check)]) {
+            _ = try await $0.owner.rerunCheck(checkID: F.check, key: F.key("rerun_check"))
+        },
+        "override_check": ClientCall(path: ["id": F.id(F.check)]) {
+            _ = try await $0.owner.overrideCheck(
+                checkID: F.check, OverrideCheckRequest(reason: "Made-up reason."), key: F.key("override_check"))
+        },
+        "draft_contract": ClientCall(path: ["id": F.id(F.task)]) {
+            _ = try await $0.owner.draftContract(taskID: F.task, key: F.key("draft_contract"))
         },
         // Helper
         "get_helper_next": ClientCall(query: ["wait": "30"]) { _ = try await $0.helper.next(wait: 30) },
@@ -525,6 +576,206 @@ struct FakeAPITests {
         var dumped = ""
         dump(pickup, to: &dumped)
         #expect(!dumped.contains("secret-made-up"))
+    }
+}
+
+@Suite("Rule check request bodies")
+struct RuleCheckBodyTests {
+    private static let rule = UUID(uuidString: "00000000-0000-4000-8000-0000000000A8")!
+    private static let check = UUID(uuidString: "00000000-0000-4000-8000-0000000000A9")!
+    private static let job = UUID(uuidString: "00000000-0000-4000-8000-0000000000A7")!
+    private static let project = UUID(uuidString: "00000000-0000-4000-8000-0000000000B2")!
+
+    private func json(_ body: some Encodable) throws -> JSONValue {
+        try #require(FakeCall.json(body))
+    }
+
+    @Test("a scope writes all three of its keys, null where they do not apply, and its ids in lower case")
+    func scope() throws {
+        #expect(try json(RuleScope.allTasks) == .object([
+            "kind": .string("all_tasks"), "project_ids": .null, "action_kinds": .null,
+        ]))
+        #expect(try json(RuleScope.checkerDecides)["kind"] == .string("checker_decides"))
+        #expect(try json(RuleScope(kind: .namedProjects, projectIDs: [Self.project])) == .object([
+            "kind": .string("named_projects"),
+            "project_ids": .array([.string("00000000-0000-4000-8000-0000000000b2")]), "action_kinds": .null,
+        ]))
+        #expect(try json(RuleScope(kind: .actionKinds, actionKinds: [.publish, .pay])) == .object([
+            "kind": .string("action_kinds"), "project_ids": .null,
+            "action_kinds": .array([.string("publish"), .string("pay")]),
+        ]))
+    }
+
+    @Test("Add rule sends its four fields and nothing else")
+    func addRule() throws {
+        let request = AddRuleRequest(
+            name: "Made-up rule", instruction: "Every task names its page.", hook: .taskBeforeDone,
+            scope: .checkerDecides)
+        #expect(try json(request) == .object([
+            "name": .string("Made-up rule"), "instruction": .string("Every task names its page."),
+            "hook": .string("task.before_done"),
+            "scope": .object(["kind": .string("checker_decides"), "project_ids": .null, "action_kinds": .null]),
+        ]))
+    }
+
+    @Test("Save rule sends every field, the route among them, null where a field has none")
+    func saveRule() throws {
+        let request = SaveRuleRequest(
+            name: "Made-up rule", instruction: nil, parameters: ["minimum": .number(2)], scope: .allTasks,
+            onFail: .warn, route: .orchestrator, queueTimeoutSeconds: 60, runTimeoutSeconds: nil)
+        let sent = try #require(json(request).objectValue)
+        #expect(Set(sent.keys) == [
+            "name", "instruction", "parameters", "scope", "on_fail", "route", "queue_timeout_seconds",
+            "run_timeout_seconds",
+        ])
+        #expect(sent["instruction"] == .null && sent["run_timeout_seconds"] == .null)
+        #expect(sent["parameters"] == .object(["minimum": .number(2)]))
+        #expect(sent["on_fail"] == .string("warn") && sent["route"] == .string("orchestrator"))
+        #expect(sent["queue_timeout_seconds"] == .number(60))
+        let bare = try #require(json(SaveRuleRequest(
+            name: "n", instruction: "i", scope: .allTasks, onFail: nil, route: nil)).objectValue)
+        #expect(bare["on_fail"] == .null && bare["route"] == .null && bare["parameters"] == .null)
+        #expect(bare.count == 8)
+    }
+
+    @Test("an override sends its reason")
+    func override() throws {
+        #expect(try json(OverrideCheckRequest(reason: "Made-up reason.")) == .object([
+            "reason": .string("Made-up reason."),
+        ]))
+    }
+
+    @Test("a checker's result goes in the fixed shape, with the tokens and the spend")
+    func ruleCheckResult() throws {
+        let request = JobResultRequest(
+            result: .ruleCheck(RuleCheckVerdict(result: .notApplicable, reason: "Made-up reason.")), tokens: 340,
+            spend: 0)
+        #expect(try json(request) == .object([
+            "result": .object(["result": .string("not_applicable"), "reason": .string("Made-up reason.")]),
+            "tokens": .number(340), "spend": .number(0),
+        ]))
+        #expect(RuleCheckVerdict.reasonLimit == 500)
+    }
+
+    @Test("a planner's result is the Complete contract body, with the stored values sent back")
+    func contractDraftResult() throws {
+        let contract = CompleteContractRequest(
+            title: "Made-up task", goal: "A goal", details: "Details.",
+            criteria: [CriterionInput(text: "It works", kind: .build), CriterionInput(text: "Checked", kind: .review)],
+            actions: [], minimumStrengthRank: 2, budgetCap: 5, workReference: "/made/up")
+        let sent = try #require(json(JobResultRequest(result: .contractDraft(contract), tokens: 1, spend: 0)).objectValue)
+        let result = try #require(sent["result"]?.objectValue)
+        #expect(Set(result.keys) == [
+            "title", "goal", "details", "criteria", "actions", "minimum_strength_rank", "budget_cap",
+            "work_reference",
+        ])
+        #expect(result["minimum_strength_rank"] == .number(2) && result["work_reference"] == .string("/made/up"))
+        #expect(result["criteria"]?[1]?["kind"] == .string("review"))
+    }
+
+    @Test("the fakes record the bodies the HTTP clients send")
+    func fakesMatchTheClients() async throws {
+        let ruleKey = IdempotencyKey(), overrideKey = IdempotencyKey(), resultKey = IdempotencyKey()
+        let save = SaveRuleRequest(
+            name: "Made-up rule", instruction: "Every task names its page.", scope: .allTasks, onFail: .block,
+            route: .builder)
+        let override = OverrideCheckRequest(reason: "Made-up reason.")
+        let result = JobResultRequest(
+            result: .ruleCheck(RuleCheckVerdict(result: .passed, reason: "Made-up reason.")), tokens: 5, spend: 0)
+
+        let owner = FakeOwnerAPI()
+        let done: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = { _, key in
+            .completed(.object([:]), key: key.value, command: .saveRule)
+        }
+        owner.script {
+            $0.saveRule = { _, _, key in .completed(.object([:]), key: key.value, command: .saveRule) }
+            $0.overrideCheck = { _, _, key in .completed(.object([:]), key: key.value, command: .overrideCheck) }
+            $0.enableRule = done; $0.disableRule = done; $0.revertRule = done; $0.removeRule = done
+            $0.rerunCheck = done
+            $0.draftContract = { _, key in
+                .completed(DraftContractResult(jobID: Self.job), key: key.value, command: .draftContract)
+            }
+            $0.listRules = { RulesList(rules: []) }
+        }
+        _ = try await owner.saveRule(ruleID: Self.rule, save, key: ruleKey)
+        _ = try await owner.overrideCheck(checkID: Self.check, override, key: overrideKey)
+        let agent = FakeAgentAPI()
+        agent.script { $0.submitJobResult = { _, _, key in .completed(nil, key: key.value, command: .submitJobResult) } }
+        _ = try await agent.submitJobResult(jobID: Self.job, result, key: resultKey)
+
+        let outcome = #"{"key":"k","command":"save_rule","outcome":"completed","result":null,"refusal":null}"#
+        let ownerSession = StubURLProtocol.session(host: "rule-fake-owner.test", answer: .init(status: 200, json: outcome))
+        let agentSession = StubURLProtocol.session(host: "rule-fake-agent.test", answer: .init(status: 200, json: outcome))
+        let ownerClient = OwnerClient(
+            baseURL: URL(string: "http://rule-fake-owner.test")!, sessionToken: "lvo_x", session: ownerSession)
+        _ = try await ownerClient.saveRule(ruleID: Self.rule, save, key: ruleKey)
+        _ = try await ownerClient.overrideCheck(checkID: Self.check, override, key: overrideKey)
+        _ = try await AgentClient(
+            baseURL: URL(string: "http://rule-fake-agent.test")!, seatToken: "lvs_x", session: agentSession)
+            .submitJobResult(jobID: Self.job, result, key: resultKey)
+
+        let sentToOwner = StubURLProtocol.requests(host: "rule-fake-owner.test").compactMap(\.body)
+        let sentToAgent = try #require(StubURLProtocol.requests(host: "rule-fake-agent.test").first?.body)
+        let sentSave = try #require(sentToOwner.first)
+        let sentOverride = try #require(sentToOwner.dropFirst().first)
+        let ownerCalls = owner.calls
+        let savedCall = try #require(ownerCalls.first)
+        let overrideCall = try #require(ownerCalls.dropFirst().first)
+        #expect(sentToOwner.count == 2 && ownerCalls.count == 2)
+        #expect(savedCall.body == (try JSONDecoder().decode(JSONValue.self, from: sentSave)))
+        #expect(overrideCall.body == (try JSONDecoder().decode(JSONValue.self, from: sentOverride)))
+        #expect(agent.calls.first?.body == (try JSONDecoder().decode(JSONValue.self, from: sentToAgent)))
+        #expect(savedCall == FakeCall(
+            .saveRule, path: ["id": "00000000-0000-4000-8000-0000000000a8"], key: ruleKey, body: savedCall.body))
+        #expect(overrideCall.path == ["id": "00000000-0000-4000-8000-0000000000a9"])
+        #expect(agent.calls.first?.path == ["id": "00000000-0000-4000-8000-0000000000a7"])
+    }
+
+    @Test("the fakes record each new call with its path and key, and refuse what was not scripted")
+    func fakesRecord() async throws {
+        let owner = FakeOwnerAPI()
+        let key = IdempotencyKey()
+        let done: @Sendable (UUID, IdempotencyKey) async throws -> PlainOutcome = { _, key in
+            .completed(.object([:]), key: key.value, command: .enableRule)
+        }
+        owner.script {
+            $0.enableRule = done; $0.disableRule = done; $0.revertRule = done; $0.removeRule = done
+            $0.rerunCheck = done
+            $0.addRule = { _, key in .completed(.object([:]), key: key.value, command: .addRule) }
+            $0.draftContract = { _, key in
+                .completed(DraftContractResult(jobID: Self.job), key: key.value, command: .draftContract)
+            }
+            $0.listRules = { RulesList(rules: []) }
+        }
+        _ = try await owner.enableRule(ruleID: Self.rule, key: key)
+        _ = try await owner.disableRule(ruleID: Self.rule, key: key)
+        _ = try await owner.revertRule(ruleID: Self.rule, key: key)
+        _ = try await owner.removeRule(ruleID: Self.rule, key: key)
+        _ = try await owner.rerunCheck(checkID: Self.check, key: key)
+        _ = try await owner.addRule(
+            AddRuleRequest(name: "n", instruction: "i", hook: .taskBeforeReady, scope: .allTasks), key: key)
+        let drafted = try await owner.draftContract(taskID: UUID(), key: key)
+        #expect(drafted.result == DraftContractResult(jobID: Self.job))
+        #expect(try await owner.listRules() == RulesList(rules: []))
+        #expect(owner.calls.map(\.operation) == [
+            .enableRule, .disableRule, .revertRule, .removeRule, .rerunCheck, .addRule, .draftContract, .listRules,
+        ])
+        await #expect(throws: FakeAPIError.notScripted(.saveRule)) {
+            _ = try await owner.saveRule(
+                ruleID: Self.rule,
+                SaveRuleRequest(name: "n", instruction: nil, scope: .allTasks, onFail: nil, route: nil), key: key)
+        }
+        await #expect(throws: FakeAPIError.notScripted(.overrideCheck)) {
+            _ = try await owner.overrideCheck(checkID: Self.check, OverrideCheckRequest(reason: "r"), key: key)
+        }
+        let agent = FakeAgentAPI()
+        await #expect(throws: FakeAPIError.notScripted(.claimNextJob)) { _ = try await agent.claimNextJob(key: key) }
+        await #expect(throws: FakeAPIError.notScripted(.submitJobResult)) {
+            _ = try await agent.submitJobResult(
+                jobID: Self.job,
+                JobResultRequest(result: .ruleCheck(RuleCheckVerdict(result: .passed, reason: "r"))), key: key)
+        }
+        #expect(agent.calls.map(\.operation) == [.claimNextJob, .submitJobResult])
     }
 }
 

@@ -1,0 +1,25 @@
+{
+  "id": "09-about-heading-typo",
+  "label": "passed",
+  "category": "short_but_specific",
+  "why": "One sentence of goal says exactly what text changes and where, and the criterion is the heading's new text; being short is no reason to fail it.",
+  "contract": {
+    "title": "Fix the About heading",
+    "goal": "Change the heading Our storey to Our story on the About page of the Thimblevane shop.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The About page's heading reads Our story.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

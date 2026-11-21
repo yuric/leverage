@@ -3,14 +3,14 @@ import Foundation
 /// The one line a runner prints on standard output when its account stops
 /// (plan HD-6), before it exits with code 5. The helper reads it and sends
 /// `report_limit` or `report_signed_out`. It holds the kind, the window, the
-/// reset time, the task or review id, the tool's version and the time
+/// reset time, the task, review or job id, the tool's version and the time
 /// observed; never a word of the tool's reply. Nothing of it is written to
 /// disk.
 ///
 /// The line is strict: every key is present (null where there is no value),
 /// and a line with a key it does not know, a missing key, another version, a
-/// window on a sign-out or none on a limit, or both a task and a review, is
-/// refused. The helper treats a refused line as no line (HD-6: code 4).
+/// window on a sign-out or none on a limit, or more than one of a task, a
+/// review and a job, is refused. The helper treats a refused line as no line (HD-6: code 4).
 public struct RunEndReport: Codable, Equatable, Sendable {
     /// The version of this line's shape.
     public static let formatVersion = 1
@@ -31,13 +31,15 @@ public struct RunEndReport: Codable, Equatable, Sendable {
     public let taskID: UUID?
     /// The review the run was doing, if any.
     public let reviewID: UUID?
+    /// The job the run was doing, if any.
+    public let jobID: UUID?
     /// The provider tool's version, as its `--version` printed it.
     public let toolVersion: String?
     /// When the runner saw the run end.
     public let observedAt: Date
 
     public init(
-        kind: Kind, window: LimitWindow?, resetAt: Date?, taskID: UUID?, reviewID: UUID?,
+        kind: Kind, window: LimitWindow?, resetAt: Date?, taskID: UUID?, reviewID: UUID?, jobID: UUID? = nil,
         toolVersion: String?, observedAt: Date
     ) {
         self.version = Self.formatVersion
@@ -46,6 +48,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         self.resetAt = resetAt
         self.taskID = taskID
         self.reviewID = reviewID
+        self.jobID = jobID
         self.toolVersion = toolVersion
         self.observedAt = observedAt
     }
@@ -55,6 +58,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         case resetAt = "reset_at"
         case taskID = "task_id"
         case reviewID = "review_id"
+        case jobID = "job_id"
         case toolVersion = "tool_version"
         case observedAt = "observed_at"
     }
@@ -82,6 +86,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         resetAt = try container.decode(Date?.self, forKey: .resetAt)
         taskID = try container.decode(UUID?.self, forKey: .taskID)
         reviewID = try container.decode(UUID?.self, forKey: .reviewID)
+        jobID = try container.decode(UUID?.self, forKey: .jobID)
         toolVersion = try container.decode(String?.self, forKey: .toolVersion)
         observedAt = try container.decode(Date.self, forKey: .observedAt)
         try validate()
@@ -95,6 +100,7 @@ public struct RunEndReport: Codable, Equatable, Sendable {
         try container.encode(resetAt, forKey: .resetAt)
         try container.encodeID(taskID, forKey: .taskID)
         try container.encodeID(reviewID, forKey: .reviewID)
+        try container.encodeID(jobID, forKey: .jobID)
         try container.encode(toolVersion, forKey: .toolVersion)
         try container.encode(observedAt, forKey: .observedAt)
     }
@@ -111,8 +117,8 @@ public struct RunEndReport: Codable, Equatable, Sendable {
                 throw RunEndReportError.invalid("a sign-out has no window and no reset time")
             }
         }
-        guard taskID == nil || reviewID == nil else {
-            throw RunEndReportError.invalid("a report names a task or a review, not both")
+        guard [taskID, reviewID, jobID].compactMap({ $0 }).count <= 1 else {
+            throw RunEndReportError.invalid("a report names a task, a review or a job, not more than one")
         }
     }
 

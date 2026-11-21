@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../gate_support"
 
 # Review passes, no outward action (PRD Lifecycle L92, L510; milestone 2
 # plan EN-9, EN-12): at task.before_done, review.passed and task.done are
@@ -10,7 +11,7 @@ class PassReviewTest < ActiveSupport::TestCase
   B = Leverage::Briefing
 
   # Records the hooks gating is asked at.
-  class Recording < Leverage::Gating::NoRules
+  class Recording < Leverage::Rules::Engine
     attr_reader :hooks
 
     def initialize
@@ -98,5 +99,45 @@ class PassReviewTest < ActiveSupport::TestCase
     outcome = apply("pass_review", { "id" => @review.id, "verdict" => "passed", "failed_criteria" => [], "notes" => "",
                                      "tokens" => 0, "spend" => 0 }, @scenario.seat(role: "reviewer"))
     assert_equal "not_holder", outcome.refusal.code
+  end
+end
+
+# A pass at its gate (milestone 4 plan §2.1 rule 7, SM-6): a failed gate at
+# when the review has passed is a failed review in full, at once.
+class PassReviewGatedTest < ActiveSupport::TestCase
+  include GateSupport
+
+  setup do
+    @scenario = Scenario.new
+    @builder = @scenario.seat(role: "builder", credential: @scenario.credential)
+    @reviewer = @scenario.seat(role: "reviewer", credential: @scenario.credential(provider: "codex"))
+  end
+
+  test "a failed gate makes the pass a failed review: the review criterion is the failed one, the check is named, no review.passed" do
+    rule = app_rule("task.before_done")
+    gating([ rule, { app_result: "failed" } ])
+    task, review = ready_for_verdict(@builder, @reviewer)
+    outcome = command("pass_review", @reviewer, pass_params(review))
+
+    assert outcome.completed?
+    assert_equal %w[check.finished review.failed criterion.reopened cost.reported], types
+    failed = written.second
+    review_criterion = Criterion.find_by!(task_id: task.id, kind: "review")
+    assert_equal({ "failed_criterion_ids" => [ review_criterion.id ], "failed_rule_check_id" => mine(RuleCheck).sole.id,
+                   "lease_seat_id" => @builder.id, "wait_cause" => nil }, failed.payload)
+    assert_equal [ "failed", [ review_criterion.id ], "Made-up notes." ], review.reload.values_at(:verdict, :failed_criteria, :notes)
+    assert_equal [ "working", 1, @builder.id ], task.reload.values_at(:state, :round, :holder_seat_id)
+  end
+
+  test "a pass that waits writes no verdict: the review keeps its reviewer and the task stays In review" do
+    with_jobs do
+      gating(custom_rule("task.before_done"))
+      task, review = ready_for_verdict(@builder, @reviewer)
+
+      assert_equal :pending, command("pass_review", @reviewer, pass_params(review)).outcome
+      assert_equal [ nil, @reviewer.id ], review.reload.values_at(:verdict, :reviewer_seat_id)
+      assert_equal "in_review", task.reload.state
+      assert_equal %w[check.queued job.queued], types
+    end
   end
 end

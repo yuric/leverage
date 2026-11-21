@@ -1,4 +1,7 @@
 require "test_helper"
+require_relative "provider_world"
+require_relative "entries/call_spy"
+require_relative "entries/handoff_support"
 
 # Leverage::Candidates (PRD L650-L703; milestone 3 plan §2.1 rules 1 to 4
 # and 8, HE-3, HE-4, HE-5, HE-35): a seat's candidates in order, whether
@@ -8,10 +11,12 @@ require "test_helper"
 # task. One test per sentence of those rules. It reads and writes nothing
 # else, so every test builds its rows with Scenario.
 class CandidatesTest < ActiveSupport::TestCase
+  include CallSpy
+
   C = Leverage::Candidates
 
   # A gating whose provider rule refuses the given providers.
-  class Refusing < Leverage::Gating::NoRules
+  class Refusing < Leverage::Rules::Engine
     def initialize(*providers)
       super()
       @providers = providers
@@ -21,7 +26,7 @@ class CandidatesTest < ActiveSupport::TestCase
   end
 
   # A gating that filters given tasks out of one seat's claims.
-  class Filtering < Leverage::Gating::NoRules
+  class Filtering < Leverage::Rules::Engine
     def initialize(seat, tasks)
       super()
       @seat_id = seat.id
@@ -192,6 +197,47 @@ class CandidatesTest < ActiveSupport::TestCase
     assert_equal own.id, C.first_available(seat, nil, @now).id
     limited(own)
     assert_equal below.id, C.first_available(seat, nil, @now).id
+  end
+
+  # Milestone 4 plan WP9 (HE-41, RD-50, L913): rule 3 obeys the provider
+  # rule's answer, asked of Gating for each candidate with the candidate's
+  # own provider. Gating is a StandIn world whose answers stand for the
+  # engine's; WP3 proves what the real comparison answers.
+  test "rule 3 with a gating world: provider_allowed? is asked for each candidate of a review with its provider, and every refusal is passed over" do
+    own = limited(@scenario.credential(provider: "claude"))
+    gemini = @scenario.credential(provider: "gemini")
+    codex = @scenario.credential(provider: "codex")
+    seat = @scenario.seat(role: "reviewer", credential: own)
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id)
+    Leverage::Gating.implementation = ProviderWorld.new(built_by: { task.id => %w[claude gemini] })
+
+    asked = spy_on(Leverage::Gating, :provider_allowed?) { assert_equal codex.id, C.first_available(seat, review, @now).id }
+    assert_equal %w[gemini codex], asked.map { |call| call.keywords.fetch(:provider) },
+      "the limited one is not available, so it is not asked about"
+    assert(asked.all? { |call| call.keywords.fetch(:task_id) == task.id })
+    assert_nil C.next_after(seat, review, codex, @now), "with codex stopped, nothing the world allows is left"
+    assert_equal codex.id, C.next_after(seat, review, gemini, @now).id
+
+    Leverage::Gating.implementation = ProviderWorld.new(rule_id: nil, built_by: { task.id => %w[claude gemini] })
+    assert_equal gemini.id, C.first_available(seat, review, @now).id, "with the rule off nothing is refused"
+  end
+
+  test "rule 3 with a gating world: a reviewer's limit with no candidate the world allows below releases the review (L913)" do
+    extend HandoffSupport
+    @scenario.helper
+    own = @scenario.credential(provider: "codex")
+    claude = @scenario.credential(provider: "claude")
+    seat = @scenario.seat(role: "reviewer", credential: own)
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: seat)
+    Leverage::Gating.implementation = ProviderWorld.new(built_by: { task.id => %w[claude] })
+
+    assert C.available?(claude, @now)
+    before = @scenario.workspace.reload.last_seq
+    assert report_limit(own, seat, review: review, reset_at: @scenario.database_now + 3600).completed?
+    assert_nil review.reload.reviewer_seat_id
+    assert_equal %w[credential.limit_reached review.released], events.where("seq > ?", before).order(:seq).map(&:type)
   end
 
   # --- Rule 4: the next candidate ------------------------------------------------
@@ -459,7 +505,7 @@ class CandidatesTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = Filtering.new(alone, [ task.id ])
 
     assert_equal "credential_limit", C.wait_cause(task, @now)
-    Leverage::Gating.implementation = Leverage::Gating::NoRules.new
+    Leverage::Gating.implementation = Leverage::Rules::Engine.new
     assert_nil C.wait_cause(task, @now)
   end
 

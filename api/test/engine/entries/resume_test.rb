@@ -1,5 +1,6 @@
 require "test_helper"
 require_relative "owner_controls_support"
+require_relative "pending_stub"
 
 # Resume (PRD Lifecycle L104, Holds L176; milestone 3 plan HE-24, HS-3):
 # closes the task's owner_hold and nothing else. Without one it is
@@ -8,6 +9,7 @@ require_relative "owner_controls_support"
 # seat holds, its next GET /v1/next answers resume. Finishing is not served.
 class ResumeTest < ActiveSupport::TestCase
   include OwnerControlsSupport
+  include PendingStub
 
   setup do
     use_scenario
@@ -95,5 +97,23 @@ class ResumeTest < ActiveSupport::TestCase
 
   test "an unknown task is not found" do
     assert_raises(T::NotFound) { owner_run("resume", "id" => SecureRandom.uuid) }
+  end
+
+  # Milestone 4 (L378; plan §2.1 rule 9): the result of a check that ran
+  # under the hold is applied when the last hold lifts.
+  test "resuming the last hold re-enters the task's pending transition once; with another hold open, not at all" do
+    task = working_task(@builder)
+    pending = scenario.pending_transition(task, command: "submit", requester: @builder)
+    owner_run("hold", "id" => task.id)
+    outcome = nil
+    calls = with_pending(pending) { outcome, = owner_run("resume", "id" => task.id) }
+
+    assert_completed(outcome)
+    assert_equal [ [ :reenter, pending.id, :hold_lifted ] ], calls.map(&:summary)
+
+    owner_run("hold", "id" => task.id)
+    open_hold(task, "rounds_exceeded", facts: { round: 0 })
+    calls = with_pending(pending) { owner_run("resume", "id" => task.id) }
+    assert_empty calls, "rounds_exceeded is still open"
   end
 end

@@ -13,11 +13,37 @@ module Leverage
   #
   # The step a hold opens is the step tracker's (Steps.on_event, from
   # hold.opened and hold.closed).
+  #
+  # Milestone 4 (its plan, WP5; PRD L161-L167, L374-L380, L392): the four
+  # rule holds (contract_incomplete, check_error, claim_gate_failed,
+  # rerun_limit) open and close here like any other, from the registry's
+  # columns, and the caller says whether check_error's task item opens
+  # (item:, only while the orchestrator is online, SM-39). A hold and a
+  # waiting command (a pending transition, PendingTransitions):
+  #
+  # - a hold opened on a Ready task with a provisional claim cancels the
+  #   claim first, with invalid_state, whatever opens the hold (RD-13,
+  #   rule 11); any other pending transition keeps waiting under the hold,
+  #   its checks running (L378);
+  # - when the last hold on a task lifts, its pending transition is gated
+  #   again (PendingTransitions.reenter, trigger hold_lifted, rule 9),
+  #   unless the task has ended, the hold is closed by the waiting command
+  #   itself while it is performed, or the hold is check_error or
+  #   rerun_limit, whose closer acts on the check and gates the transition
+  #   with it (override_check, rerun_check, a job's result, a rule turned
+  #   off, PendingTransitions.cancel), so it is gated once.
   module Holds
     PAUSES = "pauses".freeze
     # The reasons bound to the seat that holds the task: they close when it
     # loses the task (SM-15; state_machine.json, release's holds_closed).
     SEAT_BOUND = %w[seat_paused credential_limit credential_signed_out].freeze
+    # The holds a check of a pending transition opens (L392, RD-45). Whoever
+    # closes one acts on that check (Let it through once, Run it again, its
+    # result, its rule turned off, the transition cancelled) and gates the
+    # transition again itself, with the check as the trigger.
+    CHECK_HOLDS = %w[check_error rerun_limit].freeze
+    # The holds whose hold.opened names their rule check (DB-49).
+    NAMES_CHECK = %w[check_error claim_gate_failed rerun_limit].freeze
 
     module_function
 
@@ -28,25 +54,44 @@ module Leverage
     # item: - true (the default) opens the Needs you item the registry
     #         names for the reason; false opens none, for a credential_limit
     #         hold that has a due time (milestone 3 plan §2.1 rule 6, HE-4).
+    # rule_check_id: - the rule check a rule's hold is about: on the row,
+    #         and in hold.opened for the reasons of NAMES_CHECK, null for
+    #         the others (DB-49).
     #
     # Returns the Hold.
     def open(ctx, task:, reason:, cause_id: nil, facts: {}, rule_id: nil, credential_id: nil, actor_kind: "app",
-             actor_id: nil, round: task.round, item: true)
+             actor_id: nil, round: task.round, item: true, rule_check_id: nil)
+      lapse_provisional_claim(ctx, task)
       hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id, reason: reason,
-        rule_id: rule_id, credential_id: credential_id, opened_at: ctx.at, opened_by_kind: actor_kind,
-        opened_by_id: actor_id)
+        rule_id: rule_id, credential_id: credential_id, rule_check_id: rule_check_id, opened_at: ctx.at,
+        opened_by_kind: actor_kind, opened_by_id: actor_id)
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
-        actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id })
-      needs_you = needs_you_item(reason)
-      if needs_you && item
-        inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
-          about_id: task.id, hold_id: hold.id, credential_id: credential_id, facts: facts, opened_at: ctx.at,
-          choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
-        ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: opened.id, actor_kind: actor_kind,
-          actor_id: actor_id, payload: { kind: inbox.kind })
+        actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id,
+                                       rule_check_id: (rule_check_id if NAMES_CHECK.include?(reason)) })
+      if item
+        open_item(ctx, hold, task: task, facts: facts, cause_id: opened.id, actor_kind: actor_kind, actor_id: actor_id,
+          round: round)
       end
       leases_of(task).each { |subject| Leases.pause(ctx, subject) } if pauses?(reason)
       hold
+    end
+
+    # Opens the Needs you item the registry names for an open hold's
+    # reason (inbox.opened, with cause_id as its cause), unless it has one
+    # open: what Holds.open does with item: true, and what a check_error
+    # hold opened while the orchestrator was offline gets when its check
+    # ends in error again while the orchestrator is online (SM-39, L400;
+    # PendingTransitions). Returns the InboxItem, or nil when none opened.
+    def open_item(ctx, hold, task:, facts: {}, cause_id: nil, actor_kind: "app", actor_id: nil, round: task.round, **as)
+      needs_you = needs_you_item(hold.reason)
+      return nil if needs_you.nil? || InboxItem.where(hold_id: hold.id, state: "open").exists?
+
+      inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
+        about_id: task.id, hold_id: hold.id, credential_id: hold.credential_id, facts: facts, opened_at: ctx.at,
+        choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
+      ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: cause_id, actor_kind: actor_kind,
+        actor_id: actor_id, payload: { kind: inbox.kind }, **as)
+      inbox
     end
 
     # Closes a hold and resolves its open Needs you item with the owner's
@@ -86,7 +131,10 @@ module Leverage
       if remaining.none? { |open| pauses?(open.reason) }
         leases_of(task).each { |subject| Leases.restart(ctx, subject, at: effective_at) }
       end
-      mark_resume(ctx, task) if remaining.empty?
+      if remaining.empty?
+        mark_resume(ctx, task)
+        reenter_pending(ctx, task) unless CHECK_HOLDS.include?(hold.reason)
+      end
       hold
     end
 
@@ -174,11 +222,38 @@ module Leverage
       [ Task.find(task.id) ] + Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: nil).to_a
     end
 
+    # A provisional claim's reservation lapses when a hold opens (L378,
+    # RD-13): its pending claim is cancelled with invalid_state before the
+    # hold is written (rule 11).
+    def lapse_provisional_claim(ctx, task)
+      pending = PendingTransitions.of(task)
+      PendingTransitions.cancel(ctx, pending, "invalid_state") if pending&.command == "claim"
+    end
+
+    # The last hold lifted: the task's pending transition, if any, is gated
+    # again (L378, rule 9), once: not when that hold is one of its checks'
+    # (CHECK_HOLDS, whose closer gates it), not on a task that has ended
+    # (Cancel closes its holds after withdrawing what waited, EN-30), and
+    # not inside the waiting command itself while it is performed (its key
+    # is the request's, Context#as_requester).
+    def reenter_pending(ctx, task)
+      return if ended?(ctx, Task.find(task.id))
+
+      pending = PendingTransitions.of(task)
+      return if pending.nil? || pending.command_key == ctx.request.key
+
+      PendingTransitions.reenter(ctx, pending, Gating::Trigger.new(kind: :hold_lifted, rule_check_id: nil))
+    end
+
+    def ended?(ctx, task)
+      %w[done cancelled].include?(task.state) ||
+        ctx.events.any? { |event| event.task_id == task.id && Steps::TERMINAL.include?(event.type) }
+    end
+
     def mark_resume(ctx, task)
       task = Task.find(task.id)
       return unless task.holder_seat_id
-      return if %w[done cancelled].include?(task.state)
-      return if ctx.events.any? { |event| event.task_id == task.id && Steps::TERMINAL.include?(event.type) }
+      return if ended?(ctx, task)
 
       task.update!(resume_pending_since: ctx.at)
     end

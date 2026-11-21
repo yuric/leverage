@@ -12,8 +12,11 @@ module Leverage
       # Checked in this order (HE-9), after the timers due on the work's task
       # (the pipeline's step 3):
       #
-      #   404           a job (until jobs arrive, HE-33), or a credential,
-      #                 seat, task or review that is not in the workspace;
+      #   422 invalid   a job: a report that names one is report_job_limit's
+      #                 (milestone 4 plan RD-40; the helper's controller
+      #                 picks the command by the body; HE-33's 404 is gone);
+      #   404           a credential, seat, task or review that is not in
+      #                 the workspace;
       #   422 invalid   a credential that is not an added login, the path
       #                 and the body naming two credentials, a seat with no
       #                 credential, or not exactly one of task and review;
@@ -39,7 +42,7 @@ module Leverage
 
         def load(ctx)
           @params = ctx.request.params
-          raise NotFound, "Reports about jobs arrive with jobs." if @params["job_id"]
+          raise Invalid, "A report that names a job is report_job_limit's or report_job_signed_out's." if @params["job_id"]
 
           workspace_id = ctx.workspace.id
           @credential = Credential.find_by(id: @params["id"], workspace_id: workspace_id) || raise(NotFound, "No such credential")

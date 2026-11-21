@@ -4,7 +4,10 @@ import LeverageKit
 /// A reviewer's work on one review: claim it, acknowledge its briefing,
 /// drive the tool once, read-only, in the work folder, and give the
 /// verdict: passed, or failed naming the builder criteria the tool failed,
-/// with the tool's tokens and spend 0 for a login (CL-6, CL-11).
+/// with the tool's tokens and spend 0 for a login (CL-6, CL-11). A pass that
+/// answers `pending` (a model check at "when the review has passed",
+/// milestone 4) is waited on by its key, with the heartbeat running; once it
+/// is decided, a pass or a failed review alike, the flow ends.
 struct ReviewerFlow: Sendable {
     let context: FlowContext
 

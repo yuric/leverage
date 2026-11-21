@@ -34,7 +34,10 @@ class ColumnsTest < Minitest::Test
     # Text made from the seat's role, the contract and a template, and the
     # fixed interval it tells the agent (milestone 2 plan, Q-15, the owner's
     # issue 11). A read with no table behind it.
-    "LandingPrompt" => %w[text check_interval_minutes]
+    "LandingPrompt" => %w[text check_interval_minutes],
+    # A step's length, closed_at (or the read's as_of for the open one)
+    # less opened_at (milestone 4 plan section 2.3).
+    "TaskStep" => %w[seconds]
   }.freeze
 
   # A trace's rules rows carry the rule's columns, its current version's

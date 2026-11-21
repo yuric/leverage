@@ -2,11 +2,13 @@ require "test_helper"
 
 # The state table's rows for the sign-in group (test 3, PRD L836; milestone
 # 2 plan WP6): create_owner, sign_in, sign_out and issue_seat_token. Each
-# row reads no task state (from: null), changes none (to: null) and writes
-# no event, so each case runs the real entry through the pipeline for a
-# caller the row's "who" names and checks that the command completed and
-# wrote exactly the row's events: none. issue_seat_token also puts the
-# seat's run on the start request's credential (milestone 3 plan HD-3).
+# row reads no task state (from: null) and changes none (to: null), so each
+# case runs the real entry through the pipeline for a caller the row's
+# "who" names and checks that the command completed and wrote exactly the
+# row's events: none, but create_owner's rule.created, once for each
+# shipped rule (milestone 4 plan RD-1, RD-2; SM-33). issue_seat_token also
+# puts the seat's run on the start request's credential (milestone 3 plan
+# HD-3).
 class StateTableSignInTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
@@ -61,12 +63,13 @@ class StateTableSignInTest < ActiveSupport::TestCase
     assert_includes kase.who, who, "#{kase.command} is called by #{who}"
 
     request = request_for(kase.command)
-    events_before = Event.count
+    events_before = Event.pluck(:id)
     outcome = T.apply(request)
 
     assert outcome.completed?, "#{kase.command} completed (got #{outcome.outcome} #{outcome.refusal&.code})"
-    assert_equal kase.events.size, Event.count - events_before,
-      "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
+    written = Event.where.not(id: events_before).order(:seq).map(&:type)
+    times = kase.command == "create_owner" ? Leverage::Rules::Shipped.all.size : 1
+    assert_equal kase.events * times, written, "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
     assert_empty kase.conditional_events
     assert Command.exists?(key: request.key, command: kase.command), "#{kase.command} stores its commands row"
     if kase.command == "issue_seat_token"

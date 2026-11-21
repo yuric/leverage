@@ -149,6 +149,11 @@ jobs:
         run: python3 -I scripts/test_e2e_core_loop.py
       - name: Self-test of the real Gemini check's refusals
         run: python3 -I scripts/test_real_gemini_through_app.py
+      # The real rule check (milestone 4 plan §5.5) is the managing agent's
+      # alone; this proves it refuses CI, a missing switch and another
+      # provider, and starts nothing when it does.
+      - name: Self-test of the real rule check's refusals
+        run: bash scripts/test_real_rule_check.sh
       # Stand-in tools only. It builds the Swift runner lane, in a build
       # folder of its own, to run the runner's driver against them.
       - name: Self-test of the developer check with a real tool
@@ -161,6 +166,14 @@ jobs:
       # drill on its own log.
       - name: The handoff's end-to-end run
         run: scripts/e2e_handoff.sh
+      # The Rule checks milestone's acceptance run: seven tests, each on a
+      # compose project of its own from the first sign-in, which writes the
+      # shipped rules; an orchestrator, a planner, a builder and reviewers
+      # the helper starts on the stand-ins. After each, the replay and the
+      # audit, each rule's timing, and the secret scan with the test's marker
+      # words of task text, which must be in no event's payload and no log.
+      - name: The rule checks' end-to-end run
+        run: scripts/e2e_rule_checks.sh
       # A backup restored into a cluster whose volume was removed, from a
       # seeded log (milestone 3 plan §5.3).
       - name: The restore drill
@@ -169,6 +182,29 @@ jobs:
         run: python3 -I scripts/test_speed_report.py
       - name: Speed smoke run
         run: scripts/speed_run.sh --smoke
+
+  # The eval suite of the rule "Every task needs specific details"
+  # (milestone 4 plan RV-1 to RV-6): its scorer, its check and the guards of
+  # its run script, none of which reaches a provider; then the check that
+  # the committed results meet the bar for each supported model. The
+  # results are written by the managing agent's eval run (plan §5.3), never
+  # in CI.
+  evals:
+    name: Eval suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Self-test of the eval scorer
+        run: python3 -I scripts/test_eval_score.py
+      - name: Self-test of the eval check
+        run: python3 -I scripts/test_check_evals.py
+      - name: Self-test of the eval run's guards
+        run: bash scripts/test_eval_rule.sh
+      - name: The eval results are consistent (a missed bar is printed, not failed)
+        run: python3 -I scripts/check_evals.py
 
   imports:
     name: Import directions

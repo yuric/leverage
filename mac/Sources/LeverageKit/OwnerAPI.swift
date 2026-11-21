@@ -98,6 +98,31 @@ public protocol OwnerAPI: Sendable {
     func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `install_tool`, after the owner confirmed.
     func installTool(provider: Provider, key: IdempotencyKey) async throws -> PlainOutcome
+
+    // Rules and their checks (milestone 4).
+
+    /// `list_rules`: the rules with their current versions, in order.
+    func listRules() async throws -> RulesList
+    /// `add_rule`: a custom rule.
+    func addRule(_ request: AddRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `save_rule`: a new immutable version.
+    func saveRule(ruleID: UUID, _ request: SaveRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `enable_rule`.
+    func enableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `disable_rule`: also withdraws the rule's checks in flight.
+    func disableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `revert_rule`: a shipped rule's own fields, as a new version.
+    func revertRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `remove_rule`: a custom rule only.
+    func removeRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `rerun_check`: "Run it again".
+    func rerunCheck(checkID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+    /// `override_check`: "Let it through once", with the owner's reason.
+    func overrideCheck(checkID: UUID, _ request: OverrideCheckRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `draft_contract`: "Draft the details"; the result is the planner job
+    /// it queued.
+    func draftContract(taskID: UUID, key: IdempotencyKey) async throws -> CommandOutcome<DraftContractResult>
 }
 
 extension OwnerAPI {

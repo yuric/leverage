@@ -86,6 +86,9 @@ func withHandoffWorld(_ name: String, _ body: (HandoffWorld) async throws -> Voi
     let tools = try StandIns.copy(into: folder.url)
     let work = try folder.folder("work")
     let owner = try await EndToEnd.owner()
+    // RT-2: handoff with no rule in the way (the provider rule would keep a
+    // reviewer from a task its provider built after a handoff).
+    try await owner.turnShippedRulesOff()
     try folder.record(secrets: [
         EndToEnd.ownerPassword, owner.transport.token ?? "",
         StandIns.statusEmail, StandIns.statusOrganisation,

@@ -1,0 +1,25 @@
+{
+  "id": "03-fixture-specific-3",
+  "label": "passed",
+  "category": "specific",
+  "why": "Fixture case 3 of the scorer's tests, labelled passed.",
+  "contract": {
+    "title": "Fixture task 3",
+    "goal": "Add a button labelled Fixture 3 to the made-up settings page.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The settings page shows a button labelled Fixture 3.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

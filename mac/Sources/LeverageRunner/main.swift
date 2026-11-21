@@ -2,8 +2,9 @@ import Foundation
 import LeverageKit
 
 // The reference runner (plan §2.2): one seat's run, started by the helper's
-// launcher with its environment (plan §2.4), or `LeverageRunner probe`, the
-// add flow's answering check. It reads its environment, builds the loop,
+// launcher with its environment (plan §2.4), `LeverageRunner probe`, the
+// add flow's answering check, or `LeverageRunner eval`, the eval suite's
+// harness (milestone 4). It reads its environment, builds the loop,
 // and turns SIGTERM or SIGINT into a stop: the tool is ended, what the seat
 // holds is given back, and it exits 0 (CL-23). The helper that started it
 // going away (a crash, SIGKILL) is the same stop (RunnerParent, PK-8). When
@@ -12,16 +13,19 @@ import LeverageKit
 
 let environment = ProcessInfo.processInfo.environment
 
-switch CommandLine.arguments.dropFirst().first {
-case "probe":
+switch RunnerSubcommand(arguments: Array(CommandLine.arguments.dropFirst())) {
+case .probe:
     exit(await Probe.run(environment: environment, log: Log(component: "probe")))
-case "--version":
+case .eval(let arguments):
+    // The eval harness (milestone 4 plan section 2.2, RV-6): no seat, no server.
+    exit(await EvalRun.run(arguments: arguments, environment: environment))
+case .version:
     print("LeverageRunner \(leverageMacVersion)")
     exit(0)
-case nil:
+case .seat:
     break
-case let other?:
-    Log(component: "runner").error("unknown argument \(other); the runner takes none, or probe")
+case .unknown(let other):
+    Log(component: "runner").error("unknown argument \(other); the runner takes none, probe or eval")
     exit(RunnerExit.configuration.rawValue)
 }
 

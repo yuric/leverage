@@ -50,13 +50,14 @@
             }
           },
           "instruction": {
-            "description": "A model-checked rule's instruction is content, kept on its rule version and never in a payload. Its text is written in the milestone named here; null for an app-checked rule.",
+            "description": "A model-checked rule's instruction is content, kept on its rule version and never in a payload: its text, or, until the milestone named here writes it, that milestone (the Rule checks milestone wrote \"specific details\", milestone 4 plan RV-2); null for an app-checked rule.",
             "oneOf": [
+              {"type": "string", "minLength": 1},
               {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["to_be_written_in"],
-                "properties": {"to_be_written_in": {"enum": ["rule_checks", "questions_and_approvals"]}}
+                "properties": {"to_be_written_in": {"enum": ["questions_and_approvals"]}}
               },
               {"type": "null"}
             ]

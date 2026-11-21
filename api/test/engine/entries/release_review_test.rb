@@ -1,9 +1,17 @@
 require "test_helper"
+require_relative "pending_ends_support"
 
 # Release review (PRD Lifecycle L90, L507): the reviewer gives the review
 # back; review.released is written, the task stays In review, unassigned,
 # and another reviewer can claim it.
+#
+# A pending pass of the reviewer (milestone 4 plan §2.1 rule 11) is cancelled
+# with invalid_state, through PendingTransitions.cancel, before
+# review.released is written; with no pending transition nothing is
+# cancelled.
 class ReleaseReviewTest < ActiveSupport::TestCase
+  include PendingEndsSupport
+
   T = Leverage::Transitions
 
   setup do
@@ -48,5 +56,35 @@ class ReleaseReviewTest < ActiveSupport::TestCase
 
   test "a seat that does not hold the review is not_holder" do
     assert_equal "not_holder", apply("release_review", @scenario.seat(role: "reviewer"), "id" => @review.id).refusal.code
+  end
+
+  test "a pending pass is cancelled with invalid_state before review.released is written (rule 11)" do
+    pending = @scenario.pending_transition(@task, command: "pass_review", requester: @reviewer)
+    outcome = nil
+    calls = recording_cancels { outcome = apply("release_review", @reviewer, "id" => @review.id) }
+
+    assert outcome.completed?
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls,
+      "the call is the first thing the command does, and it names the pending pass"
+    assert_equal %w[review.released], written.map(&:type)
+    assert_nil @review.reload.reviewer_seat_id
+  end
+
+  test "a release with no pending transition cancels nothing" do
+    calls = recording_cancels { assert apply("release_review", @reviewer, "id" => @review.id).completed? }
+
+    assert_empty calls
+    assert_equal %w[review.released], written.map(&:type)
+  end
+
+  test "a refused release cancels nothing: the pending pass of the seat that holds the review stays" do
+    @scenario.pending_transition(@task, command: "pass_review", requester: @reviewer)
+    other = @scenario.seat(role: "reviewer")
+    outcome = nil
+    calls = recording_cancels { outcome = apply("release_review", other, "id" => @review.id) }
+
+    assert_equal "not_holder", outcome.refusal.code
+    assert_empty calls
+    assert_equal @reviewer.id, @review.reload.reviewer_seat_id
   end
 end

@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | One environment: the owner's Mac, where the app starts the server's containers; the Handoff milestone, with the daily backup and the restore |
-| **Last updated** | 2026-11-19 |
+| **Status** | One environment: the owner's Mac, where the app starts the server's containers; the Rule checks milestone, with the shipped rules on and an orchestrator agent among the agents |
+| **Last updated** | 2026-11-20 |
 
 This document says how to run and operate leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -59,11 +59,28 @@ environment.
    sign-in command. leverage checks that the tool is installed (offering to
    install it where it can), that the login is signed in, and that it
    answers a test prompt.
-4. In Agents, choose Connect: a builder on one login and a reviewer on
-   another. A seat the app runs starts at once.
-5. Choose Add task, fill in the form and save it. The task goes to Ready,
-   the builder claims it, the reviewer reviews it, and it reaches Done; the
-   task page shows each step in its log.
+4. In Agents, choose Connect: a builder on one login, a reviewer on a
+   login of another provider, and an orchestrator, which checks tasks
+   against the rules and may share a login with either. A seat the app
+   runs starts at once. The seven shipped rules are on from the first
+   sign-in: "Every task needs specific details" is checked by the
+   orchestrator, and the provider rule keeps a reviewer off a provider
+   that built the task, so a first run needs these three agents on two
+   providers. Settings, at the foot of the left pane, lists the rules and
+   turns each on or off.
+5. Choose Add task, fill in the form and save it. The task waits in
+   Backlog, "Checking the details", until the orchestrator has checked it;
+   then it goes to Ready, the builder claims it, the reviewer reviews it,
+   and it reaches Done; the task page shows each step in its log and its
+   Timing section. A task the check sends back says why on its card and
+   its page.
+
+While no orchestrator is connected, or while it is not running, every
+check waits: the health line says so, and Needs you shows "The agent that
+checks tasks is offline" with the number of checks waiting, at the next
+sweep (every 15 seconds) when no orchestrator has polled for 90 seconds or
+none was ever connected. The waiting checks go on by themselves when it
+is back.
 
 Agents run only while the app is open. Closing the window keeps them
 running; quitting the app stops them. The server's containers keep running
@@ -110,6 +127,15 @@ Nothing copies the dumps off the Mac.
 
 Migrations only go forward from the Core loop milestone on: a release that
 changes the schema adds a migration and never rewrites an earlier one.
+
+Each time the server starts, after the database is prepared,
+`bin/rails leverage:install_shipped_rules` writes the seven shipped rules
+of any workspace that has none, as the app with no key, and prints one
+line per workspace it wrote; a workspace that has its rules is left alone.
+So an installation made before the Rule checks milestone gets its rules
+at its first start after the upgrade, before any command runs. The rules
+are part of every briefing, so an agent that holds a task then is told at
+its next call that its briefing changed, and reads it again.
 
 ## Backups and restore
 
@@ -282,7 +308,8 @@ sets:
 | `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
 | `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_NOTIFICATIONS` | app | `off` keeps the app from asking for or posting a notification; `scripts/smoke_app.sh` sets it. A notification is posted only by the app opened as `Leverage.app`. |
-| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh` and `scripts/e2e_handoff.sh` set both. |
+| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the seven rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
+| `LEVERAGE_EVAL`, `LEVERAGE_EVAL_REAL` | `LeverageRunner eval`, `scripts/eval_rule.sh` | The eval suite's name, without which neither runs, and `1` for a run on the real tools, which only the maintainer sets, by hand ([Eval suites and real checks](#eval-suites-and-real-checks)). |
 
 The helper's and a seat's tokens, and the run's inputs (among them
 `LEVERAGE_CREDENTIAL_ID`, the account the run is on, and
@@ -323,13 +350,18 @@ replays the log of every workspace against the tables and prints one line
 per workspace, and `docker compose exec -T api bin/rails
 leverage:recovery_times` prints how long each interrupted run took to get
 back to work. No recovery time ceiling is set yet, so it compares nothing
-unless given one in `CEILING_SECONDS`.
+unless given one in `CEILING_SECONDS`. `docker compose exec -T api
+bin/rails leverage:rule_timing` prints each rule's checks: how often it
+ran, its queue and run times, the time it held tasks up, its tokens and
+reported spend, and how often a check was let through; ids only, no rule's
+name or words.
 
 The checks that cover the whole product, from the repository root:
 
 ```bash
 scripts/e2e_core_loop.sh
 scripts/e2e_handoff.sh
+scripts/e2e_rule_checks.sh
 scripts/restore_drill.sh
 scripts/build_app.sh && scripts/smoke_app.sh
 ```
@@ -343,11 +375,21 @@ work continues on the next account or waits and continues, and the script
 checks the log, each recovery time against a working bar of 900 seconds
 (not the owner's ceiling, which is not set), scans for secrets and the
 reply files' text, and runs the restore drill on the last test's log.
+`scripts/e2e_rule_checks.sh` runs seven tests, each in a compose project
+of its own with the shipped rules on and an orchestrator among the agents
+(the stand-in tools answer the checks): a task from the form to Done, a
+vague task sent back for details, a custom rule that blocks a submit, a
+fourth try that waits for the owner to let it through, the orchestrator
+stopped and started again, the provider rule, and a drafted contract. For
+each it checks the log, prints each rule's timing, and scans for secrets,
+for markers and for the test's task text in events and logs.
 `scripts/restore_drill.sh` alone fills a project of its own with a seeded
 log, dumps it, removes the volume and restores into the new cluster.
 `scripts/smoke_app.sh` opens the built app with a support folder and a
 compose project of its own (`leverage-smoke-<pid>`), notifications off,
-waits for the server's health and the first dump, and removes both.
+waits for the server's health and the first dump, checks that sign-up
+wrote the seven shipped rules and that a second start of the server wrote
+none again, and removes both.
 
 A developer check with a provider's real tool, never in CI, proves the
 runner's command-line flags against a tool already installed and signed in
@@ -368,6 +410,42 @@ skipped because the tool is not installed, and 4 when it was skipped
 because the tool is not signed in. `--evidence <file>` also writes the
 result to a file, and `--timeout` limits the tool run (300 seconds by
 default).
+
+### Eval suites and real checks
+
+Three more runs reach a provider's real tool, signed in on the Mac. Each
+is the maintainer's, never runs in CI, refuses to start (exit 2) when `CI`
+is set, and runs on a real tool only with its switch set by hand:
+
+```bash
+LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
+LEVERAGE_REAL_PROVIDER=claude scripts/real_rule_check.sh claude   # or codex, gemini
+LEVERAGE_REAL_PROVIDER=gemini scripts/real_rule_check.sh gemini --through-app
+```
+
+`scripts/eval_rule.sh` runs the 24 cases of `evals/specific-details/` on
+each supported tool's default model, scores them against the bar and
+writes the results, `runs.json` and `RESULTS.md` into the suite's folder
+([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)). It spends
+up to 30 tool runs per model, keeps the count in `runs.json`, and refuses
+(exit 3) a run past three per model, 90 tool runs per model or 270 in all.
+`LEVERAGE_EVAL_PROVIDERS` names fewer providers (default `claude codex
+gemini`), and `LEVERAGE_EVAL_CODEX_HOME` chooses another folder Codex is
+already signed in to. It signs in to nothing. With `LEVERAGE_TOOL_DIR` on
+a copy of the stand-in tools in place of `LEVERAGE_EVAL_REAL`, and
+`--out <folder>`, anyone may run it; nothing then reaches a provider.
+
+`scripts/real_rule_check.sh` starts the containers under a project of
+its own, connects one orchestrator on the named provider (for
+`--through-app`, a Gemini login added through Add credential, which the
+helper starts), completes two contracts from the suite, one specific and
+one vague, and passes when the first is Ready and the second is held for
+details within 5 minutes, the log replays and the secret scan finds
+nothing: two tool runs. It exits 3 when the tool is not installed.
+`python3 -I scripts/check_evals.py`, which CI runs, needs no provider: it
+checks the cases, that each supported model has a result for today's
+instruction and cases, the scores, and the registry's list of providers
+the suite covered.
 
 ## Stopping and rolling back
 
@@ -393,7 +471,9 @@ the first one.
 
 The server's logs are `docker compose -p leverage-app logs api sweep
 backup`: one `leverage.command` line per command with its timings, the
-sweep's passes and each dump. The Mac side's logs are under
+sweep's passes and each dump. A request's logged parameters keep only
+ids, numbers and true or false; every other text, task text among it, is
+`[FILTERED]`. The Mac side's logs are under
 `<support folder>/logs/`. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.

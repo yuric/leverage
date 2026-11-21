@@ -16,21 +16,24 @@ module Leverage
       # Without, a seat that connects on its own: it must name its provider
       # (seats.provider is required), and its token is returned once.
       #
-      # Builder and reviewer only in this milestone; planner and
-      # orchestrator seats arrive with rules (milestone 4) and are 422
-      # invalid. An empty or null model or effort is stored as "" (the
-      # tool's default, IN-29); the strength rank is 1 unless sent.
+      # Any of the four roles (registry seat_roles): the planner and the
+      # orchestrator arrived with rules (milestone 4 plan §0.1 fact 12,
+      # RV-5), and are connected exactly as a builder is, on any login, with
+      # or without a model; nothing is refused for an orchestrator's
+      # provider or model (L955). Another role is 422 invalid. An empty or
+      # null model or effort is stored as "" (the tool's default, IN-29);
+      # the strength rank is 1 unless sent.
       #
       # Params: "name", "role", "provider", "model", "effort",
       # "strength_rank", "credential_id".
       class ConnectSeat < Entry
-        ROLES = %w[builder reviewer].freeze
+        ROLES = Contract.list("seat_roles").freeze
 
         def load(ctx)
           params = ctx.request.params
           @name, @role, @provider = params.values_at("name", "role", "provider")
           raise Invalid, "A seat needs a name" unless @name.is_a?(String) && !@name.empty?
-          raise Invalid, "Connect offers builder and reviewer seats in this milestone" unless ROLES.include?(@role)
+          raise Invalid, "A seat's role is one of #{ROLES.join(", ")}" unless ROLES.include?(@role)
 
           params["credential_id"] ? load_login(ctx, params["credential_id"]) : load_own
         end

@@ -42,6 +42,71 @@ class LogAuditTest < ActiveSupport::TestCase
     end
   end
 
+  # Milestone 4 (its plan RE-3, RT-4): a waiting command's own events under
+  # its key in the command that brings the last result, rule check, job and
+  # hold events beside a command's row, the job timers' and the workspace
+  # timers' events with no key, and the one-time write of the shipped rules.
+  %w[
+    01-happy-path 02-failed-review-rework 05-limit-handoff 06-signed-out-hold-verify
+    07-pending-gate-check-error-override 08-lease-expiry-and-cancel 16-model-gate-and-draft
+    17-submit-rule-rerun-and-override 18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
+  ].each do |name|
+    test "the log of trace #{name}, with its rules, checks and jobs, passes" do
+      assert_empty audit(run_trace(name))
+    end
+  end
+
+  # RE-3's second key: a row's own events may be written under another
+  # command's key only when a pending transition of that key exists.
+  test "a move written later under a key that never waited is found" do
+    runner = run_trace("16-model-gate-and-draft")
+    key = key_of(runner, "$key:t1_complete_2")
+    PendingTransition.where(workspace_id: runner.workspace_id, command_key: key).update_all(command_key: "made-up-key")
+    found = audit(runner)
+    assert(found.any? { |line| line.include?(key) && line.include?("never waited") }, found.inspect)
+  end
+
+  # RT-4: no task.ready, task.claimed, task.submitted or review.passed
+  # whose command had, at its hook, an enabled blocking gate without a row
+  # that passed, did not apply, was withdrawn or was overridden.
+  test "a move past a blocking gate whose check did not pass is found" do
+    runner = run_trace("16-model-gate-and-draft")
+    key = key_of(runner, "$key:t1_complete_2")
+    pending = PendingTransition.find_by!(workspace_id: runner.workspace_id, command_key: key)
+    rule = Rule.find_by!(workspace_id: runner.workspace_id, key: "specific_details")
+    check = RuleCheck.where(pending_transition_id: pending.id, rule_id: rule.id).sole
+    check.update_columns(result: "failed")
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("task.ready") && line.include?(check.rule_id) }, found.inspect)
+  end
+
+  test "a move past a blocking gate with no check at all is found" do
+    runner = run_trace("01-happy-path")
+    RuleCheckAttempt.where(workspace_id: runner.workspace_id).delete_all
+    RuleCheck.where(workspace_id: runner.workspace_id).delete_all
+    found = audit(runner)
+    assert(found.any? { |line| line.include?("task.ready") && line.include?("gate") }, found.inspect)
+  end
+
+  # RC-50, RD-12: review claim-next writes the provider rule's applied row
+  # for the review it skips, on that review's task, and claims another.
+  test "a review claim-next that skips one task's review and claims another's passes" do
+    scenario = Scenario.new
+    scenario.rule(key: "different_provider_review", origin: "shipped")
+    claude = scenario.credential(provider: "claude")
+    skipped = scenario.task(state: "in_review", builder: scenario.seat(credential: claude))
+    taken = scenario.task(state: "in_review", builder: scenario.seat(credential: scenario.credential(provider: "codex")))
+    reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "claude", name: "Another claude"))
+    after = scenario.workspace.reload.last_seq
+    outcome = T.apply(T::Request.new(command: "claim_review", workspace_id: scenario.workspace_id, caller_kind: "seat",
+      caller_id: reviewer.id, key: "skip-and-claim", request_hash: "s" * 64, params: {}))
+
+    assert outcome.completed?, outcome.refusal&.code
+    written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", after).order(:seq)
+    assert_equal [ [ "check.finished", skipped.id ], [ "review.started", taken.id ] ], written.pluck(:type, :task_id)
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
+  end
+
   # credential.switched is a side event in the registry, but only the rows
   # that name it may write it (milestone 3 plan §2.3 and WP9): the trace's
   # last command (pass_review, which ends the task) with a switch appended

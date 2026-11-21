@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../gate_support"
 
 # Complete contract (PRD Lifecycle L80, L175; milestone 2 plan SC-3): from
 # Backlog to Ready at task.before_ready, writing task.contract_changed and
@@ -7,7 +8,7 @@ class CompleteContractTest < ActiveSupport::TestCase
   T = Leverage::Transitions
 
   # Records the hooks gating is asked at.
-  class Recording < Leverage::Gating::NoRules
+  class Recording < Leverage::Rules::Engine
     attr_reader :hooks
 
     def initialize
@@ -180,5 +181,48 @@ class CompleteContractTest < ActiveSupport::TestCase
     assert layout.reload.removed_at
     assert review.reload.removed_at
     assert_equal [ copy.id, added.id ], Criterion.where(task_id: @task.id, removed_at: nil).order(:position).pluck(:id)
+  end
+end
+
+# Complete contract at its gate (milestone 4 plan §2.1 rules 6 and 7, RD-10,
+# RE-6): a failed gate commits the contract change alone and opens
+# contract_incomplete; a model check makes it wait with its request kept.
+class CompleteContractGatedTest < ActiveSupport::TestCase
+  include GateSupport
+
+  setup do
+    @scenario = Scenario.new
+    @owner = @scenario.owner
+  end
+
+  test "a failed gate commits the contract change only: Backlog, the next version, contract_incomplete naming the rule and its check" do
+    rule = app_rule("task.before_ready")
+    gating([ rule, { app_result: "failed" } ])
+    task = @scenario.task(state: "backlog")
+    outcome = command("complete_contract", @owner, contract_params(task))
+
+    assert outcome.completed?
+    assert_equal %w[check.finished task.contract_changed hold.opened], types
+    finished, changed, opened = written
+    assert_equal [ "backlog", 1 ], task.reload.values_at(:state, :contract_version)
+    assert_equal 2, Criterion.where(task_id: task.id).count
+    assert_equal [ "owner", @owner.id, finished.id ], [ opened.actor_kind, opened.actor_id, opened.cause_id ]
+    assert_equal({ "reason" => "contract_incomplete", "rule_id" => rule.id, "credential_id" => nil, "rule_check_id" => nil },
+      opened.payload)
+    assert_equal mine(RuleCheck).sole.id, mine(Hold).sole.rule_check_id
+    assert_nil changed.cause_id
+  end
+
+  test "a model check makes it wait: the task stays in Backlog and the request is kept for the move" do
+    with_jobs do
+      gating(custom_rule("task.before_ready", route: "owner"))
+      task = @scenario.task(state: "backlog")
+      params = contract_params(task)
+
+      assert_equal :pending, command("complete_contract", @owner, params).outcome
+      assert_equal [ "backlog", 0 ], task.reload.values_at(:state, :contract_version)
+      assert_equal params, Leverage::PendingTransitions.of(task).params
+      assert_equal 0, Criterion.where(task_id: task.id).count
+    end
   end
 end

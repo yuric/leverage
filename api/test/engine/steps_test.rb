@@ -25,8 +25,10 @@ class StepTrackerTest < ActiveSupport::TestCase
   def feed(name)
     trace = @binder.bind(Leverage::Contract.trace(name))
     @scenario = Scenario.new.seed(trace.fetch("setup"))
+    @bodies = {}
     trace.fetch("commands").each_with_index do |command, index|
       expect = command.fetch("expect")
+      @bodies[command["key"]] = command.fetch("body") if command["key"]
       rows_for(command)
       ids = ActiveRecord::Base.transaction(requires_new: true) do
         ctx = @scenario.context(at: Time.iso8601(command.fetch("at")))
@@ -39,7 +41,11 @@ class StepTrackerTest < ActiveSupport::TestCase
   end
 
   # The rows a trace's events are about that a command's entry would make:
-  # the task, and the contract's criteria with their kinds.
+  # the task, the contract's criteria with their kinds, and the jobs with
+  # theirs (a job.claimed opens draft only for a contract draft's job). A
+  # contract a pending transition completes is the request of the command
+  # whose key its events carry (milestone 4 plan RE-2, RE-3), and a
+  # planner's is the result of its job (RE-6).
   def rows_for(command)
     command.fetch("expect").fetch("events").each do |event|
       case event.fetch("type")
@@ -47,13 +53,28 @@ class StepTrackerTest < ActiveSupport::TestCase
         Task.create!(id: event.fetch("task_id"), workspace_id: @scenario.workspace_id,
           state: event.dig("payload", "state"))
       when "task.contract_changed"
-        kinds = command.fetch("body").fetch("criteria").map { |criterion| criterion.fetch("kind") }
+        body = @bodies.fetch(event.fetch("command_id"))
+        kinds = (body["criteria"] || body.fetch("result").fetch("criteria")).map { |criterion| criterion.fetch("kind") }
         event.dig("payload", "added_criterion_ids").each_with_index do |id, position|
           Criterion.create!(id: id, workspace_id: @scenario.workspace_id, task_id: event.fetch("task_id"),
             position: position + 1, kind: kinds.fetch(position), text: "Made-up criterion #{position + 1}.")
         end
+      when "job.queued"
+        job_row(event.fetch("subject_id"), event.dig("payload", "kind"), event)
+      when "check.queued"
+        job_row(event.dig("payload", "job_id"), "rule_check", event)
       end
     end
+  end
+
+  def job_row(id, kind, event)
+    return if Job.exists?(id: id)
+
+    Job.create!(id: id, workspace_id: @scenario.workspace_id, kind: kind, task_id: event.fetch("task_id"),
+      target_kind: kind == "rule_check" ? "rule_check" : "task",
+      target_id: kind == "rule_check" ? event.fetch("subject_id") : event.fetch("task_id"),
+      seat_role: kind == "contract_draft" ? "planner" : "orchestrator", queued_at: Time.iso8601(event.fetch("at")),
+      input: {})
   end
 
   # Appends one expected event; EventLog gives it a new id, remembered
@@ -135,6 +156,40 @@ class StepTrackerTest < ActiveSupport::TestCase
     end
   end
 
+  # Milestone 4 (its plan, WP5): the rule checks' traces, row for row. The
+  # commands that write their events are other packages'; here the events
+  # alone drive the tracker: check opens at a pending transition's first
+  # blocking check.queued and closes where the transition ends, and draft
+  # is a planner's claimed job. Trace 19 is not fed here: its rules come
+  # from install_shipped_rules, whose rule rows the feed does not make. It
+  # runs whole, steps included, in golden_traces_test.rb, and the
+  # wait_review cause it shows (RD-11) has a test of its own below.
+  {
+    "07-pending-gate-check-error-override" => "check under a pending move to Ready, wait_owner for check_error",
+    "16-model-gate-and-draft" => "check, contract_incomplete's new wait_contract row, and draft",
+    "17-submit-rule-rerun-and-override" => "a refused submit back to finish, rerun_limit, a warn check with no step",
+    "18-claim-gate-done-gate-and-ends" => "provisional claims, the claim gate, the done gate, and waits ended from outside"
+  }.each do |name, what|
+    test "trace #{name[0, 2]}'s events yield exactly its steps: #{what}" do
+      feed(name)
+      ended = TaskStep.where(workspace_id: @scenario.workspace_id).distinct.pluck(:task_id)
+        .reject { |task_id| TaskStep.where(task_id: task_id, closed_at: nil).exists? }
+      ended.each { |task_id| assert_lifetime(task_id) }
+    end
+  end
+
+  test "trace 18: a waiting command ended from outside closes check where the transition ends, with no step between" do
+    feed("18-claim-gate-done-gate-and-ends") do |number, ids|
+      next unless [ 11, 36, 46, 51 ].include?(number)
+
+      closed = TaskStep.find_by!(kind: "check", closing_event_id: ids)
+      expected = { 11 => "task.released", 36 => "task.lease_expired", 46 => "check.finished", 51 => "task.cancelled" }
+      assert_equal expected.fetch(number), Event.find(closed.closing_event_id).type
+      assert_equal (number == 51 ? 0 : 1), TaskStep.where(opening_event_id: ids).count,
+        "the command changes the open step once (steps.json, derived rule)"
+    end
+  end
+
   test "trace 11: wait_limit names the credential the hold names and the seat that holds the task" do
     feed("11-limit-handoff-no-rules") do |number, ids|
       next unless number == 9
@@ -213,7 +268,7 @@ class StepTrackerTest < ActiveSupport::TestCase
     hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, reason: "owner_hold", opened_at: Time.current,
       opened_by_kind: "owner")
     in_context(key: "k-late") do |ctx|
-      ctx.emit("hold.opened", task: task, subject: hold, payload: { reason: "owner_hold", rule_id: nil, credential_id: nil })
+      ctx.emit("hold.opened", task: task, subject: hold, payload: { reason: "owner_hold", rule_id: nil, credential_id: nil, rule_check_id: nil })
     end
 
     assert_equal count, TaskStep.where(task_id: task.id).count
@@ -373,12 +428,177 @@ class StepTrackerTest < ActiveSupport::TestCase
       [ ctx.emit("review.failed", task: task, subject: review,
           payload: { failed_criterion_ids: [], failed_rule_check_id: nil, lease_seat_id: builder.id, wait_cause: nil }),
         ctx.emit("hold.opened", task: task, subject: hold, actor_kind: "app", actor_id: nil,
-          payload: { reason: "rounds_exceeded", rule_id: nil, credential_id: nil }) ]
+          payload: { reason: "rounds_exceeded", rule_id: nil, credential_id: nil, rule_check_id: nil }) ]
     end
 
     assert_equal before + 1, TaskStep.where(task_id: task.id).count, "one row closes and one opens"
     assert_equal failed.id, TaskStep.find_by!(task_id: task.id, kind: "review").closing_event_id
     assert_equal [ "wait_owner", opened.id, 1 ], open_step(task).values_at(:kind, :opening_event_id, :round)
+  end
+
+  # --- Rule checks and jobs (milestone 4 plan WP5; SM-24, RD-11) ---------
+
+  test "a blocking model check opens check on its pending transition; a warn check opens no step (RC-16)" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    finish = open_step(task)
+
+    queue_check(task, hook: "task.before_submit", pending: nil, blocking: false, actor: builder)
+    assert_equal finish.id, open_step(task).id, "a warn check is not a step (steps.json, derived rule 4)"
+
+    pending = SecureRandom.uuid
+    queued = queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    assert_equal [ "check", "rule_check", "pending_transition", pending, nil, queued.id ],
+      open_step(task).values_at(:kind, :step_class, :subject_kind, :subject_id, :seat_id, :opening_event_id)
+    assert_equal queued.id, finish.reload.closing_event_id
+
+    check = open_step(task)
+    queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    assert_equal check.id, open_step(task).id, "a second check of the same transition opens nothing"
+  end
+
+  test "a refused submit goes back to finish for the builder; a passed check alone changes nothing" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    pending = SecureRandom.uuid
+    first = queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    second = queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    check = open_step(task)
+
+    finish_check(task, first, result: "passed")
+    assert_equal check.id, open_step(task).id, "the other check still runs"
+    failed = finish_check(task, second, result: "failed")
+    assert_equal [ "finish", builder.id, failed.id ], open_step(task).values_at(:kind, :seat_id, :opening_event_id)
+    assert_equal failed.id, check.reload.closing_event_id
+  end
+
+  test "an errored check keeps the transition pending, except at task.before_claim, where the claim lapses" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    queued = queue_check(task, hook: "task.before_submit", pending: SecureRandom.uuid, actor: builder)
+    check = open_step(task)
+    finish_check(task, queued, result: "error")
+    assert_equal check.id, open_step(task).id, "check_error's hold, which follows, is what moves the step (L392)"
+
+    ready = @scenario.task(state: "ready")
+    claim = queue_check(ready, hook: "task.before_claim", pending: SecureRandom.uuid, actor: builder,
+      subject: [ "seat", builder.id ], claimant: builder)
+    assert_equal "check", open_step(ready).kind
+    lapsed = finish_check(ready, claim, result: "error", wait_cause: "credential_limit")
+    assert_equal [ "wait_ready", "credential_limit", lapsed.id ],
+      open_step(ready).values_at(:kind, :cause_kind, :opening_event_id)
+  end
+
+  test "a withdrawn check ends the transition only when no other check of it is still running" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    pending = SecureRandom.uuid
+    first = queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    second = queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    check = open_step(task)
+
+    finish_check(task, first, result: "withdrawn")
+    assert_equal check.id, open_step(task).id, "a rule turned off withdraws its check; the other still runs (L379)"
+    finish_check(task, second, result: "withdrawn")
+    assert_equal [ "finish", builder.id ], open_step(task).values_at(:kind, :seat_id)
+  end
+
+  test "a check withdrawn when its rule is turned off, then the completion in the same command: check closes there" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    queued = queue_check(task, hook: "task.before_submit", pending: SecureRandom.uuid, actor: builder)
+    check = open_step(task)
+    withdrawn, submitted = in_context(key: nil) do |ctx|
+      [ ctx.emit("check.finished", task: task, subject_kind: "rule_check", subject_id: queued.subject_id,
+          payload: finished_payload(queued, result: "withdrawn")),
+        ctx.emit("task.submitted", task: task, subject_kind: "review", subject_id: SecureRandom.uuid, actor_kind: "seat",
+          actor_id: builder.id, payload: { work_reference_changed: false }) ]
+    end
+
+    assert_equal submitted.id, check.reload.closing_event_id, "check closes at the event that ends the transition"
+    assert_equal [ "wait_review", submitted.id ], open_step(task).values_at(:kind, :opening_event_id)
+    assert_nil TaskStep.find_by(opening_event_id: withdrawn.id), "no step opens between them"
+  end
+
+  test "a hold over a pending check makes the open step the hold's; when it lifts, check opens again on the same transition" do
+    @scenario = Scenario.new
+    builder = @scenario.seat(role: "builder")
+    task = finishing(builder)
+    pending = SecureRandom.uuid
+    queue_check(task, hook: "task.before_submit", pending: pending, actor: builder)
+    hold = open_hold(task, "owner_hold")
+    assert_equal [ "wait_owner", hold.id ], open_step(task).values_at(:kind, :subject_id), "L378"
+
+    close_hold(task, hold)
+    assert_equal [ "check", "pending_transition", pending ], open_step(task).values_at(:kind, :subject_kind, :subject_id)
+  end
+
+  test "draft: a planner's claim of the draft job opens it; the job timing out or withdrawn reopens wait_contract (SM-24)" do
+    @scenario = Scenario.new
+    planner = @scenario.planner
+    task = @scenario.task(state: "backlog")
+    job = @scenario.job(kind: "contract_draft", task: task)
+    assert_equal "wait_contract", open_step(task).kind, "queue time is wait_contract: nobody is writing it yet"
+
+    claimed = job_event("job.claimed", task, job, planner)
+    assert_equal [ "draft", "working", "job", job.id, planner.id, claimed.id ],
+      open_step(task).values_at(:kind, :step_class, :subject_kind, :subject_id, :seat_id, :opening_event_id)
+    timed_out = job_event("job.timed_out", task, job)
+    assert_equal [ "wait_contract", timed_out.id ], open_step(task).values_at(:kind, :opening_event_id)
+
+    again = Job.create!(workspace_id: task.workspace_id, kind: "contract_draft", task_id: task.id, target_kind: "task",
+      target_id: task.id, seat_role: "planner", queued_at: @scenario.database_now, input: {}, attempt_number: 2)
+    job_event("job.claimed", task, again, planner)
+    assert_equal [ "draft", again.id ], open_step(task).values_at(:kind, :subject_id), "the requeued job's claim"
+    withdrawn = job_event("job.withdrawn", task, again)
+    assert_equal [ "wait_contract", withdrawn.id ], open_step(task).values_at(:kind, :opening_event_id)
+
+    check_job = @scenario.job(kind: "rule_check", task: task)
+    step = open_step(task)
+    job_event("job.claimed", task, check_job, @scenario.orchestrator)
+    assert_equal step.id, open_step(task).id, "an orchestrator's claim of a check's job is no step of its own"
+  end
+
+  test "a contract_incomplete hold opens a new wait_contract row (SM-24)" do
+    @scenario = Scenario.new
+    task = @scenario.task(state: "backlog")
+    waiting = open_step(task)
+    hold = open_hold(task, "contract_incomplete")
+
+    assert_equal [ "wait_contract", hold.id ], [ open_step(task).kind, Event.find(open_step(task).opening_event_id).subject_id ]
+    assert_not_equal waiting.id, open_step(task).id
+    assert_equal open_step(task).opening_event_id, waiting.reload.closing_event_id
+  end
+
+  test "wait_review names the provider rule from its first refusal, once per wait (RD-11)" do
+    @scenario = Scenario.new
+    rule = @scenario.with_shipped_rules.find { |shipped| shipped.key == "different_provider_review" }
+    reviewer = @scenario.seat(role: "reviewer")
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id, verdict: nil)
+    waiting = open_step(task)
+
+    refused = refuse_reviewer(task, rule, reviewer)
+    assert_equal [ "wait_review", "rule", rule.id, "review", review.id, refused.id ],
+      open_step(task).values_at(:kind, :cause_kind, :cause_rule_id, :subject_kind, :subject_id, :opening_event_id)
+    assert_equal refused.id, waiting.reload.closing_event_id
+
+    named = open_step(task)
+    refuse_reviewer(task, rule, @scenario.seat(role: "reviewer"))
+    assert_equal named.id, open_step(task).id, "a second refusal in the same wait opens nothing"
+
+    other = @scenario.seat(role: "reviewer")
+    @scenario.review(task, reviewer: other)
+    seat_event("review.released", task, other, subject: review)
+    assert_equal [ "wait_review", nil, nil ], open_step(task).values_at(:kind, :cause_kind, :cause_rule_id),
+      "a new wait names no cause until the rule refuses again"
+    refuse_reviewer(task, rule, reviewer)
+    assert_equal [ "rule", rule.id ], open_step(task).values_at(:cause_kind, :cause_rule_id)
   end
 
   test "an event milestone 2 cannot write raises instead of guessing a step" do
@@ -412,7 +632,7 @@ class StepTrackerTest < ActiveSupport::TestCase
   def open_hold(task, reason)
     hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, reason: reason, opened_at: Time.current,
       opened_by_kind: "app")
-    @scenario.append("hold.opened", task: task, subject: hold, payload: { reason: reason, rule_id: nil, credential_id: nil })
+    @scenario.append("hold.opened", task: task, subject: hold, payload: { reason: reason, rule_id: nil, credential_id: nil, rule_check_id: nil })
     hold
   end
 
@@ -420,6 +640,58 @@ class StepTrackerTest < ActiveSupport::TestCase
     hold.update!(closed_at: Time.current, closed_by_kind: "owner", closed_by_id: @scenario.owner.id)
     @scenario.append("hold.closed", task: task, subject: hold, actor_kind: "owner", actor_id: @scenario.owner.id,
       payload: { reason: hold.reason, rule_id: nil, credential_id: nil, lease_seat_id: nil, wait_cause: nil })
+  end
+
+  # A Working task whose builder criteria have all passed, acknowledged:
+  # finish is open, as before a submit.
+  def finishing(builder)
+    task = @scenario.task(state: "working", builder: builder)
+    Criterion.where(task_id: task.id, kind: "build").find_each do |criterion|
+      seat_event("criterion.passed", task, builder, subject: criterion)
+    end
+    acknowledge(task, builder)
+    assert_equal "finish", open_step(task).kind
+    task
+  end
+
+  # A check.queued of a model check in a command of its own (a new rule
+  # check and job, made-up ids). pending is the transition's id, or nil for
+  # a warn check. Returns the Event.
+  def queue_check(task, hook:, pending:, actor:, blocking: true, subject: [ nil, nil ], claimant: nil)
+    @scenario.append("check.queued", task: task, actor_kind: "seat", actor_id: actor.id,
+      subject: RuleCheck.new(id: SecureRandom.uuid),
+      payload: { hook: hook, rule_id: SecureRandom.uuid, rule_version_id: SecureRandom.uuid, attempt_number: 1,
+                 job_id: SecureRandom.uuid, blocking: blocking, claimant_seat_id: claimant&.id,
+                 pending_transition_id: pending, action_id: nil, subject_kind: subject.first, subject_id: subject.last,
+                 input_hash: "0" * 64 })
+  end
+
+  # The check.finished of the check a check.queued queued, by the app.
+  def finish_check(task, queued, result:, wait_cause: nil)
+    @scenario.append("check.finished", task: task, subject: RuleCheck.new(id: queued.subject_id),
+      payload: finished_payload(queued, result: result, wait_cause: wait_cause))
+  end
+
+  def finished_payload(queued, result:, wait_cause: nil)
+    queued.payload.slice("hook", "rule_id", "rule_version_id", "subject_kind", "subject_id", "input_hash")
+      .merge("result" => result, "effect" => nil, "wait_cause" => wait_cause)
+  end
+
+  # The provider rule's applied row with effect refused, for a reviewer
+  # claim-next skips (RC-50, RD-12).
+  def refuse_reviewer(task, rule, reviewer)
+    @scenario.append("check.finished", task: task, subject: RuleCheck.new(id: SecureRandom.uuid), actor_kind: "seat",
+      actor_id: reviewer.id,
+      payload: { hook: "review.assign", rule_id: rule.id, rule_version_id: @scenario.current_version(rule).id,
+                 result: "applied", effect: "refused", wait_cause: nil, subject_kind: "seat", subject_id: reviewer.id,
+                 input_hash: "0" * 64 })
+  end
+
+  # A job event on the task: by the seat when one is named, else the app.
+  def job_event(type, task, job, seat = nil)
+    payload = type == "job.claimed" ? { credential_id: nil, model: nil } : {}
+    @scenario.append(type, task: task, subject: job, payload: payload, actor_kind: seat ? "seat" : "app",
+      actor_id: seat&.id)
   end
 
   def assert_lifetime(task_id)

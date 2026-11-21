@@ -13,11 +13,16 @@
 # only in this process.
 #
 #   ruby script/speed/run.rb [--url URL] [--seats 50] [--seconds 120]
-#                            [--tick 2] [--smoke]
+#                            [--tick 2] [--specific-details on|off] [--smoke]
 #
 # --smoke is 4 seats for 20 seconds. Exit codes: 0 the run worked; 1 the
 # server could not be set up or a call was refused or failed that should
 # not have been; 2 no seat did any work.
+#
+# milestone 4 plan RD-60, 5.4: the shipped rules stay on, and "specific
+# details" (the rule with the key specific_details) is turned off through
+# disable_rule before the seats connect, unless --specific-details on is
+# given. Every other shipped rule is left as the server installed it.
 require "json"
 require "net/http"
 require "optparse"
@@ -27,7 +32,10 @@ require "uri"
 module Speed
   REGISTRY = File.expand_path("../../contract/registry.json", __dir__)
 
-  Options = Struct.new(:url, :seats, :seconds, :tick, keyword_init: true)
+  Options = Struct.new(:url, :seats, :seconds, :tick, :specific_details, keyword_init: true)
+
+  # The shipped rule the measurement turns off (its key in shipped_rules.json).
+  SPECIFIC_DETAILS_KEY = "specific_details".freeze
 
   # Operation id -> [method, path template], from the contract.
   OPERATIONS = JSON.parse(File.read(REGISTRY)).fetch("operations")
@@ -228,11 +236,32 @@ module Speed
     def run
       wait_for_server
       sign_in
+      turn_specific_details_off unless @options.specific_details
       connect_seats
       preload_tasks
     end
 
     private
+
+    # Sends disable_rule for the shipped specific_details rule when it is on,
+    # as list_rules answers it; a rule that is off already is left as it is.
+    def turn_specific_details_off
+      status, body = @owner.call("list_rules")
+      abort "speed_run: list_rules answered #{status}" unless status == 200
+      row = body.fetch("rules", []).find do |r|
+        r.dig("rule", "key") == Speed::SPECIFIC_DETAILS_KEY &&
+          r.dig("version", "origin") == "shipped" && r.dig("rule", "enabled")
+      end
+      unless row
+        puts "speed_run: specific details is off already"
+        return
+      end
+
+      status, body = @owner.call("disable_rule", ids: { "id" => row.dig("rule", "id") }, body: {})
+      abort "speed_run: disable_rule answered #{status}: #{body.to_json[0, 300]}" unless status == 200 && body["outcome"] == "completed"
+      @tally.note("specific details turned off")
+      puts "speed_run: specific details turned off through disable_rule"
+    end
 
     def wait_for_server
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 90
@@ -323,12 +352,16 @@ module Speed
   end
 
   def self.main(argv)
-    options = Options.new(url: ENV.fetch("SPEED_API_URL", "http://api:3000"), seats: 50, seconds: 120, tick: 2.0)
+    options = Options.new(url: ENV.fetch("SPEED_API_URL", "http://api:3000"), seats: 50, seconds: 120, tick: 2.0,
+                          specific_details: false)
     OptionParser.new do |o|
       o.on("--url URL") { |v| options.url = v }
       o.on("--seats N", Integer) { |v| options.seats = v }
       o.on("--seconds N", Integer) { |v| options.seconds = v }
       o.on("--tick N", Float) { |v| options.tick = v }
+      o.on("--specific-details MODE", %w[on off], "the rule \"specific details\": on or off (default off)") do |v|
+        options.specific_details = v == "on"
+      end
       o.on("--smoke") { options.seats = 4; options.seconds = 20 }
     end.parse!(argv)
     abort "speed_run: --seats must be an even number of at least 2" unless options.seats >= 2 && options.seats.even?

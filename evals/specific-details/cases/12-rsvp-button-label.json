@@ -1,0 +1,25 @@
+{
+  "id": "12-rsvp-button-label",
+  "label": "passed",
+  "category": "short_but_specific",
+  "why": "Short, but it names the button, the form and the new label, and the criterion is the label anyone can read.",
+  "contract": {
+    "title": "Rename the RSVP button",
+    "goal": "Rename the Submit button of the Hollowbrook RSVP form to Send my reply, so guests know what it does.",
+    "details": null,
+    "criteria": [
+      {
+        "text": "The RSVP form's button reads Send my reply.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

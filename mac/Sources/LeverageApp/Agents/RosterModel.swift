@@ -26,8 +26,13 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let canChange: Bool
     /// What pausing does and does not do (HE-26), on a paused agent's row.
     let pausedNote: String?
+    /// "Not tested for checking tasks." on an orchestrator the eval suite did not cover (RV-5).
+    let notTestedNote: String?
 
-    init(seat: Seat, loginName: String?, doing: String?, waitingFor: String? = nil, now: Date) {
+    init(
+        seat: Seat, loginName: String?, doing: String?, waitingFor: String? = nil, now: Date,
+        testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
+    ) {
         id = seat.id
         name = seat.name
         let runsOnApp = seat.credentialID != nil
@@ -81,6 +86,10 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         canResume = seat.paused
         canChange = true
         pausedNote = seat.paused ? AgentsCopy.pausedNote.text : nil
+        notTestedNote = seat.role == .orchestrator
+            && OrchestratorTesting.isUntested(
+                provider: seat.provider, model: seat.model, connectsOnItsOwn: !runsOnApp, tested: testedProviders)
+            ? AgentsCopy.notTestedForChecking.text : nil
     }
 }
 
@@ -129,6 +138,7 @@ final class RosterModel {
     @ObservationIgnored private let copy: @MainActor (String) -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timing: FollowTiming
+    @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var seats: [UUID: Seat] = [:]
     @ObservationIgnored private var logins: [ConnectAgentModel.LoginChoice] = []
     @ObservationIgnored private var keys: [Action: IdempotencyKey] = [:]
@@ -138,13 +148,14 @@ final class RosterModel {
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
         copy: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
-        timing: FollowTiming = .normal
+        timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
     ) {
         self.api = api
         self.noteRead = noteRead
         self.copy = copy
         self.now = now
         self.timing = timing
+        self.testedProviders = testedProviders
     }
 
     func isBusy(_ id: UUID) -> Bool { busy.contains(id) }
@@ -198,7 +209,7 @@ final class RosterModel {
                 let waiting = AgentWait.account(for: seat, in: accounts, at: at).map(ProviderNames.account)
                 return RosterRow(
                     seat: seat, loginName: seat.credentialID.flatMap { loginNames[$0] }, doing: doing[seat.id],
-                    waitingFor: waiting, now: at)
+                    waitingFor: waiting, now: at, testedProviders: testedProviders)
             }
             state = .loaded
             noteRead(position)

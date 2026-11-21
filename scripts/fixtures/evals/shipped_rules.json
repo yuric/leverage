@@ -1,0 +1,8 @@
+{
+  "rules": [
+    {
+      "key": "specific_details",
+      "instruction": "A made-up instruction for the scorer's tests."
+    }
+  ]
+}

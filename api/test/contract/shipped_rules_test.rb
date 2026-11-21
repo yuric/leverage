@@ -46,7 +46,10 @@ class ShippedRulesTest < Minitest::Test
     end
   end
 
-  def test_app_rules_name_a_function_and_model_rules_an_instruction_placeholder
+  # A model rule's instruction is its text once its milestone writes it
+  # (milestone 4 plan RV-2 for "specific details"); until then it names the
+  # milestone that will.
+  def test_app_rules_name_a_function_and_model_rules_an_instruction
     rules.each do |entry|
       if entry["checker"] == "app"
         assert_match SNAKE_CASE, entry["checker_function"], entry["key"]
@@ -55,10 +58,13 @@ class ShippedRulesTest < Minitest::Test
       else
         assert_nil entry["checker_function"], entry["key"]
         assert_empty entry["parameters"], entry["key"]
-        refute_nil entry["instruction"]["to_be_written_in"], entry["key"]
+        instruction = entry["instruction"]
+        assert(instruction.is_a?(String) ? !instruction.strip.empty? : !instruction["to_be_written_in"].nil?, entry["key"])
         assert_equal "orchestrator", entry["checker_role"], entry["key"]
       end
     end
+    assert_kind_of String, rule("specific_details")["instruction"]
+    assert_equal "questions_and_approvals", rule("orchestrator_approves_actions")["instruction"]["to_be_written_in"]
   end
 
   def test_parameters_are_typed_with_their_prd_defaults

@@ -14,6 +14,12 @@
 #   scripts/speed_run.sh --smoke    4 seats for 20 seconds (CI's check that
 #                                   the run works, not a measurement)
 #   scripts/speed_run.sh --seats N --seconds N
+#   scripts/speed_run.sh --specific-details on|off
+#
+# The shipped rules stay on. "Specific details" is off unless --specific-details
+# on is given (milestone 4 plan RD-60, 5.4): the driver turns it off through
+# disable_rule before its seats connect, so every Complete contract, claim,
+# submit, review claim and verdict passes the gate with the app-run rules only.
 #
 # Needs Docker and a .env (made from .env.example when there is none).
 # COMPOSE_PROJECT_NAME and API_IMAGE_TAG may be set; the defaults are a
@@ -28,11 +34,18 @@ seats=50
 seconds=120
 smoke=false
 min_commands=500
+specific_details=off
 while [ $# -gt 0 ]; do
   case "$1" in
     --smoke) smoke=true; seats=4; seconds=20; min_commands=10 ;;
     --seats) seats="$2"; shift ;;
     --seconds) seconds="$2"; shift ;;
+    --specific-details)
+      case "${2:-}" in
+        on|off) specific_details="$2" ;;
+        *) echo "speed_run: --specific-details is on or off" >&2; exit 64 ;;
+      esac
+      shift ;;
     *) echo "speed_run: unknown argument $1" >&2; exit 64 ;;
   esac
   shift
@@ -77,7 +90,8 @@ case "$threads$pool" in *[!0-9]*|"") echo "speed_run: could not read the thread 
 
 echo "speed_run: $seats seats for $seconds seconds"
 set +e
-U run --rm --no-deps -T api ruby script/speed/run.rb --url http://api:3000 --seats "$seats" --seconds "$seconds" | tee "$work/driver.txt"
+U run --rm --no-deps -T api ruby script/speed/run.rb --url http://api:3000 --seats "$seats" --seconds "$seconds" \
+  --specific-details "$specific_details" | tee "$work/driver.txt"
 driver=${PIPESTATUS[0]}
 set -e
 
@@ -94,6 +108,7 @@ echo "Speed measurement"
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "Machine: $machine"
 echo "Arrivals: each seat ticks every 2 seconds; the seats' ticks are spread evenly over the 2 seconds"
+echo "Rules: the shipped rules on; \"specific details\" $specific_details"
 $smoke && echo "Smoke run: it shows that the measurement works; its figures are not the measurement."
 report=0
 python3 -I scripts/speed_report.py --log "$work/api.log" --threads "$threads" --pool "$pool" \

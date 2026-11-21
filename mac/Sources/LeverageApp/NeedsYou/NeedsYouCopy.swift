@@ -15,6 +15,14 @@ enum NeedsYouCopy: OwnerFacingCopy {
     // Sent back too many times.
     case sentBackHeading, sentBackBody, letItTryOnceMore, changeTask, cancelTask
     case cancelQuestion, cancelConfirm, cancelKeep
+    // The five items of the rule checks.
+    case refusedHeading, refusedBody, rerunHeading, rerunBody, couldNotRunHeading, couldNotRunBody
+    case noReviewerHeading, noReviewerBody
+    case offlineHeading, offlineBodyOne, offlineBodyMany, offlineBodyNone, offlineBodyNotSetUp, offlineCause,
+        offlineCauseSignedOut, offlineCauseLimitUntil
+    case ruleLabel, reasonLabel
+    case letThroughOnce, runAgain, turnRuleOff, connectAgent
+    case letThroughQuestion, letThroughPlaceholder, letThroughConfirm, turnOffQuestion, turnOffConfirm, goBack
     // An item this version cannot open.
     case unknownLine
 
@@ -50,6 +58,38 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .cancelConfirm: "Cancel task"
         case .cancelKeep: "Keep it"
 
+        case .refusedHeading: "Every agent was turned away"
+        case .refusedBody:
+            "A rule turned away every agent that could build {task}. It waits until you choose what happens next."
+        case .rerunHeading: "Checked too many times"
+        case .rerunBody:
+            "{task} was checked as many times as the rule allows, and it did not pass. It waits until you choose what happens next."
+        case .couldNotRunHeading: "A check could not run"
+        case .couldNotRunBody:
+            "A check on {task} could not run, so the task waits. Run it again, let it through, or turn the rule off."
+        case .noReviewerHeading: "No agent may review this"
+        case .noReviewerBody:
+            "{task} is built and waits for a review, but no connected agent may review it. Connect an agent from another provider, or turn the rule off. It continues on its own when an agent may review it."
+        case .offlineHeading: "The agent that checks tasks is offline"
+        case .offlineBodyOne: "{count} check is waiting. It starts on its own when the agent is back."
+        case .offlineBodyMany: "{count} checks are waiting. They start on their own when the agent is back."
+        case .offlineBodyNone: "Checks wait until the agent is back, and then start on their own."
+        case .offlineBodyNotSetUp: "No agent is set up to check tasks. Connect one in Agents."
+        case .offlineCause: "The cause is {account}. Look at it in Credentials."
+        case .offlineCauseSignedOut: "{account} is signed out. Look at it in Credentials."
+        case .offlineCauseLimitUntil: "{account} is at its limit until {time}. Look at it in Credentials."
+        case .ruleLabel: "Rule"
+        case .reasonLabel: "Reason"
+        case .letThroughOnce: "Let it through once"
+        case .runAgain: "Run it again"
+        case .turnRuleOff: "Turn the rule off"
+        case .connectAgent: "Connect an agent"
+        case .letThroughQuestion: "Why are you letting it through?"
+        case .letThroughPlaceholder: "Your reason"
+        case .letThroughConfirm: "Let it through"
+        case .turnOffQuestion: "Turn this rule off for every task?"
+        case .turnOffConfirm: "Turn it off"
+        case .goBack: "Go back"
         case .unknownLine: "{task} needs you, and leverage cannot open this kind of item yet."
 
         case .notificationsOff:

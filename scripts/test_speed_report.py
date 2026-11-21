@@ -31,10 +31,12 @@ def check(name, condition, detail=""):
 
 
 def line(command="claim", caller="seat:5b0b9d30", outcome="completed",
-         refusal="-", lock="0.412", step="1.087", total="4.250", prefix=True):
+         refusal="-", lock="0.412", step="1.087", total="4.250", prefix=True,
+         gate=None):
+    gate_part = "" if gate is None else f" gate_ms={gate}"
     body = (f"leverage.command command={command} caller={caller} key=k-1 "
             f"outcome={outcome} refusal={refusal} lock_wait_ms={lock} "
-            f"event_step_ms={step} transition_ms={total}")
+            f"event_step_ms={step} transition_ms={total}{gate_part} rule=-")
     if not prefix:
         return body
     return f"api-1  | I, [2026-11-19T10:00:00.000000 #1]  INFO -- : [req-1] {body}"
@@ -161,6 +163,68 @@ check("a run with fewer commands than asked for exits 3", code == 3, out)
 code, out = run_cli(line(step="30.000") + "\n", "--target-ms", "20")
 check("above the target is still exit 0: nothing is tuned to pass", code == 0, out)
 check("and the table says above", "above 20" in out, out)
+
+# --- the fourth timing: the time inside the gate (RD-60, CommandLog) -----
+#
+# The fixture holds ten command lines of seats, each with gate_ms. The
+# percentiles are worked out here by hand, nearest-rank, from the values:
+#   claim (6 lines): 0.950 1.200 0.400 2.500 0.700 1.800
+#     sorted 0.400 0.700 0.950 1.200 1.800 2.500; p50 is rank 3 = 0.950,
+#     p95 and p99 are rank 6 = 2.500.
+#   submit (4 lines): 0.300 13.000 0.500 4.000
+#     sorted 0.300 0.500 4.000 13.000; p50 is rank 2 = 0.500,
+#     p95 and p99 are rank 4 = 13.000.
+#   all ten: sorted 0.300 0.400 0.500 0.700 0.950 1.200 1.800 2.500 4.000
+#     13.000; p50 is rank 5 = 0.950, p95 and p99 are rank 10 = 13.000.
+# The three earlier timings of the claim lines are worked out the same way:
+#   lock wait p50 = 0.412, event and step p95 = 1.450, transition p99 = 6.600.
+
+FIXTURE = HERE / "fixtures" / "speed" / "command-log-with-gate.txt"
+fixture_text = FIXTURE.read_text(encoding="utf-8")
+fixture = speed_report.read_lines(fixture_text.splitlines())
+check("the fixture has ten command lines", len(fixture.rows) == 10, str(len(fixture.rows)))
+check("every fixture line holds its gate time",
+      all(r.get("gate_ms") is not None for r in fixture.rows))
+check("a line's gate time is read", fixture.rows[0].get("gate_ms") == 0.95,
+      str(fixture.rows[0]))
+check("a line with a gate time that is not a number is not a command",
+      speed_report.parse_line(line(gate="abc")) is None)
+check("a line with a negative gate time is not a command",
+      speed_report.parse_line(line(gate="-1.000")) is None)
+
+gated = speed_report.summarise(fixture.rows, caller="seat")
+claim_gate = getattr(gated.by_command["claim"], "gate", None)
+submit_gate = getattr(gated.by_command["submit"], "gate", None)
+overall_gate = getattr(gated.overall, "gate", None)
+check("the claim gate p50, p95 and p99 are 0.950, 2.500, 2.500",
+      claim_gate == (0.95, 2.5, 2.5), str(claim_gate))
+check("the submit gate p50, p95 and p99 are 0.500, 13.000, 13.000",
+      submit_gate == (0.5, 13.0, 13.0), str(submit_gate))
+check("the overall gate p50, p95 and p99 are 0.950, 13.000, 13.000",
+      overall_gate == (0.95, 13.0, 13.0), str(overall_gate))
+check("the claim group still counts six commands", gated.by_command["claim"].count == 6)
+check("the claim lock wait p50 is still 0.412",
+      gated.by_command["claim"].lock_wait[0] == 0.412, str(gated.by_command["claim"].lock_wait))
+check("the claim event and step p95 is still 1.450",
+      gated.by_command["claim"].event_step[1] == 1.45, str(gated.by_command["claim"].event_step))
+check("the claim transition p99 is still 6.600",
+      gated.by_command["claim"].transition[2] == 6.6, str(gated.by_command["claim"].transition))
+
+legacy = fixture_text + line(command="claim", step="9.000", total="99.000") + "\n"
+legacy_parsed = speed_report.read_lines(legacy.splitlines())
+legacy_sum = speed_report.summarise(legacy_parsed.rows, caller="seat")
+check("a line without the gate time is counted, as milestone 2 counted it",
+      legacy_sum.by_command["claim"].count == 7, str(legacy_sum.by_command["claim"].count))
+check("and it adds no gate time to the percentiles",
+      getattr(legacy_sum.by_command["claim"], "gate", None) == claim_gate
+      and getattr(legacy_sum.overall, "gate", None) == overall_gate,
+      str(getattr(legacy_sum.by_command["claim"], "gate", None)))
+
+code, out = run_cli(fixture_text)
+check("the program exits 0 on the fixture", code == 0, out)
+check("the table has a gate column", "gate" in out, out)
+check("the table has the gate figures of the fixture",
+      "2.500" in out and "13.000" in out and "0.950" in out, out)
 
 if FAILURES:
     print("FAILED")

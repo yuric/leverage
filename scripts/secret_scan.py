@@ -29,17 +29,40 @@ for:
   looked for. A reply must appear nowhere but in the stand-ins' own folder,
   so that folder is never one of the paths scanned.
 
+Task text (milestone 4 plan RT-8, §5.2 step 3) is content: it belongs in
+its own rows and never in an event's payload or a log line. Two more
+questions, each with its own paths:
+
+- --not-in-events WORD with --events-dump FILE: each word, in every form a
+  secret is looked for in, must be in no `payload` of the `events` table of
+  a data-only dump (pg_dump --data-only, plain text). The same word in the
+  task's own rows of that dump is not a hit, and neither is it anywhere
+  else in an event's row.
+- --logs PATH, with --not-in-logs WORD or alone: each word must be in no
+  file under the log paths (the containers', the helper's and the runs'
+  logs). Those files must also hold no nonce-shaped marker of a check or draft frame:
+  LEVERAGE-VERDICT-, -REASON-, -QUOTE-, -END- or -DRAFT- followed by 12
+  hexadecimal characters, which only a prompt or a tool's answer carries.
+  The stand-ins' record of each call holds the prompts, so it is never one
+  of the log paths.
+
 A hit is printed as "<file>:<line>: <what>", where <what> says which listed
-secret it was (by its number in its file) or which shape matched. The secret
-itself is never printed. Exit 0 when nothing is found, 1 on any hit, 2 when
-the scan could not be made: no path, a missing path, no file to scan, no
-secret to look for, a secret shorter than 8 characters (a shorter one
-leaves a base64 piece too short to look for at one of the offsets), or a
-replies folder with no reply file or a reply file with no marker.
+secret or word it was (by its number) or which shape matched. The secret
+or word itself is never printed. Exit 0 when nothing is found, 1 on any
+hit, 2 when the scan could not be made: no path, a missing path, no file
+to scan, no secret to look for, a secret or word shorter than 8 characters
+(a shorter one leaves a base64 piece too short to look for at one of the
+offsets, or turns up by chance), a replies folder with no reply file or a
+reply file with no marker, words with no dump or no logs to look in, a
+dump with no events table or no payload column in it, or log paths with no
+file.
 
 Usage:
   python3 -I scripts/secret_scan.py [--secrets FILE]... [--literal VALUE]...
-      [--replies FOLDER]... PATH...
+      [--replies FOLDER]... [--not-in-events WORD... --events-dump FILE...]
+      [--logs PATH... [--not-in-logs WORD...]] [PATH...]
+
+Paths to scan for secrets may come before, between or after the options.
 
 Standard library only.
 """
@@ -56,6 +79,13 @@ SHAPES = [
     ("token shape", re.compile(rb"lv[sho]_[A-Za-z0-9_-]{16,}")),
     ("bearer value", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*", re.IGNORECASE)),
 ]
+# A check's or a draft's frame marks its own lines and quote blocks with a
+# nonce of 12 hexadecimal characters (plan §2.2, ADR 0012). Only a prompt
+# or a tool's answer holds one, and neither belongs in a log.
+NONCE_SHAPE = ("nonce-shaped marker", re.compile(rb"LEVERAGE-(?:VERDICT|REASON|QUOTE|END|DRAFT)-[0-9a-f]{12}"))
+# pg_dump's header of a table's rows, and the line that ends them.
+COPY_HEADER = re.compile(r"^COPY (?:public\.)?\"?events\"? \((.*)\) FROM stdin;$")
+COPY_END = b"\\."
 # A base64 piece shorter than SHORTEST_BASE64 could turn up by chance in
 # a dump. A secret of SHORTEST characters gives a piece of at least that
 # length at each of the three offsets (8, 10 and 9 characters), so every
@@ -129,6 +159,84 @@ def read_secrets(files, literals, replies=()):
         if len(value) < SHORTEST:
             raise Refused(f"{label} is too short to look for (under {SHORTEST} characters)")
     return [form for label, value in secrets for form in forms(label, value)]
+
+
+def read_words(words, flag):
+    """[(label, bytes)] for every form of each word a question looks for."""
+    found = []
+    for number, value in enumerate(words, start=1):
+        label = f"word {number} of {flag}"
+        if len(value) < SHORTEST:
+            raise Refused(f"{label} is too short to look for (under {SHORTEST} characters)")
+        found.extend(forms(label, value))
+    return found
+
+
+def events_payloads(path):
+    """[(line number, seq, payload bytes)] for every row of the events table
+    in a data-only dump."""
+    try:
+        with open(path, "rb") as handle:
+            lines = handle.read().splitlines()
+    except OSError as error:
+        raise Refused(f"cannot read the dump {path}: {error.strerror}") from error
+    rows = None
+    for number, line in enumerate(lines, start=1):
+        if rows is None:
+            header = COPY_HEADER.match(line.decode("utf-8", "replace"))
+            if header:
+                columns = [name.strip().strip('"') for name in header.group(1).split(",")]
+                if "payload" not in columns:
+                    raise Refused(f"the events table in {path} has no payload column")
+                payload_at = columns.index("payload")
+                seq_at = columns.index("seq") if "seq" in columns else None
+                rows = []
+            continue
+        if line == COPY_END:
+            return rows
+        fields = line.split(b"\t")
+        if len(fields) <= payload_at:
+            raise Refused(f"{path}:{number}: a row of the events table has no payload")
+        seq = fields[seq_at].decode("utf-8", "replace") if seq_at is not None else "?"
+        rows.append((number, seq, fields[payload_at]))
+    if rows is None:
+        raise Refused(f"no events table in {path}")
+    raise Refused(f"the events table in {path} does not end")
+
+
+def scan_payloads(dumps, words):
+    """[(path, line number, what)] for each word found in an event's payload,
+    and how many events were read."""
+    hits = []
+    count = 0
+    for path in dumps:
+        for number, seq, payload in events_payloads(path):
+            count += 1
+            seen = set()
+            for label, value in words:
+                base = label.split(" (")[0]
+                if base not in seen and value in payload:
+                    seen.add(base)
+                    hits.append((path, number, f"{base} (events.payload, seq {seq})"))
+    return hits, count
+
+
+def scan_logs(path, words):
+    """[(line number, what)] for each word and each nonce-shaped marker a
+    log line holds, one hit per word or shape and line."""
+    hits = []
+    with open(path, "rb") as handle:
+        lines = handle.read().splitlines()
+    for number, line in enumerate(lines, start=1):
+        seen = set()
+        for label, value in words:
+            base = label.split(" (")[0]
+            if base not in seen and value in line:
+                seen.add(base)
+                hits.append((number, label))
+        if NONCE_SHAPE[1].search(line):
+            hits.append((number, NONCE_SHAPE[0]))
+    return hits
 
 
 def base64_pieces(raw):
@@ -218,14 +326,34 @@ def main(argv):
     parser.add_argument("--secrets", action="append", default=[], metavar="FILE")
     parser.add_argument("--literal", action="append", default=[], metavar="VALUE")
     parser.add_argument("--replies", action="append", default=[], metavar="FOLDER")
+    parser.add_argument("--not-in-events", action="append", default=[], metavar="WORD")
+    parser.add_argument("--events-dump", action="append", default=[], metavar="FILE")
+    parser.add_argument("--not-in-logs", action="append", default=[], metavar="WORD")
+    parser.add_argument("--logs", action="append", default=[], metavar="PATH")
     parser.add_argument("paths", nargs="*", metavar="PATH")
-    arguments = parser.parse_args(argv)
+    # The end-to-end scripts add each test's folders between the options.
+    arguments = parser.parse_intermixed_args(argv)
     try:
-        if not arguments.paths:
+        if not (arguments.paths or arguments.events_dump or arguments.logs):
             raise Refused("no path to scan")
-        replies = read_replies(arguments.replies)
-        secrets = read_secrets(arguments.secrets, arguments.literal, replies)
-        files = files_under(arguments.paths)
+        if arguments.not_in_events and not arguments.events_dump:
+            raise Refused("--not-in-events needs --events-dump")
+        if arguments.not_in_logs and not arguments.logs:
+            raise Refused("--not-in-logs needs --logs")
+        if arguments.events_dump and not arguments.not_in_events:
+            raise Refused("--events-dump needs --not-in-events")
+        secrets = replies = files = []
+        if arguments.paths:
+            replies = read_replies(arguments.replies)
+            secrets = read_secrets(arguments.secrets, arguments.literal, replies)
+            files = files_under(arguments.paths)
+        event_words = read_words(arguments.not_in_events, "--not-in-events")
+        log_words = read_words(arguments.not_in_logs, "--not-in-logs")
+        try:
+            logs = files_under(arguments.logs) if arguments.logs else []
+        except Refused as refusal:
+            raise Refused(f"no log file to scan ({refusal})") from refusal
+        payload_hits, events = scan_payloads(arguments.events_dump, event_words) if event_words else ([], 0)
     except Refused as refusal:
         print(f"secret_scan: {refusal}", file=sys.stderr)
         return 2
@@ -235,13 +363,25 @@ def main(argv):
         for number, label in scan_file(path, secrets):
             print(f"{path}:{number}: {label}")
             total += 1
+    for path, number, label in payload_hits:
+        print(f"{path}:{number}: {label}")
+        total += 1
+    for path in logs:
+        for number, label in scan_logs(path, log_words):
+            print(f"{path}:{number}: {label}")
+            total += 1
     if total:
-        print(f"secret_scan: {len(files)} files, {total} hits")
+        print(f"secret_scan: {len(files) + len(logs)} files, {total} hits")
         return 1
-    listed = len({label.split(" (")[0] for label, _value in secrets})
-    reply_files = len({label for label, _value in replies if label.startswith("marker of ")})
-    also = f", {reply_files} reply files" if reply_files else ""
-    print(f"secret_scan: {len(files)} files, {listed} secrets and {len(SHAPES)} shapes{also}, no secret found")
+    if files:
+        listed = len({label.split(" (")[0] for label, _value in secrets})
+        reply_files = len({label for label, _value in replies if label.startswith("marker of ")})
+        also = f", {reply_files} reply files" if reply_files else ""
+        print(f"secret_scan: {len(files)} files, {listed} secrets and {len(SHAPES)} shapes{also}, no secret found")
+    if event_words or log_words:
+        words = len(arguments.not_in_events) + len(arguments.not_in_logs)
+        log_files = f"{len(logs)} log file" + ("" if len(logs) == 1 else "s")
+        print(f"secret_scan: {events} events and {log_files}, {words} words, no task text found")
     return 0
 
 

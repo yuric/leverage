@@ -3,18 +3,22 @@ require_relative "../support/walk"
 
 # Step partition (PRD test 2, Steps and timing; milestone 2 plan EN-25):
 # for seeded random command sequences, each task's steps touch end to end
-# and sum to its lifetime. 200 walks of at most 80 steps over the commands
-# and timers of milestones 2 and 3 (Walk; milestone 3 plan HT-3: the twelve
-# new commands, the credential timer and a credential whose reset time the
-# walk moves); SEED and WALKS override, and a failure prints the seed and
-# the walk. The same walks also check the replay (test 1) and the log audit
-# (L894), which a random sequence reaches in more corners than a trace.
+# and sum to its lifetime. 300 walks of at most 100 steps over the
+# commands and timers of milestones 2 to 4 (Walk; milestone 3 plan HT-3:
+# the twelve new commands, the credential timer and a credential whose
+# reset time the walk moves; milestone 4 plan RT-3: the twenty new
+# commands and timers, a rule set drawn per walk, an orchestrator that
+# answers drawn verdicts or none, a planner, and a step for each row of
+# rule 11's table); SEED and WALKS override, and a failure prints the seed
+# and the walk. The same walks also check the replay (test 1) and the log
+# audit (L894, with RT-4's gate line), which a random sequence reaches in
+# more corners than a trace.
 #
 #   SEED=1 WALKS=1000 bin/rails test test/engine/step_partition_test.rb
 class StepPartitionTest < ActiveSupport::TestCase
-  WALKS = Integer(ENV.fetch("WALKS", "200"), 10)
+  WALKS = Integer(ENV.fetch("WALKS", "300"), 10)
   SEED = Integer(ENV.fetch("SEED") { Random.new_seed.to_s }, 10) % 1_000_000_000
-  STEPS = 80
+  STEPS = 100
 
   # Milestone 3's commands and timers (its plan HT-3), which the walks must
   # reach and see completed.
@@ -45,7 +49,9 @@ class StepPartitionTest < ActiveSupport::TestCase
       first = steps.first
       problems << "the first step does not open at task.created" unless first.opening_event_id == created.id &&
         first.opened_at == created.effective_at
-      commands = Event.where(task_id: task.id).pluck(:id, :command_id, :at).to_h { |id, *command| [ id, command ] }
+      # One command's events share at (the workspace lock): a waiting
+      # command's own events written inside it carry another key (RE-3).
+      commands = Event.where(task_id: task.id).pluck(:id, :at).to_h
       steps.each_cons(2) do |earlier, later|
         # The same time, and an event of the same command: within one
         # command a step changes in place (steps.json), so review may close
@@ -103,6 +109,65 @@ class StepPartitionTest < ActiveSupport::TestCase
     end
     assert_empty HANDOFF - completed.to_a, "the walks never completed these"
     assert moved, "no walk moved a reset time"
+  end
+
+  # Milestone 4's commands the walks must reach and see completed (its
+  # plan RT-3). The one-time write runs when each walk starts.
+  RULE_CHECKS = %w[
+    add_rule save_rule enable_rule disable_rule revert_rule remove_rule rerun_check override_check draft_contract
+    claim_job submit_job_result report_job_limit
+  ].freeze
+
+  # The ends of a waiting command (rule 11's table) the twenty walks reach:
+  # the command that withdrew a waiting command's check. The other rows
+  # need a pass that waits on a gate at task.before_done, which a walk of
+  # 100 steps reaches too seldom to count on; each row is held by
+  # state_table_pending_ends_test.rb, state_table_review_and_seat_ends_test.rb,
+  # state_table_handoff_test.rb and trace 18 instead.
+  RULE_11_REACHED = %w[cancel edit_contract].freeze
+
+  # Fixed seeds, as COVERAGE_SEEDS: forty, because twenty walks seldom
+  # time out a contract draft both in the queue and while it runs.
+  RULE_CHECK_SEEDS = (10_001..10_040)
+
+  test "the walks complete milestone 4's commands, run its timers on due jobs and end waiting commands" do
+    completed = Set.new
+    ends = Set.new
+    timed_out = Set.new
+    items = Set.new
+    installed = true
+    RULE_CHECK_SEEDS.each do |seed|
+      walk = Walk.new(seed: seed, steps: STEPS).run
+      completed.merge(walk.log.select { |step| step.answer.start_with?("completed") }.map(&:command))
+      events = Event.where(workspace_id: walk.workspace_id)
+      installed &&= events.where(type: "rule.created", actor_kind: "app", command_id: nil).count == 7
+      timed_out.merge(events.where(type: "job.timed_out").joins("JOIN jobs ON jobs.id = events.subject_id")
+        .pluck(Arel.sql("jobs.kind"), Arel.sql("CASE WHEN jobs.claimed_at IS NULL THEN 'queue' ELSE 'run' END")))
+      items.merge(events.where(type: "inbox.opened").map { |event| event.payload["kind"] })
+      ends.merge(waiting_ends(walk.workspace_id))
+    end
+    assert installed, "every walk starts with the seven shipped rules from the one-time write"
+    assert_empty RULE_CHECKS - completed.to_a, "the walks never completed these"
+    assert_equal [ %w[contract_draft queue], %w[contract_draft run], %w[rule_check queue], %w[rule_check run] ],
+      timed_out.to_a.sort, "the four job timers each time a job out"
+    assert_empty %w[orchestrator_offline no_reviewer_eligible check_could_not_run] - items.to_a
+    assert_empty RULE_11_REACHED - ends.to_a, "no walk ended a waiting command this way"
+  end
+
+  # The commands that withdrew a check of a waiting command (rule 11):
+  # the command whose key wrote the withdrawn check.finished, or the lease
+  # timer whose end came with it.
+  def waiting_ends(workspace_id)
+    withdrawn = Event.where(workspace_id: workspace_id, type: "check.finished").select { |event| event.payload["result"] == "withdrawn" }
+    withdrawn.filter_map do |event|
+      if event.command_id
+        Command.where(workspace_id: workspace_id, key: event.command_id).pick(:command)
+      else
+        ends = Event.where(workspace_id: workspace_id, at: event.at, command_id: nil, task_id: event.task_id)
+        { "task.lease_expired" => "builder_lease_expiry", "review.lease_expired" => "review_lease_expiry" }
+          .find { |type, _| ends.exists?(type: type) }&.last
+      end
+    end
   end
 
   test "a walk is the same walk for the same seed" do

@@ -6,6 +6,12 @@ import LeverageKit
 struct NeedsYouNames: Sendable {
     var tasks: [UUID: String] = [:]
     var credentials: [UUID: Credential] = [:]
+    /// Whether an agent is set up to check tasks: false only when the health
+    /// read says none is (`not_set_up`), so the offline item does not talk
+    /// of an agent coming back (review finding 27).
+    var orchestratorSetUp = true
+    /// The clock a reset time is written with.
+    var clock: ResetClock = .system
 
     /// The task's title, or "A task" when the board did not say.
     func taskTitle(_ id: UUID?) -> String {
@@ -19,6 +25,30 @@ struct NeedsYouNames: Sendable {
     }
 
     func provider(of id: UUID?) -> Provider? { id.flatMap { credentials[$0]?.provider } }
+
+    /// The sentence that names the account the Orchestrator offline item
+    /// says is the cause, with what holds it back (L401): signed out, at its
+    /// limit until a time, or, when neither is known, the account alone.
+    func offlineCause(_ id: UUID) -> String {
+        let account = accountName(id)
+        guard let credential = credentials[id] else { return NeedsYouCopy.offlineCause.filled(["account": account]) }
+        if credential.state == .signedOut { return NeedsYouCopy.offlineCauseSignedOut.filled(["account": account]) }
+        if credential.isLimited(at: clock.now()), let until = credential.limitedUntil {
+            return NeedsYouCopy.offlineCauseLimitUntil.filled(
+                ["account": account, "time": ResetTime.text(for: until, clock: clock)])
+        }
+        return NeedsYouCopy.offlineCause.filled(["account": account])
+    }
+
+    /// The names, and whether an agent is set up to check tasks when one of
+    /// the items is the Orchestrator offline item (read from the health
+    /// line only then; a read that fails keeps the "is back" wording).
+    func checkingOrchestrator(for items: [InboxItem], from owner: any OwnerAPI) async -> NeedsYouNames {
+        guard items.contains(where: { $0.kind == .orchestratorOffline }) else { return self }
+        var names = self
+        if let health = try? await owner.systemHealth() { names.orchestratorSetUp = health.orchestrator != .notSetUp }
+        return names
+    }
 
     /// Reads the board and the credentials, in that order, so that the lower
     /// of their two positions is a point the events tail can start from
@@ -35,7 +65,10 @@ struct NeedsYouNames: Sendable {
 
 /// One button of an item, with the command it sends.
 struct NeedsYouButton: Identifiable, Equatable, Sendable {
-    enum Action: String, Sendable { case signInAgain, allowAnotherTry, changeTask, cancelTask }
+    enum Action: String, Sendable {
+        case signInAgain, allowAnotherTry, changeTask, cancelTask
+        case letThroughOnce, runAgain, turnRuleOff, connectAgent
+    }
 
     let action: Action
     let label: String
@@ -45,12 +78,33 @@ struct NeedsYouButton: Identifiable, Equatable, Sendable {
 /// The words of each item kind (HM-24), shared by the screen and the notifier.
 enum NeedsYouWords {
     /// Whether the screen can open an item of this kind: every choice it
-    /// offers has a route (HM-21). In this milestone that is three kinds.
+    /// offers has a route (HM-21). That is the three of milestone 3 and the
+    /// five of the rule checks.
     static func isShown(_ kind: NeedsYouItem) -> Bool {
         switch kind {
         case .accountSignedOut, .limitWithNoResetTime, .pastRoundLimit: true
+        case .refusedForEveryAgent, .checkPastRerunLimit, .checkCouldNotRun, .noReviewerEligible,
+            .orchestratorOffline: true
         default: false
         }
+    }
+
+    /// The kinds whose item names a rule, and so a rule's name to show.
+    static func namesARule(_ kind: NeedsYouItem) -> Bool {
+        switch kind {
+        case .refusedForEveryAgent, .checkPastRerunLimit, .checkCouldNotRun, .noReviewerEligible: true
+        default: false
+        }
+    }
+
+    /// The rule an item names, from its facts.
+    static func ruleID(of item: InboxItem) -> UUID? {
+        item.facts["rule_id"]?.stringValue.flatMap(UUID.init(uuidString:))
+    }
+
+    /// The rule check an item names, from its facts.
+    static func checkID(of item: InboxItem) -> UUID? {
+        item.facts["rule_check_id"]?.stringValue.flatMap(UUID.init(uuidString:))
     }
 
     /// The account an item names: its own, or the one its facts name.
@@ -70,6 +124,11 @@ enum NeedsYouWords {
         case .limitWithNoResetTime: return NeedsYouCopy.limitHeading.filled(["account": account])
         case .pastRoundLimit:
             return NeedsYouCopy.sentBackHeading.filled(["task": task, "count": String(sentBack(item))])
+        case .refusedForEveryAgent: return NeedsYouCopy.refusedHeading.text
+        case .checkPastRerunLimit: return NeedsYouCopy.rerunHeading.text
+        case .checkCouldNotRun: return NeedsYouCopy.couldNotRunHeading.text
+        case .noReviewerEligible: return NeedsYouCopy.noReviewerHeading.text
+        case .orchestratorOffline: return NeedsYouCopy.offlineHeading.text
         default: return NeedsYouCopy.unknownLine.filled(["task": task])
         }
     }
@@ -85,6 +144,23 @@ enum NeedsYouWords {
             let provider = names.provider(of: credential).map(ProviderNames.name) ?? NeedsYouCopy.anAccount.text
             return NeedsYouCopy.limitBody.filled(["task": task, "account": account, "provider": provider])
         case .pastRoundLimit: return NeedsYouCopy.sentBackBody.text
+        case .refusedForEveryAgent: return NeedsYouCopy.refusedBody.filled(["task": task])
+        case .checkPastRerunLimit: return NeedsYouCopy.rerunBody.filled(["task": task])
+        case .checkCouldNotRun: return NeedsYouCopy.couldNotRunBody.filled(["task": task])
+        case .noReviewerEligible: return NeedsYouCopy.noReviewerBody.filled(["task": task])
+        case .orchestratorOffline:
+            guard names.orchestratorSetUp else { return NeedsYouCopy.offlineBodyNotSetUp.text }
+            let waiting = item.waitingChecks ?? 0
+            var lines: [String] = []
+            if waiting == 1 {
+                lines.append(NeedsYouCopy.offlineBodyOne.filled(["count": "1"]))
+            } else if waiting > 1 {
+                lines.append(NeedsYouCopy.offlineBodyMany.filled(["count": String(waiting)]))
+            } else {
+                lines.append(NeedsYouCopy.offlineBodyNone.text)
+            }
+            if let credential { lines.append(names.offlineCause(credential)) }
+            return lines.joined(separator: " ")
         default: return ""
         }
     }
@@ -94,16 +170,25 @@ enum NeedsYouWords {
     static func buttons(for item: InboxItem) -> [NeedsYouButton] {
         guard isShown(item.kind) else { return [] }
         return item.choices.compactMap { choice in
+            let kind = item.kind
             switch choice {
-            case .signInAgain where item.kind == .accountSignedOut:
-                NeedsYouButton(action: .signInAgain, label: NeedsYouCopy.signInAgain.text)
-            case .allowAnotherRound where item.kind == .pastRoundLimit:
-                NeedsYouButton(action: .allowAnotherTry, label: NeedsYouCopy.letItTryOnceMore.text)
-            case .editContract where item.kind == .pastRoundLimit:
-                NeedsYouButton(action: .changeTask, label: NeedsYouCopy.changeTask.text)
-            case .cancel where item.kind == .pastRoundLimit:
-                NeedsYouButton(action: .cancelTask, label: NeedsYouCopy.cancelTask.text)
-            default: nil
+            case .signInAgain where kind == .accountSignedOut:
+                return NeedsYouButton(action: .signInAgain, label: NeedsYouCopy.signInAgain.text)
+            case .allowAnotherRound where kind == .pastRoundLimit:
+                return NeedsYouButton(action: .allowAnotherTry, label: NeedsYouCopy.letItTryOnceMore.text)
+            case .editContract where [.pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit].contains(kind):
+                return NeedsYouButton(action: .changeTask, label: NeedsYouCopy.changeTask.text)
+            case .cancel where [.pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit].contains(kind):
+                return NeedsYouButton(action: .cancelTask, label: NeedsYouCopy.cancelTask.text)
+            case .overrideOnce where [.refusedForEveryAgent, .checkPastRerunLimit, .checkCouldNotRun].contains(kind):
+                return NeedsYouButton(action: .letThroughOnce, label: NeedsYouCopy.letThroughOnce.text)
+            case .runAgain where kind == .checkCouldNotRun:
+                return NeedsYouButton(action: .runAgain, label: NeedsYouCopy.runAgain.text)
+            case .turnRuleOff where [.refusedForEveryAgent, .checkCouldNotRun, .noReviewerEligible].contains(kind):
+                return NeedsYouButton(action: .turnRuleOff, label: NeedsYouCopy.turnRuleOff.text)
+            case .connectSeat where kind == .noReviewerEligible:
+                return NeedsYouButton(action: .connectAgent, label: NeedsYouCopy.connectAgent.text)
+            default: return nil
             }
         }
     }
@@ -115,6 +200,11 @@ enum NeedsYouWords {
         case .accountSignedOut: NeedsYouCopy.kindSignedOut.text
         case .limitWithNoResetTime: NeedsYouCopy.kindLimit.text
         case .pastRoundLimit: NeedsYouCopy.kindSentBack.text
+        case .refusedForEveryAgent: NeedsYouCopy.refusedHeading.text
+        case .checkPastRerunLimit: NeedsYouCopy.rerunHeading.text
+        case .checkCouldNotRun: NeedsYouCopy.couldNotRunHeading.text
+        case .noReviewerEligible: NeedsYouCopy.noReviewerHeading.text
+        case .orchestratorOffline: NeedsYouCopy.offlineHeading.text
         default: NeedsYouCopy.kindOther.text
         }
     }

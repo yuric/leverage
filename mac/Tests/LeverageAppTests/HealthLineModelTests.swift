@@ -207,4 +207,105 @@ struct HealthLineModelTests {
         await model.refresh()
         #expect(model.status == .running)
     }
+
+    // MARK: the agent that checks tasks (RD-17, RS-2)
+
+    private func rules(_ rows: [RuleRow]) -> @Sendable () async throws -> RulesList { { RulesList(rules: rows) } }
+
+    private func orchestratorModel(
+        _ state: OrchestratorState, rules rows: @escaping @Sendable () async throws -> RulesList,
+        sweepLate: Bool = false, backupLate: Bool = false, helper: FakeHelper = FakeAppRuntime().fakeHelper
+    ) -> (HealthLineModel, FakeOwnerAPI) {
+        let owner = FakeOwnerAPI()
+        owner.script {
+            $0.systemHealth = { ShellFixtures.health(sweepLate: sweepLate, backupLate: backupLate, orchestrator: state) }
+            $0.listRules = rows
+        }
+        return (HealthLineModel(owner: owner, helper: helper, interval: .milliseconds(5)), owner)
+    }
+
+    private var checkerRule: RuleRow { RulesFixtures.row(number: 1, checker: .model, enabled: true) }
+
+    @Test("no agent set up while a rule an agent checks is on says what to do")
+    func noOrchestrator() async {
+        let (model, owner) = orchestratorModel(.notSetUp, rules: rules([checkerRule]))
+        await model.refresh()
+        #expect(model.status == .noOrchestrator)
+        #expect(model.sentence.text == "No agent is set up to check tasks. Connect one in Agents.")
+        #expect(model.tone == .warning)
+        #expect(!model.offersTryAgain)
+        #expect(owner.calls.map(\.operation) == [.getSystemHealth, .listRules])
+    }
+
+    @Test("no agent set up says nothing while every rule an agent checks is off, or does not act yet")
+    func noOrchestratorNoRule() async {
+        let off = RulesFixtures.row(number: 1, checker: .model, enabled: false)
+        let inert = RulesFixtures.row(number: 2, checker: .model, enabled: true, acts: false)
+        let app = RulesFixtures.row(number: 3, checker: .app, enabled: true)
+        for rows in [[off], [inert], [app], [off, inert, app], []] {
+            let (model, _) = orchestratorModel(.notSetUp, rules: rules(rows))
+            await model.refresh()
+            #expect(model.status == .running, "\(rows.count) rules")
+        }
+    }
+
+    @Test("a rule list that cannot be read still says no agent is set up, so work is not left waiting without a word")
+    func noOrchestratorRulesUnreadable() async {
+        let (model, _) = orchestratorModel(.notSetUp, rules: { throw URLError(.timedOut) })
+        await model.refresh()
+        #expect(model.status == .noOrchestrator)
+    }
+
+    @Test("an agent that is online reads System is running and reads no rules")
+    func orchestratorOnline() async {
+        let (model, owner) = orchestratorModel(.online, rules: rules([checkerRule]))
+        await model.refresh()
+        #expect(model.status == .running)
+        #expect(owner.calls.map(\.operation) == [.getSystemHealth])
+    }
+
+    @Test("an agent that is not running reads that, and reads no rules")
+    func orchestratorOffline() async {
+        let (model, owner) = orchestratorModel(.offline, rules: rules([checkerRule]))
+        await model.refresh()
+        #expect(model.status == .orchestratorOffline)
+        #expect(model.sentence.text == "The agent that checks tasks is not running.")
+        #expect(model.tone == .warning)
+        #expect(!model.offersTryAgain)
+        #expect(owner.calls.map(\.operation) == [.getSystemHealth])
+    }
+
+    @Test("a late sweep and a helper that gave up outrank the agent, which outranks a late backup")
+    func orchestratorPrecedence() async {
+        let (sweep, _) = orchestratorModel(.offline, rules: rules([checkerRule]), sweepLate: true)
+        await sweep.refresh()
+        #expect(sweep.status == .late)
+
+        let helper = FakeAppRuntime().fakeHelper
+        helper.current.value = .stoppedTrying
+        let (stopped, _) = orchestratorModel(.offline, rules: rules([checkerRule]), helper: helper)
+        await stopped.refresh()
+        #expect(stopped.status == .agentsStopped)
+
+        let (backup, _) = orchestratorModel(.offline, rules: rules([checkerRule]), backupLate: true)
+        await backup.refresh()
+        #expect(backup.status == .orchestratorOffline)
+
+        let (backupNotSetUp, _) = orchestratorModel(.notSetUp, rules: rules([checkerRule]), backupLate: true)
+        await backupNotSetUp.refresh()
+        #expect(backupNotSetUp.status == .noOrchestrator)
+    }
+
+    @Test("the line clears when the agent is online again")
+    func orchestratorRecovers() async {
+        let state = Locked(OrchestratorState.offline)
+        let owner = FakeOwnerAPI()
+        owner.script { $0.systemHealth = { ShellFixtures.health(orchestrator: state.value) } }
+        let model = HealthLineModel(owner: owner, helper: FakeAppRuntime().fakeHelper, interval: .milliseconds(5))
+        await model.refresh()
+        #expect(model.status == .orchestratorOffline)
+        state.value = .online
+        await model.refresh()
+        #expect(model.status == .running)
+    }
 }

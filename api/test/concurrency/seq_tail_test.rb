@@ -40,41 +40,45 @@ class SeqTailTest < CommittingTestCase
     pool = ActiveRecord::Base.connection_pool
     assert_operator pool.size, :>, SEATS + 1, "the pool (DB_POOL) must hold every claimer, the reader and the test"
 
-    done = Concurrent::AtomicBoolean.new(false)
-    go = Concurrent::CountDownLatch.new(1)
+    # The writers, the reader and the test: inside ConnectionBudget.heavy.
     seen = []
     problems = []
-    reader = Thread.new do
-      pool.with_connection do
-        cursor = start
-        go.wait
-        loop do
-          writers_done = done.true?
-          page = Leverage::Reads::EventsTail.call(scenario.workspace_id, after_seq: cursor, limit: PAGE)
-          numbers = page.fetch(:events).map { |event| event.fetch(:seq) }
-          problems << "after #{cursor} the page went back: #{numbers}" if numbers.any? { |number| number <= cursor }
-          problems << "the page is out of order: #{numbers}" unless numbers == numbers.sort
-          problems << "next_after_seq #{page.fetch(:next_after_seq)} is behind #{cursor}" if page.fetch(:next_after_seq) < cursor
-          seen.concat(numbers)
-          cursor = page.fetch(:next_after_seq)
-          break if writers_done && numbers.empty?
-
-          sleep 0.002 if numbers.empty?
-        end
-      end
-    end
-    writers = seats.map do |seat|
-      Thread.new do
+    outcomes = ConnectionBudget.heavy(SEATS + 1) do
+      done = Concurrent::AtomicBoolean.new(false)
+      go = Concurrent::CountDownLatch.new(1)
+      reader = Thread.new do
         pool.with_connection do
+          cursor = start
           go.wait
-          work(seat)
+          loop do
+            writers_done = done.true?
+            page = Leverage::Reads::EventsTail.call(scenario.workspace_id, after_seq: cursor, limit: PAGE)
+            numbers = page.fetch(:events).map { |event| event.fetch(:seq) }
+            problems << "after #{cursor} the page went back: #{numbers}" if numbers.any? { |number| number <= cursor }
+            problems << "the page is out of order: #{numbers}" unless numbers == numbers.sort
+            problems << "next_after_seq #{page.fetch(:next_after_seq)} is behind #{cursor}" if page.fetch(:next_after_seq) < cursor
+            seen.concat(numbers)
+            cursor = page.fetch(:next_after_seq)
+            break if writers_done && numbers.empty?
+
+            sleep 0.002 if numbers.empty?
+          end
         end
       end
+      writers = seats.map do |seat|
+        Thread.new do
+          pool.with_connection do
+            go.wait
+            work(seat)
+          end
+        end
+      end
+      go.count_down
+      results = writers.flat_map(&:value)
+      done.make_true
+      reader.join(60)
+      results
     end
-    go.count_down
-    outcomes = writers.flat_map(&:value)
-    done.make_true
-    reader.join(60)
 
     assert_equal SEATS * 2, outcomes.count(&:completed?)
     assert_empty problems

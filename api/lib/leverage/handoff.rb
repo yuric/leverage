@@ -42,14 +42,16 @@ module Leverage
     # signed_out. The seat's run is recorded as ended (HD-10).
     #
     # kind        - "limit" or "signed_out".
-    # task:, review: - the work the run was doing: the task, or the review
-    #               (whose task the event is written on).
+    # task:, review:, job: - the work the run was doing: the task, the
+    #               review or the job (the event is written on the review's
+    #               or the job's task, milestone 4 plan RD-40).
     # window:, reset_at:, observed_at: - a limit's report, the times as Time.
     #
     # Returns the first Event.
-    def interrupt(ctx, credential:, seat:, kind:, task: nil, review: nil, window: nil, reset_at: nil, observed_at: nil)
-      on = task || Task.find(review.task_id)
-      payload = { seat_id: seat.id, review_id: review&.id, job_id: nil }
+    def interrupt(ctx, credential:, seat:, kind:, task: nil, review: nil, job: nil, window: nil, reset_at: nil,
+                  observed_at: nil)
+      on = task || work_task(review || job)
+      payload = { seat_id: seat.id, review_id: review&.id, job_id: job&.id }
       if kind == "limit"
         reset = reset_at if plausible_reset?(window, reset_at, observed_at)
         stored = credential.limited_until
@@ -83,6 +85,11 @@ module Leverage
     # rule 4 leaves only between the seat's own and the stopped one; such
     # a hold is due at once (rule 8, HE-4) and needs nobody.
     #
+    # A review released here loses a pass that waits on a model check: the
+    # reviewer's pending transition is cancelled first, with invalid_state
+    # (PendingTransitions.cancel, milestone 4 plan §2.1 rule 11, §0.1 fact
+    # 28), before review.released is written.
+    #
     # stopped - the Credential that stopped, already marked.
     # cause   - the first Event, which the events written here name.
     #
@@ -94,10 +101,28 @@ module Leverage
       if following
         switch(ctx, seat: seat, to: following, from: stopped, cause: cause, task: task, review: review)
       elsif review
+        cancel_reviewers_pending(ctx, review)
         SeatRuns.release_review(ctx, review, cause_id: cause.id)
       else
         hold(ctx, seat, task, stopped, cause)
       end
+      ctx.events.drop(written)
+    end
+
+    # Rule 6 for a job's run (milestone 4 plan RD-40; state_machine.json
+    # report_job_limit_or_sign_out): the same order with no rule 3 (a job
+    # has no candidates' rule of its own). With a next candidate the job's
+    # run switches to it (credential.switched naming the job), the job
+    # records it and stays claimed, and the seat's run is moved there; the
+    # new run's first claim-next returns the job. With none, nothing more
+    # is written: the seat stops claiming jobs and the job runs into its
+    # run timeout (no job.requeued).
+    #
+    # Returns the Events it wrote.
+    def continue_job(ctx, seat:, stopped:, cause:, job:)
+      written = ctx.events.size
+      following = Candidates.next_after(seat, nil, stopped, ctx.at)
+      switch_as(ctx, seat: seat, to: following, from: stopped, cause: cause, job: job, **app_actor(ctx)) if following
       ctx.events.drop(written)
     end
 
@@ -164,6 +189,21 @@ module Leverage
     end
 
     # --- rule 6 ---------------------------------------------------------------
+
+    # The task a review or a job is about, or nil for a job with none.
+    def work_task(work)
+      work.task_id && Task.find_by(id: work.task_id, workspace_id: work.workspace_id)
+    end
+
+    # Rule 11 of milestone 4's plan: the pass the reviewer of review waits
+    # on (the task's pending transition, requested by that seat) is
+    # cancelled with invalid_state.
+    def cancel_reviewers_pending(ctx, review)
+      pending = PendingTransitions.of(work_task(review))
+      return unless pending && pending.requester_kind == "seat" && pending.requester_id == review.reviewer_seat_id
+
+      PendingTransitions.cancel(ctx, pending, "invalid_state")
+    end
 
     def hold(ctx, seat, task, stopped, cause)
       signed_out = Candidates.signed_out_for(seat, task)
@@ -294,12 +334,17 @@ module Leverage
 
     # --- the switch -----------------------------------------------------------
 
-    def switch_as(ctx, seat:, to:, from:, cause:, task: nil, review: nil, **as)
-      on = task || Task.find(review.task_id)
-      switched = ctx.emit("credential.switched", task: on, subject: to, cause_id: cause&.id, **as,
+    # The switch itself, for a task, a review or a job (whose run is
+    # started with no work named, RD-40).
+
+    def switch_as(ctx, seat:, to:, from:, cause:, task: nil, review: nil, job: nil, **as)
+      on = task || work_task(review || job)
+      fields = { cause_id: cause&.id, **as }
+      fields[:task] = on if on
+      switched = ctx.emit("credential.switched", subject: to, **fields,
         payload: { from_credential_id: from&.id, model: Candidates.model_for(seat, to), seat_id: seat.id,
-                   review_id: review&.id, job_id: nil })
-      (review || task).update!(credential_id: to.id)
+                   review_id: review&.id, job_id: job&.id })
+      (review || task || job).update!(credential_id: to.id)
       SeatRuns.ensure_run_on(ctx, seat, to, review || task)
       switched
     end
@@ -317,7 +362,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :plausible_reset?, :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
+    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
       :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end

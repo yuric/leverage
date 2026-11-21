@@ -24,5 +24,6 @@ enum CopyCatalogs {
         CredentialsCopy.self,
         NeedsYouCopy.self,
         HandoffCopy.self,
+        RulesCopy.self,
     ]
 }

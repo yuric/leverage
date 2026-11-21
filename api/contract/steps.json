@@ -211,10 +211,12 @@
         {"event": "task.submitted", "when": "the task is submitted", "source": "derived"},
         {"event": "review.released", "when": "the reviewer releases the review", "source": "derived"},
         {"event": "review.lease_expired", "when": "the review lease ends", "source": "derived"},
-        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
+        {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"},
+        {"event": "check.finished", "when": "an applied row at review.assign with effect refused, while the open step names no cause: it closes and a new one opens with the rule as its cause (milestone 4 plan RD-11)", "source": "derived"}
       ],
       "closed_by": [
         {"event": "review.started", "when": "a reviewer claims the review", "source": "derived"},
+        {"event": "check.finished", "when": "an applied row at review.assign with effect refused, while the open step names no cause: the step that names the rule opens at the same event (milestone 4 plan RD-11)", "source": "derived"},
         {"event": "hold.opened", "when": "a hold opens on the task: the work or waiting step closes and the hold's step opens (L277)", "source": "derived"},
         {"event": "task.returned", "when": "a contract edit returns the task to Backlog (L205)", "source": "derived"},
         {"event": "task.cancelled", "when": "the task is cancelled (L207)", "source": "derived"}

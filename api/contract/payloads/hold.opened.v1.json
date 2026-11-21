@@ -18,12 +18,17 @@
       "description": "The credential that caused the hold, where one applies. For credential_limit, the candidate that resets first (the wait_limit step's subject), or the credential that stopped when no candidate has a reset time (milestone 3 plan HE-13). For credential_signed_out, the first signed-out candidate in the seat's order (milestone 3 plan HE-12).",
       "type": ["string", "null"],
       "format": "uuid"
+    },
+    "rule_check_id": {
+      "description": "The rule check the hold is about, for check_error, claim_gate_failed and rerun_limit; null for every other reason (DB-49). The check held at the re-run limit has no other event until it is let through or withdrawn (milestone 4 plan RD-45), so this is the event the replay makes its row from.",
+      "type": ["string", "null"],
+      "format": "uuid"
     }
   },
-  "required": ["reason", "rule_id", "credential_id"],
+  "required": ["reason", "rule_id", "credential_id", "rule_check_id"],
   "examples": [
-    {"reason": "owner_hold", "rule_id": null, "credential_id": null},
-    {"reason": "claim_gate_failed", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "credential_id": null},
-    {"reason": "credential_limit", "rule_id": null, "credential_id": "e9a2c5f7-3b18-4d64-a0c9-52e7f1b4d683"}
+    {"reason": "owner_hold", "rule_id": null, "credential_id": null, "rule_check_id": null},
+    {"reason": "claim_gate_failed", "rule_id": "3e8b1c7d-5a24-4f9e-b6c3-0d7a2e5f8b19", "credential_id": null, "rule_check_id": "7c2d9e41-0b6a-4f3e-9a85-1d4c6b2e0f97"},
+    {"reason": "credential_limit", "rule_id": null, "credential_id": "e9a2c5f7-3b18-4d64-a0c9-52e7f1b4d683", "rule_check_id": null}
   ]
 }

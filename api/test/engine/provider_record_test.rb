@@ -91,4 +91,41 @@ class ProviderRecordTest < ActiveSupport::TestCase
     assert_equal %w[gemini grok], providers(reviewed_by(review))
     assert_not_includes providers(built_by(task)), "grok", "the review moved to a provider that did not build the task"
   end
+
+  test "the providers that built a task are read from the same events: every builder's credential and every seat that held it with no credential, never a review's or a job's (L448, milestone 4 RD-50)" do
+    claude = scenario.credential(provider: "claude")
+    codex = scenario.credential(provider: "codex")
+    gemini = scenario.credential(provider: "gemini")
+    grok = scenario.credential(provider: "grok_api", kind: "api_token")
+    builder = scenario.seat(role: "builder", credential: claude)
+    task = scenario.task(state: "working", builder: builder)
+    switched = lambda do |credential, review_id: nil, job_id: nil|
+      scenario.append("credential.switched", task: task, subject: credential,
+        payload: { from_credential_id: claude.id, model: nil, seat_id: builder.id, review_id: review_id, job_id: job_id })
+    end
+    record = -> { Leverage::Rules::ProviderRecord.groups(task.id) }
+
+    assert_equal %w[anthropic], record.call
+    switched.call(codex)
+    assert_equal %w[anthropic openai], record.call
+    switched.call(gemini, review_id: SecureRandom.uuid)
+    switched.call(grok, job_id: SecureRandom.uuid)
+    assert_equal %w[anthropic openai], record.call, "a review's and a job's runs did not build the task"
+
+    on_its_own = scenario.seat(role: "builder", provider: "openrouter")
+    scenario.append("task.claimed", task: task, actor_kind: "seat", actor_id: on_its_own.id,
+      payload: { seat_id: on_its_own.id, credential_id: nil, model: nil })
+    assert_equal %w[anthropic openai openrouter], record.call
+    Leverage::Gating.implementation = Leverage::Rules::Engine.new
+    assert_equal record.call, Leverage::Gating.built_by_providers(task_id: task.id)
+  end
+
+  test "a builder that connects on its own counts by its seat's provider; a task with no builder has none" do
+    own = scenario.seat(role: "builder", provider: "gemini")
+    task = scenario.task(state: "in_review", builder: own)
+
+    assert_equal %w[google], Leverage::Rules::ProviderRecord.groups(task.id)
+    assert_equal [], Leverage::Rules::ProviderRecord.groups(scenario.task.id)
+    assert_equal [], Leverage::Rules::ProviderRecord.groups(SecureRandom.uuid)
+  end
 end

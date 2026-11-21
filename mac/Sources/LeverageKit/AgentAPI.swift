@@ -46,4 +46,14 @@ public protocol AgentAPI: Sendable {
     /// `give_verdict`.
     func giveVerdict(reviewID: UUID, _ request: GiveVerdictRequest, key: IdempotencyKey) async throws
         -> PlainOutcome
+
+    // Jobs: a planner's contract drafts and an orchestrator's rule checks
+    // (milestone 4).
+
+    /// `claim_next_job`: the next job; a seat that already holds one gets
+    /// that one again (RD-35, RD-40).
+    func claimNextJob(key: IdempotencyKey) async throws -> CommandOutcome<JobClaim>
+    /// `submit_job_result`: the result in the shape of the job's kind.
+    func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome
 }

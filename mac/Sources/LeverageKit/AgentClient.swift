@@ -91,4 +91,13 @@ public struct AgentClient: AgentAPI {
         -> PlainOutcome {
         try await transport.command(.giveVerdict, path: ["id": reviewID.contractString], body: request, key: key)
     }
+
+    public func claimNextJob(key: IdempotencyKey) async throws -> CommandOutcome<JobClaim> {
+        try await transport.command(.claimNextJob, key: key)
+    }
+
+    public func submitJobResult(jobID: UUID, _ request: JobResultRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.submitJobResult, path: ["id": jobID.contractString], body: request, key: key)
+    }
 }

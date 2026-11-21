@@ -13,8 +13,15 @@ module Leverage
       # (Candidates.wait_cause, asked once the seat holds nothing): on
       # task.released when the task had no hold, else on the hold.closed
       # that leaves it with none (milestone 3 plan §2.1, changed entries).
-      # Release from Finishing, and of a provisional claim from Ready,
-      # cannot be reached yet (SC-3, HS-3; no model check).
+      #
+      # A waiting command of the releasing seat is ended first, with
+      # invalid_state (milestone 4 plan §2.1 rule 11, RE-4): a pending
+      # submit from Working, or a provisional claim from Ready (SM-13: the
+      # claimant holds the task in Ready with no lease, RE-5, and releasing
+      # it writes task.released with its reason and leaves it Ready with no
+      # holder). PendingTransitions.cancel withdraws its checks and jobs
+      # before task.released. Release from Finishing cannot be reached
+      # before milestone 5 (SC-3, HS-3).
       #
       # 422 invalid for a reason only the app chooses (seat_disabled,
       # seat_removed).
@@ -34,6 +41,8 @@ module Leverage
         end
 
         def perform(ctx)
+          pending = PendingTransitions.of(@task)
+          PendingTransitions.cancel(ctx, pending, "invalid_state") if pending
           held = Holds.held?(@task)
           Leases.end_lease(ctx, @task)
           @task.update!(state: @row.fetch("to") || @task.state, holder_seat_id: nil, builder_seat_id: nil,

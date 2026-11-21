@@ -1,0 +1,25 @@
+{
+  "id": "14-update-the-shop",
+  "label": "failed",
+  "category": "vague_goal",
+  "why": "Update the shop could mean many different pieces of work, and nothing says which.",
+  "contract": {
+    "title": "Update the shop",
+    "goal": "Update the Thimblevane shop.",
+    "details": "Several things on it are out of date.",
+    "criteria": [
+      {
+        "text": "The shop is up to date.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

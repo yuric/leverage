@@ -94,10 +94,31 @@ class ConnectSeatTest < ActiveSupport::TestCase
     assert_raises(T::Invalid) { owner_command("connect_seat", body) }
   end
 
-  test "Connect offers builder and reviewer only in this milestone" do
+  # Milestone 4 plan RV-5, §0.1 fact 12: the two job roles arrive. Any
+  # login, with or without a model, and nothing refused for its provider;
+  # milestone 2's "builder and reviewer only" is gone.
+  test "a planner and an orchestrator connect like a builder: on any login, with or without a model" do
+    logins = Leverage::Contract.registry.fetch("credential_providers").select { |entry| entry.fetch("kind") == "login" }
+      .map { |entry| @scenario.credential(provider: entry.fetch("provider")) }
     %w[planner orchestrator].each do |role|
-      assert_raises(T::Invalid) { owner_command("connect_seat", body(role: role, provider: "codex")) }
+      logins.each do |login|
+        provider = login.provider
+        [ nil, "#{provider}-model-1" ].each do |model|
+          outcome = assert_completed(owner_command("connect_seat", body(name: "Made-up #{role}", role: role,
+            credential_id: login.id, model: model)))
+          seat = Seat.find(outcome.result.fetch("seat_id"))
+          assert_equal [ role, provider, model.to_s, login.id, true ],
+            [ seat.role, seat.provider, seat.model, seat.credential_id, seat.wanted_running ]
+          assert HelperRequest.exists?(seat_id: seat.id, kind: "start_seat")
+        end
+      end
+      outcome = assert_completed(owner_command("connect_seat", body(role: role, provider: "gemini")))
+      assert outcome.once.fetch("seat_token")
     end
+  end
+
+  test "a role the registry does not list is 422" do
+    assert_raises(T::Invalid) { owner_command("connect_seat", body(role: "owner", provider: "codex")) }
   end
 
   test "a strength rank sent is kept" do

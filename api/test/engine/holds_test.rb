@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "entries/pending_stub"
 
 # Leverage::Holds (PRD L121, L150-L201; registry hold_reasons; milestone 2
 # plan WP4, EN-13, EN-31; contract decisions DB-20, DB-35): a hold row with
@@ -9,6 +10,8 @@ require "test_helper"
 # with the time they had left, and the last hold on a task a seat holds
 # sets tasks.resume_pending_since.
 class HoldsTest < ActiveSupport::TestCase
+  include PendingStub
+
   H = Leverage::Holds
 
   setup do
@@ -335,5 +338,138 @@ class HoldsTest < ActiveSupport::TestCase
 
     assert_empty H.close_seat_bound(ctx, task, cause: released, wait_cause: nil)
     assert_equal %w[hold.opened task.released], ctx.events.map(&:type)
+  end
+
+  # --- Milestone 4 (plan WP5): the four rule holds, and a hold over a
+  # waiting command (PRD L161-L167, L378, L392; RD-13, RD-45, SM-24,
+  # SM-39; §2.1 rules 9 to 11). PendingTransitions is WP4's: PendingStub
+  # stands in for it and records what Holds asks of it. ------------------
+
+  # Each rule hold's lease clock, the step it opens (the registry's step:
+  # contract_incomplete waits on the contract, the others on the owner)
+  # and its Needs you item, from a task in the state the hold opens in.
+  {
+    "contract_incomplete" => [ "backlog", false, "wait_contract", nil ],
+    "check_error" => [ "working", true, "wait_owner", "check_could_not_run" ],
+    "claim_gate_failed" => [ "ready", false, "wait_owner", "refused_for_every_agent" ],
+    "rerun_limit" => [ "working", true, "wait_owner", "check_past_rerun_limit" ]
+  }.each do |reason, (state, pauses, step, item)|
+    test "#{reason}: its rule on hold.opened, #{pauses ? "a paused" : "no"} lease clock, step #{step}, item #{item.inspect}" do
+      rule = @scenario.rule
+      task = state == "working" ? working_task : @scenario.task(state: state)
+      check = @scenario.rule_check(task, rule: rule, result: "failed")
+      ctx = context
+      task.update_columns(lease_due_at: ctx.at + 250) if state == "working"
+      hold = H.open(ctx, task: task, reason: reason, rule_id: rule.id, facts: {}, rule_check_id: check.id)
+
+      opened = ctx.events.find { |event| event.type == "hold.opened" }
+      # The rule check a rule's hold is about, for the three reasons that
+      # name one (DB-49), on the row and in the event.
+      named = H::NAMES_CHECK.include?(reason) ? check.id : nil
+      assert_equal({ "reason" => reason, "rule_id" => rule.id, "credential_id" => nil, "rule_check_id" => named }, opened.payload)
+      assert_equal check.id, hold.rule_check_id
+      assert_equal pauses, H.pausing?(task)
+      assert_equal 250, left(task) if pauses
+      open = TaskStep.find_by!(task_id: task.id, closed_at: nil)
+      assert_equal [ step, opened.id ], [ open.kind, open.opening_event_id ],
+        "the hold opens its own step, a new wait_contract row for contract_incomplete too (SM-24)"
+      item ? assert_equal(item, InboxItem.find_by(hold_id: hold.id)&.kind) : assert_not(InboxItem.exists?(hold_id: hold.id))
+    end
+  end
+
+  test "check_error opens its task item only when the caller says the orchestrator is online (SM-39)" do
+    rule = @scenario.rule
+    first = working_task
+    online = H.open(context, task: first, reason: "check_error", rule_id: rule.id, item: true)
+    second = @scenario.task(state: "working", builder: @scenario.seat(role: "builder"))
+    offline = H.open(context, task: second, reason: "check_error", rule_id: rule.id, item: false)
+
+    assert_equal "check_could_not_run", InboxItem.find_by!(hold_id: online.id).kind
+    assert_not InboxItem.exists?(hold_id: offline.id), "the workspace's Orchestrator offline item covers it"
+    assert_equal 1, Event.where(type: "inbox.opened", task_id: [ online.task_id, offline.task_id ]).count
+  end
+
+  test "a hold over a pending submit makes the open step the hold's and cancels nothing (L378)" do
+    task = working_task
+    pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
+    hold = nil
+    calls = with_pending(pending) { hold = H.open(context, task: task, reason: "owner_hold") }
+
+    assert_empty calls
+    assert_equal [ "wait_owner", hold.id ], TaskStep.find_by!(task_id: task.id, closed_at: nil).values_at(:kind, :subject_id)
+    assert_equal "pending", pending.reload.state
+  end
+
+  test "the last hold lifting re-enters the pending transition once, with the trigger hold_lifted (L378, rule 9)" do
+    task = working_task
+    pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
+    first = H.open(context, task: task, reason: "owner_hold")
+    second = H.open(context, task: task, reason: "rounds_exceeded", facts: { round: 0 })
+
+    calls = with_pending(pending) { H.close(context, hold: first, task: task.reload) }
+    assert_empty calls, "a hold is still open: nothing re-enters (rule 9)"
+
+    closing = context
+    calls = with_pending(pending) { H.close(closing, hold: second, task: task.reload, choice: "allow_another_round") }
+    assert_equal [ [ :reenter, pending.id, :hold_lifted ] ], calls.map(&:summary)
+    assert_nil calls.sole.argument.rule_check_id
+    assert_equal %w[hold.closed inbox.resolved], calls.sole.written_before.last(2),
+      "it re-enters after the hold has closed and its item is resolved"
+  end
+
+  # Override, Run it again, the re-run's result, a rule turned off and a
+  # cancel each close the check's hold and gate the transition with the
+  # check themselves (override_check.rb, rule_records.rb): Holds does not
+  # gate it a second time in the same command.
+  %w[check_error rerun_limit].each do |reason|
+    test "the last hold lifting is #{reason}, a check's own hold: Holds leaves the re-entry to its closer" do
+      task = working_task
+      pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
+      rule = @scenario.rule
+      hold = H.open(context, task: task, reason: reason, rule_id: rule.id)
+
+      assert_empty(with_pending(pending) { H.close(context, hold: hold, task: task.reload) })
+    end
+  end
+
+  test "closing the last hold re-enters nothing with no pending transition, on a cancelled task, or inside the waiting command" do
+    task = working_task
+    hold = H.open(context, task: task, reason: "owner_hold")
+    assert_empty(with_pending(nil) { H.close(context, hold: hold, task: task.reload) })
+
+    pending = @scenario.pending_transition(task, command: "submit", requester: @builder)
+    hold = H.open(context, task: task, reason: "owner_hold")
+    performing = context(key: pending.command_key, caller: [ "seat", @builder.id ])
+    calls = with_pending(pending) { H.close(performing, hold: hold, task: task.reload) }
+    assert_empty calls, "a hold the waiting command closes while it is performed does not re-enter it"
+
+    hold = H.open(context, task: task, reason: "owner_hold")
+    cancel = context
+    task.reload.update!(state: "cancelled", holder_seat_id: nil, builder_seat_id: nil)
+    cancel.emit("task.cancelled", task: task)
+    assert_empty(with_pending(pending) { H.close(cancel, hold: hold, task: task, choice: "cancel") })
+  end
+
+  # RD-13, rule 11: the reservation lapses whatever opens the hold: the
+  # owner's hold, or a rule hold the app opens.
+  { "owner_hold" => [ "owner" ], "claim_gate_failed" => [ "app" ] }.each do |reason, (actor)|
+    test "#{reason} opened on a Ready task with a provisional claim cancels the claim invalid_state, first (RD-13)" do
+      task = @scenario.task(state: "ready")
+      task.update_columns(holder_seat_id: @builder.id)
+      pending = @scenario.pending_transition(task, command: "claim", requester: @builder)
+      actor_id = actor == "owner" ? @scenario.owner.id : nil
+      rule_id = @scenario.rule.id if reason == "claim_gate_failed"
+      calls = with_pending(pending) do
+        H.open(context, task: task, reason: reason, rule_id: rule_id, actor_kind: actor, actor_id: actor_id)
+      end
+
+      assert_equal [ [ :cancel, pending.id, "invalid_state" ] ], calls.map(&:summary)
+      assert_not_includes calls.sole.written_before, "hold.opened", "the claim is cancelled before hold.opened"
+    end
+  end
+
+  test "a hold on a Ready task with no provisional claim cancels nothing" do
+    task = @scenario.task(state: "ready")
+    assert_empty(with_pending(nil) { H.open(context, task: task, reason: "owner_hold") })
   end
 end

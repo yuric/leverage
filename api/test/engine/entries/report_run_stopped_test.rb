@@ -1,5 +1,6 @@
 require "test_helper"
 require_relative "accounts_support"
+require_relative "pending_ends_support"
 
 # report_run_stopped (PRD L121, L823, L914; milestone 2 plan IN-17, IN-40,
 # IF-21): a run stopped. The seat's run state becomes stopped and its token
@@ -8,8 +9,14 @@ require_relative "accounts_support"
 # own. The seat keeps why its run stopped and its run is on no credential
 # (milestone 3 plan HD-3, HD-10); a report about an earlier run, on another
 # credential than the seat's run is on now, changes nothing.
+#
+# A pending pass of the review the stopped run's seat held (milestone 4 plan
+# §2.1 rule 11) is cancelled with invalid_state, through
+# PendingTransitions.cancel, before review.released; a builder's pending
+# submit is not touched, as its lease runs on (L121).
 class ReportRunStoppedTest < ActiveSupport::TestCase
   include AccountsSupport
+  include PendingEndsSupport
 
   setup { use_scenario }
 
@@ -121,5 +128,50 @@ class ReportRunStoppedTest < ActiveSupport::TestCase
     assert_equal [ "running", other.id, digest, nil ],
       [ reviewer.run_state, reviewer.run_credential_id, reviewer.token_hash, reviewer.run_stop_reason ]
     assert_equal reviewer.id, review.reload.reviewer_seat_id, "a handed-over review is never released by the old run's stop"
+  end
+
+  test "the pending pass of the review the stopped reviewer held is cancelled with invalid_state before review.released" do
+    reviewer = running_seat(role: "reviewer")
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: reviewer)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    written = nil
+    calls = recording_cancels { written = events_written { assert_completed(report(reviewer)) } }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal %w[review.released], written.map(&:type)
+    assert_nil review.reload.reviewer_seat_id
+  end
+
+  test "a stopped run that holds no review cancels nothing, and a builder's pending submit stays under its lease (L121)" do
+    builder = running_seat
+    task = @scenario.task(state: "working", builder: builder)
+    @scenario.pending_transition(task, command: "submit", requester: builder)
+    calls = recording_cancels { assert_completed(report(builder)) }
+
+    assert_empty calls
+    assert_equal "pending", PendingTransition.find_by!(task_id: task.id).state
+    assert_equal builder.id, task.reload.holder_seat_id
+  end
+
+  test "a review whose lease is already past its due time keeps its pending pass for the lease timer" do
+    reviewer = running_seat(role: "reviewer")
+    task = @scenario.task(state: "in_review")
+    @scenario.make_due(@scenario.review(task, reviewer: reviewer))
+    @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    calls = recording_cancels { assert_completed(report(reviewer)) }
+
+    assert_empty calls
+  end
+
+  test "a report about an earlier run on another credential cancels nothing" do
+    reviewer = running_seat(role: "reviewer")
+    task = @scenario.task(state: "in_review")
+    @scenario.review(task, reviewer: reviewer)
+    @scenario.pending_transition(task, command: "pass_review", requester: reviewer)
+    @scenario.run(reviewer, on: @scenario.credential(provider: "codex"))
+    calls = recording_cancels { assert_completed(report(reviewer)) }
+
+    assert_empty calls
   end
 end

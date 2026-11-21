@@ -25,10 +25,16 @@ public struct BoardTask: Codable, Equatable, Sendable {
     public let waitingUntil: Date?
     /// The task's open Needs you item, if any (MA-29).
     public let inboxItem: InboxItem?
+    /// A transition of the task is pending and no hold is open (RD-27).
+    public let checking: Bool
+    /// The reason of the failed check behind an open `contract_incomplete`
+    /// hold, or nil (RD-27). Text a model wrote: shown as data.
+    public let checkReason: String?
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
-        waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil
+        waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil,
+        checking: Bool = false, checkReason: String? = nil
     ) {
         self.task = task
         self.blocked = blocked
@@ -36,14 +42,17 @@ public struct BoardTask: Codable, Equatable, Sendable {
         self.waitingForCredentialID = waitingForCredentialID
         self.waitingUntil = waitingUntil
         self.inboxItem = inboxItem
+        self.checking = checking
+        self.checkReason = checkReason
     }
 
     enum CodingKeys: String, CodingKey {
-        case task, blocked
+        case task, blocked, checking
         case holdReasons = "hold_reasons"
         case waitingForCredentialID = "waiting_for_credential_id"
         case waitingUntil = "waiting_until"
         case inboxItem = "inbox_item"
+        case checkReason = "check_reason"
     }
 }
 
@@ -179,12 +188,26 @@ public struct TaskPage: Codable, Equatable, Sendable {
     public let waitingForCredentialID: UUID?
     /// When that account resets, as its board card says.
     public let waitingUntil: Date?
+    /// The task's steps in order, from `task_steps` (RD-24).
+    public let steps: [TaskStepRow]
+    /// The task's lifetime to `asOf`: the sum of its steps' seconds.
+    public let lifetimeSeconds: Double
+    /// The database time the open step and the lifetime are measured to.
+    public let asOf: Date
+    /// The task's rule checks in order of creation (RD-28).
+    public let ruleChecks: [RuleCheckRow]
+    /// The waiting command and what it waits on, or nil.
+    public let pending: PendingState?
+    /// Where a contract draft stands (RD-37).
+    public let draft: DraftState
 
     public init(
         task: TaskSummary, criteria: [Criterion] = [], actions: [Action] = [], questions: [Question] = [],
         holds: [Hold] = [], waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, reviews: [Review] = [],
         inboxItems: [InboxItem] = [], events: [EventRecord] = [], names: [LogName] = [],
-        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int
+        recoveryTimes: [RecoveryTime] = [], reviewerSeatExists: Bool, asOfSeq: Int,
+        steps: [TaskStepRow] = [], lifetimeSeconds: Double = 0, asOf: Date = Date(timeIntervalSince1970: 0),
+        ruleChecks: [RuleCheckRow] = [], pending: PendingState? = nil, draft: DraftState = .none
     ) {
         self.task = task
         self.criteria = criteria
@@ -200,10 +223,19 @@ public struct TaskPage: Codable, Equatable, Sendable {
         self.recoveryTimes = recoveryTimes
         self.reviewerSeatExists = reviewerSeatExists
         self.asOfSeq = asOfSeq
+        self.steps = steps
+        self.lifetimeSeconds = lifetimeSeconds
+        self.asOf = asOf
+        self.ruleChecks = ruleChecks
+        self.pending = pending
+        self.draft = draft
     }
 
     enum CodingKeys: String, CodingKey {
-        case task, criteria, actions, questions, holds, reviews, events, names
+        case task, criteria, actions, questions, holds, reviews, events, names, steps, pending, draft
+        case lifetimeSeconds = "lifetime_seconds"
+        case asOf = "as_of"
+        case ruleChecks = "rule_checks"
         case inboxItems = "inbox_items"
         case waitingForCredentialID = "waiting_for_credential_id"
         case waitingUntil = "waiting_until"
@@ -304,11 +336,14 @@ public struct SystemHealth: Codable, Equatable, Sendable {
     /// True when the newest backup is more than 26 hours old, or when there
     /// is none and the workspace is more than an hour old (HB-4).
     public let backupLate: Bool
+    /// Rule checks queued and not claimed, plus those held with
+    /// `check_error`, counted at each read (RD-18).
+    public let waitingChecks: Int
 
     public init(
         sweepLastRanAt: Date?, sweepLate: Bool, helperLastReportedAt: Date?, queuedHelperRequests: Int,
         readyTasks: Int, waitingReviews: Int, orchestrator: OrchestratorState = .notSetUp,
-        backupLastRanAt: Date? = nil, backupLate: Bool = false
+        backupLastRanAt: Date? = nil, backupLate: Bool = false, waitingChecks: Int = 0
     ) {
         self.sweepLastRanAt = sweepLastRanAt
         self.sweepLate = sweepLate
@@ -319,6 +354,7 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         self.orchestrator = orchestrator
         self.backupLastRanAt = backupLastRanAt
         self.backupLate = backupLate
+        self.waitingChecks = waitingChecks
     }
 
     enum CodingKeys: String, CodingKey {
@@ -331,6 +367,7 @@ public struct SystemHealth: Codable, Equatable, Sendable {
         case waitingReviews = "waiting_reviews"
         case backupLastRanAt = "backup_last_ran_at"
         case backupLate = "backup_late"
+        case waitingChecks = "waiting_checks"
     }
 }
 

@@ -1,0 +1,29 @@
+{
+  "id": "17-homepage-looks-great",
+  "label": "failed",
+  "category": "nothing_to_check",
+  "why": "The goal is clear, but no criterion names anything a reviewer could see or check: looking great and being loved are opinions.",
+  "contract": {
+    "title": "A bigger photo on the home page",
+    "goal": "Redesign the home page of the Larkspur Kitchen blog with a larger photo of the newest recipe at the top.",
+    "details": "For readers who arrive from links shared online.",
+    "criteria": [
+      {
+        "text": "The home page looks great.",
+        "kind": "build"
+      },
+      {
+        "text": "Readers love it.",
+        "kind": "build"
+      },
+      {
+        "text": "An independent reviewer agrees.",
+        "kind": "review"
+      }
+    ],
+    "actions": [],
+    "minimum_strength_rank": null,
+    "budget_cap": null,
+    "work_reference": null
+  }
+}

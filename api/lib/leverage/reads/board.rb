@@ -25,6 +25,14 @@ module Leverage
     # time, as it does MA-29's. The task page (TaskPage) names it with the
     # same two fields, from the same call to waiting, so the page and the
     # card always agree.
+    #
+    # Milestone 4 (its plan §2.3, RD-27) adds two fields a Backlog card
+    # speaks from: checking, while a transition of the task is pending and
+    # no hold is open ("Checking the details"; while a hold is open the
+    # hold's waiting step is open instead, L378), and check_reason, the
+    # reason of the failed check behind an open contract_incomplete hold
+    # ("Needs details"). Which transition of a task is pending is
+    # pending_transitions, which the task page reads too.
     module Board
       module_function
 
@@ -38,8 +46,14 @@ module Leverage
             .order(:opened_at, :id).to_a
           item_json = inbox_items(items).group_by { |item| item.fetch(:about_id) }
           waits = waiting(workspace_id, tasks, holds)
+          pending = pending_transitions(workspace_id, task_ids)
+          reasons = check_reasons(holds.values.flatten)
 
-          { tasks: tasks.map { |task| card(task, holds.fetch(task.id, []), item_json[task.id]&.first, waits.fetch(task.id)) },
+          { tasks: tasks.map do |task|
+              open = holds.fetch(task.id, [])
+              card(task, open, item_json[task.id]&.first, waits.fetch(task.id))
+                .merge(checking: pending.key?(task.id) && open.empty?, check_reason: check_reason(open, reasons))
+            end,
             as_of_seq: as_of_seq, reviewer_seat_exists: reviewer_seat?(workspace_id) }
         end
       end
@@ -55,6 +69,26 @@ module Leverage
       def inbox_items(items)
         seqs = Event.where(type: "inbox.opened", subject_id: items.map(&:id)).pluck(:subject_id, :seq).to_h
         items.map { |item| Shapes.inbox_item(item, seqs.fetch(item.id)) }
+      end
+
+      # task id => its pending PendingTransition (L373: at most one).
+      def pending_transitions(workspace_id, task_ids)
+        PendingTransition.where(workspace_id: workspace_id, task_id: task_ids, state: "pending").order(:created_at, :id)
+          .index_by(&:task_id)
+      end
+
+      # rule check id => reason, for the checks the open contract_incomplete
+      # holds name.
+      def check_reasons(open_holds)
+        ids = open_holds.select { |hold| hold.reason == "contract_incomplete" }.filter_map(&:rule_check_id)
+        RuleCheck.where(id: ids).pluck(:id, :reason).to_h
+      end
+
+      # The reason of the failed check behind the task's oldest open
+      # contract_incomplete hold, or nil.
+      def check_reason(open_holds, reasons)
+        hold = open_holds.find { |candidate| candidate.reason == "contract_incomplete" && candidate.rule_check_id }
+        hold && reasons[hold.rule_check_id]
       end
 
       def card(task, holds, item, waiting)

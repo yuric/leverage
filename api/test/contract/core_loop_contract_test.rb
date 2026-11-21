@@ -69,6 +69,11 @@ class CoreLoopContractTest < Minitest::Test
       assert sm.fetch("commands").any? { |entry| entry["command"] == command }, "#{command} has no commands entry"
       rows = derived.flat_map { |group| group["rows"] }.select { |row| row["command"] == command }
       assert_equal 1, rows.size, "#{command}: one derived row"
+      # Milestone 4 plan RD-2 and SM-33: from the Rule checks milestone on,
+      # creating the workspace writes the shipped rules' rule.created
+      # (RuleChecksContractTest holds that row).
+      next if command == "create_owner"
+
       assert_equal [], rows.first["events"], command
       assert_equal [], rows.first["conditional_events"], command
     end
@@ -101,7 +106,8 @@ class CoreLoopContractTest < Minitest::Test
     %w[401 404].each { |status| assert op["responses"].key?(status), "get_landing_prompt lacks #{status}" }
     prompt = schemas.fetch("LandingPrompt")
     assert_equal %w[check_interval_minutes text], prompt.fetch("required").sort
-    assert_equal 20, prompt.dig("properties", "check_interval_minutes", "const")
+    # 20 for a builder or a reviewer, 1 for an orchestrator or a planner (milestone 4 review, finding 19).
+    assert_equal [ 1, 20 ], prompt.dig("properties", "check_interval_minutes", "enum")
     refused = { "code" => "invalid_state", "rule_id" => nil, "reason" => nil }
     assert validator("Refusal").valid?(refused)
     assert_equal %w[text check_interval_minutes].sort, ColumnsTest::NOT_COLUMNS.fetch("LandingPrompt").sort
@@ -138,9 +144,10 @@ class CoreLoopContractTest < Minitest::Test
     assert_includes schemas.fetch("TaskPage").fetch("required"), "events"
     health = schemas.fetch("SystemHealth")
     # The Handoff milestone adds the backup's two fields (milestone 3 plan
-    # HB-4).
+    # HB-4), and the Rule checks milestone the waiting checks (milestone 4
+    # plan RD-18).
     assert_equal %w[backup_last_ran_at backup_late helper_last_reported_at orchestrator queued_helper_requests ready_tasks
-      sweep_last_ran_at sweep_late waiting_reviews], health.fetch("required").sort
+      sweep_last_ran_at sweep_late waiting_checks waiting_reviews], health.fetch("required").sort
     assert_includes health.dig("properties", "orchestrator", "enum"), "not_set_up"
   end
 

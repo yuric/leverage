@@ -2,6 +2,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "rake"
+require_relative "support/connection_budget"
 
 # The owner's password is hashed at bcrypt's lowest cost in tests, so
 # Scenario's owner does not cost a quarter of a second each time.
@@ -9,8 +10,10 @@ ActiveModel::SecurePassword.min_cost = true
 
 module ActiveSupport
   class TestCase
-    # Run tests in parallel with specified workers
-    parallelize(workers: :number_of_processors)
+    # Run tests in parallel: one worker per processor, at most eight,
+    # PARALLEL_WORKERS overriding (ConnectionBudget: every worker shares
+    # one PostgreSQL server and its max_connections).
+    parallelize(workers: ConnectionBudget.workers)
 
     # Each worker's database is loaded from db/structure.sql, which holds no
     # grants (pg_dump --no-privileges), and no rake task runs for it: grant
@@ -22,11 +25,11 @@ module ActiveSupport
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
 
-    # The production gating for milestone 2 (config/initializers/
+    # The production gating, the rules engine (config/initializers/
     # leverage_gating.rb), set again before each test: the gating
     # conformance suite unsets the implementation after each of its tests,
     # and it runs in the same process.
-    setup { Leverage::Gating.implementation = Leverage::Gating::NoRules.new }
+    setup { Leverage::Gating.implementation = Leverage::Rules::Engine.new }
 
     # Fires the deferred state trigger (C7) before the test's transaction is
     # rolled back, so a test that changes tasks.state without an event for

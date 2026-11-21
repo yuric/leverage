@@ -7,11 +7,19 @@ module Leverage
   # Its parts, each with a version: the project brief (empty, version 0,
   # while tasks have no project, SC-8), the seat's role file (RoleFiles,
   # version the release) and the task's contract (contract_version), then
-  # the rules Gating.briefing_rules returns (none in milestone 2). The hash
-  # is SHA-256 in lower-case hex over Gating::CanonicalJson.dump of the
-  # parts as {kind, id, version}, in that order: only a change to a part of
-  # this task's briefing changes it. The work reference and a failed
-  # review's notes are outside it.
+  # the rules Gating.briefing_rules returns, each as {kind: "rule", id:
+  # the rule's id, version: its current version number} (milestone 4,
+  # L470, L476). The hash is SHA-256 in lower-case hex over
+  # Gating::CanonicalJson.dump of the parts as {kind, id, version}, in that
+  # order: only a change to a part of this task's briefing changes it, so
+  # saving, switching or removing a rule in it does, and nothing else
+  # about rules does. The work reference and a failed review's notes are
+  # outside it.
+  #
+  # The answer's rules carry each rule's version id, key, name and text: a
+  # model rule's instruction, or an app rule's sentence (Rules::Sentences,
+  # milestone 4 plan RD-62), and may_apply for a "let the checker decide"
+  # rule.
   #
   # An acknowledgement is kept per seat, per lease and per hash
   # (briefing_acknowledgements), the lease named by the event that granted
@@ -37,17 +45,16 @@ module Leverage
     # The briefing in the contract's Briefing shape (string keys).
     def for(subject, positional_seat = nil, seat: positional_seat, review: nil)
       task, review = task_and_review(subject, review)
-      rules = rule_parts(task, seat, review)
+      rules = briefing_rules(task, seat, review)
       {
         "hash" => hash_for(task, seat: seat, review: review),
         "versions" => {
-          "rule_version_ids" => rules.map { |part| part.fetch("version") },
+          "rule_version_ids" => rules.map { |rule| rule.fetch("rule_version_id") },
           "brief_version" => brief_version(task),
           "role_file_version" => RoleFiles.version,
           "contract_version" => task.contract_version
         },
-        # Rules join the briefing in milestone 4 (L476), with their text.
-        "rules" => [],
+        "rules" => rules,
         "brief" => [],
         "role_file" => RoleFiles.text(seat.role),
         "contract" => contract(task)
@@ -69,10 +76,18 @@ module Leverage
         "review_notes" => notes }
     end
 
-    # The notes of the task's failed reviews, oldest round first.
+    # The notes of the task's failed reviews, oldest round first. A review
+    # failed by a rule at "when the review has passed" (failed_rule_check_id)
+    # carries, after the reviewer's notes, the rule's name, as the version
+    # the check ran against names it, and the check's reason (milestone 4
+    # plan RD-38). Both are content the runner quotes, never instructions.
     def review_notes(task)
-      Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: "failed").order(:round, :created_at)
-        .map { |review| { "review_id" => review.id, "round" => review.round, "notes" => review.notes } }
+      reviews = Review.where(workspace_id: task.workspace_id, task_id: task.id, verdict: "failed").order(:round, :created_at)
+      failed = failed_rule_notes(task, reviews.filter_map(&:failed_rule_check_id))
+      reviews.map do |review|
+        notes = [ review.notes.presence, failed[review.failed_rule_check_id] ].compact.join("\n\n").presence || review.notes
+        { "review_id" => review.id, "round" => review.round, "notes" => notes }
+      end
     end
 
     # The event that granted the seat its latest lease on the task (a
@@ -118,6 +133,31 @@ module Leverage
         .map { |part| { "kind" => part.kind.to_s, "id" => part.id, "version" => part.version } }
     end
 
+    # The briefing's rules in the contract's BriefingRule shape, in the
+    # order Gating.briefing_rules gives them.
+    def briefing_rules(task, seat, review)
+      parts = Gating.briefing_rules(task_id: task.id, seat_id: seat.id, review_id: review&.id)
+      return [] if parts.empty?
+
+      versions = RuleVersion.where(workspace_id: task.workspace_id, rule_id: parts.map(&:id))
+        .index_by { |version| [ version.rule_id, version.version ] }
+      parts.map do |part|
+        version = versions.fetch([ part.id, part.version ])
+        { "rule_id" => part.id, "rule_version_id" => version.id, "key" => version.key, "name" => version.name,
+          "instruction" => version.checker == "app" ? Rules::Sentences.for(version) : version.instruction,
+          "may_apply" => part.may_apply }
+      end
+    end
+
+    # "<rule name>: <reason>" for each failed rule check, by its id.
+    def failed_rule_notes(task, check_ids)
+      return {} if check_ids.empty?
+
+      checks = RuleCheck.where(workspace_id: task.workspace_id, id: check_ids).to_a
+      names = RuleVersion.where(id: checks.map(&:rule_version_id)).pluck(:id, :name).to_h
+      checks.to_h { |check| [ check.id, "#{names[check.rule_version_id]}: #{check.reason.presence || "No reason given."}" ] }
+    end
+
     # The project brief's version: 0 while the task has no project.
     def brief_version(task)
       return 0 unless task.project_id
@@ -158,6 +198,7 @@ module Leverage
       [ subject, review ]
     end
 
-    private_class_method :parts, :rule_parts, :brief_version, :contract, :criterion_json, :task_and_review
+    private_class_method :parts, :rule_parts, :briefing_rules, :failed_rule_notes, :brief_version, :contract, :criterion_json,
+      :task_and_review
   end
 end

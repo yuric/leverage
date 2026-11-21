@@ -3,8 +3,9 @@ module Leverage
   # and closes a task's steps from the events EventLog appends, in the same
   # call, so the steps commit with the events (L271).
   #
-  # It reads only the log, the task's open step and the task's criteria
-  # (their kinds), never a row an entry changes, so the order in which an
+  # It reads only the log, the task's open step, the task's criteria (their
+  # kinds) and a claimed job's kind, which never change, and never a row an
+  # entry changes, so the order in which an
   # entry updates its rows and emits its events does not matter, and a
   # replay of the log can drive it the same way. Which criteria a task has
   # as of an event is read from the log too (task.contract_changed's added
@@ -22,7 +23,7 @@ module Leverage
   #   derived rule): a step opened earlier in the same command is changed in
   #   place, so a failed review at the round limit closes review and opens
   #   wait_owner, with no wait_builder row between them. A command's events
-  #   share their command_id, at and effective_at; a timer's do too.
+  #   share their at and effective_at; a timer's do too.
   # - The criterion back-fill (rule 5, L279): when a criterion passes, an
   #   open build step with no criterion, of the same seat and round, is
   #   given it.
@@ -38,15 +39,45 @@ module Leverage
   # - wait_ready's cause is fixed when it opens (rule 8): from the
   #   wait_cause of the event that opens it, which is hold.closed when the
   #   task left its seat under a seat-bound hold (milestone 3 plan HE-35).
+  #
+  # Milestone 4 (its plan, WP5; steps.json; SM-24, RD-11, RC-16):
+  #
+  # - check opens at the first check.queued of a pending transition (a
+  #   blocking model check; a warn check opens no step), with the
+  #   transition as its subject, and stays open until the transition
+  #   ends: its completion (task.ready, task.claimed, task.submitted,
+  #   review.passed, review.failed), a failed check, a withdrawn one when
+  #   none of the transition's checks is left running, an errored one at
+  #   task.before_claim (the provisional claim lapses, L392), or the
+  #   task leaving its seat. A check that ends in error elsewhere keeps it
+  #   pending under check_error, whose hold names the step.
+  # - Where a transition ends with no completion, the step goes back to
+  #   the one the hook leaves: wait_contract (task.before_ready),
+  #   wait_ready (task.before_claim, with the check.finished's
+  #   wait_cause), finish for the builder (task.before_submit, steps.json)
+  #   and review for the reviewer (task.before_done, until the row's own
+  #   event moves it).
+  # - The check step closes at the last event of the command its
+  #   closed_by names: a check.finished written first and the event that
+  #   ends the transition after it (a release, the lease's end, a cancel,
+  #   a hold, a failed review, a completion) are one change, and the step
+  #   closes and the next opens at the latter (traces 16 and 18).
+  # - draft opens at job.claimed of a contract draft's job, for the
+  #   planner, and job.timed_out or job.withdrawn of that job reopens
+  #   wait_contract (SM-24). A contract_incomplete hold opens a new
+  #   wait_contract row (SM-24).
+  # - wait_review names the provider rule (cause_kind rule, cause_rule_id)
+  #   from the check.finished of an applied row at review.assign with
+  #   effect refused, once per wait (RD-11).
   module Steps
     # An event that steps.json says opens or closes a step, but that no
-    # milestone-2 command writes (jobs, checks, outward actions, escalation,
-    # owner rework). Raised rather than guessing a step; the milestone that
+    # command of this milestone writes (outward actions, escalation, owner
+    # rework). Raised rather than guessing a step; the milestone that
     # writes the event teaches the tracker.
     class Unsupported < StandardError; end
 
     # What the task's open step is, or would be with no hold open.
-    Work = Data.define(:kind, :subject_kind, :subject_id, :seat_id, :round, :cause_kind)
+    Work = Data.define(:kind, :subject_kind, :subject_id, :seat_id, :round, :cause_kind, :cause_rule_id)
 
     # The task is done or cancelled: no step is open and none opens.
     ENDED = :ended
@@ -55,20 +86,32 @@ module Leverage
     HOLD_EVENTS = %w[hold.opened hold.closed].freeze
     CRITERIA_EVENTS = %w[task.contract_changed criterion.passed criterion.reopened].freeze
 
-    # The events milestone 2 writes that steps.json names, with what each
-    # does in advance. Every other event steps.json names is Unsupported.
+    # The events milestones 2 to 4 write that steps.json names, with what
+    # each does in advance. Every other event steps.json names is
+    # Unsupported.
     HANDLED = %w[
       task.created task.promoted task.returned task.ready task.claimed task.briefing_acknowledged criterion.started
       criterion.passed task.submitted review.started review.released review.lease_expired review.failed review.passed
       task.released task.lease_expired task.done task.cancelled hold.opened hold.closed
+      check.queued check.finished job.claimed job.timed_out job.withdrawn
     ].freeze
 
     # Which seat a working step names (L278): the builder's steps name the
-    # builder, review the reviewer; waiting steps name none but these.
+    # builder, review the reviewer, draft the planner; waiting steps name
+    # none but these.
     BUILDER_STEPS = %w[briefing build finish rework wait_builder].freeze
+    SEAT_STEPS = (BUILDER_STEPS + %w[review draft]).freeze
     # The waiting steps of a hold bound to the seat that holds the task:
     # they name that seat (traces 11, 14 and 15).
     HOLDER_WAITS = %w[wait_seat wait_limit].freeze
+
+    # The step that late-binds its close (see the module's comment).
+    CHECK = "check".freeze
+    PENDING_SUBJECT = "pending_transition".freeze
+    DRAFT_JOB = "contract_draft".freeze
+    # Check events whose latest one says a check is still to be settled:
+    # queued (running), or ended in error (pending under check_error).
+    CHECK_EVENTS = %w[check.queued check.finished check.overridden].freeze
 
     module_function
 
@@ -92,7 +135,7 @@ module Leverage
         criteria.observe(event)
       end
       wanted = desired(advance(work, event, criteria), after, event, open)
-      move(open, wanted, event, again: announced_again?(open, wanted, event))
+      move(open, wanted, event, again: announced_again?(open, wanted, event) || incomplete_contract?(event, wanted))
     end
 
     # The step the task would have after event with no hold.
@@ -128,8 +171,17 @@ module Leverage
         step("review", subject: [ "criterion", review_criterion_id(event) ], seat_id: event.actor_id, round: round)
       when "review.failed"
         failed(event, payload, [ round, event.round + 1 ].max)
+      when "check.queued"
+        queued(work, event, payload, round)
+      when "check.finished"
+        finished(work, event, payload, round)
+      when "job.claimed"
+        draft_job?(event.subject_id) ? step("draft", subject: [ "job", event.subject_id ], seat_id: event.actor_id, round: round) : work
+      when "job.timed_out", "job.withdrawn"
+        work.kind == "draft" && work.subject_id == event.subject_id ? step("wait_contract", round: round) : work
       else
-        work # review.passed (task.done follows in milestone 2), hold.opened, hold.closed
+        # review.passed (task.done follows), hold.opened, hold.closed.
+        work
       end
     end
 
@@ -177,6 +229,57 @@ module Leverage
       return work unless work.kind == "build" && criteria.all_build_passed?
 
       step("finish", seat_id: work.seat_id, round: round)
+    end
+
+    # The first check.queued of a pending transition opens check; a warn
+    # check's has none and opens no step (RC-16).
+    def queued(work, _event, payload, round)
+      pending = payload["pending_transition_id"]
+      return work unless payload["blocking"] && pending
+      return work if work.kind == CHECK && work.subject_id == pending
+
+      step(CHECK, subject: [ PENDING_SUBJECT, pending ], round: round)
+    end
+
+    # A check of the open check step's transition that ends it goes back to
+    # the step its hook leaves; the provider rule refusing a reviewer names
+    # the wait (RD-11).
+    def finished(work, event, payload, round)
+      return refused_reviewer(work, payload) if payload["hook"] == "review.assign"
+      return work unless work.kind == CHECK && ends_pending?(work.subject_id, event, payload)
+
+      case payload["hook"]
+      when "task.before_ready" then step("wait_contract", round: round)
+      when "task.before_claim" then step("wait_ready", round: round, cause_kind: wait_cause(payload))
+      when "task.before_submit" then step("finish", seat_id: prior(work.subject_id, event)&.seat_id, round: round)
+      when "task.before_done"
+        before = prior(work.subject_id, event)
+        before ? before.with(round: [ before.round, round ].max) : work
+      else work
+      end
+    end
+
+    # Whether this check.finished ends the pending transition: a failed
+    # check refuses it (rule 7); an errored one lapses a provisional claim
+    # (L392) and elsewhere leaves it pending; a withdrawn one ends it once
+    # none of its checks is still running or errored. A check of another
+    # transition, or a passed one, ends nothing (the completion does).
+    def ends_pending?(pending, event, payload)
+      return false unless queued_for(event)&.payload&.fetch("pending_transition_id", nil) == pending
+
+      case payload["result"]
+      when "failed" then true
+      when "error" then payload["hook"] == "task.before_claim"
+      when "withdrawn" then unsettled_checks(pending, event).empty?
+      else false
+      end
+    end
+
+    def refused_reviewer(work, payload)
+      return work unless work.kind == "wait_review" && work.cause_kind.nil?
+      return work unless payload["result"] == "applied" && payload["effect"] == "refused"
+
+      work.with(cause_kind: "rule", cause_rule_id: payload["rule_id"])
     end
 
     def failed(event, payload, round)
@@ -243,6 +346,7 @@ module Leverage
 
     def move(open, wanted, event, again: false)
       return if open.nil? && wanted.nil?
+      return if late_close(open, wanted, event)
       return if open && wanted && same?(open, wanted) && !(again && !same_command?(open, event))
 
       if open && wanted && same_command?(open, event)
@@ -254,40 +358,75 @@ module Leverage
       TaskStep.create!(row(wanted, event).merge(workspace_id: event.workspace_id, task_id: event.task_id)) if wanted
     end
 
+    # The check step closes at the last event of the command its closed_by
+    # names (see the module's comment): when an earlier event of this
+    # command closed check and opened the open step, and this event also
+    # closes check and opens the step wanted now (or ends the task), the
+    # change moves to this event, so the command still changes the step
+    # once. Returns whether it moved it.
+    def late_close(open, wanted, event)
+      return false unless open && same_command?(open, event)
+
+      closed = TaskStep.find_by(workspace_id: event.workspace_id, task_id: event.task_id,
+        closing_event_id: open.opening_event_id)
+      return false unless closed&.kind == CHECK && closes?(CHECK, event.type)
+
+      if wanted.nil?
+        open.destroy!
+      elsif opens?(wanted.kind, event.type)
+        open.update!(row(wanted, event).merge(round: [ open.round, wanted.round ].max))
+      else
+        return false
+      end
+      closed.update!(closed_at: event.effective_at, closing_event_id: event.id)
+      true
+    end
+
+    # Whether a contract_incomplete hold opens: a new wait_contract row
+    # even while one is open (SM-24).
+    def incomplete_contract?(event, wanted)
+      event.type == "hold.opened" && event.payload&.fetch("reason", nil) == "contract_incomplete" &&
+        wanted&.kind == "wait_contract"
+    end
+
     def row(work, event)
       { kind: work.kind, step_class: step_class(work.kind), round: work.round, subject_kind: work.subject_kind,
-        subject_id: work.subject_id, seat_id: work.seat_id, cause_kind: work.cause_kind, cause_rule_id: nil,
+        subject_id: work.subject_id, seat_id: work.seat_id, cause_kind: work.cause_kind, cause_rule_id: work.cause_rule_id,
         opened_at: event.effective_at, opening_event_id: event.id }
     end
 
     def same?(open, work)
-      [ open.kind, open.subject_kind, open.subject_id, open.seat_id, open.cause_kind ] ==
-        [ work.kind, work.subject_kind, work.subject_id, work.seat_id, work.cause_kind ]
+      [ open.kind, open.subject_kind, open.subject_id, open.seat_id, open.cause_kind, open.cause_rule_id ] ==
+        [ work.kind, work.subject_kind, work.subject_id, work.seat_id, work.cause_kind, work.cause_rule_id ]
     end
 
     # Whether the open step was opened by an earlier event of the same
-    # command: same command_id, at and effective_at.
+    # command: same at (the command's clock, read once under the lock) and
+    # effective_at. The key is not compared: a pending transition completed
+    # inside another command writes under its requester's key (milestone 4
+    # plan RE-3), and a timer applied inside a command writes none but has
+    # its own effective time.
     def same_command?(open, event)
       return false unless open.opened_at == event.effective_at
 
-      opener = Event.where(id: open.opening_event_id).pick(:command_id, :at, :effective_at)
-      opener == [ event.command_id, event.at, event.effective_at ]
+      opener = Event.where(id: open.opening_event_id).pick(:at, :effective_at)
+      opener == [ event.at, event.effective_at ]
     end
 
     def work_of(open, event)
       return (event.type == "task.created" ? nil : ENDED) unless open
 
       Work.new(kind: open.kind, subject_kind: open.subject_kind, subject_id: open.subject_id, seat_id: open.seat_id,
-        round: open.round, cause_kind: open.cause_kind)
+        round: open.round, cause_kind: open.cause_kind, cause_rule_id: open.cause_rule_id)
     end
 
     # --- small readers -------------------------------------------------
 
     # A Work for a step kind.
-    def step(kind, round:, subject: [ nil, nil ], seat_id: nil, cause_kind: nil)
-      seat_id = nil unless BUILDER_STEPS.include?(kind) || HOLDER_WAITS.include?(kind) || kind == "review"
+    def step(kind, round:, subject: [ nil, nil ], seat_id: nil, cause_kind: nil, cause_rule_id: nil)
+      seat_id = nil unless SEAT_STEPS.include?(kind) || HOLDER_WAITS.include?(kind)
       Work.new(kind: kind, subject_kind: subject.first, subject_id: subject.last, seat_id: seat_id, round: round,
-        cause_kind: cause_kind)
+        cause_kind: cause_kind, cause_rule_id: cause_rule_id)
     end
 
     def wait_cause(payload)
@@ -332,6 +471,58 @@ module Leverage
     def hold_step(reason)
       @hold_steps ||= Contract.registry.fetch("hold_reasons").to_h { |entry| [ entry.fetch("reason"), entry.fetch("step") ] }
       @hold_steps.fetch(reason)
+    end
+
+    # --- what a check or a job is ---------------------------------------
+
+    # The check.queued that queued the check a check.finished ends: its
+    # latest before the event.
+    def queued_for(event)
+      Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: "check.queued",
+        subject_id: event.subject_id).where("seq < ?", event.seq).order(seq: :desc).first
+    end
+
+    # The checks of a pending transition still to be settled after the
+    # event: queued and not finished, or finished in error (still pending
+    # under check_error); an overridden check is settled.
+    def unsettled_checks(pending, event)
+      ids = Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: "check.queued")
+        .where("seq <= ?", event.seq).where("payload->>'pending_transition_id' = ?", pending).distinct.pluck(:subject_id)
+      latest = Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: CHECK_EVENTS, subject_id: ids)
+        .where("seq <= ?", event.seq).order(:seq).pluck(:subject_id, :type, :payload)
+        .each_with_object({}) { |(id, type, payload), last| last[id] = [ type, payload ] }
+      latest.select do |_id, (type, payload)|
+        type == "check.queued" || (type == "check.finished" && payload["result"] == "error" &&
+          payload["hook"] != "task.before_claim")
+      end.keys
+    end
+
+    # The step the task was at just before the transition's first
+    # check.queued: whom a refused or cancelled submit or pass goes back to.
+    def prior(pending, event)
+      first = Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: "check.queued")
+        .where("seq < ?", event.seq).where("payload->>'pending_transition_id' = ?", pending).order(:seq).first
+      work = first && fold(first, Criteria.new(first))
+      work unless work.nil? || work == ENDED
+    end
+
+    # Whether a job is a contract draft's: its kind never changes, as a
+    # criterion's does not.
+    def draft_job?(job_id) = Job.where(id: job_id).pick(:kind) == DRAFT_JOB
+
+    def closes?(kind, type)
+      @closes ||= Contract.steps.fetch("steps").to_h do |entry|
+        [ entry.fetch("kind"),
+          (entry.fetch("closed_by").map { |item| item.fetch("event") } + Contract.steps.fetch("close_without_opening")).to_set ]
+      end
+      @closes.fetch(kind).include?(type)
+    end
+
+    def opens?(kind, type)
+      @opens ||= Contract.steps.fetch("steps").to_h do |entry|
+        [ entry.fetch("kind"), entry.fetch("opened_by").to_set { |item| item.fetch("event") } ]
+      end
+      @opens.fetch(kind).include?(type)
     end
 
     def step_class(kind)

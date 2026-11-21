@@ -174,4 +174,47 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
     public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await transport.command(.signInAgain, path: ["id": credentialID.contractString], key: key)
     }
+
+    public func listRules() async throws -> RulesList {
+        try await transport.read(.listRules)
+    }
+
+    public func addRule(_ request: AddRuleRequest, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.addRule, body: request, key: key)
+    }
+
+    public func saveRule(ruleID: UUID, _ request: SaveRuleRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.saveRule, path: ["id": ruleID.contractString], body: request, key: key)
+    }
+
+    public func enableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.enableRule, path: ["id": ruleID.contractString], key: key)
+    }
+
+    public func disableRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.disableRule, path: ["id": ruleID.contractString], key: key)
+    }
+
+    public func revertRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.revertRule, path: ["id": ruleID.contractString], key: key)
+    }
+
+    public func removeRule(ruleID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.removeRule, path: ["id": ruleID.contractString], key: key)
+    }
+
+    public func rerunCheck(checkID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await transport.command(.rerunCheck, path: ["id": checkID.contractString], key: key)
+    }
+
+    public func overrideCheck(checkID: UUID, _ request: OverrideCheckRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await transport.command(.overrideCheck, path: ["id": checkID.contractString], body: request, key: key)
+    }
+
+    public func draftContract(taskID: UUID, key: IdempotencyKey) async throws
+        -> CommandOutcome<DraftContractResult> {
+        try await transport.command(.draftContract, path: ["id": taskID.contractString], key: key)
+    }
 }

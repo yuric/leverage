@@ -23,6 +23,10 @@ module Leverage
       # sign-in details.
       #
       # Params: id (the task), handoff_note, work_reference.
+      #
+      # Gated at task.before_submit (milestone 4 plan §2.1). A model check
+      # makes it wait with its request kept (RE-2); a failed gate refuses
+      # it blocked_by_rule and the builder keeps the task.
       class Submit < Entry
         def load(ctx)
           params = ctx.request.params

@@ -4,7 +4,8 @@ module Leverage
     # when a blocking model check is planned). checks are PlannedCheck rows,
     # jobs PlannedJob rows, failures and warnings Failure values (warnings are
     # failed warn rules, which let the transition through), effects Effect
-    # values of the policy rules, holds_to_open PlannedHold values.
+    # values of the policy rules, holds_to_open PlannedHold values (whose
+    # rule_check_id may index checks, as a Failure's rule_check_ref may).
     # frozen_rule_version_ids are the rule versions frozen for this request.
     # deferred_rule_ids are the policy rules at action.requested that wait
     # for the action's gates (PRD L138); Gating.reenter_action plans them.

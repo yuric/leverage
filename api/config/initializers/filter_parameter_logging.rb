@@ -17,3 +17,13 @@ LEVERAGE_TOKEN_IN_TEXT = /lv[sho]_[A-Za-z0-9_-]{43}/
 Rails.application.config.filter_parameters << lambda do |_key, value|
   value.gsub!(LEVERAGE_TOKEN_IN_TEXT, "[FILTERED]") if value.is_a?(String) && !value.frozen?
 end
+
+# Every other text a request carries is content or may be (task text, a
+# rule's name and instruction, a checker's reason, an override reason, notes,
+# evidence; PRD, Privacy; milestone 4 plan RT-8): the log keeps each
+# parameter's key, and its value only when the value is an id. Numbers and
+# true or false are kept; they are never content.
+LEVERAGE_ID_IN_TEXT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+Rails.application.config.filter_parameters << lambda do |_key, value|
+  value.replace("[FILTERED]") if value.is_a?(String) && !value.frozen? && !value.match?(LEVERAGE_ID_IN_TEXT)
+end

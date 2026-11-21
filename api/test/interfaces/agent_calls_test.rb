@@ -341,6 +341,37 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # Milestone 4 review, finding 12 (RD-38): a review failed by a rule at
+  # "when the review has passed" carries, after the reviewer's notes, the
+  # rule's name and the check's reason, so the builder sent back sees why.
+  test "get_task_briefing's notes of a review a rule failed name the rule and its reason" do
+    task = @scenario.task(state: "working", builder: @builder)
+    rule = @scenario.rule(hook: "task.before_done", name: "Made-up rule at Done")
+    check = @scenario.rule_check(task, rule: rule, result: "failed", reason: "Made-up reason the rule failed.")
+    review = Review.create!(workspace_id: task.workspace_id, task_id: task.id, round: 0, verdict: "failed",
+      notes: "Made-up reviewer notes.", failed_rule_check_id: check.id)
+
+    get_as "/v1/tasks/#{task.id}/briefing"
+
+    assert_response :ok
+    assert_equal [ { "review_id" => review.id, "round" => 0,
+                     "notes" => "Made-up reviewer notes.\n\nMade-up rule at Done: Made-up reason the rule failed." } ],
+      response.parsed_body.fetch("review_notes")
+    assert_response_matches_contract
+  end
+
+  # Milestone 4 review, finding 13 (L392, RE-5): a provisional claimant
+  # holds the Ready task with no lease; it gets no briefing until its
+  # claim gate passes.
+  test "get_task_briefing is 404 for a Ready task the seat holds provisionally" do
+    task = @scenario.task(state: "ready")
+    task.update_columns(holder_seat_id: @builder.id, lease_due_at: nil)
+
+    get_as "/v1/tasks/#{task.id}/briefing"
+
+    assert_error :not_found, "not_found"
+  end
+
   test "get_review_briefing answers the briefing of the review this reviewer holds, with no notes" do
     reviewer = @scenario.seat(role: "reviewer")
     task = @scenario.task(state: "in_review", work_reference: "~/work/made-up")

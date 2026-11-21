@@ -145,7 +145,7 @@ struct CopyTests {
         for expected in [
             "Copy.swift", "ShellCopy.swift", "SignInCopy.swift", "BoardCopy.swift", "AddTaskCopy.swift",
             "TaskPageCopy.swift", "AgentsCopy.swift", "CredentialsCopy.swift", "NeedsYouCopy.swift", "HandoffCopy.swift",
-            "RootView.swift", "AppModel.swift",
+            "RulesCopy.swift", "RootView.swift", "AppModel.swift",
         ] {
             #expect(names.contains(expected), "\(expected)")
         }
@@ -300,9 +300,62 @@ struct CopyTests {
 
     @Test("every placeholder of a Needs you sentence is one the screen fills in")
     func needsYouPlaceholders() throws {
-        let known: Set<String> = ["account", "task", "provider", "count"]
+        // "time": a reset time, which the offline item names (review finding 22).
+        let known: Set<String> = ["account", "task", "provider", "count", "time"]
         let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
         for text in NeedsYouCopy.allTexts {
+            let range = NSRange(text.startIndex..., in: text)
+            for match in regex.matches(in: text, range: range) {
+                let name = Range(match.range(at: 1), in: text).map { String(text[$0]) } ?? ""
+                #expect(known.contains(name), "\(name) in \(text)")
+            }
+        }
+    }
+
+    // MARK: Settings, Rules (RM-1, RD-8, RD-17, RD-25)
+
+    @Test("the Rules sentences are the words RM-1 and RD-8 name")
+    func rulesSentences() {
+        #expect(ShellCopy.tabSettings.text == "Settings")
+        #expect(RulesCopy.title.text == "Rules")
+        #expect(RulesCopy.scopeAllTasks.text == "Every task")
+        // Review finding 26: the owner's words say "the agent that checks", never "checker".
+        #expect(RulesCopy.scopeCheckerDecides.text == "The agent that checks decides")
+        #expect(RulesCopy.instructionLabel.text == "What the agent checks for")
+        for copy in RulesCopy.allCases {
+            #expect(!copy.text.lowercased().contains("checker"), "\(copy)")
+        }
+        #expect(RulesCopy.checkerApp.text == "leverage checks this itself")
+        #expect(RulesCopy.checkerModel.text == "An agent checks this")
+        #expect(RulesCopy.onFailBlock.text == "Stop the task")
+        #expect(RulesCopy.onFailWarn.text == "Only note it")
+        #expect(RulesCopy.notActing.text == "Starts working in a later version of leverage")
+        #expect(RulesCopy.whenItRuns.text == "When it runs")
+        #expect(RulesCopy.wordingOf.text == "Wording of {date}")
+        #expect(RulesCopy.revertToDefault.text == "Go back to the original wording")
+        #expect(RulesCopy.addRule.text == "Add a rule")
+    }
+
+    @Test("the health line says what to do when no agent checks tasks, and when it is not running (RD-17)")
+    func orchestratorHealthSentences() {
+        #expect(ShellCopy.healthNoOrchestrator.text == "No agent is set up to check tasks. Connect one in Agents.")
+        #expect(ShellCopy.healthOrchestratorOffline.text == "The agent that checks tasks is not running.")
+    }
+
+    @Test("every moment the contract names reads in plain words")
+    func momentNamesArePlain() {
+        for hook in RuleHook.allCases {
+            #expect(BannedTerms.found(in: hook.momentName).isEmpty, "\(hook.momentName)")
+            #expect(hook.momentName == hook.momentName.trimmingCharacters(in: .whitespaces))
+            #expect(!hook.momentName.isEmpty)
+        }
+    }
+
+    @Test("every placeholder of a Rules sentence is one the screen fills in")
+    func rulesPlaceholders() throws {
+        let known: Set<String> = ["date", "count", "tokens", "time", "amount", "name"]
+        let regex = try NSRegularExpression(pattern: #"\{(\w+)\}"#)
+        for text in RulesCopy.allTexts {
             let range = NSRange(text.startIndex..., in: text)
             for match in regex.matches(in: text, range: range) {
                 let name = Range(match.range(at: 1), in: text).map { String(text[$0]) } ?? ""

@@ -88,6 +88,47 @@ struct LauncherTests {
         await launcher.stopAll()
     }
 
+    @Test("a seat of each of the four roles starts alike: the same keys, the token in the environment, its role named")
+    func fourRolesStartAlike() async throws {
+        let rig = try HelperRig()
+        let launcher = rig.launcher()
+        let roles: [SeatRole] = [.builder, .reviewer, .orchestrator, .planner]
+        let seats = roles.map { _ in Seat() }
+        for seat in seats { _ = try rig.folders.createFresh(for: seat.credential) }
+
+        var finished: [Bool] = []
+        for (role, seat) in zip(roles, seats) {
+            let result = await launcher.start(helperRequest(
+                .startSeat, seat: seat.seat, credential: seat.credential,
+                params: .init(provider: .claude, role: role, model: "model-from-the-seat", effort: nil)))
+            finished.append(result.outcome == .finished)
+        }
+        var starts: [StandInRunnerStart] = []
+        defer { for start in starts { kill(start.pid, SIGKILL); kill(start.childPid, SIGKILL) } }
+        starts = try await startedRunner(rig, count: roles.count)
+
+        #expect(finished == roles.map { _ in true })
+        // Each start is matched to its seat by its credential, not by order.
+        func start(of seat: Seat) throws -> StandInRunnerStart {
+            try #require(starts.first { $0.env[EnvironmentKeys.credentialID] == seat.credential.contractString })
+        }
+        let baseline = Set(try start(of: seats[0]).env.keys)
+        for (role, seat) in zip(roles, seats) {
+            let run = try start(of: seat)
+            #expect(run.env[EnvironmentKeys.seatRole] == role.rawValue)
+            #expect(run.env[EnvironmentKeys.seatToken] == MadeUp.seatToken)
+            #expect(!run.argv.contains { $0.contains(MadeUp.seatToken) })
+            #expect(run.env[EnvironmentKeys.helperToken] == nil)
+            #expect(run.env[EnvironmentKeys.provider] == "claude")
+            #expect(run.env[EnvironmentKeys.model] == "model-from-the-seat")
+            #expect(run.env[EnvironmentKeys.settingsDir] == rig.folders.folder(for: seat.credential).path)
+            #expect(run.env[EnvironmentKeys.continueTaskID] == nil)
+            #expect(run.env[EnvironmentKeys.continueReviewID] == nil)
+            #expect(Set(run.env.keys) == baseline, "the environment keys of a \(role.rawValue) seat differ")
+        }
+        await launcher.stopAll()
+    }
+
     @Test("a Gemini seat gets no settings folder: Antigravity is one sign-in for the Mac")
     func noFolderForGemini() async throws {
         let rig = try HelperRig()

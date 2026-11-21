@@ -16,7 +16,7 @@ struct LogEntry: Identifiable, Equatable, Sendable {
 enum TaskLog {
     static func entries(
         events: [EventRecord], names: [LogName], criteria: [Criterion], recoveryTimes: [RecoveryTime] = [],
-        accounts: [UUID: String] = [:], clock: ResetClock = .system
+        accounts: [UUID: String] = [:], ruleChecks: [RuleCheckRow] = [], clock: ResetClock = .system
     ) -> [LogEntry] {
         let seats = Dictionary(
             names.filter { $0.kind == .seat }.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -28,7 +28,10 @@ enum TaskLog {
         let context = Context(
             seats: seats, credentials: credentials, criteria: words,
             events: Dictionary(events.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
-            recoveryTimes: recoveryTimes, clock: clock, returnedWhileHeld: returnedWhileHeld(ordered))
+            recoveryTimes: recoveryTimes, clock: clock, returnedWhileHeld: returnedWhileHeld(ordered),
+            ruleNames: Dictionary(ruleChecks.map { ($0.ruleID, $0.ruleName) }, uniquingKeysWith: { first, _ in first }),
+            checks: Dictionary(ruleChecks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
+            jobKinds: jobKinds(ordered))
         return ordered.map { event in
             LogEntry(id: event.id, seq: event.seq, at: event.at, text: sentence(for: event, in: context))
         }
@@ -60,6 +63,17 @@ enum TaskLog {
         return held
     }
 
+    /// What each job was queued for, from its `job.queued`: the later events of a job do not say.
+    private static func jobKinds(_ ordered: [EventRecord]) -> [UUID: JobKind] {
+        var kinds: [UUID: JobKind] = [:]
+        for event in ordered where event.type == .jobQueued {
+            guard let id = event.subjectID, let kind = event.payload["kind"]?.stringValue.flatMap(JobKind.init(rawValue:))
+            else { continue }
+            kinds[id] = kind
+        }
+        return kinds
+    }
+
     private struct Context {
         let seats: [UUID: String]
         let credentials: [UUID: String]
@@ -68,6 +82,22 @@ enum TaskLog {
         let recoveryTimes: [RecoveryTime]
         let clock: ResetClock
         let returnedWhileHeld: Set<UUID>
+        let ruleNames: [UUID: String]
+        let checks: [UUID: RuleCheckRow]
+        let jobKinds: [UUID: JobKind]
+
+        /// The rule a check event is about: the one it names, else the one of the check row it is about.
+        func rule(_ event: EventRecord) -> String {
+            if let id = uuid(event, "rule_id"), let name = ruleNames[id] { return name }
+            if event.subjectKind == .ruleCheck, let id = event.subjectID, let row = checks[id] { return row.ruleName }
+            return TaskPageCopy.aCheck.text
+        }
+
+        /// What the job of this event was queued for.
+        func jobKind(_ event: EventRecord) -> JobKind? {
+            if event.type == .jobQueued { return event.payload["kind"]?.stringValue.flatMap(JobKind.init(rawValue:)) }
+            return event.subjectID.flatMap { jobKinds[$0] }
+        }
 
         func agent(_ event: EventRecord) -> String {
             guard event.actorKind == .seat, let id = event.actorID, let name = seats[id] else {
@@ -179,6 +209,59 @@ enum TaskLog {
         return text
     }
 
+    private static func checkFinishedSentence(_ event: EventRecord, _ context: Context) -> String {
+        let rule = ["rule": context.rule(event)]
+        let result = event.payload["result"]?.stringValue.flatMap(CheckResult.init(rawValue:))
+        let effect = event.payload["effect"]?.stringValue.flatMap(RuleEffect.init(rawValue:))
+        switch (result, effect) {
+        case (.applied, .refused): return TaskPageCopy.logCheckAppliedRefused.filled(rule)
+        case (.applied, .escalated): return TaskPageCopy.logCheckAppliedEscalated.filled(rule)
+        case (.applied, .sameBuilder): return TaskPageCopy.logCheckAppliedSameBuilder.filled(rule)
+        case (.applied, _): return TaskPageCopy.logCheckApplied.filled(rule)
+        case (.passed, _): return TaskPageCopy.logCheckPassed.filled(rule)
+        case (.failed, _): return TaskPageCopy.logCheckFailed.filled(rule)
+        case (.notApplicable, _): return TaskPageCopy.logCheckNotApplicable.filled(rule)
+        case (.error, _): return TaskPageCopy.logCheckError.filled(rule)
+        case (.withdrawn, _): return TaskPageCopy.logCheckWithdrawn.filled(rule)
+        case (nil, _): return TaskPageCopy.logCheckOther.filled(rule)
+        }
+    }
+
+    /// "You let it through", followed by the owner's reason from the check's row.
+    private static func overriddenSentence(_ event: EventRecord, _ context: Context) -> String {
+        let reason = event.subjectID.flatMap { context.checks[$0]?.overrideReason }?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return reason.isEmpty ? TaskPageCopy.youLetItThrough.text + "." : TaskPageCopy.youLetItThroughWhy.filled(["reason": reason])
+    }
+
+    private static func jobSentence(_ event: EventRecord, _ context: Context) -> String {
+        let kind = context.jobKind(event)
+        let agent = ["agent": context.agent(event)]
+        switch event.type {
+        case .jobQueued:
+            switch kind {
+            case .ruleCheck: return TaskPageCopy.logJobQueuedCheck.text
+            case .contractDraft: return TaskPageCopy.logJobQueuedDraft.text
+            default: return TaskPageCopy.logJobQueuedOther.text
+            }
+        case .jobClaimed:
+            switch kind {
+            case .ruleCheck: return TaskPageCopy.logJobClaimedCheck.filled(agent)
+            case .contractDraft: return TaskPageCopy.logJobClaimedDraft.filled(agent)
+            default: return TaskPageCopy.logJobClaimedOther.filled(agent)
+            }
+        case .jobFinished:
+            switch kind {
+            case .ruleCheck: return TaskPageCopy.logJobFinishedCheck.filled(agent)
+            case .contractDraft: return TaskPageCopy.logJobFinishedDraft.filled(agent)
+            default: return TaskPageCopy.logJobFinishedOther.filled(agent)
+            }
+        case .jobTimedOut: return TaskPageCopy.logJobTimedOut.text
+        case .jobRequeued: return TaskPageCopy.logJobRequeued.text
+        default: return TaskPageCopy.logJobWithdrawn.text
+        }
+    }
+
     private static func holdOpenedSentence(_ event: EventRecord, _ context: Context) -> String {
         let account = context.account(context.uuid(event, "credential_id"))
         switch event.payload["reason"]?.stringValue.flatMap(HoldReason.init(rawValue:)) {
@@ -187,6 +270,10 @@ enum TaskLog {
         case .credentialSignedOut: return TaskPageCopy.logWaitingForSignIn.filled(["account": account])
         case .ownerHold: return TaskPageCopy.logOwnerPaused.text
         case .seatPaused: return TaskPageCopy.logAgentPaused.text
+        case .contractIncomplete: return TaskPageCopy.logHoldContractIncomplete.text
+        case .checkError: return TaskPageCopy.logHoldCheckError.text
+        case .rerunLimit: return TaskPageCopy.logHoldRerunLimit.text
+        case .claimGateFailed: return TaskPageCopy.logHoldClaimGateFailed.text
         default: return TaskPageCopy.logPaused.text
         }
     }
@@ -207,6 +294,11 @@ enum TaskLog {
         case .accountSignedOut: return TaskPageCopy.logInboxSignedOut.text
         case .limitWithNoResetTime: return TaskPageCopy.logInboxLimit.text
         case .pastRoundLimit: return TaskPageCopy.logInboxPastLimit.text
+        case .refusedForEveryAgent: return TaskPageCopy.logInboxEveryAgentTurnedAway.text
+        case .checkPastRerunLimit: return TaskPageCopy.logInboxCheckedTooManyTimes.text
+        case .checkCouldNotRun: return TaskPageCopy.logInboxCheckCouldNotRun.text
+        case .noReviewerEligible: return TaskPageCopy.logInboxNoReviewer.text
+        case .orchestratorOffline: return TaskPageCopy.logInboxOrchestratorOffline.text
         default: return TaskPageCopy.logInboxOther.text
         }
     }
@@ -217,6 +309,9 @@ enum TaskLog {
         case .editContract: return TaskPageCopy.logChoseChange.text
         case .cancel: return TaskPageCopy.logCancelled.text
         case .signInAgain: return TaskPageCopy.logChoseSignIn.text
+        case .overrideOnce: return TaskPageCopy.logChoseLetThrough.text
+        case .runAgain: return TaskPageCopy.logChoseRunAgain.text
+        case .turnRuleOff: return TaskPageCopy.logChoseTurnRuleOff.text
         default: return TaskPageCopy.logInboxSettled.text
         }
     }
@@ -302,6 +397,12 @@ enum TaskLog {
         case .seatPaused: return TaskPageCopy.logSeatPaused.filled(["agent": context.agent(named: event.subjectID)])
         case .seatResumed: return TaskPageCopy.logSeatResumed.filled(["agent": context.agent(named: event.subjectID)])
         case .seatChanged: return TaskPageCopy.logSeatChanged.filled(["agent": context.agent(named: event.subjectID)])
+        case .checkQueued: return TaskPageCopy.logCheckQueued.filled(["rule": context.rule(event)])
+        case .checkStarted: return TaskPageCopy.logCheckStarted.filled(["rule": context.rule(event)])
+        case .checkFinished: return checkFinishedSentence(event, context)
+        case .checkOverridden: return overriddenSentence(event, context)
+        case .jobQueued, .jobClaimed, .jobFinished, .jobTimedOut, .jobRequeued, .jobWithdrawn:
+            return jobSentence(event, context)
         default: return TaskPageCopy.logUpdated.text
         }
     }

@@ -612,7 +612,8 @@
             "payload": {
               "reason": "credential_signed_out",
               "rule_id": null,
-              "credential_id": "$credential:codex_b"
+              "credential_id": "$credential:codex_b",
+              "rule_check_id": null
             }
           },
           {

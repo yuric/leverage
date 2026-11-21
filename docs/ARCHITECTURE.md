@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; the contract recorded; the Core loop and Handoff milestones built: the API's transition function, sign-in, the agent and helper calls, the helper, the reference runner and the Mac app, run on the owner's Mac; a run that meets a limit or a sign-out continues on the next account; a daily backup |
-| **Last updated** | 2026-11-19 |
+| **Status** | Rules in force; the contract recorded; the Core loop, Handoff and Rule checks milestones built: the API's transition function, sign-in, the agent and helper calls, the helper, the reference runner and the Mac app, run on the owner's Mac; a run that meets a limit or a sign-out continues on the next account; a daily backup; the owner's rules gate four task moves and who may review, checked in the server or by an orchestrator agent |
+| **Last updated** | 2026-11-20 |
 
 This document describes how leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
@@ -339,35 +339,39 @@ its requests: it adds and verifies logins, signs a login in again,
 installs a provider's tool, and starts and stops a `LeverageRunner` for
 each seat the app runs, each on the account the server names. A runner
 claims tasks or reviews over the agent interface and drives the provider's
-tool for each criterion or review; the tool never calls leverage. When a
+tool for each criterion or review; an orchestrator's or a planner's runner
+claims jobs instead, a rule check or a contract draft, and runs the tool
+once per job. The tool never calls leverage. When a
 tool run fails because its account reached a limit or is signed out, the
 runner tells the helper in one line, the helper reports it, and the
 server continues the work on the next account in the Handoff order or
 holds it ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)).
 Every change goes through the API's transition function, which appends the
-event log in the same transaction. A seat that connects on its own calls
-the same agent interface with its own token.
+event log in the same transaction, and asks the owner's rules at a task's
+gated moves ([ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md)).
+A seat that connects on its own calls the same agent interface with its
+own token.
 
 ## Components
 
 Seven product units exist: the API and six Swift ones. The roles
 [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) gives them,
 and the units [ADR 0005](adr/0005-code-units-of-the-core-loop.md) adds, are
-built as far as the Handoff milestone, which added no unit and no
-direction; each entry says what the code does today.
+built as far as the Rule checks milestone; the Handoff and Rule checks
+milestones added no unit and no direction. Each entry says what the code
+does today.
 
 ### API
 
 - **Responsibility:** the server of a workspace. It serves the operations
   listed in `Leverage::Http::RouteTable` (see [Interfaces](#interfaces)):
-  the owner's sign-in and commands, the agent calls of a builder and a
-  reviewer, and the helper's calls. Every change is a command through
+  the owner's sign-in and commands, the agent calls of the four roles, and
+  the helper's calls. Every change is a command through
   `Leverage::Transitions.apply`, the one writer: it takes the workspace's
   lock, finds a stored outcome by idempotency key, applies due timers,
-  picks a refusal by the registry's precedence, asks
-  `Leverage::Gating` (in this milestone `Gating::NoRules`, which allows
-  everything), runs the command's entry, appends its events and moves the
-  steps in the same transaction, and stores the outcome. Reads are
+  picks a refusal by the registry's precedence, asks the rules through
+  `Transitions::Gate`, runs the command's entry, appends its events and
+  moves the steps in the same transaction, and stores the outcome. Reads are
   `Leverage::Reads::*`, which write nothing; the owner's reads run in one
   repeatable-read snapshot and carry the log position they saw.
   `Leverage::Candidates` reads a seat's candidates in the Handoff order and
@@ -380,6 +384,35 @@ direction; each entry says what the code does today.
   ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)).
   `Leverage::Backup` makes and prunes the daily dumps and restores one
   ([ADR 0010](adr/0010-daily-backup-and-restore.md)).
+
+  The owner's rules
+  ([ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md)):
+  `Leverage::Rules::Engine`, the gating implementation, decides from the
+  rule tables and the log and writes nothing; `Transitions::Gate` asks it
+  at an entry's hook with the hashed inputs of `Leverage::HookInputs` and
+  applies the answer: perform the entry, store the command as a pending
+  transition and answer `pending`, or take the hook's failed-gate effect.
+  An app checker (two are built: the acceptance-criteria count and the
+  provider rule) answers inside the command; a model check is a
+  `rule_check` job. The writers each own what they name: `RuleChecks` the
+  check rows and every `check.*` event, `Jobs` the jobs and `job.*`,
+  `PendingTransitions` a waiting command and its later outcome, which it
+  completes as the requester, refuses or cancels, and `RuleRecords` the
+  rules and their versions. A waiting command ended from outside goes
+  through `PendingTransitions.cancel` alone. `RolePresence` says whether
+  the orchestrator is online: some enabled seat of the role polled within
+  90 seconds and has an available account or connects on its own.
+  `ReviewerEligibility` opens and resolves "No reviewer is eligible".
+  Four timers time out a check's or a draft's job in the queue and in its
+  run, and two workspace timers, `orchestrator_offline` and
+  `reviewer_eligibility`, run on every sweep. The 120 seconds within which
+  a stopped orchestrator's item opens rest on two numbers: the sweep every
+  15 seconds and a seat's last poll written at most every 10 (90 + 10 +
+  15); a busy reference runner keeps polling every 30 seconds while its
+  tool runs, and an agent that connects on its own is told to by its role
+  file. `bin/rails leverage:install_shipped_rules`, which the image's
+  entrypoint runs before the server starts, writes the seven shipped rules
+  of a workspace that has none.
 - **Owns:** the PostgreSQL database and the HTTP interface under `/v1`.
 - **Depends on:** PostgreSQL, and the gems in `api/Gemfile`. It depends on
   no other component.
@@ -389,15 +422,22 @@ direction; each entry says what the code does today.
   parts (`event_log.rb`, `workspace_lock.rb`, `idempotency.rb`,
   `steps.rb`, `holds.rb`, `leases.rb`, `timers.rb`, `eligibility.rb`,
   `briefing.rb`, `tokens.rb`, `seat_runs.rb`, `candidates.rb`,
-  `handoff.rb`, `contract_diff.rb`), the sweep (`sweep.rb`,
-  `api/bin/sweep`), the backup (`backup.rb`, `api/bin/backup`,
-  `api/bin/restore`), the reads (among them `reads/inbox.rb` and
-  `reads/recovery_times.rb`), `Leverage::Replay` and `Leverage::LogAudit`
-  (run by `bin/rails leverage:verify_log`; `bin/rails
-  leverage:recovery_times` prints every recovery time), and milestone 1's
-  `Leverage::Contract` and `Leverage::Gating`. The role files a briefing
-  carries are `api/config/role_files/`, and the landing prompt's template
-  is `api/config/landing_prompt.md.erb`. It runs in the `api`, `sweep` and
+  `handoff.rb`, `contract_diff.rb`, and for the rules `hook_inputs.rb`,
+  `transitions/gate.rb`, `pending_transitions.rb`, `rule_checks.rb`,
+  `jobs.rb`, `job_inputs.rb`, `rule_records.rb`, `role_presence.rb`,
+  `reviewer_eligibility.rb`), the engine (`rules/`, which reads only), the
+  sweep (`sweep.rb`, `api/bin/sweep`), the backup (`backup.rb`,
+  `api/bin/backup`, `api/bin/restore`), the reads (among them
+  `reads/inbox.rb`, `reads/recovery_times.rb`, `reads/rules.rb`,
+  `reads/rule_timing.rb` and `reads/task_timeline.rb`), `Leverage::Replay`
+  and `Leverage::LogAudit` (run by `bin/rails leverage:verify_log`;
+  `bin/rails leverage:recovery_times` prints every recovery time and
+  `bin/rails leverage:rule_timing` each rule's runs and times), and
+  milestone 1's `Leverage::Contract` and `Leverage::Gating`.
+  `api/script/evals/build_inputs.rb` builds the eval suite's job inputs.
+  The role files a briefing or a job carries, one per role, are
+  `api/config/role_files/`, and the landing prompt's template is
+  `api/config/landing_prompt.md.erb`. It runs in the `api`, `sweep` and
   `backup` containers that `compose.yaml` describes.
 
 ### Shared Swift library (LeverageKit)
@@ -417,7 +457,10 @@ direction; each entry says what the code does today.
   ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md));
   `SignInStatus` asks a tool's status command whether an account is
   signed in and keeps nothing of its output; `RunEndReport` is the one line
-  a runner prints when its account stops.
+  a runner prints when its account stops, naming the task, the review or
+  the job it was on. The models of the rules, the rule checks, the jobs and
+  a task's timing are in `Models/`, and the registry list of providers the
+  eval suite covered is `ContractLists.orchestratorTestedProviders`.
 - **Owns:** every HTTP call from the Mac side to the API, and the decoding
   of the answers.
 - **Depends on:** Foundation (`FoundationNetworking` where it exists), the C
@@ -442,9 +485,22 @@ direction; each entry says what the code does today.
   a sign-out it stops heartbeating, gives back nothing, prints one
   `RunEndReport` line on standard output and exits 5. Started with work to
   continue (`LEVERAGE_CONTINUE_TASK_ID` or `LEVERAGE_CONTINUE_REVIEW_ID`),
-  it goes on from that work's first criterion that has not passed.
+  it goes on from that work's first criterion that has not passed. A
+  builder's or reviewer's prompt carries the briefing's rules as quoted
+  material. A command that answers `pending` is asked for again by its key
+  until it is decided; a submit refused `blocked_by_rule` is worked again
+  with the rule's name and reason as quoted material, up to the server's
+  re-run limit. An orchestrator's or a planner's runner runs `JobFlow`
+  instead: it claims one job, runs it (`CheckJob` or `DraftJob`, with the
+  frames of `JobPrompts` and the answers read by `VerdictParser` or
+  `DraftParser`), sends the result once, and asks `GET /v1/next` every 30
+  seconds while its tool runs
+  ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)).
+  `LeverageRunner eval` runs an eval suite's inputs through `CheckJob`
+  with no server ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
 - **Owns:** nothing stored. It makes `<work root>/<task id>/` when a task
-  names no folder.
+  names no folder, and `<work root>/jobs/<random id>/` for each tool run
+  of a job, removed after the run.
 - **Depends on:** LeverageKit.
 - **Code:** `mac/Sources/LeverageRunner/`; tests in
   `mac/Tests/LeverageRunnerTests/`.
@@ -461,9 +517,10 @@ direction; each entry says what the code does today.
   stopping it; and Sign in again (`SignInAgain`: the provider's own
   sign-in, then the verify checks). A start for a seat whose run is alive
   is a hand-over: the new token first, then the old run is stopped, then
-  the new one starts. When a runner exits 5 the helper reads its last line
-  and sends `report_limit` or `report_signed_out`
-  (`InterruptionReporter`). It never adopts an existing
+  the new one starts. A seat of any of the four roles is started the same
+  way. When a runner exits 5 the helper reads its last line
+  and sends `report_limit` or `report_signed_out`, with the job's id when
+  the run was on a job (`InterruptionReporter`). It never adopts an existing
   account folder: Add always starts from a new, empty one. It stops its
   runs and exits when its token answers `401` (exit 3) or when the app that
   started it is gone (`ParentWatch`, in LeverageKit), also when it was
@@ -502,12 +559,14 @@ direction; each entry says what the code does today.
 - **Responsibility:** the owner's window. It starts the server and, after
   sign-in, the helper; creates the owner's sign-in on a new installation,
   signs in and out; and shows the board (with the Ideas lane), the task
-  page with its log, Change the task, Pause and Continue, the Add task
-  form (with Save as an idea), Needs you, the Agent roster with Connect,
-  Pause, Resume and Change (and the landing prompt of a seat that connects
-  on its own), the Credentials list with Add credential, Sign in again and
-  each login's limit, and the Handoff tab with the order and its eight
-  fixed rules. `InboxWatcher` announces each Needs you item once, through
+  page with its log, its Timing section, its rule checklist with "Let it
+  through once" and "Run it again", and "Draft the details", Change the
+  task, Pause and Continue, the Add task form (with Save as an idea), Needs
+  you, the Agent roster with Connect for the four roles, Pause, Resume and
+  Change (and the landing prompt of a seat that connects on its own), the
+  Credentials list with Add credential, Sign in again and each login's
+  limit, the Handoff tab with the order and its eight fixed rules, and
+  Settings with the Rules screen. `InboxWatcher` announces each Needs you item once, through
   `Notifying`, and keeps the count on the tab. Every owner-facing sentence
   is a case of a copy catalog, checked against the PRD's banned terms by
   `CopyTests`. `Live.swift` builds the real services (`LiveSettings`, the
@@ -518,7 +577,7 @@ direction; each entry says what the code does today.
 - **Depends on:** LeverageKit, LeverageAppServices and SwiftUI.
 - **Code:** `mac/Sources/LeverageApp/` (`Shell/`, `SignIn/`, `Board/`,
   `AddTask/`, `TaskPage/`, `NeedsYou/`, `Agents/`, `Credentials/`,
-  `Handoff/`, `Design/`); tests in
+  `Handoff/`, `Settings/`, `Design/`); tests in
   `mac/Tests/LeverageAppTests/`. `scripts/build_app.sh` assembles
   `dist/Leverage.app` from it, the helper, the runner and
   `mac/Packaging/`.
@@ -529,8 +588,9 @@ direction; each entry says what the code does today.
 locator, temporary folders, `StubURLProtocol` and in-memory fakes of the
 three API protocols and of the app's runtime, among them `FakeNotifier`
 and `FakeInboxCursorStore`. `LeverageEndToEndTests` runs the built helper
-and runner against the real API (`scripts/e2e_core_loop.sh`, and
-`scripts/e2e_handoff.sh` for the six interrupted runs).
+and runner against the real API (`scripts/e2e_core_loop.sh`,
+`scripts/e2e_handoff.sh` for the six interrupted runs, and
+`scripts/e2e_rule_checks.sh` for the seven rule-check runs).
 `mac/Tests/StandIns/` holds the stand-in tools (`claude`, `codex`, `agy`,
 `grok`, an installer and an archive) in Python and shell, and under
 `replies/` the provider replies the detectors are tested against and the
@@ -577,13 +637,13 @@ the first change that needs one chooses it and adds it here.
 | Concern | API (`api/`) | Mac side (`mac/`) |
 |---|---|---|
 | Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
-| Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code and three timings (`Leverage::CommandLog`); never a header or a body. Logged parameters are filtered for anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
-| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, and the app's `LEVERAGE_NOTIFICATIONS`; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
+| Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code, four timings (the lock wait, the event and step writes, the whole transition and the time in `Transitions::Gate`) and the rule a `blocked_by_rule` refusal names (`Leverage::CommandLog`); never a header, a body or a rule's reason. A logged parameter keeps its key, and its value only when the value is an id, a number or true or false: every other text, task text and a rule's words among it, is `[FILTERED]`, and so is anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
+| Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, the app's `LEVERAGE_NOTIFICATIONS`, and `LEVERAGE_EVAL` and `LEVERAGE_EVAL_REAL`, read only by `LeverageRunner eval` and `scripts/eval_rule.sh`; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
 | Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)), the one number `InboxCursorStore` keeps among them. No token is ever written to a file. |
 | Notifications | None. | `Notifying` in LeverageKit's `AppRuntime`; the real one is `UserNotifier` in LeverageAppServices, on the platform's `UserNotifications`, made only by `UserNotifier.make(bundleURL:environment:)` and only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`; everywhere else, tests included, the form that posts nothing. `InboxWatcher` in LeverageApp is its one caller. |
 | Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
-| How a run ends for a reason | `report_limit` and `report_signed_out` through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
-| Child processes | None. | `Subprocess` in LeverageKit: an absolute program path, an environment built from an allow-list and never the parent's, standard input `/dev/null`, the child in a process group of its own, both outputs read while it runs, and a time limit or stop that sends the group `SIGTERM` and then `SIGKILL`. A provider's tool gets `PATH`, `HOME`, `TMPDIR`, `LANG`, its account-folder variable and, for Claude, `USER` (`ProviderCatalog.toolEnvironment`); the runner gets the helper's `HOME`, `TMPDIR`, `LANG` and `USER`, `PATH=/usr/bin:/bin`, its seat token and the run's inputs; the helper gets `HOME`, `PATH`, `TMPDIR`, `LANG`, `USER`, its token, the API's address and the support folder; docker gets only `HOME` and `PATH`. |
+| How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
+| Child processes | None. | `Subprocess` in LeverageKit: an absolute program path, an environment built from an allow-list and never the parent's, standard input `/dev/null`, the child in a process group of its own, both outputs read while it runs, and a time limit or stop that sends the group `SIGTERM` and then `SIGKILL`. A provider's tool gets `PATH`, `HOME`, `TMPDIR`, `LANG`, its account-folder variable and, for Claude, `USER` (`ProviderCatalog.toolEnvironment`), and for a job's run a new empty folder; the runner gets the helper's `HOME`, `TMPDIR`, `LANG` and `USER`, `PATH=/usr/bin:/bin`, its seat token and the run's inputs; the helper gets `HOME`, `PATH`, `TMPDIR`, `LANG`, `USER`, its token, the API's address and the support folder; docker gets only `HOME` and `PATH`. |
 | Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
 
 ## Data
@@ -601,13 +661,22 @@ the first change that needs one chooses it and adds it here.
   The Handoff milestone added `backup_runs`, `credentials.limited_since`
   (a limit was reported; `limited_until` is set only with it),
   `seats.run_credential_id` (the account the seat's current run is on) and
-  `seats.run_stop_reason`. CI migrates from zero, with `structure.sql` moved
+  `seats.run_stop_reason`. The Rule checks milestone added
+  `pending_transitions.params` and `jobs.attempt_number` and no table: the
+  rules live in `rules` and `rule_versions`, a check in `rule_checks` with
+  one `rule_check_attempts` row per attempt and one `jobs` row per model
+  attempt, and a waiting command in `pending_transitions`.
+  `pending_transitions.params` is the request the command will complete
+  with; it is task text, a check refuses it unless the transition is
+  `pending`, and the transition empties it when it completes, is refused
+  or is cancelled. CI migrates from zero, with `structure.sql` moved
   away so the migrations run, and fails when the result differs from the
   committed file. From the Core loop on, migrations only go forward.
 - **Who writes.** Every change goes through `Leverage::Transitions`; the
   sweep also writes its own `sweep_runs` rows. Only `Leverage::EventLog`
-  inserts into `events`, and no controller or read writes; a static test
-  holds both. The schema itself refuses what the PRD forbids:
+  inserts into `events`, no controller or read writes, and no file under
+  `api/lib/leverage/rules/` calls a writing Active Record method; a static
+  test holds all three. The schema itself refuses what the PRD forbids:
   - `events` and `rule_versions` are append-only: a trigger refuses
     `UPDATE`, `DELETE` and `TRUNCATE` for every role. The server and the
     sweep log in as `leverage_api`, a member of `leverage_app`, which has
@@ -675,6 +744,14 @@ the first change that needs one chooses it and adds it here.
   `scripts/check_reply_fixtures.py`
   ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md)). They
   are test data, not shipped in the app.
+- **Eval suites.** `evals/specific-details/` holds the suite of "Every task
+  needs specific details": its 24 made-up cases, its bar, one result per
+  supported model, the record of every run on real tools and
+  `RESULTS.md`. A result holds each case's verdict, reason, tokens and
+  seconds, the tool's name and version and the hashes of the instruction
+  and the cases; never the tool's raw output, never its path, and nothing
+  shaped like an email or a token, which `scripts/check_evals.py` refuses
+  ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
 
 ## Interfaces
 
@@ -692,7 +769,7 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Expected behavior, end to end | `api/contract/traces/` (fifteen traces; 09 and 10 are the Core loop's and 11 to 15 the Handoff milestone's, all with no rules) |
+| Expected behavior, end to end | `api/contract/traces/` (nineteen traces; 09 and 10 are the Core loop's and 11 to 15 the Handoff milestone's, all with no rules, and 16 to 19 the Rule checks milestone's; all but 03 and 04, which need outward actions, run whole) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
 The served operations are the Core loop's and eleven the Handoff milestone
@@ -700,13 +777,18 @@ serves: 16 agent calls, the owner's sign-in, reads and commands, the
 helper's calls, and `GET /v1/health`; then the helper's `report_limit` and
 `report_signed_out`, and the owner's `sign_in_again`, `list_inbox`,
 `promote_task`, `edit_contract`, `hold_task`, `resume_task`, `pause_seat`,
-`resume_seat` and `change_seat`. Every other operation of the contract
-answers `404`: among them the job calls, rules, `report_reading`,
-reordering, renaming and removing a credential, API tokens and
-`change_workspace_settings`. A limit or sign-out report that names a job
-answers `404` too. The Handoff milestone added no operation to the
-contract, and changed no shape that is not provisional
-([the contract's README](../api/contract/README.md)). The Core loop added six
+`resume_seat` and `change_seat`; then twelve the Rule checks milestone
+serves: the agent calls `claim_next_job` and `submit_job_result`, and the
+owner's `list_rules`, `add_rule`, `save_rule`, `enable_rule`,
+`disable_rule`, `revert_rule`, `remove_rule`, `rerun_check`,
+`override_check` and `draft_contract`. A limit or sign-out report that
+names a job runs `report_job_limit` or `report_job_signed_out`. Every
+other operation of the contract answers `404`: among them the calls of
+questions and outward actions, `report_reading`, reordering, renaming and
+removing a credential, API tokens and `change_workspace_settings`. The
+Handoff and Rule checks milestones added no operation to the contract;
+what the Rule checks milestone changed that is not provisional is listed
+in [the contract's README](../api/contract/README.md). The Core loop added six
 operations to the contract: `get_setup_state` and `create_owner` (the
 first sign-in), `sign_out_owner`, `get_helper_request` (one helper
 request's state and progress, with a long poll), `report_request_progress`
@@ -747,11 +829,40 @@ documentation, never run; `unverified` is none of these. Nothing below
 | Gemini (Antigravity, `agy`) | One sign-in for the Mac (`help`; the PRD states it) | No status or sign-in command (`help`): the test prompt is repeated | `https://antigravity.google/cli/install.sh` with `/bin/bash` (`documented`) | Not offered: `agy -p <prompt> --output-format json --print-timeout <n>s --mode plan` answered with a plan, not the word asked for (`probe`), so the runner refuses a Gemini reviewer and Connect does not list a Gemini login for one | Builder: the same without `--mode plan`, with `--mode accept-edits`, `--model`, `--effort` (`help`) |
 | Grok (Grok Build, `grok`) | Treated as one sign-in for the Mac (`unverified`) | `grok models`, signed out when it says "You are not authenticated." (`probe`); `grok login --oauth` (`help`) | None: no documented source was reachable (`unverified`) | `grok -p <prompt> --cwd <dir> --permission-mode plan` (`help`) | `--permission-mode acceptEdits`, `-m` (`help`); no effort is passed, and Connect asks for none |
 
+An orchestrator's rule check and a planner's draft run each tool in its
+check mode, the answering check the helper's test prompt uses, in a new
+empty folder ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)).
+The model and effort are passed only when the seat sets them. Claude's,
+Codex's and Antigravity's check runs ran on the owner's Mac on 2026-11-20,
+in the eval suite's run and the real checks through the server, at each
+tool's default model (`probe`); Grok's has never run.
+
+| Provider | Check run | Evidence |
+| --- | --- | --- |
+| Claude | `claude -p <prompt> --output-format json --no-session-persistence --permission-mode dontAsk --strict-mcp-config --setting-sources user --tools ""` | `probe` |
+| Codex | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <empty folder> -o <file>` | `probe` |
+| Gemini | `agy -p <prompt> --output-format json --print-timeout <n>s`, never `--mode plan` | `probe` |
+| Grok | `grok -p <prompt> --cwd <empty folder>` | `help` |
+
+A job's run also passes the seat's model and effort when the seat sets
+them (`--model` and `--effort` for Claude and Antigravity, `-m` for Codex
+and Grok), at the `help` level: every check that has run so far ran with
+no model set, so these flags have never run in check mode. A prompt over
+512 KiB is not started, because a tool gets its prompt as one argument and
+the Mac starts no program whose arguments pass 1 MiB. The runner then
+starts no tool, logs the reason and sends no result, so a check ends in
+`error` after its two run timeouts, and a draft is dropped after its
+second. The server's length limits on task text make that rare, not
+impossible: they count characters, not bytes, and not the evidence rows a
+task gathers, so a large enough task, with many evidence rows or text in
+multibyte characters, still makes its checks end in `error`.
+
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.
 No installer and no sign-in command has been run by an agent. The tool's
-standard input is always `/dev/null`, it runs in the task's folder under a
-time limit, and no run gets a flag that skips permissions or sandboxing.
+standard input is always `/dev/null`, it runs in the task's folder (a
+job's run in its empty folder) under a time limit, and no run gets a flag
+that skips permissions or sandboxing.
 An installer is downloaded only over HTTPS from a host its catalog entry
 lists.
 
@@ -808,6 +919,23 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   model name of at most 128 characters from a fixed character set with no
   `@`. An installer's address must be HTTPS on a host its catalog entry
   lists, also after a redirect.
+- **Task text reaches a checker only as material**
+  ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
+  check's or a draft's prompt every piece of task text, the contract
+  included, is inside a block marked with a nonce made for that run, with
+  every marker in the text broken (no run of `<` longer than two, and no
+  `LEVERAGE` followed by a hyphen or a dash that looks like one), and the
+  verdict is read only from lines that carry the nonce; anything
+  else the tool prints is dropped unlogged. A rule's instruction is the owner's
+  text and stands outside the blocks, as the checker's instruction. A
+  checker's run starts in a new empty folder, which is not a wall. What a
+  checker's run can reach if an instruction in task text got past the
+  frame differs by provider; ADR 0012, decision 4, says what is claimed for
+  each.
+
+  A checker's reason is at most 500 characters, stays in its row, and
+  reaches a builder's tool only as quoted material. A refused command's
+  log line holds its code and the rule's id, never the reason.
 - **A tool's output never leaves the runner.** A detector is given a
   failed run's exit status and outputs in memory only (`ToolRunRecord`,
   whose description shows sizes, never text) and gives back a kind; only
@@ -820,7 +948,7 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   sign-out, nor is any run a signal killed.
 - **The helper's reports are checked against what the seat holds.** A
   limit or sign-out report must name a credential that is an added login,
-  a seat with a credential, and exactly one task or review; it is refused
+  a seat with a credential, and exactly one task, review or job; it is refused
   when the seat does not hold that work, or when the credential is not the
   one recorded for it. A refused report marks no credential and writes no
   event.
@@ -837,10 +965,13 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   never contains the seat's token. A request body that is not sent as
   JSON is answered `400` before Rails reads it, whatever the method and
   path (`JsonBodiesOnly`), so a sign-in sent as a form, even to a mistyped
-  path, never reaches the request log. The end-to-end run scans the
+  path, never reaches the request log. The end-to-end runs scan the
   containers' logs, the helper's and runs' logs and a dump of the database
-  for every secret it used and anything shaped like a token
-  (`scripts/secret_scan.py`).
+  for every secret they used and anything shaped like a token
+  (`scripts/secret_scan.py`); the rule-check run also looks for any
+  nonce-shaped marker in a log and for each test's marker words, written
+  into its task text, rule, override reason and checker's reason, in the
+  event payloads and the logs.
 - **Privilege changes.** The owner's commands, the seats' calls and the
   helper's calls are separate operations with separate schemes. In the
   database, migrations run as the owner role, and the server and the sweep
@@ -858,7 +989,9 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
 - **What is not protected.** Agents run as the owner's own Mac account
   (PRD, Risks): a provider's tool can read whatever that account can, and
   leverage gates only what goes through it. A seat that connects on its
-  own is whatever program holds its token.
+  own is whatever program holds its token. For Codex, Gemini and Grok the
+  quote frame is the only wall between task text and a checker's reach
+  (the table above).
 
 ## Technology choices
 
@@ -887,6 +1020,9 @@ Each choice is recorded in the ADR named beside it.
 | Limit and sign-out detection | One detector per provider in LeverageKit, written to recorded and made reply files kept under `mac/Tests/StandIns/replies/` | [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md) |
 | Backups | A `backup` service from the API's image: `pg_dump` once a day to a folder on the host, `bin/restore` with the replay test; no new dependency | [ADR 0010](adr/0010-daily-backup-and-restore.md) |
 | Notifications | The platform's `UserNotifications`, a module of macOS, not a dependency to pin | No ADR: nothing is chosen beyond the platform the Mac app already targets |
+| Rule gating | The engine reads and decides; `Transitions::Gate` and four writers write; a waiting command is stored whole and finished by its own entry as its requester; no new dependency | [ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md) |
+| Model checks | An orchestrator agent runs each check as a job with the provider's tool in its check mode, task text in nonce-marked quote blocks, in an empty folder | [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md) |
+| Eval suites | A folder per suite, run on real tools by the maintainer only, scored in CI with no provider | [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) |
 
 ## Architecture decision records
 
@@ -931,3 +1067,6 @@ Recorded so far:
 - [0008. How a run moves to another account](adr/0008-how-a-run-moves-to-another-account.md)
 - [0009. Detectors from recorded and made replies](adr/0009-detectors-from-recorded-and-made-replies.md)
 - [0010. Daily backup and restore](adr/0010-daily-backup-and-restore.md)
+- [0011. Gating reads and the transition function writes](adr/0011-gating-reads-and-the-transition-function-writes.md)
+- [0012. How task text reaches a checker](adr/0012-how-task-text-reaches-a-checker.md)
+- [0013. Eval suites for rules a model judges](adr/0013-eval-suites-for-rules-a-model-judges.md)

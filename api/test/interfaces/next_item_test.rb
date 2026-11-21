@@ -32,16 +32,41 @@ class NextItemTest < ActiveSupport::TestCase
     def hash_for(_subject, _seat) = @hash
   end
 
+  # What Jobs answers (milestone 4, WP6): the job claim-next would give the
+  # seat, with the seats it was asked about.
+  class Claimable
+    attr_reader :asked
+
+    def initialize(job = nil)
+      @job = job
+      @asked = []
+    end
+
+    def next_for(seat)
+      @asked << seat.id
+      @job
+    end
+  end
+
   setup do
     @scenario = Scenario.new
     @builder = @scenario.seat(role: "builder")
     @reviewer = @scenario.seat(role: "reviewer")
   end
 
-  def item(seat, eligibility: Waiting.new, briefing: Hashing.new)
-    Leverage::Reads::NextItem.with_collaborators(eligibility: eligibility, briefing: briefing) do
+  def item(seat, eligibility: Waiting.new, briefing: Hashing.new, jobs: Claimable.new)
+    Leverage::Reads::NextItem.with_collaborators(eligibility: eligibility, briefing: briefing, jobs: jobs) do
       Leverage::Reads::NextItem.call(seat.reload)
     end
+  end
+
+  # A commands row of the seat whose outcome it has not read: notify is set
+  # once a transition that waited ends (milestone 4 plan RE-3, DB-34).
+  def unread(seat, outcome: "completed", notify: true, **columns)
+    refusal = { code: "invalid_state", rule_id: nil, reason: nil } if outcome == "refused"
+    Command.create!({ workspace_id: @scenario.workspace_id, caller_kind: "seat", caller_id: seat.id,
+                      key: "key-#{SecureRandom.hex(6)}", command: "submit", request_hash: "made-up-hash", outcome: outcome,
+                      result: ({} if outcome == "completed"), refusal: refusal, notify: notify }.merge(columns))
   end
 
   def assert_item(expected, actual)
@@ -249,16 +274,84 @@ class NextItemTest < ActiveSupport::TestCase
     assert_item Item.new("briefing_changed", task.id, nil), item(@builder, briefing: Hashing.new("new-hash"))
   end
 
+  # command (milestone 4 plan RE-3; PRD L381, L522; DB-34)
+
+  test "a seat whose command is no longer pending is told command with its key, until it reads the outcome" do
+    row = unread(@builder)
+
+    assert_item Item.new("command", row.key, nil), item(@builder)
+
+    Leverage::Transitions::MarkRead.command(row)
+    assert_item Item.none, item(@builder)
+  end
+
+  test "a refused command is told as a completed one is, the oldest unread first" do
+    later = unread(@builder)
+    earlier = unread(@builder, outcome: "refused")
+    later.update_columns(updated_at: earlier.updated_at + 1)
+
+    assert_equal earlier.key, item(@builder).fetch("id")
+  end
+
+  test "command comes before every other kind, a hold on the seat's task included" do
+    task = reworked
+    task.update_columns(resume_pending_since: @scenario.database_now)
+    acknowledge(@builder, task, lease_event(task, "review.failed"), hash: "old-hash")
+    open_hold(task)
+    row = unread(@builder)
+
+    assert_item Item.new("command", row.key, nil), item(@builder, eligibility: Waiting.new(task: task))
+  end
+
+  test "a command still pending, one already read, one not marked notify, and another seat's are not told" do
+    unread(@builder, outcome: "pending", result: nil)
+    unread(@builder, read_at: @scenario.database_now)
+    unread(@builder, notify: false)
+    unread(@reviewer)
+
+    assert_item Item.none, item(@builder)
+  end
+
+  # job (milestone 4 plan RD-35 to RD-40; PRD L527)
+
+  test "an orchestrator and a planner are told job while claim-next has one for them, and none otherwise" do
+    task = @scenario.task(state: "backlog")
+    [ @scenario.orchestrator, @scenario.planner ].each do |seat|
+      job = @scenario.job(kind: "contract_draft", task: task)
+      jobs = Claimable.new(job)
+
+      assert_item Item.new("job", nil, nil), item(seat, jobs: jobs)
+      assert_equal [ seat.id ], jobs.asked
+      assert_item Item.none, item(seat, jobs: Claimable.new)
+    end
+  end
+
+  test "a builder and a reviewer are never asked for a job, and a job seat never for a task or a review" do
+    jobs = Claimable.new(@scenario.job(kind: "contract_draft", task: @scenario.task(state: "backlog")))
+    waiting = Waiting.new(task: @scenario.task(state: "ready"), review: Review.new)
+
+    assert_equal "task", item(@builder, eligibility: waiting, jobs: jobs).fetch("kind")
+    assert_equal "review", item(@reviewer, eligibility: waiting, jobs: jobs).fetch("kind")
+    assert_empty jobs.asked
+    assert_equal "job", item(@scenario.orchestrator, eligibility: waiting, jobs: jobs).fetch("kind")
+  end
+
+  test "command comes before job" do
+    orchestrator = @scenario.orchestrator
+    row = unread(orchestrator, command: "submit_job_result")
+
+    assert_item Item.new("command", row.key, nil),
+      item(orchestrator, jobs: Claimable.new(@scenario.job(kind: "contract_draft", task: @scenario.task(state: "backlog"))))
+  end
+
   # the kinds this milestone cannot make true
 
-  test "the kinds of later milestones are never answered" do
+  test "the kinds of milestone 5 are never answered" do
     task = reworked
     task.update_columns(resume_pending_since: @scenario.database_now)
     @scenario.task(state: "ready")
-    Command.create!(workspace_id: @scenario.workspace_id, caller_kind: "seat", caller_id: @builder.id, key: "key-unread",
-      command: "heartbeat", request_hash: "made-up-hash", outcome: "completed", result: {}, notify: true)
 
-    assert_not_includes %w[command answer action job], item(@builder).fetch("kind")
+    assert_not_includes %w[answer action], item(@builder).fetch("kind")
   end
 
   test "the answer is a NextItem of the contract" do
@@ -573,6 +666,27 @@ class NextItemEligibilityTest < ActiveSupport::TestCase
     assert_agree(@builder, "task", "claim")
     @scenario.run(@builder, on: @below)
     assert_equal "task", offered(@builder)
+  end
+
+  # L526, milestone 4 plan RD-12: review is told only while review
+  # claim-next has a review for the seat, so never for a review the claim
+  # filter leaves out for it. The filter here is a Gating::StandIn world's
+  # in which the provider rule keeps the task from Claude reviewers; claim-
+  # next's choice is Eligibility.next_review, which the claim takes.
+  test "a reviewer is never told review for a review the claim filter leaves out for it, and is for one it does not" do
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id, verdict: nil)
+    other = @scenario.seat(role: "reviewer", credential: @below)
+    Leverage::Gating.implementation = Leverage::Gating::StandIn.new(
+      rules: [ { id: SecureRandom.uuid, version_id: SecureRandom.uuid, version: 1, hook: "review.assign", kind: "policy",
+                 checker: "app", on_fail: nil, route: nil, enabled: true, scope: "covers" } ],
+      built_by: { task.id => [ "claude" ] }, reviews: { review.id => task.id },
+      seat_providers: { @reviewer.id => "claude", other.id => "codex" })
+
+    assert_nil Leverage::Eligibility.next_review(@reviewer.reload), "claim-next has no review for it"
+    assert_equal "none", offered(@reviewer)
+    assert_equal review, Leverage::Eligibility.next_review(other.reload)
+    assert_equal "review", offered(other)
   end
 
   test "a reviewer is offered a review exactly when its claim would take it" do

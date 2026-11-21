@@ -155,7 +155,7 @@
     "change_task_priority", "change_task_project", "change_task_cap", "change_budget",
     "pause_project", "resume_project", "allow_another_round", "grant_access", "rerun_check",
     "override_check", "add_rule", "save_rule", "enable_rule", "disable_rule", "revert_rule",
-    "remove_rule", "create_project", "edit_brief", "delete_content", "change_workspace_settings",
+    "remove_rule", "install_shipped_rules", "create_project", "edit_brief", "delete_content", "change_workspace_settings",
     "sign_in", "create_owner", "sign_out", "issue_helper_token", "connect_seat", "pause_seat", "resume_seat", "change_seat",
     "remove_seat", "start_seat", "stop_seat", "add_credential", "verify_credential",
     "sign_in_again", "rename_credential", "remove_credential", "refresh_usage",
@@ -293,7 +293,7 @@
     "add_checks_passed", "verify_passed", "found_signed_out", "question_answered",
     "project_budget_reached", "project_under_budget", "builder_seat_enabled",
     "seat_disabled_by_change", "disables_seat_holding_working_task", "target_project_paused",
-    "source_project_paused"
+    "source_project_paused", "rerun_queues", "rerun_of_claim_check"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",
@@ -377,6 +377,11 @@
       "read_usage"
     ],
     "helper_request_states": ["queued", "picked_up", "finished", "failed"],
-    "command_outcomes": ["pending", "completed", "refused"]
+    "command_outcomes": ["pending", "completed", "refused"],
+    "orchestrator_tested_providers": [
+      "claude",
+      "codex",
+      "gemini"
+    ]
   }
 }
