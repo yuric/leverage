@@ -44,6 +44,7 @@ module Leverage
       scope = { workspace_id: task.workspace_id, task_id: task.id }
       criteria = Criterion.where(scope).select(:id)
       Evidence.where(workspace_id: task.workspace_id, criterion_id: criteria).update_all(value: nil)
+      Idempotency.forget_task_refusals(task)
       RELATED_COLUMNS.each do |model, columns|
         model.where(scope).update_all(columns.index_with(nil))
       end

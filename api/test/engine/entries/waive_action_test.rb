@@ -8,11 +8,12 @@ class WaiveActionTest < ActiveSupport::TestCase
 
   test "passes only the named action to the writer that withdraws its running checks" do
     task = scenario.finishing_task(actions: [
-      { state: "requested", description: "First made-up action." },
+      { state: "stopped", description: "First made-up action." },
       { state: "requested", description: "Second made-up action." }
     ])
     action, other = Action.where(task_id: task.id).order(:position).to_a
-    hold = scenario.hold(task, reason: "owner_approval", facts: { action_id: action.id })
+    hold = scenario.hold(task, reason: "action_stopped",
+      facts: { action_id: action.id, any_action_started: false, rule_check_id: nil })
     unrelated = scenario.hold(task, reason: "owner_approval", facts: { action_id: other.id })
     rule = scenario.rule(hook: "action.requested")
     check = scenario.rule_check(task, rule: rule, hook: "action.requested", subject: action)
@@ -40,7 +41,8 @@ class WaiveActionTest < ActiveSupport::TestCase
     assert_equal "requested", other.reload.state
     assert hold.reload.closed_at
     assert_nil unrelated.reload.closed_at
-    assert_equal "waive", Event.where(task_id: task.id, type: "inbox.resolved").sole.payload.fetch("choice")
+    assert_equal "waive", Event.where(task_id: task.id, type: "inbox.resolved", subject_id: InboxItem.find_by!(hold_id: hold.id).id)
+      .sole.payload.fetch("choice")
   end
 
   test "refuses a previously waived action" do

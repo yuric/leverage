@@ -18,10 +18,11 @@ connects on its own can use HTTP or the bundled MCP server.
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
 and approvals with real orchestrators on Claude Code, Codex and
-Antigravity. Real checks used stand-ins for outward actions. The owner's
-MCP run, real reviewer and planner runs, and a real interruption remain
-unverified. The repository contains the documents, research, and the
-following code and checks.
+Antigravity. Real checks used stand-ins for outward actions. Orchestrator
+question jobs used stand-ins for the prompt and for parsing the answer
+and basis. The owner's MCP run, real reviewer and planner runs, and a real
+interruption remain unverified. The repository contains the documents,
+research, and the following code and checks.
 
 - `api/`: a Rails application in API mode, with Minitest tests. It serves
   the owner's, the agents' and the helper's calls through one transition

@@ -46,7 +46,7 @@ enum ProjectsCopy: OwnerFacingCopy {
         case .cancel: "Cancel"
         case .deleteContent: "Delete content"
         case .confirmDelete: "Delete this project's content?"
-        case .deleteExplanation: "This deletes the project brief and the content of all its tasks. The task history and timing stay."
+        case .deleteExplanation: "This deletes the project’s content and the content of all its tasks. Backups made earlier can still contain it until they are replaced. Task history and timing stay."
         }
     }
 

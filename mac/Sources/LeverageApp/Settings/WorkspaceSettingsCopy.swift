@@ -15,12 +15,12 @@ enum WorkspaceSettingsCopy: OwnerFacingCopy {
         case .leaseLength: "How long an agent may go quiet before its task goes back"
         case .checkQueueTimeout: "How long a check may wait for an agent"
         case .checkRunTimeout: "How long a check may run"
-        case .maximumRounds: "How many times a task may be sent back"
+        case .maximumRounds: "How many failed reviews a task may have before it waits for you"
         case .rerunLimit: "How many times a check may run again"
-        case .recoveryTimeCeiling: "How long a stopped task may take to continue"
+        case .recoveryTimeCeiling: "Target time to resume work after a limit or sign-out"
         case .secondsBounds: "{minimum} to {maximum} seconds"
         case .countBounds: "{minimum} to {maximum}"
-        case .optionalSecondsBounds: "{minimum} to {maximum} seconds. Leave empty to set no limit."
+        case .optionalSecondsBounds: "{minimum} to {maximum} seconds. Leave empty to set no target. The recovery report measures this wait."
         }
     }
 

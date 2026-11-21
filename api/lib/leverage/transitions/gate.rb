@@ -162,7 +162,8 @@ module Leverage
           entry.fail_for_gate(ctx, check, cause_id: cause_id)
           Outcome.completed(entry.result)
         when "refuse"
-          Outcome.refused(Refusal.new(code: FAILED_GATE, rule_id: failure.rule_id, reason: failure.reason || check&.reason))
+          Outcome.refused(Refusal.new(code: FAILED_GATE, rule_id: failure.rule_id,
+            reason: failure.reason || check&.reason, task_id: check&.task_id))
         else
           raise Unsupported, "#{entry.hook}: a failed gate here needs milestone 5 (#{effect(entry.hook).inspect})"
         end

@@ -28,7 +28,7 @@ final class ProjectDetailModel {
     }
 
     var budgetInput: String {
-        project?.budget?.formatted(.number.grouping(.never).precision(.fractionLength(2)).locale(projects.locale)) ?? ""
+        SpendingAmount.fieldText(project?.budget, locale: projects.locale)
     }
 
     var canDeleteContent: Bool {

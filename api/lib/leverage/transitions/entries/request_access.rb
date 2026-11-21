@@ -8,8 +8,6 @@ module Leverage
         end
 
         def refusals(_ctx)
-          return [ "forbidden" ] unless @seat.role == "builder"
-
           (Eligibility.task_refusals(@task, @seat) << state_refusal(@task.state)).compact
         end
 

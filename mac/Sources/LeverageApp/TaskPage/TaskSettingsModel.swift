@@ -33,6 +33,7 @@ final class TaskSettingsModel {
 
     private let taskID: UUID
     private let api: any OwnerAPI
+    private let locale: Locale
     private let didChange: @MainActor () -> Void
     private var saved: [Field: Change]
     private var retries: [Field: (change: Change, key: IdempotencyKey)] = [:]
@@ -40,10 +41,11 @@ final class TaskSettingsModel {
     init(task: TaskSummary, api: any OwnerAPI, locale: Locale = .current, didChange: @escaping @MainActor () -> Void) {
         taskID = task.id
         self.api = api
+        self.locale = locale
         self.didChange = didChange
         priority = task.priority
         projectID = task.projectID
-        capText = Self.amountText(task.budgetCap)
+        capText = SpendingAmount.fieldText(task.budgetCap, locale: locale)
         saved = [.priority: .priority(task.priority), .project: .project(task.projectID), .cap: .cap(task.budgetCap)]
     }
 
@@ -53,14 +55,10 @@ final class TaskSettingsModel {
         let text = trimmedCap
         // Preserve an existing cap with sub-cent precision when its displayed
         // value is untouched.
-        if case .cap(let savedAmount)? = saved[.cap], text == Self.amountText(savedAmount) {
+        if case .cap(let savedAmount)? = saved[.cap], text == SpendingAmount.fieldText(savedAmount, locale: locale) {
             return savedAmount
         }
-        guard text.wholeMatch(of: /[0-9]+(?:\.[0-9]{1,2})?/) != nil,
-              let amount = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")),
-              amount < 100_000_000
-        else { return nil }
-        return amount
+        return SpendingAmount.parse(text, locale: locale)
     }
 
     var invalidCap: Bool { !trimmedCap.isEmpty && amount == nil }
@@ -118,11 +116,5 @@ final class TaskSettingsModel {
                 taskID: taskID, ChangeTaskCapRequest(budgetCap: amount), key: key
             ).completedResult()
         }
-    }
-
-    private static func amountText(_ amount: Decimal?) -> String {
-        amount?.formatted(
-            .number.locale(Locale(identifier: "en_US_POSIX")).grouping(.never).precision(.fractionLength(2))
-        ) ?? ""
     }
 }

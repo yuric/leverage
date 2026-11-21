@@ -6341,15 +6341,36 @@
       },
       "body": {},
       "expect": {
+        "outcome": "refused",
+        "refusal": {
+          "code": "invalid_state",
+          "rule_id": null
+        },
+        "events": [],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:1326",
+      "caller": "$user:owner",
+      "command": "stop_action",
+      "operation_id": "stop_action",
+      "key": "$key:stop_after_approval_timeout",
+      "path_params": {
+        "id": "$action:t3_1"
+      },
+      "body": {},
+      "expect": {
         "outcome": "completed",
         "refusal": null,
         "events": [
           {
             "ref": "@event:172",
-            "type": "action.waived",
+            "type": "action.stopped",
             "schema_version": 1,
-            "at": "@t:1325",
-            "effective_at": "@t:1325",
+            "at": "@t:1326",
+            "effective_at": "@t:1326",
             "actor_kind": "owner",
             "actor_id": "$user:owner",
             "project_id": null,
@@ -6358,34 +6379,17 @@
             "subject_kind": "action",
             "subject_id": "$action:t3_1",
             "cause_id": null,
-            "command_id": "$key:waive_action_82",
+            "command_id": "$key:stop_after_approval_timeout",
             "payload": {
-              "lease_seat_id": null
+              "overturned": false
             }
           },
           {
             "ref": "@event:173",
-            "type": "task.done",
-            "schema_version": 1,
-            "at": "@t:1325",
-            "effective_at": "@t:1325",
-            "actor_kind": "owner",
-            "actor_id": "$user:owner",
-            "project_id": null,
-            "task_id": "$task:3",
-            "round": 1,
-            "subject_kind": null,
-            "subject_id": null,
-            "cause_id": null,
-            "command_id": "$key:waive_action_82",
-            "payload": {}
-          },
-          {
-            "ref": "@event:174",
             "type": "hold.closed",
             "schema_version": 1,
-            "at": "@t:1325",
-            "effective_at": "@t:1325",
+            "at": "@t:1326",
+            "effective_at": "@t:1326",
             "actor_kind": "owner",
             "actor_id": "$user:owner",
             "project_id": null,
@@ -6394,7 +6398,7 @@
             "subject_kind": "hold",
             "subject_id": "$hold:t3_timed_out",
             "cause_id": null,
-            "command_id": "$key:waive_action_82",
+            "command_id": "$key:stop_after_approval_timeout",
             "payload": {
               "reason": "owner_approval",
               "rule_id": "$rule:orchestrator_approves_actions",
@@ -6404,11 +6408,11 @@
             }
           },
           {
-            "ref": "@event:175",
+            "ref": "@event:174",
             "type": "inbox.resolved",
             "schema_version": 1,
-            "at": "@t:1325",
-            "effective_at": "@t:1325",
+            "at": "@t:1326",
+            "effective_at": "@t:1326",
             "actor_kind": "owner",
             "actor_id": "$user:owner",
             "project_id": null,
@@ -6417,7 +6421,164 @@
             "subject_kind": "inbox_item",
             "subject_id": "$inbox:t3_timed_out",
             "cause_id": null,
-            "command_id": "$key:waive_action_82",
+            "command_id": "$key:stop_after_approval_timeout",
+            "payload": {
+              "choice": "stop"
+            }
+          },
+          {
+            "ref": "@event:175",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:1326",
+            "effective_at": "@t:1326",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t3_stop_after_timeout",
+            "cause_id": "@event:172",
+            "command_id": "$key:stop_after_approval_timeout",
+            "payload": {
+              "reason": "action_stopped",
+              "rule_id": null,
+              "credential_id": null,
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:176",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:1326",
+            "effective_at": "@t:1326",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t3_stop_after_timeout",
+            "cause_id": "@event:175",
+            "command_id": "$key:stop_after_approval_timeout",
+            "payload": {
+              "kind": "stopped_action"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:3",
+            "kind": "wait_owner",
+            "step_class": "waiting",
+            "round": 1,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t3_stop_after_timeout",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:175"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:3",
+            "kind": "wait_owner",
+            "closing_event_id": "@event:173"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:1327",
+      "caller": "$user:owner",
+      "command": "waive_action",
+      "operation_id": "waive_action",
+      "key": "$key:waive_after_approval_stop",
+      "path_params": {
+        "id": "$action:t3_1"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:177",
+            "type": "action.waived",
+            "schema_version": 1,
+            "at": "@t:1327",
+            "effective_at": "@t:1327",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": "action",
+            "subject_id": "$action:t3_1",
+            "cause_id": null,
+            "command_id": "$key:waive_after_approval_stop",
+            "payload": {
+              "lease_seat_id": null
+            }
+          },
+          {
+            "ref": "@event:178",
+            "type": "task.done",
+            "schema_version": 1,
+            "at": "@t:1327",
+            "effective_at": "@t:1327",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:waive_after_approval_stop",
+            "payload": {}
+          },
+          {
+            "ref": "@event:179",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:1327",
+            "effective_at": "@t:1327",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t3_stop_after_timeout",
+            "cause_id": null,
+            "command_id": "$key:waive_after_approval_stop",
+            "payload": {
+              "reason": "action_stopped",
+              "rule_id": null,
+              "credential_id": null,
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:180",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:1327",
+            "effective_at": "@t:1327",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:3",
+            "round": 1,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t3_stop_after_timeout",
+            "cause_id": null,
+            "command_id": "$key:waive_after_approval_stop",
             "payload": {
               "choice": "waive"
             }
@@ -6428,7 +6589,7 @@
           {
             "task_id": "$task:3",
             "kind": "wait_owner",
-            "closing_event_id": "@event:173"
+            "closing_event_id": "@event:178"
           }
         ]
       }
@@ -6457,7 +6618,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:176",
+            "ref": "@event:181",
             "type": "rule.created",
             "schema_version": 1,
             "at": "@t:1335",
@@ -6501,7 +6662,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:177",
+            "ref": "@event:182",
             "type": "task.created",
             "schema_version": 1,
             "at": "@t:1345",
@@ -6532,7 +6693,7 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:177"
+            "opening_event_id": "@event:182"
           }
         ],
         "steps_closed": []
@@ -6576,7 +6737,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:178",
+            "ref": "@event:183",
             "type": "task.contract_changed",
             "schema_version": 1,
             "at": "@t:1355",
@@ -6606,7 +6767,7 @@
             }
           },
           {
-            "ref": "@event:179",
+            "ref": "@event:184",
             "type": "task.ready",
             "schema_version": 1,
             "at": "@t:1355",
@@ -6636,14 +6797,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:179"
+            "opening_event_id": "@event:184"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "wait_contract",
-            "closing_event_id": "@event:179"
+            "closing_event_id": "@event:184"
           }
         ]
       }
@@ -6661,7 +6822,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:180",
+            "ref": "@event:185",
             "type": "task.claimed",
             "schema_version": 1,
             "at": "@t:1365",
@@ -6693,14 +6854,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:180"
+            "opening_event_id": "@event:185"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "wait_ready",
-            "closing_event_id": "@event:180"
+            "closing_event_id": "@event:185"
           }
         ]
       }
@@ -6722,7 +6883,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:181",
+            "ref": "@event:186",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1375",
@@ -6750,14 +6911,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:181"
+            "opening_event_id": "@event:186"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "briefing",
-            "closing_event_id": "@event:181"
+            "closing_event_id": "@event:186"
           }
         ]
       }
@@ -6783,7 +6944,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:182",
+            "ref": "@event:187",
             "type": "criterion.passed",
             "schema_version": 1,
             "at": "@t:1385",
@@ -6800,7 +6961,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:183",
+            "ref": "@event:188",
             "type": "evidence.attached",
             "schema_version": 1,
             "at": "@t:1385",
@@ -6831,14 +6992,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:182"
+            "opening_event_id": "@event:187"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "build",
-            "closing_event_id": "@event:182"
+            "closing_event_id": "@event:187"
           }
         ]
       }
@@ -6861,7 +7022,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:184",
+            "ref": "@event:189",
             "type": "task.submitted",
             "schema_version": 1,
             "at": "@t:1395",
@@ -6891,14 +7052,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:184"
+            "opening_event_id": "@event:189"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "finish",
-            "closing_event_id": "@event:184"
+            "closing_event_id": "@event:189"
           }
         ]
       }
@@ -6916,7 +7077,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:185",
+            "ref": "@event:190",
             "type": "review.started",
             "schema_version": 1,
             "at": "@t:1405",
@@ -6947,14 +7108,14 @@
             "seat_id": "$seat:reviewer",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:185"
+            "opening_event_id": "@event:190"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "wait_review",
-            "closing_event_id": "@event:185"
+            "closing_event_id": "@event:190"
           }
         ]
       }
@@ -6976,7 +7137,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:186",
+            "ref": "@event:191",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1415",
@@ -7018,7 +7179,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:187",
+            "ref": "@event:192",
             "type": "review.passed",
             "schema_version": 1,
             "at": "@t:1425",
@@ -7035,7 +7196,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:188",
+            "ref": "@event:193",
             "type": "action.requested",
             "schema_version": 1,
             "at": "@t:1425",
@@ -7052,7 +7213,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:189",
+            "ref": "@event:194",
             "type": "cost.reported",
             "schema_version": 1,
             "at": "@t:1425",
@@ -7072,7 +7233,7 @@
             }
           },
           {
-            "ref": "@event:190",
+            "ref": "@event:195",
             "type": "check.queued",
             "schema_version": 1,
             "at": "@t:1425",
@@ -7102,7 +7263,7 @@
             }
           },
           {
-            "ref": "@event:191",
+            "ref": "@event:196",
             "type": "job.queued",
             "schema_version": 1,
             "at": "@t:1425",
@@ -7132,14 +7293,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:190"
+            "opening_event_id": "@event:195"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "review",
-            "closing_event_id": "@event:190"
+            "closing_event_id": "@event:195"
           }
         ]
       }
@@ -7157,7 +7318,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:192",
+            "ref": "@event:197",
             "type": "job.claimed",
             "schema_version": 1,
             "at": "@t:1435",
@@ -7177,7 +7338,7 @@
             }
           },
           {
-            "ref": "@event:193",
+            "ref": "@event:198",
             "type": "check.started",
             "schema_version": 1,
             "at": "@t:1435",
@@ -7222,7 +7383,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:194",
+            "ref": "@event:199",
             "type": "job.finished",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7239,7 +7400,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:195",
+            "ref": "@event:200",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7266,7 +7427,7 @@
             }
           },
           {
-            "ref": "@event:196",
+            "ref": "@event:201",
             "type": "cost.reported",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7286,7 +7447,7 @@
             }
           },
           {
-            "ref": "@event:197",
+            "ref": "@event:202",
             "type": "action.stopped",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7298,12 +7459,12 @@
             "round": 0,
             "subject_kind": "action",
             "subject_id": "$action:t4_1",
-            "cause_id": "@event:195",
+            "cause_id": "@event:200",
             "command_id": "$key:submit_job_result_94",
             "payload": {"overturned": false}
           },
           {
-            "ref": "@event:198",
+            "ref": "@event:203",
             "type": "hold.opened",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7315,7 +7476,7 @@
             "round": 0,
             "subject_kind": "hold",
             "subject_id": "$hold:t4_gate_stop",
-            "cause_id": "@event:197",
+            "cause_id": "@event:202",
             "command_id": "$key:submit_job_result_94",
             "payload": {
               "reason": "action_stopped",
@@ -7325,7 +7486,7 @@
             }
           },
           {
-            "ref": "@event:199",
+            "ref": "@event:204",
             "type": "inbox.opened",
             "schema_version": 1,
             "at": "@t:1445",
@@ -7337,7 +7498,7 @@
             "round": 0,
             "subject_kind": "inbox_item",
             "subject_id": "$inbox:t4_gate_stop",
-            "cause_id": "@event:198",
+            "cause_id": "@event:203",
             "command_id": "$key:submit_job_result_94",
             "payload": {
               "kind": "stopped_action"
@@ -7355,14 +7516,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:198"
+            "opening_event_id": "@event:203"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "check",
-            "closing_event_id": "@event:198"
+            "closing_event_id": "@event:203"
           }
         ]
       }
@@ -7384,7 +7545,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:200",
+            "ref": "@event:205",
             "type": "check.overridden",
             "schema_version": 1,
             "at": "@t:1455",
@@ -7401,7 +7562,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:201",
+            "ref": "@event:206",
             "type": "action.approved",
             "schema_version": 1,
             "at": "@t:1455",
@@ -7413,14 +7574,14 @@
             "round": 0,
             "subject_kind": "action",
             "subject_id": "$action:t4_1",
-            "cause_id": "@event:200",
+            "cause_id": "@event:205",
             "command_id": "$key:override_check_95",
             "payload": {
               "lease_seat_id": "$seat:builder"
             }
           },
           {
-            "ref": "@event:202",
+            "ref": "@event:207",
             "type": "hold.closed",
             "schema_version": 1,
             "at": "@t:1455",
@@ -7443,7 +7604,7 @@
             }
           },
           {
-            "ref": "@event:203",
+            "ref": "@event:208",
             "type": "inbox.resolved",
             "schema_version": 1,
             "at": "@t:1455",
@@ -7473,14 +7634,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:202"
+            "opening_event_id": "@event:207"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "wait_owner",
-            "closing_event_id": "@event:202"
+            "closing_event_id": "@event:207"
           }
         ]
       }
@@ -7502,7 +7663,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:204",
+            "ref": "@event:209",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1465",
@@ -7530,14 +7691,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:204"
+            "opening_event_id": "@event:209"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:4",
             "kind": "wait_builder",
-            "closing_event_id": "@event:204"
+            "closing_event_id": "@event:209"
           }
         ]
       }
@@ -7558,7 +7719,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:205",
+            "ref": "@event:210",
             "type": "action.started",
             "schema_version": 1,
             "at": "@t:1475",
@@ -7617,7 +7778,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:206",
+            "ref": "@event:211",
             "type": "task.cancelled",
             "schema_version": 1,
             "at": "@t:1495",
@@ -7634,7 +7795,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:207",
+            "ref": "@event:212",
             "type": "action.revoked",
             "schema_version": 1,
             "at": "@t:1495",
@@ -7656,7 +7817,7 @@
           {
             "task_id": "$task:4",
             "kind": "finish",
-            "closing_event_id": "@event:206"
+            "closing_event_id": "@event:211"
           }
         ]
       }
@@ -7676,7 +7837,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:208",
+            "ref": "@event:213",
             "type": "rule.disabled",
             "schema_version": 1,
             "at": "@t:1505",
@@ -7716,7 +7877,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:209",
+            "ref": "@event:214",
             "type": "task.created",
             "schema_version": 1,
             "at": "@t:1515",
@@ -7747,7 +7908,7 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:209"
+            "opening_event_id": "@event:214"
           }
         ],
         "steps_closed": []
@@ -7791,7 +7952,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:210",
+            "ref": "@event:215",
             "type": "task.contract_changed",
             "schema_version": 1,
             "at": "@t:1525",
@@ -7821,7 +7982,7 @@
             }
           },
           {
-            "ref": "@event:211",
+            "ref": "@event:216",
             "type": "task.ready",
             "schema_version": 1,
             "at": "@t:1525",
@@ -7851,14 +8012,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:211"
+            "opening_event_id": "@event:216"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "wait_contract",
-            "closing_event_id": "@event:211"
+            "closing_event_id": "@event:216"
           }
         ]
       }
@@ -7876,7 +8037,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:212",
+            "ref": "@event:217",
             "type": "task.claimed",
             "schema_version": 1,
             "at": "@t:1535",
@@ -7908,14 +8069,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:212"
+            "opening_event_id": "@event:217"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "wait_ready",
-            "closing_event_id": "@event:212"
+            "closing_event_id": "@event:217"
           }
         ]
       }
@@ -7937,7 +8098,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:213",
+            "ref": "@event:218",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1545",
@@ -7965,14 +8126,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:213"
+            "opening_event_id": "@event:218"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "briefing",
-            "closing_event_id": "@event:213"
+            "closing_event_id": "@event:218"
           }
         ]
       }
@@ -7998,7 +8159,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:214",
+            "ref": "@event:219",
             "type": "criterion.passed",
             "schema_version": 1,
             "at": "@t:1555",
@@ -8015,7 +8176,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:215",
+            "ref": "@event:220",
             "type": "evidence.attached",
             "schema_version": 1,
             "at": "@t:1555",
@@ -8046,14 +8207,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:214"
+            "opening_event_id": "@event:219"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "build",
-            "closing_event_id": "@event:214"
+            "closing_event_id": "@event:219"
           }
         ]
       }
@@ -8076,7 +8237,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:216",
+            "ref": "@event:221",
             "type": "task.submitted",
             "schema_version": 1,
             "at": "@t:1565",
@@ -8106,14 +8267,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:216"
+            "opening_event_id": "@event:221"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "finish",
-            "closing_event_id": "@event:216"
+            "closing_event_id": "@event:221"
           }
         ]
       }
@@ -8137,7 +8298,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:217",
+            "ref": "@event:222",
             "type": "task.created",
             "schema_version": 1,
             "at": "@t:1575",
@@ -8168,7 +8329,7 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:217"
+            "opening_event_id": "@event:222"
           }
         ],
         "steps_closed": []
@@ -8207,7 +8368,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:218",
+            "ref": "@event:223",
             "type": "task.contract_changed",
             "schema_version": 1,
             "at": "@t:1585",
@@ -8235,7 +8396,7 @@
             }
           },
           {
-            "ref": "@event:219",
+            "ref": "@event:224",
             "type": "task.ready",
             "schema_version": 1,
             "at": "@t:1585",
@@ -8265,14 +8426,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:219"
+            "opening_event_id": "@event:224"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:6",
             "kind": "wait_contract",
-            "closing_event_id": "@event:219"
+            "closing_event_id": "@event:224"
           }
         ]
       }
@@ -8290,7 +8451,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:220",
+            "ref": "@event:225",
             "type": "task.claimed",
             "schema_version": 1,
             "at": "@t:1595",
@@ -8322,14 +8483,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:220"
+            "opening_event_id": "@event:225"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:6",
             "kind": "wait_ready",
-            "closing_event_id": "@event:220"
+            "closing_event_id": "@event:225"
           }
         ]
       }
@@ -8351,7 +8512,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:221",
+            "ref": "@event:226",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1605",
@@ -8379,14 +8540,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:221"
+            "opening_event_id": "@event:226"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:6",
             "kind": "briefing",
-            "closing_event_id": "@event:221"
+            "closing_event_id": "@event:226"
           }
         ]
       }
@@ -8404,7 +8565,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:222",
+            "ref": "@event:227",
             "type": "review.started",
             "schema_version": 1,
             "at": "@t:1615",
@@ -8435,14 +8596,14 @@
             "seat_id": "$seat:reviewer",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:222"
+            "opening_event_id": "@event:227"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "wait_review",
-            "closing_event_id": "@event:222"
+            "closing_event_id": "@event:227"
           }
         ]
       }
@@ -8464,7 +8625,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:223",
+            "ref": "@event:228",
             "type": "task.briefing_acknowledged",
             "schema_version": 1,
             "at": "@t:1625",
@@ -8506,7 +8667,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:224",
+            "ref": "@event:229",
             "type": "review.passed",
             "schema_version": 1,
             "at": "@t:1635",
@@ -8523,7 +8684,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:225",
+            "ref": "@event:230",
             "type": "action.requested",
             "schema_version": 1,
             "at": "@t:1635",
@@ -8540,7 +8701,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:226",
+            "ref": "@event:231",
             "type": "cost.reported",
             "schema_version": 1,
             "at": "@t:1635",
@@ -8560,7 +8721,7 @@
             }
           },
           {
-            "ref": "@event:227",
+            "ref": "@event:232",
             "type": "check.queued",
             "schema_version": 1,
             "at": "@t:1635",
@@ -8590,7 +8751,7 @@
             }
           },
           {
-            "ref": "@event:228",
+            "ref": "@event:233",
             "type": "job.queued",
             "schema_version": 1,
             "at": "@t:1635",
@@ -8620,14 +8781,14 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:227"
+            "opening_event_id": "@event:232"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "review",
-            "closing_event_id": "@event:227"
+            "closing_event_id": "@event:232"
           }
         ]
       }
@@ -8645,7 +8806,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:229",
+            "ref": "@event:234",
             "type": "job.claimed",
             "schema_version": 1,
             "at": "@t:1645",
@@ -8665,7 +8826,7 @@
             }
           },
           {
-            "ref": "@event:230",
+            "ref": "@event:235",
             "type": "check.started",
             "schema_version": 1,
             "at": "@t:1645",
@@ -8710,7 +8871,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:231",
+            "ref": "@event:236",
             "type": "job.finished",
             "schema_version": 1,
             "at": "@t:1655",
@@ -8727,7 +8888,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:232",
+            "ref": "@event:237",
             "type": "check.finished",
             "schema_version": 1,
             "at": "@t:1655",
@@ -8754,7 +8915,7 @@
             }
           },
           {
-            "ref": "@event:233",
+            "ref": "@event:238",
             "type": "cost.reported",
             "schema_version": 1,
             "at": "@t:1655",
@@ -8774,7 +8935,7 @@
             }
           },
           {
-            "ref": "@event:234",
+            "ref": "@event:239",
             "type": "action.approved",
             "schema_version": 1,
             "at": "@t:1655",
@@ -8804,14 +8965,14 @@
             "seat_id": "$seat:builder",
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:234"
+            "opening_event_id": "@event:239"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:5",
             "kind": "check",
-            "closing_event_id": "@event:234"
+            "closing_event_id": "@event:239"
           }
         ]
       }
@@ -8831,7 +8992,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:235",
+            "ref": "@event:240",
             "type": "seat.removed",
             "schema_version": 1,
             "at": "@t:1665",
@@ -8848,7 +9009,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:236",
+            "ref": "@event:241",
             "type": "task.released",
             "schema_version": 1,
             "at": "@t:1665",
@@ -8860,7 +9021,7 @@
             "round": 0,
             "subject_kind": null,
             "subject_id": null,
-            "cause_id": "@event:235",
+            "cause_id": "@event:240",
             "command_id": "$key:remove_seat_116",
             "payload": {
               "reason": "seat_removed",
@@ -8868,7 +9029,7 @@
             }
           },
           {
-            "ref": "@event:237",
+            "ref": "@event:242",
             "type": "hold.opened",
             "schema_version": 1,
             "at": "@t:1665",
@@ -8880,7 +9041,7 @@
             "round": 0,
             "subject_kind": "hold",
             "subject_id": "$hold:t5_removed",
-            "cause_id": "@event:235",
+            "cause_id": "@event:240",
             "command_id": "$key:remove_seat_116",
             "payload": {
               "reason": "action_unconfirmed",
@@ -8890,7 +9051,7 @@
             }
           },
           {
-            "ref": "@event:238",
+            "ref": "@event:243",
             "type": "inbox.opened",
             "schema_version": 1,
             "at": "@t:1665",
@@ -8902,7 +9063,7 @@
             "round": 0,
             "subject_kind": "inbox_item",
             "subject_id": "$inbox:t5_removed",
-            "cause_id": "@event:237",
+            "cause_id": "@event:242",
             "command_id": "$key:remove_seat_116",
             "payload": {
               "kind": "unconfirmed_action"
@@ -8920,7 +9081,7 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:236"
+            "opening_event_id": "@event:241"
           },
           {
             "task_id": "$task:5",
@@ -8932,19 +9093,19 @@
             "seat_id": null,
             "cause_kind": null,
             "cause_rule_id": null,
-            "opening_event_id": "@event:237"
+            "opening_event_id": "@event:242"
           }
         ],
         "steps_closed": [
           {
             "task_id": "$task:6",
             "kind": "build",
-            "closing_event_id": "@event:236"
+            "closing_event_id": "@event:241"
           },
           {
             "task_id": "$task:5",
             "kind": "wait_builder",
-            "closing_event_id": "@event:237"
+            "closing_event_id": "@event:242"
           }
         ]
       }
@@ -8985,7 +9146,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:239",
+            "ref": "@event:244",
             "type": "task.cancelled",
             "schema_version": 1,
             "at": "@t:1685",
@@ -9002,7 +9163,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:240",
+            "ref": "@event:245",
             "type": "action.revoked",
             "schema_version": 1,
             "at": "@t:1685",
@@ -9019,7 +9180,7 @@
             "payload": {}
           },
           {
-            "ref": "@event:241",
+            "ref": "@event:246",
             "type": "hold.closed",
             "schema_version": 1,
             "at": "@t:1685",
@@ -9042,7 +9203,7 @@
             }
           },
           {
-            "ref": "@event:242",
+            "ref": "@event:247",
             "type": "inbox.resolved",
             "schema_version": 1,
             "at": "@t:1685",
@@ -9066,7 +9227,7 @@
           {
             "task_id": "$task:5",
             "kind": "wait_owner",
-            "closing_event_id": "@event:239"
+            "closing_event_id": "@event:244"
           }
         ]
       }
@@ -9086,7 +9247,7 @@
         "refusal": null,
         "events": [
           {
-            "ref": "@event:243",
+            "ref": "@event:248",
             "type": "task.cancelled",
             "schema_version": 1,
             "at": "@t:1695",
@@ -9108,7 +9269,7 @@
           {
             "task_id": "$task:6",
             "kind": "wait_ready",
-            "closing_event_id": "@event:243"
+            "closing_event_id": "@event:248"
           }
         ]
       }

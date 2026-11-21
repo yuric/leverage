@@ -48,9 +48,8 @@ module Leverage
           @task = @job.task_id && Task.find_by(id: @job.task_id, workspace_id: ctx.workspace.id)
           @result = nil
           @tokens = params["tokens"]
-          @spend = params["spend"]
+          @spend = Costs.report_amount(@tokens, params["spend"])
           @answer = params["result"].to_h.stringify_keys
-          raise Invalid, "tokens and spend are numbers of at least 0" unless counted?
 
           @handler = BY_KIND.fetch(@job.kind) { raise Invalid, "No #{@job.kind} job is handed out in this milestone." }
           @handler.check_shape(@job, @answer)
@@ -78,12 +77,6 @@ module Leverage
         # Whether the command waits: a planner's Complete contract met a
         # model-checked gate (RE-6), so this call answers 202 pending.
         def pending? = @outcome == :pending
-
-        private
-
-        def counted?
-          @tokens.is_a?(Integer) && @tokens >= 0 && @spend.is_a?(Numeric) && @spend >= 0
-        end
       end
     end
   end

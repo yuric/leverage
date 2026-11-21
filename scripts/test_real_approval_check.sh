@@ -88,6 +88,12 @@ class Handler(BaseHTTPRequestHandler):
             assert expected["review"]["evidence"] in scenario["reviews"][0]["notes"]
             if index == 2:
                 assert self.server.first_page_reads > 0, "the second task started before checking the first"
+            if self.server.fault == "hangup":
+                self.server.pages[f"/v1/owner/tasks/{task_id}"] = {
+                    "task": {"state": "finishing"}, "actions": [{"state": "requested"}], "holds": [], "events": [],
+                }
+                self.answer({"outcome": "completed", "result": None})
+                return
             self.server.pages[f"/v1/owner/tasks/{task_id}"] = self.page(task_id, index)
             # Post one expected work folder for the builder shim and wait for its answer.
             instruction = self.server.marker_file

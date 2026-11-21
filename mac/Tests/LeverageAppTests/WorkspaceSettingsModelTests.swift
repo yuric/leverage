@@ -168,11 +168,7 @@ struct WorkspaceSettingsModelTests {
         model.fields[.leaseLength] = "900"
         owner.script { $0.workspaceSettings = { updated } }
         feed.noteRead(asOfSeq: 0)
-        let deadline = ContinuousClock.now.advanced(by: Patience.scaled(.seconds(1)))
-        while model.fields[.checkQueueTimeout] != "120", .now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(model.fields[.checkQueueTimeout] == "120")
+        #expect(await ShellFixtures.eventually { model.fields[.checkQueueTimeout] == "120" })
         #expect(model.fields[.leaseLength] == "900")
         #expect(model.canSave)
         #expect(owner.calls.filter { $0.operation == .getWorkspaceSettings }.count == 2)

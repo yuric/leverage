@@ -284,6 +284,7 @@
     {"kind": "contract_draft", "input_component": "ContractDraftJobInput", "result_component": "ContractDraftJobResult"}
   ],
   "guards": [
+    "held_owner_approval", "not_held_owner_approval", "question_task_active", "question_task_ended",
     "builder_holds_task", "approval_not_yet_overturned", "approval_already_overturned",
     "approval_asked_of_caller", "approval_not_asked_of_caller", "builder_seat_unavailable",
     "question_answerable", "question_not_answerable", "orchestrator_answer_not_overturned",

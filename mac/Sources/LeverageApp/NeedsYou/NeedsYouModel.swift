@@ -50,6 +50,7 @@ final class NeedsYouModel {
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
     @ObservationIgnored private let openTask: @MainActor (UUID) -> Void
     @ObservationIgnored private let timing: FollowTiming
+    private let locale: Locale
     @ObservationIgnored private let openAgents: @MainActor () -> Void
     /// The key of each command sent, kept until the server has answered it.
     @ObservationIgnored private var keys: [String: IdempotencyKey] = [:]
@@ -71,6 +72,7 @@ final class NeedsYouModel {
         self.openTask = openTask
         self.openAgents = openAgents
         self.timing = timing
+        self.locale = locale
     }
 
     // MARK: Let it through once, and Turn the rule off
@@ -298,12 +300,7 @@ final class NeedsYouModel {
     }
 
     private var enteredAmount: Decimal? {
-        let parts = trimmedPrompt.split(separator: ".", omittingEmptySubsequences: false)
-        guard (1...2).contains(parts.count), let whole = parts.first, !whole.isEmpty,
-              parts.count == 1 || (1...2).contains(parts[1].count),
-              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } })
-        else { return nil }
-        return Decimal(string: trimmedPrompt, locale: Locale(identifier: "en_US_POSIX"))
+        SpendingAmount.parse(trimmedPrompt, locale: locale)
     }
 
     private func showPrompt(_ action: NeedsYouButton.Action, on id: UUID) {

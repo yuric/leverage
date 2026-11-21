@@ -334,7 +334,10 @@ struct ClientPathsTests {
 
     @Test("the clients have one method for each served operation, and no other")
     func coverage() {
-        #expect(Set(Self.calls.keys) == Set(ContractDocument.served))
+        let milestoneFive = QuestionsAndApprovalsClientTests.calls.map(\.operation).filter { $0 != "get_landing_prompt" }
+        #expect(Set(milestoneFive) == Set(ContractDocument.questionsAndApprovals))
+        #expect(Set(Self.calls.keys).isDisjoint(with: milestoneFive))
+        #expect(Set(Self.calls.keys).union(milestoneFive) == Set(ContractDocument.served))
     }
 
     @Test("agent and helper polls give the server its requested wait and a timeout margin",
@@ -362,7 +365,7 @@ struct ClientPathsTests {
         }
     }
 
-    @Test("each client method sends its registry operation", arguments: ContractDocument.served)
+    @Test("each client method sends its registry operation", arguments: Self.calls.keys.sorted())
     func sendsItsOperation(operation: String) async throws {
         let entry = try #require(ContractDocument.operation(operation))
         let call = try #require(Self.calls[operation], "no client method for \(operation)")

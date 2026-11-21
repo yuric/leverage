@@ -192,7 +192,7 @@ enum NeedsYouWords {
             guard let action = action(in: item, page: names.page(for: item)) else {
                 return NeedsYouCopy.kindApproval.text
             }
-            return NeedsYouCopy.approvalHeading.filled(["verb": verb(action.kind), "description": action.description])
+            return NeedsYouCopy.approvalHeading.filled(["action": actionPhrase(action)])
         case .stoppedAction:
             guard let action = action(in: item, page: names.page(for: item)) else { return settledHeading(kind: .stoppedAction) }
             return NeedsYouCopy.stoppedHeading.filled(["verb": verb(action.kind)])
@@ -402,9 +402,24 @@ enum NeedsYouWords {
         }
         return NeedsYouCopy.unconfirmedBody.filled([
             "agent": agentName(page?.task.builderSeatID, page: page, names: names),
-            "verb": verb(action.kind).lowercased(), "description": action.description,
+            "action": actionPhrase(action, lowercaseVerb: true),
             "who": approver, "when": when.text,
         ])
+    }
+
+    private static func actionPhrase(_ action: OutwardAction, lowercaseVerb: Bool = false) -> String {
+        let verb = verb(action.kind)
+        var detail = action.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let prefix = detail.range(
+            of: "^" + NSRegularExpression.escapedPattern(for: verb) + #"\b"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) {
+            detail.removeSubrange(prefix)
+        }
+        detail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        detail = detail.replacingOccurrences(of: #"[.!?]+$"#, with: "", options: .regularExpression)
+        let title = lowercaseVerb ? verb.lowercased() : verb
+        return detail.isEmpty ? title : title + " " + detail
     }
 
     private static func stoppedCause(for item: InboxItem, page: TaskPage?, names: NeedsYouNames) -> String {

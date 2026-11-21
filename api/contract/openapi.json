@@ -3967,6 +3967,7 @@
     "/v1/owner/questions/{id}/answer": {
       "post": {
         "operationId": "answer_question",
+        "description": "A withdrawn orchestrator answer can be replaced only while its task is active.",
         "summary": "Answers a question passed on to the owner.",
         "tags": [
           "owner"
@@ -4047,6 +4048,7 @@
     "/v1/owner/questions/{id}/overturn": {
       "post": {
         "operationId": "overturn_answer",
+        "description": "The task must be active.",
         "summary": "Overturns a decision on a question.",
         "tags": [
           "owner"
@@ -4257,6 +4259,7 @@
     "/v1/owner/actions/{id}/waive": {
       "post": {
         "operationId": "waive_action",
+        "description": "An action with an open owner approval must be approved or stopped first.",
         "summary": "Waives an outward action.",
         "tags": [
           "owner"
@@ -8261,7 +8264,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           },
           "spent": {
             "type": "number",
@@ -9488,11 +9492,13 @@
         "properties": {
           "tokens": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 9223372036854775807
           },
           "spend": {
             "type": "number",
             "minimum": 0,
+            "maximum": 99999999.999999,
             "description": "US dollars since the last report."
           }
         },
@@ -9584,11 +9590,13 @@
           },
           "tokens": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 9223372036854775807
           },
           "spend": {
             "type": "number",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           }
         },
         "required": [
@@ -9825,7 +9833,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           },
           "brief": {
             "type": "array",
@@ -10383,7 +10392,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           },
           "work_reference": {
             "type": [
@@ -10482,11 +10492,13 @@
           },
           "tokens": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 9223372036854775807
           },
           "spend": {
             "type": "number",
             "minimum": 0,
+            "maximum": 99999999.999999,
             "description": "US dollars."
           }
         },
@@ -10785,7 +10797,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           }
         },
         "required": [
@@ -11423,7 +11436,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           },
           "spent": {
             "type": "number",
@@ -11510,7 +11524,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           }
         },
         "required": [
@@ -11575,7 +11590,8 @@
               "number",
               "null"
             ],
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 99999999.999999
           }
         },
         "required": [

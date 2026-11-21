@@ -155,7 +155,7 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .invalidSpendingLimit: "Enter an amount in US dollars with up to two decimal places, or leave it empty."
         case .deleteContent: "Delete content"
         case .deleteContentQuestion: "Delete this task’s content?"
-        case .deleteContentExplanation: "This permanently deletes the task’s content. Its timing and activity stay in the record."
+        case .deleteContentExplanation: "This deletes the task’s content. Backups made earlier can still contain it until they are replaced. Its timing and activity stay in the record."
         case .keepContent: "Keep content"
         case .deletedTask: "Deleted task"
         case .contentDeleted: "This task’s content was deleted."

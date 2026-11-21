@@ -57,10 +57,18 @@ module Leverage
       Question.find_by!(id: job.target_id, task_id: job.task_id, workspace_id: job.workspace_id)
     end
 
+    def withdraw_jobs(ctx, task)
+      Job.where(workspace_id: task.workspace_id, task_id: task.id, kind: "question", state: %w[queued claimed])
+        .order(:queued_at, :id).each { |job| Jobs.withdraw(ctx, job) }
+    end
+
     def miss_job(ctx, job, due_kind)
+      question = for_job(job)
+      return Jobs.withdraw(ctx, job) if Holds.ended?(ctx, task_of(question))
+
       Jobs.time_out(ctx, job, due_kind)
       if Timers.second_miss?(job)
-        pass_on(ctx, for_job(job))
+        pass_on(ctx, question)
       else
         Jobs.requeue(ctx, job)
       end

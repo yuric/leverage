@@ -62,12 +62,19 @@ module Leverage
         # An edit can remove an action definition after a return for rework.
         # Its decision is still in the log, but the definition's text is gone.
         state = action&.state
-        summary = action ? [ action.kind.capitalize, action.description ].compact.join(" ") : ""
+        summary = action ? action_summary(action) : ""
         decision(event, task).merge(kind: "approval", action_id: event.subject_id, question_id: nil,
           summary: summary, outcome: nil, action_state: state,
           started: same_approval.any? { |candidate| candidate.type == "action.started" },
           overturned_at: Shapes.time(overturned&.at), overturn_effect: approval_effect(overturned),
           undoable: live?(task) && !subsequent_approval && overturned.nil? && UNDOABLE_ACTION_STATES.include?(state))
+      end
+
+      def action_summary(action)
+        description = action.description.to_s.strip
+        return description if description.match?(/\A#{Regexp.escape(action.kind)}\b/i)
+
+        [ action.kind.capitalize, description.presence ].compact.join(" ")
       end
 
       def decision(event, task)

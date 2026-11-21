@@ -457,8 +457,10 @@ Where two inventories chose differently, the decision names the conflict.
 - **SM-9** `[reading]` `task.reassigned` only on escalation, carrying
   `minimum_strength_rank`. M-G9, M-G20.
 - **SM-10** `[reading]` Waive is allowed from `requested, approved,
-  stopped, started`; when it answers a hold it also writes `hold.closed`
-  and `inbox.resolved` (L113). M-G10.
+  stopped, started` once the action has no open `owner_approval` hold.
+  Approve or Stop answers that hold first. Waive also writes
+  `hold.closed` and `inbox.resolved` when it answers a stopped or
+  unconfirmed action (L113, L158). M-G10.
 - **SM-11** `[reading]` After a waive or override clears `action_stopped`,
   the approval rule of L138 applies to the remaining approved actions.
   M-G11.

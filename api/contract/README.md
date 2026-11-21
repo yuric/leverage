@@ -649,7 +649,9 @@ allows the recovery time ceiling to be cleared (AP-39).
   holds the task and is enabled and unpaused, rework replaces its lease
   and a waive keeps it (AE-16). A re-enabled seat can still hold the
   task's paused lease. Offer task again replaces that lease. Mark action
-  done keeps it when approved actions remain (AP-19).
+  done keeps it when approved actions remain and the seat is available
+  (AP-19). An action with an open owner approval must be approved or
+  stopped before it can be waived.
 - `task.created` carries the initial `action_ids` so replay can recover
   actions added with the task. Replay accepts older events without that
   field (DB-50). `action.stopped.overturned` distinguishes an open
@@ -657,13 +659,20 @@ allows the recovery time ceiling to be cleared (AP-39).
 - A question passed on without blocking has a Needs you item with a null
   hold. The answer, overturn and content deletion rows declare which
   cases are accepted and which return `invalid_state` (AP-3, AP-6,
-  AP-36). A project deletion also writes `content.deleted` for each
+  AP-36). Done withdraws queued or claimed question jobs. An orchestrator's
+  answer can be overturned or replaced only while the task is active.
+  A project deletion also writes `content.deleted` for each
   task whose content it deletes. A changed brief advances its version
   once. Added and removed entries write `brief.changed` at that version.
   A reorder alone records the moved entries (AP-27, DB-41).
 - Complete contract and Edit contract close a budget hold when the new
   cap is empty or above the task's reported spending (AE-12). A report
-  opens no budget hold on a task the command just ended.
+  opens no budget hold on a task the command just ended. Budget, cap and
+  spend requests accept at most 99,999,999.999999 dollars. A report whose
+  sum would overflow a task or project total returns `422 invalid`. The
+  saved spend and its event use the same six-decimal precision. If a
+  running gate's cost uses the capacity a waiting verdict needs, the
+  gate result still commits and the verdict is refused.
 - `QuestionJobInput` carries the task's question, contract with outward
   actions, project brief, role file and earlier answers. `ApprovalJobInput`
   carries the action, contract, role file, rule instruction and quoted
@@ -676,7 +685,9 @@ allows the recovery time ceiling to be cleared (AP-39).
   `important_event_types` list (AP-34).
 - The owner inbox includes optional `detail` for access requests and
   stopped approvals. The content stays in its row.
-- Delete content also clears stored claim copies. A stale job claim
+- Delete content also clears stored claim copies and check reasons from
+  command refusals. New refusals record the source task on the receipt.
+  A task page omits cleared evidence. A stale job claim
   exposes no material when the seat no longer holds that job in the
   current role or project, or the task content was deleted. A repeat
   preserves the key and never claims new work.

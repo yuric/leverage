@@ -162,6 +162,12 @@ struct ContractExamplesTests {
         "LandingPrompt": decodes(LandingPrompt.self),
         "TransportError": decodes(TransportError.self),
         "Refusal": decodes(Refusal.self),
+        "AskQuestionCompleted": decodes(CommandOutcome<AskQuestionResult>.self),
+        "Question": decodes(Question.self),
+        "DecisionsList": decodes(DecisionsList.self),
+        "ProjectsList": decodes(ProjectsList.self),
+        "WorkspaceSettings": decodes(WorkspaceSettings.self),
+        "ChangeWorkspaceSettingsCompleted": decodes(CommandOutcome<WorkspaceSettings>.self),
     ]
 
     @Test("every served operation is in the registry and the interface schema")

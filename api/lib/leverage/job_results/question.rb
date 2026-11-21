@@ -14,7 +14,9 @@ module Leverage
         raise Transitions::Invalid, "A question result must answer with a basis or pass the question on."
       end
 
-      def refusals(_task) = []
+      def refusals(task)
+        task && !%w[done cancelled].include?(task.state) ? [] : [ "invalid_state" ]
+      end
 
       def perform(ctx, job, task, seat:, answer:, tokens:, spend:)
         question = Questions.for_job(job)

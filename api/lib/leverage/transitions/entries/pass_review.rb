@@ -29,6 +29,10 @@ module Leverage
           @review = Review.find_by(id: @params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such review")
           @task = Task.find_by!(id: @review.task_id, workspace_id: ctx.workspace.id)
           raise Invalid, "A pass names no failed criteria." if Array(@params["failed_criteria"]).any?
+
+          if @review.reviewer_seat_id == @seat.id && @review.verdict.nil? && @seat.role == "reviewer"
+            Costs.validate_verdict!(@task, tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
+          end
         end
 
         def refusals(_ctx)
@@ -55,7 +59,10 @@ module Leverage
           @task.update!(state: finishing ? "finishing" : "done", holder_seat_id: nil)
           ctx.emit("review.passed", task: @task, subject: @review, payload: {})
           actions = finishing ? Actions.request_all(ctx, @task) : []
-          ctx.emit("task.done", task: @task, payload: {}) unless finishing
+          unless finishing
+            ctx.emit("task.done", task: @task, payload: {})
+            Questions.withdraw_jobs(ctx, @task)
+          end
           Costs.report(ctx, task: @task, subject: @review,
             tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
           actions.each { |action| request_action(ctx, action) }

@@ -949,7 +949,7 @@ extension NeedsYouModelTests {
 
         let (unconfirmed, _, _) = milestoneFive(.unconfirmedAction, description: "Publish the sample page.")
         await unconfirmed.load()
-        #expect(unconfirmed.rows.first?.body.contains("publish the sample page.") == true)
+        #expect(unconfirmed.rows.first?.body.contains("publish the sample page, approved") == true)
         #expect(unconfirmed.rows.first?.body.localizedCaseInsensitiveContains("publish publish") == false)
     }
 

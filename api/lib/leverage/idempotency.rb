@@ -55,7 +55,15 @@ module Leverage
     def store(ctx, request, outcome)
       Command.create!(workspace_id: ctx.workspace.id, caller_kind: request.caller_kind, caller_id: ctx.caller_id,
         key: request.key, command: request.command, request_hash: request.request_hash, outcome: outcome.outcome.to_s,
-        refusal: outcome.refusal&.to_h, result: outcome.result)
+        refusal: stored_refusal(outcome.refusal), result: outcome.result)
+    end
+
+    def stored_refusal(refusal)
+      return unless refusal
+
+      fields = refusal.to_h
+      fields["task_id"] = refusal.task_id if refusal.task_id
+      fields
     end
 
     def forget_task_claims(task)
@@ -67,6 +75,36 @@ module Leverage
       receipts.where(command: "claim_review").where("result -> 'review' ->> 'task_id' = ?", task.id)
         .update_all("result = jsonb_build_object('review', jsonb_build_object('id', result -> 'review' -> 'id', " \
           "'task_id', result -> 'review' -> 'task_id'))")
+    end
+
+    # Older receipts lack the task ID. Prefer their pending transition
+    # or a check event. Cached legacy failures may have neither, so clear
+    # matching check text in the same workspace as the final fallback.
+    def forget_task_refusals(task)
+      Command.where(workspace_id: task.workspace_id, outcome: "refused")
+        .where("refusal ->> 'code' = 'blocked_by_rule' AND refusal ->> 'reason' IS NOT NULL")
+        .where(<<~SQL.squish, task_id: task.id)
+          COALESCE(commands.refusal ->> 'task_id', (
+            SELECT pending_transitions.task_id::text FROM pending_transitions
+            WHERE pending_transitions.workspace_id = commands.workspace_id
+              AND pending_transitions.requester_kind = commands.caller_kind
+              AND pending_transitions.requester_id = commands.caller_id AND pending_transitions.command_key = commands.key
+            ORDER BY pending_transitions.created_at DESC LIMIT 1
+          ), (
+            SELECT events.task_id::text FROM events
+            WHERE events.workspace_id = commands.workspace_id AND events.type = 'check.finished'
+              AND events.actor_kind = commands.caller_kind AND events.actor_id = commands.caller_id
+              AND events.command_id = commands.key AND events.payload ->> 'rule_id' = commands.refusal ->> 'rule_id'
+            ORDER BY events.seq DESC LIMIT 1
+          ), (
+            SELECT :task_id FROM rule_checks
+            WHERE rule_checks.workspace_id = commands.workspace_id AND rule_checks.task_id = :task_id
+              AND rule_checks.rule_id::text = commands.refusal ->> 'rule_id'
+              AND rule_checks.reason = commands.refusal ->> 'reason'
+            LIMIT 1
+          )) = :task_id
+        SQL
+        .update_all("refusal = jsonb_set(refusal, '{reason}', 'null'::jsonb)")
     end
 
     def forget_project_claims(project)

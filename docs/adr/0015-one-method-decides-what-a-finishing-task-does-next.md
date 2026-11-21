@@ -16,10 +16,10 @@ and event log (AE-1, AE-2, AP-15, AP-19).
   routes a settled gate to its pending transition or requested action.
 - `Finishing.settle` decides what follows a change to the action
   decisions. It completes the task once all actions are done or waived.
-  If work remains after approvals are complete, the task keeps its
-  current holder or waits for the previous builder. A disabled or
-  removed seat, or a seat no longer in the builder role, opens
-  Unconfirmed action.
+  If work remains after approvals are complete, an enabled,
+  unremoved builder can keep the lease or get one when free.
+  Otherwise Unconfirmed action opens for the remaining work, even
+  when the task still names the previous holder.
 - `Finishing.after_command` checks waiting tasks after a command or
   timer. It grants the lease only to the previous builder, with eligible
   tasks ordered by the completing approval or waiver and then task ID.

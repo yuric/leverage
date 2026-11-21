@@ -5,10 +5,13 @@ module Leverage
         def load(ctx)
           @question = Question.find_by(id: ctx.request.params["id"], workspace_id: ctx.workspace.id) ||
             raise(NotFound, "No such question")
+          @task = Task.find_by!(id: @question.task_id, workspace_id: ctx.workspace.id)
         end
 
         def refusals(_ctx)
-          guard = %w[passed_on overturned].include?(@question.outcome) ? "question_answerable" : "question_not_answerable"
+          answerable = @task.content_deleted_at.nil? && @task.state != "cancelled" &&
+            (@question.outcome == "passed_on" || (@question.outcome == "overturned" && @task.state != "done"))
+          guard = answerable ? "question_answerable" : "question_not_answerable"
           [ state_refusal(nil, [ guard ]) ].compact
         end
 

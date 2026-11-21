@@ -1259,6 +1259,10 @@ class TracesTest < Minitest::Test
     waivers = events_of(name, "waive_action")
     assert_equal [ nil, nil ], payloads(waivers.first(2).flatten, "action.waived").map { |payload| payload["lease_seat_id"] }
     assert_equal %w[action.waived task.done hold.closed inbox.resolved], waivers.last.map { |event| event["type"] }
+    assert_empty waivers.fetch(2)
+    stop = events_of(name, "stop_action").last
+    assert_equal %w[action.stopped hold.closed inbox.resolved hold.opened inbox.opened], stop.map { |event| event["type"] }
+    assert_equal [ "stop" ], payloads(stop, "inbox.resolved").map { |payload| payload["choice"] }
     rework = events_of(name, "return_for_rework").first
     assert_equal "$seat:builder", payloads(rework, "task.returned_for_rework").first["lease_seat_id"]
     assert_equal [ %w[action.stopped hold.opened inbox.opened], %w[action.overturn_recorded], [] ].sort,

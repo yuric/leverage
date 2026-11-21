@@ -116,6 +116,9 @@ class StateTableFinishingTest < ActiveSupport::TestCase
         lease_event_id: lease.id, briefing_hash: Leverage::Briefing.hash_for(task, seat: @builder),
         acknowledged_at: @scenario.database_now)
     end
+    # A synthetic holder isolates the unlisted state from the higher
+    # precedence not_holder refusal, which the roles tests cover.
+    task.update!(holder_seat_id: @builder.id) if kase.invalid_state? && WORK.include?(kase.command)
     @before = Event.where(workspace_id: @scenario.workspace_id).maximum(:seq)
     [ task, action ]
   end

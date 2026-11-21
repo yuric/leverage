@@ -325,7 +325,7 @@ class StateMachineTest < Minitest::Test
   end
 
   def test_a_waive_closes_the_errored_gate_of_its_action
-    rows.select { |row| row["command"] == "waive_action" }.each do |row|
+    rows.select { |row| row["command"] == "waive_action" && row["refusal"].nil? }.each do |row|
       assert_includes row["holds_closed"], "check_error", label(row)
     end
   end

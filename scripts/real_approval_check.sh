@@ -428,7 +428,8 @@ def interrupted(_signum, _frame):
     raise KeyboardInterrupt
 
 
-signal.signal(signal.SIGTERM, interrupted)
+for sig in (signal.SIGTERM, signal.SIGHUP):
+    signal.signal(sig, interrupted)
 sys.dont_write_bytecode = True
 try:
     with tempfile.TemporaryDirectory(prefix="leverage-real-approval-check-") as directory:

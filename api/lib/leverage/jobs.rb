@@ -79,9 +79,11 @@ module Leverage
 
     # A stored claim can show its material only to the seat that can still hold it.
     def claim_material_available?(job, seat, at:)
-      active?(seat) && job.workspace_id == seat.workspace_id && job.claimed_by_seat_id == seat.id &&
-        job.state == "claimed" && role_matches?(job, seat) && !due?(job, :run, at) &&
-        !task_of(job)&.content_deleted_at
+      return false unless active?(seat) && job.workspace_id == seat.workspace_id && job.claimed_by_seat_id == seat.id &&
+        job.state == "claimed" && role_matches?(job, seat) && !due?(job, :run, at)
+
+      task = task_of(job)
+      !task&.content_deleted_at && (job.kind != "question" || (task && !%w[done cancelled].include?(task.state)))
     end
 
     # A seat can change role while it holds a job. The old job still occupies
@@ -94,6 +96,7 @@ module Leverage
     # or nil.
     def held(seat, at = Time.current)
       Job.where(workspace_id: seat.workspace_id, claimed_by_seat_id: seat.id, state: "claimed")
+        .where.not(kind: "question", task_id: ended_tasks(seat.workspace_id))
         .order(:claimed_at, :id).find { |job| !due?(job, :run, at) }
     end
 
@@ -187,12 +190,18 @@ module Leverage
     # The oldest queued job of the seat's kinds whose queue time has not
     # run out, of a task the seat never claimed as a builder and that is
     # neither cancelled nor stripped of content. A Done task's jobs
-    # still run while it has content (RC-16). An action batch can queue
+    # still run while it has content (RC-16), except question jobs.
+    # An action batch can queue
     # more than one job at the same effective time.
     def claimable(seat, at)
       Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role)
         .where.not(task_id: built_by(seat)).where.not(task_id: unavailable_tasks(seat.workspace_id)).or(queued_without_task(seat))
+        .where.not(kind: "question", task_id: ended_tasks(seat.workspace_id))
         .order(:queued_at, Arel.sql(ACTION_QUEUE_ORDER), :id).find { |job| !due?(job, :queue, at) }
+    end
+
+    def ended_tasks(workspace_id)
+      Task.where(workspace_id: workspace_id, state: %w[done cancelled]).select(:id)
     end
 
     def unavailable_tasks(workspace_id)
@@ -232,7 +241,7 @@ module Leverage
       ctx.emit(type, subject: job, payload: payload, **fields)
     end
 
-    private_class_method :active?, :placed?, :claimable, :unavailable_tasks, :queued_without_task, :kinds_for, :built_by, :task_of, :event_fields,
-      :emit
+    private_class_method :active?, :placed?, :claimable, :ended_tasks, :unavailable_tasks, :queued_without_task,
+      :kinds_for, :built_by, :task_of, :event_fields, :emit
   end
 end

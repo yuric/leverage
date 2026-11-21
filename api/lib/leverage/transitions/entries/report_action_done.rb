@@ -13,10 +13,8 @@ module Leverage
 
         def refusals(_ctx)
           @last = Actions.last_open?(@action)
-          refusal = state_refusal(@task.state, [ @last ? "last_open_action" : "not_last_open_action" ])
-          return [ refusal ] if refusal
-
           codes = Eligibility.task_refusals(@task, @seat)
+          codes << state_refusal(@task.state, [ @last ? "last_open_action" : "not_last_open_action" ])
           codes << "invalid_state" unless Actions.allows?(@action, command)
           codes << "on_hold" if Eligibility.on_hold?(@task)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[
@@ -32,6 +30,7 @@ module Leverage
           Leases.end_lease(ctx, @task)
           @task.update!(state: "done", holder_seat_id: nil)
           ctx.emit("task.done", task: @task, payload: {})
+          Questions.withdraw_jobs(ctx, @task)
         end
       end
     end

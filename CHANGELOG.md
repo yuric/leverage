@@ -24,6 +24,10 @@ once it makes its first release.
 - The bundled MCP server exposes the agent interface for seats that
   connect on their own. All seven shipped rules act, and outward action
   approvals have their own eval suite.
+- Completing a task withdraws its unanswered question jobs. An
+  outstanding Approval item is answered before the action can be waived.
+  Content deletion clears stored check reasons and evidence. The spending
+  fields share the Mac’s decimal separator and reject out-of-range amounts.
 
 - Added rule checks: rules with versions in Settings, checks by an
   orchestrator agent, tasks that wait on a check, letting a check through

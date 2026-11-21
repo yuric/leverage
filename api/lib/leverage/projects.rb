@@ -16,7 +16,7 @@ module Leverage
 
     def add_spend(ctx, project_id, amount)
       project = Project.find_by!(id: project_id, workspace_id: ctx.workspace.id)
-      project.update!(spent: project.spent + amount)
+      project.update!(spent: Costs.total(project.spent, amount))
       project
     end
 

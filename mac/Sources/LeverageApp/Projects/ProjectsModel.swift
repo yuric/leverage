@@ -99,11 +99,7 @@ final class ProjectsModel {
     func budgetRequest(_ input: String) -> ChangeBudgetRequest? {
         let input = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if input.isEmpty { return ChangeBudgetRequest(budget: nil) }
-        let separator = NSRegularExpression.escapedPattern(for: locale.decimalSeparator ?? ".")
-        let pattern = #"^[0-9]+(?:\#(separator)[0-9]{1,2})?$"#
-        guard input.range(of: pattern, options: .regularExpression) != nil,
-              let number = Decimal(string: input, locale: locale)
-        else { return nil }
+        guard let number = SpendingAmount.parse(input, locale: locale) else { return nil }
         return ChangeBudgetRequest(budget: number)
     }
 

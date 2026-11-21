@@ -12,17 +12,18 @@ module Leverage
       unless Actions.first_approved_open(task)
         Leases.end_lease(ctx, task)
         task.update!(state: "done", holder_seat_id: nil, resume_pending_since: nil)
-        return ctx.emit("task.done", task: task, payload: {})
+        done = ctx.emit("task.done", task: task, payload: {})
+        Questions.withdraw_jobs(ctx, task)
+        return done
       end
       seat = builder(task)
-      if by&.type == "hold.closed" && by.payload["lease_seat_id"]
-        task.reload
-        grant_lease(ctx, task, seat, paused: Holds.pausing?(task))
-        return place_lease(ctx, task, seat, cause: by)
-      end
-      return if task.holder_seat_id
+      return lose_builder(ctx, task, cause: by) unless seat&.enabled && seat.removed_at.nil?
 
-      lose_builder(ctx, task, cause: by) unless seat&.enabled && seat.removed_at.nil?
+      return unless by&.type == "hold.closed" && by.payload["lease_seat_id"]
+
+      task.reload
+      grant_lease(ctx, task, seat, paused: Holds.pausing?(task))
+      place_lease(ctx, task, seat, cause: by)
     end
 
     def reenter_action(ctx, action, trigger)

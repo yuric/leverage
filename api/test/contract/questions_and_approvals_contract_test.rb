@@ -96,7 +96,7 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
     assert_equal "working", rework["to"]
     assert_includes rework["guard"], "no_action_started"
     waive = rows("waive_action").find { |row| row["guard"].include?("builder_holds_task") }
-    assert_equal %w[not_last_open_action approvals_complete builder_holds_task], waive&.fetch("guard")
+    assert_equal %w[not_held_owner_approval not_last_open_action approvals_complete builder_holds_task], waive&.fetch("guard")
     assert_nil waive["builder_lease"]
     assert_includes waive["note"], "lease_seat_id"
   end

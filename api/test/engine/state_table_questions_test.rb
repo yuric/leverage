@@ -75,7 +75,7 @@ class StateTableQuestionsTest < ActiveSupport::TestCase
   end
 
   StateTableCases.define(self, %w[answer_question]) do |kase|
-    task = task_in("done")
+    task = task_in("working")
     outcomes = kase.refusal ? %w[open answered] : %w[passed_on overturned]
     outcomes.each do |outcome|
       question = scenario.question(task, outcome: outcome, blocking: false)
@@ -89,7 +89,7 @@ class StateTableQuestionsTest < ActiveSupport::TestCase
           question.reload.attributes.values_at("outcome", "answer", "basis", "answered_by_kind", "answered_by_id")
       end
     end
-    assert_equal "done", task.reload.state
+    assert_equal "working", task.reload.state
   end
 
   StateTableCases.define(self, %w[overturn_answer]) do |kase|

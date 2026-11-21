@@ -57,6 +57,9 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
         scenario.append("action.overturn_recorded", task: @task, subject: @action, actor_kind: "owner", actor_id: scenario.owner.id)
       end
     end
+    if @guard.include?("held_owner_approval")
+      scenario.hold(@task, reason: "owner_approval", facts: { action_id: @action.id })
+    end
     if @guard.include?("held_action_unconfirmed")
       scenario.hold(@task, reason: "action_unconfirmed", facts: { action_ids: [ @action.id ],
         approved_by_kind: "owner", approved_by_id: scenario.owner.id, builder_announced_start: false })
@@ -66,6 +69,7 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
   end
 
   def action_state
+    return "requested" if @guard.include?("held_owner_approval")
     return "done" if @guard.include?("approved_action_done")
     return "started" if @guard.include?("action_started")
     return "approved" if %w[mark_action_done offer_task_again overturn_approval].include?(@row.command)

@@ -785,7 +785,9 @@ with a test that failed first:
   report spend are self-connected seats. A real provider tool carried out
   no outward action. Lease expiry after approval was tested through HTTP.
   The stand-in end-to-end builder lost the lease by releasing the task.
-  The MCP heartbeat window was tested with a manual clock.
+  The MCP heartbeat window was tested with a manual clock. The
+  orchestrator's question prompt and its answer and basis parser ran
+  against stand-in tools.
 
 ## What the Rule checks milestone proves, and how far
 
@@ -1194,6 +1196,9 @@ so the model "the tool's default" picked there is not known.
 Each passed only after `leverage:verify_log` and the secret scan. No
 outward action was carried out: the approved action of the approval
 check is the stand-in builder touching a file in the script's folder.
+The Claude Code MCP developer check used a stand-in reviewer, turned
+every rule off and supplied its own MCP settings. It pre-allowed the
+leverage tools and confirmed the defaults in its prompt.
 The real checks ran on the code at 4dd2872, before the documents step
 and the adversarial review.
 
@@ -2024,6 +2029,16 @@ skeleton's pull request description, as rule AR-004 asks.
 
     The PRD changes and the alternatives are listed below.
 
+    - **Review, approval and waiver.** The lifecycle row now requires
+      Approve or Stop before waiving an action with an open Approval
+      item. This follows the Approval choices and the Holds table. The
+      alternative was to add Waive to the Approval choices.
+    - **Review, questions at Done.** Done withdraws live question jobs.
+      The owner can still answer a non-blocking question passed on
+      earlier. Orchestrator answers become final when the task ends. An
+      alternative was to let late jobs report cost and end quietly, leaving
+      them eligible to claim after Done.
+
     - **T-1.** Give an objection after completion an event. The alternative is the two action columns in AP-13.
     - **T-2.** Record the Claude Code MCP proof and the criterion and action start boundaries. The alternative is to wait for another client's or the owner's check before describing the MCP connection.
     - **T-3.** Give a seat connecting through MCP its tool-based landing prompt. The alternative is one HTTP prompt for every seat.
@@ -2057,7 +2072,7 @@ skeleton's pull request description, as rule AR-004 asks.
     - **Builder and cost guards.** Distinguish the previous builder already holding the task and close a budget hold through the contract commands. The alternative is to treat that builder as busy and require Change cap separately.
     - **Interfaces.** Add typed question and approval job inputs and results, workspace settings read and bounds, the landing prompt connection selector and the optional owner inbox detail. The alternative is generic job data and separate commands or reads for the new forms.
     - **Remaining PRD gaps.** Reviewers report cost with a verdict only, despite the Roles text. The alternative is a reviewer cost call. There is no command to change credential strength. A failure routed to the orchestrator still goes to the owner (RD-24). The alternatives are a credential edit command and defining the orchestrator's action on that failure.
-    - **Held-out integrity.** Two frozen held-out candidates disagree with their contract action. The real held-out run refuses that set. The alternatives are a separately reviewed, explicitly refrozen future set or keeping the shipped wording and the measured main-set results.
+    - **Held-out integrity.** The offline checker warns about two frozen candidates that disagree with their contract action. A real held-out run refuses that set. Changing the approval wording is blocked until the owner decides. A separately reviewed, refrozen set would require amending the PRD's “No case changes after that run” rule. The other option keeps the shipped wording and measured main-set results.
 
 ## Waiting for the owner
 

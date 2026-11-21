@@ -251,8 +251,8 @@ module Leverage
     def settle(pending, outcome, state: "completed")
       pending.update!(state: state, params: nil)
       row = Command.find_by(caller_kind: pending.requester_kind, caller_id: pending.requester_id, key: pending.command_key)
-      row&.update!(outcome: outcome.outcome.to_s, result: outcome.result, refusal: outcome.refusal&.to_h, notify: true,
-        read_at: nil)
+      row&.update!(outcome: outcome.outcome.to_s, result: outcome.result, refusal: Idempotency.stored_refusal(outcome.refusal),
+        notify: true, read_at: nil)
     end
 
     # A provisional claim's reservation lapses (RE-5): the claimant no

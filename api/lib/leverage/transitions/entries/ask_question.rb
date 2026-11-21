@@ -8,8 +8,6 @@ module Leverage
         end
 
         def refusals(_ctx)
-          return [ "forbidden" ] unless @seat.role == "builder"
-
           codes = Eligibility.task_refusals(@task, @seat)
           codes << state_refusal(@task.state)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[Briefing.acknowledgement(@task, seat: @seat)]

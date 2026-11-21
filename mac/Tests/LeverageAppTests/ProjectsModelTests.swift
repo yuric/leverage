@@ -187,12 +187,12 @@ struct ProjectsModelTests {
             watch.cancel()
             feed.stop()
         }
-        guard await ShellFixtures.eventually(timeout: .seconds(1), { projects.projects.first?.openTasks == 1 }) else {
+        guard await ShellFixtures.eventually({ projects.projects.first?.openTasks == 1 }) else {
             Issue.record("The first project read did not show the open task.")
             return
         }
         rows.value = [Self.project()]
         sent.value = true
-        #expect(await ShellFixtures.eventually(timeout: .seconds(1)) { projects.projects.first?.openTasks == 0 })
+        #expect(await ShellFixtures.eventually { projects.projects.first?.openTasks == 0 })
     }
 }

@@ -56,7 +56,8 @@ module Leverage
 
       def page(workspace_id, task, as_of_seq)
         criteria = Criterion.where(task_id: task.id, removed_at: nil).order(:position, :id).to_a
-        evidence = Evidence.where(criterion_id: criteria.map(&:id)).order(:created_at, :id).group_by(&:criterion_id)
+        evidence = Evidence.where(criterion_id: criteria.map(&:id)).where.not(value: nil)
+          .order(:created_at, :id).group_by(&:criterion_id)
         reviews = Review.where(task_id: task.id).order(:round, :created_at, :id).to_a
         events = Event.where(workspace_id: workspace_id, task_id: task.id).order(:seq).to_a
         items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task.id, state: "open")

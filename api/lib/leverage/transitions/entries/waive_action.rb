@@ -15,9 +15,13 @@ module Leverage
         end
 
         def refusals(_ctx)
-          # Every listed Finishing row accepts a waivable action. Which
-          # branch applies depends on the actions left by the waive.
-          guards = waivable? ? [ "not_last_open_action", "approvals_pending" ] : []
+          guards = if Actions.owner_approval_holds(@action).any?
+            [ "held_owner_approval" ]
+          elsif waivable?
+            [ "not_held_owner_approval", "not_last_open_action", "approvals_pending" ]
+          else
+            []
+          end
           [ state_refusal(@task.state, guards) ].compact
         end
 
@@ -40,7 +44,7 @@ module Leverage
         end
 
         def answered_holds
-          open = Holds.open_holds(@task).select { |hold| %w[action_stopped owner_approval action_unconfirmed].include?(hold.reason) }
+          open = Holds.open_holds(@task).select { |hold| %w[action_stopped action_unconfirmed].include?(hold.reason) }
           facts = InboxItem.where(workspace_id: @task.workspace_id, hold_id: open.map(&:id), state: "open").pluck(:hold_id, :facts).to_h
           open.select do |hold|
             item = facts.fetch(hold.id, {})
