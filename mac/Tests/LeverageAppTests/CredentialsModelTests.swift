@@ -237,6 +237,96 @@ struct CredentialsModelTests {
         #expect(model.rows.map(\.id) == [Fixtures.secondLoginID])
     }
 
+    @Test("a lost Remove answer is resolved by key if a reread finds the account gone")
+    func lostRemoveAnswer() async throws {
+        let owner = owner()
+        let runtime = FakeAppRuntime()
+        let submitted = Locked<IdempotencyKey?>(nil)
+        owner.script {
+            $0.removeCredential = { _, key in
+                submitted.update { $0 = key }
+                throw URLError(.networkConnectionLost)
+            }
+            $0.command = { key in
+                #expect(key == submitted.value)
+                return Fixtures.plain(.removeCredential, key: key)
+            }
+        }
+        let model = makeModel(owner, runtime: runtime)
+        await model.load()
+        model.askToRemove(Fixtures.loginID)
+        await model.remove(Fixtures.loginID)
+        #expect(runtime.fakeHelper.messages.value.isEmpty)
+        owner.script { $0.credentials = { CredentialsList(credentials: [], asOfSeq: 12) } }
+        await model.load()
+        await model.load()
+        #expect(Fixtures.calls(owner, .removeCredential).count == 1)
+        #expect(Fixtures.calls(owner, .getOwnerCommand).count == 1)
+        let messages = runtime.fakeHelper.messages.value
+        try #require(messages.count == 1)
+        if case .forget(let id) = messages[0] {
+            #expect(id == Fixtures.loginID)
+        } else {
+            Issue.record("Completed Remove must send forget")
+        }
+    }
+
+    @Test("Verify and Verify all cannot overlap and duplicate a login's checks")
+    func verifyDoesNotOverlap() async {
+        let owner = owner()
+        let modelRef = Locked<CredentialsModel?>(nil)
+        owner.script {
+            $0.verifyAllCredentials = { key in
+                await modelRef.value?.verify(Fixtures.loginID)
+                return .completed(QueuedRequests(helperRequestIDs: []), key: key.value, command: .verifyCredential)
+            }
+            $0.verifyCredential = { _, key in
+                await modelRef.value?.verifyAll()
+                return Fixtures.plain(.verifyCredential, key: key)
+            }
+        }
+        let model = makeModel(owner)
+        modelRef.update { $0 = model }
+        defer { modelRef.update { $0 = nil } }
+        await model.load()
+        await model.verifyAll()
+        #expect(Fixtures.calls(owner, .verifyCredential).isEmpty)
+        owner.forgetCalls()
+        await model.verify(Fixtures.loginID)
+        #expect(Fixtures.calls(owner, .verifyAllCredentials).isEmpty)
+        #expect(Fixtures.calls(owner, .verifyCredential).count == 1)
+    }
+
+    @Test("a later healthy usage reading clears a Refresh failure on that row")
+    func refreshRecovery() async {
+        let owner = owner()
+        let request = requestID
+        owner.script {
+            $0.refreshUsage = { key in
+                .completed(QueuedRequests(helperRequestIDs: [request]), key: key.value, command: .refreshUsage)
+            }
+            $0.helperRequest = { _, _, _ in
+                Fixtures.request(request, kind: .readUsage, state: .failed, credential: Fixtures.loginID)
+            }
+        }
+        let model = makeModel(owner)
+        await model.load()
+        await model.refresh()
+        #expect(model.failure(for: Fixtures.loginID) == "Unavailable right now.")
+        let at = now
+        owner.script {
+            $0.credentials = {
+                let credential = Fixtures.credential(Fixtures.loginID, name: "Personal").credential
+                let reading = CredentialReading(
+                    credentialID: credential.id, observedAt: at.addingTimeInterval(1),
+                    state: .ok, toolVersion: nil, figures: [], resets: nil)
+                return CredentialsList(credentials: [CredentialWithReading(credential: credential, reading: reading)], asOfSeq: 11)
+            }
+        }
+        await model.load()
+        #expect(model.failure(for: Fixtures.loginID) == nil)
+    }
+
     @Test("each bulk command follows its answered requests and associates progress and failure by credential ID")
     func followsBulkRequests() async {
         let owner = owner()
@@ -604,7 +694,9 @@ struct CredentialsModelTests {
             }
         }
         let feed = EventFeed(owner: owner, waitSeconds: 25, retryDelay: .milliseconds(5))
-        let model = CredentialsModel(api: owner, noteRead: { feed.noteRead(asOfSeq: $0) }, now: { now }, timing: .quick)
+        let model = CredentialsModel(
+            api: owner, noteRead: { feed.noteRead(asOfSeq: $0) }, now: { now }, timing: .quick,
+            helper: FakeAppRuntime().helper)
         model.attach(to: feed)
         await model.load()
         #expect(model.rows.count == 2)

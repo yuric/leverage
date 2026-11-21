@@ -65,6 +65,8 @@ struct CredentialRowTests {
         #expect(row(reading: .unavailable, version: "codex 0.1.2 (built)", testedVersions: ["v0.1.2"]).readingLine ==
                 "Unavailable right now.")
         #expect(row(reading: .unavailable, testedVersions: ["v0.1.2"]).readingLine == "Unavailable right now.")
+        #expect(row(reading: .unavailable, version: "unknown", testedVersions: ["v0.1.2"]).readingLine ==
+                "Unavailable right now.")
         #expect(row(kind: .apiToken, provider: .openrouter, reading: .unavailable).readingLine == "Unavailable right now.")
     }
 
@@ -72,6 +74,7 @@ struct CredentialRowTests {
     func signedOutReading() {
         let active = row(reading: .signedOut)
         #expect(!active.isSignedOut)
+        #expect(active.usage.isEmpty)
         #expect(active.readingLine == "Looked signed out when last read. Choose Verify to check.")
         #expect(row(state: .signedOut).isSignedOut)
     }
