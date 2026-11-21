@@ -269,7 +269,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_3",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -427,7 +428,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_5",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],

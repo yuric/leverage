@@ -217,7 +217,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_2",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -2591,7 +2592,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_35",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -4490,7 +4492,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_57",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -6513,7 +6516,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_84",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -7727,7 +7731,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_101",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
@@ -8147,7 +8152,8 @@
             "cause_id": null,
             "command_id": "$key:add_task_107",
             "payload": {
-              "state": "backlog"
+              "state": "backlog",
+              "added_action_ids": []
             }
           }
         ],
