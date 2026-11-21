@@ -114,11 +114,8 @@ module Leverage
         "mark_action_done" => "v1/owner/actions#mark_done",
         "overturn_approval" => "v1/owner/actions#overturn",
         "get_workspace_settings" => "v1/owner/settings#show",
-        "change_workspace_settings" => "v1/owner/settings#update"
-      }.freeze
-
-      # Credentials milestone operations staged for the HTTP package (CT-1).
-      PENDING = {
+        "change_workspace_settings" => "v1/owner/settings#update",
+        # Milestone 6's six (its plan §2.3, CT-1).
         "rename_credential" => "v1/owner/credentials#rename",
         "remove_credential" => "v1/owner/credentials#remove",
         "reorder_credentials" => "v1/owner/credentials#reorder",
@@ -126,6 +123,9 @@ module Leverage
         "verify_all_credentials" => "v1/owner/credentials#verify_all",
         "report_reading" => "v1/helper/credentials#readings"
       }.freeze
+
+      # The seam assertion keeps this until API integration (CT-1).
+      PENDING = {}.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
       # path the registry's path with {id} written :id.
