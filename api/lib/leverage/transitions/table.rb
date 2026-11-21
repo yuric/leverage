@@ -51,10 +51,12 @@ module Leverage
 
         # The entry class of a command. Raises UnknownCommand for a command
         # with no entry.
-        def entry_for(command)
+        def entry_for(command, allow_pending: false)
           command = command.to_s
+          unless include?(command) || (allow_pending && PENDING.include?(command))
+            raise UnknownCommand, "#{command} has no entry"
+          end
           return @overrides.fetch(command) if @overrides.key?(command)
-          raise UnknownCommand, "#{command} has no entry" unless known?(command)
 
           class_name(command).constantize
         end

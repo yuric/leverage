@@ -252,7 +252,8 @@ module Leverage
 
     def apply_job_timer(ctx, timer, job, applied)
       applied << job.id
-      apply(ctx, Transitions::Table.entry_for(timer).new(timer, targets: [ job ]))
+      entry = Transitions::Table.entry_for(timer, allow_pending: true).new(timer, targets: [ job ])
+      apply(ctx, entry)
     end
 
     # Applies the due lease timers a claim would otherwise find in its way:
