@@ -8,6 +8,49 @@ class ContentDeletionTest < ActiveSupport::TestCase
 
   setup { use_scenario }
 
+  %w[task project].each do |target|
+    test "#{target} content deletion resolves the unanswered item on a Done task" do
+      builder = own_seat
+      task = ready_to_submit(builder)
+      project = scenario.project if target == "project"
+      assert_completed command("ask_question", builder, { "id" => task.id, "text" => "Which sample?",
+        "assumption" => "The short one.", "blocking" => false })
+      items = InboxItem.where(workspace_id: scenario.workspace_id, about_kind: "task", about_id: task.id)
+      item = items.where(state: "open").sole
+      assert_equal "question_passed_on", item.kind
+      assert_nil item.hold_id
+
+      assert_completed command("submit", builder, submit_params(task))
+      if project
+        assert_completed owner_command("change_task_project", { id: task.id, project_id: project.id })
+      end
+      task.reload
+      reviewer = own_seat(role: "reviewer")
+      review = scenario.review(task, reviewer: reviewer)
+      assert_completed command("acknowledge_review_briefing", reviewer, { "id" => review.id,
+        "briefing_hash" => Leverage::Briefing.hash_for(task, seat: reviewer, review: review) })
+      assert_completed command("pass_review", reviewer, pass_params(review))
+      assert_equal "done", task.reload.state
+      assert_equal "open", item.reload.state
+
+      other = scenario.question(scenario.task(state: "working", builder: builder), outcome: "passed_on", blocking: false)
+      params = project ? { project_id: project.id } : { task_id: task.id }
+      last_at = Event.where(workspace_id: scenario.workspace_id).maximum(:at)
+      written = with_clock_behind(last_at) { events_written { assert_completed owner_command("delete_content", params) } }
+
+      assert_empty items.where(state: "open")
+      assert InboxItem.exists?(workspace_id: scenario.workspace_id, about_kind: "task", about_id: other.task_id, state: "open")
+      expected = %w[inbox.resolved content.deleted]
+      assert_equal expected, written.select { |event| event.task_id == task.id }.map(&:type)
+      resolved = written.find { |event| event.type == "inbox.resolved" }
+      assert_equal [ item.id, { "choice" => "cancel" } ], [ resolved.subject_id, resolved.payload ]
+      assert_equal [ "resolved", "owner", scenario.owner.id, resolved.at ],
+        item.reload.attributes.values_at("state", "resolved_by_kind", "resolved_by_id", "resolved_at")
+      assert_empty Leverage::Replay.diff(scenario.workspace_id)
+      assert_empty Leverage::LogAudit.call(scenario.workspace_id)
+    end
+  end
+
   test "task deletion blanks each content column and keeps all other fields and neighboring content" do
     project = project_with_brief
     target = task_with_content(scenario, project)
@@ -142,12 +185,10 @@ class ContentDeletionTest < ActiveSupport::TestCase
     before_steps = step_snapshot
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
 
-    # Like ClockStepBackTest, make the clock read earlier than the last event.
-    lock = Leverage::WorkspaceLock
-    original_clock = lock.method(:clock)
     last_at = before_events.last.fetch("at")
-    lock.define_singleton_method(:clock) { last_at - 0.040 }
-    written = events_written { assert_completed owner_command("delete_content", { task_id: task.id }) }
+    written = with_clock_behind(last_at) do
+      events_written { assert_completed owner_command("delete_content", { task_id: task.id }) }
+    end
 
     assert_equal [ "content.deleted" ], written.map(&:type)
     event = written.first
@@ -157,8 +198,6 @@ class ContentDeletionTest < ActiveSupport::TestCase
       .order(:seq).map(&:attributes)
     assert_equal before_steps, step_snapshot
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
-  ensure
-    lock.define_singleton_method(:clock, original_clock) if original_clock
   end
 
   test "project deletion blanks its own content and each undeleted terminal task in event order" do
@@ -202,6 +241,16 @@ class ContentDeletionTest < ActiveSupport::TestCase
   end
 
   private
+
+  # Like ClockStepBackTest, make the clock read earlier than the last event.
+  def with_clock_behind(at)
+    lock = Leverage::WorkspaceLock
+    original = lock.method(:clock)
+    lock.define_singleton_method(:clock) { at - 0.040 }
+    yield
+  ensure
+    lock.define_singleton_method(:clock, original)
+  end
 
   def command_receipt(seat, key)
     Leverage::Reads::CommandOutcome.call(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: seat.id, key: key)

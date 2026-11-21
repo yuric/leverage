@@ -74,6 +74,45 @@ class StateTableQuestionsTest < ActiveSupport::TestCase
     end
   end
 
+  test "the owner can answer a non-blocking passed-on question after Done" do
+    task = task_in("done")
+    question = scenario.question(task, outcome: "passed_on", blocking: false, asking_seat: @builder)
+    item = InboxItem.find_by!(workspace_id: scenario.workspace_id, about_id: task.id, kind: "question_passed_on")
+    assert_equal "open", item.state
+
+    written = events_written do
+      assert_completed owner_command("answer_question", { "id" => question.id, "answer" => "The long sample." })
+    end
+
+    assert_equal %w[question.answered inbox.resolved], types(written)
+    assert_equal [ "answered", "The long sample." ], question.reload.attributes.values_at("outcome", "answer")
+    assert_equal "resolved", item.reload.state
+    assert_equal "done", task.reload.state
+  end
+
+  test "the owner cannot answer a non-blocking passed-on question after Cancel" do
+    task = task_in("working")
+    question = scenario.question(task, outcome: "passed_on", blocking: false)
+    assert_completed owner_command("cancel", { "id" => task.id })
+
+    assert_empty events_written {
+      assert_refused "invalid_state", owner_command("answer_question", { "id" => question.id, "answer" => "The long sample." })
+    }
+    assert_equal "passed_on", question.reload.outcome
+  end
+
+  test "the owner cannot answer a non-blocking passed-on question after its content is deleted" do
+    task = task_in("done")
+    question = scenario.question(task, outcome: "passed_on", blocking: false, asking_seat: @builder)
+    assert_completed owner_command("delete_content", { task_id: task.id })
+
+    assert_empty events_written {
+      assert_refused "invalid_state", owner_command("answer_question", { "id" => question.id, "answer" => "The long sample." })
+    }
+    assert_equal "passed_on", question.reload.outcome
+    assert_nil question.answer
+  end
+
   StateTableCases.define(self, %w[answer_question]) do |kase|
     task = task_in("working")
     outcomes = kase.refusal ? %w[open answered] : %w[passed_on overturned]
