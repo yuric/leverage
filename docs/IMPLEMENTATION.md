@@ -62,7 +62,7 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 5 Questions and approvals | `feat/questions-and-approvals` | None yet | In review. The managing agent ran both evals and both developer checks. Local verification and findings are recorded in the pull request description. |
+| Milestone 5 Questions and approvals | `feat/questions-and-approvals` | [#16](https://github.com/yuric/leverage/pull/16) | In review. The managing agent ran both evals and both developer checks. Local verification and findings are recorded in the pull request description. |
 
 ## Milestones
 
@@ -78,7 +78,7 @@ the PRD's milestone list. How the build is run locally is in
 | 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 10 |
 | 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 11. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Merged | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 12. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
-| 5 | Questions and approvals | In review | None yet | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run and pull request checks are ahead. See question 13 and [Measurements](#measurements). |
+| 5 | Questions and approvals | In review | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run and pull request checks are ahead. See question 13 and [Measurements](#measurements). |
 | 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
 | 7 | Analytics page | Not in this build | | See question 1 |
 
@@ -2113,7 +2113,7 @@ run is also listed here until the owner has read it.
 | A handoff between two real logins of one provider | The release line on continuing on another login of the same provider, which the provider-terms record says Anthropic's policy and Google's documents do not clearly allow (question 11, HM-55) |
 | A restore from inside the app, and a copy of the backups off the Mac | Neither is built. A restore is the maintainer's terminal command ([DEPLOY.md](DEPLOY.md#restoring)) |
 | Pull request 15 | The Rule checks milestone is merged. Its AI-assistance boxes remain for the owner. |
-| Questions and approvals pull request (None yet) | Both AI-assistance boxes await the owner's review. |
+| Questions and approvals pull request ([#16](https://github.com/yuric/leverage/pull/16)) | Both AI-assistance boxes await the owner's review. |
 | [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md), [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) and [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) | The owner reads the MCP, Finishing and overturn records. |
 | The owner's MCP run | Connect an agent through MCP from Agents and let the agent finish one task. |
 | The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
