@@ -1,21 +1,21 @@
 import Foundation
 import LeverageKit
 
+private extension EnvironmentKeys {
+    static let evalMaximumToolRuns = "LEVERAGE_EVAL_MAX_TOOL_RUNS"
+    static let evalMaximumSecondTries = "LEVERAGE_EVAL_MAX_SECOND_TRIES"
+}
+
 /// `LeverageRunner eval --inputs <file> --provider <name> --out <file>
 /// [--account-folder <dir>] [--resolve-only]`: the eval suite's harness
-/// (milestone 4 plan section 2.2, RV-3, RV-6, section 2.4). No seat, no
-/// server.
+/// (RV-3, RV-6, AV-3, AV-6). No seat or server.
 ///
 /// Each case's input, which `api/script/evals/build_inputs.rb` built with
-/// `JobInputs`, goes through `CheckJob`'s prompt, tool run (check mode, a
-/// new empty folder, 120 seconds) and parser, with `CheckJob`'s own second
-/// run turned off. A case with no verdict is run once more, for at most 6
-/// cases, and then counts as `none`; at 30 tool runs it stops for good and
-/// writes the cases it did not reach as `none`. One line of JSON per case
-/// goes to `--out`: the case, the verdict (`passed`, `failed` or `none`),
-/// the reason, the tokens, the seconds, the tool runs, the tool's version
-/// and the model ("the tool's default": the drivers read no model name from
-/// a tool's answer, and the run sets none).
+/// `JobInputs`, goes through `CheckJob` or `ApprovalJob` with its own
+/// second run turned off. The eval can retry each case once within the
+/// selected set's retry and tool-run ceilings. One line of JSON per case
+/// gives the verdict or decision (or `none`), reason, tokens, seconds,
+/// tool runs, tool version and model.
 ///
 /// It refuses to start (exit 2) unless `LEVERAGE_EVAL` names the suite and
 /// exactly one of these holds: `LEVERAGE_TOOL_DIR` is set (a run against
@@ -31,19 +31,15 @@ import LeverageKit
 /// real path `LEVERAGE_DEV_TOOL_LOGIN=1`, which `scripts/eval_rule.sh` sets,
 /// lets Claude or Codex use the sign-in it already holds (PV-6).
 ///
-/// Exit 0 when every case has its line (whatever the verdicts), 1 when the
+/// Exit 0 when every case has its line, 1 when the
 /// run could not be made (no tool, an unreadable inputs file), 2 for a
 /// refused start. The lines it prints name the tool and each case's id and
-/// verdict, never a prompt, an answer or a reason.
+/// result, never a prompt, an answer or a reason.
 enum EvalRun {
     static let exitCode: Int32 = 2
 
     /// The suites this harness runs; `LEVERAGE_EVAL` names one.
-    static let suites = ["specific-details"]
-    /// RV-6: a full run of one model makes at most 30 tool runs, 6 of them
-    /// second tries.
-    static let maximumToolRuns = 30
-    static let maximumSecondTries = 6
+    static let suites = Suite.allCases.map(\.rawValue)
     /// Each tool run's limit (RV-6), as the probe's.
     static let toolRunSeconds = 120
     /// The model a line names when the tool reports none.
@@ -63,9 +59,11 @@ enum EvalRun {
     ) async -> Int32 {
         let options: Options
         let path: ToolSource
+        let limits: Limits
         do {
             options = try Options(arguments: arguments)
             path = try ToolSource(environment: environment)
+            limits = try Limits(suite: path.suite, environment: environment)
         } catch let refusal as Refusal {
             write("eval: refused: \(refusal.reason)")
             return exitCode
@@ -75,17 +73,19 @@ enum EvalRun {
 
         // The inputs are read before any tool is looked for, so that a run
         // that cannot be made stops before anything is resolved or started.
-        var suite: Inputs?
+        var cases: [Inputs.Case]?
         if !options.resolveOnly {
             do {
-                suite = try Inputs.read(options.inputs)
-            } catch {
-                write("eval: the inputs file cannot be read (\(error))")
-                return 1
-            }
-            if let name = suite?.suite, name != path.suite {
-                write("eval: refused: the inputs are the suite \(name), not \(path.suite)")
+                cases = try Inputs.read(options.inputs, suite: path.suite)
+            } catch let refusal as Refusal {
+                write("eval: refused: \(refusal.reason)")
                 return exitCode
+            } catch let error as Inputs.Invalid {
+                write("eval: the inputs file cannot be read (\(error.reason))")
+                return 1
+            } catch {
+                write("eval: the inputs file cannot be read")
+                return 1
             }
         }
 
@@ -95,7 +95,7 @@ enum EvalRun {
             return 1
         }
         write("eval: \(options.provider.rawValue): tool \(tool)")
-        guard let suite else { return 0 }
+        guard let cases else { return 0 }
 
         let configuration: ToolConfiguration
         let driver: ProcessToolDriver
@@ -111,7 +111,7 @@ enum EvalRun {
             return 1
         }
         let version = await toolVersion(entry, configuration: configuration)
-        write("eval: \(options.provider.rawValue): version \(version), \(suite.cases.count) cases")
+        write("eval: \(options.provider.rawValue): version \(version), \(cases.count) cases")
 
         let base = configuration.parentEnvironment[EnvironmentKeys.tmpdir].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.temporaryDirectory
@@ -126,26 +126,25 @@ enum EvalRun {
         }
         defer { try? FileManager.default.removeItem(at: workRoot) }
 
-        let counting = CountingDriver(driver: driver, ceiling: maximumToolRuns)
+        let counting = CountingDriver(driver: driver, ceiling: limits.toolRuns)
         let context = FlowContext(
             api: NoServer(), driver: counting, timing: .standard, log: Log(component: "eval", write: { _ in }),
             state: RunnerState(), workRoot: workRoot, home: configuration.home,
             interruption: Interruption(provider: options.provider, hasCredential: false))
         let lines = Lines(path: options.out)
         var secondTries = 0
-        for item in suite.cases {
-            var line = Line(case: item.id, toolVersion: version)
-            if counting.runs >= maximumToolRuns {
+        for item in cases {
+            var line = Line(case: item.id, suite: path.suite, toolVersion: version)
+            if counting.runs >= limits.toolRuns {
                 line.notReached = true
             } else {
                 let started = Date()
                 let before = counting.runs
-                var verdict = await check(item.input, context: context)
-                if verdict == nil, secondTries < maximumSecondTries, counting.runs < maximumToolRuns {
+                line.result = await evaluate(item.input, context: context)
+                if line.result == nil, secondTries < limits.secondTries, counting.runs < limits.toolRuns {
                     secondTries += 1
-                    verdict = await check(item.input, context: context)
+                    line.result = await evaluate(item.input, context: context)
                 }
-                line.verdict = verdict
                 line.toolRuns = counting.runs - before
                 line.tokens = counting.tokens(since: before)
                 line.seconds = (Date().timeIntervalSince(started) * 1000).rounded() / 1000
@@ -156,25 +155,36 @@ enum EvalRun {
                 write("eval: the output cannot be written (\(error))")
                 return 1
             }
-            write("eval: \(options.provider.rawValue): \(item.id): \(line.verdictWord) "
+            write("eval: \(options.provider.rawValue): \(item.id): \(line.resultWord) "
                 + "(\(line.toolRuns) tool run\(line.toolRuns == 1 ? "" : "s"))")
         }
         write("eval: \(options.provider.rawValue): \(counting.runs) tool runs, \(secondTries) second tries")
         return 0
     }
 
-    /// One run of `CheckJob` on the input, its own second run off: the
-    /// verdict, or nil when none came.
-    static func check(_ input: RuleCheckJobInput, context: FlowContext) async -> RuleCheckVerdict? {
-        // The claim's due time leaves the tool its whole limit: CheckJob
-        // ends the tool 10 seconds before it (RD-34).
-        let claim = JobClaim(
-            jobID: UUID(), kind: .ruleCheck, input: .ruleCheck(input),
-            runDueAt: context.timing.now().addingTimeInterval(Double(toolRunSeconds) + CheckJob.endsBeforeDue + 1))
-        guard case .result(let request)? = try? await CheckJob(context: context, allowsSecondRun: false)
-            .run(claim, input: input),
-            case .ruleCheck(let verdict) = request.result else { return nil }
-        return verdict
+    /// One run through the same job, prompt and parser a claimed job uses.
+    private static func evaluate(_ input: Inputs.Payload, context: FlowContext) async -> CaseResult? {
+        // The claim leaves the tool its whole limit plus the RD-34 cushion.
+        let due = context.timing.now().addingTimeInterval(Double(toolRunSeconds) + CheckJob.endsBeforeDue + 1)
+        let end: JobRunEnd?
+        switch input {
+        case .ruleCheck(let check):
+            let claim = JobClaim(jobID: UUID(), kind: .ruleCheck, input: .ruleCheck(check), runDueAt: due)
+            end = try? await CheckJob(context: context, allowsSecondRun: false).run(claim, input: check)
+        case .approval(let approval, let payload):
+            let claim = JobClaim(jobID: UUID(), kind: .approval, input: .other(.approval, payload), runDueAt: due)
+            end = try? await ApprovalJob(context: context, allowsSecondRun: false).run(claim, input: approval)
+        }
+        guard case .result(let request)? = end else { return nil }
+        switch request.result {
+        case .ruleCheck(let verdict):
+            return CaseResult(word: verdict.result.rawValue, reason: verdict.reason)
+        case .approval(let decision):
+            let word = decision.decision == .passToOwner ? "ask_owner" : decision.decision.rawValue
+            return CaseResult(word: word, reason: decision.reason)
+        case .contractDraft, .question:
+            return nil
+        }
     }
 
     // MARK: - The tool
@@ -248,6 +258,34 @@ enum EvalRun {
         let reason: String
     }
 
+    enum Suite: String, CaseIterable {
+        case specificDetails = "specific-details"
+        case approvesActions = "approves-actions"
+
+        var resultKey: Line.CodingKeys { self == .approvesActions ? .decision : .verdict }
+    }
+
+    private struct Limits {
+        let toolRuns: Int
+        let secondTries: Int
+
+        init(suite: Suite, environment: [String: String]) throws {
+            // Keep the main-set hard ceilings even for direct invocations.
+            // The script selects lower ceilings for the held-out set.
+            let maximumToolRuns = suite == .approvesActions ? 36 : 30
+            toolRuns = try Self.read(EnvironmentKeys.evalMaximumToolRuns, in: 1...maximumToolRuns, environment)
+            secondTries = try Self.read(EnvironmentKeys.evalMaximumSecondTries, in: 0...6, environment)
+        }
+
+        private static func read(_ key: String, in range: ClosedRange<Int>, _ environment: [String: String]) throws -> Int {
+            guard let raw = environment[key] else { return range.upperBound }
+            guard let value = Int(raw), range.contains(value) else {
+                throw Refusal(reason: "\(key) must be an integer from \(range.lowerBound) to \(range.upperBound)")
+            }
+            return value
+        }
+    }
+
     /// The arguments.
     struct Options {
         var inputs = ""
@@ -298,7 +336,7 @@ enum EvalRun {
 
     /// Where the tool may come from: the stand-ins, or the Mac's own tools.
     struct ToolSource {
-        let suite: String
+        let suite: Suite
         /// The stand-ins' `bin/`; nil on the real path.
         let toolDir: String?
 
@@ -306,7 +344,7 @@ enum EvalRun {
             func value(_ name: String) -> String? {
                 environment[name].flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
             }
-            guard let suite = value(EnvironmentKeys.eval), EvalRun.suites.contains(suite) else {
+            guard let name = value(EnvironmentKeys.eval), let suite = Suite(rawValue: name) else {
                 throw Refusal(reason: "\(EnvironmentKeys.eval) must name the suite (\(EvalRun.suites.joined(separator: ", ")))")
             }
             let toolDir = value(EnvironmentKeys.toolDir)
@@ -343,44 +381,89 @@ enum EvalRun {
     }
 
     /// The inputs file `build_inputs.rb` writes.
-    struct Inputs: Decodable {
-        struct Case: Decodable {
+    private enum Inputs {
+        enum Payload {
+            case ruleCheck(RuleCheckJobInput)
+            case approval(ApprovalJobInput, JSONValue)
+        }
+
+        struct Case {
             let id: String
-            let input: RuleCheckJobInput
+            let input: Payload
         }
 
-        let suite: String
-        let cases: [Case]
+        struct Invalid: Error {
+            let reason: String
+        }
 
-        static func read(_ path: String) throws -> Inputs {
-            let inputs = try JSONDecoder().decode(Inputs.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
-            guard !inputs.cases.isEmpty else { throw Refusal(reason: "it holds no case") }
-            guard Set(inputs.cases.map(\.id)).count == inputs.cases.count else {
-                throw Refusal(reason: "two cases share an id")
+        private struct Header: Decodable {
+            let suite: String
+        }
+
+        private struct File<Input: Decodable>: Decodable {
+            let cases: [Entry<Input>]
+        }
+
+        private struct Entry<Input: Decodable>: Decodable {
+            let id: String
+            let input: Input
+        }
+
+        static func read(_ path: String, suite: Suite) throws -> [Case] {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let decoder = JSONDecoder()
+            let name = try decoder.decode(Header.self, from: data).suite
+            guard name == suite.rawValue else {
+                throw Refusal(reason: "the inputs are for a different suite than \(suite.rawValue)")
             }
-            return inputs
+            let cases: [Case]
+            switch suite {
+            case .specificDetails:
+                cases = try decoder.decode(File<RuleCheckJobInput>.self, from: data).cases.map {
+                    Case(id: $0.id, input: .ruleCheck($0.input))
+                }
+            case .approvesActions:
+                cases = try decoder.decode(File<JSONValue>.self, from: data).cases.map {
+                    guard let approval = JobInput.other(.approval, $0.input).approvalInput else {
+                        throw Invalid(reason: "it holds an unreadable approval input")
+                    }
+                    return Case(id: $0.id, input: .approval(approval, $0.input))
+                }
+            }
+            guard !cases.isEmpty else { throw Invalid(reason: "it holds no case") }
+            guard Set(cases.map(\.id)).count == cases.count else {
+                throw Invalid(reason: "two cases share an id")
+            }
+            return cases
         }
+    }
+
+    struct CaseResult {
+        let word: String
+        let reason: String
     }
 
     /// One case's line.
     struct Line: Encodable {
         let `case`: String
-        var verdict: RuleCheckVerdict?
+        let suite: Suite
+        var result: CaseResult?
         var tokens = 0
         var seconds = 0.0
         var toolRuns = 0
         let toolVersion: String
         var notReached = false
 
-        init(case id: String, toolVersion: String) {
+        init(case id: String, suite: Suite, toolVersion: String) {
             self.case = id
+            self.suite = suite
             self.toolVersion = toolVersion
         }
 
-        var verdictWord: String { verdict?.result.rawValue ?? "none" }
+        var resultWord: String { result?.word ?? "none" }
 
         enum CodingKeys: String, CodingKey {
-            case `case`, verdict, reason, tokens, seconds, model
+            case `case`, verdict, decision, reason, tokens, seconds, model
             case toolRuns = "tool_runs"
             case toolVersion = "tool_version"
             case notReached = "not_reached"
@@ -389,8 +472,8 @@ enum EvalRun {
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(self.case, forKey: .case)
-            try container.encode(verdictWord, forKey: .verdict)
-            if let reason = verdict?.reason {
+            try container.encode(resultWord, forKey: suite.resultKey)
+            if let reason = result?.reason {
                 try container.encode(reason, forKey: .reason)
             } else {
                 try container.encodeNil(forKey: .reason)
@@ -453,7 +536,7 @@ enum EvalRun {
         }
     }
 
-    /// The API of a run with no server: `CheckJob` calls none of it.
+    /// The API of a run with no server: the jobs call none of it.
     struct NoServer: AgentAPI {
         struct NotCalled: Error {}
 

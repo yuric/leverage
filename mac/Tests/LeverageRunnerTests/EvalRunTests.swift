@@ -40,17 +40,19 @@ struct EvalRunTests {
             try writeInputs(ids: (1...cases).map { String(format: "%02d-made-up-case", $0) })
         }
 
-        func writeInputs(
-            ids: [String], suite: String = EvalRunTests.suite, input: some Encodable
+        func writeInputs<Input: Encodable>(
+            ids: [String], suite: String, makeInput: () -> Input
         ) throws {
             let encoder = JSONEncoder()
-            let payload = try JSONSerialization.jsonObject(with: encoder.encode(input))
-            let entries = ids.map { ["id": $0, "input": payload] }
+            let entries = try ids.map { id -> [String: Any] in
+                let input = try JSONSerialization.jsonObject(with: encoder.encode(makeInput()))
+                return ["id": id, "input": input]
+            }
             try JSONSerialization.data(withJSONObject: ["suite": suite, "cases": entries]).write(to: inputs)
         }
 
         func writeInputs(ids: [String], suite: String = EvalRunTests.suite) throws {
-            try writeInputs(ids: ids, suite: suite, input: JobFixture.checkInput())
+            try writeInputs(ids: ids, suite: suite) { JobFixture.checkInput() }
         }
 
         func writeApprovalInputs(count: Int) throws {
@@ -63,10 +65,12 @@ struct EvalRunTests {
                 roleFile: check.roleFile, instruction: check.instruction,
                 action: .init(kind: .send, description: description, position: 1), contract: contract,
                 quoted: [.init(label: .evidence, text: JobFixture.evidence)])
-            let input = ApprovalJobInput(actionID: UUID(), ruleCheckID: UUID(), taskID: UUID(), material: material)
             try writeInputs(
                 ids: (1...count).map { String(format: "%02d-made-up-case", $0) },
-                suite: EvalRunTests.approvalSuite, input: input)
+                suite: EvalRunTests.approvalSuite
+            ) {
+                ApprovalJobInput(actionID: UUID(), ruleCheckID: UUID(), taskID: UUID(), material: material)
+            }
         }
 
         /// A stand-in run's environment, with values of the parent that must
