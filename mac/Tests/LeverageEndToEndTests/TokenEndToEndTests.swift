@@ -238,7 +238,15 @@ struct TokenEndToEndTests {
 
 /// Observes the actual response before OwnerClient decodes it. An unknown
 /// JSON field would otherwise be dropped even if it carried a token.
-private final class TokenResponseAudit: URLProtocol, @unchecked Sendable {
+private final class TokenResponseAudit: URLProtocol {
+    // FoundationNetworking marks URLProtocol's inherited Sendable
+    // conformance unavailable. The callback only needs a weak reference.
+    private final class ReplyTarget: @unchecked Sendable {
+        private(set) weak var value: TokenResponseAudit?
+
+        init(_ value: TokenResponseAudit) { self.value = value }
+    }
+
     private let lock = NSLock()
     private var forwarding: URLSessionDataTask?
     private var stopped = false
@@ -247,23 +255,33 @@ private final class TokenResponseAudit: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self, let client = self.client else { return }
+        let target = ReplyTarget(self)
+        // FoundationNetworking calls startLoading on a URLSession queue.
+        // Start the upstream task off that queue to avoid re-entering it.
+        DispatchQueue.global().async {
+            target.value?.forward(to: target)
+        }
+    }
+
+    private func forward(to target: ReplyTarget) {
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let receiver = target.value, let client = receiver.client,
+                  !receiver.lock.withLock({ receiver.stopped }) else { return }
             if let error {
-                client.urlProtocol(self, didFailWithError: error)
+                client.urlProtocol(receiver, didFailWithError: error)
                 return
             }
             guard let data, let response else {
-                client.urlProtocol(self, didFailWithError: LeverageClientError.notHTTP)
+                client.urlProtocol(receiver, didFailWithError: LeverageClientError.notHTTP)
                 return
             }
             if String(decoding: data, as: UTF8.self).contains("LVRG-TOKEN-") {
-                client.urlProtocol(self, didFailWithError: EndToEndFailure("the owner response carried a token marker"))
+                client.urlProtocol(receiver, didFailWithError: EndToEndFailure("the owner response carried a token marker"))
                 return
             }
-            client.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client.urlProtocol(self, didLoad: data)
-            client.urlProtocolDidFinishLoading(self)
+            client.urlProtocol(receiver, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client.urlProtocol(receiver, didLoad: data)
+            client.urlProtocolDidFinishLoading(receiver)
         }
         lock.withLock {
             if stopped { task.cancel() } else { forwarding = task }
