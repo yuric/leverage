@@ -157,7 +157,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == f"/v1/owner/tasks/{TASK}/complete-contract":
             assert message["actions"] == []
             assert message["criteria"] == [
-                {"text": "Create a file named hello.txt that contains the word ready", "kind": "build"}
+                {"text": "Create a file named hello.txt that contains the word ready", "kind": "build"},
+                {"text": "An independent reviewer agrees.", "kind": "review"}
             ]
             folder = Path(message["work_reference"])
             assert folder.is_dir() and not list(folder.iterdir())
