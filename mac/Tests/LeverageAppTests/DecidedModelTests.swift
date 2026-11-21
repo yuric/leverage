@@ -195,15 +195,22 @@ struct DecidedModelTests {
     func recordObjection() async throws {
         let done = decision(.approval, time: 1, undoable: false, state: .done, started: true)
         let closed = decision(.approval, time: 2, undoable: false, state: .stopped)
-        let current = Locked([done, closed])
+        let cancelled = decision(.approval, time: 3, undoable: false, state: .done)
+        let current = Locked([done, closed, cancelled])
         let owner = owner(current)
         owner.script { script in
+            script.board = {
+                TaskScreenFixtures.board([
+                    TaskScreenFixtures.boardTask(.done, id: done.taskID),
+                    TaskScreenFixtures.boardTask(.cancelled, id: cancelled.taskID),
+                ])
+            }
             script.overturnApproval = { _, key in
                 current.value = [Decision(
                     actionID: done.actionID, decidedAt: done.decidedAt, undoable: false, kind: .approval,
                     taskID: done.taskID, taskTitle: done.taskTitle, seatID: done.seatID, summary: done.summary,
                     actionState: .done, started: true, overturnedAt: Date(timeIntervalSince1970: 3),
-                    overturnEffect: .recordedOnly), closed]
+                    overturnEffect: .recordedOnly), closed, cancelled]
                 return .completed(nil, key: key.value, command: .overturnApproval)
             }
         }
@@ -215,6 +222,9 @@ struct DecidedModelTests {
         #expect(model.canRecordObjection(done))
         #expect(!model.canUndo(closed))
         #expect(!model.canRecordObjection(closed))
+        #expect(!model.canRecordObjection(cancelled))
+        model.requestUndo(cancelled)
+        #expect(model.confirming == nil)
         model.requestUndo(closed)
         #expect(model.confirming == nil)
 
