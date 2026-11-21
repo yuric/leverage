@@ -1213,6 +1213,38 @@ class TracesTest < Minitest::Test
     assert_equal [ 2 ], payloads(events, "task.reassigned").map { |payload| payload["minimum_strength_rank"] }
     assert_equal 4, events.count { |event| event["type"] == "review.failed" }
     assert_equal [ "not_eligible" ] * 3, commands.filter_map { |command| command.dig("expect", "refusal", "code") }
+    # PRD L130: the previous builder is free, so the failed review alone
+    # would give it a fresh lease (L91); the escalation is what sends the
+    # task to Ready, and task.reassigned is the event steps.json gives that
+    # move (wait_ready, "an escalation sends the task to Ready").
+    escalation = commands.find { |command| types(command).include?("task.reassigned") }
+    reassigned = escalation["expect"]["events"].find { |event| event["type"] == "task.reassigned" }
+    assert_equal [ [ "wait_ready", reassigned["ref"] ] ],
+      escalation["expect"]["steps_opened"].map { |step| [ step["kind"], step["opening_event_id"] ] }
+  end
+
+  # README, Golden traces, Order: a job result writes job.finished, the
+  # check's check.finished, then cost.reported. An approval job is the
+  # attempt of the approval policy's check (jobs.json), so its result keeps
+  # the order of every other check job's, as traces 03 and 04 have it.
+  def test_a_check_jobs_result_writes_its_check_before_its_cost
+    seen = 0
+    NAMES.each do |name|
+      trace = Leverage::Contract.trace(name)
+      checks = all_events(trace).select { |event| event["type"] == "check.queued" }
+        .to_h { |event| [ event["payload"]["job_id"], event["subject_id"] ] }
+      trace["commands"].each_with_index do |command, index|
+        next unless command["command"] == "submit_job_result" && command["expect"]["outcome"] == "completed"
+
+        events = command["expect"]["events"]
+        check = checks[events.first["subject_id"]] or next
+        where = "#{name} command #{index + 1}"
+        assert_equal %w[job.finished check.finished cost.reported], events.first(3).map { |event| event["type"] }, where
+        assert_equal check, events[1]["subject_id"], "#{where}: the check whose attempt the job is"
+        seen += 1
+      end
+    end
+    assert_operator seen, :>=, 7, "trace 22's approval results are among them"
   end
 
   def test_trace_22_keeps_or_replaces_the_retained_lease_and_never_reopens_an_errored_approval
