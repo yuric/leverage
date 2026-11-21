@@ -216,6 +216,10 @@ final class BoardModel {
         return shown.map { lane in LaneContent(lane: lane, cards: cards.filter { $0.lane == lane }) }
     }
 
+    func lanes(matching filter: BoardFilter) -> [LaneContent] {
+        lanes
+    }
+
     /// Reads the board and the names of the agents.
     func load() async {
         generation += 1

@@ -56,6 +56,194 @@ struct AddTaskModelTests {
         #expect(owner.calls.isEmpty)
     }
 
+    @Test("Add task starts in the board's project, with No project first in the picker")
+    func projectChoices() {
+        let first = Project(id: UUID(), name: "Invoices", goal: "Correct totals", briefVersion: 0)
+        let second = Project(id: UUID(), name: "Reports", goal: "Useful reports", briefVersion: 0)
+        let navigator = Navigator()
+        navigator.selectProject(second.id)
+        let scoped = AddTaskModel(api: scripted(), boardFilter: navigator.boardFilter, onSaved: {})
+
+        #expect(scoped.projectID == second.id)
+        let choices = scoped.projectChoices([first, second])
+        #expect(choices.map(\.name) == ["No project", "Invoices", "Reports"])
+        #expect(choices.map(\.id) == [nil, first.id, second.id])
+
+        navigator.selectProject(nil)
+        let all = AddTaskModel(api: scripted(), boardFilter: navigator.boardFilter, onSaved: {})
+        #expect(all.projectID == nil)
+        #expect(all.projectChoices([]).map(\.name) == ["No project"])
+    }
+
+    @Test("the project goes in Add task and both commands keep the outward actions in form order")
+    func projectAndActionRequests() async throws {
+        let owner = scripted()
+        let model = makeModel(owner)
+        let projectID = UUID()
+        model.projectID = projectID
+        model.actions = [
+            OutwardActionDraft(kind: .send, description: "Share the approved summary"),
+            OutwardActionDraft(kind: .publish, description: "Release the new pricing page"),
+            OutwardActionDraft(kind: .pay, description: "Pay the invoice"),
+            OutwardActionDraft(kind: .delete, description: "Remove the old draft"),
+        ]
+
+        await model.save()
+
+        #expect(owner.calls.map(\.operation) == [.addTask, .completeContract])
+        let add = try owner.call(at: 0)
+        let complete = try owner.call(at: 1)
+        #expect(add.body?["project_id"] == .string(projectID.contractString))
+        #expect(complete.body?["project_id"] == nil)
+        #expect(add.body?["actions"] == complete.body?["actions"])
+        #expect(complete.body?["actions"] == .array([
+            .object(["kind": .string("send"), "description": .string("Share the approved summary")]),
+            .object(["kind": .string("publish"), "description": .string("Release the new pricing page")]),
+            .object(["kind": .string("pay"), "description": .string("Pay the invoice")]),
+            .object(["kind": .string("delete"), "description": .string("Remove the old draft")]),
+        ]))
+    }
+
+    @Test("choosing No project omits the project from the command")
+    func noProjectRequest() async throws {
+        let owner = scripted()
+        let model = AddTaskModel(api: owner, boardFilter: BoardFilter(projectID: UUID()), onSaved: {})
+        model.title = "Fix it"
+        #expect(model.projectID != nil)
+        model.projectID = nil
+
+        await model.save()
+
+        #expect((try owner.call(at: 0)).body?["project_id"] == nil)
+    }
+
+    @Test("the action rows can be added, edited and removed, and need a description")
+    func editActions() async throws {
+        let owner = scripted()
+        let model = makeModel(owner)
+        model.addAction()
+        model.addAction()
+        try #require(model.actions.count == 2)
+        #expect(model.actions[0].id != model.actions[1].id)
+        #expect(model.actions.map(\.kind) == [.publish, .publish])
+        model.actions[1].kind = .send
+        model.actions[1].description = " \n "
+        model.removeAction(id: model.actions[0].id)
+        #expect(model.actions.map(\.kind) == [.send])
+        #expect(!model.canSave)
+        await model.save()
+        #expect(owner.calls.isEmpty)
+
+        model.actions[0].description = "  Send the report.  "
+        #expect(model.canSave)
+        await model.save()
+        #expect((try owner.call(at: 1)).body?["actions"] == .array([
+            .object(["kind": .string("send"), "description": .string("Send the report.")]),
+        ]))
+    }
+
+    @Test("the project and action picker use the form's words in picker order")
+    func projectAndActionWords() {
+        #expect(AddTaskCopy.projectLabel.text == "Project")
+        #expect(AddTaskCopy.actionsLabel.text == "What goes out at the end")
+        #expect(ActionKind.allCases.map { AddTaskCopy.actionKind($0).text } == [
+            "Publish", "Pay", "Send", "Delete",
+        ])
+    }
+
+    @Test("a project change after Add task failed uses a new key and the chosen project")
+    func editedProjectNewKey() async throws {
+        let owner = scripted(add: { _, _ in throw URLError(.timedOut) })
+        let first = UUID()
+        let second = UUID()
+        let model = AddTaskModel(api: owner, boardFilter: BoardFilter(projectID: first), onSaved: {})
+        model.title = "Fix it"
+        await model.save()
+        model.projectID = second
+        await model.save()
+
+        let initial = try owner.call(at: 0)
+        let retry = try owner.call(at: 1)
+        #expect(initial.body?["project_id"] == .string(first.contractString))
+        #expect(retry.body?["project_id"] == .string(second.contractString))
+        #expect(initial.key != retry.key)
+    }
+
+    @Test("retry keeps the contract body and key until an action is edited, and keeps the created task's project")
+    func retryActions() async throws {
+        let attempts = Locked(0)
+        let owner = scripted(complete: { _, _, key in
+            if attempts.update({ $0 += 1; return $0 }) <= 2 { throw URLError(.networkConnectionLost) }
+            return Fixtures.plain(.completeContract, key: key)
+        })
+        let project = UUID()
+        let model = AddTaskModel(api: owner, boardFilter: BoardFilter(projectID: project), onSaved: {})
+        model.title = "Fix it"
+        model.actions = [OutwardActionDraft(kind: .publish, description: "Release the new pricing page")]
+
+        #expect(model.canChooseProject)
+        await model.save()
+        #expect(!model.canChooseProject)
+        model.projectID = UUID()
+        #expect(model.projectID == project)
+        await model.save()
+        model.actions[0].description = "Release the new pricing page tomorrow"
+        await model.save()
+
+        #expect(owner.calls.map(\.operation) == [.addTask, .completeContract, .completeContract, .completeContract])
+        let first = try owner.call(at: 1)
+        let unchanged = try owner.call(at: 2)
+        let changed = try owner.call(at: 3)
+        #expect(first.key == unchanged.key && first.body == unchanged.body)
+        #expect(first.key != changed.key)
+        #expect(first.path == changed.path && changed.path == ["id": newTaskID.contractString])
+        #expect(first.body?["actions"] != changed.body?["actions"])
+        #expect(changed.body?["actions"] == .array([
+            .object(["kind": .string("publish"), "description": .string("Release the new pricing page tomorrow")]),
+        ]))
+        #expect(model.state == .saved)
+    }
+
+    @Test("Save as an idea keeps the chosen project and outward actions")
+    func ideaProjectAndActions() async throws {
+        let owner = scripted()
+        let model = makeModel(owner)
+        let project = UUID()
+        model.projectID = project
+        model.actions = [OutwardActionDraft(kind: .send, description: "Email the summary")]
+
+        await model.saveAsIdea()
+
+        #expect(owner.calls.map(\.operation) == [.addTask])
+        let add = try owner.call(at: 0)
+        #expect(add.body?["project_id"] == .string(project.contractString))
+        #expect(add.body?["actions"] == .array([
+            .object(["kind": .string("send"), "description": .string("Email the summary")]),
+        ]))
+    }
+
+    @Test("editing an action after Add task failed sends the changed body under a new key")
+    func editedActionNewAddKey() async throws {
+        let owner = scripted(add: { _, _ in throw URLError(.timedOut) })
+        let model = makeModel(owner)
+        model.actions = [OutwardActionDraft(kind: .publish, description: "Release the new pricing page")]
+
+        await model.save()
+        await model.save()
+        model.actions[0].kind = .send
+        await model.save()
+
+        #expect(owner.calls.map(\.operation) == [.addTask, .addTask, .addTask])
+        let first = try owner.call(at: 0)
+        let unchanged = try owner.call(at: 1)
+        let changed = try owner.call(at: 2)
+        #expect(first.key == unchanged.key && first.body == unchanged.body)
+        #expect(first.key != changed.key)
+        #expect(changed.body?["actions"] == .array([
+            .object(["kind": .string("send"), "description": .string("Release the new pricing page")]),
+        ]))
+    }
+
     // MARK: the two commands
 
     @Test("Save task sends Add task and then Complete contract, each with its own key")

@@ -1,3 +1,4 @@
+import Foundation
 import LeverageKit
 import SwiftUI
 
@@ -75,6 +76,7 @@ struct FormField<Content: View>: View {
 /// The form itself, drawn from its model.
 struct AddTaskForm: View {
     @Bindable var model: AddTaskModel
+    var projects: [Project] = []
     let cancel: () -> Void
 
     var body: some View {

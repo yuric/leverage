@@ -68,6 +68,17 @@ struct ContractDraft: Equatable, Sendable {
     }
 }
 
+struct OutwardActionDraft: Equatable, Identifiable, Sendable {
+    let id = UUID()
+    var kind: ActionKind = .publish
+    var description = ""
+}
+
+struct AddTaskProjectChoice: Equatable, Identifiable {
+    let id: UUID?
+    let name: String
+}
+
 /// The Add task form: Save task sends Add task and then Complete contract, each
 /// under its own key (MA-13, SM-4).
 ///
@@ -137,7 +148,18 @@ final class AddTaskModel {
     private(set) var acceptanceCriteriaRuleOn = false
     private(set) var providerRuleOn = false
 
-    init(api: any OwnerAPI, onSaved: @escaping @MainActor () -> Void) {
+    var projectID: UUID?
+    var actions: [OutwardActionDraft] = []
+
+    var canChooseProject: Bool { true }
+
+    func projectChoices(_ projects: [Project]) -> [AddTaskProjectChoice] { [] }
+
+    func addAction() {}
+
+    func removeAction(id: UUID) {}
+
+    init(api: any OwnerAPI, boardFilter: BoardFilter = BoardFilter(), onSaved: @escaping @MainActor () -> Void) {
         self.api = api
         self.onSaved = onSaved
     }
