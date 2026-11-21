@@ -65,9 +65,12 @@ struct NeedsYouNames: Sendable {
 
 /// One button of an item, with the command it sends.
 struct NeedsYouButton: Identifiable, Equatable, Sendable {
-    enum Action: String, Sendable {
+    enum Action: Hashable, Sendable {
         case signInAgain, allowAnotherTry, changeTask, cancelTask
         case letThroughOnce, runAgain, turnRuleOff, connectAgent
+        case keepAssumption, answerDifferently, approve, stop, returnForRework, offerAgain
+        case markDone(UUID), waive(UUID)
+        case grantAccess, raiseCap, changeBudget, resumeProject
     }
 
     let action: Action

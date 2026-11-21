@@ -254,6 +254,11 @@ final class NeedsYouModel {
         subscription = nil
     }
 
+    var promptText = ""
+    var selectedCriterionIDs: Set<UUID> = []
+
+    func confirmPrompt() async {}
+
     // MARK: the buttons
 
     /// Runs a button of a row. A button the row does not have sends nothing.
@@ -275,6 +280,7 @@ final class NeedsYouModel {
             guard row.ruleID != nil else { return }
             confirmingTurnOff = rowID
         case .connectAgent: openAgents()
+        default: break
         }
     }
 
