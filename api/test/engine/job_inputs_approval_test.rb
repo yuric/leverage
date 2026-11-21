@@ -4,11 +4,14 @@ class JobInputsApprovalTest < ActiveSupport::TestCase
   setup do
     @scenario = Scenario.new
     @seat = @scenario.seat(role: "orchestrator")
-    @task = @scenario.finishing_task(holder: false, actions: [ { kind: "send", description: "Sample notice" } ])
+    @project = @scenario.project(name: "Sample notice project")
+    @task = @scenario.finishing_task(holder: false, project: @project,
+      actions: [ { kind: "send", description: "Sample notice" } ])
     @action = Action.find_by!(task_id: @task.id)
     @rule = @scenario.rule(hook: "action.requested", kind: "policy")
     @check = @scenario.rule_check(@task, rule: @rule, subject: @action, attempts: 0)
-    @other = @scenario.task(state: "backlog", title: "Unrelated sample")
+    other_project = @scenario.project(name: "Unrelated sample project")
+    @other = @scenario.task(state: "backlog", project: other_project, title: "Unrelated sample")
   end
 
   test "an approval claim carries its own action and contract material" do
@@ -17,9 +20,11 @@ class JobInputsApprovalTest < ActiveSupport::TestCase
     assert_equal :completed, result.outcome
     input = result.result.fetch("input")
     assert_equal @action.id, input.fetch("action_id")
+    assert_equal @project.id, input.fetch("project_id")
     assert_equal "Sample notice", input.dig("material", "action", "description")
     assert_equal @task.title, input.dig("material", "contract", "title")
     refute_includes input.to_json, @other.title
+    refute_includes input.to_json, @other.project_id
   end
 
   %w[approve stop pass_to_owner].each do |decision|
