@@ -77,6 +77,33 @@ module Leverage
         assert_empty filter(reviewer, :review).excluded_review_ids
       end
 
+      test "only tasks of covered projects at or over budget are skipped when the rule is on" do
+        rule = scenario.rule(key: "project_budget_pause", origin: "shipped")
+        seat = scenario.seat
+        at_budget = scenario.project(budget: 2, spent: 2)
+        over_budget = scenario.project(budget: 2, spent: 3)
+        under_budget = scenario.project(budget: 2, spent: 1)
+        no_budget = scenario.project(spent: 5)
+        at = scenario.task(state: "ready", project: at_budget)
+        over = scenario.task(state: "ready", project: over_budget)
+        [ under_budget, no_budget, nil ].each { |project| scenario.task(state: "ready", project: project) }
+
+        assert_equal [ at.id, over.id ].sort, filter(seat, :task).excluded_task_ids.sort
+        rule.update!(enabled: false)
+        assert_empty filter(seat, :task).excluded_task_ids
+      end
+
+      test "the project budget claim filter observes the active rule's scope" do
+        named = scenario.project(budget: 1, spent: 1)
+        other = scenario.project(budget: 1, spent: 1)
+        scenario.rule(key: "project_budget_pause", origin: "shipped", scope_kind: "named_projects",
+          scope_values: [ named.id ])
+        allowed = scenario.task(state: "ready", project: named)
+        scenario.task(state: "ready", project: other)
+
+        assert_equal [ allowed.id ], filter(scenario.seat, :task).excluded_task_ids
+      end
+
       test "it filters only tasks and reviews" do
         assert_raises(ArgumentError) { ClaimFilter.call(seat_id: scenario.seat.id, kind: :job) }
       end

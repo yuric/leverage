@@ -4,9 +4,7 @@ module Leverage
   module Rules
     # Rules::AppCheckers (milestone 4 plan §2.1, RD-8): the registry from a
     # checker_function to its class, and the one list of what acts in this
-    # milestone. Two of the five functions are built; an app rule whose
-    # function is not built runs nowhere, and the approval rule, a model
-    # rule, waits for the outward actions of milestone 5.
+    # milestone. All five app checkers and both model rules act.
     class AppCheckersTest < ActiveSupport::TestCase
       include TestSupport
 
@@ -15,30 +13,31 @@ module Leverage
         scenario.current_version(rule)
       end
 
-      test "two functions are built, and every function of the shipped rules is named" do
-        assert_equal %w[minimum_criteria_count refuse_reviewer_of_building_provider], AppCheckers::BUILT.keys.sort
+      test "all five shipped app checkers are built" do
         functions = Shipped.all.filter_map(&:checker_function)
         assert_equal %w[escalate_after_failed_reviews minimum_criteria_count pause_project_at_budget
                         refuse_reviewer_of_building_provider route_question], functions.sort
-        functions.each { |function| assert_equal AppCheckers::BUILT.key?(function), AppCheckers.built?(function), function }
+        assert_equal functions.sort, AppCheckers::BUILT.keys.sort
+        functions.each { |function| assert AppCheckers.built?(function), function }
       end
 
       test "a model rule runs; an app rule runs only when its function is built" do
         versions = scenario.with_shipped_rules.to_h { |rule| [ rule.key, scenario.current_version(rule) ] }
 
         runs = versions.select { |_, version| AppCheckers.runs?(version) }.keys
-        assert_equal %w[acceptance_criteria specific_details different_provider_review orchestrator_approves_actions], runs
+        assert_equal versions.keys, runs
+        refute AppCheckers.runs?(versions.fetch("acceptance_criteria").dup.tap { |version| version.checker_function = "unbuilt" })
       end
 
-      test "three shipped rules act in this milestone; the other four start working later (RD-8)" do
+      test "all seven shipped rules act (AP-1)" do
         versions = scenario.with_shipped_rules.to_h { |rule| [ rule.key, scenario.current_version(rule) ] }
 
         acting = versions.select { |_, version| AppCheckers.acts?(version) }.keys
-        assert_equal %w[acceptance_criteria specific_details different_provider_review], acting
+        assert_equal versions.keys, acting
       end
 
-      test "a custom model rule acts at each of the four moments offered now" do
-        %w[task.before_ready task.before_claim task.before_submit task.before_done].each do |hook|
+      test "a custom model rule acts at each of the five offered moments" do
+        Contract.registry.fetch("custom_rule_hooks").each do |hook|
           assert AppCheckers.acts?(scenario.current_version(model_gate(hook))), hook
         end
       end
@@ -54,7 +53,8 @@ module Leverage
       end
 
       test "check refuses a function that is not built" do
-        version = shipped_version("escalate_after_failed_reviews")
+        version = shipped_version("acceptance_criteria").dup
+        version.checker_function = "unbuilt"
         task = scenario.task
         assert_raises(ArgumentError) do
           AppCheckers.check(version, request: request_for(task, "task.before_ready", params: contract_params), task: task)

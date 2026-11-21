@@ -12,9 +12,8 @@ module Leverage
 
       def parts(task, seat = scenario.seat) = BriefingRules.call(task_id: task.id, seat_id: seat.id)
 
-      test "the three shipped rules that act are in it, in the shipped order; the four that start later are not" do
-        rules = scenario.with_shipped_rules.to_h { |rule| [ rule.key, rule ] }
-        expected = %w[acceptance_criteria specific_details different_provider_review].map { |key| rules.fetch(key).id }
+      test "all seven shipped rules are in the briefing, in shipped order" do
+        expected = scenario.with_shipped_rules.map(&:id)
 
         result = parts(scenario.task(state: "working"))
         assert_equal expected, result.map(&:id)
