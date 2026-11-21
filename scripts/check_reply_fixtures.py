@@ -174,7 +174,7 @@ def private_id_key(key):
     return match is not None and match[1].lower().replace("-", "_") not in FIELD_SUFFIXES
 
 
-def private_field(key):
+def usage_named_field(key):
     """Match account details, identifiers, credentials and filesystem paths."""
     words = key_words(key)
     return (named_field(key) or bool(words & {"id", "ids", "uuid", "uuids", "workspace", "team",
@@ -211,7 +211,7 @@ def usage_private_value(provider, path, value, marker):
         return not scrubbed(value, marker)
     if isinstance(value, dict) and data_keyed_field(key):
         return False  # Its children are checked by their keys as well as their values.
-    return private_field(key) and not scrubbed(value, marker)
+    return usage_named_field(key) and not scrubbed(value, marker)
 
 
 def scan_value(value, path, marker, provider, usage, found):
@@ -229,7 +229,7 @@ def scan_value(value, path, marker, provider, usage, found):
                 found.add("an object keyed by account, model or limit data needs placeholder keys")
             child = (*path, key)
             private = (usage_private_value(provider, child, inner, marker) if usage else
-                       path[:1] in (("stdout",), ("stderr",)) and private_field(key) and not scrubbed(inner, marker))
+                       path[:1] in (("stdout",), ("stderr",)) and usage_named_field(key) and not scrubbed(inner, marker))
             if private:
                 found.add("an account, identifier, credential or path field holds a non-placeholder value")
             scan_value(inner, child, marker, provider, usage, found)
