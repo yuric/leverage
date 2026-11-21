@@ -166,12 +166,14 @@ module Leverage
     end
 
     def withdraw_checks(ctx, action, task)
-      action_checks(action).where(round: task.round, result: [ nil, "error" ], overridden_at: nil).order(:created_at, :id)
-        .each do |check|
-          job = RuleChecks.open_job(check)
-          Jobs.withdraw(ctx, job) if job
-          RuleChecks.withdraw(ctx, check)
-        end
+      checks = action_checks(action).where(round: task.round, overridden_at: nil)
+      # An errored approval has already passed the decision to the owner.
+      errored_gates = checks.where(result: "error", rule_version_id: RuleVersion.where(kind: "gate").select(:id))
+      checks.where(result: nil).or(errored_gates).order(:created_at, :id).each do |check|
+        job = RuleChecks.open_job(check)
+        Jobs.withdraw(ctx, job) if job
+        RuleChecks.withdraw(ctx, check)
+      end
     end
 
     def action_checks(action)

@@ -125,7 +125,9 @@ class TraceRunner
   POLLED_AT = /polled at (-?[0-9]+)/
   # The job timers, and which due time each runs at (timers.json).
   JOB_TIMERS = { "check_queue_timeout" => :queue, "contract_draft_job_queue_timeout" => :queue,
-                 "check_run_timeout" => :run, "contract_draft_job_run_timeout" => :run }.freeze
+                 "check_run_timeout" => :run, "contract_draft_job_run_timeout" => :run,
+                 "question_job_queue_timeout" => :queue, "question_job_run_timeout" => :run }.freeze
+  DELETION_TARGETS = { "delete_task_content" => "task_id", "delete_project_content" => "project_id" }.freeze
   LEASE_ENDS = %w[task.lease_expired review.lease_expired].freeze
   # The hold reasons that pause a lease clock (the registry's lease_clock).
   PAUSING = Leverage::Contract.registry.fetch("hold_reasons")
@@ -394,6 +396,9 @@ class TraceRunner
   def request_params(command, caller_id)
     @command_seconds = seconds(command.fetch("at"))
     params = resolve(command.fetch("path_params")).merge(resolve(command.fetch("body")))
+    if (target = DELETION_TARGETS[command.fetch("operation_id")])
+      params[target] = params.delete("id")
+    end
     subject_class = ACKNOWLEDGEMENTS[command.fetch("command")]
     if subject_class && params.key?("briefing_hash")
       subject = subject_class.find_by(id: params["id"])

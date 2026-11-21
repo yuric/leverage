@@ -440,18 +440,18 @@ module Leverage
     # command closed check and opened the open step, and this event also
     # closes check and opens the step wanted now (or ends the task), the
     # change moves to this event, so the command still changes the step
-    # once. Escalation likewise uses task.reassigned for Ready, and a task
-    # ending after a hold lifts closes the waiting step at its terminal
-    # event. Returns whether it moved the change.
+    # once. A task ending after a hold lifts closes the waiting step at
+    # its terminal event. Escalation moves only the Ready opener: the
+    # review ended at review.failed. Returns whether it moved the change.
     def late_close(open, wanted, event)
       return false unless open && same_command?(open, event)
 
       closed = TaskStep.find_by(workspace_id: event.workspace_id, task_id: event.task_id,
         closing_event_id: open.opening_event_id)
       return false unless closed
-      return false unless (closed.kind == CHECK && closes?(CHECK, event.type)) ||
-        (closed.kind == "wait_owner" && TERMINAL.include?(event.type)) ||
-        (event.type == "task.reassigned" && wanted&.kind == "wait_ready")
+      escalated = event.type == "task.reassigned" && wanted&.kind == "wait_ready"
+      return false unless escalated || (closed.kind == CHECK && closes?(CHECK, event.type)) ||
+        (closed.kind == "wait_owner" && TERMINAL.include?(event.type))
 
       if wanted.nil?
         open.destroy!
@@ -460,7 +460,7 @@ module Leverage
       else
         return false
       end
-      closed.update!(closed_at: event.effective_at, closing_event_id: event.id)
+      closed.update!(closed_at: event.effective_at, closing_event_id: event.id) unless escalated
       true
     end
 
