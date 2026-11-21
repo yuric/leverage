@@ -64,7 +64,7 @@ module Leverage
         open_planned(ctx, task, evaluation.holds_to_open, checks)
         if (failure = evaluation.failures.first)
           Actions.stop(ctx, action, by: [ "app", nil ], rule_check: check_of(failure, checks))
-        elsif evaluation.outcome != :pending && evaluation.deferred_rule_ids.empty? && checks.none? { |check| approval_check?(check) }
+        elsif evaluation.outcome != :pending && evaluation.deferred_rule_ids.empty? && checks.none? { |check| approval_decision_path?(check) }
           Finishing.open_owner_approval(ctx, action)
         end
         evaluation
@@ -73,7 +73,7 @@ module Leverage
       def reenter_action(ctx, action, trigger)
         task = Task.find(action.task_id)
         return if Actions.action_checks(action).where(round: task.round).any? do |check|
-          approval_check?(check) && check.result != "withdrawn"
+          approval_decision_path?(check)
         end
 
         decision = Gating.reenter_action(action_id: action.id, trigger: trigger)
@@ -83,7 +83,7 @@ module Leverage
           Actions.stop(ctx, action, by: [ "app", nil ], rule_check: check_of(decision.failures.first, []))
         when :complete
           checks = write_action_checks(ctx, action, task, decision.checks, decision.jobs, failed: false)
-          Finishing.open_owner_approval(ctx, action) unless checks.any? { |check| approval_check?(check) }
+          Finishing.open_owner_approval(ctx, action) unless checks.any? { |check| approval_decision_path?(check) }
         when :keep_pending
           decision.holds_to_open.each do |planned|
             next if Holds.open_holds(task).any? { |hold| hold.reason == planned.reason && hold.rule_check_id == planned.rule_check_id }
@@ -94,9 +94,15 @@ module Leverage
         decision
       end
 
+      def approval_decision_path?(check)
+        check && !%w[not_applicable withdrawn].include?(check.result) && approval_check?(check)
+      end
+
       def approval_check?(check)
         check && check.hook == ACTION_HOOK && RuleVersion.find(check.rule_version_id).kind == "policy"
       end
+
+      private_class_method :approval_decision_path?
 
       def requeue_check(ctx, check, **options)
         return RuleChecks.queue_attempt(ctx, check, **options) unless check.subject_kind == "action"
