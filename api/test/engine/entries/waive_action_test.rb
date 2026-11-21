@@ -28,7 +28,7 @@ class WaiveActionTest < ActiveSupport::TestCase
     end
     calls = recording({ Leverage::Actions => %i[waive last_open?], Leverage::Finishing => %i[settle after_command] },
       fakes: { "Actions.waive" => waive, "Actions.last_open?" => ->(_action) { false },
-               "Finishing.settle" => ->(*) {}, "Finishing.after_command" => ->(*) {} }) do
+               "Finishing.settle" => ->(*) { }, "Finishing.after_command" => ->(*) { } }) do
       assert_completed owner_command("waive_action", { "id" => action.id })
     end
 

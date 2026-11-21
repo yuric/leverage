@@ -13,8 +13,8 @@ class OverturnApprovalTest < ActiveSupport::TestCase
     %w[approved started].each do |state|
       task, action = action_on(state)
 
-      calls = recording({ Leverage::Actions => :stop, Leverage::Finishing => :settle },
-        fakes: { "Actions.stop" => ->(_ctx, _action, by:) { nil } }) do
+      calls = recording({ Leverage::Actions => :stop, Leverage::Finishing => %i[settle after_command] },
+        fakes: { "Actions.stop" => ->(_ctx, _action, by:) { nil }, "Finishing.after_command" => ->(*) { } }) do
         assert_empty events_written { assert_completed(overturn(action)) }, "the stop seam owns the writes"
       end
 
@@ -61,7 +61,8 @@ class OverturnApprovalTest < ActiveSupport::TestCase
     _, stopped = action_on("stopped")
 
     [ owner_approved, stopped ].each do |action|
-      calls = recording({ Leverage::Actions => %i[stop record_overturn] }) do
+      calls = recording({ Leverage::Actions => %i[stop record_overturn], Leverage::Finishing => :after_command },
+        fakes: { "Finishing.after_command" => ->(*) { } }) do
         assert_empty events_written { assert_refused("invalid_state", overturn(action)) }
       end
       assert_empty calls.fetch("Actions.stop")

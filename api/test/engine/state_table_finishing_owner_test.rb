@@ -95,9 +95,13 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
       [ ACTIONS, :stop ] => ->(ctx, action, by:) { stop(ctx, action, by: by) },
       [ ACTIONS, :record_overturn ] => ->(ctx, action) { write_action(ctx, action, "action.overturn_recorded", "done") },
       [ FINISHING, :settle ] => ->(ctx, task, by:) { settle(ctx, task, by: by) },
-      [ FINISHING, :after_command ] => ->(_ctx) {},
-      [ Leverage::Steps, :on_event ] => ->(ctx, event) { steps.call(ctx, event) if Leverage::Steps::HANDLED.include?(event.type) }
+      [ FINISHING, :after_command ] => ->(_ctx) { },
+      [ Leverage::Steps, :on_event ] => ->(ctx, event) { steps.call(ctx, event) unless step_events_owned_by_wp4.include?(event.type) }
     }
+  end
+
+  def step_events_owned_by_wp4
+    %w[action.waived action.marked_done action.withdrawn action.stopped task.returned_for_rework]
   end
 
   def waive(ctx, action)
@@ -162,7 +166,9 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
 
   def with_methods(overrides)
     originals = overrides.keys.to_h { |mod, name| [ [ mod, name ], mod.method(name) ] }
-    overrides.each { |(mod, name), substitute| mod.define_singleton_method(name, substitute) }
+    overrides.each do |(mod, name), substitute|
+      mod.define_singleton_method(name) { |*args, **kwargs| substitute.call(*args, **kwargs) }
+    end
     yield
   ensure
     originals.each { |(mod, name), original| mod.define_singleton_method(name, original) }

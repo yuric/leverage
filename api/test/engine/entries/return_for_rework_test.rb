@@ -23,10 +23,17 @@ class ReturnForReworkTest < ActiveSupport::TestCase
     error = check_error_hold(requested)
     unrelated = scenario.hold(@task, reason: "owner_hold")
     action_holds = [ stopped_hold, approval, unconfirmed, error ]
+    job = scenario.job(kind: "approval", task: @task, target: requested)
+    requested.update!(approval_job_id: job.id)
+    actions = Action.where(task_id: @task.id).order(:position).to_a
     withdrawals = []
     withdraw = lambda do |ctx, task|
       withdrawals << [ ctx.request.command, task.id, ctx.events.map(&:type),
         action_holds.map { |hold| hold.reload.closed_at } ]
+      actions.each do |action|
+        action.update!(state: "contracted", approval_job_id: nil)
+      end
+      Leverage::Jobs.withdraw(ctx, job)
     end
 
     events = events_written do
@@ -35,6 +42,8 @@ class ReturnForReworkTest < ActiveSupport::TestCase
 
     assert_equal [ [ "return_for_rework", @task.id,
                     %w[task.returned_for_rework criterion.reopened criterion.reopened], [ nil, nil, nil, nil ] ] ], withdrawals
+    assert_equal %w[contracted contracted contracted], actions.map { |action| action.reload.state }
+    assert_equal "withdrawn", job.reload.state
     assert_equal [ @named.id, @review.id ], events.select { |event| event.type == "criterion.reopened" }.map(&:subject_id)
     assert_equal "passed", @untouched.reload.state
     [ @named, @review ].each do |criterion|
@@ -101,7 +110,7 @@ class ReturnForReworkTest < ActiveSupport::TestCase
     end
   end
 
-  def with_rework_seams(withdraw: ->(_ctx, _task) {}, &block)
+  def with_rework_seams(withdraw: ->(_ctx, _task) { }, &block)
     steps = Leverage::Steps.method(:on_event)
     track = ->(ctx, event) { steps.call(ctx, event) unless event.type == "task.returned_for_rework" }
     with_methods(Leverage::Steps, on_event: track) do
