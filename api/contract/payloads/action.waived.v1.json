@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "properties": {
     "lease_seat_id": {
-      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Set when the waive leaves approved actions to carry out, no action waiting and none stopped, no hold to close, and the builder holds nothing (plan SM-11).",
+      "description": "The builder seat given a fresh lease by this event, or null when it gives none. Replay sets the task's holder from it. Set when the waive leaves approved actions to carry out, no other action waiting or stopped, no hold that remains open, and the builder holds nothing (plan SM-11).",
       "type": ["string", "null"],
       "format": "uuid"
     }
