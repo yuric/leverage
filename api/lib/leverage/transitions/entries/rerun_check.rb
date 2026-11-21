@@ -24,7 +24,6 @@ module Leverage
         CLAIM_HOOK = "task.before_claim".freeze
         ERROR = "error".freeze
         RUN_AGAIN = "run_again".freeze
-        JOB_KIND = "rule_check".freeze
 
         def load(ctx)
           @check = RuleCheck.find_by(id: ctx.request.params["id"], workspace_id: ctx.workspace.id) ||
@@ -33,6 +32,8 @@ module Leverage
         end
 
         def refusals(_ctx)
+          return [ state_refusal(nil, [ "rerun_of_approval_check" ]) || invalid_state ] if Gate.approval_check?(@check)
+
           causes = [ state_refusal(nil, [ claim? ? "rerun_of_claim_check" : "rerun_queues" ]) ]
           causes << invalid_state unless @check.result == ERROR
           causes << invalid_state if @task.nil? || @task.state == "cancelled"
@@ -45,7 +46,7 @@ module Leverage
             Holds.close(ctx, hold: hold, task: @task, choice: RUN_AGAIN)
           else
             version = RuleVersion.find(@check.rule_version_id)
-            RuleChecks.queue_attempt(ctx, @check, kind: JOB_KIND, seat_role: version.checker_role || "orchestrator")
+            Gate.requeue_check(ctx, @check, kind: "rule_check", seat_role: version.checker_role || "orchestrator")
           end
           @result = nil
         end

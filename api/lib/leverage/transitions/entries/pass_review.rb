@@ -8,8 +8,8 @@ module Leverage
       # is Done with no holder; it keeps its builder seat. review.passed and
       # task.done are written, then cost.reported about the review with the
       # verdict's tokens and spend, which add to the task's spent; no policy
-      # runs (EN-12). A work call, blocked by a hold (L174). The row with an
-      # outward action cannot be reached: no contract has one (SC-3).
+      # runs before its report. A work call, blocked by a hold (L174). The
+      # outward action row enters Finishing and requests each action.
       #
       # 422 invalid when a pass names failed criteria.
       #
@@ -33,7 +33,7 @@ module Leverage
 
         def refusals(_ctx)
           codes = Eligibility.review_refusals(@review, @seat)
-          codes << state_refusal(@task.state, [ "no_outward_action" ])
+          codes << state_refusal(@task.state, [ Actions.for_task(@task).exists? ? "has_outward_action" : "no_outward_action" ])
           codes << "on_hold" if Eligibility.on_hold?(@task)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[
             Briefing.acknowledgement(@task, seat: @seat, review: @review)]
@@ -51,12 +51,25 @@ module Leverage
           Criterion.where(task_id: @task.id, kind: "review", removed_at: nil).find_each do |criterion|
             criterion.update!(state: "passed", passed_at: ctx.at, passed_by_seat_id: @seat.id)
           end
-          @task.update!(state: "done", holder_seat_id: nil)
+          finishing = @row.fetch("to") == "finishing"
+          @task.update!(state: finishing ? "finishing" : "done", holder_seat_id: nil)
           ctx.emit("review.passed", task: @task, subject: @review, payload: {})
-          ctx.emit("task.done", task: @task, payload: {})
+          actions = finishing ? Actions.request_all(ctx, @task) : []
+          ctx.emit("task.done", task: @task, payload: {}) unless finishing
           Costs.report(ctx, task: @task, subject: @review,
             tokens: @params.fetch("tokens", 0), spend: @params.fetch("spend", 0))
+          actions.each { |action| request_action(ctx, action) }
           @result = nil
+        end
+
+        private def request_action(ctx, action)
+          entry = RequestAction.new
+          Finishing.as_app(ctx, "request_action", { "id" => action.id }) do
+            entry.load(ctx)
+            raise ArgumentError, "a passing review must be able to request its action" if entry.refusals(ctx).any?
+
+            entry.perform(ctx)
+          end
         end
 
         # The failed gate's effect (hooks.json failed_review, SM-6): the

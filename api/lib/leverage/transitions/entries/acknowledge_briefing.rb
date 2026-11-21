@@ -22,6 +22,8 @@ module Leverage
         end
 
         def refusals(_ctx)
+          return [ "not_holder" ] if @task.state == "finishing" && @task.holder_seat_id.nil?
+
           codes = Eligibility.task_refusals(@task, @seat)
           codes << state_refusal(@task.state)
           codes << "briefing_changed" unless @hash == Briefing.hash_for(@task, seat: @seat)

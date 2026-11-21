@@ -51,8 +51,62 @@ module Leverage
 
       module_function
 
-      def request_action(_ctx, _action) = nil
-      def reenter_action(_ctx, _action, _trigger) = nil
+      ACTION_HOOK = "action.requested".freeze
+
+      def request_action(ctx, action)
+        task = Task.find(action.task_id)
+        inputs = HookInputs.for(hook: ACTION_HOOK, task: task, params: { "action_id" => action.id })
+        request = Gating::Request.new(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id,
+          hook: ACTION_HOOK, round: task.round, subject_kind: "action", subject_id: action.id,
+          requester_kind: "app", requester_id: nil, command_key: nil, inputs: inputs)
+        evaluation = Gating.evaluate(request)
+        checks = write_action_checks(ctx, action, task, evaluation.checks, evaluation.jobs, failed: evaluation.failures.any?)
+        open_planned(ctx, task, evaluation.holds_to_open, checks)
+        if (failure = evaluation.failures.first)
+          Actions.stop(ctx, action, by: [ "app", nil ], rule_check: check_of(failure, checks))
+        elsif evaluation.outcome != :pending && evaluation.deferred_rule_ids.empty? && checks.none? { |check| approval_check?(check) }
+          Finishing.open_owner_approval(ctx, action)
+        end
+        evaluation
+      end
+
+      def reenter_action(ctx, action, trigger)
+        task = Task.find(action.task_id)
+        return if Actions.action_checks(action).where(round: task.round).any? do |check|
+          approval_check?(check) && check.result != "withdrawn"
+        end
+
+        decision = Gating.reenter_action(action_id: action.id, trigger: trigger)
+        close_action_check_holds(ctx, action, task, decision, trigger)
+        case decision.action
+        when :refuse
+          Actions.stop(ctx, action, by: [ "app", nil ], rule_check: check_of(decision.failures.first, []))
+        when :complete
+          checks = write_action_checks(ctx, action, task, decision.checks, decision.jobs, failed: false)
+          Finishing.open_owner_approval(ctx, action) unless checks.any? { |check| approval_check?(check) }
+        when :keep_pending
+          decision.holds_to_open.each do |planned|
+            next if Holds.open_holds(task).any? { |hold| hold.reason == planned.reason && hold.rule_check_id == planned.rule_check_id }
+
+            open_hold(ctx, task, planned, check_id: planned.rule_check_id, action_id: action.id)
+          end
+        end
+        decision
+      end
+
+      def approval_check?(check)
+        check && check.hook == ACTION_HOOK && RuleVersion.find(check.rule_version_id).kind == "policy"
+      end
+
+      def requeue_check(ctx, check, **options)
+        return RuleChecks.queue_attempt(ctx, check, **options) unless check.subject_kind == "action"
+
+        request = ctx.request
+        asked = PendingTransitions::Requested.new(command: request.command, workspace_id: ctx.workspace.id,
+          requester_kind: request.caller_kind, requester_id: request.caller_id, command_key: request.key,
+          params: request.params.merge("action_id" => check.subject_id))
+        ctx.as_requester(asked, cause_id: nil) { RuleChecks.queue_attempt(ctx, check, **options) }
+      end
 
       # Returns the Result, or nil when the row has no hook.
       def call(ctx, entry)
@@ -114,14 +168,14 @@ module Leverage
       # check.finished written in this command as cause unless cause_id:
       # is given. A check_error item opens only while the orchestrator is
       # online (SM-39). Returns the Hold.
-      def open_hold(ctx, task, planned, check_id:, cause_id: :written, actor_kind: "app", actor_id: nil, **as)
+      def open_hold(ctx, task, planned, check_id:, cause_id: :written, actor_kind: "app", actor_id: nil, action_id: nil, **as)
         if cause_id == :written
           cause_id = ctx.events.reverse.find { |event| event.type == "check.finished" && event.subject_id == check_id }&.id
         end
         facts = CHECK_ITEMS.include?(planned.reason) && check_id ? { rule_id: planned.rule_id, rule_check_id: check_id } : {}
         item = planned.reason != "check_error" || RolePresence.online?(ctx.workspace, "orchestrator", ctx.at)
         hold = Holds.open(ctx, task: task, reason: planned.reason, rule_id: planned.rule_id, cause_id: cause_id,
-          facts: facts, actor_kind: actor_kind, actor_id: actor_id, item: item,
+          facts: facts, actor_kind: actor_kind, actor_id: actor_id, item: item, action_id: action_id,
           **supported(rule_check_id: check_id, **RuleChecks.event_fields(as).except(:actor_kind, :actor_id)))
         hold.update!(rule_check_id: check_id) if check_id && hold.rule_check_id != check_id
         hold
@@ -147,6 +201,26 @@ module Leverage
         end
         Gating::Request.new(workspace_id: ctx.workspace.id, hook: hook, requester_kind: kind,
           requester_id: ctx.request.caller_id || id, command_key: ctx.request.key, **fields)
+      end
+
+      def write_action_checks(ctx, action, task, planned, jobs, failed:)
+        kept = failed ? planned.map { |check| check.result.nil? ? nil : check } : planned
+        plan = Gating::Evaluation.new(outcome: :completed, frozen_rule_version_ids: [], checks: kept.compact,
+          jobs: failed ? [] : jobs, failures: [], warnings: [], effects: [], holds_to_open: [])
+        rows = nil
+        params = { "action_id" => action.id }
+        Finishing.as_app(ctx, "request_action", params) { rows = RuleChecks.write(ctx, plan, task: task) }
+        kept.map { |check| check && rows.shift }
+      end
+
+      def close_action_check_holds(ctx, action, task, decision, trigger)
+        ids = decision.holds_to_close.to_set
+        check = Actions.action_checks(action).find_by(id: trigger.rule_check_id)
+        Holds.open_holds(task).each do |hold|
+          matches = hold.reason == "check_error" && check && hold.rule_check_id == check.id &&
+            (check.result != "error" || check.overridden_at)
+          Holds.close(ctx, hold: hold, task: task, actor_kind: "app", actor_id: nil) if ids.include?(hold.id) || matches
+        end
       end
 
       # --- private -------------------------------------------------------------

@@ -82,8 +82,13 @@ module Leverage
         Jobs.time_out(ctx, job, due_kind)
         return RuleChecks.new_attempt(ctx, check, job: Jobs.requeue(ctx, job)) unless second
 
-        RuleChecks.error(ctx, check)
-        CheckReentry.after(ctx, check, Gating::Trigger.new(kind: CHECK_TIMED_OUT, rule_check_id: check.id))
+        finished = RuleChecks.error(ctx, check)
+        if job.kind == "approval"
+          action = Action.find_by!(id: check.subject_id, task_id: check.task_id, workspace_id: ctx.workspace.id)
+          Finishing.open_owner_approval(ctx, action, check: check, cause: finished)
+        else
+          CheckReentry.after(ctx, check, Gating::Trigger.new(kind: CHECK_TIMED_OUT, rule_check_id: check.id))
+        end
       end
 
       # first_miss job.timed_out, job.requeued; second_miss job.timed_out.

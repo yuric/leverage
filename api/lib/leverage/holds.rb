@@ -58,12 +58,14 @@ module Leverage
     #         and in hold.opened for the reasons of NAMES_CHECK, null for
     #         the others (DB-49).
     #
+    # action_id: - the outward action the hold is about, when it singles one out.
+    #
     # Returns the Hold.
     def open(ctx, task:, reason:, cause_id: nil, facts: {}, rule_id: nil, credential_id: nil, actor_kind: "app",
-             actor_id: nil, round: task.round, item: true, rule_check_id: nil)
+             actor_id: nil, round: task.round, item: true, rule_check_id: nil, action_id: nil)
       lapse_provisional_claim(ctx, task)
       hold = Hold.create!(workspace_id: task.workspace_id, task_id: task.id, project_id: task.project_id, reason: reason,
-        rule_id: rule_id, credential_id: credential_id, rule_check_id: rule_check_id, opened_at: ctx.at,
+        rule_id: rule_id, credential_id: credential_id, rule_check_id: rule_check_id, action_id: action_id, opened_at: ctx.at,
         opened_by_kind: actor_kind, opened_by_id: actor_id)
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id,
@@ -88,10 +90,20 @@ module Leverage
 
       inbox = InboxItem.create!(workspace_id: task.workspace_id, kind: needs_you.fetch("item"), about_kind: "task",
         about_id: task.id, hold_id: hold.id, credential_id: hold.credential_id, facts: facts, opened_at: ctx.at,
-        choices: needs_you.fetch("choices").map { |choice| choice.fetch("choice") })
+        choices: item_choices(needs_you, facts.stringify_keys))
       ctx.emit("inbox.opened", task: task, round: round, subject: inbox, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { kind: inbox.kind }, **as)
       inbox
+    end
+
+    def item_choices(needs_you, facts)
+      needs_you.fetch("choices").filter_map do |choice|
+        case choice["when"]
+        when "no_action_started" then next if facts["any_action_started"]
+        when "stopped_by_check" then next unless facts["rule_check_id"]
+        end
+        choice.fetch("choice")
+      end
     end
 
     # Closes a hold and resolves its open Needs you item with the owner's
@@ -109,9 +121,8 @@ module Leverage
     # When no pausing hold is left open, the task's lease clocks run again,
     # from effective_at (a timer's close gives the lease no time for the
     # sweep's delay);
-    # when no hold at all is left open on a task a seat holds, and the task
-    # has not ended in this command (Cancel writes task.cancelled first,
-    # EN-30), resume_pending_since is set to the command's time.
+    # when the last hold lifts and the task continues under its existing
+    # lease, resume_pending_since is set to the command's time.
     #
     # Returns the Hold.
     def close(ctx, hold:, task:, choice: nil, lease_seat_id: nil, wait_cause: nil, cause_id: nil,
@@ -132,7 +143,7 @@ module Leverage
         leases_of(task).each { |subject| Leases.restart(ctx, subject, at: effective_at) }
       end
       if remaining.empty?
-        mark_resume(ctx, task)
+        mark_resume(ctx, task, closed)
         reenter_pending(ctx, task) unless CHECK_HOLDS.include?(hold.reason)
       end
       hold
@@ -250,10 +261,16 @@ module Leverage
         ctx.events.any? { |event| event.task_id == task.id && Steps::TERMINAL.include?(event.type) }
     end
 
-    def mark_resume(ctx, task)
+    def mark_resume(ctx, task, closed)
       task = Task.find(task.id)
       return unless task.holder_seat_id
       return if ended?(ctx, task)
+
+      fresh_lease = ctx.events.any? do |event|
+        event.task_id == task.id && event.effective_at == closed.effective_at &&
+          Leases.builder_grantee(event) == task.holder_seat_id
+      end
+      return if fresh_lease
 
       task.update!(resume_pending_since: ctx.at)
     end

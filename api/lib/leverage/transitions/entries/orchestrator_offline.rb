@@ -105,7 +105,7 @@ module Leverage
         # naming the job, then job.queued; trace 19, command 31), as Run it
         # again writes it.
         def run_again(ctx, check)
-          RuleChecks.queue_attempt(ctx, check, seat_role: ROLE)
+          Gate.requeue_check(ctx, check, seat_role: ROLE)
         end
 
         # The open check_error holds whose check ended in error, oldest
@@ -117,13 +117,13 @@ module Leverage
             check = hold.rule_check_id && RuleCheck.find_by(id: hold.rule_check_id, workspace_id: workspace_id)
             check ||= RuleCheck.where(workspace_id: workspace_id, task_id: hold.task_id, rule_id: hold.rule_id)
               .order(:updated_at, :id).last
-            next unless check&.result == "error"
+            next unless check&.result == "error" && !Gate.approval_check?(check)
 
             [ hold, check, InboxItem.where(hold_id: hold.id, state: "open").exists? ]
           end
         end
 
-        def queued_checks(workspace_id) = Job.where(workspace_id: workspace_id, kind: "rule_check", state: "queued")
+        def queued_checks(workspace_id) = Job.where(workspace_id: workspace_id, kind: %w[rule_check approval], state: "queued")
 
         # RD-18: rule checks queued and not claimed, plus those held with
         # check_error.
