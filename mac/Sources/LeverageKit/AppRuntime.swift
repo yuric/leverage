@@ -37,6 +37,7 @@ public enum HelperState: Equatable, Sendable {
     case stopped
 }
 
+/// The helper could not receive a local message because it was not running.
 public enum HelperSendError: Error, Equatable, Sendable {
     case notRunning
 }
@@ -179,7 +180,7 @@ private final class UnavailableHelper: HelperSupervising {
     func state() async -> HelperState { .notStarted }
     func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState { .notStarted }
     func tryAgain() async -> HelperState { .notStarted }
-    func send(_ message: LocalHelperMessage) async throws {}
+    func send(_ message: LocalHelperMessage) async throws { throw HelperSendError.notRunning }
     func stop() async {}
 }
 

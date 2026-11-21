@@ -61,6 +61,7 @@ public struct HelperClient: HelperAPI {
 
     public func reportReading(credentialID: UUID, _ reading: CredentialReading, key: IdempotencyKey) async throws
         -> PlainOutcome {
-        throw LeverageClientError.invalidBody
+        try await transport.command(
+            .reportReading, path: ["id": credentialID.contractString], body: reading, key: key)
     }
 }

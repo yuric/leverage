@@ -405,8 +405,8 @@ struct ClientPathsTests {
         if operation == "refresh_usage" || operation == "verify_all_credentials" {
             // These operations specify the result in prose rather than in a separate schema.
             var fields = try #require(example.objectValue)
-            let commands = try #require(entry["commands"]?.arrayValue)
-            fields["command"] = try #require(commands.first)
+            let command = try #require(entry["commands"]?.arrayValue?.first)
+            fields["command"] = command
             fields["result"] = .object(["helper_request_ids": .array([.string(F.id(F.request))])])
             example = .object(fields)
         }

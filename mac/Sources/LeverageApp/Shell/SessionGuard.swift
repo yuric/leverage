@@ -325,7 +325,6 @@ struct SessionGuard: OwnerAPI {
     func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws -> PlainOutcome {
         try await guarded { try await base.reorderCredentials(request, key: key) }
     }
-
 }
 
 /// The helper's token comes from `issue_helper_token`: this hands any

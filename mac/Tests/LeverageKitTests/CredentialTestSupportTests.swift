@@ -26,7 +26,8 @@ struct CredentialTestSupportTests {
             return
         }
         #expect(recordedID == credentialID)
-        #expect(recordedToken == token)
+        let tokenMatches = recordedToken == token
+        #expect(tokenMatches)
         #expect(forgottenID == credentialID)
     }
 
@@ -117,6 +118,7 @@ struct CredentialTestSupportTests {
         let data = try Data(contentsOf: url)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: NSDictionary])
         let expected: NSDictionary = [answer: ["reply": reply], timeout: ["never_answers": true]]
-        #expect(object == ["tokens": expected])
+        let scenarioMatches = object == ["tokens": expected]
+        #expect(scenarioMatches)
     }
 }

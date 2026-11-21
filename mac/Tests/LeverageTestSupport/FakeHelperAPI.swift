@@ -20,6 +20,8 @@ public final class FakeHelperAPI: HelperAPI, @unchecked Sendable {
             -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.reportRunStarted) }
         public var reportRunStopped: @Sendable (UUID, RunStoppedReport, IdempotencyKey) async throws
             -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.reportRunStopped) }
+        public var reportReading: @Sendable (UUID, CredentialReading, IdempotencyKey) async throws
+            -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.reportReading) }
         public var reportLimit: @Sendable (UUID, LimitReport, IdempotencyKey) async throws
             -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.reportLimit) }
         public var reportSignedOut: @Sendable (UUID, SignOutReport, IdempotencyKey) async throws
@@ -81,7 +83,8 @@ public final class FakeHelperAPI: HelperAPI, @unchecked Sendable {
 
     public func reportReading(credentialID: UUID, _ reading: CredentialReading, key: IdempotencyKey)
         async throws -> PlainOutcome {
-        throw FakeAPIError.notScripted(.reportReading)
+        try await record(.reportReading, Self.id(credentialID), key: key, body: reading)
+            .reportReading(credentialID, reading, key)
     }
 
     public func reportLimit(credentialID: UUID, _ report: LimitReport, key: IdempotencyKey) async throws

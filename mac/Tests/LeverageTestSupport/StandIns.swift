@@ -82,10 +82,19 @@ public struct StandInTools: Sendable {
         try encoder.encode(scenario).write(to: state.appendingPathComponent("scenario.json"))
     }
 
+    /// The Python script to run with the provider API scenario and a port file.
+    public var providerAPI: URL { file("provider_api.py") }
+
+    /// Writes the scenario for the stand-in provider API and returns its URL.
+    /// Its requests are logged alongside it, apart from the tool calls.
+    @discardableResult
     public func writeProviderAPIScenario(tokens: [String: StandInScenario.TokenDirective]) throws -> URL {
-        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        let url = state.appendingPathComponent("provider-api-scenario.json")
-        try Data("{}".utf8).write(to: url)
+        let folder = state.appendingPathComponent("provider-api", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("scenario.json")
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        try encoder.encode(["tokens": tokens]).write(to: url, options: .atomic)
         return url
     }
 
@@ -204,16 +213,56 @@ public struct StandInScenario: Encodable, Sendable {
         }
     }
 
+    /// How a tool answers usage and version requests for an account (RD-8).
     public struct UsageDirective: Encodable, Sendable {
+        public var tool: String
+        public var account: String?
+        /// An output or session fixture path relative to the stand-ins' replies folder.
+        public var reply: String?
+        /// A Claude settings fixture path relative to the replies folder.
+        public var settings: String?
+        /// Age the settings cache when writing the settings fixture.
+        public var staleSettings: Bool?
+        public var neverAnswers: Bool?
+        /// The full text printed by the stand-in's version command.
+        public var version: String?
+        /// Override the Codex home returned by the session.
+        public var codexHome: String?
+
         public init(
             tool: String, account: URL? = nil, reply: String? = nil, settings: String? = nil,
             staleSettings: Bool? = nil, neverAnswers: Bool? = nil, version: String? = nil, codexHome: URL? = nil
-        ) {}
+        ) {
+            self.tool = tool
+            self.account = account?.path
+            self.reply = reply
+            self.settings = settings
+            self.staleSettings = staleSettings
+            self.neverAnswers = neverAnswers
+            self.version = version
+            self.codexHome = codexHome?.path
+        }
     }
 
-    public enum TokenDirective: Sendable {
+    /// How the stand-in provider API answers a request with a fake token marker.
+    public enum TokenDirective: Encodable, Sendable {
+        /// A fixture path relative to the stand-ins' replies folder.
         case reply(String)
         case neverAnswers
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .reply(let file):
+                try container.encode(file, forKey: .reply)
+            case .neverAnswers:
+                try container.encode(true, forKey: .neverAnswers)
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case reply, neverAnswers
+        }
     }
 
     /// Round r of review follows `reviews[r]`, then the last entry.
@@ -223,6 +272,7 @@ public struct StandInScenario: Encodable, Sendable {
     public var builder: Builder
     /// Every account's directives.
     public var directives: [Directive]
+    public var usage: [UsageDirective]
 
     public init(
         reviews: [Review] = [], gateFile: String? = nil, builder: Builder = .evidence,
@@ -232,6 +282,7 @@ public struct StandInScenario: Encodable, Sendable {
         self.gateFile = gateFile
         self.builder = builder
         self.directives = directives
+        self.usage = usage
     }
 }
 

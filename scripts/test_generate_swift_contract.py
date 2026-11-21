@@ -36,16 +36,20 @@ def load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def run(registry, openapi, *arguments, output_text=None, hooks=None):
+def run(registry, openapi, *arguments, output_text=None, hooks=None, readers=None):
     """Run the generator on the given objects; return (code, output, Swift)."""
     with tempfile.TemporaryDirectory() as folder:
         registry_path = Path(folder) / "registry.json"
         openapi_path = Path(folder) / "openapi.json"
         hooks_path = Path(folder) / "hooks.json"
+        readers_path = Path(folder) / "readers.json"
         output_path = Path(folder) / "Contract.swift"
         registry_path.write_text(json.dumps(registry), encoding="utf-8")
         openapi_path.write_text(json.dumps(openapi), encoding="utf-8")
         hooks_path.write_text(json.dumps(hooks if hooks is not None else load(HOOKS)), encoding="utf-8")
+        if readers is not None:
+            readers_path.write_text(json.dumps(readers), encoding="utf-8")
+            arguments = ("--readers", str(readers_path), *arguments)
         if output_text is not None:
             output_path.write_text(output_text, encoding="utf-8")
         result = subprocess.run(
@@ -157,7 +161,23 @@ def main():
                 swift == committed, "the outputs differ")
 
     check_agent_tools(cases, registry, openapi)
-    check_readers(cases, swift, load(READERS)["readers"])
+    readers = load(READERS)
+    check_readers(cases, swift, readers["readers"])
+
+    doctored_readers = copy.deepcopy(readers)
+    codex = next(reader for reader in doctored_readers["readers"] if reader["provider"] == "codex")
+    codex["capture"]["usage"] = "recorded"
+    codex["tested_tool_versions"] = ["9.8.7", "9.8.8"]
+    codex["figures"][0]["label"] = '5-hour "window"'
+    code, out, new_swift = run(registry, openapi, readers=doctored_readers)
+    cases.check("generates from changed reader metadata", code == 0 and new_swift is not None, out)
+    check_readers(cases, new_swift or "", doctored_readers["readers"])
+    code, out, _ = run(registry, openapi, "--check", output_text=committed, readers=doctored_readers)
+    cases.check("--check fails when reader metadata changed", code == 1 and "Contract.swift differs" in out, out)
+
+    doctored_readers["readers"].pop()
+    code, out, _ = run(registry, openapi, readers=doctored_readers)
+    cases.check("a missing provider reader fails", code == 1 and "one reader per provider" in out, out)
 
     cases.check("important event types are exposed as a typed list in registry order",
                 "importantEventTypes: [EventType] = [" + ", ".join(

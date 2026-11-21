@@ -1,6 +1,6 @@
 import Foundation
 
-/// The helper's calls, one method per operation milestone 2 serves. The
+/// The helper's calls, one method per served operation. The
 /// helper takes `any HelperAPI`: `HelperClient` sends them over HTTP with
 /// the helper's token, and LeverageTestSupport's `FakeHelperAPI` answers
 /// them in memory.
