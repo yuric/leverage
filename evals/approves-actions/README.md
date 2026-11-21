@@ -65,8 +65,8 @@ LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 \
 The hashes in `bar.json` freeze both case sets and their labels. If a model
 misses, the maintainer can revise the wording of the rule or role file, then
 rerun the main set for every model. Record the reason in the `changes` list
-in `runs.json`. With changed wording, add `--held-out` to the real command
-after the final main runs. Keep the held-out cases blind during tuning.
+in `runs.json`. With changed wording, the final main runs are followed by a real
+`--held-out` run once the held-out set is valid for the production input. Keep the held-out cases blind during tuning.
 Starting a held-out run closes the main set to further runs.
 
 The limit per model is three main runs and one held-out run, up to 120 tool
@@ -74,3 +74,9 @@ calls per model and 360 overall. `runs.json` tracks reservations and completed
 runs. The scorer writes the current results to `results/<provider>.json` and
 `results/held-out/<provider>.json` and generates `RESULTS.md`. The report shows
 held-out scores in aggregate.
+
+The real held-out run requires each candidate to match the contract
+action at its listed position. The offline checker counted two mismatches
+in the frozen held-out set. The first run met all three bars without
+a wording change, so the held-out set was unused and the recorded
+main-set results stand. A future held-out real run refuses that set.

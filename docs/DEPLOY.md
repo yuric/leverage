@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | One environment: the owner's Mac, where the app starts the server's containers; the Rule checks milestone, with the shipped rules on and an orchestrator agent among the agents |
+| **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active in the Questions and approvals milestone. |
 | **Last updated** | 2026-11-20 |
 
 This document says how to run and operate leverage: how to stand it up from
@@ -38,7 +38,7 @@ scripts/build_app.sh
 
 It builds the API image as `leverage-api:<version>` in this Mac's Docker,
 pulls the PostgreSQL image `compose.yaml` pins by its digest, builds the app,
-the helper and the runner in release mode, and writes `dist/Leverage.app`,
+the helper, the runner and the MCP server in release mode, and writes `dist/Leverage.app`,
 signed ad hoc and not notarized, so it runs on this Mac only.
 `scripts/build_app.sh --no-image` builds the bundle without the image (CI
 does this). It is meant to be moved anywhere and opened from Finder; so
@@ -67,7 +67,8 @@ environment.
    orchestrator, and the provider rule keeps a reviewer off a provider
    that built the task, so a first run needs these three agents on two
    providers. Settings, at the foot of the left pane, lists the rules and
-   turns each on or off.
+   turns each on or off. Settings > Workspace settings sets the lease length,
+   check timeouts, maximum rounds, re-run limit and recovery time ceiling.
 5. Choose Add task, fill in the form and save it. The task waits in
    Backlog, "Checking the details", until the orchestrator has checked it;
    then it goes to Ready, the builder claims it, the reviewer reviews it,
@@ -75,16 +76,37 @@ environment.
    Timing section. A task the check sends back says why on its card and
    its page.
 
-While no orchestrator is connected, or while it is not running, every
-check waits: the health line says so, and Needs you shows "The agent that
-checks tasks is offline" with the number of checks waiting, at the next
-sweep (every 15 seconds) when no orchestrator has polled for 90 seconds or
-none was ever connected. The waiting checks go on by themselves when it
-is back.
+When checks are queued and no orchestrator is polling, the health line
+and Needs you show the offline state. A question goes to the owner at
+once when no enabled orchestrator seat is connected. An outward action
+waiting for an approval job goes to the owner after two queue timeouts
+if the job is never claimed. The default is four minutes.
 
-Agents run only while the app is open. Closing the window keeps them
-running; quitting the app stops them. The server's containers keep running
-after the app quits.
+The app runs its managed seats while the app is open. Closing the window
+keeps those seats running. Quitting the app stops those seats. The server
+containers continue to run.
+
+### Connect a seat through MCP
+
+In Agents choose Connect, select a role and use the option for an agent
+that connects on its own. Under How it connects, select Through MCP.
+Copy the MCP settings to the client and replace `PASTE-THE-TOKEN-HERE`
+with the token shown in Connect. Start the client with those settings and
+paste the landing prompt. The settings start `LeverageMCP` from the Mac app bundle. If the bundle
+moves, update the executable path. The client needs these settings for
+the child process.
+
+| Setting | Value |
+| --- | --- |
+| Executable | The absolute path to `Leverage.app/Contents/MacOS/LeverageMCP` |
+| `LEVERAGE_API_URL` | The live loopback URL from Connect. With no URL set the process defaults to `http://127.0.0.1:3000` |
+| `LEVERAGE_SEAT_TOKEN` | The seat token shown once in Connect, passed in the environment |
+| `LEVERAGE_SEAT_ROLE` | `builder`, `reviewer`, `orchestrator` or `planner`. If omitted, the client discovers all agent tools and the API still enforces the seat's role |
+
+Keep any client settings file containing the token readable only by
+the owner's Mac account. The landing prompt carries no token. The
+client speaks MCP with the child over standard input and output.
+[ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
 
 ## Where things live
 
@@ -120,6 +142,9 @@ owner signs up again on the new database its dumps are small and newer:
 - `docker volume prune` (or `docker system prune --volumes`) while the
   containers are stopped;
 - resetting Docker Desktop to its factory defaults, or uninstalling it.
+
+Delete content clears the live database. Existing dumps follow their
+normal retention and can hold older task content.
 
 The log is lost for good when the volume and the backups folder are both
 lost: by deleting the support folder as well, or by losing the Mac's disk.
@@ -349,8 +374,9 @@ you changed it. `docker compose exec -T api bin/rails leverage:verify_log`
 replays the log of every workspace against the tables and prints one line
 per workspace, and `docker compose exec -T api bin/rails
 leverage:recovery_times` prints how long each interrupted run took to get
-back to work. No recovery time ceiling is set yet, so it compares nothing
-unless given one in `CEILING_SECONDS`. `docker compose exec -T api
+back to work. It compares intervals with the workspace's recovery time
+ceiling when set. `CEILING_SECONDS` overrides that value for the command.
+`docker compose exec -T api
 bin/rails leverage:rule_timing` prints each rule's checks: how often it
 ran, its queue and run times, the time it held tasks up, its tokens and
 reported spend, and how often a check was let through; ids only, no rule's
@@ -362,6 +388,7 @@ The checks that cover the whole product, from the repository root:
 scripts/e2e_core_loop.sh
 scripts/e2e_handoff.sh
 scripts/e2e_rule_checks.sh
+scripts/e2e_questions_approvals.sh
 scripts/restore_drill.sh
 scripts/build_app.sh && scripts/smoke_app.sh
 ```
@@ -383,6 +410,9 @@ fourth try that waits for the owner to let it through, the orchestrator
 stopped and started again, the provider rule, and a drafted contract. For
 each it checks the log, prints each rule's timing, and scans for secrets,
 for markers and for the test's task text in events and logs.
+`scripts/e2e_questions_approvals.sh` exercises questions, outward actions,
+project budgets and the built MCP server with stand-ins. Each of seven
+cases runs in its own project and checks replay, audit and the secret scan.
 `scripts/restore_drill.sh` alone fills a project of its own with a seeded
 log, dumps it, removes the volume and restores into the new cluster.
 `scripts/smoke_app.sh` opens the built app with a support folder and a
@@ -413,12 +443,16 @@ default).
 
 ### Eval suites and real checks
 
-Three more runs reach a provider's real tool, signed in on the Mac. Each
+The evals and developer checks below reach a real tool already signed in
+on the Mac. Each
 is the maintainer's, never runs in CI, refuses to start (exit 2) when `CI`
 is set, and runs on a real tool only with its switch set by hand:
 
 ```bash
 LEVERAGE_EVAL=specific-details LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh specific-details
+LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 scripts/eval_rule.sh approves-actions
+LEVERAGE_REAL_MCP=1 LEVERAGE_REAL_PROVIDER=claude scripts/real_mcp_run.sh claude
+LEVERAGE_REAL_PROVIDER=claude scripts/real_approval_check.sh claude   # or codex, gemini
 LEVERAGE_REAL_PROVIDER=claude scripts/real_rule_check.sh claude   # or codex, gemini
 LEVERAGE_REAL_PROVIDER=gemini scripts/real_rule_check.sh gemini --through-app
 ```
@@ -442,10 +476,20 @@ helper starts), completes two contracts from the suite, one specific and
 one vague, and passes when the first is Ready and the second is held for
 details within 5 minutes, the log replays and the secret scan finds
 nothing: two tool runs. It exits 3 when the tool is not installed.
-`python3 -I scripts/check_evals.py`, which CI runs, needs no provider: it
-checks the cases, that each supported model has a result for today's
-instruction and cases, the scores, and the registry's list of providers
-the suite covered.
+
+The approval suite uses 30 main cases and reserves 10 held-out cases for
+a wording change under the suite's run rules. The results bind to the
+instruction, case set and orchestrator role file. CI checks both suites
+offline and compares the registry with the providers that met both bars.
+[Approval suite](../evals/approves-actions/README.md)
+
+`scripts/real_mcp_run.sh` checks one Claude Code task to Done over MCP with
+a stand-in reviewer. `scripts/real_approval_check.sh` checks an approval
+and a stop or owner handoff with a real orchestrator and a stand-in
+builder and reviewer. The approved action writes a line to a temporary
+test file. Both checks replay the log and scan for secrets. The scripts
+accept `LEVERAGE_E2E_SCRATCH` to reuse a Swift build directory. Their
+outcomes are in [Measurements](IMPLEMENTATION.md#measurements).
 
 ## Stopping and rolling back
 

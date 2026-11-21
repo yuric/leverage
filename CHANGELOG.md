@@ -10,13 +10,28 @@ once it makes its first release.
 
 ### Added
 
+- Worker questions and access requests, with owner replies and grants
+  in Needs you.
+- Outward actions after review, with approval or stop decisions, a
+  Finishing lease for the original builder and owner choices for
+  unconfirmed actions.
+- Decided for you records approvals and answers made by deciding.
+  Activity shows the workspace's events.
+- Projects have briefs, budgets and pause controls. Tasks have project,
+  priority and spending limit controls. Repeated failed reviews can
+  require a stronger builder.
+- Workspace settings and content deletion for finished work.
+- The bundled MCP server exposes the agent interface for seats that
+  connect on their own. All seven shipped rules act, and outward action
+  approvals have their own eval suite.
+
 - Added rule checks: rules with versions in Settings, checks by an
   orchestrator agent, tasks that wait on a check, letting a check through
   once, a Timing section and rule checklist on each task, drafting a
   task's details, and the item that says no agent may review. The PRD's
   Rule checks milestone: every workspace has the seven shipped rules, on,
   written at sign-up or, for an existing installation, when the server
-  starts; four of them start acting in a later version. The owner's rules
+  starts. Four first act in the Questions and approvals milestone. The owner's rules
   gate a task becoming ready, an agent starting it, its work being
   submitted and its review passing; a rule leverage checks itself answers
   at once, and one a model judges is a job for an orchestrator agent,

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Rules in force; the contract recorded; the Core loop, Handoff and Rule checks milestones built: the API's transition function, sign-in, the agent and helper calls, the helper, the reference runner and the Mac app, run on the owner's Mac; a run that meets a limit or a sign-out continues on the next account; a daily backup; the owner's rules gate four task moves and who may review, checked in the server or by an orchestrator agent |
+| **Status** | Rules in force. The Core loop, Handoff, Rule checks and Questions and approvals are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
 | **Last updated** | 2026-11-20 |
 
 This document describes how leverage is built: its components, how they
@@ -308,6 +308,8 @@ flowchart LR
     helper["LeverageHelper"]
     runner["LeverageRunner, one per running seat"]
     tool["The provider's tool"]
+    client["An agent that connects through MCP"]
+    mcp["LeverageMCP"]
     backups[("backups folder")]
     subgraph docker["Docker containers (project leverage-app)"]
       api["api (Rails)"]
@@ -324,6 +326,8 @@ flowchart LR
   app -- "HTTP, 127.0.0.1" --> api
   helper -- "HTTP, 127.0.0.1" --> api
   runner -- "HTTP, 127.0.0.1" --> api
+  client -- "MCP over standard input and output" --> mcp
+  mcp -- "HTTP, 127.0.0.1" --> api
   api --> db
   sweep --> db
   backup --> db
@@ -340,8 +344,9 @@ installs a provider's tool, and starts and stops a `LeverageRunner` for
 each seat the app runs, each on the account the server names. A runner
 claims tasks or reviews over the agent interface and drives the provider's
 tool for each criterion or review; an orchestrator's or a planner's runner
-claims jobs instead, a rule check or a contract draft, and runs the tool
-once per job. The tool never calls leverage. When a
+claims jobs instead. An orchestrator checks rules, handles questions and
+decides action approvals. A planner drafts contracts. The runner drives the
+tool for each job. When a
 tool run fails because its account reached a limit or is signed out, the
 runner tells the helper in one line, the helper reports it, and the
 server continues the work on the next account in the Handoff order or
@@ -350,16 +355,15 @@ Every change goes through the API's transition function, which appends the
 event log in the same transaction, and asks the owner's rules at a task's
 gated moves ([ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md)).
 A seat that connects on its own calls the same agent interface with its
-own token.
+own token, directly or through [LeverageMCP](#mcp-server-leveragemcp).
 
 ## Components
 
-Seven product units exist: the API and six Swift ones. The roles
-[ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) gives them,
-and the units [ADR 0005](adr/0005-code-units-of-the-core-loop.md) adds, are
-built as far as the Rule checks milestone; the Handoff and Rule checks
-milestones added no unit and no direction. Each entry says what the code
-does today.
+Seven product units exist: the API and six Swift units.
+[ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) and
+[ADR 0005](adr/0005-code-units-of-the-core-loop.md) record the original
+units. [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+adds the MCP server.
 
 ### API
 
@@ -459,8 +463,10 @@ does today.
   signed in and keeps nothing of its output; `RunEndReport` is the one line
   a runner prints when its account stops, naming the task, the review or
   the job it was on. The models of the rules, the rule checks, the jobs and
-  a task's timing are in `Models/`, and the registry list of providers the
-  eval suite covered is `ContractLists.orchestratorTestedProviders`.
+  a task's timing are in `Models/`. The registry's list of providers that
+  met both eval bars is `ContractLists.orchestratorTestedProviders`.
+  The generator also writes the agent tool schemas to
+  `Generated/AgentTools.swift` from the interface contract.
 - **Owns:** every HTTP call from the Mac side to the API, and the decoding
   of the answers.
 - **Depends on:** Foundation (`FoundationNetworking` where it exists), the C
@@ -490,20 +496,36 @@ does today.
   material. A command that answers `pending` is asked for again by its key
   until it is decided; a submit refused `blocked_by_rule` is worked again
   with the rule's name and reason as quoted material, up to the server's
-  re-run limit. An orchestrator's or a planner's runner runs `JobFlow`
-  instead: it claims one job, runs it (`CheckJob` or `DraftJob`, with the
-  frames of `JobPrompts` and the answers read by `VerdictParser` or
-  `DraftParser`), sends the result once, and asks `GET /v1/next` every 30
-  seconds while its tool runs
+  re-run limit. The builder runs approved actions in `FinishingFlow` and
+  reports the work through the agent interface. An orchestrator's or a
+  planner's runner runs `JobFlow` instead. The runner claims one job and
+  calls `CheckJob`, `DraftJob`, `QuestionJob` or `ApprovalJob`. The
+  runner sends the result once and asks `GET /v1/next` every 30 seconds
+  while the tool runs
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)).
-  `LeverageRunner eval` runs an eval suite's inputs through `CheckJob`
-  with no server ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
+  `LeverageRunner eval` runs the two eval suites through the production
+  `CheckJob` or `ApprovalJob` without serving the HTTP API.
+  [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)
 - **Owns:** nothing stored. It makes `<work root>/<task id>/` when a task
   names no folder, and `<work root>/jobs/<random id>/` for each tool run
   of a job, removed after the run.
 - **Depends on:** LeverageKit.
 - **Code:** `mac/Sources/LeverageRunner/`; tests in
   `mac/Tests/LeverageRunnerTests/`.
+
+### MCP server (LeverageMCP)
+
+- **Responsibility** is to expose the agent interface as tools over MCP.
+  The client's settings start the process. `ToolCatalog` lists the
+  generated tools for the configured role, and `ToolCaller` forwards
+  calls through the shared HTTP transport. The server keeps the current
+  task or review in memory for heartbeats and work calls.
+  [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+- **Owns** the MCP session, with the Rails API authoritative for seat
+  authorization, idempotency and work state.
+- **Depends on** LeverageKit, Foundation and CoreFoundation.
+- **Code** lives in `mac/Sources/LeverageMCP/`, with tests in
+  `mac/Tests/LeverageMCPTests/`.
 
 ### Mac helper (LeverageHelper)
 
@@ -566,7 +588,9 @@ does today.
   Change (and the landing prompt of a seat that connects on its own), the
   Credentials list with Add credential, Sign in again and each login's
   limit, the Handoff tab with the order and its eight fixed rules, and
-  Settings with the Rules screen. `InboxWatcher` announces each Needs you item once, through
+  Settings with Rules and Workspace, Projects, Activity and Decided for
+  you. The task page includes questions, outward actions and task settings.
+  `InboxWatcher` announces each Needs you item once, through
   `Notifying`, and keeps the count on the tab. Every owner-facing sentence
   is a case of a copy catalog, checked against the PRD's banned terms by
   `CopyTests`. `Live.swift` builds the real services (`LiveSettings`, the
@@ -579,7 +603,7 @@ does today.
   `AddTask/`, `TaskPage/`, `NeedsYou/`, `Agents/`, `Credentials/`,
   `Handoff/`, `Settings/`, `Design/`); tests in
   `mac/Tests/LeverageAppTests/`. `scripts/build_app.sh` assembles
-  `dist/Leverage.app` from it, the helper, the runner and
+  `dist/Leverage.app` from it, the helper, the runner, the MCP server and
   `mac/Packaging/`.
 
 ### Test units
@@ -591,6 +615,9 @@ and `FakeInboxCursorStore`. `LeverageEndToEndTests` runs the built helper
 and runner against the real API (`scripts/e2e_core_loop.sh`,
 `scripts/e2e_handoff.sh` for the six interrupted runs, and
 `scripts/e2e_rule_checks.sh` for the seven rule-check runs).
+`scripts/e2e_questions_approvals.sh` adds seven runs and starts the built
+MCP server against the real API with `ScriptedMCPClient`.
+`LeverageMCPTests` checks protocol, process, tool and heartbeat behavior.
 `mac/Tests/StandIns/` holds the stand-in tools (`claude`, `codex`, `agy`,
 `grok`, an installer and an archive) in Python and shell, and under
 `replies/` the provider replies the detectors are tested against and the
@@ -608,19 +635,21 @@ API calls nothing on the Mac side.
 The runner and the helper never import each other: the helper starts the
 runner as a process. The app imports neither: it reaches the helper only
 through the server and by starting its process. The units and their
-directions are recorded in
-[ADR 0005](adr/0005-code-units-of-the-core-loop.md).
+directions are recorded in [ADR 0005](adr/0005-code-units-of-the-core-loop.md)
+and [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md).
 
 | Code unit | Folder | May import |
 |---|---|---|
 | `LeverageKit` | `mac/Sources/LeverageKit/` | nothing |
 | `LeverageRunner` | `mac/Sources/LeverageRunner/` | `LeverageKit` |
+| `LeverageMCP` | `mac/Sources/LeverageMCP/` | `LeverageKit` |
 | `LeverageHelper` | `mac/Sources/LeverageHelper/` | `LeverageKit` |
 | `LeverageAppServices` | `mac/Sources/LeverageAppServices/` | `LeverageKit` |
 | `LeverageApp` | `mac/Sources/LeverageApp/` | `LeverageKit`, `LeverageAppServices` |
 | `LeverageTestSupport` | `mac/Tests/LeverageTestSupport/` | `LeverageKit` |
 | `LeverageKitTests` | `mac/Tests/LeverageKitTests/` | `LeverageKit`, `LeverageTestSupport` |
 | `LeverageRunnerTests` | `mac/Tests/LeverageRunnerTests/` | `LeverageKit`, `LeverageRunner`, `LeverageTestSupport` |
+| `LeverageMCPTests` | `mac/Tests/LeverageMCPTests/` | `LeverageKit`, `LeverageMCP`, `LeverageTestSupport` |
 | `LeverageHelperTests` | `mac/Tests/LeverageHelperTests/` | `LeverageKit`, `LeverageHelper`, `LeverageTestSupport` |
 | `LeverageAppServicesTests` | `mac/Tests/LeverageAppServicesTests/` | `LeverageKit`, `LeverageAppServices`, `LeverageTestSupport` |
 | `LeverageAppTests` | `mac/Tests/LeverageAppTests/` | `LeverageKit`, `LeverageApp`, `LeverageTestSupport` |
@@ -639,7 +668,7 @@ the first change that needs one chooses it and adds it here.
 | Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
 | Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code, four timings (the lock wait, the event and step writes, the whole transition and the time in `Transitions::Gate`) and the rule a `blocked_by_rule` refusal names (`Leverage::CommandLog`); never a header, a body or a rule's reason. A logged parameter keeps its key, and its value only when the value is an id, a number or true or false: every other text, task text and a rule's words among it, is `[FILTERED]`, and so is anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
 | Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, the app's `LEVERAGE_NOTIFICATIONS`, and `LEVERAGE_EVAL` and `LEVERAGE_EVAL_REAL`, read only by `LeverageRunner eval` and `scripts/eval_rule.sh`; [DEPLOY.md](DEPLOY.md) lists them). The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
-| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)), the one number `InboxCursorStore` keeps among them. No token is ever written to a file. |
+| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | The owner's session token in the login Keychain (`KeychainSessionStore`, one item); everything else in files under the support folder (see [Data](#data)), the one number `InboxCursorStore` keeps among them. The app writes no token to a regular file. External MCP client settings may contain the self-connected seat's token. |
 | Notifications | None. | `Notifying` in LeverageKit's `AppRuntime`; the real one is `UserNotifier` in LeverageAppServices, on the platform's `UserNotifications`, made only by `UserNotifier.make(bundleURL:environment:)` and only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`; everywhere else, tests included, the form that posts nothing. `InboxWatcher` in LeverageApp is its one caller. |
 | Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
 | How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
@@ -710,8 +739,8 @@ the first change that needs one chooses it and adds it here.
   name, a kind and a state; no login, sign-in token, settings folder or
   keychain reference has a column.
 - **How long.** The sweep deletes `commands` rows (the idempotency keys and
-  stored outcomes) and `sweep_runs` rows older than 7 days. Nothing else is
-  deleted; the log is kept for good.
+  stored outcomes) and `sweep_runs` rows older than 7 days. Delete content clears the applicable content columns while keeping
+  the event log and timing records.
 - **Backups.** The `backup` service dumps the whole database once a day
   (`pg_dump` custom format) into a folder on the host, outside Docker's
   volumes: the app's `<support folder>/backups`, folder 0700, each file
@@ -744,14 +773,12 @@ the first change that needs one chooses it and adds it here.
   `scripts/check_reply_fixtures.py`
   ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md)). They
   are test data, not shipped in the app.
-- **Eval suites.** `evals/specific-details/` holds the suite of "Every task
-  needs specific details": its 24 made-up cases, its bar, one result per
-  supported model, the record of every run on real tools and
-  `RESULTS.md`. A result holds each case's verdict, reason, tokens and
-  seconds, the tool's name and version and the hashes of the instruction
-  and the cases; never the tool's raw output, never its path, and nothing
-  shaped like an email or a token, which `scripts/check_evals.py` refuses
-  ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)).
+- **Eval suites.** [Specific details](../evals/specific-details/README.md)
+  and [outward action approvals](../evals/approves-actions/README.md)
+  hold made-up cases, numeric bars, run records and per-model results.
+  Results record model verdicts or decisions, short reasons, tokens,
+  elapsed time and provenance hashes. The scorer keeps no raw tool output.
+  [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)
 
 ## Interfaces
 
@@ -769,36 +796,21 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Expected behavior, end to end | `api/contract/traces/` (nineteen traces; 09 and 10 are the Core loop's and 11 to 15 the Handoff milestone's, all with no rules, and 16 to 19 the Rule checks milestone's; all but 03 and 04, which need outward actions, run whole) |
+| Expected behavior, end to end | `api/contract/traces/` (23 golden traces, all run whole) |
+| Agent MCP tools | `api/contract/openapi.json`, `api/contract/roles.json` and the session behavior in [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
-The served operations are the Core loop's and eleven the Handoff milestone
-serves: 16 agent calls, the owner's sign-in, reads and commands, the
-helper's calls, and `GET /v1/health`; then the helper's `report_limit` and
-`report_signed_out`, and the owner's `sign_in_again`, `list_inbox`,
-`promote_task`, `edit_contract`, `hold_task`, `resume_task`, `pause_seat`,
-`resume_seat` and `change_seat`; then twelve the Rule checks milestone
-serves: the agent calls `claim_next_job` and `submit_job_result`, and the
-owner's `list_rules`, `add_rule`, `save_rule`, `enable_rule`,
-`disable_rule`, `revert_rule`, `remove_rule`, `rerun_check`,
-`override_check` and `draft_contract`. A limit or sign-out report that
-names a job runs `report_job_limit` or `report_job_signed_out`. Every
-other operation of the contract answers `404`: among them the calls of
-questions and outward actions, `report_reading`, reordering, renaming and
-removing a credential, API tokens and `change_workspace_settings`. The
-Handoff and Rule checks milestones added no operation to the contract;
-what the Rule checks milestone changed that is not provisional is listed
-in [the contract's README](../api/contract/README.md). The Core loop added six
-operations to the contract: `get_setup_state` and `create_owner` (the
-first sign-in), `sign_out_owner`, `get_helper_request` (one helper
-request's state and progress, with a long poll), `report_request_progress`
-(the helper's per-check progress) and `get_landing_prompt` (the text the
-owner pastes into a seat that connects on its own).
+The route table serves all 24 agent operations and the owner and helper
+operations for the Core loop, Handoff, Rule checks and Questions and
+approvals. The Credentials milestone operations are still unserved.
+The contract README records changes to each interface by milestone.
 
 - **Commands.** Every call that changes something is a `POST` that carries
   an `Idempotency-Key` header and answers one outcome body: 200 completed,
   202 pending, 409 refused with a code from the registry's `refusals`. A
-  repeat of the key answers the stored outcome and writes nothing.
+  repeat of the key writes no events. A stored job claim exposes material
+  only while the seat still holds the job in its current role and project.
+  Delete content clears stored claim copies of the deleted material.
 - **Events** are versioned. A released payload version is never edited: a
   change adds a new version, the server writes the newest, every reader
   handles every listed version, and old events are never rewritten.
@@ -843,6 +855,11 @@ tool's default model (`probe`); Grok's has never run.
 | Codex | `codex exec <prompt> --json --sandbox read-only --skip-git-repo-check --ephemeral -C <empty folder> -o <file>` | `probe` |
 | Gemini | `agy -p <prompt> --output-format json --print-timeout <n>s`, never `--mode plan` | `probe` |
 | Grok | `grok -p <prompt> --cwd <empty folder>` | `help` |
+
+The managing agent ran Claude Code 2.1.325 as a builder over MCP with
+`--mcp-config <file> --strict-mcp-config --allowedTools mcp__leverage`
+(`probe`). The client asked for protocol revision 2025-11-25, and the
+task reached Done with a stand-in reviewer.
 
 A job's run also passes the seat's model and effort when the seat sets
 them (`--model` and `--effort` for Claude and Antigravity, `-m` for Codex
@@ -905,7 +922,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
     the app runs, and lives only in its runner's environment; it ends at
     the next pickup, when the run is reported stopped, and when the seat is
     removed. A seat that connects on its own gets its token once in the
-    Connect sheet; Remove ends it.
+    Connect sheet. Remove ends it. An MCP client starts `LeverageMCP`
+    using the seat token from the client's settings as
+    `LEVERAGE_SEAT_TOKEN` in the child environment. The MCP server uses
+    the token for API authentication and never logs it. The settings
+    that start the child may hold the token. The app and runner do not
+    store it there. [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
 - **The setup call.** `POST /v1/owner/setup` needs no token and creates the
   one owner. It answers `404` once an owner exists; until then any program
   on the Mac that can reach the loopback address could call it.
@@ -921,7 +943,7 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   lists, also after a redirect.
 - **Task text reaches a checker only as material**
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
-  check's or a draft's prompt every piece of task text, the contract
+  check, draft, question or approval prompt every piece of task text, the contract
   included, is inside a block marked with a nonce made for that run, with
   every marker in the text broken (no run of `<` longer than two, and no
   `LEVERAGE` followed by a hyphen or a dash that looks like one), and the
@@ -930,8 +952,9 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   text and stands outside the blocks, as the checker's instruction. A
   checker's run starts in a new empty folder, which is not a wall. What a
   checker's run can reach if an instruction in task text got past the
-  frame differs by provider; ADR 0012, decision 4, says what is claimed for
-  each.
+  frame differs by provider. ADR 0012, decision 4, records the reach of
+  each provider's check mode. The same table applies to the run that
+  decides an outward action approval.
 
   A checker's reason is at most 500 characters, stays in its row, and
   reaches a builder's tool only as quoted material. A refused command's
@@ -1022,7 +1045,10 @@ Each choice is recorded in the ADR named beside it.
 | Notifications | The platform's `UserNotifications`, a module of macOS, not a dependency to pin | No ADR: nothing is chosen beyond the platform the Mac app already targets |
 | Rule gating | The engine reads and decides; `Transitions::Gate` and four writers write; a waiting command is stored whole and finished by its own entry as its requester; no new dependency | [ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md) |
 | Model checks | An orchestrator agent runs each check as a job with the provider's tool in its check mode, task text in nonce-marked quote blocks, in an empty folder | [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md) |
-| Eval suites | A folder per suite, run on real tools by the maintainer only, scored in CI with no provider | [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) |
+| Eval suites | A folder per suite. CI scores the committed runs without using a provider | [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) |
+| MCP server | Swift executable over standard input and output, using the shared HTTP transport and generated agent tool schemas | [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
+| Finishing | A shared settlement path for action decisions and one scan for delayed leases | [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) |
+| Overturn after action completion | A durable event on the action | [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) |
 
 ## Architecture decision records
 
@@ -1070,3 +1096,6 @@ Recorded so far:
 - [0011. Gating reads and the transition function writes](adr/0011-gating-reads-and-the-transition-function-writes.md)
 - [0012. How task text reaches a checker](adr/0012-how-task-text-reaches-a-checker.md)
 - [0013. Eval suites for rules a model judges](adr/0013-eval-suites-for-rules-a-model-judges.md)
+- [0014. The MCP server is a Swift program over standard input and output](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+- [0015. One method decides what a Finishing task does next](adr/0015-one-method-decides-what-a-finishing-task-does-next.md)
+- [0016. An overturned approval that changes nothing is an event](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md)

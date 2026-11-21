@@ -648,12 +648,17 @@ allows the recovery time ceiling to be cleared (AP-39).
   and a waive keeps it (AE-16). A re-enabled seat can still hold the
   task's paused lease. Offer task again replaces that lease. Mark action
   done keeps it when approved actions remain (AP-19).
+- `task.created` carries the initial `action_ids` so replay can recover
+  actions added with the task. Replay accepts older events without that
+  field (DB-50). `action.stopped.overturned` distinguishes an open
+  approval overturned by the owner from an ordinary stop (DB-51).
 - A question passed on without blocking has a Needs you item with a null
   hold. The answer, overturn and content deletion rows declare which
   cases are accepted and which return `invalid_state` (AP-3, AP-6,
   AP-36). A project deletion also writes `content.deleted` for each
-  task whose content it deletes. Edit brief writes `brief.changed` once
-  per entry added or removed (AP-27).
+  task whose content it deletes. A changed brief advances its version
+  once. Added and removed entries write `brief.changed` at that version.
+  A reorder alone records the moved entries (AP-27, DB-41).
 - Complete contract and Edit contract close a budget hold when the new
   cap is empty or above the task's reported spending (AE-12). A report
   opens no budget hold on a task the command just ended.
@@ -667,6 +672,12 @@ allows the recovery time ceiling to be cleared (AP-39).
   returns the chosen form in `connection` (AM-8). Connect and Change
   seat accept strength ranks 1 to 3 (AP-24). Activity uses the registry's
   `important_event_types` list (AP-34).
+- The owner inbox includes optional `detail` for access requests and
+  stopped approvals. The content stays in its row.
+- Delete content also clears stored claim copies. A stale job claim
+  exposes no material when the seat no longer holds that job in the
+  current role or project, or the task content was deleted. A repeat
+  preserves the key and never claims new work.
 - Decided for you reads expose the decision, its task and seat, and the
   result of an overturn (AP-31, AP-32, AP-35). Projects expose their
   ordered briefs, pause source, open task count and content deletion

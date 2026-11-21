@@ -317,9 +317,10 @@ Where two inventories chose differently, the decision names the conflict.
   `password_digest`, `users.workspace_id` unique; `sessions (user_id,
   token_hash, created_at, last_used_at)`. D-G45, I-G17.
 - **DB-41** `[shape]` `projects.brief_version integer not null default 0`,
-  incremented on each `brief.changed`. Conflict: R-G28 (the seq of the
-  latest `brief.changed`); the column wins as the plainer read. D-G46,
-  R-G28.
+  incremented once for a whole brief edit that changes content or order.
+  Added and removed entries write `brief.changed` with the same
+  version. A reorder with no added or removed entries writes the moved
+  entries at the new version. An unchanged list writes nothing. D-G46, R-G28.
 - **DB-42** `[shape]` Content columns are nullable and blanked by Delete
   content (which writes `content.deleted`); `tasks.content_deleted_at`,
   `projects.content_deleted_at`. Content: task title, goal, details, work
