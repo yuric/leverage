@@ -99,6 +99,7 @@ struct BoardModelTests {
         let model = makeModel(owner)
         let navigator = Navigator()
         await model.load()
+        #expect(model.builders.map(\.id) == [Fixtures.builderID])
 
         func filteredTitles() -> [String] {
             model.lanes(matching: navigator.boardFilter).flatMap(\.cards).map(\.title)

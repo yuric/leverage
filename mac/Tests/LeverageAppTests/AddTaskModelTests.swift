@@ -69,6 +69,11 @@ struct AddTaskModelTests {
         #expect(choices.map(\.name) == ["No project", "Invoices", "Reports"])
         #expect(choices.map(\.id) == [nil, first.id, second.id])
 
+        let partial = scoped.projectChoices([first])
+        #expect(partial.map(\.name) == ["No project", "Invoices", "Selected project"])
+        #expect(partial.map(\.id) == [nil, first.id, second.id])
+        #expect(scoped.projectID == second.id)
+
         navigator.selectProject(nil)
         let all = AddTaskModel(api: scripted(), boardFilter: navigator.boardFilter, onSaved: {})
         #expect(all.projectID == nil)
@@ -138,7 +143,7 @@ struct AddTaskModelTests {
         #expect(model.canSave)
         await model.save()
         #expect((try owner.call(at: 1)).body?["actions"] == .array([
-            .object(["kind": .string("send"), "description": .string("Send the report.")]),
+            .object(["kind": .string("send"), "description": .string("  Send the report.  ")]),
         ]))
     }
 

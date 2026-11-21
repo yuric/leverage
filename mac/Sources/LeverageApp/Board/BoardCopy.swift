@@ -8,10 +8,12 @@ enum BoardCopy: OwnerFacingCopy {
     // Lane headings.
     case laneIdeas, laneBacklog, laneBlocked, laneReady, laneInProgress, laneDone, laneCancelled
     case emptyLane, showCancelled, loading
+    case projectFilter, agentFilter, allAgents, selectedProject, selectedAgent
 
     // A card's status line.
     case lineNotStarted, lineNeedsDetails, lineWaitingForAgent, lineBuilding, lineReviewing, lineFinished
     case lineCancelled, linePaused, anAgent, lineCheckingDetails
+    case lineWrappingUp, lineWaitingForItsAgent, lineWaitingForStrongerAgent
 
     // A card's chip for the state it is in.
     case chipNeedsDetails, chipNew, chipInReview, chipDone, chipCancelled, chipCheckingDetails, chipBeingChecked
@@ -24,6 +26,8 @@ enum BoardCopy: OwnerFacingCopy {
     // A card's note.
     case noteNoReviewer, noteWaitingForAccount, noteWaitingForAccountNoTime, noteAccountSignedOut, anAccount
     case noteCheckCouldNotRun, noteEveryAgentTurnedAway, noteCheckedTooManyTimes
+    case noteQuestion, noteApproval, noteAccess, noteBudget, noteProjectPaused, noteActionStopped, noteActionUnconfirmed
+    case noteOtherProvidersTooWeak
 
     var text: String {
         switch self {
@@ -37,6 +41,11 @@ enum BoardCopy: OwnerFacingCopy {
         case .emptyLane: "Nothing here"
         case .showCancelled: "Show cancelled"
         case .loading: "Loading the board…"
+        case .projectFilter: "Project"
+        case .agentFilter: "Agent"
+        case .allAgents: "All agents"
+        case .selectedProject: "Selected project"
+        case .selectedAgent: "Selected agent"
 
         case .lineNotStarted: "Not started yet"
         case .lineNeedsDetails: "Say what done looks like to send it to an agent"
@@ -48,6 +57,9 @@ enum BoardCopy: OwnerFacingCopy {
         case .linePaused: "Paused, was {lane}"
         case .anAgent: "An agent"
         case .lineCheckingDetails: "Waiting for the check to finish"
+        case .lineWrappingUp: "Wrapping up"
+        case .lineWaitingForItsAgent: "Waiting for its agent"
+        case .lineWaitingForStrongerAgent: "Waiting for a stronger agent"
 
         case .chipNeedsDetails: "Needs details"
         case .chipNew: "New"
@@ -84,6 +96,14 @@ enum BoardCopy: OwnerFacingCopy {
             "A check turned away every agent that tried to take this task. Open it to see why."
         case .noteCheckedTooManyTimes:
             "A check ran on this work too many times. Open the task to let it through once or to change the details."
+        case .noteQuestion: "An agent is waiting for your answer."
+        case .noteApproval: "Something is ready to go out and needs your approval."
+        case .noteAccess: "An agent needs you to give it access before it can continue."
+        case .noteBudget: "This task reached its spending limit."
+        case .noteProjectPaused: "This task is waiting for its project to resume."
+        case .noteActionStopped: "Something that was to go out was stopped."
+        case .noteActionUnconfirmed: "Check whether what was meant to go out happened."
+        case .noteOtherProvidersTooWeak: "Accounts of other providers are not strong enough for this task"
         }
     }
 
@@ -110,9 +130,16 @@ enum BoardCopy: OwnerFacingCopy {
         }
     }
 
-    /// The sentence under a card that waits on a check, for the three holds a rule opens.
+    /// The sentence under a card explaining what the task waits for.
     static func note(for reason: HoldReason) -> BoardCopy? {
         switch reason {
+        case .ownerQuestion: .noteQuestion
+        case .ownerApproval: .noteApproval
+        case .access: .noteAccess
+        case .budget: .noteBudget
+        case .projectPaused: .noteProjectPaused
+        case .actionStopped: .noteActionStopped
+        case .actionUnconfirmed: .noteActionUnconfirmed
         case .checkError: .noteCheckCouldNotRun
         case .claimGateFailed: .noteEveryAgentTurnedAway
         case .rerunLimit: .noteCheckedTooManyTimes

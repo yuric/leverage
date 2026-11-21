@@ -93,10 +93,12 @@ enum CardWording {
             line = BoardCopy.lineNeedsDetails.text
             chip = CardChip(text: BoardCopy.chipNeedsDetails.text, tone: .wait)
         case .ready:
-            line = BoardCopy.lineWaitingForAgent.text
+            line = (task.waitsForStrongerAgent ? BoardCopy.lineWaitingForStrongerAgent : .lineWaitingForAgent).text
             chip = CardChip(text: BoardCopy.chipNew.text, tone: .info)
-        case .working, .finishing:
+        case .working:
             line = BoardCopy.lineBuilding.filled(["agent": agent])
+        case .finishing:
+            line = (task.waitsForBuilder ? BoardCopy.lineWaitingForItsAgent : .lineWrappingUp).text
         case .inReview:
             line = BoardCopy.lineReviewing.filled(["agent": builder])
             chip = CardChip(text: BoardCopy.chipInReview.text, tone: .info)
@@ -129,7 +131,12 @@ enum CardWording {
         var note: String?
         let accountWait = state == .done || state == .cancelled ? nil : accountWait(task, waits, accounts, clock)
         if let accountWait {
-            note = accountWait.note
+            // A minimum above Standard excludes other providers' logins added in the app (AP-24).
+            if let minimum = task.task.minimumStrengthRank, minimum > 1 {
+                note = "\(accountWait.note) \(BoardCopy.noteOtherProvidersTooWeak.text)"
+            } else {
+                note = accountWait.note
+            }
             // A Ready task no agent can start has no hold to give it a chip.
             if waitReason == nil, state == .ready {
                 chip = CardChip(
@@ -155,6 +162,8 @@ enum CardWording {
 /// One card of the board.
 struct BoardCard: Identifiable, Equatable, Sendable {
     let id: UUID
+    let projectID: UUID?
+    let builderSeatID: UUID?
     let title: String
     let lane: BoardLane
     let statusLine: String
@@ -168,6 +177,8 @@ struct BoardCard: Identifiable, Equatable, Sendable {
         let content = CardWording.content(
             for: task, seatNames: seatNames, reviewerSeatExists: reviewerSeatExists, accounts: accounts, clock: clock)
         id = task.task.id
+        projectID = task.task.projectID
+        builderSeatID = task.task.builderSeatID
         title = task.task.title
         lane = BoardLane.lane(for: task)
         statusLine = content.statusLine
@@ -192,6 +203,7 @@ final class BoardModel {
 
     private(set) var state: State = .loading
     private(set) var cards: [BoardCard] = []
+    private(set) var builders: [Seat] = []
     /// The Show cancelled switch (MA-1).
     var showCancelled = false
 
@@ -212,12 +224,17 @@ final class BoardModel {
 
     /// The lanes as drawn: the six, and the cancelled lane while the switch is on.
     var lanes: [LaneContent] {
-        let shown = showCancelled ? BoardLane.standard + [.cancelled] : BoardLane.standard
-        return shown.map { lane in LaneContent(lane: lane, cards: cards.filter { $0.lane == lane }) }
+        lanes(matching: BoardFilter())
     }
 
+    /// A task matches an agent by its builder, including when a reviewer holds it.
     func lanes(matching filter: BoardFilter) -> [LaneContent] {
-        lanes
+        let matching = cards.filter { card in
+            (filter.projectID == nil || filter.projectID == card.projectID)
+                && (filter.agentID == nil || filter.agentID == card.builderSeatID)
+        }
+        let shown = showCancelled ? BoardLane.standard + [.cancelled] : BoardLane.standard
+        return shown.map { lane in LaneContent(lane: lane, cards: matching.filter { $0.lane == lane }) }
     }
 
     /// Reads the board and the names of the agents.
@@ -228,9 +245,11 @@ final class BoardModel {
             let board = try await api.board()
             var position = board.asOfSeq
             var names = seatNames
+            var builders = self.builders
             do {
                 let seats = try await api.seats()
                 names = Dictionary(seats.seats.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+                builders = seats.seats.filter { $0.role == .builder }
                 position = min(position, seats.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
                 throw error
@@ -256,6 +275,7 @@ final class BoardModel {
             }
             guard mine == generation else { return }
             seatNames = names
+            self.builders = builders
             accounts = known
             cards = board.tasks.map {
                 BoardCard(

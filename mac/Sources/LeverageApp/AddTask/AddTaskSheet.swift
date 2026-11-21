@@ -12,9 +12,9 @@ struct AddTaskSheet: View {
     var body: some View {
         let navigator = context.navigator
         let model = box.model {
-            AddTaskModel(api: context.owner, onSaved: { navigator.finishAddTask() })
+            AddTaskModel(api: context.owner, boardFilter: navigator.boardFilter, onSaved: { navigator.finishAddTask() })
         }
-        AddTaskForm(model: model, cancel: { navigator.isAddTaskPresented = false })
+        AddTaskForm(model: model, projects: context.paneProjects, cancel: { navigator.isAddTaskPresented = false })
             .task { await model.loadRules() }
     }
 }
@@ -85,7 +85,8 @@ struct AddTaskForm: View {
                 .font(.system(size: 20, weight: .semibold))
                 .padding(.bottom, 14)
             ScrollView {
-                AddTaskFields(model: model)
+                AddTaskFields(model: model, projects: projects)
+                    .disabled(model.isBusy)
                     .padding(.trailing, 6)
             }
             Text(model.footnote.text)
@@ -141,6 +142,7 @@ struct AddTaskForm: View {
 /// The fields of the form, one under another.
 struct AddTaskFields: View {
     @Bindable var model: AddTaskModel
+    var projects: [Project] = []
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -160,6 +162,35 @@ struct AddTaskFields: View {
                 FormField(label: AddTaskCopy.detailsLabel.text) {
                     PlaceholderEditor(
                         text: $model.details, placeholder: AddTaskCopy.detailsPlaceholder.text, minHeight: 48)
+                }
+                FormField(label: AddTaskCopy.projectLabel.text) {
+                    Picker(AddTaskCopy.projectLabel.text, selection: $model.projectID) {
+                        ForEach(model.projectChoices(projects)) { choice in
+                            Text(verbatim: choice.name).tag(choice.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .disabled(!model.canChooseProject)
+                }
+                FormField(
+                    label: AddTaskCopy.actionsLabel.text,
+                    hint: model.hasIncompleteActions ? AddTaskCopy.actionDescriptionHint.text : nil
+                ) {
+                    ForEach($model.actions) { $action in
+                        HStack {
+                            Picker(AddTaskCopy.actionKindLabel.text, selection: $action.kind) {
+                                ForEach(ActionKind.allCases, id: \.self) { kind in
+                                    Text(AddTaskCopy.actionKind(kind).text).tag(kind)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                            TextField(AddTaskCopy.actionDescription.text, text: $action.description)
+                                .textFieldStyle(.roundedBorder)
+                            Button(AddTaskCopy.removeAction.text) { model.removeAction(id: action.id) }
+                        }
+                    }
+                    Button(AddTaskCopy.addAction.text) { model.addAction() }
                 }
                 FormField(label: AddTaskCopy.priorityLabel.text) {
                     Picker(AddTaskCopy.priorityLabel.text, selection: $model.priority) {
