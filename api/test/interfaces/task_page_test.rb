@@ -19,7 +19,7 @@ class TaskPageReadTest < CommittingTestCase
   def page(task)
     body = Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id)
     json = JSON.parse(JSON.generate(body))
-    assert_matches_component("TaskPage", json)
+    assert_empty contract_errors("#/components/schemas/TaskPage", json)
     json
   end
 
@@ -292,8 +292,8 @@ class TaskPageReadTest < CommittingTestCase
     task = scenario.finishing_task(actions: [ { kind: "publish", description: "A sample notice", state: "stopped" } ])
     action = Action.find_by!(task_id: task.id)
     check = scenario.rule_check(task, rule: scenario.rule(hook: "action.requested"), subject: action, result: "failed")
-    hold = Hold.find_by!(task_id: task.id, reason: "action_stopped")
-    hold.update_columns(action_id: action.id, rule_check_id: check.id)
+    item = InboxItem.find_by!(workspace_id: scenario.workspace_id, about_id: task.id, kind: "stopped_action")
+    item.update!(facts: item.facts.merge("rule_check_id" => check.id))
 
     json = page(task)
 

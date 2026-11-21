@@ -17,7 +17,7 @@ class QuestionReadTest < CommittingTestCase
     assert_instance_of Leverage::Reads::Question::Found, found
     assert_equal question.id, found.row.id
     body = JSON.parse(JSON.generate(found.body))
-    assert_matches_component("Question", body)
+    assert_empty contract_errors("#/components/schemas/Question", body)
     assert_equal [ question.id, task.id, builder.id, question.text, question.assumption, true ],
       body.values_at("id", "task_id", "asking_seat_id", "text", "assumption", "blocking")
     assert_equal [ "answered", question.answer, "decision", "seat", orchestrator.id, false ],
@@ -36,7 +36,7 @@ class QuestionReadTest < CommittingTestCase
     assert_instance_of Leverage::Reads::Question::Found, found
     body = JSON.parse(JSON.generate(found.body))
 
-    assert_matches_component("Question", body)
+    assert_empty contract_errors("#/components/schemas/Question", body)
     assert_equal [ "overturned", true ], body.values_at("outcome", "overturned")
   end
 

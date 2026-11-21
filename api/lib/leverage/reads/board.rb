@@ -44,15 +44,20 @@ module Leverage
           holds = Hold.where(workspace_id: workspace_id, task_id: task_ids, closed_at: nil).order(:opened_at, :id).group_by(&:task_id)
           items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task_ids, state: "open")
             .order(:opened_at, :id).to_a
-          item_json = inbox_items(items).group_by { |item| item.fetch(:about_id) }
+          item_json = inbox_items(workspace_id, items).group_by { |item| item.fetch(:about_id) }
           waits = waiting(workspace_id, tasks, holds)
           pending = pending_transitions(workspace_id, task_ids)
           reasons = check_reasons(holds.values.flatten)
+          finishing = tasks.select { |task| task.state == "finishing" && task.holder_seat_id.nil? }
+          waiting_builders = Action.where(workspace_id: workspace_id, task_id: finishing.map(&:id), state: "approved")
+            .distinct.pluck(:task_id).to_set
 
           { tasks: tasks.map do |task|
               open = holds.fetch(task.id, [])
               card(task, open, item_json[task.id]&.first, waits.fetch(task.id))
-                .merge(checking: pending.key?(task.id) && open.empty?, check_reason: check_reason(open, reasons))
+                .merge(checking: pending.key?(task.id) && open.empty?, check_reason: check_reason(open, reasons),
+                  waits_for_builder: waiting_builders.include?(task.id),
+                  waits_for_stronger_agent: task.state == "ready" && !task.minimum_strength_rank.nil?)
             end,
             as_of_seq: as_of_seq, reviewer_seat_exists: reviewer_seat?(workspace_id) }
         end
@@ -66,9 +71,10 @@ module Leverage
 
       # The Needs you items as the contract has them, each with the seq of its
       # inbox.opened event (the item's subject).
-      def inbox_items(items)
-        seqs = Event.where(type: "inbox.opened", subject_id: items.map(&:id)).pluck(:subject_id, :seq).to_h
-        items.map { |item| Shapes.inbox_item(item, seqs.fetch(item.id)) }
+      def inbox_items(workspace_id, items)
+        seqs = Event.where(workspace_id: workspace_id, type: "inbox.opened", subject_id: items.map(&:id))
+          .pluck(:subject_id, :seq).to_h
+        Inbox.shapes(workspace_id, items.map { |item| [ item, seqs.fetch(item.id) ] })
       end
 
       # task id => its pending PendingTransition (L373: at most one).

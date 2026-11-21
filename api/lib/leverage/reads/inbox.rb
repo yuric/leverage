@@ -37,15 +37,27 @@ module Leverage
         { items: shapes(workspace_id, items), next_after_seq: items.last&.last || after_seq }
       end
 
-      # The items as the contract has them, the count of an open
-      # Orchestrator offline item read now.
+      # The items as the contract has them. Read the offline count and the
+      # availability of Offer again from current rows.
       def shapes(workspace_id, items)
         counted = items.any? { |item, _| item.kind == COUNTED }
         count = (ActiveRecord::Base.uncached { SystemHealth.waiting_checks(workspace_id) } if counted)
+        offerable = offerable_tasks(workspace_id, items)
         items.map do |item, seq|
           shape = Shapes.inbox_item(item, seq)
-          item.kind == COUNTED ? shape.merge(facts: item.facts.merge("waiting_checks" => count)) : shape
+          if item.kind == COUNTED
+            shape[:facts] = item.facts.merge("waiting_checks" => count)
+          elsif item.kind == "unconfirmed_action" && !offerable.include?(item.about_id)
+            shape[:choices] = item.choices - [ "offer_again" ]
+          end
+          shape
         end
+      end
+
+      def offerable_tasks(workspace_id, items)
+        ids = items.filter_map { |item, _seq| item.about_id if item.kind == "unconfirmed_action" }
+        builders = Seat.where(workspace_id: workspace_id, enabled: true, removed_at: nil).select(:id)
+        Task.where(workspace_id: workspace_id, id: ids, builder_seat_id: builders).pluck(:id).to_set
       end
 
       # [item, opened_seq] pairs in seq order.

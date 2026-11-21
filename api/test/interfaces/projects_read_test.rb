@@ -47,7 +47,7 @@ class ProjectsReadTest < CommittingTestCase
 
   def projects
     body = JSON.parse(JSON.generate(Leverage::Reads::Projects.call(scenario.workspace_id)))
-    assert_matches_component("ProjectsList", body)
+    assert_empty contract_errors("#/components/schemas/ProjectsList", body)
     body.fetch("projects")
   end
 

@@ -394,6 +394,14 @@ class NextItemTest < ActiveSupport::TestCase
     assert_item Item.none, item(@builder, eligibility: waiting)
   end
 
+  test "a fresh Finishing lease still tells the builder about work already announced as started" do
+    task = @scenario.finishing_task(builder: @builder, actions: [
+      { kind: "publish", description: "Publish the sample.", state: "started" }
+    ])
+
+    assert_item Item.new("action", task.id, nil), item(@builder)
+  end
+
   test "an approved action with no holder or an expired lease is silent" do
     actions = [ { kind: "publish", description: "Publish the sample.", state: "approved" } ]
     @scenario.finishing_task(builder: @builder, holder: false, actions: actions)

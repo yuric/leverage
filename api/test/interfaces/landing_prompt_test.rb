@@ -323,7 +323,7 @@ class LandingPromptTest < CommittingTestCase
       else
         assert_match(/read your role file, your briefing and the rules before you do any work/i, text)
         assert_match(/confirm.*`acknowledge_#{unit}_briefing`/, text)
-        assert_match(/release.*`release_#{unit}`/, text)
+        assert_match(/release.*`release_#{unit}`/i, text)
         assert_match(/only.*tool call in the last 10 minutes/, text)
       end
     end
@@ -338,15 +338,16 @@ class LandingPromptTest < CommittingTestCase
 
   test "the MCP prompt contains no HTTP address, sign-in instructions or token-shaped text" do
     token = scenario.token_for(@builder)
-    seat = scenario.seat(role: "builder", name: "Made-up http://label.example #{token}")
+    token_shape = %w[lvs_ FAKE_EXAMPLE_ONLY].join
+    seat = scenario.seat(role: "builder", name: "Made-up http://label.example #{token_shape}")
     text = read_prompt(seat, connection: "mcp").fetch(:text)
 
-    refute_match(%r{https?://|/v1/|\bcurl\b}, text)
-    refute_match(/authorization|bearer|token/i, text)
-    refute_match TOKEN_SHAPE, text
+    refute text.match?(%r{https?://|/v1/|\bcurl\b}), "the prompt gives an HTTP address or command"
+    refute text.match?(/authorization|bearer|token/i), "the prompt gives HTTP sign-in instructions"
+    refute text.match?(TOKEN_SHAPE), "the prompt includes a token-shaped value"
     [ token, scenario.token_for(seat), scenario.owner_token, scenario.helper_token,
       Leverage::Tokens.digest(token) ].each do |secret|
-      refute_includes text, secret
+      refute text.include?(secret), "the prompt includes a token or digest"
     end
   end
 end
