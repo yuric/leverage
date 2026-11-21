@@ -61,7 +61,7 @@ module Leverage
           held = @job.claimed_by_seat_id == @seat.id
           codes << "task_cancelled" if held && @task&.state == "cancelled"
           codes << "not_holder" unless held
-          codes << "forbidden" unless @seat.role == @job.seat_role
+          codes << "forbidden" unless Jobs.role_matches?(@job, @seat)
           codes << Refusal.new(code: "invalid_state") unless @job.state == "claimed" && !Jobs.due?(@job, :run, ctx.at)
           codes.concat(@handler.refusals(@task))
           codes << state_refusal(nil)

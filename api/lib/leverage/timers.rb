@@ -58,7 +58,7 @@ module Leverage
     EFFECTIVE_AT = "effective_at".freeze
 
     # Approval jobs and ordinary rule checks share the check timers and
-    # the attempt's rule-version timeouts. WP6 adds the question timers.
+    # the attempt's rule-version timeouts.
     CHECK_JOB_KINDS = Contract.jobs.fetch("jobs").filter_map do |job|
       job.fetch("kind") if job.fetch("queue_timer") == "check_queue_timeout"
     end.freeze
@@ -67,6 +67,8 @@ module Leverage
     JOB_TIMERS = {
       "check_queue_timeout" => { kinds: CHECK_JOB_KINDS, state: "queued", due: :queue }.freeze,
       "check_run_timeout" => { kinds: CHECK_JOB_KINDS, state: "claimed", due: :run }.freeze,
+      "question_job_queue_timeout" => { kinds: %w[question].freeze, state: "queued", due: :queue }.freeze,
+      "question_job_run_timeout" => { kinds: %w[question].freeze, state: "claimed", due: :run }.freeze,
       "contract_draft_job_queue_timeout" => { kinds: %w[contract_draft].freeze, state: "queued", due: :queue }.freeze,
       "contract_draft_job_run_timeout" => { kinds: %w[contract_draft].freeze, state: "claimed", due: :run }.freeze
     }.freeze
@@ -82,7 +84,8 @@ module Leverage
       queue: "jobs.queued_at + workspaces.check_queue_timeout_seconds * interval '1 second'",
       run: "jobs.claimed_at + workspaces.check_run_timeout_seconds * interval '1 second'"
     }.freeze
-    JOB_DUE_SQL = CHECK_JOB_KINDS.index_with(CHECK_DUE_SQL).merge("contract_draft" => WORKSPACE_JOB_DUE_SQL).freeze
+    JOB_DUE_SQL = CHECK_JOB_KINDS.index_with(CHECK_DUE_SQL)
+      .merge(%w[question contract_draft].index_with(WORKSPACE_JOB_DUE_SQL)).freeze
     CHECK_JOINS = "JOIN rule_check_attempts ON rule_check_attempts.job_id = jobs.id " \
                   "JOIN rule_checks ON rule_checks.id = rule_check_attempts.rule_check_id " \
                   "JOIN rule_versions ON rule_versions.id = rule_checks.rule_version_id".freeze
@@ -317,7 +320,9 @@ module Leverage
       ids = target_ids(ctx.request.params)
       return [] if ids.empty? && ctx.request.caller_kind != "seat"
 
-      task_ids = ids.empty? ? [] : ids + [ Review, Job, RuleCheck ].flat_map { |model| model.where(workspace_id: workspace_id, id: ids).pluck(:task_id) }
+      targets = [ Review, Job, RuleCheck ]
+      targets << Question if %w[answer_question overturn_answer].include?(ctx.request.command)
+      task_ids = ids.empty? ? [] : ids + targets.flat_map { |model| model.where(workspace_id: workspace_id, id: ids).pluck(:task_id) }
       scope = Task.where(workspace_id: workspace_id, id: task_ids.compact)
       if ctx.request.caller_kind == "seat"
         seat_id = ctx.request.caller_id
@@ -385,8 +390,8 @@ module Leverage
       !due.nil? && due <= at
     end
 
-    # Whether a job's miss is its second (L399, DB-31): a draft's job is
-    # the attempt, so its own attempt_number says so; a check's attempt is
+    # Whether a job's miss is its second (L399, DB-31): a draft or question
+    # job has its own attempt_number; a check's attempt is
     # the second try of a miss when the attempt before it was queued once
     # more (job.requeued on its job). An attempt the owner ran again, or
     # one run again after a withdrawal or an error, misses for the first

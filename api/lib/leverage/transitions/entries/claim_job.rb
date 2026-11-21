@@ -6,7 +6,7 @@ module Leverage
       # the oldest job its role takes (Jobs.next_for), or gets the one it
       # holds again, which writes nothing (RD-40: a run moved to another
       # credential continues it). A new claim writes job.claimed with the
-      # credential and the model (Jobs.claim), and a rule check's attempt
+      # credential and the model (Jobs.claim), and a check job's attempt
       # starts (RuleChecks.start, check.started).
       #
       # Refused not_eligible when the seat may not claim or nothing is left,
@@ -32,7 +32,7 @@ module Leverage
         def perform(ctx)
           unless @job.state == "claimed"
             Jobs.claim(ctx, @job, @seat)
-            if @job.kind == "rule_check"
+            if Timers.check_job?(@job)
               check = RuleCheck.find_by!(id: @job.target_id, workspace_id: @job.workspace_id)
               RuleChecks.start(ctx, check, job: @job, seat: @seat)
             end

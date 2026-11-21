@@ -60,8 +60,8 @@ class QuestionsTest < ActiveSupport::TestCase
 
     assert_matches_component("AskQuestionResult", outcome.result)
     question = Question.find(outcome.result.fetch("question_id"))
-    job = Job.find_by!(target_id: question.id)
     assert_equal %w[question.asked check.finished job.queued], types(written)
+    job = Job.find_by!(target_id: question.id)
     assert_equal({ "blocking" => true }, written.first.payload)
     check = RuleCheck.find(written[1].subject_id)
     assert_equal [ rule.id, "question", question.id, "applied", "to_orchestrator" ],

@@ -2,9 +2,9 @@ module Leverage
   module Transitions
     module Entries
       class QuestionJobRunTimeout < JobTimer
-        def load(_ctx) = nil
+        private
 
-        def perform(_ctx) = nil
+        def miss(ctx, job) = Questions.miss_job(ctx, job, due_kind)
       end
     end
   end

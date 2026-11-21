@@ -9,7 +9,7 @@ module Leverage
   #
   # Who may claim (L545, RD-35, RD-36, HD-4): an enabled seat, not paused
   # and not removed, of the role that claims the job's kind (IF-13: the
-  # orchestrator rule checks, the planner contract drafts); for a seat the
+  # orchestrator checks and questions, the planner contract drafts); for a seat the
   # app runs, its run on its first available candidate (as Eligibility asks
   # of a builder or a reviewer), so the claim records the account that does
   # the work. A seat holds one job at a time and gets that one again (RD-40);
@@ -50,10 +50,20 @@ module Leverage
       return nil unless active?(seat)
 
       job = held(seat, at)
-      return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at)) if job
+      if job
+        return unless role_matches?(job, seat)
+
+        return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
+      end
       return nil unless placed?(seat, at)
 
       claimable(seat, at)
+    end
+
+    # A seat can change role while it holds a job. The old job still occupies
+    # the seat until it ends, but only the job's role can receive or finish it.
+    def role_matches?(job, seat)
+      job.seat_role == seat.role && kinds_for(seat.role).include?(job.kind)
     end
 
     # The job the seat holds now: claimed by it and its run time not over,
