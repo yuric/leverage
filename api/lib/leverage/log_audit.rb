@@ -7,13 +7,13 @@ module Leverage
   # a workspace's log and lists every disagreement as a line; an empty list
   # means the log passes.
   #
-  # Commands. The workspace lock makes one command's events one unbroken
-  # run of seq sharing at, so the log is cut into groups of consecutive
-  # events with the same command_id and at. A group with a key is the
+  # Commands. The workspace lock gives each command its own at. Keyed
+  # events group by command_id and at, and keyless events form consecutive
+  # runs at that time. A group with a key is the
   # command of the commands row with that key (by the caller its actor
   # names when several callers used one key; when the row is gone, purged
   # after 7 days, every command whose rows write the group's first event is
-  # tried). A group with no key is a timer's: task.lease_expired is
+  # tried). A group with no key is app-written: task.lease_expired is
   # builder_lease_expiry, review.lease_expired review_lease_expiry, and a
   # hold.closed of a credential hold (credential_limit or
   # credential_signed_out) with neither is credential_hold_release
@@ -144,16 +144,30 @@ module Leverage
 
     # --- commands --------------------------------------------------------------
 
-    # The workspace's events cut into one group per command (its key and its
-    # at: the lock makes one command's events share at), in the order each
-    # group's first event was written. A waiting command's events written
-    # inside another command are a group of their own (RE-3).
+    # Keyed events belong to one command at one time, even when a pending
+    # command completes under its own key between two of them (RE-3).
+    # Keyless events share no such identity: a command can run a due timer
+    # and later request actions after a keyed pass_review. Keep those
+    # keyless runs on their own side of the task's move to Finishing.
     def groups(workspace_id)
-      result = {}
+      ordered = []
+      keyed = {}
+      keyless = nil
       Replay.each_event(workspace_id) do |event|
-        (result[[ event.command_id, event.at ]] ||= Group.new(command_id: event.command_id, at: event.at, events: [])).events << event
+        if event.command_id
+          keyless = nil
+          group = keyed[[ event.command_id, event.at ]] ||= append_group(ordered, event)
+        else
+          keyless = append_group(ordered, event) unless keyless&.at == event.at
+          group = keyless
+        end
+        group.events << event
       end
-      result.values
+      ordered
+    end
+
+    def append_group(groups, event)
+      Group.new(command_id: event.command_id, at: event.at, events: []).tap { |group| groups << group }
     end
 
     def audit_group(workspace_id, group, states, audit)
