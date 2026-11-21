@@ -51,7 +51,7 @@
     "maximum_tool_runs_per_provider": 120,
     "maximum_tool_runs_total": 360
   },
-  "cases_sha256": "90de5881f04b908273a9c45a18408f1e6bde6c9aa9dd3303337939aa128e0e83",
+  "cases_sha256": "4f625ed8ca7bdf329e51210eae4d4ffe722584914c1b6dc58837610568715579",
   "held_out": {
     "bar": {
       "minimum_correct": 8,
