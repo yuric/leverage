@@ -75,6 +75,11 @@ class Scenario
 
   def helper_token = token_for(helper)
 
+  # A helper whose last report was at the time the test names.
+  def live_helper(at: database_now)
+    helper.tap { |row| row.update!(last_reported_at: at) }
+  end
+
   # A credential. added: true (the default) is a credential whose checks
   # have passed, with its credential.added event; added: false is one whose
   # Add credential is still running (IN-24): signed out and no event.
@@ -94,6 +99,24 @@ class Scenario
       append("credential.added", subject: credential) if added
       credential
     end
+  end
+
+  # The row an API token adds. The database never gets the token itself.
+  def token_credential(provider: "openai_api", **columns)
+    credential(provider: provider, kind: "api_token", masked_label: "••••••••", **columns)
+  end
+
+  # A usage reading, with its observation time separate from storage time.
+  def reading(credential, observed_at: database_now, state: "ok", figures: [], created_at: database_now, **columns)
+    CredentialReading.create!(workspace_id: workspace_id, credential_id: credential.id, observed_at: observed_at,
+      state: state, figures: figures, created_at: created_at, **columns)
+  end
+
+  # A request as queued, picked up or ended by the helper.
+  def helper_request(kind:, credential:, state: "queued", at: database_now, **columns)
+    HelperRequest.create!(workspace_id: workspace_id, kind: kind, credential_id: credential.id, state: state,
+      requested_at: at, picked_up_at: (at if state == "picked_up"),
+      finished_at: (at if %w[finished failed].include?(state)), **columns)
   end
 
   # A seat, with seat.connected. A seat the app runs has a credential; the

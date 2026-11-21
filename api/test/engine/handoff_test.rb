@@ -30,6 +30,20 @@ class HandoffTest < ActiveSupport::TestCase
     end
   end
 
+  # A reorder's context, with only the two changed positions written.
+  # The entry's validation and its call to reevaluate are tested separately.
+  def after_swapping_positions(first, second)
+    ActiveRecord::Base.transaction(requires_new: true) do
+      ctx = scenario.context(request: owner_request("reorder_credentials"))
+      first_position = first.position
+      first.update!(position: second.position)
+      second.update!(position: first_position)
+      ctx.emit("credential.order_changed", subject: second, payload: {})
+      cause = ctx.emit("credential.order_changed", subject: first, payload: {})
+      H.reevaluate(ctx, cause: cause)
+    end
+  end
+
   # A login just verified inside the command: active, signed in, no limit
   # with no reset time (HE-2, which report_request_result writes), and its
   # credential.verified.
@@ -207,6 +221,129 @@ class HandoffTest < ActiveSupport::TestCase
 
     assert_empty written
     assert_nil @hold.reload.closed_at
+  end
+
+  test "a reorder that removes the only reset opens a no-reset item for the first candidate" do
+    first = scenario.credential(provider: "claude")
+    dated = scenario.credential(provider: "codex")
+    later = scenario.credential(provider: "grok")
+    builder = scenario.seat(role: "builder", credential: first)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(first)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    scenario.limit_credential(later)
+    hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
+
+    written = events_written { after_swapping_positions(first, dated) }
+
+    assert_equal %w[credential.order_changed credential.order_changed inbox.opened], written.map(&:type)
+    item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+    assert_equal [ "limit_with_no_reset_time", first.id, { "credential_id" => first.id } ],
+      [ item.kind, item.credential_id, item.facts ]
+    assert_equal [ item.id, task.id, written[1].id ], [ written.last.subject_id, written.last.task_id, written.last.cause_id ]
+    assert_equal [ "credential_limit", dated.id, nil ], hold.reload.attributes.values_at("reason", "credential_id", "closed_at")
+
+    second_look = events_written do
+      ActiveRecord::Base.transaction(requires_new: true) do
+        H.reevaluate(scenario.context(request: owner_request("reorder_credentials")))
+      end
+    end
+
+    assert_empty second_look
+    assert_equal [ item.id ], InboxItem.where(hold_id: hold.id, state: "open").pluck(:id)
+  end
+
+  test "a reorder with no reset prefers the first signed-out candidate to an earlier limited candidate" do
+    own = scenario.credential(provider: "claude")
+    dated = scenario.credential(provider: "codex")
+    first_signed_out = scenario.credential(provider: "grok")
+    later_signed_out = scenario.credential(provider: "claude")
+    builder = scenario.seat(role: "builder", credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(own)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
+    scenario.sign_out_credential(first_signed_out)
+    scenario.sign_out_credential(later_signed_out)
+
+    written = events_written { after_swapping_positions(own, dated) }
+
+    assert_equal %w[credential.order_changed credential.order_changed inbox.opened], written.map(&:type)
+    item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+    assert_equal [ "account_signed_out", first_signed_out.id, { "credential_id" => first_signed_out.id } ],
+      [ item.kind, item.credential_id, item.facts ]
+    assert_equal [ "credential_limit", nil ], hold.reload.attributes.values_at("reason", "closed_at")
+  end
+
+  test "a reorder writes no inbox item while a credential limit hold still has a due time" do
+    own = scenario.credential(provider: "claude")
+    dated = scenario.credential(provider: "codex")
+    spare = scenario.credential(provider: "grok")
+    builder = scenario.seat(role: "builder", credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(own)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    scenario.limit_credential(spare)
+    hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
+
+    written = events_written { after_swapping_positions(dated, spare) }
+
+    assert_equal %w[credential.order_changed credential.order_changed], written.map(&:type)
+    assert_empty InboxItem.where(hold_id: hold.id)
+    assert_nil hold.reload.closed_at
+  end
+
+  test "removing an unrecorded candidate with the only reset also opens the no-reset item" do
+    own = scenario.credential
+    dated = scenario.credential
+    builder = scenario.seat(credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(own)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    written = events_written do
+      Credential.transaction do
+        ctx = scenario.context(request: owner_request("remove_credential"))
+        cause = ctx.emit("credential.removed", subject: dated, payload: {})
+        dated.delete
+        H.reevaluate(ctx, cause: cause)
+      end
+    end
+
+    assert_equal %w[credential.removed inbox.opened], written.map(&:type)
+    item = InboxItem.find_by!(hold_id: hold.id, state: "open")
+    assert_equal [ "limit_with_no_reset_time", own.id, written.first.id ],
+      [ item.kind, item.credential_id, written.last.cause_id ]
+    assert_nil hold.reload.closed_at
+  end
+
+  test "a reorder that restores a due time resolves the no-reset item under a clock that steps back" do
+    dated = scenario.credential(provider: "codex")
+    own = scenario.credential(provider: "claude")
+    builder = scenario.seat(role: "builder", credential: own)
+    task = scenario.task(state: "working", builder: builder)
+    scenario.limit_credential(dated, reset_at: from_now(6000))
+    scenario.limit_credential(own)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, facts: { credential_id: own.id })
+    item = InboxItem.find_by!(hold_id: hold.id)
+    before = Event.where(workspace_id: scenario.workspace_id).order(:seq).last
+    lock = Leverage::WorkspaceLock
+    original = lock.method(:clock)
+    lock.define_singleton_method(:clock) { before.at - 1 }
+
+    written = events_written { after_swapping_positions(dated, own) }
+
+    assert_equal %w[credential.order_changed credential.order_changed inbox.resolved], written.map(&:type)
+    resolved = written.last
+    assert_equal [ item.id, task.id, { "choice" => nil } ], [ resolved.subject_id, resolved.task_id, resolved.payload ]
+    assert_equal [ "resolved", "owner", scenario.owner.id, resolved.at ],
+      item.reload.attributes.values_at("state", "resolved_by_kind", "resolved_by_id", "resolved_at")
+    assert_equal before.at + Rational(1, 1_000_000), resolved.at
+    assert_operator resolved.effective_at, :>=, before.effective_at
+    assert_equal [ "credential_limit", own.id, nil ], hold.reload.attributes.values_at("reason", "credential_id", "closed_at")
+  ensure
+    lock.define_singleton_method(:clock, original) if original
   end
 
   test "the open credential holds are looked at oldest first, in bounded batches" do
