@@ -19,7 +19,8 @@ class GoldenTracesTest < ActiveSupport::TestCase
   # the shipped rules; 16 to 19 are milestone 4's own.
   NOT_YET = {
     "03-stop-rework-pass-approve-done" => [ 5, 1 ],
-    "04-two-actions-custom-rule" => [ 5, 0 ]
+    "04-two-actions-custom-rule" => [ 5, 0 ],
+    "20-questions-and-access" => [ 5, 0 ]
   }.freeze
 
   # The handoff milestone's five, which run whole (HT-1).

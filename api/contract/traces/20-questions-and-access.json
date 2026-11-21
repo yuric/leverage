@@ -1,0 +1,2426 @@
+{
+  "name": "20-questions-and-access",
+  "description": "A builder asks questions from the sample project. The orchestrator answers from the record, decides, and passes a blocking question to the owner. The owner overturns a decision, answers passed-on questions and grants access. A question job misses both attempts, and a question asked after the only orchestrator is removed goes straight to the owner.",
+  "covers": [
+    "AE-7",
+    "AP-2",
+    "AP-3",
+    "AP-6",
+    "AT-1",
+    "DB-31"
+  ],
+  "setup": {
+    "settings": {},
+    "users": [
+      {
+        "id": "$user:owner"
+      }
+    ],
+    "helpers": [],
+    "credentials": [
+      {
+        "id": "$credential:codex_r",
+        "kind": "login",
+        "provider": "codex",
+        "name": "Codex R",
+        "state": "active",
+        "limited_until": null,
+        "position": 1,
+        "model": "codex-model-1",
+        "effort": null,
+        "strength_rank": 1
+      },
+      {
+        "id": "$credential:claude_a",
+        "kind": "login",
+        "provider": "claude",
+        "name": "Claude A",
+        "state": "active",
+        "limited_until": null,
+        "position": 2,
+        "model": null,
+        "effort": null,
+        "strength_rank": 1
+      }
+    ],
+    "seats": [
+      {
+        "id": "$seat:builder",
+        "name": "Builder",
+        "provider": "claude",
+        "model": "claude-model-1",
+        "effort": "high",
+        "role": "builder",
+        "strength_rank": 1,
+        "credential_id": "$credential:claude_a",
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": null
+      },
+      {
+        "id": "$seat:reviewer",
+        "name": "Reviewer",
+        "provider": "codex",
+        "model": "codex-model-1",
+        "effort": "high",
+        "role": "reviewer",
+        "strength_rank": 1,
+        "credential_id": "$credential:codex_r",
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": null
+      },
+      {
+        "id": "$seat:orchestrator",
+        "name": "Orchestrator",
+        "provider": "codex",
+        "model": "codex-model-1",
+        "effort": "high",
+        "role": "orchestrator",
+        "strength_rank": 1,
+        "credential_id": null,
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": "@t:0"
+      }
+    ],
+    "projects": [],
+    "rules": [
+      {
+        "id": "$rule:acceptance_criteria",
+        "key": "acceptance_criteria",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:acceptance_criteria_1"
+      },
+      {
+        "id": "$rule:specific_details",
+        "key": "specific_details",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:specific_details_1"
+      },
+      {
+        "id": "$rule:ask_orchestrator_first",
+        "key": "ask_orchestrator_first",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:ask_orchestrator_first_1"
+      },
+      {
+        "id": "$rule:different_provider_review",
+        "key": "different_provider_review",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:different_provider_review_1"
+      },
+      {
+        "id": "$rule:escalate_after_failed_reviews",
+        "key": "escalate_after_failed_reviews",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:escalate_after_failed_reviews_1"
+      },
+      {
+        "id": "$rule:project_budget_pause",
+        "key": "project_budget_pause",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:project_budget_pause_1"
+      },
+      {
+        "id": "$rule:orchestrator_approves_actions",
+        "key": "orchestrator_approves_actions",
+        "origin": "shipped",
+        "enabled": false,
+        "current_version": 1,
+        "current_version_id": "$rule_version:orchestrator_approves_actions_1"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "at": "@t:0",
+      "caller": "$user:owner",
+      "command": "create_project",
+      "operation_id": "create_project",
+      "key": "$key:create_project_1",
+      "path_params": {},
+      "body": {
+        "name": "Sample project",
+        "goal": "Prepare a sample report.",
+        "budget": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:1",
+            "type": "project.created",
+            "schema_version": 1,
+            "at": "@t:0",
+            "effective_at": "@t:0",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": null,
+            "round": null,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:create_project_1",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:10",
+      "caller": "$user:owner",
+      "command": "edit_brief",
+      "operation_id": "edit_brief",
+      "key": "$key:edit_brief_2",
+      "path_params": {
+        "id": "$project:sample"
+      },
+      "body": {
+        "entries": [
+          {
+            "kind": "decision",
+            "text": "Use the short sample format."
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:2",
+            "type": "brief.changed",
+            "schema_version": 1,
+            "at": "@t:10",
+            "effective_at": "@t:10",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": null,
+            "round": null,
+            "subject_kind": "brief_entry",
+            "subject_id": "$brief_entry:format",
+            "cause_id": null,
+            "command_id": "$key:edit_brief_2",
+            "payload": {
+              "brief_version": 1
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:20",
+      "caller": "$user:owner",
+      "command": "add_task",
+      "operation_id": "add_task",
+      "key": "$key:add_task_3",
+      "path_params": {},
+      "body": {
+        "title": "Prepare the sample report",
+        "goal": "Prepare the sample deliverable.",
+        "project_id": "$project:sample",
+        "priority": "normal",
+        "state": "backlog"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:3",
+            "type": "task.created",
+            "schema_version": 1,
+            "at": "@t:20",
+            "effective_at": "@t:20",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:add_task_3",
+            "payload": {
+              "state": "backlog"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_contract",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:3"
+          }
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:30",
+      "caller": "$user:owner",
+      "command": "complete_contract",
+      "operation_id": "complete_contract",
+      "key": "$key:complete_contract_4",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "title": "Prepare the sample report",
+        "goal": "Prepare the sample deliverable.",
+        "details": "Use the sample work folder.",
+        "criteria": [
+          {
+            "text": "Prepare the sample artifact.",
+            "kind": "build"
+          },
+          {
+            "text": "Check the sample artifact.",
+            "kind": "review"
+          }
+        ],
+        "actions": [],
+        "minimum_strength_rank": null,
+        "budget_cap": null,
+        "work_reference": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:4",
+            "type": "task.contract_changed",
+            "schema_version": 1,
+            "at": "@t:30",
+            "effective_at": "@t:30",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_4",
+            "payload": {
+              "contract_version": 1,
+              "minimum_strength_rank": null,
+              "added_criterion_ids": [
+                "$criterion:t1_build",
+                "$criterion:t1_review"
+              ],
+              "reset_criterion_ids": [],
+              "removed_criterion_ids": [],
+              "added_action_ids": [],
+              "removed_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:5",
+            "type": "task.ready",
+            "schema_version": 1,
+            "at": "@t:30",
+            "effective_at": "@t:30",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:complete_contract_4",
+            "payload": {
+              "wait_cause": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_ready",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:5"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_contract",
+            "closing_event_id": "@event:5"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:40",
+      "caller": "$seat:builder",
+      "command": "claim",
+      "operation_id": "claim_next_task",
+      "key": "$key:claim_5",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:6",
+            "type": "task.claimed",
+            "schema_version": 1,
+            "at": "@t:40",
+            "effective_at": "@t:40",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:claim_5",
+            "payload": {
+              "seat_id": "$seat:builder",
+              "credential_id": "$credential:claude_a",
+              "model": "claude-model-1"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "briefing",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:6"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_ready",
+            "closing_event_id": "@event:6"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:50",
+      "caller": "$seat:builder",
+      "command": "acknowledge_briefing",
+      "operation_id": "acknowledge_task_briefing",
+      "key": "$key:acknowledge_briefing_6",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "briefing_hash": "briefing-t1-6"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:7",
+            "type": "task.briefing_acknowledged",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:acknowledge_briefing_6",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:7"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "briefing",
+            "closing_event_id": "@event:7"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:60",
+      "caller": "$seat:builder",
+      "command": "ask_question",
+      "operation_id": "ask_question",
+      "key": "$key:ask_question_7",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "text": "Which report format is in the project brief?",
+        "assumption": "Use the short format.",
+        "blocking": false
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:8",
+            "type": "question.asked",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:record",
+            "cause_id": null,
+            "command_id": "$key:ask_question_7",
+            "payload": {
+              "blocking": false
+            }
+          },
+          {
+            "ref": "@event:9",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:record",
+            "cause_id": null,
+            "command_id": "$key:ask_question_7",
+            "payload": {
+              "hook": "question.asked",
+              "rule_id": "$rule:ask_orchestrator_first",
+              "rule_version_id": "$rule_version:ask_orchestrator_first_1",
+              "result": "applied",
+              "effect": "to_orchestrator",
+              "wait_cause": null,
+              "subject_kind": "question",
+              "subject_id": "$question:record",
+              "input_hash": "fee9002aec6d3f71c88f4ecf87a84a77bda60dde402061625c136e4dca2373c1"
+            }
+          },
+          {
+            "ref": "@event:10",
+            "type": "job.queued",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:record_1",
+            "cause_id": null,
+            "command_id": "$key:ask_question_7",
+            "payload": {
+              "kind": "question"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [],
+        "result_fields": {
+          "question_id": "$question:record"
+        }
+      }
+    },
+    {
+      "at": "@t:70",
+      "caller": "$seat:orchestrator",
+      "command": "claim_job",
+      "operation_id": "claim_next_job",
+      "key": "$key:claim_job_8",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:11",
+            "type": "job.claimed",
+            "schema_version": 1,
+            "at": "@t:70",
+            "effective_at": "@t:70",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:record_1",
+            "cause_id": null,
+            "command_id": "$key:claim_job_8",
+            "payload": {
+              "credential_id": null,
+              "model": "codex-model-1"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:80",
+      "caller": "$seat:orchestrator",
+      "command": "submit_job_result",
+      "operation_id": "submit_job_result",
+      "key": "$key:submit_job_result_9",
+      "path_params": {
+        "id": "$job:record_1"
+      },
+      "body": {
+        "result": {
+          "outcome": "answered",
+          "answer": "Use the short sample format.",
+          "basis": "record"
+        },
+        "tokens": 60,
+        "spend": 0
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:12",
+            "type": "job.finished",
+            "schema_version": 1,
+            "at": "@t:80",
+            "effective_at": "@t:80",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:record_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_9",
+            "payload": {}
+          },
+          {
+            "ref": "@event:13",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:80",
+            "effective_at": "@t:80",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:record_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_9",
+            "payload": {
+              "tokens": 60,
+              "spend": 0
+            }
+          },
+          {
+            "ref": "@event:14",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:80",
+            "effective_at": "@t:80",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:record",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_9",
+            "payload": {
+              "basis": "record"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:90",
+      "caller": "$seat:builder",
+      "command": "ask_question",
+      "operation_id": "ask_question",
+      "key": "$key:ask_question_10",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "text": "Which sample section goes first?",
+        "assumption": "Put the overview first.",
+        "blocking": true
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:15",
+            "type": "question.asked",
+            "schema_version": 1,
+            "at": "@t:90",
+            "effective_at": "@t:90",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:decision",
+            "cause_id": null,
+            "command_id": "$key:ask_question_10",
+            "payload": {
+              "blocking": true
+            }
+          },
+          {
+            "ref": "@event:16",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:90",
+            "effective_at": "@t:90",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:decision",
+            "cause_id": null,
+            "command_id": "$key:ask_question_10",
+            "payload": {
+              "hook": "question.asked",
+              "rule_id": "$rule:ask_orchestrator_first",
+              "rule_version_id": "$rule_version:ask_orchestrator_first_1",
+              "result": "applied",
+              "effect": "to_orchestrator",
+              "wait_cause": null,
+              "subject_kind": "question",
+              "subject_id": "$question:decision",
+              "input_hash": "a7ec4665328002b9b1c5129368d4a8dc825792425b7fd7f652713c6c1fb288f6"
+            }
+          },
+          {
+            "ref": "@event:17",
+            "type": "job.queued",
+            "schema_version": 1,
+            "at": "@t:90",
+            "effective_at": "@t:90",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:decision_1",
+            "cause_id": null,
+            "command_id": "$key:ask_question_10",
+            "payload": {
+              "kind": "question"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [],
+        "result_fields": {
+          "question_id": "$question:decision"
+        }
+      }
+    },
+    {
+      "at": "@t:100",
+      "caller": "$seat:orchestrator",
+      "command": "claim_job",
+      "operation_id": "claim_next_job",
+      "key": "$key:claim_job_11",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:18",
+            "type": "job.claimed",
+            "schema_version": 1,
+            "at": "@t:100",
+            "effective_at": "@t:100",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:decision_1",
+            "cause_id": null,
+            "command_id": "$key:claim_job_11",
+            "payload": {
+              "credential_id": null,
+              "model": "codex-model-1"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:110",
+      "caller": "$seat:orchestrator",
+      "command": "submit_job_result",
+      "operation_id": "submit_job_result",
+      "key": "$key:submit_job_result_12",
+      "path_params": {
+        "id": "$job:decision_1"
+      },
+      "body": {
+        "result": {
+          "outcome": "answered",
+          "answer": "Put the overview first.",
+          "basis": "decision"
+        },
+        "tokens": 60,
+        "spend": 0
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:19",
+            "type": "job.finished",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:decision_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_12",
+            "payload": {}
+          },
+          {
+            "ref": "@event:20",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:decision_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_12",
+            "payload": {
+              "tokens": 60,
+              "spend": 0
+            }
+          },
+          {
+            "ref": "@event:21",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:110",
+            "effective_at": "@t:110",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:decision",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_12",
+            "payload": {
+              "basis": "decision"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:120",
+      "caller": "$seat:builder",
+      "command": "ask_question",
+      "operation_id": "ask_question",
+      "key": "$key:ask_question_13",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "text": "Should the report cover a second sample?",
+        "assumption": "Use the first sample only.",
+        "blocking": true
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:22",
+            "type": "question.asked",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:pass_on",
+            "cause_id": null,
+            "command_id": "$key:ask_question_13",
+            "payload": {
+              "blocking": true
+            }
+          },
+          {
+            "ref": "@event:23",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:pass_on",
+            "cause_id": null,
+            "command_id": "$key:ask_question_13",
+            "payload": {
+              "hook": "question.asked",
+              "rule_id": "$rule:ask_orchestrator_first",
+              "rule_version_id": "$rule_version:ask_orchestrator_first_1",
+              "result": "applied",
+              "effect": "to_orchestrator",
+              "wait_cause": null,
+              "subject_kind": "question",
+              "subject_id": "$question:pass_on",
+              "input_hash": "2f9473336cd70c5946830327158308c379c890658622dc69ec6833a2c85abdaf"
+            }
+          },
+          {
+            "ref": "@event:24",
+            "type": "job.queued",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:pass_on_1",
+            "cause_id": null,
+            "command_id": "$key:ask_question_13",
+            "payload": {
+              "kind": "question"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [],
+        "result_fields": {
+          "question_id": "$question:pass_on"
+        }
+      }
+    },
+    {
+      "at": "@t:130",
+      "caller": "$seat:orchestrator",
+      "command": "claim_job",
+      "operation_id": "claim_next_job",
+      "key": "$key:claim_job_14",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:25",
+            "type": "job.claimed",
+            "schema_version": 1,
+            "at": "@t:130",
+            "effective_at": "@t:130",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:pass_on_1",
+            "cause_id": null,
+            "command_id": "$key:claim_job_14",
+            "payload": {
+              "credential_id": null,
+              "model": "codex-model-1"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:140",
+      "caller": "$seat:orchestrator",
+      "command": "submit_job_result",
+      "operation_id": "submit_job_result",
+      "key": "$key:submit_job_result_15",
+      "path_params": {
+        "id": "$job:pass_on_1"
+      },
+      "body": {
+        "result": {
+          "outcome": "passed_on",
+          "answer": null,
+          "basis": null
+        },
+        "tokens": 60,
+        "spend": 0
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:26",
+            "type": "job.finished",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:pass_on_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_15",
+            "payload": {}
+          },
+          {
+            "ref": "@event:27",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:pass_on_1",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_15",
+            "payload": {
+              "tokens": 60,
+              "spend": 0
+            }
+          },
+          {
+            "ref": "@event:28",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_pass_on",
+            "cause_id": null,
+            "command_id": "$key:submit_job_result_15",
+            "payload": {
+              "reason": "owner_question",
+              "rule_id": null,
+              "credential_id": null,
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:29",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:140",
+            "effective_at": "@t:140",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_pass_on",
+            "cause_id": "@event:28",
+            "command_id": "$key:submit_job_result_15",
+            "payload": {
+              "kind": "question_passed_on"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_pass_on",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:28"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:28"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:150",
+      "caller": "$seat:builder",
+      "command": "pass_criterion",
+      "operation_id": "pass_criterion",
+      "key": "$key:pass_criterion_16",
+      "path_params": {
+        "id": "$task:1",
+        "cid": "$criterion:t1_build"
+      },
+      "body": {
+        "evidence": {
+          "kind": "link",
+          "value": "https://example.test/sample/t1"
+        }
+      },
+      "expect": {
+        "outcome": "refused",
+        "refusal": {
+          "code": "on_hold",
+          "rule_id": null
+        },
+        "events": [],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "The last hold closes, so the holder is offered resume before the next work call.",
+      "at": "@t:160",
+      "caller": "$user:owner",
+      "command": "answer_question",
+      "operation_id": "answer_question",
+      "key": "$key:answer_question_17",
+      "path_params": {
+        "id": "$question:pass_on"
+      },
+      "body": {
+        "answer": "Keep the one sample."
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:30",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:pass_on",
+            "cause_id": null,
+            "command_id": "$key:answer_question_17",
+            "payload": {
+              "basis": "owner"
+            }
+          },
+          {
+            "ref": "@event:31",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_pass_on",
+            "cause_id": null,
+            "command_id": "$key:answer_question_17",
+            "payload": {
+              "reason": "owner_question",
+              "rule_id": null,
+              "credential_id": null,
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:32",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:160",
+            "effective_at": "@t:160",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_pass_on",
+            "cause_id": null,
+            "command_id": "$key:answer_question_17",
+            "payload": {
+              "choice": "answer"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:31"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "closing_event_id": "@event:31"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:170",
+      "caller": "$user:owner",
+      "command": "overturn_answer",
+      "operation_id": "overturn_answer",
+      "key": "$key:overturn_answer_18",
+      "path_params": {
+        "id": "$question:decision"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:33",
+            "type": "question.overturned",
+            "schema_version": 1,
+            "at": "@t:170",
+            "effective_at": "@t:170",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:decision",
+            "cause_id": null,
+            "command_id": "$key:overturn_answer_18",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:180",
+      "caller": "$user:owner",
+      "command": "answer_question",
+      "operation_id": "answer_question",
+      "key": "$key:answer_question_19",
+      "path_params": {
+        "id": "$question:decision"
+      },
+      "body": {
+        "answer": "Put the examples first."
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:34",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:180",
+            "effective_at": "@t:180",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:decision",
+            "cause_id": null,
+            "command_id": "$key:answer_question_19",
+            "payload": {
+              "basis": "owner"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:190",
+      "caller": "$seat:builder",
+      "command": "ask_question",
+      "operation_id": "ask_question",
+      "key": "$key:ask_question_20",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "text": "Which placeholder label should the sample use?",
+        "assumption": "Use Sample A.",
+        "blocking": true
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:35",
+            "type": "question.asked",
+            "schema_version": 1,
+            "at": "@t:190",
+            "effective_at": "@t:190",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:timeout",
+            "cause_id": null,
+            "command_id": "$key:ask_question_20",
+            "payload": {
+              "blocking": true
+            }
+          },
+          {
+            "ref": "@event:36",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:190",
+            "effective_at": "@t:190",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:timeout",
+            "cause_id": null,
+            "command_id": "$key:ask_question_20",
+            "payload": {
+              "hook": "question.asked",
+              "rule_id": "$rule:ask_orchestrator_first",
+              "rule_version_id": "$rule_version:ask_orchestrator_first_1",
+              "result": "applied",
+              "effect": "to_orchestrator",
+              "wait_cause": null,
+              "subject_kind": "question",
+              "subject_id": "$question:timeout",
+              "input_hash": "bab4476ce981385671d2b153cff53b3d0da63a469f0d9b09cb1c67cab8ba3b41"
+            }
+          },
+          {
+            "ref": "@event:37",
+            "type": "job.queued",
+            "schema_version": 1,
+            "at": "@t:190",
+            "effective_at": "@t:190",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:timeout_1",
+            "cause_id": null,
+            "command_id": "$key:ask_question_20",
+            "payload": {
+              "kind": "question"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [],
+        "result_fields": {
+          "question_id": "$question:timeout"
+        }
+      }
+    },
+    {
+      "note": "The first attempt misses its queue deadline.",
+      "at": "@t:315",
+      "caller": "app",
+      "command": "question_job_queue_timeout",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:38",
+            "type": "job.timed_out",
+            "schema_version": 1,
+            "at": "@t:315",
+            "effective_at": "@t:310",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:timeout_1",
+            "cause_id": null,
+            "command_id": null,
+            "payload": {}
+          },
+          {
+            "ref": "@event:39",
+            "type": "job.requeued",
+            "schema_version": 1,
+            "at": "@t:315",
+            "effective_at": "@t:310",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:timeout_1",
+            "cause_id": null,
+            "command_id": null,
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:325",
+      "caller": "$seat:orchestrator",
+      "command": "claim_job",
+      "operation_id": "claim_next_job",
+      "key": "$key:claim_job_22",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:40",
+            "type": "job.claimed",
+            "schema_version": 1,
+            "at": "@t:325",
+            "effective_at": "@t:325",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:timeout_2",
+            "cause_id": null,
+            "command_id": "$key:claim_job_22",
+            "payload": {
+              "credential_id": null,
+              "model": "codex-model-1"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "The claimed retry misses its run deadline.",
+      "at": "@t:630",
+      "caller": "app",
+      "command": "question_job_run_timeout",
+      "operation_id": null,
+      "key": null,
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:41",
+            "type": "job.timed_out",
+            "schema_version": 1,
+            "at": "@t:630",
+            "effective_at": "@t:625",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:timeout_2",
+            "cause_id": null,
+            "command_id": null,
+            "payload": {}
+          },
+          {
+            "ref": "@event:42",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:630",
+            "effective_at": "@t:625",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_timeout",
+            "cause_id": null,
+            "command_id": null,
+            "payload": {
+              "reason": "owner_question",
+              "rule_id": null,
+              "credential_id": null,
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:43",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:630",
+            "effective_at": "@t:625",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_timeout",
+            "cause_id": "@event:42",
+            "command_id": null,
+            "payload": {
+              "kind": "question_passed_on"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_timeout",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:42"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:42"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:640",
+      "caller": "$user:owner",
+      "command": "answer_question",
+      "operation_id": "answer_question",
+      "key": "$key:answer_question_24",
+      "path_params": {
+        "id": "$question:timeout"
+      },
+      "body": {
+        "answer": "Use Sample A."
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:44",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:640",
+            "effective_at": "@t:640",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:timeout",
+            "cause_id": null,
+            "command_id": "$key:answer_question_24",
+            "payload": {
+              "basis": "owner"
+            }
+          },
+          {
+            "ref": "@event:45",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:640",
+            "effective_at": "@t:640",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_timeout",
+            "cause_id": null,
+            "command_id": "$key:answer_question_24",
+            "payload": {
+              "reason": "owner_question",
+              "rule_id": null,
+              "credential_id": null,
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:46",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:640",
+            "effective_at": "@t:640",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_timeout",
+            "cause_id": null,
+            "command_id": "$key:answer_question_24",
+            "payload": {
+              "choice": "answer"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:45"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "closing_event_id": "@event:45"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:650",
+      "caller": "$user:owner",
+      "command": "remove_seat",
+      "operation_id": "remove_seat",
+      "key": "$key:remove_seat_25",
+      "path_params": {
+        "id": "$seat:orchestrator"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:47",
+            "type": "seat.removed",
+            "schema_version": 1,
+            "at": "@t:650",
+            "effective_at": "@t:650",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": null,
+            "round": null,
+            "subject_kind": "seat",
+            "subject_id": "$seat:orchestrator",
+            "cause_id": null,
+            "command_id": "$key:remove_seat_25",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:660",
+      "caller": "$seat:builder",
+      "command": "ask_question",
+      "operation_id": "ask_question",
+      "key": "$key:ask_question_26",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "text": "May the second sample stay in a footnote?",
+        "assumption": "Leave the footnote out.",
+        "blocking": false
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:48",
+            "type": "question.asked",
+            "schema_version": 1,
+            "at": "@t:660",
+            "effective_at": "@t:660",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:offline",
+            "cause_id": null,
+            "command_id": "$key:ask_question_26",
+            "payload": {
+              "blocking": false
+            }
+          },
+          {
+            "ref": "@event:49",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:660",
+            "effective_at": "@t:660",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:offline",
+            "cause_id": null,
+            "command_id": "$key:ask_question_26",
+            "payload": {
+              "hook": "question.asked",
+              "rule_id": "$rule:ask_orchestrator_first",
+              "rule_version_id": "$rule_version:ask_orchestrator_first_1",
+              "result": "applied",
+              "effect": "to_owner",
+              "wait_cause": null,
+              "subject_kind": "question",
+              "subject_id": "$question:offline",
+              "input_hash": "02f9aeb4e24fd17aa697f500956f65ca7491c1289be170315b0e32534c182829"
+            }
+          },
+          {
+            "ref": "@event:50",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:660",
+            "effective_at": "@t:660",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_offline",
+            "cause_id": "@event:48",
+            "command_id": "$key:ask_question_26",
+            "payload": {
+              "kind": "question_passed_on"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [],
+        "result_fields": {
+          "question_id": "$question:offline"
+        }
+      }
+    },
+    {
+      "at": "@t:670",
+      "caller": "$user:owner",
+      "command": "answer_question",
+      "operation_id": "answer_question",
+      "key": "$key:answer_question_27",
+      "path_params": {
+        "id": "$question:offline"
+      },
+      "body": {
+        "answer": "Leave the footnote out."
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:51",
+            "type": "question.answered",
+            "schema_version": 1,
+            "at": "@t:670",
+            "effective_at": "@t:670",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "question",
+            "subject_id": "$question:offline",
+            "cause_id": null,
+            "command_id": "$key:answer_question_27",
+            "payload": {
+              "basis": "owner"
+            }
+          },
+          {
+            "ref": "@event:52",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:670",
+            "effective_at": "@t:670",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_offline",
+            "cause_id": null,
+            "command_id": "$key:answer_question_27",
+            "payload": {
+              "choice": "answer"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:680",
+      "caller": "$seat:builder",
+      "command": "request_access",
+      "operation_id": "request_access",
+      "key": "$key:request_access_28",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "description": "Sample folder read access."
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:53",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:680",
+            "effective_at": "@t:680",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_access",
+            "cause_id": null,
+            "command_id": "$key:request_access_28",
+            "payload": {
+              "reason": "access",
+              "rule_id": null,
+              "credential_id": null,
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:54",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:680",
+            "effective_at": "@t:680",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_access",
+            "cause_id": "@event:53",
+            "command_id": "$key:request_access_28",
+            "payload": {
+              "kind": "access_request"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_access",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:53"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:53"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:690",
+      "caller": "$user:owner",
+      "command": "grant_access",
+      "operation_id": "grant_access",
+      "key": "$key:grant_access_29",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:55",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:690",
+            "effective_at": "@t:690",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t1_access",
+            "cause_id": null,
+            "command_id": "$key:grant_access_29",
+            "payload": {
+              "reason": "access",
+              "rule_id": null,
+              "credential_id": null,
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:56",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:690",
+            "effective_at": "@t:690",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t1_access",
+            "cause_id": null,
+            "command_id": "$key:grant_access_29",
+            "payload": {
+              "choice": "mark_access_granted"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:55"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_owner",
+            "closing_event_id": "@event:55"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:700",
+      "caller": "$seat:builder",
+      "command": "pass_criterion",
+      "operation_id": "pass_criterion",
+      "key": "$key:pass_criterion_30",
+      "path_params": {
+        "id": "$task:1",
+        "cid": "$criterion:t1_build"
+      },
+      "body": {
+        "evidence": {
+          "kind": "link",
+          "value": "https://example.test/sample/t1"
+        }
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:57",
+            "type": "criterion.passed",
+            "schema_version": 1,
+            "at": "@t:700",
+            "effective_at": "@t:700",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_build",
+            "cause_id": null,
+            "command_id": "$key:pass_criterion_30",
+            "payload": {}
+          },
+          {
+            "ref": "@event:58",
+            "type": "evidence.attached",
+            "schema_version": 1,
+            "at": "@t:700",
+            "effective_at": "@t:700",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "evidence",
+            "subject_id": "$evidence:t1_0",
+            "cause_id": null,
+            "command_id": "$key:pass_criterion_30",
+            "payload": {
+              "criterion_id": "$criterion:t1_build",
+              "kind": "link"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "finish",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": "$seat:builder",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:57"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "build",
+            "closing_event_id": "@event:57"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:710",
+      "caller": "$seat:builder",
+      "command": "submit",
+      "operation_id": "submit_task",
+      "key": "$key:submit_31",
+      "path_params": {
+        "id": "$task:1"
+      },
+      "body": {
+        "handoff_note": "The sample artifact is ready.",
+        "work_reference": "branch sample-1"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:59",
+            "type": "task.submitted",
+            "schema_version": 1,
+            "at": "@t:710",
+            "effective_at": "@t:710",
+            "actor_kind": "seat",
+            "actor_id": "$seat:builder",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:submit_31",
+            "payload": {
+              "work_reference_changed": true
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_review",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:59"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "finish",
+            "closing_event_id": "@event:59"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:720",
+      "caller": "$seat:reviewer",
+      "command": "claim_review",
+      "operation_id": "claim_next_review",
+      "key": "$key:claim_review_32",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:60",
+            "type": "review.started",
+            "schema_version": 1,
+            "at": "@t:720",
+            "effective_at": "@t:720",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:claim_review_32",
+            "payload": {
+              "credential_id": "$credential:codex_r",
+              "model": "codex-model-1"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "review",
+            "step_class": "working",
+            "round": 0,
+            "subject_kind": "criterion",
+            "subject_id": "$criterion:t1_review",
+            "seat_id": "$seat:reviewer",
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:60"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_review",
+            "closing_event_id": "@event:60"
+          }
+        ]
+      }
+    },
+    {
+      "at": "@t:730",
+      "caller": "$seat:reviewer",
+      "command": "acknowledge_review_briefing",
+      "operation_id": "acknowledge_review_briefing",
+      "key": "$key:acknowledge_review_briefing_33",
+      "path_params": {
+        "id": "$review:t1_r0"
+      },
+      "body": {
+        "briefing_hash": "review-briefing-t1-0"
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:61",
+            "type": "task.briefing_acknowledged",
+            "schema_version": 1,
+            "at": "@t:730",
+            "effective_at": "@t:730",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:acknowledge_review_briefing_33",
+            "payload": {}
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:740",
+      "caller": "$seat:reviewer",
+      "command": "pass_review",
+      "operation_id": "give_verdict",
+      "key": "$key:pass_review_34",
+      "path_params": {
+        "id": "$review:t1_r0"
+      },
+      "body": {
+        "verdict": "passed",
+        "failed_criteria": [],
+        "notes": "Checked the sample artifact.",
+        "tokens": 0,
+        "spend": 0
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:62",
+            "type": "review.passed",
+            "schema_version": 1,
+            "at": "@t:740",
+            "effective_at": "@t:740",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:pass_review_34",
+            "payload": {}
+          },
+          {
+            "ref": "@event:63",
+            "type": "task.done",
+            "schema_version": 1,
+            "at": "@t:740",
+            "effective_at": "@t:740",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:pass_review_34",
+            "payload": {}
+          },
+          {
+            "ref": "@event:64",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:740",
+            "effective_at": "@t:740",
+            "actor_kind": "seat",
+            "actor_id": "$seat:reviewer",
+            "project_id": "$project:sample",
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "review",
+            "subject_id": "$review:t1_r0",
+            "cause_id": null,
+            "command_id": "$key:pass_review_34",
+            "payload": {
+              "tokens": 0,
+              "spend": 0
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "review",
+            "closing_event_id": "@event:63"
+          }
+        ]
+      }
+    }
+  ]
+}
