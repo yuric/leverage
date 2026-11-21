@@ -39,14 +39,14 @@ module Leverage
     # Runs under the workspace lock, so a concurrent first call has either
     # committed its row or not started. Raises KeyReused when the row's hash
     # differs.
-    def find(request)
+    def find(request, at:)
       return nil if request.by_app? || request.caller_id.nil?
 
       row = Command.find_by(caller_kind: request.caller_kind, caller_id: request.caller_id, key: request.key)
       return nil unless row
       raise KeyReused, "This key was used for another request" unless row.request_hash == request.request_hash
 
-      outcome_of(row)
+      outcome_of(row, at: at)
     end
 
     # Writes the commands row of a completed or refused command. once is
@@ -58,9 +58,51 @@ module Leverage
         refusal: outcome.refusal&.to_h, result: outcome.result)
     end
 
-    def outcome_of(row)
+    def forget_task_claims(task)
+      receipts = completed_claims(task.workspace_id)
+      receipts.where(command: "claim_job").where("result -> 'input' ->> 'task_id' = ?", task.id)
+        .update_all("result = result - 'input'")
+      receipts.where(command: "claim").where("result -> 'task' ->> 'id' = ?", task.id)
+        .update_all("result = jsonb_build_object('task', jsonb_build_object('id', result -> 'task' -> 'id'))")
+      receipts.where(command: "claim_review").where("result -> 'review' ->> 'task_id' = ?", task.id)
+        .update_all("result = jsonb_build_object('review', jsonb_build_object('id', result -> 'review' -> 'id', " \
+          "'task_id', result -> 'review' -> 'task_id'))")
+    end
+
+    def forget_project_claims(project)
+      receipts = completed_claims(project.workspace_id)
+      receipts.where(command: "claim_job")
+        .where("result -> 'input' ->> 'project_id' = ?", project.id).update_all("result = result - 'input'")
+      receipts.where(command: %w[claim claim_review]).where(
+        "result -> 'briefing' -> 'brief' @> ?::jsonb", [ { project_id: project.id } ].to_json
+      ).update_all("result = jsonb_set(result, '{briefing,brief}', '[]'::jsonb)")
+    end
+
+    def outcome_of(row, at: nil)
+      if row.outcome == "completed" && !claim_material_available?(row, at)
+        return Transitions::Outcome.refused(Transitions::Refusal.new(code: "not_eligible"))
+      end
+
       refusal = row.refusal && Transitions::Refusal.new(**row.refusal.symbolize_keys)
       Transitions::Outcome.new(outcome: row.outcome, result: row.result, refusal: refusal, once: nil)
     end
+
+    def claim_material_available?(row, at)
+      return row.result&.key?("briefing") if %w[claim claim_review].include?(row.command)
+      return true unless row.command == "claim_job"
+      return false unless row.result&.key?("input")
+
+      seat = Seat.find_by(id: row.caller_id, workspace_id: row.workspace_id)
+      job = Job.find_by(id: row.result["job_id"], workspace_id: row.workspace_id)
+      return false unless job && Jobs.claim_material_available?(job, seat, at: at || WorkspaceLock.clock)
+
+      Task.where(workspace_id: row.workspace_id, id: job.task_id, project_id: row.result.dig("input", "project_id")).exists?
+    end
+
+    def completed_claims(workspace_id)
+      Command.where(workspace_id: workspace_id, caller_kind: "seat", outcome: "completed")
+    end
+
+    private_class_method :claim_material_available?, :completed_claims
   end
 end

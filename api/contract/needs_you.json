@@ -193,8 +193,8 @@
       "hold_reason": null,
       "prd_choices": "None. It closes on its own when a seat with the role polls again.",
       "choices": [],
-      "facts": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string", "enum": ["orchestrator", "planner"], "description": "The role that is offline. planner is never written: no item opens for an offline planner (DB-31; milestone 4 plan RD-20)."}, "waiting_checks": {"type": "integer", "minimum": 0, "description": "Rule checks queued and not claimed plus those held with check_error, counted by the read each time: the count now, not the count when the item opened (milestone 4 plan RD-18)."}, "credential_id": {"type": ["string", "null"], "format": "uuid"}}, "required": ["role", "waiting_checks", "credential_id"]},
-      "closes": "On its own when a seat with the role polls again (L201, L402), and not before. It opens only while at least one rule_check job is queued or one check is held with check_error (L401; milestone 4 plan RD-16)."
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string", "enum": ["orchestrator", "planner"], "description": "The role that is offline. planner is never written: no item opens for an offline planner (DB-31; milestone 4 plan RD-20)."}, "waiting_checks": {"type": "integer", "minimum": 0, "description": "Rule check and approval jobs queued and not claimed, plus checks held with check_error, counted by the read each time: the count now, not the count when the item opened (milestone 4 plan RD-18)."}, "credential_id": {"type": ["string", "null"], "format": "uuid"}}, "required": ["role", "waiting_checks", "credential_id"]},
+      "closes": "On its own when a seat with the role polls again (L201, L402), and not before. It opens only while at least one rule_check or approval job is queued or one check is held with check_error (L401; milestone 4 plan RD-16)."
     }
   ]
 }

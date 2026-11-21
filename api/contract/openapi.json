@@ -86,7 +86,7 @@
       "get": {
         "operationId": "get_command",
         "summary": "Reads the current outcome of a command this seat sent.",
-        "description": "Pending, completed with its result, or refused with its cause. Reading it clears `command` in `GET /v1/next`. A pending command that is ended from outside reads refused with one of RC-17's three codes: task_cancelled when the owner cancels the task; lease_expired when the builder's or the review's lease ends; invalid_state for every other ending, the owner's contract edit, a changed input, a release, a run that stops, a seat removed, disabled or paused, and a hold on a provisional claim (milestone 4 plan section 2.1, rule 11).",
+        "description": "Pending, completed with its result, or refused with its cause. A claim whose saved material is no longer available reads refused with not_eligible. Reading it clears `command` in `GET /v1/next`. A pending command that is ended from outside reads refused with one of RC-17's three codes: task_cancelled when the owner cancels the task; lease_expired when the builder's or the review's lease ends; invalid_state for every other ending, the owner's contract edit, a changed input, a release, a run that stops, a seat removed, disabled or paused, and a hold on a provisional claim (milestone 4 plan section 2.1, rule 11).",
         "tags": [
           "agent"
         ],
@@ -1553,7 +1553,7 @@
       "post": {
         "operationId": "claim_next_job",
         "summary": "Claims the next job: a rule check, a question, an approval or a contract draft.",
-        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first.",
+        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
         "tags": [
           "agent"
         ],
@@ -11340,7 +11340,7 @@
           },
           "acts": {
             "type": "boolean",
-            "description": "False for a rule whose effect arrives in a later milestone (milestone 4 plan RD-8)."
+            "description": "Whether the rule's hook, checker and scope can act on a supported command."
           },
           "stats": {
             "$ref": "#/components/schemas/RuleStats"

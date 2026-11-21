@@ -26,6 +26,7 @@ module Leverage
           waived = Actions.waive(ctx, @action)
           Finishing.settle(ctx, @task, by: waived) if last
           answered_holds.each { |hold| Holds.close(ctx, hold: hold, task: @task, choice: "waive") }
+          Actions.action_check_error_holds(@action).each { |hold| Holds.close(ctx, hold: hold, task: @task) }
           Finishing.settle(ctx, @task, by: waived) unless last
           @result = nil
         end

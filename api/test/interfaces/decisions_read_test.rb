@@ -57,14 +57,14 @@ class DecisionsReadTest < CommittingTestCase
     seat = scenario.orchestrator
     task = scenario.task(state: "working")
     question = scenario.question(task, outcome: "answered", basis: "decision", answerer: seat)
-    finishing = scenario.finishing_task(actions: [{}])
+    finishing = scenario.finishing_task(actions: [ {} ])
     action = Action.where(task_id: finishing.id).sole
     approve(finishing, action, seat)
 
     seat.update!(role: "planner")
 
-    assert_equal [[action.id, seat.id], [question.id, seat.id]],
-      decisions.map { |row| [row["action_id"] || row["question_id"], row["seat_id"]] }
+    assert_equal [ [ action.id, seat.id ], [ question.id, seat.id ] ],
+      decisions.map { |row| [ row["action_id"] || row["question_id"], row["seat_id"] ] }
   end
 
   test "a decided question on a Done or Cancelled task stays listed and cannot be undone" do

@@ -34,7 +34,7 @@ module Leverage
 
         private
 
-        def available_builder? = @builder&.enabled && @builder.removed_at.nil?
+        def available_builder? = @builder&.role == "builder" && @builder.enabled && @builder.removed_at.nil?
 
         def builder_availability
           return "builder_holds_task" if Finishing.builder_holds_task?(@task)

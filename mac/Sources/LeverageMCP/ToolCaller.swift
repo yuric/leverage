@@ -95,7 +95,11 @@ actor ToolCaller {
             let lookup = await send(ToolRequest(operation: .getCommand, path: ["key": key.value]))
             switch lookup.response?.status {
             case 200:
-                held.ignoreStoredOutcome(for: key)
+                // A command observed while it was pending can still establish
+                // this session's lease, even if it settles before this retry.
+                if lookup.response?.body["outcome"]?.stringValue != OutcomeKind.pending.rawValue {
+                    held.ignoreStoredOutcome(for: key)
+                }
                 return await send(request)
             case 404:
                 break

@@ -75,6 +75,7 @@ module Leverage
           turning_off = @params["enabled"] == false && @seat.enabled
           login_changes = @login && @login.id != @seat.credential_id
           values = changes
+          changing_builder_role = @seat.role == "builder" && values.key?(:role) && values[:role] != @seat.role
           if values.all? { |column, value| @seat.public_send(column) == value }
             @result = { "helper_request_id" => nil }
             return
@@ -83,6 +84,7 @@ module Leverage
           @seat.update!(values.merge(turning_off ? { wanted_running: false } : {}))
           changed = ctx.emit("seat.changed", subject: @seat, payload: {})
           stop = turn_off(ctx, changed) if turning_off
+          SeatRuns.hold_finishing_tasks(ctx, @seat, cause: changed) if changing_builder_role && !turning_off
           look_again(ctx, changed) if login_changes
           @result = { "helper_request_id" => stop&.id }
         end

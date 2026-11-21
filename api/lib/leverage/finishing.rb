@@ -110,6 +110,8 @@ module Leverage
       return unless seat&.credential_id
 
       candidate = Candidates.first_available(seat, task, ctx.at)
+      return unless candidate
+
       if task.credential_id == candidate.id
         SeatRuns.ensure_run_on(ctx, seat, candidate, task)
       else

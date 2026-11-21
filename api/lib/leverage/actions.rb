@@ -78,7 +78,8 @@ module Leverage
       task = task_of(action)
       change = transition!(action, "action.waived", "waive_action")
       action.update!(state: change.fetch("to"))
-      ignored = holds_for(action, "action_stopped") + owner_approval_holds(action) + unconfirmed_holds(action)
+      ignored = holds_for(action, "action_stopped") + owner_approval_holds(action) + unconfirmed_holds(action) +
+        action_check_error_holds(action)
       lease = Finishing.prepare_lease(ctx, task, except_holds: ignored)
       event = ctx.emit("action.waived", task: task, subject: action, payload: { lease_seat_id: lease&.id })
       Finishing.place_lease(ctx, task, lease, cause: event)
@@ -136,6 +137,11 @@ module Leverage
     end
 
     def owner_approval_holds(action) = holds_for(action, "owner_approval")
+
+    def action_check_error_holds(action)
+      Hold.where(workspace_id: action.workspace_id, task_id: action.task_id, reason: "check_error", closed_at: nil,
+        rule_check_id: action_checks(action).select(:id)).order(:opened_at, :id).to_a
+    end
 
     def holds_for(action, reason)
       holds = Hold.where(workspace_id: action.workspace_id, task_id: action.task_id, reason: reason, closed_at: nil)

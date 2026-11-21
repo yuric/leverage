@@ -61,10 +61,10 @@ class ContentDeletionTest < ActiveSupport::TestCase
       "job_id" => SecureRandom.uuid, "input" => { "task_id" => outside.id, "project_id" => project.id, "material" => "Sample brief" })
     former_project_builder = saved_claim("claim", own_seat(role: "builder"),
       "task" => { "id" => outside.id, "project_id" => project.id },
-      "briefing" => { "brief" => [{ "project_id" => project.id, "text" => "Sample brief" }] })
+      "briefing" => { "brief" => [ { "project_id" => project.id, "text" => "Sample brief" } ] })
     former_project_reviewer = saved_claim("claim_review", own_seat(role: "reviewer"),
       "review" => { "id" => SecureRandom.uuid, "task_id" => outside.id },
-      "briefing" => { "brief" => [{ "project_id" => project.id, "text" => "Sample brief" }] })
+      "briefing" => { "brief" => [ { "project_id" => project.id, "text" => "Sample brief" } ] })
 
     assert_completed owner_command("delete_content", { project_id: project.id })
 

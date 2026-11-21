@@ -68,13 +68,20 @@ module Leverage
 
       job = held(seat, at)
       if job
-        return unless role_matches?(job, seat) && !task_of(job)&.content_deleted_at
+        return unless claim_material_available?(job, seat, at: at)
 
         return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
       end
       return nil unless placed?(seat, at)
 
       claimable(seat, at)
+    end
+
+    # A stored claim can show its material only to the seat that can still hold it.
+    def claim_material_available?(job, seat, at:)
+      active?(seat) && job.workspace_id == seat.workspace_id && job.claimed_by_seat_id == seat.id &&
+        job.state == "claimed" && role_matches?(job, seat) && !due?(job, :run, at) &&
+        !task_of(job)&.content_deleted_at
     end
 
     # A seat can change role while it holds a job. The old job still occupies

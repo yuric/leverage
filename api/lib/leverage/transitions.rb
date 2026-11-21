@@ -105,7 +105,7 @@ module Leverage
         timing = { lock_wait: 0.0, writes: 0.0, gate: 0.0 }
         outcome = ActiveRecord::Base.transaction(requires_new: true) do
           ctx = context(request, timing)
-          stored = Idempotency.find(request)
+          stored = Idempotency.find(request, at: ctx.at)
           next stored if stored
 
           Timers.apply_due(ctx)

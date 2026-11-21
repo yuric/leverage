@@ -12,7 +12,7 @@ module Leverage
       def call(workspace_id)
         Snapshot.call(workspace_id) do
           events = Event.where(workspace_id: workspace_id)
-          decisions = decision_events(events, workspace_id)
+          decisions = decision_events(events)
           tasks = Task.where(workspace_id: workspace_id, id: decisions.map(&:task_id)).index_by(&:id)
           question_ids, action_ids = decisions.partition { |event| event.subject_kind == "question" }
             .map { |group| group.map(&:subject_id).uniq }
@@ -35,9 +35,9 @@ module Leverage
         end
       end
 
-      def decision_events(events, workspace_id)
-        orchestrators = Seat.where(workspace_id: workspace_id, role: "orchestrator").select(:id)
-        events.where(actor_kind: "seat", actor_id: orchestrators)
+      def decision_events(events)
+        # Job result authorization determines the actor's role when the event is written.
+        events.where(actor_kind: "seat")
           .where("type = 'action.approved' OR (type = 'question.answered' AND payload->>'basis' = 'decision')")
           .order(seq: :desc).to_a
       end

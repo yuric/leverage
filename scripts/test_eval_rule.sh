@@ -261,7 +261,7 @@ check_frozen() {
       [ ! -e "$approval/results" ] &&
       [ ! -e "$approval/runs.json" ] &&
       [ ! -d "$approval/.eval-run.lock" ] &&
-      [ "$(sed -n '/^verify-cases /p' "$work/scoring")" = "verify-cases $approval" ] &&
+      [ "$(sed -n '/^verify-cases /p' "$work/scoring")" = "verify-cases $approval${flags[*]:+ ${flags[*]}}" ] &&
       [[ "$output" == *"frozen $folder hash differs"* ]]; then
     printf 'ok    changed frozen %s refuses a %s real-mode run before any tool starts\n' "$folder" "$selection"
   else

@@ -22,7 +22,6 @@ struct HeldWork {
     private var actionStates: [String: ActionState]?
     private var pending: [String: ToolRequest] = [:]
     private var settledKeys: Set<String> = []
-    private static let leaseRefusals: Set<RefusalCode> = [.notHolder, .leaseExpired, .taskCancelled, .invalidState]
 
     func hasStartedCriterion(task: String, criterion: String) -> Bool {
         item == .task(task) && startedCriteria.contains(criterion)
@@ -77,14 +76,21 @@ struct HeldWork {
 
     private mutating func settle(_ request: ToolRequest, response: ToolResponse) {
         let target = Self.work(for: request)
-        if let code = response.refusalCode, Self.leaseRefusals.contains(code), target == item {
-            hold(nil)
+        if let code = response.refusalCode, target == item {
+            // A work call can refuse the action or question without ending its lease.
+            let heartbeat = request.operation == .heartbeatTask || request.operation == .heartbeatReview
+            if code == .leaseExpired || code == .taskCancelled ||
+                (heartbeat && (code == .notHolder || code == .invalidState)) {
+                hold(nil)
+            }
         }
         guard response.status == 200, response.body["outcome"]?.stringValue != OutcomeKind.refused.rawValue else {
             return
         }
 
         switch request.operation {
+        case .getNext:
+            recordNext(response.body)
         case .claimNextTask:
             guard let id = Self.id(response.body["result"]?["task"]?["id"]) else { return }
             hold(.task(id))
@@ -98,6 +104,26 @@ struct HeldWork {
             guard let target else { return }
             hold(target)
             if case .task = target { recordTaskCall(request, body: response.body) }
+        }
+    }
+
+    private mutating func recordNext(_ body: JSONValue) {
+        guard let kind = body["kind"]?.stringValue.flatMap(NextKind.init(rawValue:)),
+              let task = Self.id(body["id"]) else { return }
+        switch kind {
+        case .action, .rework:
+            hold(.task(task), fresh: true)
+        case .resume:
+            hold(.task(task))
+        case .briefingChanged:
+            if let review = Self.id(body["review_id"]) {
+                hold(.review(review))
+            } else if body["review_id"] == nil || body["review_id"] == .null {
+                hold(.task(task))
+            }
+        default:
+            // Offers and command or question notifications do not identify a lease.
+            break
         }
     }
 
@@ -126,8 +152,8 @@ struct HeldWork {
         }
     }
 
-    private mutating func hold(_ next: Item?) {
-        guard item != next else { return }
+    private mutating func hold(_ next: Item?, fresh: Bool = false) {
+        guard fresh || item != next else { return }
         item = next
         startedCriteria.removeAll()
         startedActions.removeAll()

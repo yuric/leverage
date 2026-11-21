@@ -28,6 +28,7 @@ module Leverage
       if project
         project.update_columns(name: nil, goal: nil, content_deleted_at: ctx.at)
         BriefEntry.where(workspace_id: project.workspace_id, project_id: project.id).update_all(text: nil)
+        Idempotency.forget_project_claims(project)
         ctx.emit("content.deleted", project_id: project.id)
         tasks_in(project).where(content_deleted_at: nil).find_each { |member| delete_task(ctx, member) }
       else
@@ -46,6 +47,7 @@ module Leverage
       RELATED_COLUMNS.each do |model, columns|
         model.where(scope).update_all(columns.index_with(nil))
       end
+      Idempotency.forget_task_claims(task)
       task.update_columns(**TASK_COLUMNS, content_deleted_at: ctx.at)
       ctx.emit("content.deleted", task: task)
     end

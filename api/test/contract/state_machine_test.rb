@@ -317,8 +317,16 @@ class StateMachineTest < Minitest::Test
     row["side_events"].each do |entry|
       next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
       next if %w[hold.closed credential.switched inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")
+      next if %w[hold.opened inbox.opened].include?(entry["event"]) &&
+        entry["note"].include?("changes from builder to another role")
 
       assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
+    end
+  end
+
+  def test_a_waive_closes_the_errored_gate_of_its_action
+    rows.select { |row| row["command"] == "waive_action" }.each do |row|
+      assert_includes row["holds_closed"], "check_error", label(row)
     end
   end
 

@@ -293,15 +293,45 @@ def held_out_refusals(suite, runs, bar, providers, wording):
     return reasons
 
 
-def verify_cases(suite, bar):
-    for held_out in (False, True) if "held_out" in bar else (False,):
-        config = set_config(bar, held_out)
+def approval_candidate_matches(case):
+    if not isinstance(case, dict):
+        return False
+    candidate = case.get("action")
+    contract = case.get("contract")
+    if not isinstance(candidate, dict) or not isinstance(contract, dict):
+        return False
+    actions = contract.get("actions")
+    position = candidate.get("position")
+    return (
+        isinstance(actions, list)
+        and type(position) is int
+        and 1 <= position <= len(actions)
+        and actions[position - 1] == {key: value for key, value in candidate.items() if key != "position"}
+    )
+
+
+def inconsistent_held_out_candidates(cases):
+    count = sum(not approval_candidate_matches(case) for case in cases)
+    if count:
+        subject = "candidate does" if count == 1 else "candidates do"
+        return f"{count} held-out approval {subject} not match the contract action at the listed position"
+    return None
+
+
+def verify_cases(suite, bar, *, held_out=False):
+    for held_set in (False, True) if "held_out" in bar else (False,):
+        config = set_config(bar, held_set)
         expected = config.get("cases_sha256")
         if not expected and bar["kind"] == "verdict":
             continue
-        if not expected or cases_sha256(read_cases(suite, held_out)) != expected:
-            name = "held-out" if held_out else "main"
+        cases = read_cases(suite, held_set)
+        if not expected or cases_sha256(cases) != expected:
+            name = "held-out" if held_set else "main"
             raise Refused(f"{name} case set does not match the frozen hash in bar.json")
+        if held_out and held_set:
+            mismatch = inconsistent_held_out_candidates(cases)
+            if mismatch:
+                raise Refused(mismatch)
 
 
 def check_providers(names):
@@ -571,6 +601,7 @@ def main(argv):
 
     command = commands.add_parser("verify-cases")
     command.add_argument("suite")
+    command.add_argument("--held-out", action="store_true")
 
     command = commands.add_parser("budget")
     command.add_argument("--runs", required=True)
@@ -639,7 +670,7 @@ def execute(args):
         value = config[args.key]
         print(" ".join(value) if isinstance(value, list) else value)
     elif args.command == "verify-cases":
-        verify_cases(args.suite, bar)
+        verify_cases(args.suite, bar, held_out=held_out)
     elif args.command == "score":
         scores = score(read_cases(args.suite, held_out), config, read_lines(args.verdicts), args.canary)
         print(json.dumps(scores, indent=2))

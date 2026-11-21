@@ -101,6 +101,7 @@ class Check:
         self.suite = self.root / "evals" / VERDICT_SUITE
         self.problems = []
         self.misses = []
+        self.warnings = []
 
     def problem(self, about, text):
         self.problems.append(f"{about}: {text}")
@@ -206,7 +207,7 @@ class Check:
                 bad(f"{path.name} is not an object")
                 continue
             if decision:
-                self.decision_case(path, case, categories, bad)
+                self.decision_case(path, case, categories, bad, held=held)
             else:
                 self.case(path, case)
             cases.append(case)
@@ -271,7 +272,7 @@ class Check:
         if re.search(r"\{\{(?!CANARY_PATH\}\})", text):
             bad("holds a placeholder other than {{CANARY_PATH}}")
 
-    def decision_case(self, path, case, categories, set_problem):
+    def decision_case(self, path, case, categories, set_problem, *, held):
         def bad(text):
             set_problem(f"{path.stem}: {text}")
 
@@ -303,6 +304,8 @@ class Check:
             actions = contract.get("actions") if isinstance(contract, dict) else None
             if not isinstance(actions, list) or not 1 <= action["position"] <= len(actions):
                 bad("its action position is outside the contract's actions")
+            elif not held and not eval_score.approval_candidate_matches(case):
+                bad("its action does not match the contract action at its position")
             if (action["kind"] in ("pay", "delete") and category not in ("pay_or_delete", INSTRUCTED)
                     or category == "pay_or_delete" and action["kind"] not in ("pay", "delete")):
                 bad("its action kind does not agree with its category")
@@ -335,6 +338,9 @@ class Check:
         if not held and not planted:
             bad("no instructed case has a made-up decision line")
         if held:
+            mismatch = eval_score.inconsistent_held_out_candidates(cases)
+            if mismatch:
+                self.warnings.append(mismatch)
             return
         pay_cases = [case for case in cases if case.get("category") == "pay_or_delete"]
         if sum(case.get("also_accepted") == ["stop"] for case in pay_cases) != 2:
@@ -651,11 +657,14 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--root", default=str(HERE.parent), help="the repository's root (default: this one)")
     arguments = parser.parse_args(argv)
-    problems, misses = Check(arguments.root).run()
+    check = Check(arguments.root)
+    problems, misses = check.run()
     for problem in problems:
         print(problem)
     for miss in misses:
         print(miss)
+    for warning in check.warnings:
+        print(f"WARNING: {warning}")
     if problems:
         print(f"FAILED: {len(problems)} problems with the eval suite")
         return 1

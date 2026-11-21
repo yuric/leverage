@@ -33,6 +33,17 @@ struct CheckJob: Sendable {
     /// `claim.runDueAt` (RD-34).
     func run(_ claim: JobClaim, input: RuleCheckJobInput) async throws -> JobRunEnd {
         let material = input.material
+        let action: (kind: ActionKind, description: String)?
+        if input.hook == .actionRequested {
+            guard let kind = input.inputs["action_kind"]?.stringValue.flatMap(ActionKind.init(rawValue:)),
+                  let description = input.inputs["action_description"]?.stringValue else {
+                context.log.warning("job \(claim.jobID.contractString): action gate has no action")
+                return .noResult
+            }
+            action = (kind, description)
+        } else {
+            action = nil
+        }
         var tokens = 0
         for attempt in 1...(allowsSecondRun ? 2 : 1) {
             guard let limit = Self.timeLimit(runDueAt: claim.runDueAt, now: context.timing.now()),
@@ -41,7 +52,7 @@ struct CheckJob: Sendable {
                 break
             }
             let nonce = JobPrompts.makeNonce()
-            let prompt = JobPrompts.check(material: material, nonce: nonce)
+            let prompt = JobPrompts.check(material: material, nonce: nonce, action: action)
             if let reason = JobToolRun.tooLong(prompt) {
                 // The same material makes a prompt as long every time: no
                 // second run is tried, nothing is sent, and the job runs into

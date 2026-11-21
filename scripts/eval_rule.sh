@@ -175,7 +175,7 @@ if [ "$path_kind" = "real tools" ]; then
     refuse "cannot lock the real-run budget for $suite_name"
   fi
   suite_lock="$suite/.eval-run.lock"
-  score verify-cases "$suite"
+  score verify-cases "$suite" ${set_flag[@]+"${set_flag[@]}"}
   score budget --suite "$suite" --runs "$suite/runs.json" --providers "$providers" \
     --shipped "$shipped" --role-file "$role_file" ${set_flag[@]+"${set_flag[@]}"}
 fi
