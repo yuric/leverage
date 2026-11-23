@@ -22,7 +22,9 @@ class RolePresenceTest < ActiveSupport::TestCase
   def seat(role: "orchestrator", polled: 10, **options)
     seat = @scenario.seat(role: role, **options)
     seat.update_columns(last_polled_at: polled && @now - polled)
-    seat
+    # The times as stored: the database keeps microseconds, the object in
+    # memory the nanoseconds Ruby read, so a comparison could miss by 1 µs.
+    seat.reload
   end
 
   # A login limited since seconds_ago, until seconds_until from @now (nil:

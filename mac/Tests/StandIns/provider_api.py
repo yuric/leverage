@@ -10,6 +10,7 @@ Only the fake marker survives from the authorization value.
 import argparse
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import socketserver
 import json
 import os
 from pathlib import Path
@@ -92,6 +93,14 @@ class ProviderServer(ThreadingHTTPServer):
         self.calls_lock = threading.Lock()
         super().__init__(("127.0.0.1", 0), ProviderRequest)
         self.timeout = 0.25
+
+    def server_bind(self):
+        # HTTPServer.server_bind asks socket.getfqdn for the host's name: a
+        # reverse lookup that can take many seconds on a CI runner. The
+        # stand-in serves 127.0.0.1 only, so it names itself so.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
 
     def record(self, method, path, headers):
         entry = {"method": method, "path": path, "headers": headers}
