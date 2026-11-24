@@ -20,7 +20,7 @@ enum SetupPoints {
 
     static func task(_ state: TaskState, title: String = "Pocket to-do") -> BoardTask {
         BoardTask(task: TaskSummary(
-            id: taskID, title: title, goal: "g", details: nil, state: state, round: 0,
+            id: taskID, title: title, details: nil, state: state, round: 0,
             holderSeatID: state == .working ? Fixtures.builderID : nil, builderSeatID: Fixtures.builderID,
             workReference: nil, priority: .normal))
     }

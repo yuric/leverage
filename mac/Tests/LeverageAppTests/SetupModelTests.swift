@@ -11,7 +11,7 @@ private typealias Fixtures = AgentFixtures
 enum SetupFixtures {
     static func task(_ title: String, _ state: TaskState) -> BoardTask {
         BoardTask(task: TaskSummary(
-            id: UUID(), title: title, goal: "g", details: nil, state: state, round: 0, workReference: nil,
+            id: UUID(), title: title, details: nil, state: state, round: 0, workReference: nil,
             priority: .normal))
     }
 

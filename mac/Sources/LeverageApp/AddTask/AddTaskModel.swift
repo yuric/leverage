@@ -99,7 +99,7 @@ final class AddTaskModel {
 
     private(set) var state: State = .editing
 
-    private var draft = ContractDraft() {
+    private(set) var draft = ContractDraft() {
         didSet {
             guard draft != oldValue else { return }
             addKey = nil
