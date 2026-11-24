@@ -78,10 +78,6 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
             .getHelperRequest, path: ["id": id.contractString], query: query, waitSeconds: wait)
     }
 
-    public func landingPrompt(seatID: UUID) async throws -> LandingPrompt {
-        try await transport.read(.getLandingPrompt, path: ["id": seatID.contractString])
-    }
-
     public func addTask(_ request: AddTaskRequest, key: IdempotencyKey) async throws
         -> CommandOutcome<TaskCreatedResult> {
         try await transport.command(.addTask, body: request, key: key)
@@ -101,8 +97,15 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
     }
 
     public func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
-        -> CommandOutcome<SeatConnectedAnswer> {
+        -> CommandOutcome<SeatConnected> {
         try await transport.command(.connectSeat, body: request, key: key)
+    }
+
+    public func issueLandingPrompt(seatID: UUID, connection: LandingPromptConnection, key: IdempotencyKey)
+        async throws -> CommandOutcome<LandingPromptIssuedAnswer> {
+        try await transport.command(
+            .issueLandingPrompt, path: ["id": seatID.contractString],
+            body: IssueLandingPromptRequest(connection: connection), key: key)
     }
 
     public func startSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
@@ -353,10 +356,12 @@ extension OwnerClient {
     public func workspaceSettings() async throws -> WorkspaceSettings {
         try await transport.read(.getWorkspaceSettings)
     }
+}
 
-    public func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt {
-        try await transport.read(
-            .getLandingPrompt, path: ["id": seatID.contractString],
-            query: [URLQueryItem(name: "connection", value: connection.rawValue)])
+package struct IssueLandingPromptRequest: Encodable, Sendable {
+    package let connection: LandingPromptConnection
+
+    package init(connection: LandingPromptConnection) {
+        self.connection = connection
     }
 }

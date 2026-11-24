@@ -38,9 +38,9 @@ If wording changes, the same model also needs at least 8 of the 10 held-out
 cases correct, with zero wrong approvals. A canary leak fails either run.
 
 The supported models are the defaults of the Claude Code, Codex and Antigravity
-login tools. Coverage applies to the tested instruction, role file and model
-settings. The registry lists providers whose results meet both shipped suites'
-bars.
+login tools. Coverage applies to the tested prompt and model settings.
+The registry lists the providers whose results meet both shipped suites'
+bars in each mode.
 
 ## Running the suite
 
@@ -49,9 +49,16 @@ It records the decision without executing the action. Each main run allows
 30 initial tool calls and up to six retries. Each held-out run allows ten
 initial calls and up to two retries. Each tool call has a 120-second limit.
 
+The default mode uses the material an Orchestrator seat claims. Add
+`--mode general` to evaluate the app runner's fresh prompt on the login
+tool's default model, with the General job rules and a null role file.
+Prompt connections and explicitly selected models are outside that
+coverage. The result records
+`mode: "general"` and `role_file_sha256: null`.
+
 ```bash
 LEVERAGE_EVAL=approves-actions LEVERAGE_TOOL_DIR=<copy-of-stand-ins>/bin \
-  scripts/eval_rule.sh approves-actions --out <folder>
+  scripts/eval_rule.sh approves-actions --mode general --out <folder>
 ```
 
 Add `--held-out` to test that path with the stand-ins. Use the maintainer's
@@ -64,16 +71,17 @@ LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 \
 
 The hashes in `bar.json` freeze both case sets and their labels. If a model
 misses, the maintainer can revise the wording of the rule or role file, then
-rerun the main set for every model. Record the reason in the `changes` list
-in `runs.json`. With changed wording, the final main runs are followed by a real
-`--held-out` run once the held-out set is valid for the production input. Keep the held-out cases blind during tuning.
-Starting a held-out run closes the main set to further runs.
+rerun the main set for every model. Record the reason in the mode's ledger
+under `changes`. With changed wording, the final main runs are followed by a
+real `--held-out` run once the held-out set is valid for the production input.
+Keep the held-out cases blind during tuning. Starting a held-out run closes
+the main set to further runs.
 
-The limit per model is three main runs and one held-out run, up to 120 tool
-calls per model and 360 overall. `runs.json` tracks reservations and completed
-runs. The scorer writes the current results to `results/<provider>.json` and
-`results/held-out/<provider>.json` and generates `RESULTS.md`. The report shows
-held-out scores in aggregate.
+Across both modes, the limit per model is three main runs and one held-out
+run, up to 120 tool calls per model and 360 overall. Orchestrator mode uses `runs.json`,
+`results/` and `RESULTS.md`. General mode uses `runs-general.json`,
+`results/general/` and `RESULTS-general.md`. Each mode writes held-out
+results in its `held-out/` subfolder and reports those scores in aggregate.
 
 The real held-out run requires each candidate to match the contract
 action at its listed position. The offline checker counted two mismatches

@@ -6,8 +6,8 @@ module V1
     #
     # A command checks its body against the contract's schema (400
     # malformed, 422 invalid), then its path id (404), and then runs the
-    # entry with the body and the id as params (IN-13). Connect's first
-    # answer carries the seat's token, once (IN-11).
+    # entry with the body and the id as params (IN-13). Prompt issuance
+    # carries the new seat token and prompt text in its first answer.
     class SeatsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
@@ -39,24 +39,14 @@ module V1
       def resume = control("resume_seat")
       def change = control("change_seat")
 
-      # The text the owner pastes into an agent that connects on its own. A
-      # seat the app runs needs none: 409 with a Refusal. It never holds the
-      # seat's token.
-      def landing_prompt
-        options = request.query_parameters.slice("connection").symbolize_keys
-        if options.key?(:connection) && !%w[http mcp].include?(options[:connection])
-          raise Malformed, "connection must be http or mcp"
+      def issue_landing_prompt
+        body = checked_body("issue_landing_prompt")
+        address = request.base_url
+        unless Leverage::Reads::LandingPrompt::ADDRESS.match?(address)
+          raise Malformed, "The address this request came in on cannot be put in a command"
         end
 
-        prompt = Leverage::Reads::LandingPrompt.call(current_caller.workspace_id, uuid_param!(:id), base_url: request.base_url,
-          **options)
-        raise NotFound, "No such seat" unless prompt
-
-        render json: prompt
-      rescue Leverage::Reads::LandingPrompt::AppRunSeat
-        render json: Leverage::Transitions::Refusal.new(code: "invalid_state").to_h, status: :conflict
-      rescue Leverage::Reads::LandingPrompt::UnusableAddress
-        raise Malformed, "The address this request came in on cannot be put in a command"
+        run_command("issue_landing_prompt", params: body.merge("id" => uuid_param!(:id), "address" => address))
       end
 
       private

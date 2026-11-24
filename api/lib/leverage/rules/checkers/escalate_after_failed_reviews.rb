@@ -22,8 +22,10 @@ module Leverage
           return false unless task.builder_seat_id
 
           rank = Seat.where(workspace_id: task.workspace_id, id: task.builder_seat_id).pick(:strength_rank)
-          rank && Seat.where(workspace_id: task.workspace_id, role: "builder", enabled: true, removed_at: nil)
-            .where("strength_rank > ?", rank).exists?
+          return false unless rank
+
+          Seat.where(workspace_id: task.workspace_id, role: Roles.roles_acting_as("builder"), enabled: true, removed_at: nil)
+            .where("strength_rank > ?", rank).any? { |seat| Eligibility.standing?(seat, task, rank: rank + 1) }
         end
 
         private_class_method :failed_count, :stronger_builder?

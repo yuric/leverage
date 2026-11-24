@@ -28,8 +28,14 @@ struct MCPHTTPClient: Sendable {
         do {
             switch request.operation.method {
             case .get:
-                let value = try await transport.read(
-                    request.operation, JSONValue.self, path: request.path, waitSeconds: request.wait)
+                let value: JSONValue
+                if request.operation == .getJoin {
+                    let instructions = try await AgentClient(transport: transport).join(connection: .mcp)
+                    value = try json(instructions)
+                } else {
+                    value = try await transport.read(
+                        request.operation, JSONValue.self, path: request.path, waitSeconds: request.wait)
+                }
                 return ToolResponse(status: 200, body: value)
             case .post:
                 guard let key = request.key else { throw LeverageClientError.invalidBody }

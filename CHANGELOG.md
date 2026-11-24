@@ -10,6 +10,23 @@ once it makes its first release.
 
 ### Added
 
+- Connect defaults to General. A General agent can build, review, draft
+  contracts, check tasks, answer questions and decide approvals, one job,
+  task or review at a time. A running seat the app manages restarts when
+  its role changes to or from General. A General seat can build and do
+  jobs on a Gemini login. Its review work passes over Gemini logins.
+  The board shows task-specific reviewer availability and includes eligible
+  General seats in account waits. A Ready task still shows the builder's
+  login wait when a General seat with a free login lacks standing to build it.
+  General build and review briefings include the instructions for that work.
+- Prompt connections use one landing prompt with the seat's token and
+  instructions to fetch `GET /v1/join` for HTTP or MCP. New prompt in the
+  roster confirms the replacement, then ends the old token and gives back
+  work the seat holds. A Working
+  task returns to Ready, a review is released, a held job times out, and a
+  Finishing lease ends with any open actions that need confirmation sent to
+  the owner.
+
 - Added the Credentials screen with limits and resets where available, API
   tokens, Refresh and Verify all, renaming and removing a credential, and
   reordering the handoff order. A usage reading can resume a waiting task
@@ -190,5 +207,7 @@ once it makes its first release.
 
 ### Fixed
 
+- Log verification recognizes rule checks the orchestrator retries before
+  the workspace's offline item opens.
 - Saving an unchanged seat leaves reviewer eligibility updates to the
   timer sweep.

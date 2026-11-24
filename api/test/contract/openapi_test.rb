@@ -10,16 +10,18 @@ class OpenapiTest < Minitest::Test
   TOKEN_WORD = /(\A|_)token(_hash)?\z|secret|password|keychain|settings_folder/i
   # The only components that may carry a secret, once, in the response that
   # issues it (IF-15, IF-16, IF-17). A stored command outcome never does.
-  ONE_TIME_RESPONSES = %w[SeatTokenPickup SeatConnected HelperTokenIssued OwnerSession].freeze
+  # The landing prompt carries the seat's token in its text, so it is one of
+  # them (GA-13); connect_seat issues no token.
+  ONE_TIME_RESPONSES = %w[SeatTokenPickup LandingPromptIssued HelperTokenIssued OwnerSession].freeze
   # The operation that returns each one, and the token property it carries.
   ONE_TIME_OPERATIONS = {
-    "issue_seat_token" => %w[SeatTokenPickup seat_token], "connect_seat" => %w[SeatConnected seat_token],
+    "issue_seat_token" => %w[SeatTokenPickup seat_token], "issue_landing_prompt" => %w[LandingPromptIssued seat_token],
     "issue_helper_token" => %w[HelperTokenIssued helper_token], "sign_in_owner" => %w[OwnerSession session_token],
     "create_owner" => %w[OwnerSession session_token]
   }.freeze
   # The owner reads whose shapes wait for track F's queries (IF-18), and the
   # helper request's progress (milestone 2 plan, IN-23). The events tail,
-  # the Needs you list, the setup state, the landing prompt and workspace settings are stable.
+  # the Needs you list, the setup state and workspace settings are stable.
   PROVISIONAL_READS = %w[
     get_board get_task list_decisions list_seats list_projects list_rules list_credentials get_system_health
     get_helper_request
@@ -229,7 +231,7 @@ class OpenapiTest < Minitest::Test
     provisional = operations.select { |_, _, op| op["x-provisional"] }.map { |_, _, op| op["operationId"] }
     assert_equal PROVISIONAL_READS.sort, provisional.sort
     stable = owner_reads - provisional
-    assert_equal %w[get_landing_prompt get_owner_command get_setup_state get_workspace_settings list_events list_inbox], stable.sort
+    assert_equal %w[get_owner_command get_setup_state get_workspace_settings list_events list_inbox], stable.sort
   end
 
   def test_health_is_infrastructure_outside_the_agent_calls
@@ -264,6 +266,7 @@ class OpenapiTest < Minitest::Test
       [ "Question", "outcome" ] => lists["question_outcomes"], [ "Question", "basis" ] => lists["question_bases"],
       [ "BriefEntry", "kind" ] => lists["brief_entry_kinds"],
       [ "Seat", "role" ] => lists["seat_roles"], [ "ConnectSeatRequest", "role" ] => lists["seat_roles"],
+      [ "ChangeSeatRequest", "role" ] => lists["seat_roles"], [ "HelperRequestParams", "role" ] => lists["seat_roles"],
       [ "Seat", "provider" ] => providers, [ "Seat", "run_state" ] => lists["seat_run_states"],
       [ "Credential", "provider" ] => providers, [ "Credential", "kind" ] => lists["credential_kinds"],
       [ "Credential", "state" ] => lists["credential_states"],
@@ -288,6 +291,18 @@ class OpenapiTest < Minitest::Test
     end
     assert_equal lists["task_states"].values_at(0, 1), enum_of("AddTaskRequest", "state")
     assert_equal registry["custom_rule_hooks"], enum_of("AddRuleRequest", "hook")
+  end
+
+  # A General seat gets no role file (GA-2): its briefing and every job's
+  # material carry role_file null, and the briefing's versions name none.
+  def test_a_role_file_may_be_null_for_a_general_seat
+    %w[Briefing CheckMaterial DraftMaterial QuestionMaterial ApprovalMaterial].each do |component|
+      node = schemas.fetch(component).fetch("properties").fetch("role_file")
+      assert_equal %w[string null], node["type"], component
+      assert_includes node.fetch("description"), "General", component
+    end
+    node = schemas.fetch("BriefingVersions").fetch("properties").fetch("role_file_version")
+    assert_equal %w[string null], node["type"]
   end
 
   def test_the_job_components_named_by_the_registry_exist
@@ -353,10 +368,10 @@ class OpenapiTest < Minitest::Test
       refute validator.valid?(wrap.call(first.except(token))), "#{envelope}: a first answer without its token"
     end
     connected = JSONSchemer.openapi(doc).ref("#/components/schemas/SeatConnectedCompleted")
-    app_run = { "key" => "k", "command" => "connect_seat", "outcome" => "completed", "refusal" => nil,
-                "result" => { "seat_id" => uuid(1), "seat_token" => nil } }
-    assert connected.valid?(app_run), "a seat the app runs gets seat_token null"
-    refute connected.valid?(app_run.merge("result" => { "seat_id" => uuid(1), "seat_token" => nil, "repeated" => true }))
+    seat = { "key" => "k", "command" => "connect_seat", "outcome" => "completed", "refusal" => nil,
+             "result" => { "seat_id" => uuid(1) } }
+    assert connected.valid?(seat), "connect_seat answers the seat's id and no token (GA-13)"
+    refute connected.valid?(seat.merge("result" => { "seat_id" => uuid(1), "seat_token" => nil }))
   end
 
   def test_the_seat_token_is_returned_once_and_never_stored
@@ -373,7 +388,7 @@ class OpenapiTest < Minitest::Test
 
       refs = [ op["responses"].fetch("200") ].map { |response| json_schema(response)["$ref"] }.compact.map { |ref| ref.split("/").last }
       one_time = refs & ONE_TIME_RESPONSES.map { |name| "#{name}Completed" }
-      allowed = %w[issue_seat_token connect_seat issue_helper_token sign_in_owner create_owner]
+      allowed = %w[issue_seat_token issue_landing_prompt issue_helper_token sign_in_owner create_owner]
       assert_equal allowed.include?(op["operationId"]), !one_time.empty?, op["operationId"]
     end
     # Only the four one-time responses may name a token at all (C17).

@@ -150,8 +150,8 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
 
   def test_job_inputs_require_the_material_and_results_have_length_limits
     {
-      "QuestionJobInput" => %w[role_file question contract brief earlier_answers],
-      "ApprovalJobInput" => %w[role_file instruction action contract quoted]
+      "QuestionJobInput" => %w[role_file job_rules question contract brief earlier_answers],
+      "ApprovalJobInput" => %w[role_file job_rules instruction action contract quoted]
     }.each do |component, required|
       assert_includes components.fetch(component).fetch("required"), "material"
       material_name = property(component, "material").fetch("$ref").split("/").last
@@ -186,12 +186,7 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
     assert schema.valid?({ "recovery_time_ceiling_seconds" => nil })
   end
 
-  def test_landing_prompt_and_seat_request_shapes
-    path = "/v1/owner/seats/{id}/landing-prompt"
-    connection = openapi.dig("paths", path, "get", "parameters").find { |entry| entry["name"] == "connection" }
-    assert_equal "http", connection&.dig("schema", "default")
-    assert_equal %w[http mcp], connection.dig("schema", "enum")
-    assert_equal %w[http mcp], property("LandingPrompt", "connection")&.fetch("enum")
+  def test_seat_request_shapes
     %w[ConnectSeatRequest ChangeSeatRequest].each do |name|
       assert_equal [ 1, 3 ], property(name, "strength_rank").values_at("minimum", "maximum")
       refute_includes components.fetch(name).fetch("required"), "strength_rank"

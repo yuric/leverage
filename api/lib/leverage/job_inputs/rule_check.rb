@@ -29,7 +29,7 @@ module Leverage
           "inputs" => job.input.to_h["inputs"].presence ||
             HookInputs.for(hook: check.hook, task: task, params: params, seat: seat, review: review),
           "material" => {
-            "role_file" => RoleFiles.text("orchestrator"), "instruction" => version.instruction.to_s,
+            "instruction" => version.instruction.to_s,
             "moment" => moment(check.hook), "may_answer_not_applicable" => version.scope_kind == "checker_decides",
             "contract" => check_contract(check.hook, task, params),
             "quoted" => quoted(check.hook, task, params, seat, job.claimed_at || Time.current)

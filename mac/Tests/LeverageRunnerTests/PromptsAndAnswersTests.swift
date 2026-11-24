@@ -28,7 +28,7 @@ struct PromptsAndAnswersTests {
     }
 
     @Test("a builder prompt names its criterion first and asks for one marker line")
-    func builderPrompt() {
+    func builderPrompt() throws {
         let briefing = Fixture.briefing(hash: "h", criteria: contract)
         let prompt = Prompts.builder(
             number: 2, criterion: contract[2], briefing: briefing,
@@ -41,8 +41,60 @@ struct PromptsAndAnswersTests {
         #expect(!prompt.contains("LEVERAGE-CRITERION"))
         #expect(prompt.contains("The layout matches the rest of the site."))
         #expect(prompt.contains("See criterion 1 too."))
-        #expect(prompt.contains(briefing.roleFile))
+        let roleFile = try #require(briefing.roleFile)
+        #expect(prompt.contains("Your role:\n> \(roleFile)"))
         #expect(prompt.contains("/work/t"))
+    }
+
+    @Test("build, review and rule retry prompts omit the missing role file and keep the workspace rules")
+    func promptsWithoutRoleFile() {
+        let fixture = Fixture.briefing(hash: "h", criteria: contract)
+        let rule = BriefingRule(
+            ruleID: UUID(), ruleVersionID: UUID(), key: "price_list", name: "Check the price list",
+            instruction: "Use the current figures.", mayApply: false)
+        let briefing = Briefing(
+            hash: fixture.hash, versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1),
+            rules: [rule], roleFile: nil, contract: fixture.contract)
+        let folder = URL(fileURLWithPath: "/work/t")
+        let prompts = [
+            Prompts.builder(number: 1, criterion: contract[0], briefing: briefing, reviewNotes: [], folder: folder),
+            Prompts.reviewer(briefing: briefing, folder: folder),
+            BuilderFlow.rulePrompt(ruleName: rule.name, reason: "The figures are old.", briefing: briefing, folder: folder),
+        ]
+        for prompt in prompts {
+            #expect(!prompt.contains("Your role:"))
+            #expect(prompt.contains(Prompts.rulesHeading + "\n> - " + rule.name))
+            #expect(prompt.contains(briefing.contract.goal))
+        }
+    }
+
+    @Test("the runner gives General build, rule retry and review prompts their briefing instructions")
+    func generalWorkRules() throws {
+        let fixture = Fixture.briefing(hash: "h", criteria: contract)
+        let briefing = Briefing(
+            hash: fixture.hash, versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1),
+            roleFile: nil, contract: fixture.contract)
+        let data = try JSONEncoder().encode(briefing)
+        let original = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        func briefingWithRules(_ rules: [String]) throws -> Briefing {
+            var json = original
+            json["work_rules"] = rules
+            return try JSONDecoder().decode(Briefing.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+
+        let folder = URL(fileURLWithPath: "/work/t")
+        let gate = "Leverage gates only what goes through it."
+        let buildRule = "Wait for Leverage to approve an outward action before publishing, paying, sending or deleting. Carry out only what the approval covers."
+        let build = try briefingWithRules([gate, buildRule])
+        let builder = Prompts.builder(number: 1, criterion: contract[0], briefing: build, reviewNotes: [], folder: folder)
+        let retry = BuilderFlow.rulePrompt(ruleName: "Check the price", reason: "The figures are old.", briefing: build, folder: folder)
+        let reviewRule = "Change nothing, inside or outside the work folder. Take no outward action."
+        let review = try briefingWithRules([gate, reviewRule])
+        let reviewer = Prompts.reviewer(briefing: review, folder: folder)
+        for (prompt, rule) in [(builder, buildRule), (retry, buildRule), (reviewer, reviewRule)] {
+            #expect(prompt.contains("\n" + gate + "\n" + rule))
+            #expect(!prompt.contains("Your role:"))
+        }
     }
 
     @Test("quoted material cannot carry a marker line")

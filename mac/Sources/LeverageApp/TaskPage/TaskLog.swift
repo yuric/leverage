@@ -378,6 +378,7 @@ enum TaskLog {
             case .stopping: copy = .logReleasedStopping
             case .seatDisabled: copy = .logReleasedSwitchedOff
             case .seatRemoved: copy = .logReleasedRemoved
+            case .newPrompt: copy = .logReleasedNewPrompt
             case nil: copy = .logReleasedOther
             }
             return copy.filled(agent)

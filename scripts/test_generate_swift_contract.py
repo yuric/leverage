@@ -69,9 +69,9 @@ def check_agent_tools(cases, registry, openapi):
         rf"summary: {quoted}, inputSchema: {quoted}, roles: \[([^\]]*)\]\),$",
         tools_text, re.MULTILINE)
     operations = [op for op in registry["operations"] if op["tag"] == "agent"]
-    cases.check("AgentTools.swift has all 24 agent operations in registry order",
+    cases.check("AgentTools.swift has all 25 agent operations in registry order (get_join included, GA-12)",
                 [json.loads(row[0]) for row in rows] == [op["operation_id"] for op in operations]
-                and len(rows) == 24, f"found {len(rows)} tool declarations")
+                and len(rows) == 25, f"found {len(rows)} tool declarations")
     roles = load(ROLES)["roles"]
     for raw_id, method, raw_path, raw_summary, raw_schema, role_list in rows:
         tool_id = json.loads(raw_id)
@@ -104,6 +104,44 @@ def check_agent_tools(cases, registry, openapi):
                         "id" in schema.get("required", []) and len(result.get("oneOf", [])) == 4
                         and {"outcome", "answer", "basis"} in [
                             set(alternative.get("required", [])) for alternative in result["oneOf"]])
+
+
+def check_role_facts(cases):
+    """AgentTools.swift gives each seat role the roles it acts as and whether
+    it gets a role file, from roles.json (contract decisions GA-1, GA-2)."""
+    tools_text = AGENT_TOOLS.read_text(encoding="utf-8") if AGENT_TOOLS.exists() else ""
+    roles = load(ROLES)["roles"]
+    for property_name, value in (
+        ("actsAs: [SeatRole]", lambda role: "[" + ", ".join("." + name for name in role["acts_as"]) + "]"),
+        ("hasRoleFile: Bool", lambda role: "true" if role["role_file"] else "false"),
+    ):
+        match = re.search(rf"^    public var {re.escape(property_name)} \{{\n(.*?)^    \}}",
+                          tools_text, re.MULTILINE | re.DOTALL)
+        body = match[1] if match else ""
+        entries = dict(re.findall(r"^        case \.(\w+): return (.*)$", body, re.MULTILINE))
+        cases.check(f"SeatRole.{property_name} has one case per role of roles.json",
+                    len(entries) == len(roles) and len(roles) > 0, body)
+        for role in roles:
+            cases.check(f"SeatRole.{property_name} matches roles.json for {role['role']}",
+                        entries.get(role["role"]) == value(role) if "acts_as" in role and "role_file" in role
+                        else False, entries.get(role["role"], "missing"))
+    # GA-7: the rules a General seat's job material carries, as the runner's
+    # job prompts and the eval's General mode read them.
+    match = re.search(r"^    public var jobRules: \[String\] \{\n(.*?)^    \}", tools_text, re.MULTILINE | re.DOTALL)
+    body = match[1] if match else ""
+    entries = dict(re.findall(r"^        case \.(\w+): return (\[.*\])$", body, re.MULTILINE))
+    cases.check("SeatRole.jobRules has one case per role of roles.json",
+                len(entries) == len(roles) and len(roles) > 0, body)
+    for role in roles:
+        try:
+            actual = json.loads(entries.get(role["role"], "null"))
+        except json.JSONDecodeError:
+            actual = None
+        cases.check(f"SeatRole.jobRules matches roles.json for {role['role']}",
+                    "job_rules" in role and actual == role["job_rules"], entries.get(role["role"], "missing"))
+    cases.check("SeatRole.jobRules is not empty for a role with no role file",
+                all(role.get("job_rules") for role in roles if role.get("role_file") is False)
+                and any(role.get("role_file") is False for role in roles))
 
 
 def check_readers(cases, swift, readers):
@@ -161,6 +199,7 @@ def main():
                 swift == committed, "the outputs differ")
 
     check_agent_tools(cases, registry, openapi)
+    check_role_facts(cases)
     readers = load(READERS)
     check_readers(cases, swift, readers["readers"])
 
@@ -204,7 +243,9 @@ def main():
         "public enum CommandName: String, Codable, CaseIterable, Sendable {",
         "public enum ContractOperation: String, CaseIterable, Sendable {",
         'case .claimNextTask: return (.post, "/v1/tasks/claim-next", .builder, .agent)',
-        'case .getLandingPrompt: return (.get, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)',
+        'case .issueLandingPrompt: return (.post, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)',
+        'case .getJoin: return (.get, "/v1/join", .any, .agent)',
+        '    case issueLandingPrompt = "issue_landing_prompt"',
         "public enum TransportErrorCode: String, Codable, CaseIterable, Sendable {",
         '    case keyReused = "key_reused"',
         "public enum HelperCheck: String, Codable, CaseIterable, Sendable {",
@@ -312,6 +353,15 @@ def main():
     ]:
         cases.check(f"writes {line.strip()!r}", line in swift, line)
     cases.check("a list of providers is no enum", "enum OrchestratorTestedProvider" not in swift)
+    cases.check("the providers tested as a General seat are written, as a list (GA-11)",
+                "generalTestedProviders: [Provider] = []" in swift and "enum GeneralTestedProvider" not in swift)
+    cases.check("the landing prompt is no longer a read", "getLandingPrompt" not in swift)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["general_tested_providers"] = ["claude_api"]
+    code, out, _ = run(doctored, openapi)
+    cases.check("a General-tested provider that is not a login fails and names it",
+                code == 1 and "claude_api" in out and "login" in out, out)
 
     # The list's committed values are the managing agent's eval results, so
     # what an empty list gives is asked of a doctored registry, not of the

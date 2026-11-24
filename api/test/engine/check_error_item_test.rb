@@ -35,6 +35,23 @@ class CheckErrorItemTest < ActiveSupport::TestCase
     assert_equal [ open_holds(@task).sole.id ], items.map(&:hold_id)
   end
 
+  test "the log attributes a retry to orchestrator recovery before an offline item opens" do
+    go_offline
+    error_check(@check)
+    assert_equal [ "check_error" ], open_holds(@task).map(&:reason)
+    assert_empty InboxItem.where(workspace_id: scenario.workspace_id)
+    before = scenario.workspace.reload.last_seq
+
+    come_back
+    assert_completed(timer("orchestrator_offline"))
+
+    written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", before).order(:seq).to_a
+    assert_equal %w[check.queued job.queued], written.map(&:type)
+    assert_equal [ [ "app", nil ], [ "app", nil ] ], written.map { |event| [ event.actor_kind, event.command_id ] }
+    assert_equal [ @check.id, written.last.subject_id ], [ written.first.subject_id, written.first.payload.fetch("job_id") ]
+    assert_empty Leverage::LogAudit.call(scenario.workspace_id, after_seq: before)
+  end
+
   test "an error while offline, the orchestrator back, and an error again while online opens the item" do
     go_offline
     error_check(@check)

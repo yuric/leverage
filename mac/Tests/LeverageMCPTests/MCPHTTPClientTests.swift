@@ -8,6 +8,32 @@ import Testing
 @testable import LeverageMCP
 
 struct MCPHTTPClientTests {
+    @Test func getJoinRequestsMCPInstructions() async throws {
+        let host = "mcp-join-fixture.invalid"
+        let session = StubURLProtocol.session(host: host, answer: .init(status: 200, json: """
+            {"text":"Fixture instructions","role":"general","connection":"mcp","unused":"fixture metadata"}
+            """))
+        defer { session.invalidateAndCancel() }
+        let transport = HTTPTransport(
+            baseURL: URL(string: "http://\(host)")!, token: "fixture-not-a-seat-token", session: session)
+
+        let answer = try await MCPHTTPClient(transport: transport).send(ToolRequest(operation: .getJoin))
+
+        #expect(answer.status == 200)
+        #expect(answer.body == .object([
+            "text": .string("Fixture instructions"), "role": .string("general"), "connection": .string("mcp"),
+        ]))
+        let requests = StubURLProtocol.requests(host: host)
+        try #require(requests.count == 1)
+        let request = try #require(requests.first)
+        #expect(request.method == "GET")
+        #expect(request.url?.path == "/v1/join")
+        #expect(request.url?.query == "connection=mcp")
+        let hasAuthorization = request.header("Authorization") == "Bearer fixture-not-a-seat-token"
+        #expect(hasAuthorization)
+        #expect(request.body == nil)
+    }
+
     @Test func sendsPathBodyAndHeadersAndRetriesWithIdenticalKeyAndBytes() async throws {
         let host = "mcp-retry-fixture.invalid"
         let session = StubURLProtocol.session(host: host, answers: [

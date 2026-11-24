@@ -3,7 +3,7 @@ import LeverageKit
 import LeverageTestSupport
 import Testing
 
-// What the seven rule-check tests share (milestone 4 plan §5.2, RT-8, RT-9):
+// What the rule-check tests share (milestone 4 plan §5.2, RT-8, RT-9):
 // each starts at the first sign-in on a database of its own, which
 // scripts/e2e_rule_checks.sh starts for that one test, so creating the owner
 // writes the seven shipped rules, on. The helper starts every agent, an
@@ -66,7 +66,7 @@ struct RuleChecksWorld {
     func addLogin(_ provider: Provider, name: String, id: UUID = UUID()) async throws -> UUID {
         try await owner.addLogin(
             provider, name: name, id: id, model: ProviderCatalog.entry(for: provider.rawValue)?.defaultModel?.value,
-            strengthRank: 1)
+            strengthRank: 1, deadline: Patience.seconds(120))
     }
 
     /// The usual three: a builder on Claude "One", a reviewer on Codex
@@ -146,7 +146,7 @@ struct RuleChecksWorld {
     /// gone (§5.2).
     func stopSeats(_ seats: [UUID]) async throws {
         for seat in seats { try await owner.stopAndWait(seat: seat) }
-        try await eventually("every process the runs started ended", deadline: 30) {
+        try await eventually("every process the runs started ended", deadline: Patience.seconds(30)) {
             try await Processes.startedBy(helper.process.processID, orNaming: folder.url).isEmpty
         }
     }

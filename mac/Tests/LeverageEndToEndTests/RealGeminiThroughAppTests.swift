@@ -55,12 +55,8 @@ struct RealGeminiThroughAppTests {
 
             // The reviewer: a seat that connects on its own, its token shown
             // once and given only to the runner's environment.
-            let connected = try await owner.connectSeat(
-                ConnectSeatRequest(name: "Stand-in reviewer", role: .reviewer, provider: .codex),
-                key: IdempotencyKey())
-            guard case .shown(let seat)? = try connected.completedResult(), let token = seat.seatToken else {
-                throw EndToEndFailure("connect_seat showed no token for the reviewer")
-            }
+            let prompt = try await owner.connectByPrompt("Stand-in reviewer", role: .reviewer, provider: .codex)
+            let token = prompt.seatToken
             try folder.record(secrets: [token])
             let account = try folder.folder("reviewer-account")
             try tools.signIn("codex", accountFolder: account)
@@ -93,7 +89,7 @@ struct RealGeminiThroughAppTests {
                 where: { $0.taskID == task && $0.type == .taskDone })
             let events = await follower.events(of: task)
             #expect(events.filter { $0.type == .taskSubmitted }.allSatisfy { $0.actorID == builder })
-            #expect(events.contains { $0.type == .reviewPassed && $0.actorID == seat.seatID })
+            #expect(events.contains { $0.type == .reviewPassed && $0.actorID == prompt.seatID })
             try await owner.stopAndWait(seat: builder)
         } cleanup: {
             if let reviewerRun {

@@ -24,13 +24,14 @@ public enum LeverageClientError: Error, Equatable, Sendable {
     case invalidBody
     /// The answer was not an HTTP response.
     case notHTTP
-    /// A command was refused (409), or a read refused with a `Refusal`
-    /// (`get_landing_prompt` for a seat the app runs).
+    /// The API refused the request (409).
     case refused(Refusal)
     /// A command is pending (202) where its result was asked for.
     case pending(CommandName)
     /// An operation's path needs this parameter, and it was not given.
     case missingPathParameter(String)
+    /// This API client has no implementation of the operation.
+    case unsupportedOperation(ContractOperation)
     /// The value is not an idempotency key.
     case invalidKey(String)
 }

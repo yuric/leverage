@@ -42,7 +42,6 @@ class OwnerReadsTest < CommittingTestCase
   READS = %w[
     /v1/owner/board /v1/owner/seats /v1/owner/credentials /v1/owner/health /v1/owner/events
     /v1/owner/tasks/00000000-0000-4000-8000-000000000001 /v1/owner/helper-requests/00000000-0000-4000-8000-000000000002
-    /v1/owner/seats/00000000-0000-4000-8000-000000000003/landing-prompt
   ].freeze
 
   test "every owner read is 401 without an owner token" do

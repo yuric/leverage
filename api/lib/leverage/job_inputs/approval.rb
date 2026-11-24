@@ -17,7 +17,7 @@ module Leverage
         {
           "task_id" => task.id, "project_id" => task.project_id, "action_id" => action.id, "rule_check_id" => check.id,
           "material" => {
-            "role_file" => RoleFiles.text("orchestrator"), "instruction" => instruction(version),
+            "instruction" => instruction(version),
             "action" => action.attributes.slice("kind", "description", "position"),
             "contract" => contract, "quoted" => quotes(task, check.round, criteria)
           }

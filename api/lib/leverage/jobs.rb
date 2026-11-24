@@ -56,14 +56,14 @@ module Leverage
       fields = event_fields(ctx, as)
       job = Job.create!(id: id || SecureRandom.uuid, workspace_id: ctx.workspace.id, kind: kind, task_id: task&.id,
         project_id: task&.project_id, target_kind: EventLog.kind_of(target), target_id: target.id, seat_role: seat_role,
-        state: "queued", queued_at: fields[:effective_at], input: input, attempt_number: attempt_number)
+        state: "queued", queued_at: fields[:effective_at], input: JobInputs.store(input, seat_role, kind: kind), attempt_number: attempt_number)
       emit(ctx, "job.queued", job, task, fields, payload: { kind: kind })
       job
     end
 
     # The job seat would get from claim-next at at: the one it holds, else
     # the oldest it may claim, or nil. Reads only.
-    def next_for(seat, at: Time.current)
+    def next_for(seat, at: Time.current, additional: [])
       return nil unless active?(seat)
 
       job = held(seat, at)
@@ -72,9 +72,20 @@ module Leverage
 
         return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
       end
-      return nil unless placed?(seat, at)
+      return nil unless ready_to_claim?(seat, at)
 
-      claimable(seat, at)
+      queued = claimable(seat, at)
+      proposed = additional.select { |item| claimable_proposal?(item, seat, at) }.min_by(&:queued_at)
+      proposed && (queued.nil? || proposed.queued_at < queued.queued_at) ? proposed : queued
+    end
+
+    # Recovery checks eligibility for this attempt independently of queue order.
+    def may_claim_proposal?(job, seat, at:)
+      active?(seat) && ready_to_claim?(seat, at) && claimable_proposal?(job, seat, at)
+    end
+
+    def ready_to_claim?(seat, at)
+      placed?(seat, at) && (seat.role != "general" || Eligibility.idle_for_claim?(seat, at: at))
     end
 
     # A stored claim can show its material only to the seat that can still hold it.
@@ -89,7 +100,7 @@ module Leverage
     # A seat can change role while it holds a job. The old job still occupies
     # the seat until it ends, but only the job's role can receive or finish it.
     def role_matches?(job, seat)
-      job.seat_role == seat.role && kinds_for(seat.role).include?(job.kind)
+      Roles.acts_as?(seat.role, job.seat_role) && kinds_for(seat.role).include?(job.kind)
     end
 
     # The job the seat holds now: claimed by it and its run time not over,
@@ -194,10 +205,13 @@ module Leverage
     # An action batch can queue
     # more than one job at the same effective time.
     def claimable(seat, at)
-      Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role)
-        .where.not(task_id: built_by(seat)).where.not(task_id: unavailable_tasks(seat.workspace_id)).or(queued_without_task(seat))
-        .where.not(kind: "question", task_id: ended_tasks(seat.workspace_id))
-        .order(:queued_at, Arel.sql(ACTION_QUEUE_ORDER), :id).find { |job| !due?(job, :queue, at) }
+      queued = Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role),
+        seat_role: definitions_for(seat.role).map { |job| job.fetch("claimer_role") }.uniq)
+      queued.where.not(task_id: built_by(seat)).where.not(task_id: unavailable_tasks(seat.workspace_id))
+        .or(queued.where(task_id: nil)).where.not(kind: "question", task_id: ended_tasks(seat.workspace_id))
+        .order(:queued_at, Arel.sql(ACTION_QUEUE_ORDER), :id).find do |job|
+          !due?(job, :queue, at) && !own_draft_check?(job, seat)
+        end
     end
 
     def ended_tasks(workspace_id)
@@ -209,15 +223,32 @@ module Leverage
       tasks.where(state: "cancelled").or(tasks.where.not(content_deleted_at: nil)).select(:id)
     end
 
-    # A queued job with no task, which no past holder can be kept from.
-    def queued_without_task(seat)
-      Job.where(workspace_id: seat.workspace_id, state: "queued", kind: kinds_for(seat.role), seat_role: seat.role,
-        task_id: nil)
+    # Presence and question routing can ask about a job before it enters
+    # the queue. Existing jobs win a tie with these proposed rows.
+    def claimable_proposal?(job, seat, at)
+      return false unless job.workspace_id == seat.workspace_id && job.state == "queued" && role_matches?(job, seat)
+      return false if due?(job, :queue, at) || own_draft_check?(job, seat)
+      return true unless job.task_id
+
+      !built_by(seat).exists?(task_id: job.task_id) && !unavailable_tasks(seat.workspace_id).exists?(id: job.task_id) &&
+        (job.kind != "question" || !ended_tasks(seat.workspace_id).exists?(id: job.task_id))
+    end
+
+    def own_draft_check?(job, seat)
+      return false unless seat.role == "general" && job.kind == "rule_check" && job.task_id
+      return false unless RuleCheck.exists?(workspace_id: job.workspace_id, id: job.target_id, hook: "task.before_ready")
+
+      Job.where(workspace_id: job.workspace_id, task_id: job.task_id, kind: "contract_draft",
+        claimed_by_seat_id: seat.id, state: "finished").exists?
     end
 
     # The job kinds a role claims (IF-13, jobs.json claimer_role).
     def kinds_for(role)
-      Contract.jobs.fetch("jobs").select { |job| job.fetch("claimer_role") == role }.map { |job| job.fetch("kind") }
+      definitions_for(role).map { |job| job.fetch("kind") }
+    end
+
+    def definitions_for(role)
+      Contract.jobs.fetch("jobs").select { |job| Roles.acts_as?(role, job.fetch("claimer_role")) }
     end
 
     # The tasks the seat ever claimed as a builder (RC-49, RD-36).
@@ -241,7 +272,7 @@ module Leverage
       ctx.emit(type, subject: job, payload: payload, **fields)
     end
 
-    private_class_method :active?, :placed?, :claimable, :ended_tasks, :unavailable_tasks, :queued_without_task,
-      :kinds_for, :built_by, :task_of, :event_fields, :emit
+    private_class_method :active?, :placed?, :ready_to_claim?, :claimable, :ended_tasks, :unavailable_tasks, :claimable_proposal?, :own_draft_check?,
+      :kinds_for, :definitions_for, :built_by, :task_of, :event_fields, :emit
   end
 end

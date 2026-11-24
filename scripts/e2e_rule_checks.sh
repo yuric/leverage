@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # The Rule checks milestone's acceptance run (milestone 4 plan §5.2, RT-9):
-# seven tests, each from the first sign-in, which now writes the seven
+# eight tests, each from the first sign-in, which writes the seven
 # shipped rules, to a task checked by the rules: the shipped rules from the
 # form to Done and on a vague task, a custom rule at "before work is
 # submitted" that refuses and passes and that waits for the owner on the
 # fourth try, the orchestrator offline and back, the provider rule at
-# review, and a contract a planner drafts. It is built like
+# review, a contract a planner drafts, and two General agents from the form
+# to Done. It is built like
 # scripts/e2e_handoff.sh: the real API, sweep and backup in containers, the
 # real helper and runner built once with LEVERAGE_ONLY=e2e, every provider's
 # tool a stand-in. It needs Docker and Swift and nothing else, and is the
@@ -55,7 +56,7 @@ for file in compose.yaml compose.test.yaml; do
   fi
 done
 
-# The seven tests of §5.2, as swift test --filter names them.
+# The eight tests, as swift test --filter names them.
 tests=(
   "ShippedRulesEndToEndTests/testFormToDone"
   "ShippedRulesEndToEndTests/testVagueTaskStaysInBacklog"
@@ -64,6 +65,7 @@ tests=(
   "OrchestratorOfflineEndToEndTests/testOfflineAndBack"
   "ProviderRuleEndToEndTests/testNoReviewerEligibleThenAnother"
   "DraftContractEndToEndTests/testDraftToReady"
+  "GeneralAgentsEndToEndTests/testTwoGeneralAgentsFormToDone"
 )
 replies="$root/mac/Tests/StandIns/replies"
 

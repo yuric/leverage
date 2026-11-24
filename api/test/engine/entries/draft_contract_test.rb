@@ -27,7 +27,7 @@ class DraftContractTest < ActiveSupport::TestCase
     assert_equal [ "contract_draft", task.id, project.id, "task", task.id, "planner", "queued", 1 ],
       job.attributes.values_at("kind", "task_id", "project_id", "target_kind", "target_id", "seat_role", "state",
         "attempt_number")
-    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 3 }, job.input)
+    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 3 }, job.input.except("material"))
     queued = written.sole
     assert_equal [ "job.queued", "job", job.id, task.id, "owner", scenario.owner.id, key, { "kind" => "contract_draft" } ],
       [ queued.type, queued.subject_kind, queued.subject_id, queued.task_id, queued.actor_kind, queued.actor_id,
@@ -39,7 +39,7 @@ class DraftContractTest < ActiveSupport::TestCase
     task = scenario.task(state: "backlog", criteria: [])
     job = Job.find(assert_completed(draft(task)).result.fetch("job_id"))
 
-    assert_equal({ "task_id" => task.id, "project_id" => nil, "brief_version" => 0 }, job.input)
+    assert_equal({ "task_id" => task.id, "project_id" => nil, "brief_version" => 0 }, job.input.except("material"))
   end
 
   test "outside Backlog it is invalid_state and nothing is queued" do

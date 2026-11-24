@@ -18,7 +18,7 @@ module Leverage
         check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
         orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout usage_read_due
       ].freeze
-      SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token].freeze
+      SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token issue_landing_prompt].freeze
       ACCOUNTS = %w[
         issue_helper_token add_credential verify_credential install_tool connect_seat start_seat stop_seat remove_seat
         report_request_progress report_request_result report_run_started report_run_stopped

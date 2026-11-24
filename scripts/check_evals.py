@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CI's check of the orchestrator eval suites. It never calls a provider.
+"""CI's check of the rule eval suites. It never calls a provider.
 
 It checks bar.json, the cases and their recorded results against the
 shipped wording and the frozen case hashes, the run history against its
@@ -352,23 +352,25 @@ class Check:
 
     # --- Results ----------------------------------------------------------------
 
-    def wording(self, bar):
+    def wording(self, bar, mode):
         try:
             instruction = eval_score.instruction_sha256(self.shipped, rule=bar["rule"])
             role_path = self.root / ROLE_FILE
-            role = eval_score.role_file_sha256(role_path) if bar["kind"] == "decision" or role_path.exists() else None
+            role = None
+            if mode == "orchestrator" and (bar["kind"] == "decision" or role_path.exists()):
+                role = eval_score.role_file_sha256(role_path)
             return instruction, role
         except (OSError, ValueError, eval_score.Refused) as error:
             self.problem("results", f"{self.suite.name}: the shipped wording cannot be read ({error})")
             return None
 
-    def results(self, bar, cases, wording, held=False, tuning=False, expected=None, runs=()):
-        directory = self.suite / "results"
-        if held:
-            directory /= "held-out"
+    def results(self, bar, cases, wording, mode, held=False, tuning=False, expected=(), runs=()):
+        directory = eval_score.results_folder(self.suite, mode, held)
         decision = bar["kind"] == "decision"
         set_name = "held-out" if held else self.suite.name
         prefix = f"{set_name}: " if decision else ""
+        if mode == "general":
+            prefix = "general: " + prefix
         case_set = eval_score.cases_sha256(cases)
         results = {}
         for path in sorted(directory.glob("*.json")):
@@ -387,15 +389,14 @@ class Check:
             if held and not tuning:
                 self.problem("results", f"{prefix}{provider} has a result although the wording did not change")
             results[provider] = result
-            self.result(provider, result, bar, cases, wording, case_set, prefix, held, runs)
-        expected = bar["supported_providers"] if expected is None else expected
+            self.result(provider, result, bar, cases, wording, case_set, prefix, held, runs, mode)
         for provider in sorted(expected):
             if provider not in results:
                 procedure = "AV-6" if decision else "RV-6"
                 self.problem("results", f"{prefix}{provider} has no result; run the suite ({procedure})")
         return results
 
-    def result(self, provider, result, bar, cases, wording, case_set, prefix, held, runs):
+    def result(self, provider, result, bar, cases, wording, case_set, prefix, held, runs, mode):
         def bad(text):
             self.problem("results", f"{prefix}{provider}: {text}")
 
@@ -406,6 +407,9 @@ class Check:
         if result.get("status") not in ("run", "not_run"):
             bad("the status must be run or not_run")
             return
+        if eval_score.record_mode(result) != mode:
+            bad(f"the result must be in {mode} mode")
+            return
         if result.get("suite") != self.suite.name or result.get("held_out", False) is not held:
             bad("was recorded for another suite or set")
         instruction, role = wording
@@ -413,9 +417,13 @@ class Check:
             bad("was recorded against another instruction than shipped_rules.json's; run the suite again")
         if result.get("cases_sha256") != case_set:
             bad("was recorded against another case set than the suite's; run the suite again")
-        if bar["kind"] == "decision":
-            if result.get("role_file_sha256") != role:
+        legacy = mode == "orchestrator" and "mode" not in result and bar["kind"] == "verdict"
+        if not valid_role_hash(result, mode, legacy):
+            bad(f"has an invalid or missing role_file_sha256 for {mode} mode")
+        elif mode == "orchestrator" and role is not None:
+            if result.get("role_file_sha256", LEGACY_ROLE_SHA256) != role:
                 bad("was recorded against another role file; run the suite again")
+        if bar["kind"] == "decision":
             if result["status"] == "run":
                 matching = [entry for entry in runs if entry.get("provider") == provider
                             and entry.get("held_out", False) is held and entry.get("reserved") is False]
@@ -423,8 +431,6 @@ class Check:
                 if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
                     bad("the result does not match the latest settled run")
                 self.result_tool_runs(result, bar, bad)
-        elif role is not None and result.get("role_file_sha256", LEGACY_ROLE_SHA256) != role:
-            bad("was recorded against another role file; run the suite again")
         try:
             met, scores = eval_score.rescore(result, cases, bar)
         except (eval_score.Refused, AttributeError, TypeError, KeyError) as refusal:
@@ -464,26 +470,31 @@ class Check:
         except (OSError, ValueError) as error:
             self.problem("registry", f"registry.json cannot be read ({error})")
             return
-        listed = (registry.get("lists") or {}).get("orchestrator_tested_providers")
-        passing = sorted(passing)
-        if not isinstance(listed, list) or any(not isinstance(value, str) for value in listed) or sorted(listed) != passing:
-            self.problem("registry", f"orchestrator_tested_providers is {listed}; it must be the providers whose "
-                                     f"results met the bar in every suite, {passing}")
+        lists = registry.get("lists") or {}
+        for mode, providers in passing.items():
+            key = f"{mode}_tested_providers"
+            listed = lists.get(key)
+            expected = sorted(providers)
+            if (not isinstance(listed, list) or any(not isinstance(value, str) for value in listed)
+                    or sorted(listed) != expected):
+                self.problem("registry", f"{key} is {listed}; it must be the providers whose "
+                                         f"{mode} results met the bar in every suite, {expected}")
 
     # --- runs.json ----------------------------------------------------------------
 
-    def runs(self, bar, wording):
-        path = self.suite / "runs.json"
+    def runs(self, bar, wording, mode):
+        path = eval_score.runs_file(self.suite, mode)
+        if mode == "general" and not path.exists():
+            return [], False
         try:
             runs = eval_score.read_json(path)
         except (OSError, ValueError) as error:
-            self.problem("runs", f"runs.json cannot be read ({error})")
+            self.problem("runs", f"{path.name} cannot be read ({error})")
             return [], False
         entries = runs.get("runs") if isinstance(runs, dict) else None
         if not isinstance(entries, list):
-            self.problem("runs", "runs.json has no list of runs")
+            self.problem("runs", f"{path.name} has no list of runs")
             return [], False
-        totals, counts = Counter(), Counter()
         decision = bar["kind"] == "decision"
         primary_wordings = set()
         held_started = False
@@ -503,12 +514,18 @@ class Check:
             if made > config["maximum_tool_runs"]:
                 self.problem("runs", f"{prefix}: a run of {made} tool runs; a run makes at most "
                                      f"{config['maximum_tool_runs']}")
-            totals[provider] += made
-            counts[(held, provider)] += 1
+            if eval_score.record_mode(entry) != mode:
+                self.problem("runs", f"{prefix}: a run in {path.name} must be in {mode} mode")
+                continue
+            legacy = mode == "orchestrator" and "mode" not in entry and not decision
+            if not valid_role_hash(entry, mode, legacy):
+                self.problem("runs", f"{prefix}: a run has an invalid or missing role_file_sha256 for {mode} mode")
+                continue
             if not decision:
+                valid_entries.append(entry)
                 continue
             hashes = eval_score.wording_hashes(entry)
-            if not all(digest(value) for value in hashes) or entry.get("cases_sha256") != config["cases_sha256"]:
+            if not digest(hashes[0]) or entry.get("cases_sha256") != config["cases_sha256"]:
                 self.problem("runs", f"{prefix}: a run has invalid wording or case set hashes")
                 continue
             if type(entry.get("reserved")) is not bool:
@@ -525,6 +542,14 @@ class Check:
                 if held_started:
                     self.problem("runs", f"{prefix}: a primary run started after a held-out run")
             valid_entries.append(entry)
+        return valid_entries, len(primary_wordings | {tuple(wording)}) > 1
+
+    def run_budget(self, bar, entries):
+        totals, counts = Counter(), Counter()
+        for entry in entries:
+            provider = entry["provider"]
+            totals[provider] += entry["tool_runs"]
+            counts[(entry.get("held_out", False), provider)] += 1
         for (held, provider), count in sorted(counts.items()):
             maximum = eval_score.set_config(bar, held_out=held)["maximum_runs_per_provider"]
             prefix = f"held-out: {provider}" if held else provider
@@ -539,29 +564,38 @@ class Check:
         maximum = budget["maximum_tool_runs_total"]
         if total > maximum:
             self.problem("runs", f"{total} tool runs in all; the ceiling is {maximum}")
-        return valid_entries, len(primary_wordings | {tuple(wording)}) > 1
 
     def run_suite(self):
+        passing = {mode: set() for mode in eval_score.MODES}
         bar = self.bar()
         if bar is None:
-            return set()
+            return passing
         before = len(self.problems)
         cases = self.cases(bar)
         held_cases = self.cases(bar, held=True) if bar["kind"] == "decision" else []
         if before != len(self.problems) and bar["kind"] == "decision":
-            return set()
-        wording = self.wording(bar)
-        if wording is None:
-            return set()
-        runs, tuning = self.runs(bar, wording)
-        results = self.results(bar, cases, wording, runs=runs)
+            return passing
+        all_runs = []
+        for mode in passing:
+            wording = self.wording(bar, mode)
+            if wording is None:
+                continue
+            runs, tuning = self.runs(bar, wording, mode)
+            all_runs.extend(runs)
+            passing[mode] = self.run_mode(bar, cases, held_cases, mode, wording, runs, tuning)
+        self.run_budget(bar, all_runs)
+        return passing
+
+    def run_mode(self, bar, cases, held_cases, mode, wording, runs, tuning):
+        expected = bar["supported_providers"] if mode == "orchestrator" else ()
+        results = self.results(bar, cases, wording, mode, expected=expected, runs=runs)
         passing = {provider for provider, result in results.items() if result.get("met_bar") is True}
         if bar["kind"] == "decision":
             held_bar = eval_score.set_config(bar, held_out=True)
             expected = {provider for provider, result in results.items()
                         if tuning and result.get("status") == "run" and eval_score.wording_hashes(result) == wording}
-            held_results = self.results(held_bar, held_cases, wording, held=True, tuning=tuning, expected=expected,
-                                        runs=runs)
+            held_results = self.results(held_bar, held_cases, wording, mode, held=True, tuning=tuning,
+                                        expected=expected, runs=runs)
             if tuning:
                 passing &= {provider for provider, result in held_results.items() if result.get("met_bar") is True}
         return passing
@@ -581,13 +615,22 @@ class Check:
         if (self.root.resolve() == HERE.parent or decision_suite.exists()
                 or any(rule.get("key") == DECISION_RULE and rule.get("instruction") for rule in rules)):
             self.suite = decision_suite
-            passing &= self.run_suite()
+            approval_passing = self.run_suite()
+            for mode, providers in passing.items():
+                providers.intersection_update(approval_passing[mode])
         self.registry(passing)
         return self.problems, self.misses
 
 
 def digest(value):
     return isinstance(value, str) and SHA256.fullmatch(value) is not None
+
+
+def valid_role_hash(record, mode, legacy):
+    if "role_file_sha256" not in record:
+        return legacy
+    value = record["role_file_sha256"]
+    return value is None if mode == "general" else digest(value)
 
 
 def category_pairs(categories):

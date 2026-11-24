@@ -54,6 +54,42 @@ class BriefingTest < ActiveSupport::TestCase
     refute_equal B.hash_for(@task, seat: @builder), B.hash_for(@task, seat: @reviewer)
   end
 
+  test "a General seat's briefing has no role file, version or hash part" do
+    general = @scenario.seat(role: "general")
+    parts = [
+      { "kind" => "brief", "id" => nil, "version" => 0 },
+      { "kind" => "contract", "id" => @task.id, "version" => @task.contract_version }
+    ]
+    expected = Digest::SHA256.hexdigest(Leverage::Gating::CanonicalJson.dump(parts))
+
+    assert_equal expected, B.hash_for(@task, seat: general)
+    briefing = B.for(@task, seat: general)
+    assert_matches_component("Briefing", briefing)
+    assert_nil briefing.fetch("role_file")
+    assert_nil briefing.fetch("versions").fetch("role_file_version")
+    assert_equal expected, briefing.fetch("hash")
+  end
+
+  test "General briefings give the held build or review its instructions without a role file" do
+    general = @scenario.seat(role: "general")
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: general)
+    build = B.for(@task, seat: general)
+    reviewing = B.for(review, seat: general)
+
+    assert_matches_component("Briefing", build)
+    assert_matches_component("Briefing", reviewing)
+    assert_nil build.fetch("role_file")
+    assert_nil reviewing.fetch("role_file")
+    assert_includes Array(build["work_rules"]), "Use the contract in your briefing as the task to carry out."
+    assert_includes Array(build["work_rules"]), "Wait for Leverage to approve an outward action before publishing, paying, sending or deleting. Carry out only what the approval covers."
+    assert_includes Array(build["work_rules"]), "Leverage gates only what goes through it."
+    assert_includes Array(reviewing["work_rules"]), "Open the evidence links and read the work in the work folder named by the work reference."
+    assert_includes Array(reviewing["work_rules"]), "Change nothing, inside or outside the work folder. Take no outward action."
+    assert_includes Array(reviewing["work_rules"]), "Leverage gates only what goes through it."
+    refute B.for(@task, seat: @builder).key?("work_rules")
+  end
+
   test "the hash changes with the contract version and with nothing outside the parts" do
     before = B.hash_for(@task, seat: @builder)
     criterion = Criterion.where(task_id: @task.id, kind: "build").first

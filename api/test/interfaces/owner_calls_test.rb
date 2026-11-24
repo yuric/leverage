@@ -52,7 +52,11 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       { op: "connect_seat", command: "connect_seat", path: "/v1/owner/seats",
         body: { "name" => "Made-up agent", "role" => "builder", "provider" => "claude", "model" => nil, "effort" => nil,
                 "strength_rank" => 1, "credential_id" => nil },
-        result: { "seat_id" => @seat_id }, once: { "seat_token" => "made-up-value" } },
+        result: { "seat_id" => @seat_id } },
+      { op: "issue_landing_prompt", command: "issue_landing_prompt", path: "/v1/owner/seats/#{@seat_id}/landing-prompt",
+        body: { "connection" => "http" }, ids: { "id" => @seat_id }, params: { "address" => "http://www.example.com" },
+        result: { "seat_id" => @seat_id, "connection" => "http" },
+        once: { "seat_token" => Leverage::Tokens.issue(:seat), "text" => "Made-up landing prompt." } },
       { op: "start_seat", command: "start_seat", path: "/v1/owner/seats/#{@seat_id}/start", ids: { "id" => @seat_id }, result: request },
       { op: "stop_seat", command: "stop_seat", path: "/v1/owner/seats/#{@seat_id}/stop", ids: { "id" => @seat_id }, result: request },
       { op: "remove_seat", command: "remove_seat", path: "/v1/owner/seats/#{@seat_id}/remove", ids: { "id" => @seat_id }, result: nil },
@@ -156,22 +160,22 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       assert_equal "owner", request.caller_kind
       assert_equal @user.id, request.caller_id
       assert_equal "key-#{call[:op]}", request.key
-      assert_equal (call[:body] || {}).merge(call[:ids] || {}), request.params, call[:op]
+      assert_equal (call[:body] || {}).merge(call[:ids] || {}).merge(call[:params] || {}), request.params, call[:op]
       raw = call[:body] && JSON.generate(call[:body])
       assert_equal Leverage::Idempotency.request_hash(method: "POST", path: call[:path], body: raw.to_s), request.request_hash
     end
   end
 
   test "a token shown once is in the first answer only and the stored result never holds it" do
-    call = calls.find { |candidate| candidate[:op] == "connect_seat" }
-    @stand_in.script("connect_seat", Outcome.completed(call[:result], once: call[:once]))
+    call = calls.find { |candidate| candidate[:op] == "issue_landing_prompt" }
+    @stand_in.script("issue_landing_prompt", Outcome.completed(call[:result], once: call[:once]))
     with_stand_in { send_call(call) }
-    assert_equal "made-up-value", response.parsed_body.dig("result", "seat_token")
+    assert_response :ok
+    assert_equal call[:once], response.parsed_body.fetch("result").slice("seat_token", "text")
 
-    # What the engine stores and a repeat renders: the token-free part, repeated.
     stored = Leverage::Transitions::Outcome.completed(call[:result])
-    rendered = RunsCommands.outcome_body("connect_seat", "k", stored)
-    assert_equal({ "seat_id" => @seat_id, "repeated" => true }, rendered[:result])
+    rendered = RunsCommands.outcome_body("issue_landing_prompt", "k", stored)
+    assert_equal call[:result].merge("repeated" => true), rendered[:result]
   end
 
   # --- every command, refused -------------------------------------------------------------------------------------
@@ -350,12 +354,12 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
   end
 
   test "get_owner_command renders a token command's stored result as repeated, without a token" do
-    store_command(key: "stored-3", command: "connect_seat", result: { "seat_id" => @seat_id })
+    store_command(key: "stored-3", command: "issue_landing_prompt", result: { "seat_id" => @seat_id, "connection" => "http" })
     get "/v1/owner/commands/stored-3", headers: headers
     assert_response :ok
     assert_response_matches_contract
-    assert_equal({ "seat_id" => @seat_id, "repeated" => true }, response.parsed_body["result"])
-    assert_no_match(/token/, response.body)
+    assert_equal({ "seat_id" => @seat_id, "connection" => "http", "repeated" => true }, response.parsed_body["result"])
+    assert_no_match(/seat_token|text/, response.body)
   end
 
   test "get_owner_command is 404 for an unknown key, another caller's key and another workspace's key" do
@@ -441,33 +445,12 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "landing prompt passes the default and each explicit connection to the reader" do
-    path = "/v1/owner/seats/#{@seat_id}/landing-prompt"
-    [ [ "", "http" ], [ "?connection=http", "http" ], [ "?connection=mcp", "mcp" ] ].each do |query, connection|
-      result = read_example("LandingPrompt").merge("connection" => connection)
-      with_read_stub(Leverage::Reads::LandingPrompt, result) do |calls|
-        get "#{path}#{query}", headers: headers
-
-        assert_response :ok
-        assert_response_matches_contract
-        assert_equal result, response.parsed_body
-        keywords = { base_url: request.base_url }
-        keywords[:connection] = connection unless query.empty?
-        assert_equal [ [ [ @scenario.workspace_id, @seat_id ], keywords ] ], calls
-      end
-    end
-  end
-
-  test "landing prompt rejects a connection outside the query schema before calling the reader" do
-    path = "/v1/owner/seats/#{@seat_id}/landing-prompt"
-    with_read_stub(Leverage::Reads::LandingPrompt, read_example("LandingPrompt")) do |calls|
-      [ "?connection=other", "?connection=MCP", "?connection=", "?connection%5B%5D=http" ].each do |query|
-        get "#{path}#{query}", headers: headers
-
-        assert_transport_error :bad_request, "malformed"
-        assert_response_matches_contract
-      end
-      assert_empty calls
+  test "prompt issuance rejects a connection outside the body schema before running the command" do
+    call = calls.find { |candidate| candidate[:op] == "issue_landing_prompt" }
+    [ "other", "MCP", "", [ "http" ] ].each do |connection|
+      with_stand_in { send_call(call, body: { "connection" => connection }) }
+      assert_transport_error :unprocessable_entity, "invalid"
+      assert_response_matches_contract
     end
   end
 end

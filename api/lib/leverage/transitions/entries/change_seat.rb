@@ -8,10 +8,10 @@ module Leverage
       # - name, model, effort, strength rank apply at once; the next run
       #   uses them. A null model or effort is "", the tool's default, and a
       #   null rank is 1, the seats' default (IN-29).
-      # - role: builder, reviewer, planner or orchestrator (the registry's
-      #   seat_roles; milestone 4 plan §0.1 fact 12 lifts the limit of the
-      #   two job roles); a change of role is invalid_state while the seat
-      #   holds a task or a review.
+      # - role: a change is invalid_state while the seat holds a task or a
+      #   review. Changing a running app seat to or from General restarts
+      #   it through start_seat (GA-8). Approved actions are held when the
+      #   previous builder changes to a role that does not build.
       # - credential_id: for a seat the app runs only (a seat that connects
       #   on its own has no login: 422 invalid). The login must be an added
       #   login of the workspace (404 for an unknown id, 422 invalid for an
@@ -39,7 +39,7 @@ module Leverage
       # to what it is) completes with no event and changes nothing.
       #
       # A removed or unknown seat is 404. Result: helper_request_id, the
-      # stop_seat request when one was queued, else null.
+      # start_seat or stop_seat request when one was queued, else null.
       #
       # Params: id (the seat), and the ChangeSeatRequest body.
       class ChangeSeat < Entry
@@ -54,7 +54,7 @@ module Leverage
             raise Invalid, "A seat needs a name"
           end
           if @params.key?("role") && !Contract.list("seat_roles").include?(@params["role"])
-            raise Invalid, "A seat is a builder, a reviewer, a planner or an orchestrator"
+            raise Invalid, "A seat is general, a builder, a reviewer, a planner or an orchestrator"
           end
 
           rank = @params["strength_rank"]
@@ -75,18 +75,17 @@ module Leverage
           turning_off = @params["enabled"] == false && @seat.enabled
           login_changes = @login && @login.id != @seat.credential_id
           values = changes
-          changing_builder_role = @seat.role == "builder" && values.key?(:role) && values[:role] != @seat.role
           if values.all? { |column, value| @seat.public_send(column) == value }
             @result = { "helper_request_id" => nil }
             return
           end
 
+          old_role = @seat.role
           @seat.update!(values.merge(turning_off ? { wanted_running: false } : {}))
           changed = ctx.emit("seat.changed", subject: @seat, payload: {})
-          stop = turn_off(ctx, changed) if turning_off
-          SeatRuns.hold_finishing_tasks(ctx, @seat, cause: changed) if changing_builder_role && !turning_off
+          request = turning_off ? turn_off(ctx, changed) : change_role(ctx, old_role, changed)
           look_again(ctx, changed) if login_changes
-          @result = { "helper_request_id" => stop&.id }
+          @result = { "helper_request_id" => request&.id }
         end
 
         private
@@ -120,6 +119,18 @@ module Leverage
           values[:enabled] = @params["enabled"] if @params.key?("enabled")
           values.merge!(credential_id: @login.id, provider: @login.provider) if @login
           values
+        end
+
+        def change_role(ctx, old_role, changed)
+          return if old_role == @seat.role
+
+          if Roles.acts_as?(old_role, "builder") && !Roles.acts_as?(@seat.role, "builder")
+            SeatRuns.hold_finishing_tasks(ctx, @seat, cause: changed)
+          end
+          return unless old_role == "general" || @seat.role == "general"
+          return unless @seat.credential_id && @seat.run_state == "running" && @seat.wanted_running
+
+          SeatRuns.start(ctx, @seat, SeatRuns.placement(@seat, at: ctx.at))
         end
 
         # Releases the Working task the seat holds and closes its seat-bound

@@ -151,7 +151,7 @@ module Leverage
       raise ArgumentError, "kind is :queue or :run, not #{kind.inspect}" unless WORKSPACE_TIMEOUTS.key?(kind)
 
       workspace = Workspace.find(job.workspace_id)
-      attempt = RuleCheckAttempt.find_by(job_id: job.id)
+      attempt = job.id && RuleCheckAttempt.find_by(job_id: job.id)
       if attempt
         from = kind == :queue ? attempt.queued_at : attempt.started_at
         version = RuleVersion.joins("JOIN rule_checks ON rule_checks.rule_version_id = rule_versions.id")

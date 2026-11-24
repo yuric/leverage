@@ -8,7 +8,7 @@ import LeverageAppServices
 /// What the app reads from its own bundle, as `scripts/build_app.sh`
 /// assembles it (plan PK-1): the compose file in `Contents/Resources`, the
 /// tag of the API image it built (a key of `Info.plist`), and the helper
-/// next to the app's own program in `Contents/MacOS`.
+/// and MCP programs next to the app's own program in `Contents/MacOS`.
 struct LiveSettings: Equatable, Sendable {
     /// The `Info.plist` key build_app.sh writes the image tag under.
     static let imageTagKey = "LeverageAPIImageTag"
@@ -19,6 +19,7 @@ struct LiveSettings: Equatable, Sendable {
     var composeSource: URL
     var imageTag: String
     var helperProgram: URL
+    var mcpProgram: URL
     /// The bundle the app runs from; `UserNotifier.make` decides on it
     /// (HM-27). Outside a bundle it is the program's own folder.
     var bundleURL: URL
@@ -31,7 +32,9 @@ struct LiveSettings: Equatable, Sendable {
         } else {
             imageTag = Self.fallbackImageTag
         }
-        helperProgram = executable.deletingLastPathComponent().appendingPathComponent("LeverageHelper")
+        let programs = executable.deletingLastPathComponent()
+        helperProgram = programs.appendingPathComponent("LeverageHelper")
+        mcpProgram = programs.appendingPathComponent("LeverageMCP")
     }
 
     /// The running app's own bundle.
@@ -118,7 +121,8 @@ enum Live {
             home: home,
             composeSource: settings.composeSource,
             imageTag: settings.imageTag,
-            composeProject: ServerSupervisor.Configuration.composeProject(environment: environment)))
+            composeProject: ServerSupervisor.Configuration.composeProject(environment: environment),
+            mcpProgram: settings.mcpProgram))
         let helper = HelperSupervisor(configuration: .init(
             helperProgram: settings.helperProgram, supportFolder: support, environment: environment))
         return LiveRuntime(

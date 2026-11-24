@@ -7,7 +7,7 @@ module Leverage
     #
     # The orchestrator's half (milestone 4 plan §2.3, RD-17, RD-18):
     # orchestrator is not_set_up while the workspace has no enabled
-    # orchestrator seat that is not removed, else online or offline as
+    # orchestrator or General seat that is not removed, else online or offline as
     # RolePresence says (L401) at the database's time; waiting_checks is
     # waiting_checks below, which the open "Orchestrator offline" item's
     # count is too (Inbox), so the line and the item never disagree.
@@ -62,7 +62,7 @@ module Leverage
 
         # not_set_up, online or offline (RD-17).
         def orchestrator(workspace_id)
-          return "not_set_up" unless Seat.where(workspace_id: workspace_id, role: "orchestrator", enabled: true, removed_at: nil).exists?
+          return "not_set_up" unless RolePresence.configured?(workspace_id, "orchestrator")
 
           presence.online?(Workspace.find(workspace_id), "orchestrator", database_now) ? "online" : "offline"
         end

@@ -9,7 +9,6 @@ module Leverage
         {
           "question_id" => question.id, "task_id" => task.id, "project_id" => task.project_id,
           "material" => {
-            "role_file" => RoleFiles.text("orchestrator"),
             "question" => { "text" => question.text.to_s, "assumption" => question.assumption.to_s, "blocking" => question.blocking },
             "contract" => contract(task), "brief" => brief(task), "earlier_answers" => earlier_answers(task, question)
           }

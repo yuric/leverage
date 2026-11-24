@@ -368,6 +368,67 @@ struct LauncherTests {
         await launcher.stopAll()
     }
 
+    @Test("a role change to or from General replaces the run without reporting a stop",
+          arguments: [SeatRole.builder, .general])
+    func generalRoleChangeHandsOver(oldRole: SeatRole) async throws {
+        let rig = try HelperRig()
+        let seat = Seat()
+        let launcher = rig.launcher()
+        let newRole: SeatRole = oldRole == .general ? .builder : .general
+        let firstRequest = helperRequest(
+            .startSeat, seat: seat.seat, credential: seat.credential, params: .init(provider: .gemini, role: oldRole))
+        let nextRequest = helperRequest(
+            .startSeat, seat: seat.seat, credential: seat.credential, params: .init(provider: .gemini, role: newRole))
+
+        do {
+            let firstResult = await launcher.start(firstRequest)
+            try #require(firstResult.outcome == .finished)
+            let first = try #require(try await startedRunner(rig).first)
+            #expect(first.env[EnvironmentKeys.seatRole] == oldRole.rawValue)
+            #expect(isAlive(first.pid))
+
+            let nextResult = await launcher.start(nextRequest)
+            try #require(nextResult.outcome == .finished)
+            let starts = try await startedRunner(rig, count: 2)
+            let replacement = try #require(starts.first { $0.pid != first.pid })
+            #expect(starts.count == 2)
+            #expect(await eventually { !isAlive(first.pid) && !isAlive(first.childPid) })
+            #expect(replacement.env[EnvironmentKeys.seatRole] == newRole.rawValue)
+            #expect(isAlive(replacement.pid))
+            #expect(await launcher.runningSeats() == [seat.seat])
+            #expect(rig.calls(.reportRunStarted).map { $0.path["id"] } == Array(repeating: seat.seat.contractString, count: 2))
+            #expect(rig.calls(.reportRunStopped).isEmpty)
+        } catch {
+            await launcher.stopAll()
+            throw error
+        }
+        await launcher.stopAll()
+    }
+
+    @Test("a General launch passes through the task or review to continue")
+    func generalContinuesWork() throws {
+        let rig = try HelperRig()
+        let seat = Seat()
+        let launcher = rig.launcher()
+        let tool = LocatedTool(path: rig.tools.tool("claude").path, version: "1")
+        let task = UUID()
+        let review = UUID()
+
+        let building = launcher.runnerRequest(
+            seatID: seat.seat, seatToken: MadeUp.seatToken,
+            params: .init(provider: .claude, role: .general, taskID: task), tool: tool, accountFolder: nil)
+        let reviewing = launcher.runnerRequest(
+            seatID: seat.seat, seatToken: MadeUp.seatToken,
+            params: .init(provider: .claude, role: .general, reviewID: review), tool: tool, accountFolder: nil)
+
+        #expect(building.environment[EnvironmentKeys.seatRole] == "general")
+        #expect(building.environment[EnvironmentKeys.continueTaskID] == task.contractString)
+        #expect(building.environment[EnvironmentKeys.continueReviewID] == nil)
+        #expect(reviewing.environment[EnvironmentKeys.seatRole] == "general")
+        #expect(reviewing.environment[EnvironmentKeys.continueTaskID] == nil)
+        #expect(reviewing.environment[EnvironmentKeys.continueReviewID] == review.contractString)
+    }
+
     @Test("a hand-over whose token is not given leaves the old run as it was")
     func handOverWithNoTokenKeepsTheRun() async throws {
         let rig = try HelperRig()

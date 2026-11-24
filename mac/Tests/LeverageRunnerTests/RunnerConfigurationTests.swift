@@ -96,7 +96,7 @@ struct RunnerConfigurationTests {
         #expect(refusal { $0["LEVERAGE_SEAT_TOKEN"] = "" } == .missing("LEVERAGE_SEAT_TOKEN"))
     }
 
-    @Test("a role that is not one of the four, or a provider that is not a login, is refused")
+    @Test("an unknown role or a provider that is not a login is refused")
     func roleAndProvider() {
         #expect(refusal { $0["LEVERAGE_SEAT_ROLE"] = nil } == .missing("LEVERAGE_SEAT_ROLE"))
         #expect(refusal { $0["LEVERAGE_SEAT_ROLE"] = "auditor" } == .unsupportedRole("auditor"))
@@ -152,6 +152,30 @@ struct RunnerConfigurationTests {
         var values = environment("gemini", role: "reviewer")
         values["LEVERAGE_SETTINGS_DIR"] = nil
         #expect(refusal({ _ in }, base: values) == .reviewerNotOffered(.gemini))
+    }
+
+    @Test("General runs on every login", arguments: ["claude", "codex", "gemini", "grok"])
+    func generalOnEveryLogin(provider: String) throws {
+        var values = environment(provider, role: "general")
+        if provider == "gemini" || provider == "grok" { values["LEVERAGE_SETTINGS_DIR"] = nil }
+        let configuration = try RunnerConfiguration(environment: values)
+        #expect(configuration.role == .general)
+        #expect(configuration.tool.provider.rawValue == provider)
+        #expect(configuration.continuing == nil)
+    }
+
+    @Test("General reads the task or review it was started with", arguments: ["claude", "gemini"])
+    func generalContinuation(provider: String) throws {
+        let id = UUID()
+        var values = environment(provider, role: "general")
+        if provider == "gemini" { values["LEVERAGE_SETTINGS_DIR"] = nil }
+
+        values["LEVERAGE_CONTINUE_TASK_ID"] = id.contractString
+        #expect(try RunnerConfiguration(environment: values).continuing == .task(id))
+
+        values["LEVERAGE_CONTINUE_TASK_ID"] = nil
+        values["LEVERAGE_CONTINUE_REVIEW_ID"] = id.contractString
+        #expect(try RunnerConfiguration(environment: values).continuing == .review(id))
     }
 
     @Test("the configuration never prints the seat token")

@@ -17,7 +17,7 @@ class RoutesTest < ActiveSupport::TestCase
     complete_contract cancel_task allow_another_round connect_seat start_seat stop_seat remove_seat issue_helper_token
     add_credential verify_credential install_tool
     get_helper_next report_request_result issue_seat_token report_run_started report_run_stopped
-    get_setup_state create_owner sign_out_owner get_helper_request report_request_progress get_landing_prompt
+    get_setup_state create_owner sign_out_owner get_helper_request report_request_progress
   ].freeze
 
   # The eleven operations milestone 3 serves (milestone 3 plan §2.3).
@@ -45,6 +45,11 @@ class RoutesTest < ActiveSupport::TestCase
     rename_credential remove_credential reorder_credentials refresh_usage verify_all_credentials report_reading
   ].freeze
 
+  JOIN_OPERATIONS = {
+    "get_join" => [ "GET", "/v1/join", "v1/agent/join#show" ],
+    "issue_landing_prompt" => [ "POST", "/v1/owner/seats/:id/landing-prompt", "v1/owner/seats#issue_landing_prompt" ]
+  }.freeze
+
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
   def drawn
@@ -54,7 +59,8 @@ class RoutesTest < ActiveSupport::TestCase
   test "the served operations match their milestones, each a registry operation" do
     refute RouteTable.const_defined?(:PENDING, false)
     assert_equal operations.keys.sort, RouteTable::ROUTES.keys.sort
-    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6).sort, RouteTable::ROUTES.keys.sort
+    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6 + JOIN_OPERATIONS.keys).sort,
+      RouteTable::ROUTES.keys.sort
     RouteTable::ROUTES.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes.each do |route|
       operation = operations.fetch(route.operation_id)
@@ -77,13 +83,22 @@ class RoutesTest < ActiveSupport::TestCase
   end
 
   test "each controller is one of the plans', under v1/agent, v1/owner, v1/helper or the health check" do
-    allowed = %r{\Av1/(agent/(actions|questions|next|commands|tasks|criteria|reviews|jobs)|owner/(actions|questions|projects|decisions|settings|setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
+    allowed = %r{\Av1/(agent/(actions|questions|join|next|commands|tasks|criteria|reviews|jobs)|owner/(actions|questions|projects|decisions|settings|setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
     RouteTable::ROUTES.each_value { |target| assert_match allowed, target.split("#").first }
   end
 
   test "routes.rb types no path of the interface" do
     source = Rails.root.join("config/routes.rb").read
     assert_no_match(%r{["']/?v1}, source)
+  end
+
+  test "join and prompt issuance replace the old landing prompt read" do
+    JOIN_OPERATIONS.each do |operation_id, (verb, path, target)|
+      assert_equal target, RouteTable::ROUTES[operation_id]
+      assert_equal [ verb, path ], [ drawn.fetch(operation_id).verb, drawn.fetch(operation_id).path.spec.to_s ]
+    end
+    refute RouteTable.serves?("get_landing_prompt")
+    refute drawn.key?("get_landing_prompt")
   end
 
   test "the route table's rails paths and verbs are read from the registry" do

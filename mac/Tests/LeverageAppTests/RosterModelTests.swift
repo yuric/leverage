@@ -82,7 +82,7 @@ struct RosterModelTests {
         await model.load()
         #expect(row(model, Fixtures.builderID)?.roleLine == "Builder. Building Fix rounding in invoice totals.")
         #expect(row(model, Fixtures.reviewerID)?.roleLine == "Reviewer. Not running.")
-        #expect(row(model, Fixtures.ownID)?.roleLine == "Builder. Connects on its own.")
+        #expect(row(model, Fixtures.ownID)?.roleLine == "Builder. Connected by prompt.")
     }
 
     @Test("a running agent with no task says it is waiting for work")
@@ -133,7 +133,7 @@ struct RosterModelTests {
         #expect(row(model, Fixtures.reviewerID)?.lastPolledLine == "Has not asked for work yet.")
     }
 
-    @Test("only a seat the app runs has Start or Stop, and only one that connects on its own has Copy landing prompt")
+    @Test("only a seat the app runs has Start or Stop, and only one that connects on its own has New prompt")
     func buttonsByKind() async {
         let model = makeModel(Fixtures.owner())
         await model.load()
@@ -143,8 +143,8 @@ struct RosterModelTests {
         #expect(running?.canStop == true && running?.canStart == false)
         #expect(stopped?.canStart == true && stopped?.canStop == false)
         #expect(own?.canStart == false && own?.canStop == false)
-        #expect(running?.canCopyLandingPrompt == false && stopped?.canCopyLandingPrompt == false)
-        #expect(own?.canCopyLandingPrompt == true)
+        #expect(running?.canIssueNewPrompt == false && stopped?.canIssueNewPrompt == false)
+        #expect(own?.canIssueNewPrompt == true)
     }
 
     // MARK: refused, cannot reach, signed out
@@ -358,88 +358,86 @@ struct RosterModelTests {
         #expect(keys.count == 2 && keys[0] == keys[1])
     }
 
-    @Test("MCP settings and the MCP landing prompt are available only for self-connected agents")
-    func copiesMCPConnection() async throws {
+    // MARK: New prompt
+
+    @Test("New prompt issues a replacement only after confirmation and copies only on request",
+          arguments: LandingPromptConnection.allCases)
+    func issuesNewPrompt(_ connection: LandingPromptConnection) async throws {
         let owner = Fixtures.owner()
         owner.script {
-            $0.landingPromptForConnection = { _, connection in
-                LandingPrompt(text: "Instructions for \(connection.rawValue).", connection: connection)
-            }
+            $0.issueLandingPrompt = { Fixtures.issuedPrompt($0, connection: $1, key: $2) }
         }
-        let apiURL = try #require(URL(string: "http://127.0.0.1:49171"))
-        let board = Fixtures.pasteboard()
-        let model = RosterModel(api: owner, noteRead: { _ in }, copy: board.copy, apiURL: { apiURL })
-        await model.load()
-        #expect(row(model, Fixtures.builderID)?.canCopyMCPSettings == false)
-        #expect(row(model, Fixtures.ownID)?.canCopyMCPSettings == true)
-        owner.forgetCalls()
-        await model.copyMCPSettings(Fixtures.builderID)
-        await model.copyLandingPrompt(Fixtures.builderID, connection: .mcp)
-        #expect(owner.calls.isEmpty)
-        #expect(board.copied.value.isEmpty)
-        await model.copyMCPSettings(Fixtures.ownID)
-        #expect(owner.calls.isEmpty)
-        #expect(board.copied.value == [MCPSettings.text(apiURL: apiURL, role: .builder)].compactMap { $0 })
-        #expect(board.copied.value.count == 1)
-        await model.copyLandingPrompt(Fixtures.ownID, connection: .mcp)
-        #expect(Fixtures.calls(owner, .getLandingPrompt).last?.query["connection"] == "mcp")
-        #expect(board.copied.value.last == "Instructions for mcp.")
-    }
-
-    // MARK: Copy landing prompt
-
-    @Test("Copy landing prompt fetches the prompt of that agent and copies it, each time it is chosen")
-    func copyLandingPrompt() async {
-        let owner = Fixtures.owner()
-        owner.script { $0.landingPrompt = { _ in LandingPrompt(text: "Read your rules first.") } }
         let board = Fixtures.pasteboard()
         let model = makeModel(owner, copy: board.copy)
         await model.load()
-        await model.copyLandingPrompt(Fixtures.ownID)
-        await model.copyLandingPrompt(Fixtures.ownID)
-        #expect(board.copied.value == ["Read your rules first.", "Read your rules first."])
-        #expect(Fixtures.calls(owner, .getLandingPrompt).count == 2)
-        #expect(Fixtures.calls(owner, .getLandingPrompt).first?.path["id"] == Fixtures.ownID.contractString)
-        #expect(model.copiedPrompt == Fixtures.ownID)
+        model.prepareNewPrompt(Fixtures.ownID, connection: connection)
+        let prompt = try #require(model.newPrompt)
+        #expect(Fixtures.calls(owner, .issueLandingPrompt).isEmpty)
+        await prompt.issue()
+        let first = try #require(Fixtures.calls(owner, .issueLandingPrompt).last)
+        #expect(first.path["id"] == Fixtures.ownID.contractString)
+        #expect(first.body == .object(["connection": .string(connection.rawValue)]))
+        #expect(prompt.state == .ready(Fixtures.landingText))
+        #expect(board.copied.value.isEmpty)
+        prompt.copyPrompt()
+        #expect(board.copied.value == [Fixtures.landingText])
+        model.closeNewPrompt()
+        #expect(model.newPrompt == nil)
+        #expect(prompt.state == .none)
+        model.prepareNewPrompt(Fixtures.ownID, connection: connection)
+        await model.newPrompt?.issue()
+        let calls = Fixtures.calls(owner, .issueLandingPrompt)
+        #expect(calls.count == 2)
+        #expect(first.key != calls.last?.key)
     }
 
-    @Test("a seat the app runs has no landing prompt: nothing is asked and nothing is copied")
+    @Test("New prompt is unavailable for a seat the app runs")
     func noPromptForAppSeat() async {
         let owner = Fixtures.owner()
-        let board = Fixtures.pasteboard()
-        let model = makeModel(owner, copy: board.copy)
+        let model = makeModel(owner)
         await model.load()
         owner.forgetCalls()
-        await model.copyLandingPrompt(Fixtures.builderID)
+        model.prepareNewPrompt(Fixtures.builderID, connection: .mcp)
+        #expect(model.newPrompt == nil)
         #expect(owner.calls.isEmpty)
-        #expect(board.copied.value.isEmpty)
     }
 
-    @Test("a prompt the server refuses is not copied, and the row says why")
-    func promptRefused() async {
+    @Test("a refused New prompt shows the reason and leaves nothing to copy")
+    func promptRefused() async throws {
         let owner = Fixtures.owner()
         owner.script {
-            $0.landingPrompt = { _ in throw LeverageClientError.refused(Refusal(code: .invalidState, ruleID: nil, reason: nil)) }
+            $0.issueLandingPrompt = { _, _, key in
+                .refused(Refusal(code: .invalidState, ruleID: nil, reason: nil), key: key.value, command: .issueLandingPrompt)
+            }
         }
         let board = Fixtures.pasteboard()
         let model = makeModel(owner, copy: board.copy)
         await model.load()
-        await model.copyLandingPrompt(Fixtures.ownID)
+        model.prepareNewPrompt(Fixtures.ownID, connection: .http)
+        let prompt = try #require(model.newPrompt)
+        await prompt.issue()
+        #expect(prompt.state == .failed(ShellCopy.refusalInvalidState.text))
+        prompt.copyPrompt()
         #expect(board.copied.value.isEmpty)
-        #expect(model.failure(for: Fixtures.ownID) == ShellCopy.refusalInvalidState.text)
-        #expect(model.copiedPrompt == nil)
     }
 
-    @Test("a prompt that holds something shaped like a token is never copied")
-    func promptWithTokenShape() async {
+    @Test("a replacement containing a second token-shaped string is refused")
+    func promptWithTokenShape() async throws {
         let owner = Fixtures.owner()
-        owner.script { $0.landingPrompt = { _ in LandingPrompt(text: "Sign in with \(Fixtures.madeUpToken).") } }
+        owner.script {
+            $0.issueLandingPrompt = {
+                Fixtures.issuedPrompt($0, connection: $1, key: $2, text: Fixtures.landingText + " " + Fixtures.madeUpToken + "-other")
+            }
+        }
         let board = Fixtures.pasteboard()
         let model = makeModel(owner, copy: board.copy)
         await model.load()
-        await model.copyLandingPrompt(Fixtures.ownID)
+        model.prepareNewPrompt(Fixtures.ownID, connection: .http)
+        let prompt = try #require(model.newPrompt)
+        await prompt.issue()
+        #expect(prompt.state == .failed(ShellCopy.somethingWentWrong.text))
+        prompt.copyPrompt()
         #expect(board.copied.value.isEmpty)
-        #expect(model.failure(for: Fixtures.ownID) == ShellCopy.somethingWentWrong.text)
     }
 
     // MARK: staying current
@@ -534,7 +532,7 @@ struct RosterModelTests {
         // Stopped: it has no run, and says so.
         #expect(rowWords(model, Fixtures.reviewerID) == "Reviewer. Not running.")
         // Connects on its own: it has no account of its own to wait for.
-        #expect(rowWords(model, Fixtures.ownID) == "Builder. Connects on its own.")
+        #expect(rowWords(model, Fixtures.ownID) == "Builder. Connected by prompt.")
     }
 
     @Test("an account whose reset time is known is named before one with no reset time")
@@ -835,7 +833,7 @@ struct RosterModelTests {
     func rowNoteForConnectingOnItsOwn() async {
         let row = await orchestratorRow(credential: nil, tested: [.claude])
         #expect(row?.notTestedNote == note)
-        #expect(row?.roleLine == "Orchestrator. Connects on its own.")
+        #expect(row?.roleLine == "Orchestrator. Connected by prompt.")
     }
 
     @Test("with an empty tested list every orchestrator row has the note, and no other role does")
@@ -843,6 +841,29 @@ struct RosterModelTests {
         #expect(await orchestratorRow(tested: [])?.notTestedNote == note)
         for role in [SeatRole.builder, .reviewer, .planner] {
             #expect(await orchestratorRow(model: "some-model", role: role, tested: [])?.notTestedNote == nil, "\(role)")
+        }
+    }
+
+    @Test("a General row uses the General eval list and says how the agent connected")
+    func generalRowCoverage() {
+        let seat = Fixtures.seat(orchestratorID, name: "General agent", role: .general, credential: nil)
+        let untested = RosterRow(seat: seat, loginName: nil, doing: nil, now: now, generalTestedProviders: [])
+        #expect(untested.roleLine == "General. Connected by prompt.")
+        #expect(untested.notTestedNote == note)
+        let tested = RosterRow(seat: seat, loginName: nil, doing: nil, now: now, generalTestedProviders: [seat.provider])
+        #expect(tested.notTestedNote == note)
+        let registry = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
+        #expect(registry.notTestedNote == note)
+
+        for model in [nil, "custom-model"] as [String?] {
+            let native = Fixtures.seat(
+                orchestratorID, name: "General agent", role: .general, credential: Fixtures.loginID, model: model)
+            let covered = RosterRow(seat: native, loginName: nil, doing: nil, now: now,
+                                    generalTestedProviders: [native.provider])
+            #expect(covered.notTestedNote == (model == nil ? nil : note))
+            let uncovered = RosterRow(seat: native, loginName: nil, doing: nil, now: now,
+                                      generalTestedProviders: [.codex])
+            #expect(uncovered.notTestedNote == note)
         }
     }
 

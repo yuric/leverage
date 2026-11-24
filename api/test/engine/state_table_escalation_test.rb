@@ -45,6 +45,17 @@ class StateTableEscalationTest < ActionDispatch::IntegrationTest
     assert_equal stronger.id, task.reload.holder_seat_id
   end
 
+  test "a stronger General seat that never reviewed the task causes the escalation row" do
+    @scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", parameters: { "threshold" => 1 })
+    @scenario.seat(role: "general", strength_rank: 2)
+    task, review = ready_for_verdict(@builder, @reviewer)
+
+    assert command("fail_review", @reviewer, fail_params(review, task)).completed?
+
+    assert_equal [ "ready", nil, 2 ], task.reload.values_at(:state, :holder_seat_id, :minimum_strength_rank)
+    assert_includes types, "task.reassigned"
+  end
+
   test "an applied escalation after a before-done gate failure takes the same row" do
     @scenario.seat(role: "builder", strength_rank: 2)
     before_done = app_rule("task.before_done")

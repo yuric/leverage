@@ -160,6 +160,79 @@ class RolePresenceTest < ActiveSupport::TestCase
     assert_operator bound, :<=, 120
   end
 
+  test "a recently polled General seat holding an orchestrator job counts" do
+    general = seat(role: "general")
+    task = @scenario.task
+    @scenario.rule_check(task, rule: @scenario.rule, started: true, checker: general)
+
+    assert online?
+  end
+
+  test "an idle General seat counts when no check waits and when it can claim the next check" do
+    seat(role: "general")
+    assert online?, "there is no check waiting"
+
+    @scenario.rule_check(@scenario.task, rule: @scenario.rule)
+    assert online?, "the seat can claim the check"
+  end
+
+  test "an idle General seat counts if it can claim a new attempt of an errored check" do
+    seat(role: "general")
+    errored_check(@scenario.task)
+
+    assert online?
+  end
+
+  test "a General seat barred from the waiting check counts offline when it queues or is held with an error" do
+    general = seat(role: "general")
+    task = @scenario.task(state: "in_review", builder: general)
+
+    check = @scenario.rule_check(task, rule: @scenario.rule)
+    queued = Event.find_by!(type: "check.queued", subject_id: check.id)
+    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
+    job = Job.find(attempt.job_id)
+    job.update_columns(queued_at: queued.effective_at)
+    @now = @scenario.database_now
+    refute online?, "the seat built this task"
+    assert_instant queued.effective_at, P.offline_since(@scenario.workspace, "orchestrator", @now)
+
+    job.update!(state: "timed_out")
+    check.update!(result: "error")
+    @scenario.hold(task, reason: "check_error", item: false).update!(rule_check_id: check.id)
+    @now = @scenario.database_now
+    refute online?, "the check still waits when no job is queued"
+  end
+
+  test "a General seat holding a task or a review does not count however recently it polled" do
+    builder = seat(role: "general")
+    @scenario.task(state: "working", builder: builder)
+    refute online?
+
+    reviewer = seat(role: "general", provider: "codex")
+    @scenario.review(@scenario.task(state: "in_review"), reviewer: reviewer)
+    refute online?
+  end
+
+  test "the 120-second bound of L909 holds when a General seat stops polling" do
+    general = seat(role: "general", polled: 89)
+    assert online?
+
+    @now = general.last_polled_at + P::OFFLINE_AFTER
+    refute online?
+    since = P.offline_since(@scenario.workspace, "orchestrator", @now)
+    assert_instant @now, since
+    bound = since - general.last_polled_at + Leverage::Transitions::RecordPoll::SEAT_SECONDS + Leverage::Sweep::INTERVAL
+    assert_operator bound, :<=, 120
+  end
+
+  def errored_check(task)
+    check = @scenario.rule_check(task, rule: @scenario.rule)
+    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
+    Job.find(attempt.job_id).update!(state: "timed_out")
+    check.update!(result: "error")
+    @scenario.hold(task, reason: "check_error", item: false).update!(rule_check_id: check.id)
+  end
+
   def assert_instant(expected, actual, message = nil)
     refute_nil actual, message
     assert_in_delta expected.to_f, actual.to_f, 0.000_001, message

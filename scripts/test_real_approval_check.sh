@@ -53,7 +53,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         assert self.headers.get("Content-Type") == "application/json"
-        assert self.headers.get("Idempotency-Key")
+        key = self.headers.get("Idempotency-Key")
+        assert key and key not in self.server.keys
+        self.server.keys.add(key)
         if self.path == "/v1/owner/setup":
             result = {"session_token": token(0)}
         elif self.headers.get("Authorization") != f"Bearer {token(0)}":
@@ -61,12 +63,25 @@ class Handler(BaseHTTPRequestHandler):
             return
         elif self.path == "/v1/owner/seats":
             number = roles[body["role"]]
-            result = {"seat_id": ident(number), "seat_token": token(number)}
+            seat_id = ident(number)
+            self.server.connected[seat_id] = number
+            result = {"seat_id": seat_id}
+        elif self.path.endswith("/landing-prompt"):
+            seat_id = self.path.split("/")[-2]
+            assert self.path == f"/v1/owner/seats/{seat_id}/landing-prompt"
+            assert body == {"connection": "http"} and seat_id not in self.server.issued
+            self.server.issued.add(seat_id)
+            seat_token = token(self.server.connected[seat_id])
+            address = f"http://127.0.0.1:{self.server.server_port}"
+            result = {"seat_id": seat_id, "seat_token": seat_token, "connection": "http",
+                      "text": f"Join Leverage at {address} with token {seat_token}. Fetch GET {address}/v1/join "
+                              f"with header Authorization: Bearer {seat_token} and follow its instructions exactly."}
         elif self.path.endswith("/disable"):
             self.server.rules[self.path.split("/")[-2]]["enabled"] = False
             result = None
         elif self.path == "/v1/owner/tasks":
             assert sum(rule["enabled"] for rule in self.server.rules.values()) == 1
+            assert self.server.issued == {ident(number) for number in roles.values()}
             index = len(self.server.tasks) + 1
             task_id = ident(index + 100)
             result = {"task_id": task_id}
@@ -202,8 +217,9 @@ elif name == "swift":
         (products / "LeverageRunner").symlink_to(Path(sys.argv[0]).with_name("runner-shim"))
 elif name == "LeverageRunner":
     role = os.environ["LEVERAGE_SEAT_ROLE"]
+    number = {"builder": 1, "reviewer": 2, "orchestrator": 3}[role]
+    assert os.environ["LEVERAGE_SEAT_TOKEN"] == f"lvs_mock_{number:024d}"
     (work / f"{role}-pid").write_text(str(os.getpid()))
-    assert os.environ["LEVERAGE_SEAT_TOKEN"].startswith("lvs_mock_")
     tool = Path(os.environ["LEVERAGE_TOOL_PATH"])
     if role == "orchestrator":
         assert os.environ.get("LEVERAGE_DEV_TOOL_LOGIN") == "1"
@@ -305,6 +321,7 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
     hangup_tmp.mkdir()
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
         server.tasks, server.pages = {}, {}
+        server.keys, server.connected, server.issued = set(), {}, set()
         server.rules = {ident(90): {"key": "orchestrator_approves_actions", "id": ident(90), "enabled": True}}
         server.fault, server.first_page_reads, server.marker_file = "hangup", 0, work / "hangup-task-folder"
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -362,6 +379,7 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
         (work / "orchestrator-ready").unlink(missing_ok=True)
         with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
             server.tasks, server.pages = {}, {}
+            server.keys, server.connected, server.issued = set(), {}, set()
             server.rules = {ident(i): {"key": key, "id": ident(i), "enabled": True}
                             for i, key in enumerate(("orchestrator_approves_actions", "other"), 90)}
             server.fault, server.first_page_reads, server.marker_file = fault, 0, marker
@@ -377,7 +395,8 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
                 thread.join()
         check(result.returncode == expected_status and message in result.stderr,
               f"{fault}: expected exit {expected_status} with {message!r}, got exit {result.returncode}")
-        check(quiet_value not in result.stdout + result.stderr and token(0) not in result.stdout + result.stderr,
+        combined = result.stdout + result.stderr
+        check(quiet_value not in combined and all(token(i) not in combined for i in range(4)),
               f"{fault}: a response body or token escaped")
         if expected_status == 0:
             invoked = calls.read_text().splitlines() if calls.exists() else []
@@ -387,7 +406,8 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
                   f"{fault}: expected only audited results")
             if out.is_dir():
                 for path in out.iterdir():
-                    check(quiet_value not in path.read_text() and token(0) not in path.read_text(),
+                    contents = path.read_text()
+                    check(quiet_value not in contents and all(token(i) not in contents for i in range(4)),
                           f"{fault}: private data escaped into results")
         else:
             check(not out.exists(), f"{fault}: failed run published results")

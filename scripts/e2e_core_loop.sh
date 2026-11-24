@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The one test of the whole core loop (milestone 2 plan §5.2, TS-9): the real
-# API, its sweep and PostgreSQL in containers of a project of its own, the
-# real helper and runner built from mac/, every provider's tool a stand-in.
+# The core loop, reviewer handoff and short-prompt agent (TS-9, GA-12–GA-17):
+# the real API, its sweep and PostgreSQL in containers of a project of its own,
+# the real helper and runner built from mac/, every provider's tool a stand-in.
 # It needs Docker and Swift and nothing else, and is the same on the Mac and
 # in CI's e2e job.
 #
@@ -20,6 +20,7 @@
 #                          leverage-api:<project>, removed when the run ends
 #   LEVERAGE_E2E_SCRATCH   Swift's build folder (default: mac/.build)
 #   LEVERAGE_E2E_KEEP=1    keep the run's folder (logs, dump) even when it passes
+#   LEVERAGE_E2E_ONLY      run a single matching test within LeverageEndToEnd
 # A failed run always keeps its folder and prints where it is.
 set -euo pipefail
 
@@ -82,14 +83,26 @@ say "building the e2e lane in $scratch"
 
 # 3. The tests: each writes its folder (support folder, logs, the secrets it
 # used) under LEVERAGE_E2E_DIR.
-say "running LeverageEndToEndTests"
+filter=LeverageEndToEnd
+expected=3
+if [ -n "${LEVERAGE_E2E_ONLY:-}" ]; then
+  filter="$filter.*$LEVERAGE_E2E_ONLY"
+  expected=1
+  say "running 1 end-to-end test matching $LEVERAGE_E2E_ONLY"
+else
+  say "running all $expected end-to-end tests"
+fi
 # LEVERAGE_REAL_PROVIDER is dropped, so the developer check with a real
 # tool (RealGeminiThroughAppTests) never runs here.
 (cd mac && env -u LEVERAGE_REAL_PROVIDER LEVERAGE_ONLY=e2e LEVERAGE_E2E=1 LEVERAGE_E2E_DIR="$out/tests" \
-  swift test --skip-build --scratch-path "$scratch" --filter LeverageEndToEndTests)
+  swift test --skip-build --scratch-path "$scratch" --filter "$filter")
 ran=$(find "$out/tests" -mindepth 2 -maxdepth 2 -name secrets.txt 2>/dev/null | wc -l | tr -d ' ')
-if [ "$ran" -lt 2 ]; then
-  say "expected both end-to-end tests to run; $ran wrote their secrets"
+if [ "$ran" -ne "$expected" ]; then
+  if [ "$expected" -eq 1 ]; then
+    say "expected 1 end-to-end test to run; $ran wrote their secrets"
+  else
+    say "expected all $expected end-to-end tests to run; $ran wrote their secrets"
+  fi
   exit 1
 fi
 

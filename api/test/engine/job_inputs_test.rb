@@ -43,6 +43,7 @@ class JobInputsTest < ActiveSupport::TestCase
     assert_equal Leverage::HookInputs.for(hook: "task.before_ready", task: task, params: body), input.fetch("inputs")
     material = input.fetch("material")
     assert_equal Leverage::RoleFiles.text("orchestrator"), material.fetch("role_file")
+    assert_empty material.fetch("job_rules")
     assert_equal [ "Made-up instruction one.", "when a task is ready to start", false ],
       material.values_at("instruction", "moment", "may_answer_not_applicable")
     assert_equal({ "title" => "Requested title", "goal" => "Requested goal.", "details" => "Requested details.",
@@ -140,10 +141,39 @@ class JobInputsTest < ActiveSupport::TestCase
 
     assert_matches_component("ContractDraftJobInput", input)
     assert_equal [ task.id, project.id, 0 ], input.values_at("task_id", "project_id", "brief_version")
-    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "title" => "Draft me", "goal" => "Made-up goal.",
+    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [], "title" => "Draft me", "goal" => "Made-up goal.",
                    "details" => nil, "criteria" => [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
                    "work_reference" => "~/work/made-up", "minimum_strength_rank" => 2, "budget_cap" => 12.5,
                    "brief" => [] }, input.fetch("material"))
     assert_nothing_of_another_task(input)
+  end
+
+  test "a new job stores its role file and empty job rules even when General claims it" do
+    task = scenario.task(state: "backlog", criteria: [])
+    general = scenario.seat(role: "general")
+    job = Leverage::Jobs.queue(scenario.context, kind: "contract_draft", task: task, target: task,
+      seat_role: "planner", input: { "task_id" => task.id, "project_id" => nil, "brief_version" => 0 })
+    stored_material = { "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [] }
+    general_rules = Leverage::Contract.roles.fetch("roles").find { |entry| entry.fetch("role") == "general" }.fetch("job_rules")
+
+    assert_equal stored_material, job.reload.input["material"]
+    result = assert_completed(claim_job(general)).result
+    assert_equal job.id, result.fetch("job_id")
+    assert_matches_component("ClaimJobResult", result)
+    assert_nil result.dig("input", "material", "role_file")
+    assert_equal general_rules, result.dig("input", "material", "job_rules")
+    assert_equal stored_material, job.reload.input.fetch("material")
+  end
+
+  test "a stored role file with no job rules is returned with empty job rules" do
+    task = scenario.task(state: "backlog", criteria: [])
+    job = scenario.job(kind: "contract_draft", task: task,
+      input: { "material" => { "role_file" => "Previously stored planner text." } })
+
+    material = input_for(job).fetch("material")
+
+    assert_equal "Previously stored planner text.", material.fetch("role_file")
+    assert_empty material.fetch("job_rules")
+    refute job.reload.input.fetch("material").key?("job_rules")
   end
 end

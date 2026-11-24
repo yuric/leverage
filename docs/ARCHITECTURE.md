@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Rules in force. The Core loop, Handoff, Rule checks, Questions and approvals, and Credentials are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
-| **Last updated** | 2026-11-21 |
+| **Last updated** | 2026-11-23 |
 
 This document describes how Leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
@@ -348,19 +348,20 @@ login in again,
 installs a provider's tool, and starts and stops a `LeverageRunner` for
 each seat the app runs, each on the account the server names. A runner
 claims tasks or reviews over the agent interface and drives the provider's
-tool for each criterion or review; an orchestrator's or a planner's runner
-claims jobs instead. An orchestrator checks rules, handles questions and
-decides action approvals. A planner drafts contracts. The runner drives the
-tool for each job. When a
-tool run fails because its account reached a limit or is signed out, the
-runner tells the helper in one line, the helper reports it, and the
-server continues the work on the next account in the Handoff order or
+tool for each criterion or review. An orchestrator checks rules, handles
+questions and decides action approvals. A planner drafts contracts. The
+runner drives the tool for each job. A General seat can take work in any
+of those roles from the same loop. When a tool run fails because its
+account reached a limit or is signed out, the runner tells the helper in
+one line. The helper reports it, and the server continues the work on the
+next account in the Handoff order or
 holds it ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)).
 Every change goes through the API's transition function, which appends the
 event log in the same transaction, and asks the owner's rules at a task's
 gated moves ([ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md)).
-A seat that connects on its own calls the same agent interface with its
-own token, directly or through [LeverageMCP](#mcp-server-leveragemcp).
+A seat that connects on its own gets a landing prompt with its token and
+reads `GET /v1/join` for its instructions. It works through the same agent
+interface, directly or through [LeverageMCP](#mcp-server-leveragemcp).
 
 ## Components
 
@@ -374,7 +375,7 @@ adds the MCP server.
 
 - **Responsibility:** the server of a workspace. It serves the operations
   listed in `Leverage::Http::RouteTable` (see [Interfaces](#interfaces)):
-  the owner's sign-in and commands, the agent calls of the four roles, and
+  the owner's sign-in and commands, the agent calls of the five roles, and
   the helper's calls. Every change is a command through
   `Leverage::Transitions.apply`, the one writer: it takes the workspace's
   lock, finds a stored outcome by idempotency key, applies due timers,
@@ -408,20 +409,38 @@ adds the MCP server.
   `PendingTransitions` a waiting command and its later outcome, which it
   completes as the requester, refuses or cancels, and `RuleRecords` the
   rules and their versions. A waiting command ended from outside goes
-  through `PendingTransitions.cancel` alone. `RolePresence` says whether
-  the orchestrator is online: some enabled seat of the role polled within
-  90 seconds and has an available account or connects on its own.
+  through `PendingTransitions.cancel` alone. `RolePresence` reads polls
+  in the last 90 seconds for enabled Orchestrator seats that have an
+  available account or connect on their own. A check waits while its
+  `rule_check` or `approval` job is queued or while it is held with
+  `check_error`. While a check waits, a General seat must have polled in
+  the last 90 seconds and either hold an orchestrator job or hold nothing
+  and be a seat that could claim it (Jobs.next_for). A check held with
+  `check_error` is considered as a new attempt. The same set of waiting
+  checks drives `orchestrator_offline`. The timer queues an errored rule
+  check again when a counting General seat passes the job claim tests
+  for that attempt, independently of queue order. A counting Orchestrator
+  can take it once free. Errored claim-check holds close on recovery so the
+  next claim checks afresh.
+  [PRD check errors and presence](PRD.md#when-a-check-cannot-run)
+
   `ReviewerEligibility` opens and resolves "No reviewer is eligible".
+  In a workspace with a General seat, the board and task page share the
+  independent reviewer reading for each unassigned review, including
+  when the provider rule is off. Their account waits include General
+  seats. Ready account waits use `Eligibility.claim_standing?`, the
+  same standing test the engine uses to determine the Ready step's
+  account wait cause.
   Four timers time out a check's or a draft's job in the queue and in its
   run, and two workspace timers, `orchestrator_offline` and
   `reviewer_eligibility`, run on every sweep. The 120 seconds within which
   a stopped orchestrator's item opens rest on two numbers: the sweep every
   15 seconds and a seat's last poll written at most every 10 (90 + 10 +
   15); a busy reference runner keeps polling every 30 seconds while its
-  tool runs, and an agent that connects on its own is told to by its role
-  file. `bin/rails leverage:install_shipped_rules`, which the image's
-  entrypoint runs before the server starts, writes the seven shipped rules
-  of a workspace that has none.
+  tool runs, and the join instructions tell an agent that connects on
+  its own when to poll. `bin/rails leverage:install_shipped_rules`, which
+  the image's entrypoint runs before the server starts, writes the seven
+  shipped rules of a workspace that has none.
 - **Owns:** the PostgreSQL database and the HTTP interface under `/v1`.
 - **Depends on:** PostgreSQL, and the gems in `api/Gemfile`. It depends on
   no other component.
@@ -444,10 +463,14 @@ adds the MCP server.
   `bin/rails leverage:rule_timing` each rule's runs and times), and
   milestone 1's `Leverage::Contract` and `Leverage::Gating`.
   `api/script/evals/build_inputs.rb` builds the eval suite's job inputs.
-  The role files a briefing or a job carries, one per role, are
-  `api/config/role_files/`, and the landing prompt's template is
-  `api/config/landing_prompt.md.erb`. It runs in the `api`, `sweep` and
-  `backup` containers that `compose.yaml` describes.
+  `api/config/role_files/` holds the role files for Builder, Reviewer,
+  Planner and Orchestrator. A General briefing has no role file.
+  `roles.json` supplies the General briefing's `work_rules` and each job
+  material's `job_rules`. The join instructions use the same sentences
+  for the relevant kind of work.
+  The templates in `api/config/` are `landing_prompt.txt.erb`,
+  `join_http.md.erb` and `join_mcp.md.erb`. The API image runs in the
+  `api`, `sweep` and `backup` containers that `compose.yaml` describes.
 
 ### Shared Swift library (LeverageKit)
 
@@ -502,12 +525,18 @@ adds the MCP server.
   until it is decided; a submit refused `blocked_by_rule` is worked again
   with the rule's name and reason as quoted material, up to the server's
   re-run limit. The builder runs approved actions in `FinishingFlow` and
-  reports the work through the agent interface. An orchestrator's or a
-  planner's runner runs `JobFlow` instead. The runner claims one job and
-  calls `CheckJob`, `DraftJob`, `QuestionJob` or `ApprovalJob`. The
+  reports the work through the agent interface. `JobFlow` claims one job
+  and calls `CheckJob`, `DraftJob`, `QuestionJob` or `ApprovalJob`. The
   runner sends the result once and asks `GET /v1/next` every 30 seconds
-  while the tool runs
-  ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)).
+  while the tool runs.
+  [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)
+  The General runner uses `SeatRole.actsAs` to take
+  jobs, reviews and tasks in one polling loop. While idle it is offered
+  a job first, then a review, then a task. Its build and review prompts
+  give the briefing's `work_rules` before quoted task text. Its fresh
+  job prompts give `job_rules` from the material. General eval mode
+  measures these job prompts on app-managed default models.
+  It writes no role, skill or Markdown file into a work folder.
   `LeverageRunner eval` runs the two eval suites through the production
   `CheckJob` or `ApprovalJob` without serving the HTTP API.
   [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)
@@ -523,7 +552,8 @@ adds the MCP server.
 - **Responsibility** is to expose the agent interface as tools over MCP.
   The client's settings start the process. `ToolCatalog` lists the
   generated tools for the configured role, and `ToolCaller` forwards
-  calls through the shared HTTP transport. The server keeps the current
+  calls through the shared HTTP transport. The `get_join` tool reads
+  the MCP form of the join instructions. The server keeps the current
   task or review in memory for heartbeats and work calls.
   [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
 - **Owns** the MCP session, with the Rails API authoritative for seat
@@ -544,7 +574,7 @@ adds the MCP server.
   stopping it; and Sign in again (`SignInAgain`: the provider's own
   sign-in, then the verify checks). A start for a seat whose run is alive
   is a hand-over: the new token first, then the old run is stopped, then
-  the new one starts. A seat of any of the four roles is started the same
+  the new one starts. A seat of any of the five roles is started the same
   way. When a runner exits 5 the helper reads its last line
   and sends `report_limit` or `report_signed_out`, with the job's id when
   the run was on a job (`InterruptionReporter`). It never adopts an existing
@@ -595,8 +625,8 @@ adds the MCP server.
   page with its log, its Timing section, its rule checklist with "Let it
   through once" and "Run it again", and "Draft the details", Change the
   task, Pause and Continue, the Add task form (with Save as an idea), Needs
-  you, the Agent roster with Connect for the four roles, Pause, Resume and
-  Change (and the landing prompt of a seat that connects on its own), the
+  you, the Agent roster with Connect for the five roles, Pause, Resume and
+  Change, and New prompt for a seat that connects on its own, the
   Credentials list with Add credential, Refresh, Verify all, usage and
   resets where available, and row actions, the Handoff tab with a
   reorderable list and its eight fixed rules, and
@@ -624,9 +654,9 @@ adds the MCP server.
 locator, temporary folders, `StubURLProtocol` and in-memory fakes of the
 three API protocols and of the app's runtime, among them `FakeNotifier`
 and `FakeInboxCursorStore`. `LeverageEndToEndTests` runs the built helper
-and runner against the real API (`scripts/e2e_core_loop.sh`,
-`scripts/e2e_handoff.sh` for the six interrupted runs, and
-`scripts/e2e_rule_checks.sh` for the seven rule-check runs).
+and runner against the real API. `scripts/e2e_core_loop.sh` also runs a
+prompt-connected agent. `scripts/e2e_handoff.sh` runs the six interrupted
+cases, and `scripts/e2e_rule_checks.sh` runs the eight rule-check cases.
 `scripts/e2e_questions_approvals.sh` adds seven runs and starts the built
 MCP server against the real API with `ScriptedMCPClient`.
 `LeverageMCPTests` checks protocol, process, tool and heartbeat behavior.
@@ -829,10 +859,11 @@ the stability rules.
 | Agent MCP tools | `api/contract/openapi.json`, `api/contract/roles.json` and the session behavior in [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
-The route table serves all 107 operations, including 24 agent operations.
-Credentials adds owner `rename_credential`, `remove_credential`,
-`refresh_usage`, `verify_all_credentials` and `reorder_credentials`, and
-helper `report_reading`. The contract README records the interface changes.
+`GET /v1/join` is an authenticated seat read that leaves poll-based
+presence unchanged. It returns the instructions for the seat's role and
+connection, including the polling loop. The short landing prompt is
+issued once by the owner command `issue_landing_prompt`. The contract
+README records the routes and how they connect.
 
 On standard input, the helper accepts one UTF-8 JSON object per line.
 Both `token` (version 2) and `forget` (version 1) of
@@ -986,10 +1017,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   - A seat's token is made by the helper's seat-token pickup for a seat
     the app runs, and lives only in its runner's environment; it ends at
     the next pickup, when the run is reported stopped, and when the seat is
-    removed. A seat that connects on its own gets its token once in the
-    Connect sheet. Remove ends it. An MCP client starts `LeverageMCP`
-    using the seat token from the client's settings as
-    `LEVERAGE_SEAT_TOKEN` in the child environment. The MCP server uses
+    removed. A seat that connects on its own receives its token only in
+    the landing prompt, when Connect or New prompt issues one. Remove and
+    New prompt end the old token. The prompt's agent stops at its next
+    `401`. An MCP client starts `LeverageMCP` using the seat token from
+    the client's settings as `LEVERAGE_SEAT_TOKEN` in the child
+    environment. The MCP server uses
     the token for API authentication and never logs it. The settings
     that start the child may hold the token. The app and runner do not
     store it there. [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
@@ -1073,11 +1106,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   allow-listed tool environment excludes every Leverage token. A tool
   acting as an external MCP client needs access to the seat token via
   its settings, to pass it to the MCP process as described above. The helper's
-  requests carry only non-secret inputs (`params`), and the landing prompt
-  never contains the seat's token. A request body that is not sent as
-  JSON is answered `400` before Rails reads it, whatever the method and
-  path (`JsonBodiesOnly`), so a sign-in sent as a form, even to a mistyped
-  path, never reaches the request log. The end-to-end runs scan the
+  requests carry only non-secret inputs (`params`). The landing prompt
+  contains the seat's token, so the API returns both only in the one-time
+  response and keeps only the token's digest. A request body sent in any
+  format other than JSON is answered `400` before Rails reads it, for any
+  method and path (`JsonBodiesOnly`). A sign-in sent as a form, even to a
+  mistyped path, never reaches the request log. The end-to-end runs scan the
   containers' logs, the helper's and runs' logs and a dump of the database
   for every secret they used and anything shaped like a token
   (`scripts/secret_scan.py`); the rule-check run also looks for any

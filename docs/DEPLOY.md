@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
-| **Last updated** | 2026-11-21 |
+| **Last updated** | 2026-11-23 |
 
-This document says how to run and operate leverage: how to stand it up from
+This document says how to run and operate Leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
 written so that someone who has never run Leverage can follow it without
 help.
@@ -59,16 +59,15 @@ environment.
    sign-in command. Leverage checks that the tool is installed (offering to
    install it where it can), that the login is signed in, and that it
    answers a test prompt.
-4. In Agents, choose Connect: a builder on one login, a reviewer on a
-   login of another provider, and an orchestrator, which checks tasks
-   against the rules and may share a login with either. A seat the app
-   runs starts at once. The seven shipped rules are on from the first
-   sign-in: "Every task needs specific details" is checked by the
-   orchestrator, and the provider rule keeps a reviewer off a provider
-   that built the task, so a first run needs these three agents on two
-   providers. Settings, at the foot of the left pane, lists the rules and
-   turns each on or off. Settings > Workspace settings sets the lease length,
-   check timeouts, maximum rounds, re-run limit and recovery time ceiling.
+4. In Agents, choose Connect. Choose "Native: run on my login" and pick
+   a login. General is selected by default. For a first task with the
+   seven shipped rules on, connect two General agents on different
+   providers that support review. You can also connect a Builder and a
+   Reviewer on different providers, and an Orchestrator that can share
+   either login. A seat the app runs starts at once. Settings, at the
+   foot of the left pane, lists the rules and turns each on or off.
+   Settings > Workspace settings sets the lease length, check timeouts,
+   maximum rounds, re-run limit and recovery time ceiling.
 5. Choose Add task, fill in the form and save it. The task waits in
    Backlog, "Checking the details", until the orchestrator has checked it;
    then it goes to Ready, the builder claims it, the reviewer reviews it,
@@ -76,37 +75,79 @@ environment.
    Timing section. A task the check sends back says why on its card and
    its page.
 
-When checks are queued and no orchestrator is polling, the health line
-and Needs you show the offline state. A question goes to the owner at
-once when no enabled orchestrator seat is connected. An outward action
-waiting for an approval job goes to the owner after two queue timeouts
-if the job is never claimed. The default is four minutes.
+When a check waits and no seat counts as present for the orchestrator,
+the health line and Needs you show the offline state. A General seat
+busy building or reviewing cannot take a check. A question goes to the
+owner at once when no Orchestrator seat is enabled and no General seat
+can take the question now. An outward action waiting for an approval job
+goes to the owner after two queue timeouts if the job is never claimed.
+The default is four minutes.
 
 The app runs its managed seats while the app is open. Closing the window
 keeps those seats running. Quitting the app stops those seats. The server
 containers continue to run.
 
+### Connect a seat by prompt
+
+In Agents, choose Connect, select a role and choose
+"Prompt: paste into any agent". Choose "By HTTP calls" or "Through MCP" under
+How it connects, then connect the seat. Copy the one landing prompt and
+paste it into an agent on the same Mac. The prompt contains the seat's
+token and the loopback address. It tells the agent to fetch `GET /v1/join`
+using that token, then follow the instructions and keep polling for
+work. Keep the prompt private. The roster labels
+the seat "Connected by prompt."
+
+Choose **New prompt** in the roster and confirm to issue a replacement
+for the same seat. The replacement prompt displays its token and paste
+instructions once issued. The old agent's next call answers `401` and
+it stops. Leverage also
+gives back the seat's work immediately. A Working task goes back to Ready,
+a review is released, and a held job times out as if its run timer had
+expired. A pending submit, pending pass or provisional claim is cancelled.
+A Finishing lease ends and any open approved or started actions come to
+Needs you as "Unconfirmed action". An approved action already waiting
+for the seat can still be taken by the new agent.
+
 ### Connect a seat through MCP
 
-In Agents choose Connect, select a role and use the option for an agent
-that connects on its own. Under How it connects, select Through MCP.
-Copy the MCP settings to the client and replace `PASTE-THE-TOKEN-HERE`
-with the token shown in Connect. Start the client with those settings and
-paste the landing prompt. The settings start `LeverageMCP` from the Mac app bundle. If the bundle
-moves, update the executable path. The client needs these settings for
-the child process.
+Choose "Through MCP" when connecting by prompt. The agent first fetches
+`GET /v1/join?connection=mcp` over HTTP. The response gives it the
+settings to add to its MCP client or ask you to add. The client uses
+these settings to start the bundled server and speaks MCP with it over
+standard input and output. If the app bundle moves, update the path in
+the client's settings.
 
 | Setting | Value |
 | --- | --- |
-| Executable | The absolute path to `Leverage.app/Contents/MacOS/LeverageMCP` |
-| `LEVERAGE_API_URL` | The live loopback URL from Connect. With no URL set the process defaults to `http://127.0.0.1:3000` |
-| `LEVERAGE_SEAT_TOKEN` | The seat token shown once in Connect, passed in the environment |
-| `LEVERAGE_SEAT_ROLE` | `builder`, `reviewer`, `orchestrator` or `planner`. If omitted, the client discovers all agent tools and the API still enforces the seat's role |
+| `command` | The absolute path to `Leverage.app/Contents/MacOS/LeverageMCP` |
+| `LEVERAGE_API_URL` | The loopback URL from the landing prompt |
+| `LEVERAGE_SEAT_TOKEN` | The token from the landing prompt, passed in the child's environment |
+| `LEVERAGE_SEAT_ROLE` | `general`, `builder`, `reviewer`, `planner` or `orchestrator`. If omitted, all agent tools are listed and the API still enforces the seat's role |
 
+The app passes its bundled executable path to the API through Compose
+as `LEVERAGE_MCP_COMMAND`. If you start the server from the repository,
+set `LEVERAGE_MCP_COMMAND` to the absolute path to `LeverageMCP` before
+starting Compose. When the API has no usable path, the join instructions
+tell the agent to ask you for it.
 Keep any client settings file containing the token readable only by
-the owner's Mac account. The landing prompt carries no token. The
-client speaks MCP with the child over standard input and output.
+the owner's Mac account.
 [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+
+### Files a General agent's tool may read
+
+Leverage supplies a General seat with instructions as text in the join
+response, build and review briefings and prompts, and job material and
+prompts. Both join instructions tell a General agent to disregard earlier
+builds and reviews when it takes a job, and to start a fresh context when
+the client supports it. The General eval covers only the fresh job prompts
+on app-managed default models. Leverage supplies no role file, skill file
+or other Markdown file. Your provider's tool can still load its own
+instructions. Claude Code may read `CLAUDE.md` in the work folder.
+Whether the runner's `--setting-sources user` prevents that is unverified.
+Codex reads `AGENTS.md` in the work folder and under `CODEX_HOME`.
+Which files Antigravity and Grok Build read from their work or home
+folders remains unverified.
 
 ## Where things live
 
@@ -357,14 +398,15 @@ sets:
 | `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
 | `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_NOTIFICATIONS` | app | `off` keeps the app from asking for or posting a notification; `scripts/smoke_app.sh` sets it. A notification is posted only by the app opened as `Leverage.app`. |
-| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the seven rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
+| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
 | `LEVERAGE_EVAL`, `LEVERAGE_EVAL_REAL` | `LeverageRunner eval`, `scripts/eval_rule.sh` | The eval suite's name, without which neither runs, and `1` for a run on the real tools, which only the maintainer sets, by hand ([Eval suites and real checks](#eval-suites-and-real-checks)). |
 
 The helper's and a seat's tokens, and the run's inputs (among them
 `LEVERAGE_CREDENTIAL_ID`, the account the run is on, and
 `LEVERAGE_CONTINUE_TASK_ID` or `LEVERAGE_CONTINUE_REVIEW_ID`, the work it
-continues), are set by the app and the helper only. Secrets are never committed to this repository; the
-values live in `.env` and in the server folder.
+continues), are set by the app and the helper for seats the app runs.
+For seats that connect through MCP, the client passes the seat token from
+its settings. Secrets stay out of this repository.
 
 ## Environments
 
@@ -418,23 +460,27 @@ scripts/restore_drill.sh
 scripts/build_app.sh && scripts/smoke_app.sh
 ```
 
-`scripts/e2e_core_loop.sh` starts its own compose project, runs the real
-helper and runner with stand-in tools through a task with one failed
-review, checks the log and scans for secrets, and removes its project.
+`scripts/e2e_core_loop.sh` exercises a task with one failed review using
+the real helper and runner with stand-in tools. It also tests a
+prompt-connected agent that fetches its instructions, takes a task to
+Done with a second seat, and gives a second task back on New prompt.
+The script checks the log and scans for secrets in its own compose
+project, then removes the project.
 `scripts/e2e_handoff.sh` runs six tests, each in a compose project of its
 own, in which a stand-in tool meets a limit or a sign-out mid-task: the
 work continues on the next account or waits and continues, and the script
 checks the log, each recovery time against a working bar of 900 seconds
 (not the owner's ceiling, which is not set), scans for secrets and the
 reply files' text, and runs the restore drill on the last test's log.
-`scripts/e2e_rule_checks.sh` runs seven tests, each in a compose project
-of its own with the shipped rules on and an orchestrator among the agents
-(the stand-in tools answer the checks): a task from the form to Done, a
-vague task sent back for details, a custom rule that blocks a submit, a
-fourth try that waits for the owner to let it through, the orchestrator
-stopped and started again, the provider rule, and a drafted contract. For
-each it checks the log, prints each rule's timing, and scans for secrets,
-for markers and for the test's task text in events and logs.
+`scripts/e2e_rule_checks.sh` runs eight tests, each in a compose project of
+its own with the shipped rules on and stand-in tools answering the checks.
+It covers a task from the form to Done with dedicated roles, a vague task
+sent back for details, a custom rule that blocks a submit, a fourth try
+that waits for the owner to let it through, the orchestrator stopped and
+started again, the provider rule, a drafted contract, and a task from the
+form to Done with two General agents. Each test checks the log, prints
+each rule's timing, and scans events and logs for secrets, markers and
+the test's task text.
 `scripts/e2e_questions_approvals.sh` exercises questions, outward actions,
 project budgets and the built MCP server with stand-ins. Each of seven
 cases runs in its own project and checks replay, audit and the secret scan.

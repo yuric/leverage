@@ -197,7 +197,7 @@ extension TokenAnswer: Encodable where Shown: Encodable, Repeated: Encodable {
 
 public typealias OwnerSessionAnswer = TokenAnswer<OwnerSession, OwnerSessionRepeated>
 public typealias HelperTokenAnswer = TokenAnswer<HelperTokenIssued, HelperTokenIssuedRepeated>
-public typealias SeatConnectedAnswer = TokenAnswer<SeatConnected, SeatConnectedRepeated>
+public typealias LandingPromptIssuedAnswer = TokenAnswer<LandingPromptIssued, LandingPromptIssuedRepeated>
 public typealias SeatTokenPickupAnswer = TokenAnswer<SeatTokenPickup, SeatTokenPickupRepeated>
 
 /// Printed with its token removed, so that a log line or a test failure
@@ -294,45 +294,63 @@ public struct HelperTokenIssuedRepeated: Codable, Equatable, Sendable {
     }
 }
 
-/// A connected seat: its token once for a seat that connects on its own,
-/// null for a seat the app runs.
-public struct SeatConnected: Codable, Equatable, Sendable, HidesToken {
+/// A connected seat's ID.
+public struct SeatConnected: Codable, Equatable, Sendable {
     public let seatID: UUID
-    public let seatToken: String?
 
-    public init(seatID: UUID, seatToken: String?) {
+    public init(seatID: UUID) {
         self.seatID = seatID
-        self.seatToken = seatToken
     }
 
     enum CodingKeys: String, CodingKey {
         case seatID = "seat_id"
-        case seatToken = "seat_token"
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeID(seatID, forKey: .seatID)
-        try container.encode(seatToken, forKey: .seatToken)
-    }
-
-    public var fieldsWithoutToken: [(String, String)] {
-        [("seatID", seatID.contractString), ("seatToken", seatToken == nil ? "nil" : "[removed]")]
     }
 }
 
-public struct SeatConnectedRepeated: Codable, Equatable, Sendable {
+/// The first answer to issuing a landing prompt. The text also carries the token.
+public struct LandingPromptIssued: Codable, Equatable, Sendable, HidesToken {
     public let seatID: UUID
+    public let seatToken: String
+    public let text: String
+    public let connection: LandingPromptConnection
+
+    public init(seatID: UUID, seatToken: String, text: String, connection: LandingPromptConnection) {
+        self.seatID = seatID
+        self.seatToken = seatToken
+        self.text = text
+        self.connection = connection
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case seatID = "seat_id"
+        case seatToken = "seat_token"
+        case text, connection
+    }
+
+    public var fieldsWithoutToken: [(String, String)] {
+        [("seatID", seatID.contractString), ("connection", connection.rawValue)]
+    }
+}
+
+public struct LandingPromptIssuedRepeated: Codable, Equatable, Sendable {
+    public let seatID: UUID
+    public let connection: LandingPromptConnection
     public let repeated: Bool
 
-    public init(seatID: UUID) {
+    public init(seatID: UUID, connection: LandingPromptConnection) {
         self.seatID = seatID
+        self.connection = connection
         self.repeated = true
     }
 
     enum CodingKeys: String, CodingKey {
-        case repeated
         case seatID = "seat_id"
+        case connection, repeated
     }
 }
 

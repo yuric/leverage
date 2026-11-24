@@ -26,12 +26,12 @@ module Leverage
     #                     not acknowledged its briefing under that lease.
     #   rework            a failed review or the owner sent the task back
     #                     under a fresh lease it has not acknowledged.
+    #   job               Jobs has a job the seat may claim or already
+    #                     holds (L527): the one claim-next would give it.
     #   review, task      Eligibility has a review or a task for a seat that
     #                     holds none (EN-23): the review claim-next would
     #                     take, so never one the claim filter leaves out for
     #                     the seat (L526, milestone 4 plan RD-12).
-    #   job               Jobs has a job for an orchestrator or a planner
-    #                     (L527): the one claim-next would give it.
     #   none              nothing above is true.
     #
     # While a hold is open on the seat's task the answer is none (EN-13),
@@ -171,11 +171,11 @@ module Leverage
         # this never offers what a claim refuses: for a seat the app runs,
         # only work its run is placed for (milestone 3 plan HD-4).
         def waiting(seat)
-          case seat.role
-          when "builder" then item("task") if eligibility.next_task(seat)
-          when "reviewer" then item("review") if eligibility.next_review(seat)
-          when "orchestrator", "planner" then item("job") if jobs.next_for(seat)
+          if Roles.acts_as?(seat.role, "orchestrator") || Roles.acts_as?(seat.role, "planner")
+            return item("job") if jobs.next_for(seat)
           end
+          return item("review") if Roles.acts_as?(seat.role, "reviewer") && eligibility.next_review(seat)
+          item("task") if Roles.acts_as?(seat.role, "builder") && eligibility.next_task(seat)
         end
       end
     end

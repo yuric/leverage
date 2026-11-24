@@ -49,8 +49,9 @@ public struct QuotedText: Codable, Equatable, Sendable {
 /// claimed from the frozen rule version and the task's rows or the pending
 /// request, never stored in an event (RD-30).
 public struct CheckMaterial: Codable, Equatable, Sendable {
-    /// The orchestrator's role file.
-    public let roleFile: String
+    /// The orchestrator's role file, absent for a General seat.
+    public let roleFile: String?
+    public let jobRules: [String]
     /// The frozen rule version's instruction.
     public let instruction: String
     /// The hook's moment name (`RuleHook.momentName`).
@@ -62,10 +63,11 @@ public struct CheckMaterial: Codable, Equatable, Sendable {
     public let quoted: [QuotedText]
 
     public init(
-        roleFile: String, instruction: String, moment: String, mayAnswerNotApplicable: Bool = false,
+        roleFile: String?, jobRules: [String] = [], instruction: String, moment: String, mayAnswerNotApplicable: Bool = false,
         contract: CheckContract, quoted: [QuotedText] = []
     ) {
         self.roleFile = roleFile
+        self.jobRules = jobRules
         self.instruction = instruction
         self.moment = moment
         self.mayAnswerNotApplicable = mayAnswerNotApplicable
@@ -76,7 +78,30 @@ public struct CheckMaterial: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case instruction, moment, contract, quoted
         case roleFile = "role_file"
+        case jobRules = "job_rules"
         case mayAnswerNotApplicable = "may_answer_not_applicable"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roleFile = try container.decode(String?.self, forKey: .roleFile)
+        jobRules = container.contains(.jobRules) ? try container.decode([String].self, forKey: .jobRules) : []
+        instruction = try container.decode(String.self, forKey: .instruction)
+        moment = try container.decode(String.self, forKey: .moment)
+        mayAnswerNotApplicable = try container.decode(Bool.self, forKey: .mayAnswerNotApplicable)
+        contract = try container.decode(CheckContract.self, forKey: .contract)
+        quoted = try container.decode([QuotedText].self, forKey: .quoted)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(roleFile, forKey: .roleFile)
+        try container.encode(jobRules, forKey: .jobRules)
+        try container.encode(instruction, forKey: .instruction)
+        try container.encode(moment, forKey: .moment)
+        try container.encode(mayAnswerNotApplicable, forKey: .mayAnswerNotApplicable)
+        try container.encode(contract, forKey: .contract)
+        try container.encode(quoted, forKey: .quoted)
     }
 }
 
@@ -121,8 +146,9 @@ public struct RuleCheckJobInput: Codable, Equatable, Sendable {
 /// stored values the result sends back unchanged. The server keeps the
 /// stored ones whatever the result holds.
 public struct DraftMaterial: Codable, Equatable, Sendable {
-    /// The planner's role file.
-    public let roleFile: String
+    /// The planner's role file, absent for a General seat.
+    public let roleFile: String?
+    public let jobRules: [String]
     public let title: String
     public let goal: String
     public let details: String?
@@ -135,11 +161,12 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
     public let brief: [BriefEntry]
 
     public init(
-        roleFile: String, title: String, goal: String, details: String? = nil, criteria: [CriterionInput] = [],
+        roleFile: String?, jobRules: [String] = [], title: String, goal: String, details: String? = nil, criteria: [CriterionInput] = [],
         workReference: String? = nil, minimumStrengthRank: Int? = nil, budgetCap: Decimal? = nil,
         brief: [BriefEntry] = []
     ) {
         self.roleFile = roleFile
+        self.jobRules = jobRules
         self.title = title
         self.goal = goal
         self.details = details
@@ -153,9 +180,38 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case title, goal, details, criteria, brief
         case roleFile = "role_file"
+        case jobRules = "job_rules"
         case workReference = "work_reference"
         case minimumStrengthRank = "minimum_strength_rank"
         case budgetCap = "budget_cap"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roleFile = try container.decode(String?.self, forKey: .roleFile)
+        jobRules = container.contains(.jobRules) ? try container.decode([String].self, forKey: .jobRules) : []
+        title = try container.decode(String.self, forKey: .title)
+        goal = try container.decode(String.self, forKey: .goal)
+        details = try container.decodeIfPresent(String.self, forKey: .details)
+        criteria = try container.decode([CriterionInput].self, forKey: .criteria)
+        workReference = try container.decodeIfPresent(String.self, forKey: .workReference)
+        minimumStrengthRank = try container.decodeIfPresent(Int.self, forKey: .minimumStrengthRank)
+        budgetCap = try container.decodeIfPresent(Decimal.self, forKey: .budgetCap)
+        brief = try container.decode([BriefEntry].self, forKey: .brief)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(roleFile, forKey: .roleFile)
+        try container.encode(jobRules, forKey: .jobRules)
+        try container.encode(title, forKey: .title)
+        try container.encode(goal, forKey: .goal)
+        try container.encode(details, forKey: .details)
+        try container.encode(criteria, forKey: .criteria)
+        try container.encode(workReference, forKey: .workReference)
+        try container.encode(minimumStrengthRank, forKey: .minimumStrengthRank)
+        try container.encode(budgetCap, forKey: .budgetCap)
+        try container.encode(brief, forKey: .brief)
     }
 }
 

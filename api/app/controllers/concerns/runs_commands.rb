@@ -7,9 +7,9 @@
 #
 # A token shown once (Outcome#once) is merged into result in this response
 # only. A repeat of the key answers the stored, token-free result, and for
-# the four answers that carry a token it adds "repeated": true: the
+# the answers that carry a token it adds "repeated": true: the
 # contract's OwnerSessionRepeated, HelperTokenIssuedRepeated,
-# SeatConnectedRepeated and SeatTokenPickupRepeated (IN-9, IN-11).
+# LandingPromptIssuedRepeated and SeatTokenPickupRepeated (IN-9, IN-11).
 #
 #   def claim_next
 #     run_command("claim")
@@ -26,7 +26,7 @@ module RunsCommands
     "create_owner" => "session_token",
     "sign_in" => "session_token",
     "issue_helper_token" => "helper_token",
-    "connect_seat" => "seat_token",
+    "issue_landing_prompt" => "seat_token",
     "issue_seat_token" => "seat_token"
   }.freeze
 
@@ -46,10 +46,23 @@ module RunsCommands
       result.merge(outcome.once)
     elsif ONCE_FIELDS.key?(command)
       result.merge("repeated" => true)
+    elsif command == "claim_job" && outcome.result
+      job_claim_result(result)
     else
       outcome.result
     end
   end
+
+  # Legacy claim receipts have a dedicated role file and no job_rules field.
+  # Idempotency has already checked that the seat may still see the material.
+  def self.job_claim_result(result)
+    input = result["input"]
+    material = input&.fetch("material", nil)
+    return result unless material && !material.key?("job_rules")
+
+    result.merge("input" => input.merge("material" => material.merge("job_rules" => [])))
+  end
+  private_class_method :job_claim_result
 
   private
 

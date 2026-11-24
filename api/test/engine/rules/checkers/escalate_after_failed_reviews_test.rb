@@ -68,6 +68,31 @@ module Leverage
         assert_no_escalation task, review
       end
 
+      test "a stronger General seat that has never reviewed the task counts for escalation" do
+        scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", parameters: { "threshold" => 1 })
+        task, review = task_with_review
+        scenario.seat(role: "general", strength_rank: 2)
+        assert_escalated task, review
+      end
+
+      test "a stronger General seat that reviewed the task cannot trigger escalation on the second failure" do
+        scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped")
+        task, first_review = task_with_review
+        general = scenario.seat(role: "general", strength_rank: 2)
+        scenario.review(task, reviewer: general)
+        first_review.reload.update!(verdict: "failed", lease_due_at: nil)
+        task.update!(round: 1)
+        review = Review.create!(workspace_id: task.workspace_id, task_id: task.id, round: 1, reviewer_seat_id: general.id)
+
+        assert_no_escalation task, review
+        dedicated = scenario.seat(role: "builder", strength_rank: 2)
+        assert_escalated task, review
+        scenario.task(state: "working", builder: dedicated)
+        assert_escalated task, review
+        dedicated.update!(paused: true)
+        assert_escalated task, review
+      end
+
       test "the disabled rule writes no row even when a stronger builder can take the work" do
         scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", enabled: false, parameters: { "threshold" => 1 })
         task, review = task_with_review

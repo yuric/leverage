@@ -114,7 +114,9 @@ class RegistryTest < Minitest::Test
   end
 
   def test_next_kinds_are_in_precedence_order
-    assert_equal %w[command briefing_changed resume answer action rework review job task none], registry["next_kinds"]
+    # A seat that may claim more than one kind (a General seat) is offered
+    # a job, then a review, then a task (GA-4).
+    assert_equal %w[command briefing_changed resume answer action rework job review task none], registry["next_kinds"]
   end
 
   def test_release_reasons_are_chosen_by_a_seat_or_the_app

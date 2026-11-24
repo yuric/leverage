@@ -4,10 +4,10 @@ import Foundation
 public struct BriefingVersions: Codable, Equatable, Sendable {
     public let ruleVersionIDs: [UUID]
     public let briefVersion: Int
-    public let roleFileVersion: String
+    public let roleFileVersion: String?
     public let contractVersion: Int
 
-    public init(ruleVersionIDs: [UUID] = [], briefVersion: Int = 0, roleFileVersion: String, contractVersion: Int) {
+    public init(ruleVersionIDs: [UUID] = [], briefVersion: Int = 0, roleFileVersion: String?, contractVersion: Int) {
         self.ruleVersionIDs = ruleVersionIDs
         self.briefVersion = briefVersion
         self.roleFileVersion = roleFileVersion
@@ -19,6 +19,22 @@ public struct BriefingVersions: Codable, Equatable, Sendable {
         case briefVersion = "brief_version"
         case roleFileVersion = "role_file_version"
         case contractVersion = "contract_version"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ruleVersionIDs = try container.decode([UUID].self, forKey: .ruleVersionIDs)
+        briefVersion = try container.decode(Int.self, forKey: .briefVersion)
+        roleFileVersion = try container.decode(String?.self, forKey: .roleFileVersion)
+        contractVersion = try container.decode(Int.self, forKey: .contractVersion)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ruleVersionIDs, forKey: .ruleVersionIDs)
+        try container.encode(briefVersion, forKey: .briefVersion)
+        try container.encode(roleFileVersion, forKey: .roleFileVersion)
+        try container.encode(contractVersion, forKey: .contractVersion)
     }
 }
 
@@ -102,20 +118,22 @@ public struct Briefing: Codable, Equatable, Sendable {
     public let versions: BriefingVersions
     public let rules: [BriefingRule]
     public let brief: [BriefEntry]
-    public let roleFile: String
+    public let roleFile: String?
+    public let workRules: [String]?
     public let contract: BriefingContract
     /// The task's answers. They do not change the briefing hash.
     public let answers: [AnsweredQuestion]
 
     public init(
         hash: String, versions: BriefingVersions, rules: [BriefingRule] = [], brief: [BriefEntry] = [],
-        roleFile: String, contract: BriefingContract, answers: [AnsweredQuestion] = []
+        roleFile: String?, contract: BriefingContract, answers: [AnsweredQuestion] = [], workRules: [String]? = nil
     ) {
         self.hash = hash
         self.versions = versions
         self.rules = rules
         self.brief = brief
         self.roleFile = roleFile
+        self.workRules = workRules
         self.contract = contract
         self.answers = answers
     }
@@ -123,6 +141,31 @@ public struct Briefing: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case hash, versions, rules, brief, contract, answers
         case roleFile = "role_file"
+        case workRules = "work_rules"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hash = try container.decode(String.self, forKey: .hash)
+        versions = try container.decode(BriefingVersions.self, forKey: .versions)
+        rules = try container.decode([BriefingRule].self, forKey: .rules)
+        brief = try container.decode([BriefEntry].self, forKey: .brief)
+        roleFile = try container.decode(String?.self, forKey: .roleFile)
+        workRules = try container.decodeIfPresent([String].self, forKey: .workRules)
+        contract = try container.decode(BriefingContract.self, forKey: .contract)
+        answers = try container.decode([AnsweredQuestion].self, forKey: .answers)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(hash, forKey: .hash)
+        try container.encode(versions, forKey: .versions)
+        try container.encode(rules, forKey: .rules)
+        try container.encode(brief, forKey: .brief)
+        try container.encode(roleFile, forKey: .roleFile)
+        try container.encodeIfPresent(workRules, forKey: .workRules)
+        try container.encode(contract, forKey: .contract)
+        try container.encode(answers, forKey: .answers)
     }
 }
 

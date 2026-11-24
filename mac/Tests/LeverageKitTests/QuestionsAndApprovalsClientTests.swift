@@ -28,7 +28,7 @@ struct QuestionsAndApprovalsClientTests {
         }
     }
 
-    // The 30 new operations and the added MCP form of the landing prompt.
+    // The Questions and approvals operations.
     static let calls: [Call] = [
         .agent("ask_question") {
             _ = try await $0.askQuestion(taskID: taskID, AskQuestionRequest(text: "example", assumption: "example", blocking: false),
@@ -99,7 +99,6 @@ struct QuestionsAndApprovalsClientTests {
                 key: key)
         },
         .owner("get_workspace_settings") { _ = try await $0.workspaceSettings() },
-        .owner("get_landing_prompt") { _ = try await $0.landingPrompt(seatID: taskID, connection: .mcp) },
     ]
 
     @Test("Each client sends its operation's method, path, key and JSON", arguments: calls)
@@ -125,7 +124,7 @@ struct QuestionsAndApprovalsClientTests {
         #expect(sent.url?.path == expectedPath(template))
         #expect(sent.header("Authorization") == "Bearer \(Self.bearer)")
         #expect(sent.header("Idempotency-Key") == (method == "POST" ? Self.key.value : nil))
-        #expect(sent.url?.query == (call.operation == "get_landing_prompt" ? "connection=mcp" : nil))
+        #expect(sent.url?.query == nil)
 
         if let ref = contract["requestBody"]?["content"]?["application/json"]?["schema"]?["$ref"]?.stringValue {
             let component = try #require(ContractDocument.component(of: ref))

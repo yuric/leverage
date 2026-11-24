@@ -365,7 +365,10 @@ def run_check(run_dir):
         with contextlib.ExitStack() as running:
             running.callback(stop_runners, runners)
             for role, selected in (("builder", "claude"), ("reviewer", "codex"), ("orchestrator", provider)):
-                seat = api.command("/seats", {"name": role.capitalize(), "role": role, "provider": selected})
+                connected = api.command("/seats", {"name": role.capitalize(), "role": role, "provider": selected})
+                seat_id = connected["seat_id"]
+                landing = api.command(f"/seats/{seat_id}/landing-prompt", {"connection": "http"})
+                seat = {"seat_id": seat_id, "seat_token": landing["seat_token"]}
                 seats[role] = seat
                 selected_tool, settings = tools[role]
                 runner_log = running.enter_context((logs / f"{role}.log").open("wb"))

@@ -81,13 +81,10 @@ final class QuestionsApprovalsWorld {
         try await connectManaged("Builder \(name)", role: .builder, provider: .claude, login: name)
     }
 
-    func manualBuilder(_ name: String = "Builder") async throws -> (seat: UUID, client: AgentClient, token: String) {
-        let outcome = try await owner.connectSeat(
-            ConnectSeatRequest(name: name, role: .builder, provider: .claude), key: IdempotencyKey())
-        guard case .shown(let seat)? = try outcome.completedResult(), let token = seat.seatToken else {
-            throw EndToEndFailure("Connect seat did not issue a token to the builder")
-        }
-        return (seat.seatID, AgentClient(baseURL: EndToEnd.apiURL, seatToken: token), token)
+    func manualBuilder(_ name: String = "Builder", connection: LandingPromptConnection = .http)
+        async throws -> (seat: UUID, client: AgentClient, token: String) {
+        let prompt = try await owner.connectByPrompt(name, role: .builder, provider: .claude, connection: connection)
+        return (prompt.seatID, AgentClient(baseURL: EndToEnd.apiURL, seatToken: prompt.seatToken), prompt.seatToken)
     }
 
     func addTask(

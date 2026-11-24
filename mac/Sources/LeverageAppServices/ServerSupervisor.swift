@@ -19,6 +19,8 @@ public actor ServerSupervisor: ServerSupervising {
         /// The tag of the `leverage-api` image the bundle was built with.
         public var imageTag: String
         public var composeProject: String
+        /// The bundled MCP executable, whose path the API gives to MCP clients.
+        public var mcpProgram: URL?
         /// The program that starts Docker Desktop, run as `open -a Docker`.
         public var openProgram = "/usr/bin/open"
         /// How long Docker Desktop is given to answer after it was opened.
@@ -31,7 +33,7 @@ public actor ServerSupervisor: ServerSupervising {
 
         public init(
             supportFolder: URL, dockerFolders: [URL], home: URL, composeSource: URL, imageTag: String,
-            composeProject: String = Configuration.defaultComposeProject
+            composeProject: String = Configuration.defaultComposeProject, mcpProgram: URL? = nil
         ) {
             self.supportFolder = supportFolder
             self.dockerFolders = dockerFolders
@@ -39,6 +41,7 @@ public actor ServerSupervisor: ServerSupervising {
             self.composeSource = composeSource
             self.imageTag = imageTag
             self.composeProject = composeProject
+            self.mcpProgram = mcpProgram
         }
 
         /// The project name keeps the owner's data apart from a developer's
@@ -150,11 +153,13 @@ public actor ServerSupervisor: ServerSupervising {
 
         _ = move(to: .starting)
         let folder = settings.folder.path
+        var environment = DockerLocator.environment(docker: docker, home: configuration.home)
+        environment[EnvironmentKeys.mcpCommand] = configuration.mcpProgram?.path
         let up = await self.docker(
             docker,
             ["compose", "--project-directory", folder, "-f", folder + "/compose.yaml",
              "-p", configuration.composeProject, "up", "-d"],
-            workingDirectory: folder, timeLimit: configuration.composeTimeLimit)
+            workingDirectory: folder, environment: environment, timeLimit: configuration.composeTimeLimit)
         guard let up else { return failed("docker compose up could not be started") }
         guard up.succeeded else {
             return failed("docker compose up failed (\(up.exitDescription)): \(up.lastLine)")
@@ -200,11 +205,12 @@ public actor ServerSupervisor: ServerSupervising {
     }
 
     private func docker(
-        _ docker: URL, _ arguments: [String], workingDirectory: String? = nil, timeLimit: Duration
+        _ docker: URL, _ arguments: [String], workingDirectory: String? = nil,
+        environment: [String: String]? = nil, timeLimit: Duration
     ) async -> SubprocessResult? {
         let request = SubprocessRequest(
             executable: docker.path, arguments: arguments,
-            environment: DockerLocator.environment(docker: docker, home: configuration.home),
+            environment: environment ?? DockerLocator.environment(docker: docker, home: configuration.home),
             workingDirectory: workingDirectory, timeLimit: timeLimit)
         do {
             return try await runner.run(request)

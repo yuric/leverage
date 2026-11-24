@@ -31,4 +31,11 @@ class JobsTest < Minitest::Test
       assert_operator entry["attempts"], :>=, 1, entry["kind"]
     end
   end
+
+  # A General seat claims every kind, through the roles it acts as (GA-1).
+  def test_a_general_seat_claims_every_kind
+    general = Leverage::Contract.roles.fetch("roles").find { |entry| entry["role"] == "general" }
+    refute_nil general
+    jobs.each { |entry| assert_includes general["acts_as"], entry["claimer_role"], entry["kind"] }
+  end
 end

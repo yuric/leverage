@@ -45,7 +45,8 @@ module Leverage
   # "Account signed out" item a sign-out opens on another task's
   # credential_limit hold (HE-11, OTHER_TASK), and the provider rule's
   # applied rows review claim-next writes on the tasks of the reviews it
-  # skips (RC-50, RD-12; OTHER_TASK_OF).
+  # skips (RC-50, RD-12; OTHER_TASK_OF). A project pause holds its other
+  # tasks and withdraws their provisional claims before opening those holds.
   #
   # Milestone 4 (its plan RE-3, RT-4):
   #
@@ -63,8 +64,9 @@ module Leverage
   #
   # Events with no key also come from the job timers (job.timed_out), from
   # the workspace timers orchestrator_offline and reviewer_eligibility
-  # (their Needs you items name them) and from the one-time write of the
-  # shipped rules (rule.created). Several timers on one task can have
+  # (their Needs you items name them, or an errored check's history names
+  # recovery before the offline item opens) and from the one-time write
+  # of the shipped rules (rule.created). Several timers on one task can have
   # the same effective time when their due times precede its latest event.
   #
   # The gate (RT-4, test 4): no task.ready, task.claimed, task.submitted or
@@ -328,6 +330,7 @@ module Leverage
       return JOB_TIMERS if types.include?("job.timed_out")
       return [ "grant_action_lease" ] if types.include?("action.lease_granted")
       return [ "orchestrator_offline" ] if events.any? { |event| recovered_claim_hold?(event) }
+      return [ "orchestrator_offline" ] if recovered_check_attempts?(events)
       return [ "request_action" ] if events.any? { |event| action_request_event?(event) }
 
       [ credential_release(events) ].compact
@@ -340,16 +343,50 @@ module Leverage
     def recovered_claim_hold?(event)
       return false unless event.type == "hold.closed" && event.actor_kind == "app" && event.payload["reason"] == "check_error"
 
-      earlier = Event.where(workspace_id: event.workspace_id, task_id: event.task_id).where("seq < ?", event.seq)
+      earlier = task_history_before(event)
       opened = earlier.where(subject_kind: "hold", subject_id: event.subject_id, type: %w[hold.opened hold.closed]).order(:seq).last
       return false unless opened&.type == "hold.opened" && opened.payload["reason"] == "check_error"
 
       check_id = opened.payload["rule_check_id"]
       return false unless check_id
 
-      check = earlier.where(subject_kind: "rule_check", subject_id: check_id, type: %w[check.queued check.finished check.overridden])
-        .order(:seq).last
+      check = last_check_event(earlier, check_id)
       check&.type == "check.finished" && check.payload.values_at("hook", "result") == %w[task.before_claim error]
+    end
+
+    # A sweep can retry errored checks before it has opened an offline
+    # item. Each retry queues a job of its own for a check still in error
+    # under a check_error hold (PRD, When a check cannot run; GA-6).
+    def recovered_check_attempts?(events)
+      events.each_slice(2).all? do |check, job|
+        next false unless check.type == "check.queued" && check.subject_kind == "rule_check" && check.actor_kind == "app"
+        next false unless job&.type == "job.queued" && job.subject_kind == "job" && job.actor_kind == "app" &&
+          job.payload["kind"] == "rule_check" && job.subject_id == check.payload["job_id"]
+
+        earlier = task_history_before(check)
+        finished = last_check_event(earlier, check.subject_id)
+        hook = check.payload["hook"]
+        next false unless hook != "task.before_claim" && finished&.type == "check.finished" &&
+          finished.payload.values_at("hook", "result") == [ hook, "error" ]
+
+        open_check_error?(earlier, check.subject_id)
+      end
+    end
+
+    def open_check_error?(earlier, check_id)
+      holds = earlier.where(subject_kind: "hold")
+      opened = holds.where(type: "hold.opened").where("payload->>'reason' = 'check_error' AND payload->>'rule_check_id' = ?", check_id)
+        .order(:seq).last
+      opened && !holds.where(type: "hold.closed", subject_id: opened.subject_id).where("seq > ?", opened.seq).exists?
+    end
+
+    def task_history_before(event)
+      Event.where(workspace_id: event.workspace_id, task_id: event.task_id).where("seq < ?", event.seq)
+    end
+
+    def last_check_event(earlier, check_id)
+      earlier.where(subject_kind: "rule_check", subject_id: check_id, type: %w[check.queued check.finished check.overridden])
+        .order(:seq).last
     end
 
     def action_request_event?(event)
@@ -461,8 +498,33 @@ module Leverage
     end
 
     def cross_task_side_event?(event, events)
-      event.type == "hold.opened" && event.payload["reason"] == "project_paused" && events.any? do |pause|
-        pause.type == "project.paused" && pause.project_id == event.project_id && pause.id == event.cause_id
+      return project_pause_hold?(event, events) if event.type == "hold.opened"
+
+      withdrawal = event
+      if event.type == "job.withdrawn"
+        return false unless event.subject_kind == "job" && event.subject_id
+
+        withdrawal = events.find do |check|
+          claim_withdrawal?(check) && check.task_id == event.task_id && check.project_id == event.project_id &&
+            check.seq < event.seq && Steps.queued_for(check)&.payload&.fetch("job_id", nil) == event.subject_id
+        end
+      end
+      return false unless claim_withdrawal?(withdrawal)
+
+      events.any? do |hold|
+        hold.task_id == event.task_id && hold.project_id == event.project_id && event.seq < hold.seq &&
+          project_pause_hold?(hold, events, before: withdrawal.seq)
+      end
+    end
+
+    def claim_withdrawal?(event)
+      event&.type == "check.finished" && event.subject_kind == "rule_check" &&
+        event.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
+    end
+
+    def project_pause_hold?(hold, events, before: hold.seq)
+      hold.type == "hold.opened" && hold.payload["reason"] == "project_paused" && events.any? do |pause|
+        pause.type == "project.paused" && pause.project_id == hold.project_id && pause.id == hold.cause_id && pause.seq < before
       end
     end
 

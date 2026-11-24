@@ -52,21 +52,21 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   end
 
   test "every served agent operation is in the Roles table, and each role's served calls are covered here" do
-    assert_equal %w[builder orchestrator planner reviewer], ROLES.keys.sort
+    assert_equal %w[builder general orchestrator planner reviewer], ROLES.keys.sort
     SERVED_AGENT.each do |operation_id|
       assert(ROLES.keys.any? { |role| ROLES.fetch(role).include?(operation_id) }, operation_id)
     end
     covered = TASK_CALLS + ACTION_CALLS.keys + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS +
-      %w[get_next get_command get_question]
+      %w[get_join get_next get_command get_question]
     assert_equal SERVED_AGENT.sort, covered.sort
     builder_only = TASK_CALLS + ACTION_CALLS.keys + %w[get_question]
-    assert_empty builder_only - ROLES.fetch("builder")
-    (ROLES.keys - [ "builder" ]).each do |role|
+    %w[builder general].each { |role| assert_empty builder_only - ROLES.fetch(role), role }
+    (ROLES.keys - %w[builder general]).each do |role|
       assert_empty builder_only & ROLES.fetch(role), role
     end
     REVIEW_CALLS.each { |operation_id| refute_includes ROLES.fetch("builder"), operation_id }
     JOB_ROLES.each do |role|
-      assert_equal (JOB_CALLS + %w[get_next get_command]).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
+      assert_equal (JOB_CALLS + %w[get_join get_next get_command]).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
     end
     JOB_CALLS.each { |operation_id| %w[builder reviewer].each { |role| refute_includes ROLES.fetch(role), operation_id } }
   end
@@ -223,9 +223,9 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   # Milestone 4 (its plan §0.1 fact 12, RV-5): Connect offers the four
   # roles; a planner or an orchestrator connects as a builder does, on its
   # own or on a login, with no rule on its provider or model.
-  test "Connect offers the four roles: a planner or an orchestrator connects like a builder" do
+  test "a General, planner or orchestrator seat connects like a builder" do
     login = @scenario.credential(provider: "grok")
-    { "planner" => nil, "orchestrator" => login.id }.each do |role, credential_id|
+    { "general" => nil, "planner" => nil, "orchestrator" => login.id }.each do |role, credential_id|
       call("connect_seat", token: @scenario.owner_token, key: new_key,
         body: { "name" => "Made-up #{role}", "role" => role, "provider" => (credential_id ? nil : "codex"),
                 "model" => nil, "effort" => nil, "strength_rank" => nil, "credential_id" => credential_id })

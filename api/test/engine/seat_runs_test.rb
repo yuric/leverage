@@ -231,6 +231,161 @@ class SeatRunsTest < ActiveSupport::TestCase
     assert_equal [ Leverage::Tokens.digest(token), other.id ], [ seat.reload.token_hash, seat.run_credential_id ]
   end
 
+  # --- New prompt (GA-17) -------------------------------------------------------------
+
+  test "a new prompt returns a Working task to Ready with the new_prompt reason" do
+    seat = @scenario.seat(role: "general")
+    task = @scenario.task(state: "working", builder: seat)
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal %w[task.released], context.events.map(&:type)
+    released = context.events.sole
+    assert_equal [ task.id, "new_prompt" ],
+      [ released.task_id, released.payload.fetch("reason") ]
+    assert_equal [ "ready", nil, nil, nil, nil ],
+      task.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id", "lease_due_at", "lease_time_left_while_paused")
+  end
+
+  test "a new prompt opens Unconfirmed action for a held Finishing task and keeps its builder" do
+    seat = @scenario.seat(role: "general")
+    task = @scenario.finishing_task(builder: seat, actions: [ { kind: "send", state: "started" } ])
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal %w[hold.opened inbox.opened], context.events.map(&:type)
+    assert_equal "action_unconfirmed", Hold.find_by!(task_id: task.id, closed_at: nil).reason
+    assert_equal [ "finishing", seat.id, nil ], task.reload.attributes.values_at("state", "builder_seat_id", "lease_due_at")
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+  end
+
+  test "a new prompt for an idle seat emits no work event" do
+    seat = @scenario.seat(role: "general")
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_empty context.events
+  end
+
+  test "a new prompt leaves an approved action that is still waiting for its builder" do
+    seat = @scenario.seat(role: "builder")
+    task = @scenario.finishing_task(builder: seat, holder: false, actions: [ { kind: "send", state: "approved" } ])
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_empty context.events
+    assert_equal [ "finishing", seat.id, nil ], task.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
+    assert_equal "approved", Action.find_by!(task_id: task.id).state
+  end
+
+  test "a new prompt releases a review and cancels its pending pass first" do
+    seat = @scenario.seat(role: "general")
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: seat)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: seat)
+    context = ctx
+
+    calls = recording_cancels { Leverage::SeatRuns.release_for_new_prompt(context, seat) }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal %w[review.released], context.events.map(&:type)
+    assert_empty context.events.sole.payload
+    assert_equal [ nil, nil, nil ], review.reload.attributes.values_at("reviewer_seat_id", "lease_due_at", "lease_time_left_while_paused")
+    assert_equal "in_review", task.reload.state
+  end
+
+  test "a new prompt cancels the seat's pending submit with invalid_state before releasing its task" do
+    seat = @scenario.seat(role: "general")
+    task = @scenario.task(state: "working", builder: seat)
+    pending = @scenario.pending_transition(task, command: "submit", requester: seat)
+    context = ctx
+
+    calls = recording_cancels { Leverage::SeatRuns.release_for_new_prompt(context, seat) }
+
+    assert_equal [ Cancelled.new(pending.id, "invalid_state", []) ], calls
+    assert_equal %w[task.released], context.events.map(&:type)
+  end
+
+  test "a new prompt cancels a provisional claim without a release event" do
+    seat = @scenario.seat(role: "general")
+    task = @scenario.task(state: "ready")
+    task.update!(holder_seat_id: seat.id)
+    pending = @scenario.pending_transition(task, command: "claim", requester: seat)
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal "cancelled", pending.reload.state
+    assert_nil task.reload.holder_seat_id
+    assert_empty context.events
+  end
+
+  test "a new prompt times out a held check's first attempt at once and queues the second" do
+    seat, job, _task, check = held_prompt_check(attempts: 1)
+    request = Leverage::Transitions::Request.new(command: "issue_landing_prompt", workspace_id: @scenario.workspace_id,
+      caller_kind: "owner", caller_id: @scenario.owner.id, key: "made-up-new-prompt", request_hash: "made-up",
+      params: { "id" => seat.id })
+    context = @scenario.context(request: request)
+    assert_operator Leverage::Timers.job_due_at(job, :run), :>, context.at
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal %w[job.timed_out job.requeued check.queued], context.events.map(&:type)
+    assert_equal [ [ "app", nil, nil, context.at ] ], context.events.map { |event|
+      [ event.actor_kind, event.actor_id, event.command_id, event.effective_at ]
+    }.uniq
+    assert_equal [ "timed_out", context.at ], job.reload.attributes.values_at("state", "finished_at")
+    retry_job = Job.find_by!(target_id: check.id, state: "queued")
+    assert_equal [ 2, context.at ], retry_job.attributes.values_at("attempt_number", "queued_at")
+  end
+
+  test "a new prompt times out a held check's second attempt at once and opens check_error" do
+    seat, job, task, check = held_prompt_check(attempts: 2)
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal %w[job.timed_out check.finished hold.opened], context.events.take(3).map(&:type)
+    assert_equal "error", check.reload.result
+    assert_equal "timed_out", job.reload.state
+    assert_equal "check_error", Hold.find_by!(task_id: task.id, closed_at: nil).reason
+    assert_empty Job.where(target_id: check.id, state: "queued")
+  end
+
+  test "a new prompt passes a blocking question to its owner after the job's second miss" do
+    seat = @scenario.seat(role: "general")
+    builder = @scenario.seat(role: "builder")
+    task = @scenario.task(state: "working", builder: builder)
+    question = @scenario.question(task, asking_seat: builder)
+    job = @scenario.job(kind: "question", task: task, target: question, state: "claimed", seat: seat, attempt_number: 2)
+    context = ctx
+
+    Leverage::SeatRuns.release_for_new_prompt(context, seat)
+
+    assert_equal %w[job.timed_out hold.opened inbox.opened], context.events.map(&:type)
+    assert_equal "timed_out", job.reload.state
+    assert_equal "passed_on", question.reload.outcome
+    assert_equal "owner_question", Hold.find_by!(task_id: task.id, closed_at: nil).reason
+    assert_empty Job.where(target_id: question.id, state: "queued")
+  end
+
+  test "a helper token hands over work with no release events" do
+    login = @scenario.credential
+    seat = @scenario.seat(role: "builder", credential: login, run_state: "running")
+    task = @scenario.task(state: "working", builder: seat)
+    context = ctx
+    start = Leverage::SeatRuns.start(context, seat, Leverage::SeatRuns.placement(seat, at: context.at))
+
+    Leverage::SeatRuns.issue_token(seat, start)
+
+    assert_empty context.events
+    assert_equal [ "working", seat.id ], task.reload.attributes.values_at("state", "holder_seat_id")
+  end
+
   # --- a Working task released by the seat (HE-35, SM-15) ------------------------------
 
   test "a release with no seat-bound hold carries the wait_ready cause and closes none" do
@@ -276,6 +431,21 @@ class SeatRunsTest < ActiveSupport::TestCase
   end
 
   private
+
+  def held_prompt_check(attempts:)
+    seat = @scenario.seat(role: "general")
+    rule = @scenario.rule(key: "specific_details", origin: "shipped")
+    task = @scenario.task(state: "backlog")
+    params = { "id" => task.id, "criteria" => [ { "kind" => "review", "text" => "Review the made-up result." } ] }
+    pending = @scenario.pending_transition(task, command: "complete_contract", requester: @scenario.owner,
+      params: params, frozen_rule_version_ids: [ @scenario.current_version(rule).id ])
+    hook = "task.before_ready"
+    inputs = Leverage::HookInputs.for(hook: hook, task: task, params: params)
+    input_hash = Leverage::Gating.input_hash(hook: hook, inputs: inputs)
+    check = @scenario.rule_check(task, rule: rule, attempts: attempts, started: true, checker: seat, pending: pending,
+      input_hash: input_hash)
+    [ seat, Job.find_by!(target_id: check.id, state: "claimed"), task, check ]
+  end
 
   def placed(seat)
     placement = Leverage::SeatRuns.placement(seat)

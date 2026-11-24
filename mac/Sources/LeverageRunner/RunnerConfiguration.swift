@@ -7,7 +7,7 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     /// A variable that must be set is missing or empty.
     case missing(String)
     case notAbsolute(String)
-    /// Not one of the four seat roles.
+    /// Unknown seat role.
     case unsupportedRole(String)
     /// Not one of the four logins.
     case unsupportedProvider(String)
@@ -174,9 +174,8 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
         guard let roleName = environment[EnvironmentKeys.seatRole], !roleName.isEmpty else {
             throw RunnerConfigurationError.missing(EnvironmentKeys.seatRole)
         }
-        // A planner and an orchestrator run jobs (milestone 4): their tool
-        // runs are the answering check, never a reviewer's plan mode, so no
-        // provider is refused for them (§0.1 fact 27, RV-5).
+        // A dedicated Reviewer needs a login with a working review mode.
+        // General can build and run jobs even when the login cannot review (GA-9).
         guard let role = SeatRole(rawValue: roleName) else {
             throw RunnerConfigurationError.unsupportedRole(roleName)
         }
@@ -202,12 +201,15 @@ struct RunnerConfiguration: Sendable, CustomStringConvertible, CustomDebugString
         case (nil, nil):
             continuing = nil
         case (let task?, nil):
-            guard role == .builder else { throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueTaskID) }
+            guard role.actsAs(.builder) else {
+                throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueTaskID)
+            }
             continuing = .task(task)
         case (nil, let review?):
-            guard role == .reviewer else {
+            guard role.actsAs(.reviewer) else {
                 throw RunnerConfigurationError.workNotForRole(EnvironmentKeys.continueReviewID)
             }
+            // General on Gemini still needs the ID to give the review back.
             continuing = .review(review)
         case (_?, _?):
             throw RunnerConfigurationError.twoWorksToContinue

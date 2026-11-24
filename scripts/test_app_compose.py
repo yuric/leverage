@@ -125,6 +125,13 @@ def main():
                 db == service_block(original, "db") and not any(PULL in line for line in db))
     cases.check("the file still ends with a newline", made.endswith("\n"))
 
+    for label, compose in (("repository", original), ("bundle", made)):
+        api = service_block(compose, "api")
+        cases.check(f"the {label} API extends the shared environment with the MCP command",
+                    "    environment:" in api
+                    and "      <<: *api-environment" in api
+                    and "      LEVERAGE_MCP_COMMAND: ${LEVERAGE_MCP_COMMAND:-}" in api)
+
     code, messages, output = run(original, to_file=False)
     cases.check("without --output it writes the same text to standard output", code == 0 and output == made, messages)
 

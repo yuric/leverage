@@ -127,7 +127,7 @@ struct TaskPageModelTests {
         #expect(model.status?.statusLine == "Builder One is building")
         let (review, _, _) = await loaded(readyPage(.inReview, reviewer: false))
         #expect(review.status?.statusLine == "Builder One's work is being reviewed")
-        #expect(review.status?.note == "No reviewer agent is connected. Connect one in Agents.")
+        #expect(review.status?.note == "No connected agent can review this task. Connect one in Agents.")
         let (paused, _, _) = await loaded(readyPage(.working, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID)]))
         #expect(paused.status?.statusLine == "Paused, was In progress")
         let (closed, _, _) = await loaded(readyPage(.working, holds: [Fixtures.hold(.roundsExceeded, taskID: taskID, open: false)]))

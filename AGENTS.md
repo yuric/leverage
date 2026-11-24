@@ -12,9 +12,14 @@ Done. A run that meets a provider limit or sign-out continues on the
 next eligible account or waits. The database is backed up daily, with a
 tested restore. All seven shipped rules act. The app shows questions,
 access requests, outward actions, projects and spending, Activity,
-Decided for you, content deletion and workspace settings. A seat that
-connects on its own can use HTTP or the bundled MCP server. Credentials
-lists both kinds of credential, with token Add, Refresh, Verify all,
+Decided for you, content deletion and workspace settings. Connect offers
+five roles and defaults to General, which builds, reviews, drafts contracts
+and handles orchestrator jobs. A seat that connects on its own gets one
+landing prompt and reads its instructions from `GET /v1/join`, then works
+over HTTP or the bundled MCP server. General briefings carry build or
+review instructions as text, and the join instructions bound each job to
+its own material. Credentials lists both kinds of
+credential, with token Add, Refresh, Verify all,
 Rename and Remove. Confirmed local credential cleanup resumes when the
 helper starts. The Handoff tab supports reordering. Codex CLI 0.169.0 is
 the only registered login usage reader. The five API token readers have
@@ -62,9 +67,10 @@ research, and the following code and checks.
   the API's port in automated runs) and `.env.example`;
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
-  with stand-in tools), `e2e_handoff.sh` (six runs interrupted by a limit
-  or a sign-out, with stand-in tools), `e2e_rule_checks.sh` (seven runs
-  with the rules on and an orchestrator, with stand-in tools),
+  with stand-in tools, including a prompt-connected agent), `e2e_handoff.sh`
+  (six runs interrupted by a limit or a sign-out, with stand-in tools),
+  `e2e_rule_checks.sh` (eight runs with the rules on, including two General
+  agents taking a task from the form to Done),
   `e2e_questions_approvals.sh` (seven stand-in cases, with MCP),
   `e2e_credentials.sh` (three stand-in cases with replay and secret scans),
   `capture_reader_reply.py` (a maintainer-only developer check),
@@ -327,9 +333,9 @@ The whole product, from the repository root (Docker and Swift, nothing
 else):
 
 ```bash
-scripts/e2e_core_loop.sh                             # the whole loop with stand-in tools
+scripts/e2e_core_loop.sh                             # the whole loop, including a prompt-connected agent
 scripts/e2e_handoff.sh                               # six interrupted runs, one compose project each
-scripts/e2e_rule_checks.sh                           # seven runs with the rules on, one compose project each
+scripts/e2e_rule_checks.sh                           # eight runs with the rules on, one compose project each
 scripts/e2e_questions_approvals.sh                   # seven runs with stand-ins, including MCP
 scripts/e2e_credentials.sh                          # three stand-in Credentials cases
 scripts/restore_drill.sh                             # back up, empty the cluster, restore, replay

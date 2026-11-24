@@ -90,6 +90,7 @@ public enum CommandName: String, Codable, CaseIterable, Sendable {
     case claimJob = "claim_job"
     case submitJobResult = "submit_job_result"
     case issueSeatToken = "issue_seat_token"
+    case issueLandingPrompt = "issue_landing_prompt"
     case reportRunStarted = "report_run_started"
     case reportRunStopped = "report_run_stopped"
     case reportRequestProgress = "report_request_progress"
@@ -271,6 +272,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
     case stopping
     case seatDisabled = "seat_disabled"
     case seatRemoved = "seat_removed"
+    case newPrompt = "new_prompt"
 
     /// Whether a seat may send it with a release (`chosen_by: seat`).
     public var isChosenBySeat: Bool {
@@ -280,6 +282,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
         case .stopping: return true
         case .seatDisabled: return false
         case .seatRemoved: return false
+        case .newPrompt: return false
         }
     }
 }
@@ -292,8 +295,8 @@ public enum NextKind: String, Codable, CaseIterable, Sendable {
     case answer
     case action
     case rework
-    case review
     case job
+    case review
     case task
     case none
 }
@@ -677,6 +680,7 @@ public enum SeatRole: String, Codable, CaseIterable, Sendable {
     case reviewer
     case planner
     case orchestrator
+    case general
 }
 
 /// registry.json `lists.seat_run_states`.
@@ -774,6 +778,8 @@ public enum RuleHook: String, Codable, CaseIterable, Sendable {
 public enum ContractLists {
     /// registry.json `lists.orchestrator_tested_providers`. The login providers whose tool's default model passed the eval suite (RV-5). It refuses nothing: the app says "Not tested for checking tasks." beside every other choice.
     public static let orchestratorTestedProviders: [Provider] = [.claude, .codex, .gemini]
+    /// registry.json `lists.general_tested_providers`. The login providers whose tool's default model passed both eval suites run as a General seat (GA-11). It refuses nothing: the app says "Not tested for checking tasks." beside a General seat of every other provider.
+    public static let generalTestedProviders: [Provider] = []
     /// registry.json `lists.important_event_types`. The event types shown by the Important filter in Activity.
     public static let importantEventTypes: [EventType] = [.taskCreated, .taskClaimed, .taskSubmitted, .taskReassigned, .taskReturnedForRework, .taskDone, .taskCancelled, .reviewPassed, .reviewFailed, .actionApproved, .actionStopped, .actionStarted, .actionReportedDone, .actionMarkedDone, .actionWaived, .actionWithdrawn, .actionRevoked, .actionOverturnRecorded, .questionAnswered, .questionOverturned, .inboxOpened, .checkOverridden, .credentialLimitReached, .credentialSignedOut, .credentialSwitched, .projectCreated, .projectPaused, .projectResumed, .projectBudgetChanged, .ruleChanged, .ruleEnabled, .ruleDisabled, .ruleReverted, .ruleRemoved, .seatConnected, .seatRemoved, .workspaceSettingsChanged, .contentDeleted]
 }
@@ -788,6 +794,7 @@ public enum HTTPMethod: String, CaseIterable, Sendable {
 public enum ContractOperation: String, CaseIterable, Sendable {
     case getNext = "get_next"
     case getCommand = "get_command"
+    case getJoin = "get_join"
     case claimNextTask = "claim_next_task"
     case getTaskBriefing = "get_task_briefing"
     case acknowledgeTaskBriefing = "acknowledge_task_briefing"
@@ -871,7 +878,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
     case resumeSeat = "resume_seat"
     case changeSeat = "change_seat"
     case removeSeat = "remove_seat"
-    case getLandingPrompt = "get_landing_prompt"
+    case issueLandingPrompt = "issue_landing_prompt"
     case startSeat = "start_seat"
     case stopSeat = "stop_seat"
     case issueHelperToken = "issue_helper_token"
@@ -899,6 +906,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
         switch self {
         case .getNext: return (.get, "/v1/next", .any, .agent)
         case .getCommand: return (.get, "/v1/commands/{key}", .any, .agent)
+        case .getJoin: return (.get, "/v1/join", .any, .agent)
         case .claimNextTask: return (.post, "/v1/tasks/claim-next", .builder, .agent)
         case .getTaskBriefing: return (.get, "/v1/tasks/{id}/briefing", .holder, .agent)
         case .acknowledgeTaskBriefing: return (.post, "/v1/tasks/{id}/ack-briefing", .holder, .agent)
@@ -982,7 +990,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
         case .resumeSeat: return (.post, "/v1/owner/seats/{id}/resume", .owner, .owner)
         case .changeSeat: return (.post, "/v1/owner/seats/{id}/change", .owner, .owner)
         case .removeSeat: return (.post, "/v1/owner/seats/{id}/remove", .owner, .owner)
-        case .getLandingPrompt: return (.get, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)
+        case .issueLandingPrompt: return (.post, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)
         case .startSeat: return (.post, "/v1/owner/seats/{id}/start", .owner, .owner)
         case .stopSeat: return (.post, "/v1/owner/seats/{id}/stop", .owner, .owner)
         case .issueHelperToken: return (.post, "/v1/owner/helpers", .owner, .owner)

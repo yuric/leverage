@@ -35,7 +35,7 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logReviewStarted, logReviewReleased, logReviewLeaseExpired, logReviewPassed
     case logReviewFailed, logReviewFailedList, logReturnedForRework, logDone, logCancelled
     case logReleasedUnable, logReleasedNotSuited, logReleasedStopping, logReleasedSwitchedOff
-    case logReleasedRemoved, logReleasedOther, logLeaseExpired
+    case logReleasedRemoved, logReleasedNewPrompt, logReleasedOther, logLeaseExpired
     case logPausedAtLimit, logPaused, logNoLongerPaused
 
     // Additional task and workspace events shared with Activity.
@@ -188,6 +188,7 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .logReleasedStopping: "{agent} was stopped, so the task went back to waiting."
         case .logReleasedSwitchedOff: "{agent} was switched off, so the task went back to waiting."
         case .logReleasedRemoved: "{agent} was removed, so the task went back to waiting."
+        case .logReleasedNewPrompt: "A new prompt was issued, so the task went back to waiting."
         case .logReleasedOther: "{agent} stopped working on the task, so it went back to waiting."
         case .logLeaseExpired: "The agent stopped responding, so the task went back to waiting."
         case .logPausedAtLimit: "Sent back too many times. Paused."

@@ -21,6 +21,7 @@ TASK = "00000000-0000-4000-8000-000000000103"
 SIDE_EFFECTS = ("claude", "codex", "agy", "grok", "docker", "swift")
 EVENTS = ("task.claimed", "criterion.started", "criterion.passed", "task.submitted", "task.done")
 SEAT_TOKEN = "stand-in-builder-token"
+REVIEWER_TOKEN = "stand-in-reviewer-token"
 PRIVATE_TEXT = "stand-in raw response must stay private"
 RULES = [f"00000000-0000-4000-8000-00000000020{i}" for i in range(7)]
 
@@ -127,8 +128,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if body:
             assert self.headers["Content-Type"] == "application/json"
         if self.command == "POST":
-            assert self.headers["Idempotency-Key"]
-        if path not in ("/v1/health", "/v1/owner/setup"):
+            key = self.headers["Idempotency-Key"]
+            assert key and key not in server.keys
+            server.keys.add(key)
+        if path == "/v1/join":
+            assert self.headers["Authorization"] == f"Bearer {SEAT_TOKEN}"
+        elif path not in ("/v1/health", "/v1/owner/setup"):
             assert self.headers["Authorization"] == "Bearer stand-in-session-token"
         message = json.loads(body) if body else {}
         completed = lambda result: {"outcome": "completed", "result": result}
@@ -146,11 +151,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             assert seat in ("builder", "reviewer")
             assert message["provider"] == ("claude" if seat == "builder" else "codex")
             assert not message.get("credential_id")
-            result = completed({"seat_id": BUILDER if seat == "builder" else REVIEWER,
-                                "seat_token": f"stand-in-{seat}-token"})
-        elif path == f"/v1/owner/seats/{BUILDER}/landing-prompt":
-            assert self.path.endswith("?connection=mcp")
-            result = {"connection": "mcp", "text": "Stand-in MCP landing prompt."}
+            seat_id = BUILDER if seat == "builder" else REVIEWER
+            server.connected.add(seat_id)
+            result = completed({"seat_id": seat_id})
+        elif path.endswith("/landing-prompt"):
+            if self.command != "POST":
+                self.send_error(405, PRIVATE_TEXT)
+                return
+            seat_id = path.split("/")[-2]
+            assert seat_id in server.connected and seat_id not in server.issued
+            connection, token = ("mcp", SEAT_TOKEN) if seat_id == BUILDER else ("http", REVIEWER_TOKEN)
+            assert self.path == path and message == {"connection": connection}
+            server.issued[seat_id] = connection
+            address = f"http://127.0.0.1:{server.server_port}"
+            join_url = f"{address}/v1/join" + ("?connection=mcp" if connection == "mcp" else "")
+            result = completed({"seat_id": seat_id, "seat_token": token, "connection": connection,
+                                "text": f"Join Leverage at {address} with token {token}. Fetch GET {join_url} "
+                                        f"with header Authorization: Bearer {token} and follow its instructions exactly."})
+        elif path == "/v1/join":
+            assert self.command == "GET" and self.path == "/v1/join?connection=mcp" and not body
+            assert server.issued.get(BUILDER) == "mcp"
+            server.join_reads += 1
+            result = {"role": "builder", "connection": "mcp", "text": "Stand-in MCP join instructions."}
         elif path == "/v1/owner/tasks":
             assert server.disabled == set(RULES)
             result = completed({"task_id": TASK})
@@ -248,6 +270,8 @@ class Check(unittest.TestCase):
         (self.root / "mode").write_text(mode)
         server.root = self.root
         server.disabled = set()
+        server.keys, server.connected, server.issued = set(), set(), {}
+        server.join_reads = 0
         server.mode = mode
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
@@ -264,9 +288,10 @@ class Check(unittest.TestCase):
                 if process.poll() is None:
                     process.send_signal(signal.SIGINT)
             output = self.read(process)
-            self.assertEqual(process.returncode, expected)
+            self.assertEqual(process.returncode, expected, output)
             self.assertIn(reason, output)
             self.assertNotIn(SEAT_TOKEN, output)
+            self.assertNotIn(REVIEWER_TOKEN, output)
             self.assertNotIn("stand-in-session-token", output)
             self.assertNotIn(PRIVATE_TEXT, output)
             self.assertNotRegex(output, r"(?m)^\+")
@@ -282,8 +307,10 @@ class Check(unittest.TestCase):
             self.assertTrue(facts["has_builder_token"])
             self.assertEqual(Path(facts["cwd"]), server.work_folder)
             self.assertTrue(facts["empty"])
+            self.assertEqual(server.issued, {BUILDER: "mcp", REVIEWER: "http"})
+            self.assertEqual(server.join_reads, 1)
             args = facts["args"]
-            self.assertTrue(args[args.index("-p") + 1].startswith("Stand-in MCP landing prompt."))
+            self.assertTrue(args[args.index("-p") + 1].startswith("Stand-in MCP join instructions."))
             self.assertTrue(args[args.index("-p") + 1].endswith(
                 "Your user confirms these defaults. Take the one task that is waiting, finish it, submit it, and stop."
             ))
@@ -293,6 +320,7 @@ class Check(unittest.TestCase):
             self.assertIn("--no-session-persistence", args)
             self.assertNotIn("skip-permissions", " ".join(args))
             self.assertNotIn(SEAT_TOKEN, " ".join(args))
+            self.assertNotIn(REVIEWER_TOKEN, " ".join(args))
             calls = (self.root / "calls").read_text().splitlines()
             self.assertEqual(calls.count("claude"), 1)
             self.assertFalse(any(name in calls for name in ("codex", "agy", "grok")))
@@ -303,6 +331,7 @@ class Check(unittest.TestCase):
                     contents = artifact.read_text()
                     self.assertNotIn(PRIVATE_TEXT, contents)
                     self.assertNotIn(SEAT_TOKEN, contents)
+                    self.assertNotIn(REVIEWER_TOKEN, contents)
                 self.assertIn("2025-06-18", output)
             else:
                 self.assertFalse(output_folder.exists())

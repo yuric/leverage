@@ -129,6 +129,13 @@ struct ChangeAgentModelTests {
 
     // MARK: the body of each change
 
+    @Test("General can change to a Gemini login")
+    func generalOffersGemini() {
+        let model = makeModel(owner(), seat: appSeat(role: .general))
+        #expect(model.loginChoices.map(\.id).contains(geminiLogin.id))
+        #expect(!model.geminiHiddenForReviewer)
+    }
+
     @Test("a new name is sent alone, trimmed")
     func renamed() async {
         let owner = owner()
@@ -322,6 +329,16 @@ struct ChangeAgentModelTests {
     }
 
     // MARK: words and screen
+
+    @Test("the Change sheet has no role picker")
+    func noRolePicker() throws {
+        let sheet = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/LeverageApp/Agents/ChangeAgentSheet.swift")
+        let code = LiteralScanner.code(of: try String(contentsOf: sheet, encoding: .utf8))
+        #expect(!code.contains("AgentsCopy.roleLabel"))
+        #expect(!code.contains("SeatRole"))
+    }
 
     @Test("no sentence of the sheet uses a banned word or an email")
     func plainWords() {

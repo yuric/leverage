@@ -71,7 +71,7 @@ class RuleChecksTest < ActiveSupport::TestCase
       assert_equal [ "rule_check", "orchestrator", "rule_check", check.id ], job.values_at(:kind, :seat_role, :target_kind, :target_id)
       assert_equal({ "rule_check_id" => check.id, "attempt_number" => 1, "rule_version_id" => check.rule_version_id,
                      "hook" => "task.before_ready", "task_id" => @task.id, "project_id" => nil },
-        job.input.except("inputs", "params"))
+        job.input.except("inputs", "params", "material"))
       assert_equal({}, job.input.fetch("params"), "the request's text the material needs (review finding 8): none here")
       queued = events.first.payload
       assert_equal [ 1, job.id, true, nil, pending.id, nil ],

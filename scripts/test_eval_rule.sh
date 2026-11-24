@@ -55,6 +55,7 @@ done
 # Keep all child commands inside the fixture. The scorer unit tests check
 # the hash algorithm. Here the scorer's refusal checks the shell wiring.
 cat >"$repo/scripts/eval_score.py" <<'PYTHON'
+import json
 import os
 from pathlib import Path
 import sys
@@ -107,9 +108,13 @@ elif command == "record":
         print("eval_score: refused: a case has no line", file=sys.stderr)
         sys.exit(2)
     out = Path(option("--out"))
-    out.write_text('{"tool_runs":2}\n')
+    result = {"tool_runs": 2}
+    if "--mode" in args:
+        result.update(mode=option("--mode"), role_file_sha256=None)
+    out.write_text(json.dumps(result) + "\n")
 elif command == "report":
-    (Path(option("--suite")) / "RESULTS.md").write_text("# Test results\n")
+    filename = "RESULTS-general.md" if "--mode" in args else "RESULTS.md"
+    (Path(option("--suite")) / filename).write_text("# Test results\n")
 elif command in {"runs-add", "runs-settle"}:
     reserved = command == "runs-add"
     Path(option("--runs")).write_text("reserved\n" if reserved else "settled\n")
@@ -126,6 +131,7 @@ cat >"$shims/docker" <<EOF
 #!/bin/sh
 case " \$* " in *" --held-out "*) selection=held-out ;; *) selection=main ;; esac
 echo "docker \$1 \$2 \$selection" >>"$called"
+case " \$* " in *" --mode general "*) echo 'inputs mode general' >>"$called" ;; esac
 if [ "\$2" = run ]; then
   for argument do
     case "\$argument" in
@@ -136,6 +142,7 @@ fi
 EOF
 cat >"$shims/LeverageRunner" <<EOF
 #!/bin/sh
+case " \$* " in *" --mode general "*) echo 'runner mode general' >>"$called" ;; esac
 case " \$* " in
   *" --resolve-only "*)
     echo "runner resolve \$LEVERAGE_EVAL \$3" >>"$called"
@@ -224,6 +231,10 @@ check "an unknown provider" 2 "${stand_in[@]}" "LEVERAGE_EVAL_PROVIDERS=claude c
 EXPECTED_REFUSAL="named twice" check "a provider cannot run twice" 2 "${stand_in[@]}" \
   LEVERAGE_EVAL_PROVIDERS="claude claude" -- specific-details --out "$work/out"
 check "an unknown option" 2 "${stand_in[@]}" -- specific-details --out "$work/out" --fast
+EXPECTED_REFUSAL="unknown mode" check "an unknown mode" 2 "${stand_in[@]}" -- \
+  specific-details --out "$work/out" --mode reviewer
+EXPECTED_REFUSAL="--mode needs" check "a missing mode" 2 "${stand_in[@]}" -- \
+  specific-details --out "$work/out" --mode
 
 mkdir -p "$repo/approves-actions"
 cp "$approval/bar.json" "$repo/approves-actions/bar.json"
@@ -313,6 +324,72 @@ check_run() {
   fi
 }
 
+check_general_run() {
+  local mode_setup=$1 selection=$2
+  local environment=(LEVERAGE_EVAL=approves-actions)
+  local flags=(--mode general)
+  local destination="$work/out" status=0 output problems=()
+  local result="results/general/gemini.json"
+  cases=$((cases + 1))
+  : >"$called"
+  : >"$work/scoring"
+  if [ "$mode_setup" = real-shims ]; then
+    environment+=(LEVERAGE_EVAL_REAL=1)
+    destination="$approval"
+    printf 'existing orchestrator ledger\n' >"$approval/runs.json"
+  else
+    environment+=("LEVERAGE_TOOL_DIR=$standins/bin")
+    flags+=(--out "$destination")
+  fi
+  if [ "$selection" = held-out ]; then
+    flags+=(--held-out)
+    result="results/general/held-out/gemini.json"
+  fi
+  mkdir -p "$destination/results"
+  printf 'existing orchestrator result\n' >"$destination/results/gemini.json"
+  printf 'existing orchestrator report\n' >"$destination/RESULTS.md"
+  output=$(env -i PATH="$shims:$system_path" HOME="$work/home" TMPDIR="$work/tmp" \
+    "${environment[@]}" bash "$script" approves-actions "${flags[@]}" 2>&1) || status=$?
+  if [ "$status" -ne 0 ]; then problems+=("exit $status"); fi
+  if [ "$(sed -n '/^inputs mode general$/p' "$called")" != 'inputs mode general' ] ||
+      [ "$(sed -n '/^docker compose run /p' "$called")" != "docker compose run $selection" ]; then
+    problems+=("did not build General inputs")
+  fi
+  if [ "$(sed -n '/^runner mode general$/p' "$called" | wc -l | tr -d ' ')" -ne 2 ]; then
+    problems+=("did not select General mode for runner resolution and execution")
+  fi
+  if [ ! -f "$destination/$result" ] ||
+      ! scorer_received_general_mode "record" || ! scorer_received_general_mode "report" ||
+      [ ! -f "$destination/RESULTS-general.md" ]; then
+    problems+=("did not record and report General results separately")
+  fi
+  if [ "$(cat "$destination/results/gemini.json")" != 'existing orchestrator result' ] ||
+      [ "$(cat "$destination/RESULTS.md")" != 'existing orchestrator report' ]; then
+    problems+=("overwrote orchestrator results")
+  fi
+  if [ "$mode_setup" = real-shims ]; then
+    if ! scorer_received_general_mode "budget" || ! scorer_received_general_mode "runs-add" ||
+        ! scorer_received_general_mode "runs-settle" ||
+        [ ! -f "$approval/runs-general.json" ] || [ "$(cat "$approval/runs-general.json")" != settled ] ||
+        [ "$(cat "$approval/runs.json")" != 'existing orchestrator ledger' ]; then
+      problems+=("did not settle the General run in its own ledger")
+    fi
+  fi
+  if [ ${#problems[@]} -eq 0 ]; then
+    printf 'ok    General %s %s run uses its material, mode and result paths\n' "$mode_setup" "$selection"
+  else
+    failures=$((failures + 1))
+    printf 'FAIL  General %s %s run: %s\n' "$mode_setup" "$selection" "${problems[*]}"
+    printf '%s\n' "$output" | sed 's/^/      /'
+    cat "$called" "$work/scoring" | sed 's/^/      /'
+  fi
+}
+
+scorer_received_general_mode() {
+  grep "^$1 " "$work/scoring" | grep -q -- '--mode general' &&
+    ! grep "^$1 " "$work/scoring" | grep -q -- '--role-file'
+}
+
 # A partial JSONL file is only a lower bound on the number of tool runs.
 check_real_run() {
   local name=$1 runner_status=$2 record_status=$3
@@ -359,6 +436,9 @@ check_run approves-actions held-out gemini 12 2
 check_real_run "a failed real-mode run keeps its full budget reservation" 1 0
 check_real_run "an incomplete real-mode run keeps its full budget reservation" 0 2
 check_real_run "a complete real-mode run settles the scored tool count" 0 0
+check_general_run stand-in main
+check_general_run stand-in held-out
+check_general_run real-shims main
 
 echo "$cases cases, $failures failed"
 [ "$failures" -eq 0 ]

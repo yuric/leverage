@@ -21,7 +21,7 @@ and leaves its meaning to the PRD.
 | `hooks.json` | The hooks, what a failed gate does, hashed inputs, moment names. |
 | `shipped_rules.json` | The seven shipped rules, their version-1 fields. |
 | `jobs.json` | The job kinds: who claims them, timeouts, their input and result components. |
-| `roles.json` | The four seat roles: may change, may read, calls. |
+| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, General work and job instructions, calls (every role may read `GET /v1/join`). |
 | `timers.json` | Each timer: scope, due-time source, events. |
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
@@ -129,9 +129,9 @@ An operation's `caller`:
 | Caller | Who |
 | --- | --- |
 | `any` | Any signed-in seat. |
-| `builder`, `reviewer` | A seat with that role. |
+| `builder`, `reviewer` | A seat with that role, or a General seat (`roles.json` `acts_as`). |
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
-| `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts. |
+| `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
 | `job_holder` | The seat that claimed the job. |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
@@ -760,3 +760,112 @@ in the completed outcome's result.
 - Trace `24-reading-ends-a-limit-wait` covers when a reading clears a
   limit, how reorders change a held task's candidates, and the events and
   steps the task records (CT-3).
+
+## What the General role added
+
+The owner asked for a role that does everything, picked first when an
+agent is connected. Its decisions are GA-1 to GA-11 in
+[`decisions.md`](decisions.md#general-role-ga).
+
+- `seat_roles` gains `general`, last. `roles.json` gains two fields on
+  every row: `acts_as`, the roles whose work a seat of the role does
+  (each role itself; `general` the other four), and `role_file`, false
+  for `general` only. The `general` row's callers and operations are the
+  union of the other four's. The Swift generator writes both fields as
+  `SeatRole.actsAs` and `SeatRole.hasRoleFile` in `AgentTools.swift`.
+- `jobs.json`, the state table's `who` values and the operations'
+  `caller` keep naming the role whose work is done: a General seat
+  satisfies `builder`, `reviewer`, `planner`, `orchestrator`,
+  `job_claimer` and the rule's `checker_role` through `acts_as`. A job's
+  `seat_role` stays `orchestrator` or `planner`.
+- `next_kinds` puts `job` before `review`. Only a General seat can have
+  more than one of `job`, `review` and `task` true at once (GA-4).
+- `Briefing.role_file`, `BriefingVersions.role_file_version` and the
+  `role_file` of the four job materials may be null: null for a General
+  seat, whose briefing hashes no role file part. A General briefing
+  carries `work_rules` for building or reviewing, outside the hash.
+  The runner and both join responses use those instructions (GA-7).
+  A job's stored input keeps the role file text; a claim by a General
+  seat returns it as null (GA-2).
+- The role enums of `Seat`, `ConnectSeatRequest`, `ChangeSeatRequest` and
+  `HelperRequestParams` gain `general`. `seats.role` is not constrained in
+  the database, so there is no migration.
+- The guards `builder_seat_enabled` and `builder_seat_unavailable` read a
+  role that builds, `builder` or `general` (GA-8).
+
+After the design was challenged three times, the contract holds these
+(decisions GA-1 to GA-11 as revised):
+
+- Escalation counts a seat by the standing part of the claim test,
+  paused or not and busy or not, as on `main`: enabled, not removed, acts
+  as builder, the rank, and no `review.started` by it on the task. Claims
+  add "not paused" and the momentary part; the guard `escalates` says so,
+  and the Eligibility module holds both parts (GA-1). The review bar is
+  lifted for a task that no other seat could build, and escalation does
+  not lift it (GA-5).
+- Presence: two sentences, the same in `needs_you.json` (Orchestrator
+  offline's `closes`) and in the `orchestrator_offline` row, say what
+  waits (a queued rule_check or approval job, or a check held with
+  `check_error`) and when a General seat counts for the orchestrator:
+  while it polls and holds an orchestrator job, or holds nothing and
+  could claim a waiting check (`Jobs.next_for`), or holds nothing while
+  none waits. Question, approval and contract-draft jobs end as before;
+  `orchestrator_offline` queues an errored rule check again only when a
+  counting seat is eligible for that attempt, regardless of queue order,
+  and leaves other errors with the owner. Errored claim-check holds close
+  when the role is back (GA-6, RC-37). A question goes to a job only when a seat
+  that acts as orchestrator could claim it now (GA-1).
+- `change_seat`: a change of role of a running seat the app runs, to or
+  from General, queues only `start_seat`, which the helper hands over
+  (HD-2); other role changes queue nothing, as before. Unconfirmed action
+  opens on a change to a role that does not build (GA-8). Only a General
+  seat's review work passes over Gemini logins (GA-9).
+- `roles.json` gains `job_rules` on every row: four sentences for
+  `general`, empty for the roles with a role file. The four job materials
+  gain `job_rules`, set when a General seat claims the job, where its
+  `role_file` is null. The Swift generator writes them as
+  `SeatRole.jobRules`, which the eval's General mode and the runner's
+  tests read (GA-7).
+- `lists.general_tested_providers`: the login providers whose default
+  model met both suites' bars run as a General seat, empty until the
+  maintainer runs them. The Swift generator writes it as
+  `ContractLists.generalTestedProviders` (GA-11). The list applies to the
+  app runner's fresh job prompt on default models. A seat that connects
+  on its own or names a model remains outside the eval coverage.
+- `BoardTask.reviewer_seat_exists` is an optional task-level reading for
+  unassigned reviews in a workspace with a General seat. The task page
+  shares that reading. Ready account waits use the build claim standing
+  test for each task (GA-5, HE-16). In review account waits include
+  eligible General reviewers (HE-15).
+
+## What the join call added
+
+The owner asked that an agent connected by prompt land from one short
+prompt that carries its token, and read the rest of its instructions
+from the server. Its decisions are GA-12 to GA-17 in
+[`decisions.md`](decisions.md#general-role-ga).
+
+- `get_join` (`GET /v1/join`, caller `any`, tag `agent`): every role
+  lists it in `roles.json`, so the generated agent tools include it. It
+  answers `JoinInstructions`, the whole text for the seat's role and the
+  `connection` query (`http` or `mcp`), as JSON with a `text` field
+  (GA-14). The MCP form's settings name the program the API was given in
+  `LEVERAGE_MCP_COMMAND` (GA-15).
+- `issue_landing_prompt` (`POST /v1/owner/seats/{id}/landing-prompt`,
+  command `issue_landing_prompt`, a derived row that writes no seat
+  event) replaces the read `get_landing_prompt` and its `LandingPrompt`.
+  It issues the
+  seat's token, ending the one before it, and answers
+  `LandingPromptIssued` once: the short prompt with the token in it, and
+  the token. A repeat of the key answers `LandingPromptIssuedRepeated`
+  (GA-13). It releases the work the seat holds, as `remove_seat` does but
+  with the seat kept: the registry gains the app's release reason
+  `new_prompt` for a Working task, a review is released and a job misses
+  its run time at once; the row lists the events, among them the run
+  timer's (`job.requeued` and `check.queued` after a first miss) and the
+  holds of a last miss (`check_error`, `owner_approval`,
+  `owner_question`) (GA-17).
+- `connect_seat` returns no token: `SeatConnected` is the seat's id, and
+  `SeatConnectedRepeated` is gone. The four one-time responses are
+  `SeatTokenPickup`, `LandingPromptIssued`, `HelperTokenIssued` and
+  `OwnerSession`.

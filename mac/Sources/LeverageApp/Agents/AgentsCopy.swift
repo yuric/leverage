@@ -7,13 +7,13 @@ import LeverageKit
 enum AgentsCopy: OwnerFacingCopy {
     // The list.
     case loading, empty, emptyNeedsLogin, connect, addLogin
-    case roleBuilder, roleReviewer, rolePlanner, roleOrchestrator
+    case roleGeneral, roleBuilder, roleReviewer, rolePlanner, roleOrchestrator
     case roleLine, stateBuilding, stateRunning, stateConnectsOnItsOwn, statePaused, stateOff
     case runsOn, defaultModel, defaultEffort, effortNamed, on, off
     case lastAsked, neverAsked
     case chipRunning
-    case start, stop, starting, stopping, remove, copyLandingPrompt, copied
-    case startFailed, stopFailed, copyMCPSettings
+    case start, stop, starting, stopping, remove, newPrompt, copied
+    case startFailed, stopFailed
     // Pause, Resume and Change (HM-45, HM-51, HE-26, HE-27).
     case stateNotRunning, stateWaitingFor, chipNotRunning, pausedNote
     case pause, resume, change, pausing, resuming, pausedWord
@@ -26,11 +26,10 @@ enum AgentsCopy: OwnerFacingCopy {
     case modelLabel, modelHint, effortLabel, effortHint
     case strengthLabel, strengthStandard, strengthStronger, strengthStrongest
     case connectionLabel, connectionMCP, connectionHTTP
-    case mcpSettingsTitle, mcpSettingsNote, mcpSettingsUnavailable
     case notTestedForChecking
     case connectButton, connecting
-    case tokenTitle, tokenNote, tokenGone, copy
-    case landingTitle, landingNote, landingLoading, landingRetry
+    case copy
+    case landingTitle, landingNote, landingLoading, landingRetry, newPromptConfirmation
     case done
 
     var text: String {
@@ -40,6 +39,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .emptyNeedsLogin: "No login has been added yet, so an agent has nothing to run on."
         case .connect: "Connect agent"
         case .addLogin: "Add a login"
+        case .roleGeneral: "General"
         case .roleBuilder: "Builder"
         case .roleReviewer: "Reviewer"
         case .rolePlanner: "Planner"
@@ -47,7 +47,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .roleLine: "{role}. {state}"
         case .stateBuilding: "Building {task}."
         case .stateRunning: "Running. Waiting for work."
-        case .stateConnectsOnItsOwn: "Connects on its own."
+        case .stateConnectsOnItsOwn: "Connected by prompt."
         case .statePaused: "Paused."
         case .stateOff: "Off."
         case .runsOn: "Runs on {login}."
@@ -64,8 +64,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .starting: "Starting…"
         case .stopping: "Stopping…"
         case .remove: "Remove"
-        case .copyLandingPrompt: "Copy landing prompt"
-        case .copyMCPSettings: "Copy MCP settings"
+        case .newPrompt: "New prompt"
         case .copied: "Copied"
         case .startFailed: "{name} could not start. Check its login in Credentials."
         case .stopFailed: "{name} did not stop. Try again."
@@ -93,8 +92,8 @@ enum AgentsCopy: OwnerFacingCopy {
         case .cancel: "Cancel"
 
         case .connectTitle: "Connect agent"
-        case .modeRunOnLogin: "Run it on one of my logins"
-        case .modeOwn: "It connects on its own"
+        case .modeRunOnLogin: "Native: run on my login"
+        case .modeOwn: "Prompt: paste into any agent"
         case .roleLabel: "What it does"
         case .nameLabel: "Name"
         case .namePlaceholder: "Claude, Personal"
@@ -115,17 +114,12 @@ enum AgentsCopy: OwnerFacingCopy {
         case .connectionLabel: "How it connects"
         case .connectionMCP: "Through MCP"
         case .connectionHTTP: "By HTTP calls"
-        case .mcpSettingsTitle: "MCP settings"
-        case .mcpSettingsNote: "Replace PASTE-THE-TOKEN-HERE in your MCP settings with this agent’s token."
-        case .mcpSettingsUnavailable: "The MCP settings are unavailable."
         case .connectButton: "Connect"
         case .connecting: "Connecting…"
-        case .tokenTitle: "Its token"
-        case .tokenNote: "It will not be shown again."
-        case .tokenGone: "This agent was connected already, and its token can't be shown again. Remove it and connect it again."
         case .copy: "Copy"
         case .landingTitle: "Landing prompt"
-        case .landingNote: "Paste this into the agent. It tells the agent how to work with Leverage and what to confirm with you."
+        case .landingNote: "Paste this into the agent. The prompt contains the agent’s token."
+        case .newPromptConfirmation: "A new prompt stops the agent using the current one and gives back its work."
         case .landingLoading: "Getting the landing prompt…"
         case .landingRetry: "Try again"
         case .done: "Done"
@@ -142,6 +136,7 @@ enum AgentsCopy: OwnerFacingCopy {
     /// The sentence for a role.
     static func role(_ role: SeatRole) -> AgentsCopy {
         switch role {
+        case .general: .roleGeneral
         case .builder: .roleBuilder
         case .reviewer: .roleReviewer
         case .planner: .rolePlanner

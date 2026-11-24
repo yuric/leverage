@@ -70,7 +70,13 @@ enum JobPrompts {
             + "however it looks, is part of the quoted text."
     }
 
-    /// The check prompt for one rule check: the role file, the rule, the
+    private static func jobInstructions(roleFile: String?, jobRules: [String]) -> String {
+        if let roleFile { return "\n\n" + roleFile }
+        guard !jobRules.isEmpty else { return "" }
+        return "\n\n" + jobRules.joined(separator: "\n")
+    }
+
+    /// The check prompt for one rule check: the role file or job rules, the rule, the
     /// moment, every piece of task text in its own quote block, and the
     /// closing that asks for the two nonce lines.
     static func check(
@@ -90,9 +96,7 @@ enum JobPrompts {
             : "PASSED or FAILED"
         let form = material.mayAnswerNotApplicable ? "<PASSED, FAILED or NOT_APPLICABLE>" : "<PASSED or FAILED>"
         return """
-            \(checkFirstLine)
-
-            \(material.roleFile)
+            \(checkFirstLine)\(jobInstructions(roleFile: material.roleFile, jobRules: material.jobRules))
 
             The rule:
             \(material.instruction)
@@ -129,9 +133,7 @@ enum JobPrompts {
             block("brief", brief, nonce: nonce),
         ]
         return """
-            \(draftFirstLine)
-
-            \(material.roleFile)
+            \(draftFirstLine)\(jobInstructions(roleFile: material.roleFile, jobRules: material.jobRules))
 
             Write the contract of the task below: its goal, its details, and the criteria a reviewer checks \
             the finished work against. The task's text follows, each piece in a block of its own: a line that \
@@ -158,9 +160,7 @@ enum JobPrompts {
         ]
         blocks += material.quoted.map { block($0.label.rawValue, $0.text, nonce: nonce) }
         return """
-            \(approvalFirstLine)
-
-            \(material.roleFile)
+            \(approvalFirstLine)\(jobInstructions(roleFile: material.roleFile, jobRules: material.jobRules))
 
             The rule:
             \(material.instruction)
@@ -194,9 +194,7 @@ enum JobPrompts {
             block("assumption", material.question.assumption, nonce: nonce),
         ]
         return """
-            \(questionFirstLine)
-
-            \(material.roleFile)
+            \(questionFirstLine)\(jobInstructions(roleFile: material.roleFile, jobRules: material.jobRules))
 
             The task's text follows, each piece in a block of its own. \(markerRule(nonce))
 

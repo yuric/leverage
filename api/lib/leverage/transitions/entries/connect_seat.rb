@@ -6,17 +6,17 @@ module Leverage
       # seat.connected. The SM-42 side events (No reviewer is eligible) are
       # not written in this milestone (SC-11).
       #
-      # With credential_id, a seat the app runs: a token is 422 invalid
-      # (TK-4). An unknown or unfinished login is 404. The provider is the
+      # With credential_id, a seat the app runs: an API credential is 422
+      # invalid (TK-4). An unknown or unfinished login is 404. The provider is the
       # login's, and naming another is 422 invalid. The seat has no token
       # until the helper picks up its start (issue_seat_token); it is
-      # stopped, wanted running, and start_seat is queued (IN-30). The
-      # answer is SeatConnected with seat_token null.
+      # stopped, wanted running, and start_seat is queued (IN-30).
       #
       # Without, a seat that connects on its own: it must name its provider
-      # (seats.provider is required), and its token is returned once.
+      # (seats.provider is required). The owner issues its token separately
+      # through issue_landing_prompt (GA-13). Both ways return only the seat id.
       #
-      # Any of the four roles (registry seat_roles): the planner and the
+      # Any registry seat role: the planner and the
       # orchestrator arrived with rules (milestone 4 plan §0.1 fact 12,
       # RV-5), and are connected exactly as a builder is, on any login, with
       # or without a model; nothing is refused for an orchestrator's
@@ -48,15 +48,12 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(nil) ].compact
 
         def perform(ctx)
-          token = @credential ? nil : Tokens.issue(:seat)
           seat = Seat.create!(workspace_id: ctx.workspace.id, name: @name, role: @role, provider: @provider,
             model: ctx.request.params["model"].to_s, effort: ctx.request.params["effort"].to_s,
-            strength_rank: @strength_rank, credential_id: @credential&.id,
-            token_hash: token && Tokens.digest(token))
+            strength_rank: @strength_rank, credential_id: @credential&.id)
           ctx.emit("seat.connected", subject: seat, payload: {})
           SeatRuns.connected(ctx, seat)
           @result = { "seat_id" => seat.id }
-          @once = { "seat_token" => token }
         end
 
         private

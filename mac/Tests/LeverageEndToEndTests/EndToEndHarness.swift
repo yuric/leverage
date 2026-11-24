@@ -365,10 +365,30 @@ extension OwnerClient {
     func connect(_ name: String, role: SeatRole, login: UUID) async throws -> UUID {
         let outcome = try await connectSeat(
             ConnectSeatRequest(name: name, role: role, credentialID: login), key: IdempotencyKey())
-        guard case .shown(let seat)? = try outcome.completedResult() else {
+        guard let seat = try outcome.completedResult() else {
             throw EndToEndFailure("connect_seat answered no seat")
         }
         return seat.seatID
+    }
+
+    func connectByPrompt(
+        _ name: String, role: SeatRole, provider: Provider, connection: LandingPromptConnection = .http
+    ) async throws -> LandingPromptIssued {
+        let outcome = try await connectSeat(
+            ConnectSeatRequest(name: name, role: role, provider: provider), key: IdempotencyKey())
+        guard let seat = try outcome.completedResult() else {
+            throw EndToEndFailure("connect_seat answered no seat")
+        }
+        return try await newPrompt(seat: seat.seatID, connection: connection)
+    }
+
+    func newPrompt(seat: UUID, connection: LandingPromptConnection = .http) async throws -> LandingPromptIssued {
+        let outcome = try await issueLandingPrompt(seatID: seat, connection: connection, key: IdempotencyKey())
+        guard case .shown(let prompt)? = try outcome.completedResult(),
+              prompt.seatID == seat, prompt.connection == connection else {
+            throw EndToEndFailure("issue_landing_prompt did not issue a fresh prompt for the seat")
+        }
+        return prompt
     }
 
     /// Stop for a seat the app runs: waits until the helper has done it and
@@ -377,18 +397,18 @@ extension OwnerClient {
         let outcome = try await stopSeat(seatID: seat, key: IdempotencyKey())
         _ = try outcome.completedResult()
         if let request = outcome.helperRequestID {
-            let done = try await finishedRequest(request, owner: self, deadline: 60)
+            let done = try await finishedRequest(request, owner: self, deadline: Patience.seconds(60))
             guard done.state == .finished else {
                 throw EndToEndFailure("the stop of seat \(seat.contractString) failed")
             }
         }
-        try await eventually("seat \(seat.contractString) stopped", deadline: 30) {
+        try await eventually("seat \(seat.contractString) stopped", deadline: Patience.seconds(30)) {
             try await self.seats().seats.first { $0.id == seat }?.runState == .stopped
         }
     }
 
     func waitUntilRunning(_ seats: [UUID]) async throws {
-        try await eventually("the seats' runs started", deadline: 60) {
+        try await eventually("the seats' runs started", deadline: Patience.seconds(60)) {
             let listed = try await self.seats().seats
             return seats.allSatisfy { id in listed.first { $0.id == id }?.runState == .running }
         }

@@ -31,7 +31,7 @@ enum ContractDocument {
 
     // Milestone 2 (Core loop).
     static let coreLoop: [String] = [
-        "get_next", "get_command", "claim_next_task", "get_task_briefing",
+        "get_join", "get_next", "get_command", "claim_next_task", "get_task_briefing",
         "acknowledge_task_briefing", "heartbeat_task", "start_criterion", "pass_criterion",
         "submit_task", "release_task", "claim_next_review", "heartbeat_review",
         "release_review", "get_review_briefing", "acknowledge_review_briefing", "give_verdict",
@@ -43,7 +43,7 @@ enum ContractDocument {
         "get_helper_next", "report_request_result", "issue_seat_token", "report_run_started",
         "report_run_stopped",
         "get_setup_state", "create_owner", "sign_out_owner", "get_helper_request",
-        "report_request_progress", "get_landing_prompt",
+        "report_request_progress", "issue_landing_prompt",
     ]
 
     // Milestone 3 (Handoff).
@@ -148,7 +148,7 @@ struct ContractExamplesTests {
         "AddCredentialCompleted": decodes(CommandOutcome<AddCredentialResult>.self),
         "OwnerSessionCompleted": decodes(CommandOutcome<OwnerSessionAnswer>.self),
         "HelperTokenIssuedCompleted": decodes(CommandOutcome<HelperTokenAnswer>.self),
-        "SeatConnectedCompleted": decodes(CommandOutcome<SeatConnectedAnswer>.self),
+        "SeatConnectedCompleted": decodes(CommandOutcome<SeatConnected>.self),
         "SeatTokenPickupCompleted": decodes(CommandOutcome<SeatTokenPickupAnswer>.self),
         "BriefingResponse": decodes(BriefingResponse.self),
         "Health": decodes(Health.self),
@@ -165,7 +165,8 @@ struct ContractExamplesTests {
         "HelperNext": decodes(HelperNext.self),
         "HelperRequestStatus": decodes(HelperRequestStatus.self),
         "SetupState": decodes(SetupState.self),
-        "LandingPrompt": decodes(LandingPrompt.self),
+        "LandingPromptIssuedCompleted": decodes(CommandOutcome<LandingPromptIssuedAnswer>.self),
+        "JoinInstructions": decodes(JoinInstructions.self),
         "TransportError": decodes(TransportError.self),
         "Refusal": decodes(Refusal.self),
         "AskQuestionCompleted": decodes(CommandOutcome<AskQuestionResult>.self),
@@ -178,7 +179,7 @@ struct ContractExamplesTests {
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 107)
+        #expect(ContractDocument.served.count == 108)
         #expect(ContractDocument.handoff.first == "report_limit")
         #expect(ContractDocument.handoff.last == "change_seat")
         #expect(ContractDocument.ruleChecks.first == "claim_next_job")
@@ -245,7 +246,7 @@ struct ContractExamplesTests {
 
     @Test("a token answer is the token the first time and repeated, with none, after",
           arguments: ["OwnerSessionCompleted", "HelperTokenIssuedCompleted",
-                      "SeatConnectedCompleted", "SeatTokenPickupCompleted"])
+                      "LandingPromptIssuedCompleted", "SeatTokenPickupCompleted"])
     func tokenAnswers(component: String) throws {
         let examples = ContractDocument.examples(of: component)
         #expect(examples.count == 2, "\(component) should show both shapes")
@@ -267,11 +268,18 @@ struct ContractExamplesTests {
                 case .shown(let issued): #expect(!issued.helperToken.isEmpty); shapes.append("shown")
                 case .repeated(let issued): #expect(issued.repeated); shapes.append("repeated")
                 }
-            case "SeatConnectedCompleted":
-                let answer = try decoder.decode(CommandOutcome<SeatConnectedAnswer>.self, from: data)
+            case "LandingPromptIssuedCompleted":
+                let answer = try decoder.decode(CommandOutcome<LandingPromptIssuedAnswer>.self, from: data)
                 switch try #require(answer.result) {
-                case .shown: shapes.append("shown")
-                case .repeated(let connected): #expect(connected.repeated); shapes.append("repeated")
+                case .shown(let issued):
+                    #expect(!issued.seatToken.isEmpty && issued.text.contains(issued.seatToken))
+                    #expect(issued.connection == .http)
+                    shapes.append("shown")
+                case .repeated(let issued):
+                    #expect(issued.repeated && issued.connection == .http)
+                    let json = try JSONDecoder().decode(JSONValue.self, from: LeverageJSON.encoder().encode(issued))
+                    #expect(json["seat_token"] == nil && json["text"] == nil)
+                    shapes.append("repeated")
                 }
             default:
                 let answer = try decoder.decode(CommandOutcome<SeatTokenPickupAnswer>.self, from: data)
@@ -283,6 +291,134 @@ struct ContractExamplesTests {
             #expect(shapes.last == (repeated ? "repeated" : "shown"))
         }
         #expect(shapes == ["shown", "repeated"])
+    }
+
+    @Test("seat connection returns just the seat ID")
+    func seatConnected() throws {
+        let fixture = try #require(ContractDocument.examples(of: "SeatConnectedCompleted").first)
+        let answer = try LeverageJSON.decoder().decode(
+            CommandOutcome<SeatConnected>.self, from: ContractDocument.data(fixture))
+        let result = try #require(try answer.completedResult())
+        #expect(result.seatID.contractString == fixture["result"]?["seat_id"]?.stringValue)
+        let written = try JSONDecoder().decode(JSONValue.self, from: LeverageJSON.encoder().encode(result))
+        #expect(written == fixture["result"])
+    }
+
+    @Test("the issued prompt's token and text are hidden when inspected")
+    func issuedPromptHidesSecrets() throws {
+        let issued = try example("LandingPromptIssued", as: LandingPromptIssued.self)
+        try #require(!issued.seatToken.isEmpty && !issued.text.isEmpty)
+        let mirror = Mirror(reflecting: issued)
+        let labels = Set(mirror.children.compactMap(\.label))
+        #expect(labels.isDisjoint(with: ["seatToken", "text"]))
+        for display in [String(describing: issued), String(reflecting: issued)] {
+            let revealsToken = display.contains(issued.seatToken)
+            let revealsText = display.contains(issued.text)
+            #expect(!revealsToken)
+            #expect(!revealsText)
+        }
+    }
+
+    @Test("a General briefing preserves null for its role file and version")
+    func generalBriefing() throws {
+        var briefing = try #require(ContractDocument.examples(of: "Briefing").first?.objectValue)
+        var versions = try #require(briefing["versions"]?.objectValue)
+        versions["role_file_version"] = .null
+        briefing["versions"] = .object(versions)
+        briefing["role_file"] = .null
+        let model = try LeverageJSON.decoder().decode(Briefing.self, from: ContractDocument.data(.object(briefing)))
+        let written = try JSONDecoder().decode(JSONValue.self, from: LeverageJSON.encoder().encode(model))
+        #expect(written["role_file"] == .null)
+        #expect(written["versions"]?["role_file_version"] == .null)
+    }
+
+    private static let materials: [String: @Sendable (JSONValue) throws -> JSONValue] = [
+        "CheckMaterial": roundTrip(CheckMaterial.self),
+        "DraftMaterial": roundTrip(DraftMaterial.self),
+        "QuestionMaterial": roundTrip(QuestionMaterial.self),
+        "ApprovalMaterial": roundTrip(ApprovalMaterial.self),
+    ]
+
+    private static func roundTrip<Model: Codable & SendableMetatype>(_ type: Model.Type)
+        -> @Sendable (JSONValue) throws -> JSONValue {
+        { example in
+            let model = try LeverageJSON.decoder().decode(type, from: ContractDocument.data(example))
+            return try JSONDecoder().decode(JSONValue.self, from: LeverageJSON.encoder().encode(model))
+        }
+    }
+
+    @Test("General job material round-trips its null role file and rules", arguments: Self.materials.keys.sorted())
+    func generalMaterial(component: String) throws {
+        let roundTrip = try #require(Self.materials[component])
+        let rules = JSONValue.array(SeatRole.general.jobRules.map(JSONValue.string))
+        let example = try #require(ContractDocument.examples(of: component).first {
+            $0["role_file"] == .null
+        })
+        let written = try roundTrip(example)
+        #expect(written["role_file"] == .null)
+        #expect(written["job_rules"] == rules)
+    }
+
+    @Test("material issued before job_rules was added reads with no rules", arguments: Self.materials.keys.sorted())
+    func olderMaterial(component: String) throws {
+        let roundTrip = try #require(Self.materials[component])
+        var fields = try #require(ContractDocument.examples(of: component).first?.objectValue)
+        fields.removeValue(forKey: "job_rules")
+        let written = try roundTrip(.object(fields))
+        #expect(written["role_file"] == fields["role_file"])
+        #expect(written["job_rules"] == .array([]))
+    }
+
+    @Test("material with an explicit null job_rules is malformed", arguments: Self.materials.keys.sorted())
+    func nullJobRules(component: String) throws {
+        let roundTrip = try #require(Self.materials[component])
+        var fields = try #require(ContractDocument.examples(of: component).first?.objectValue)
+        fields["job_rules"] = .null
+        #expect(throws: DecodingError.self) {
+            _ = try roundTrip(.object(fields))
+        }
+    }
+
+    @Test("draft material retains its required nullable values")
+    func draftKeepsNulls() throws {
+        let roundTrip = try #require(Self.materials["DraftMaterial"])
+        let draft = try #require(ContractDocument.examples(of: "DraftMaterial").first)
+        let written = try roundTrip(draft)
+        for key in ["details", "work_reference", "minimum_strength_rank", "budget_cap"] {
+            #expect(draft[key] == .null)
+            #expect(written[key] == .null, "\(key)")
+        }
+    }
+
+    @Test("each General job claim round-trips its material through the claim and its typed input",
+          arguments: ["rule_check", "contract_draft", "question", "approval"])
+    func generalClaim(kind: String) throws {
+        let (inputName, materialName) = switch kind {
+        case "rule_check": ("RuleCheckJobInput", "CheckMaterial")
+        case "contract_draft": ("ContractDraftJobInput", "DraftMaterial")
+        case "question": ("QuestionJobInput", "QuestionMaterial")
+        default: ("ApprovalJobInput", "ApprovalMaterial")
+        }
+        let example = try #require(ContractDocument.examples(of: materialName).first {
+            $0["role_file"] == .null
+        })
+        var fields = try #require(ContractDocument.examples(of: "ClaimJobResult").first?.objectValue)
+        var input = try #require(ContractDocument.examples(of: inputName).first?.objectValue)
+        input["material"] = example
+        fields["input"] = .object(input)
+        fields["kind"] = .string(kind)
+
+        let claim = try LeverageJSON.decoder().decode(JobClaim.self, from: ContractDocument.data(.object(fields)))
+        let written = try JSONDecoder().decode(JSONValue.self, from: LeverageJSON.encoder().encode(claim))
+        let material = try #require(written["input"]?["material"])
+        #expect(material["role_file"] == .null)
+        #expect(material["job_rules"] == example["job_rules"])
+        switch claim.input {
+        case .ruleCheck, .contractDraft: break
+        case .other(.question, _): #expect(claim.input.questionInput != nil)
+        case .other(.approval, _): #expect(claim.input.approvalInput != nil)
+        case .other: Issue.record("Unexpected job kind")
+        }
     }
 
     @Test("an outcome keeps its kind, result and refusal")

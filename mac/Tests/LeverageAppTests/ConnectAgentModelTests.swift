@@ -13,23 +13,19 @@ private typealias Fixtures = AgentFixtures
 struct ConnectAgentModelTests {
     private let newSeatID = UUID(uuidString: "99999999-9999-4999-8999-999999999999")!
 
-    private func shown(_ token: String?, key: IDKey) -> CommandOutcome<SeatConnectedAnswer> {
-        .completed(.shown(SeatConnected(seatID: newSeatID, seatToken: token)), key: key.value, command: .connectSeat)
-    }
-
-    typealias IDKey = IdempotencyKey
-
     private func owner(
-        logins: [CredentialWithReading]? = nil, token: String? = Fixtures.madeUpToken, prompt: String = "Read your rules first."
+        logins: [CredentialWithReading]? = nil, prompt: String = Fixtures.landingText
     ) -> FakeOwnerAPI {
         let owner = Fixtures.owner(
             credentials: CredentialsList(credentials: logins ?? Fixtures.credentials().credentials, asOfSeq: 5))
         let id = newSeatID
         owner.script {
             $0.connectSeat = { _, key in
-                .completed(.shown(SeatConnected(seatID: id, seatToken: token)), key: key.value, command: .connectSeat)
+                .completed(SeatConnected(seatID: id), key: key.value, command: .connectSeat)
             }
-            $0.landingPrompt = { _ in LandingPrompt(text: prompt) }
+            $0.issueLandingPrompt = { seatID, connection, key in
+                Fixtures.issuedPrompt(seatID, connection: connection, key: key, text: prompt)
+            }
         }
         return owner
     }
@@ -47,12 +43,12 @@ struct ConnectAgentModelTests {
 
     // MARK: the form
 
-    @Test("a new form runs the agent on a login, as a builder, with nothing filled in")
+    @Test("a new form runs the agent on a login, as General, with nothing filled in")
     func startsEmpty() async {
         let model = makeModel(owner())
         await model.load()
         #expect(model.mode == .runOnLogin)
-        #expect(model.role == .builder)
+        #expect(model.role == .general)
         #expect(model.name.isEmpty && model.modelName.isEmpty && model.effort.isEmpty)
         #expect(model.phase == .editing)
         #expect(!model.canConnect)
@@ -85,14 +81,15 @@ struct ConnectAgentModelTests {
         #expect(model.canConnect)
     }
 
-    @Test("a Gemini login is not offered for the Reviewer role")
+    @Test("General offers Gemini and Reviewer hides it")
     func geminiNotForReviewer() async {
         let list = Fixtures.credentials().credentials + [
             Fixtures.credential(Fixtures.geminiLoginID, name: "Antigravity", provider: .gemini, position: 3)
         ]
         let model = makeModel(owner(logins: list))
         await model.load()
-        #expect(model.logins.count == 3)
+        #expect(model.role == .general)
+        #expect(model.logins.contains { $0.id == Fixtures.geminiLoginID })
         model.credentialID = Fixtures.geminiLoginID
         model.role = .reviewer
         #expect(model.logins.map(\.id) == [Fixtures.loginID, Fixtures.secondLoginID])
@@ -103,10 +100,48 @@ struct ConnectAgentModelTests {
         #expect(model.logins.count == 3)
     }
 
-    @Test("all four roles are offered: Builder, Reviewer, Planner and Orchestrator (MA-10)")
+    @Test("General is offered first alongside the four dedicated roles")
     func roles() {
-        #expect(ConnectAgentModel.roles == [.builder, .reviewer, .planner, .orchestrator])
-        #expect(ConnectAgentModel.roles.map { AgentsCopy.role($0).text } == ["Builder", "Reviewer", "Planner", "Orchestrator"])
+        #expect(ConnectAgentModel.roles == [.general, .builder, .reviewer, .planner, .orchestrator])
+        #expect(ConnectAgentModel.roles.map { AgentsCopy.role($0).text } == ["General", "Builder", "Reviewer", "Planner", "Orchestrator"])
+    }
+
+    @Test("Connect and New prompt use the owner's requested words")
+    func connectionCopy() {
+        #expect(AgentsCopy.modeRunOnLogin.text == "Native: run on my login")
+        #expect(AgentsCopy.modeOwn.text == "Prompt: paste into any agent")
+        #expect(AgentsCopy.stateConnectsOnItsOwn.text == "Connected by prompt.")
+        #expect(AgentsCopy.newPrompt.text == "New prompt")
+        #expect(AgentsCopy.landingNote.text.contains("contains the agent’s token"))
+    }
+
+    @Test("the shown landing prompt has paste instructions without the replacement confirmation")
+    func shownPromptCopy() {
+        #expect(AgentsCopy.landingNote.text.hasPrefix("Paste this into the agent."))
+        #expect(!AgentsCopy.landingNote.text.contains("gives back its work"))
+        #expect(AgentsCopy.newPromptConfirmation.text == "A new prompt stops the agent using the current one and gives back its work.")
+    }
+
+    @Test("the General note covers only app-run default models on tested providers")
+    func generalCoverage() async {
+        let model = ConnectAgentModel(
+            api: owner(), copy: { _ in }, onConnected: {},
+            testedProviders: [.codex], generalTestedProviders: [.claude])
+        await model.load()
+        model.role = .general
+        #expect(model.chosenProvider == .claude)
+        #expect(!model.showsNotTestedNote)
+        model.modelName = "custom-model"
+        #expect(model.showsNotTestedNote)
+        model.modelName = ""
+        #expect(!model.showsNotTestedNote)
+        model.credentialID = Fixtures.secondLoginID
+        #expect(model.showsNotTestedNote)
+        model.mode = .connectsOnItsOwn
+        model.provider = .claude
+        #expect(model.showsNotTestedNote)
+        model.provider = .codex
+        #expect(model.showsNotTestedNote)
     }
 
     // MARK: the planner and the orchestrator (RV-5)
@@ -177,7 +212,7 @@ struct ConnectAgentModelTests {
         #expect(!model.showsNotTestedNote)
     }
 
-    @Test("the note is for the orchestrator only: a builder, a reviewer and a planner never get it")
+    @Test("a builder, a reviewer and a planner never get the checking note")
     func noNoteForOtherRoles() async {
         let model = await orchestratorModel(tested: [])
         model.modelName = "some-model"
@@ -208,7 +243,7 @@ struct ConnectAgentModelTests {
             Fixtures.credential(Fixtures.geminiLoginID, name: "Antigravity", provider: .gemini, position: 3)
         ]
         for role in [SeatRole.planner, .orchestrator] {
-            let owner = owner(logins: list, token: nil)
+            let owner = owner(logins: list)
             let model = await orchestratorModel(tested: [], owner: owner)
             model.role = role
             #expect(model.logins.count == 3, "\(role)")
@@ -239,7 +274,7 @@ struct ConnectAgentModelTests {
         #expect(model.logins.count == 3)
     }
 
-    @Test("an orchestrator that connects on its own is connected like a builder: no login, its provider, a token shown once")
+    @Test("an orchestrator that connects on its own is connected like a builder: no login, its provider, and a landing prompt")
     func orchestratorOnItsOwn() async {
         let owner = owner()
         let model = await orchestratorModel(tested: [], owner: owner)
@@ -251,12 +286,12 @@ struct ConnectAgentModelTests {
         #expect(fields["credential_id"] == .null)
         #expect(fields["provider"] == .string("grok"))
         #expect(model.phase == .shown)
-        #expect(model.shownToken == Fixtures.madeUpToken)
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
     }
 
     @Test("Connect sends the strength chosen for an agent on a login")
     func connectWithStrongerModel() async {
-        let owner = owner(token: nil)
+        let owner = owner()
         let model = makeModel(owner)
         await model.load()
         model.name = "Builder on a login"
@@ -277,69 +312,58 @@ struct ConnectAgentModelTests {
         #expect(Fixtures.calls(owner, .connectSeat).isEmpty)
     }
 
-    @Test("self-connected agents get the selected prompt and MCP gets separately copyable settings",
+    @Test("prompt connect issues the chosen connection and copies the full text",
           arguments: LandingPromptConnection.allCases)
-    func connectUsing(_ connection: LandingPromptConnection) async throws {
+    func connectUsing(_ connection: LandingPromptConnection) async {
         let owner = owner()
-        owner.script {
-            $0.landingPromptForConnection = { _, connection in
-                LandingPrompt(text: "Instructions for \(connection.rawValue).", connection: connection)
-            }
-        }
-        let apiURL = try #require(URL(string: "http://127.0.0.1:49170"))
         let board = Fixtures.pasteboard()
-        let model = ConnectAgentModel(api: owner, copy: board.copy, onConnected: {}, apiURL: { apiURL })
+        let model = makeModel(owner, copy: board.copy)
         model.mode = .connectsOnItsOwn
         model.connection = connection
         model.role = .reviewer
         model.name = "Independent reviewer"
         model.strengthRank = 3
         await model.connect()
+        let calls = owner.calls.filter { [.connectSeat, .issueLandingPrompt].contains($0.operation) }
+        #expect(calls.map(\.operation) == [.connectSeat, .issueLandingPrompt])
+        #expect(calls.last?.path["id"] == newSeatID.contractString)
+        #expect(calls.last?.body == .object(["connection": .string(connection.rawValue)]))
         #expect(body(owner)["strength_rank"] == .number(3))
-        #expect(Fixtures.calls(owner, .getLandingPrompt).last?.query["connection"] == connection.rawValue)
-        #expect(model.landing == .ready("Instructions for \(connection.rawValue)."))
-        #expect(model.shownToken != nil)
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
         #expect(board.copied.value.isEmpty)
-        model.copyMCPSettings()
-        if connection == .mcp {
-            let settings = try #require(model.mcpSettings)
-            let containsSeatToken = settings.contains(Fixtures.madeUpToken)
-            try #require(!containsSeatToken)
-            #expect(board.copied.value == [settings])
-            #expect(settings.contains(apiURL.absoluteString))
-            #expect(settings.contains("reviewer"))
-            #expect(settings.contains("PASTE-THE-TOKEN-HERE"))
-        } else {
-            #expect(model.mcpSettings == nil)
-            #expect(board.copied.value.isEmpty)
-        }
+        model.prompt?.copyPrompt()
+        #expect(board.copied.value == [Fixtures.landingText])
         model.finish()
-        #expect(model.shownToken == nil)
-        #expect(model.mcpSettings == nil)
+        #expect(model.prompt == nil)
     }
 
-    @Test("a landing prompt for the wrong connection is rejected")
-    func rejectsWrongPrompt() async {
+    @Test("a landing prompt for the wrong connection or seat is rejected", arguments: [true, false])
+    func rejectsWrongPrompt(wrongSeat: Bool) async {
         let owner = owner()
         owner.script {
-            $0.landingPromptForConnection = { _, _ in LandingPrompt(text: "HTTP instructions", connection: .http) }
+            $0.issueLandingPrompt = { seatID, connection, key in
+                Fixtures.issuedPrompt(
+                    wrongSeat ? Fixtures.ownID : seatID,
+                    connection: wrongSeat ? connection : .http, key: key)
+            }
         }
         let model = makeModel(owner)
         model.mode = .connectsOnItsOwn
         model.connection = .mcp
         model.name = "Independent builder"
         await model.connect()
-        #expect(model.landing == .failed(ShellCopy.somethingWentWrong.text))
+        #expect(model.prompt?.state == .failed(ShellCopy.somethingWentWrong.text))
     }
 
     // MARK: a seat the app runs
 
     @Test("connecting on a login sends role, name, the login and its provider; model and effort are null when empty")
     func connectOnLogin() async {
-        let owner = owner(token: nil)
+        let owner = owner()
         let connected = Locked(0)
         let model = makeModel(owner, connected: connected)
         await model.load()
+        model.role = .builder
         model.name = " Builder one "
         model.credentialID = Fixtures.secondLoginID
         await model.connect()
@@ -352,13 +376,13 @@ struct ConnectAgentModelTests {
         #expect(fields["effort"] == .null)
         #expect(fields["strength_rank"] == .number(1))
         #expect(model.phase == .done)
-        #expect(model.shownToken == nil)
+        #expect(model.prompt == nil)
         #expect(connected.value == 1)
     }
 
     @Test("model and effort the owner typed are sent as typed")
     func modelAndEffort() async {
-        let owner = owner(token: nil)
+        let owner = owner()
         let model = makeModel(owner)
         await model.load()
         model.name = "Reviewer one"
@@ -374,7 +398,7 @@ struct ConnectAgentModelTests {
 
     @Test("Effort is offered only for a tool that takes one, and is never sent for one that does not")
     func effortOnlyWhereTaken() async {
-        let owner = owner(token: nil)
+        let owner = owner()
         let model = makeModel(owner)
         await model.load()
         model.name = "Builder one"
@@ -395,13 +419,13 @@ struct ConnectAgentModelTests {
 
     @Test("a seat the app runs asks for no landing prompt")
     func noPromptForLogin() async {
-        let owner = owner(token: nil)
+        let owner = owner()
         let model = makeModel(owner)
         await model.load()
         model.name = "Builder one"
         await model.connect()
-        #expect(Fixtures.calls(owner, .getLandingPrompt).isEmpty)
-        #expect(model.landing == .none)
+        #expect(Fixtures.calls(owner, .issueLandingPrompt).isEmpty)
+        #expect(model.prompt == nil)
     }
 
     // MARK: a seat that connects on its own
@@ -416,99 +440,75 @@ struct ConnectAgentModelTests {
         return model
     }
 
-    @Test("connecting on its own sends no login, the provider chosen, and shows the token once")
+    @Test("connecting by prompt sends the chosen provider, role and no credential")
     func connectOwn() async {
         let owner = owner()
         let model = await connectOnItsOwn(owner)
         let fields = body(owner)
         #expect(fields["credential_id"] == .null)
         #expect(fields["provider"] == .string("grok"))
+        #expect(fields["role"] == .string("general"))
         #expect(model.phase == .shown)
-        #expect(model.shownToken == Fixtures.madeUpToken)
-        #expect(model.tokenGone == false)
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
     }
 
-    @Test("the landing prompt is fetched after the connect, for the new agent, and shown below the token")
-    func promptAfterConnect() async {
-        let owner = owner()
-        let model = await connectOnItsOwn(owner)
-        let asked = Fixtures.calls(owner, .getLandingPrompt)
-        #expect(asked.count == 1)
-        #expect(asked.first?.path["id"] == newSeatID.contractString)
-        #expect(model.landing == .ready("Read your rules first."))
-        let order = owner.calls.map(\.operation)
-        #expect(order.firstIndex(of: .connectSeat)! < order.firstIndex(of: .getLandingPrompt)!)
-    }
-
-    @Test("the token is not in the prompt; a prompt that holds it is dropped, never shown or copied")
-    func tokenNotInPrompt() async {
-        let good = await connectOnItsOwn(owner())
-        if case .ready(let text) = good.landing { #expect(!text.contains(Fixtures.madeUpToken)) }
-        #expect(good.landing != .none)
-
+    @Test("a missing key or a second token-shaped string makes a prompt uncopyable",
+          arguments: [false, true])
+    func refusesUnusableText(containsSecondToken: Bool) async {
         let board = Fixtures.pasteboard()
-        let leaking = await connectOnItsOwn(owner(prompt: "Use \(Fixtures.madeUpToken) to sign in."), copy: board.copy)
-        #expect(leaking.landing == .failed(ShellCopy.somethingWentWrong.text))
-        leaking.copyLandingPrompt()
+        let text = containsSecondToken ? Fixtures.landingText + " " + Fixtures.madeUpToken + "-other" : "Read your rules first."
+        let model = await connectOnItsOwn(owner(prompt: text), copy: board.copy)
+        #expect(model.prompt?.state == .failed(ShellCopy.somethingWentWrong.text))
+        model.prompt?.copyPrompt()
         #expect(board.copied.value.isEmpty)
     }
 
-    @Test("Copy on the token copies the token; Copy on the prompt copies the prompt")
-    func copies() async {
-        let board = Fixtures.pasteboard()
-        let model = await connectOnItsOwn(owner(), copy: board.copy)
-        model.copyToken()
-        model.copyLandingPrompt()
-        #expect(board.copied.value == [Fixtures.madeUpToken, "Read your rules first."])
-    }
-
-    @Test("a prompt that could not be fetched says so and can be asked for again")
-    func promptFails() async {
+    @Test("retry after a lost response keeps the key, then an answered repeat issues again with a fresh key")
+    func repeatedAnswer() async {
         let owner = owner()
         let attempts = Locked(0)
         owner.script {
-            $0.landingPrompt = { _ in
-                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.timedOut) }
-                return LandingPrompt(text: "Second try.")
+            $0.issueLandingPrompt = { seatID, connection, key in
+                switch attempts.update({ $0 += 1; return $0 }) {
+                case 1: throw URLError(.timedOut)
+                case 2:
+                    return .completed(.repeated(LandingPromptIssuedRepeated(seatID: seatID, connection: connection)),
+                                      key: key.value, command: .issueLandingPrompt)
+                default: return Fixtures.issuedPrompt(seatID, connection: connection, key: key)
+                }
             }
         }
         let model = await connectOnItsOwn(owner)
-        #expect(model.landing == .failed(ShellCopy.cannotReach.text))
-        #expect(model.shownToken == Fixtures.madeUpToken)
-        await model.retryLandingPrompt()
-        #expect(model.landing == .ready("Second try."))
+        #expect(model.prompt?.state == .failed(ShellCopy.cannotReach.text))
+        await model.prompt?.issue()
+        let keys = Fixtures.calls(owner, .issueLandingPrompt).compactMap(\.key)
+        #expect(keys.count == 3)
+        #expect(Set(keys).count == 2)
+        #expect(keys.prefix(2).first == keys.prefix(2).last)
+        #expect(Fixtures.calls(owner, .connectSeat).count == 1)
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
     }
 
-    @Test("an answer without a token (the same command sent again) says it cannot be shown again, and still offers the prompt")
-    func repeatedAnswer() async {
-        let owner = owner()
-        let id = newSeatID
-        owner.script {
-            $0.connectSeat = { _, key in
-                .completed(.repeated(SeatConnectedRepeated(seatID: id)), key: key.value, command: .connectSeat)
-            }
-        }
-        let model = await connectOnItsOwn(owner)
-        #expect(model.phase == .shown)
-        #expect(model.shownToken == nil)
-        #expect(model.tokenGone)
-        #expect(model.landing == .ready("Read your rules first."))
-    }
-
-    @Test("finishing forgets the token")
-    func finishForgets() async {
-        let model = await connectOnItsOwn(owner())
-        #expect(model.shownToken != nil)
+    @Test("closing a shown prompt clears its text and prevents copying from an old reference")
+    func finishForgets() async throws {
+        let board = Fixtures.pasteboard()
+        let model = await connectOnItsOwn(owner(), copy: board.copy)
+        let prompt = try #require(model.prompt)
+        #expect(prompt.state == .ready(Fixtures.landingText))
         model.finish()
-        #expect(model.shownToken == nil)
-        #expect(model.landing == .none)
+        #expect(model.prompt == nil)
+        #expect(prompt.state == .none)
+        prompt.copyPrompt()
+        #expect(board.copied.value.isEmpty)
     }
 
-    @Test("the model never prints the token")
+    @Test("prompt state diagnostics never print its text or token")
     func neverPrintsToken() async {
         let model = await connectOnItsOwn(owner())
-        #expect(!String(describing: model.phase).contains(Fixtures.madeUpToken))
-        #expect(!String(reflecting: model.landing).contains(Fixtures.madeUpToken))
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
+        let description = String(reflecting: model.prompt?.state)
+        #expect(!description.contains(Fixtures.madeUpToken))
+        #expect(!description.contains(Fixtures.landingText))
     }
 
     // MARK: keys, refusals, failures
@@ -521,7 +521,7 @@ struct ConnectAgentModelTests {
         owner.script {
             $0.connectSeat = { _, key in
                 if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.networkConnectionLost) }
-                return .completed(.shown(SeatConnected(seatID: id, seatToken: nil)), key: key.value, command: .connectSeat)
+                return .completed(SeatConnected(seatID: id), key: key.value, command: .connectSeat)
             }
         }
         let model = makeModel(owner)

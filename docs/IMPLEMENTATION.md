@@ -54,15 +54,32 @@ ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-21 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4) and Questions and approvals (milestone 5) |
-| **Next** | Review Credentials on `feat/credentials`. |
+| **As of** | 2026-11-23 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5) and Credentials (milestone 6) |
+| **Next** | Integrate and verify the General role and landing prompt. |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 6 Credentials | `feat/credentials` | [#17](https://github.com/yuric/leverage/pull/17) | In review: built, reviewed twice, every check passing on the owner's Mac and in CI. Real provider and Keychain acceptance await the owner. |
+| General role and landing prompt | `feat/general-agent` | | In progress. The contract is on the branch. The API, Mac app, end-to-end checks and eval changes are being integrated. The choices made for the owner are in question 15. |
+
+The other four roles keep their existing work behavior. The new restart
+on a role change applies only to running seats the app manages when
+changing to or from General. The new Gemini review pass-over applies
+only to General seats.
+
+The review fixes make orchestrator recovery test each eligible retry,
+surface an independent reviewer or account wait per task, and give General
+builds, reviews and jobs their instructions in the corresponding material.
+General eval coverage is for app-managed default models. New prompt
+confirms the replacement before displaying paste instructions.
+
+The second review fixes apply the build claim standing test to Ready
+account waits on the board and task page. Both reads preserve the
+builder's login wait when a General seat that reviewed the task cannot
+claim it. The PRD's first-build briefing description specifies the work
+instructions a General seat receives.
 
 ## Milestones
 
@@ -79,7 +96,7 @@ the PRD's milestone list. How the build is run locally is in
 | 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 11. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Merged | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 12. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
 | 5 | Questions and approvals | Merged | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run is ahead. See question 13 and [Measurements](#measurements). |
-| 6 | Credentials | In review | [#17](https://github.com/yuric/leverage/pull/17) | Token Add, usage readings, row actions and reordering. See [reader evidence](#credentials-readers-and-recordings), [measurements](#credentials-runs) and question 14. |
+| 6 | Credentials | Merged | [#17](https://github.com/yuric/leverage/pull/17) | Token Add, usage readings, row actions and reordering. Real provider and Keychain acceptance await the owner. See [reader evidence](#credentials-readers-and-recordings), [measurements](#credentials-runs) and question 14. |
 | 7 | Analytics page | Not in this build | | See question 1 |
 
 Status is one of `Not started`, `In progress`, `In review`, `Merged`,
@@ -911,6 +928,17 @@ the helper's own account selection. Its proof is from stand-ins.
 All entries remain provisional. The two model-list headers remain
 unverified on the actual endpoints.
 [Architecture](ARCHITECTURE.md#usage-readers)
+
+### The General role and landing prompt
+
+The interface decisions are recorded in the
+[General role contract](../api/contract/decisions.md#general-role-ga).
+
+- **GA-14.** The join call uses the interface's JSON envelope.
+- **GA-15.** The MCP join instructions supply the client settings.
+- **GA-16.** The prompt-connected agent stops on `401`. Pausing the seat
+  leaves the agent polling for work.
+- **GA-17.** New prompt returns the seat's held work and keeps the seat.
 
 ## What the Rule checks milestone proves, and how far
 
@@ -2303,6 +2331,47 @@ skeleton's pull request description, as rule AR-004 asks.
     confirmed removal can leave local data. A stopped token is replaced
     by Remove and Add. The API still has no security scanner.
 
+15. **The choices made for the owner for the General role.** The
+    [contract](../api/contract/decisions.md#general-role-ga) records the
+    choices and their effects. Work proceeds with these decisions.
+
+    - **GA-2** `[owner]`. Leverage gives General agents the instructions
+      as text in the join response, briefings, job material and runner
+      prompts, with no role file, skill file or other Markdown file. The provider tool
+      can still read its own files. See the provider-specific details in
+      [Deployment](DEPLOY.md#files-a-general-agents-tool-may-read).
+      **Alternative.** Give General agents the existing role files or
+      write a role file for them.
+    - **GA-3** `[owner-later]`. A General seat holds one task, review or
+      job at a time. With two General seats and no free seat eligible to
+      claim a custom check at "when the review has passed", the check
+      ends in `check_error` and "Orchestrator offline" opens once. The
+      error stays with the owner until a seat that can claim it counts.
+      **Alternative.** Let a seat whose only holding is a review with a
+      pending pass claim that task's checks.
+    - **GA-4** `[owner]`. Offer a job before a review, and a review before
+      a task. **Alternative.** Offer a review before a job.
+    - **GA-5** `[owner]`. A General seat can build a task it reviewed
+      only when no other unpaused seat meets that task's standing claim
+      test. It cannot check its own draft at
+      `task.before_ready`. **Alternative.** Let it build a task it
+      reviewed and check its own draft.
+    - **GA-5** `[owner-later]`. Another General seat can build a task
+      given back, including on another provider. If neither provider can
+      then review it, "No reviewer is eligible" opens.
+      **Alternative.** Bar that claim while the provider rule is on and
+      no third provider can review, and open a Needs you item when that
+      bar alone leaves the task unclaimed.
+    - **GA-6** `[owner-later]`. A General seat building or reviewing, or
+      idle and unable to take a waiting check, does not count toward
+      orchestrator presence. "Orchestrator offline" can open and notify
+      the owner during ordinary work, once per wait. Keep the existing
+      wording. **Alternative.** Count any recently polling General seat
+      or reword the item.
+    - **GA-10** `[owner]`. The PRD keeps "connects on its own". The app
+      uses the words "Connected by prompt." **Alternative.** Rename it
+      throughout.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -2354,3 +2423,4 @@ run is also listed here until the owner has read it.
 | Tool updates | Record each new Claude or Codex version before enabling a reader on that version. |
 | Five real provider tokens | Add and verify each token, check its reading, and check the rebuilt app's Keychain prompt. |
 | Native Handoff controls | Drag a row in the live app and verify keyboard and cancellation behavior. |
+| General role and landing prompt | Read the choices in question 15, including the limits for a custom review-pass check, a task given back across providers and the orchestrator offline notice during General work. |

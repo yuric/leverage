@@ -62,7 +62,8 @@ class JobQueueTest < ActiveSupport::TestCase
     assert_equal [ "contract_draft", task.id, project.id, "task", task.id, "planner", "queued", 1, nil, nil ],
       job.attributes.values_at("kind", "task_id", "project_id", "target_kind", "target_id", "seat_role", "state",
         "attempt_number", "claimed_by_seat_id", "claimed_at")
-    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 0 }, job.input)
+    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 0 }, job.input.except("material"))
+    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [] }, job.input["material"])
     queued = written.sole
     assert_equal [ "job.queued", "job", job.id, task.id, "owner", scenario.owner.id, key, { "kind" => "contract_draft" } ],
       [ queued.type, queued.subject_kind, queued.subject_id, queued.task_id, queued.actor_kind, queued.actor_id,
@@ -261,5 +262,79 @@ class JobQueueTest < ActiveSupport::TestCase
       written.map { |event| [ event.type, event.subject_id ] }
     assert_equal %w[withdrawn withdrawn], [ queued.reload.state, claimed.reload.state ]
     assert_nil J.next_for(@orchestrator)
+  end
+  %w[rule_check approval question contract_draft].each do |kind|
+    test "General claims and completes a #{kind} with only the General role's job rules" do
+      seat = scenario.seat(role: "general", provider: "codex")
+      current = kind == "approval" ? scenario.finishing_task(actions: [ { state: "requested" } ]) : scenario.task
+      job, result = general_job(kind, current)
+      offered = assert_completed(claim_job(seat)).result
+      assert_equal [ job.id, kind ], offered.values_at("job_id", "kind")
+      assert_nil offered.dig("input", "material", "role_file")
+      instructions = Leverage::Contract.roles.fetch("roles").find { |row| row.fetch("role") == "general" }.fetch("job_rules")
+      assert_equal instructions, offered.dig("input", "material", "job_rules")
+      assert_completed(submit_result(seat, job, result))
+      assert_equal "finished", job.reload.state
+    end
+  end
+
+  test "General cannot work on a job for a task it built, which another orchestrator can take" do
+    general = scenario.seat(role: "general", provider: "codex")
+    task = scenario.task(state: "in_review", builder: general)
+    question, = general_job("question", task)
+    other, = general_job("question", scenario.task)
+
+    assert_equal other, J.next_for(general)
+    assert_equal question, J.next_for(@orchestrator)
+  end
+
+  test "General cannot take the ready check of its own draft but can take another check" do
+    general = scenario.seat(role: "general")
+    task = scenario.task
+    scenario.job(kind: "contract_draft", task: task, state: "finished", seat: general)
+    own, = general_job("rule_check", task)
+    assert_nil J.next_for(general)
+    assert_equal own, J.next_for(@orchestrator)
+    other, = general_job("rule_check", scenario.task)
+    assert_equal other, J.next_for(general)
+  end
+
+  %i[task review provisional].each do |work|
+    test "a General seat holding a #{work} cannot claim a job" do
+      general = scenario.seat(role: "general")
+      general_job("question", scenario.task)
+      case work
+      when :task then scenario.task(state: "working", builder: general)
+      when :review
+        task = scenario.task(state: "in_review")
+        review = scenario.review(task, reviewer: general)
+        scenario.pending_transition(task, command: "pass_review", requester: general, params: { "id" => review.id })
+      when :provisional then scenario.task(state: "ready").update!(holder_seat_id: general.id)
+      end
+      assert_nil J.next_for(general)
+    end
+  end
+
+  private
+
+  def general_job(kind, task)
+    case kind
+    when "rule_check"
+      _task, _pending, check = waiting_contract(model_rule, task: task)
+      [ job_of(check), { "result" => "passed", "reason" => "The made-up details are sufficient." } ]
+    when "approval"
+      action = Action.find_by!(task_id: task.id, state: "requested")
+      rule = model_rule(hook: "action.requested")
+      check = scenario.rule_check(task, rule: rule, subject: action, attempts: 0)
+      request = T::Request.new(command: "request_action", workspace_id: task.workspace_id, caller_kind: nil,
+        caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
+      attempt = Leverage::RuleChecks.queue_attempt(scenario.context(request: request), check, kind: kind)
+      [ Job.find(attempt.job_id), { "decision" => "pass_to_owner", "reason" => "The made-up action needs a change." } ]
+    when "question"
+      question = scenario.question(task, asking_seat: task.builder_seat_id ? Seat.find(task.builder_seat_id) : scenario.seat)
+      [ scenario.job(kind: kind, task: task, target: question), { "outcome" => "passed_on", "answer" => nil, "basis" => nil } ]
+    when "contract_draft"
+      [ draft_job(task), contract_body ]
+    end
   end
 end

@@ -5,12 +5,8 @@ require_relative "../support/http_calls"
 # 2 plan IN-9, IN-11, IN-17, IN-18): a session, a seat and a helper token is
 # stored only as its SHA-256 digest; a seat token ends at the next issue;
 # no token and no password appears in a commands row, a helper_requests
-# row or any log line written during the test; and the landing prompt of a
-# seat that connects on its own carries no token of any kind and nothing
-# shaped like one (override 11).
-#
-# The landing-prompt case needs Reads::LandingPrompt, which is WP9's: it is
-# red until WP9 lands and first passes in WP17's whole-suite run.
+# row, event or log line. The prompt carries only the issued seat token
+# and its text is never persisted or logged.
 class SecretsTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
   include HttpCalls
@@ -125,21 +121,28 @@ class SecretsTest < ActionDispatch::IntegrationTest
     refute_includes @log.string, PASSWORD
   end
 
-  test "the landing prompt of a seat that connects on its own carries no token" do
+  test "the issued landing prompt and token never reach a stored row or a log" do
     scenario = Scenario.new
     seat = scenario.seat(role: "builder", provider: "claude")
-    seat_token = scenario.token_for(seat)
+    previous = scenario.token_for(seat)
 
-    get "/v1/owner/seats/#{seat.id}/landing-prompt", headers: { "Authorization" => "Bearer #{scenario.owner_token}" }
-
+    call("issue_landing_prompt", token: scenario.owner_token, key: new_key, ids: { "id" => seat.id },
+      body: { "connection" => "http" })
     assert_response :ok
     assert_response_matches_contract
-    text = response.body
-    refute_includes text, seat_token
+
+    result = response.parsed_body.fetch("result")
+    token = result.fetch("seat_token")
+    text = result.fetch("text")
+    assert_equal [ token ], text.scan(TOKEN_SHAPE).uniq
+    refute_includes text, previous
     refute_includes text, scenario.owner_token
     refute_includes text, scenario.helper_token
-    refute_match TOKEN_SHAPE, text
-    refute_match(/\blv[sho]_/, text, "nothing shaped like a token, not even a prefix")
+    assert_nowhere(token, "the issued token")
+    assert_nowhere(text, "the issued prompt")
+    refute_match TOKEN_SHAPE, @log.string
+    refute_match TOKEN_SHAPE, stored_rows
+    assert_equal Leverage::Tokens.digest(token), seat.reload.token_hash
   end
 
   test "credential operations keep account facts off the log and credentials off the wire" do

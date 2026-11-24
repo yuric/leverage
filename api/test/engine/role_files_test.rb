@@ -10,9 +10,18 @@ require "test_helper"
 class RoleFilesTest < ActiveSupport::TestCase
   R = Leverage::RoleFiles
 
-  test "there is one role file for each of the four roles, read from config/role_files" do
-    assert_equal Leverage::Contract.list("seat_roles").sort, R::ROLES.sort
-    R::ROLES.each { |role| assert_equal Rails.root.join("config/role_files/#{role}.md").read, R.text(role) }
+  test "only the roles with a role file in the contract have a file in config/role_files" do
+    roles = Leverage::Contract.roles.fetch("roles")
+    roles.each do |entry|
+      role = entry.fetch("role")
+      path = Rails.root.join("config/role_files/#{role}.md")
+      if entry.fetch("role_file")
+        assert_equal path.read, R.text(role)
+      else
+        refute path.exist?
+        assert_raises(ArgumentError) { R.text(role) }
+      end
+    end
     assert_raises(ArgumentError) { R.text("owner") }
   end
 

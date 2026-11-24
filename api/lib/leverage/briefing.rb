@@ -5,16 +5,16 @@ module Leverage
   # what a seat must read before it works on a task or a review.
   #
   # Its parts, each with a version: the project brief (empty, version 0,
-  # while a task has no project), the seat's role file (RoleFiles,
-  # version the release) and the task's contract (contract_version), then
-  # the rules Gating.briefing_rules returns, each as {kind: "rule", id:
-  # the rule's id, version: its current version number} (milestone 4,
-  # L470, L476). The hash is SHA-256 in lower-case hex over
+  # while a task has no project), the seat's role file if it has one
+  # (RoleFiles, version the release; GA-2) and the task's contract
+  # (contract_version), then the rules Gating.briefing_rules returns.
+  # Each rule has kind "rule", the rule id and its current version number
+  # (milestone 4, L470, L476). The hash is SHA-256 in lower-case hex over
   # Gating::CanonicalJson.dump of the parts as {kind, id, version}, in that
   # order: only a change to a part of this task's briefing changes it, so
   # saving, switching or removing a rule in it does, and nothing else
-  # about rules does. The work reference, review notes and answered
-  # questions are outside it.
+  # about rules does. General work instructions, the work reference,
+  # review notes and answered questions are outside it.
   #
   # The answer's rules carry each rule's version id, key, name and text: a
   # model rule's instruction, or an app rule's sentence (Rules::Sentences,
@@ -48,17 +48,20 @@ module Leverage
       rules = briefing_rules(task, seat, review)
       project = project_for(task)
       brief_version = project&.brief_version || 0
+      role_file = RoleFiles.text(seat.role) if Roles.role_file?(seat.role)
+      work_rules = Roles.work_rules(seat.role, review ? "reviewer" : "builder")
       {
         "hash" => parts_hash(task, seat, review, brief_version),
         "versions" => {
           "rule_version_ids" => rules.map { |rule| rule.fetch("rule_version_id") },
           "brief_version" => brief_version,
-          "role_file_version" => RoleFiles.version,
+          "role_file_version" => (RoleFiles.version if role_file),
           "contract_version" => task.contract_version
         },
         "rules" => rules,
         "brief" => Projects.brief(project),
-        "role_file" => RoleFiles.text(seat.role),
+        "role_file" => role_file,
+        **(work_rules ? { "work_rules" => work_rules } : {}),
         "contract" => contract(task),
         "answers" => answers(task)
       }
@@ -128,11 +131,12 @@ module Leverage
 
     # The parts the hash covers, in order.
     def parts(task, seat, review, brief_version)
-      [
-        { "kind" => "brief", "id" => task.project_id, "version" => brief_version },
-        { "kind" => "role_file", "id" => seat.role, "version" => RoleFiles.version },
-        { "kind" => "contract", "id" => task.id, "version" => task.contract_version }
-      ] + rule_parts(task, seat, review)
+      parts = [ { "kind" => "brief", "id" => task.project_id, "version" => brief_version } ]
+      if Roles.role_file?(seat.role)
+        parts << { "kind" => "role_file", "id" => seat.role, "version" => RoleFiles.version }
+      end
+      parts << { "kind" => "contract", "id" => task.id, "version" => task.contract_version }
+      parts.concat(rule_parts(task, seat, review))
     end
 
     def rule_parts(task, seat, review)

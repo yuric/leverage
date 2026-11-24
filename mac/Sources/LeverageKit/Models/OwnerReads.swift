@@ -32,12 +32,14 @@ public struct BoardTask: Codable, Equatable, Sendable {
     public let checkReason: String?
     public let waitsForBuilder: Bool
     public let waitsForStrongerAgent: Bool
+    /// Whether an independent seat can review this waiting task, when supplied by the board.
+    public let reviewerSeatExists: Bool?
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
         waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil,
         checking: Bool = false, checkReason: String? = nil,
-        waitsForBuilder: Bool = false, waitsForStrongerAgent: Bool = false
+        waitsForBuilder: Bool = false, waitsForStrongerAgent: Bool = false, reviewerSeatExists: Bool? = nil
     ) {
         self.task = task
         self.blocked = blocked
@@ -49,6 +51,7 @@ public struct BoardTask: Codable, Equatable, Sendable {
         self.checkReason = checkReason
         self.waitsForBuilder = waitsForBuilder
         self.waitsForStrongerAgent = waitsForStrongerAgent
+        self.reviewerSeatExists = reviewerSeatExists
     }
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +63,7 @@ public struct BoardTask: Codable, Equatable, Sendable {
         case checkReason = "check_reason"
         case waitsForBuilder = "waits_for_builder"
         case waitsForStrongerAgent = "waits_for_stronger_agent"
+        case reviewerSeatExists = "reviewer_seat_exists"
     }
 }
 
@@ -387,29 +391,16 @@ public enum LandingPromptConnection: String, Codable, CaseIterable, Sendable {
     case mcp
 }
 
-/// `LandingPrompt`: the text an agent that connects on its own starts
-/// from (Q-15). It never holds the seat's token.
-public struct LandingPrompt: Codable, Equatable, Sendable {
+/// `JoinInstructions`: what an authenticated seat reads when it joins.
+public struct JoinInstructions: Codable, Equatable, Sendable {
     public let text: String
-    public let checkIntervalMinutes: Int
+    public let role: SeatRole
     public let connection: LandingPromptConnection
 
-    public init(text: String, checkIntervalMinutes: Int = 20, connection: LandingPromptConnection = .http) {
+    public init(text: String, role: SeatRole, connection: LandingPromptConnection) {
         self.text = text
-        self.checkIntervalMinutes = checkIntervalMinutes
+        self.role = role
         self.connection = connection
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case text, connection
-        case checkIntervalMinutes = "check_interval_minutes"
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        text = try container.decode(String.self, forKey: .text)
-        checkIntervalMinutes = try container.decode(Int.self, forKey: .checkIntervalMinutes)
-        connection = try container.decodeIfPresent(LandingPromptConnection.self, forKey: .connection) ?? .http
     }
 }
 

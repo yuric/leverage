@@ -144,8 +144,11 @@ struct HTTPTransportTests {
             {"code":"invalid_state","rule_id":null,"reason":null}
             """)])
         await #expect(throws: LeverageClientError.refused(Refusal(code: .invalidState, ruleID: nil, reason: nil))) {
-            let _: LandingPrompt = try await transport.read(
-                .getLandingPrompt, path: ["id": "00000000-0000-4000-8000-000000000001"])
+            let _: Question = try await transport.read(
+                .getQuestion, path: [
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "qid": "00000000-0000-4000-8000-000000000002",
+                ])
         }
     }
 

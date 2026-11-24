@@ -241,4 +241,83 @@ class QuestionsTest < ActiveSupport::TestCase
   ensure
     lock.define_singleton_method(:clock, original) if original
   end
+  test "the shipped policy sends a question to a recently polled, eligible General seat" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    seat = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    job = Job.find_by(target_id: question.id, kind: "question")
+    refute_nil job
+    assert_equal job, Leverage::Jobs.next_for(seat)
+  end
+
+  %i[asking busy paused stale queued_job].each do |condition|
+    test "the shipped policy sends a question to the owner when General is #{condition}" do
+      @orchestrator.update!(enabled: false)
+      scenario.with_shipped_rules
+      if condition == :asking
+        @builder.update!(role: "general")
+      else
+        seat = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+        case condition
+        when :busy then scenario.task(state: "working", builder: seat)
+        when :paused then seat.update!(paused: true)
+        when :stale then seat.update!(last_polled_at: scenario.database_now - 90.seconds)
+        when :queued_job then scenario.job(kind: "contract_draft", task: scenario.task)
+        end
+      end
+      acknowledge
+
+      question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+      assert_equal "passed_on", question.outcome
+      refute Job.exists?(target_id: question.id, kind: "question")
+    end
+  end
+
+  test "a General seat barred from the only errored waiting check does not get a question" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    general = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    draft = scenario.task
+    scenario.job(kind: "contract_draft", task: draft, state: "finished", seat: general)
+    rule = Rule.find_by!(workspace_id: scenario.workspace_id, key: "specific_details")
+    check = scenario.rule_check(draft, rule: rule)
+    job_of(check).update!(state: "timed_out")
+    check.update!(result: "error")
+    scenario.hold(draft, reason: "check_error", item: false).update!(rule_check_id: check.id)
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    assert_equal "passed_on", question.outcome
+    refute Job.exists?(target_id: question.id)
+  end
+
+  test "an enabled paused Orchestrator still routes questions to a job" do
+    @orchestrator.update!(paused: true)
+    scenario.with_shipped_rules
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    assert Job.exists?(target_id: question.id, kind: "question", state: "queued")
+  end
+
+  test "two General builders asking blocking questions send both to the owner" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    @builder.update!(role: "general")
+    builders = [ @builder, scenario.seat(role: "general", provider: "codex") ]
+    tasks = [ @task, scenario.task(state: "working", builder: builders.last) ]
+    builders.each { |seat| seat.update!(last_polled_at: scenario.database_now) }
+
+    tasks.zip(builders).each do |task, seat|
+      hash = Leverage::Briefing.hash_for(task, seat: seat)
+      assert_completed(seat_command(seat, "acknowledge_briefing", { "id" => task.id, "briefing_hash" => hash }))
+      question = Question.find(assert_completed(ask(task, seat: seat, blocking: true)).result.fetch("question_id"))
+      assert_equal "passed_on", question.outcome
+      assert InboxItem.exists?(about_id: task.id, kind: "question_passed_on", state: "open")
+      refute Job.exists?(target_id: question.id)
+    end
+  end
 end

@@ -39,7 +39,7 @@ module Leverage
           end
           @job.reload
           @result = {
-            "job_id" => @job.id, "kind" => @job.kind, "input" => JobInputs.for(@job),
+            "job_id" => @job.id, "kind" => @job.kind, "input" => JobInputs.for(@job, seat: @seat),
             "credential_id" => @job.credential_id, "model" => Jobs.model_of(@job, @seat),
             "run_due_at" => Timers.job_due_at(@job, :run)&.utc&.iso8601(6)
           }

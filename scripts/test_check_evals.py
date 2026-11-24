@@ -67,6 +67,7 @@ class Root:
         for provider in self.supported():
             self.record(provider)
         self.set_tested(self.supported())
+        self.set_tested([], mode="general")
 
     # --- the pieces ---------------------------------------------------------
 
@@ -121,10 +122,10 @@ class Root:
         (self.suite / "runs.json").write_text(json.dumps({"runs": runs, "changes": []}, indent=2) + "\n",
                                               encoding="utf-8")
 
-    def set_tested(self, providers):
+    def set_tested(self, providers, mode="orchestrator"):
         path = self.root / "api" / "contract" / "registry.json"
         registry = json.loads(path.read_text(encoding="utf-8"))
-        registry["lists"]["orchestrator_tested_providers"] = list(providers)
+        registry["lists"][f"{mode}_tested_providers"] = list(providers)
         path.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
 
     def set_instruction(self, text):
@@ -282,6 +283,17 @@ class CheckEvalsTests(unittest.TestCase):
         code, output = self.copy.check()
         self.assertEqual(code, 0, output)
         self.assertIn("MISS: gemini was not run", output)
+
+    def test_the_budget_counts_both_ledgers_together(self):
+        claude = self.copy.run_entry("claude", 24)
+        general = {**claude, "mode": "general", "role_file_sha256": None}
+        general_path = self.copy.suite / "runs-general.json"
+        self.copy.write_runs([claude, claude])
+        self.copy.write_case(general_path, {"runs": [general]})
+        code, output = self.copy.check()
+        self.assertEqual(code, 0, output)
+        self.copy.write_case(general_path, {"runs": [general, general]})
+        self.assertFails("runs:", "claude: 4 full runs", "96 tool runs")
 
 
 class ApprovalRoot(Root):
@@ -446,6 +458,54 @@ class ApprovalCheckTests(unittest.TestCase):
 
     def test_both_suites_pass_without_a_wording_change(self):
         self.assertPasses("OK")
+
+    def write_general_result(self, path, **changes):
+        result = {**self.copy.case(path), "mode": "general", "role_file_sha256": None, **changes}
+        general_path = path.parent / "general" / path.name
+        general_path.parent.mkdir(exist_ok=True)
+        self.copy.write_case(general_path, result)
+        return general_path
+
+    def test_general_registry_requires_a_passing_result_in_each_suite(self):
+        self.copy.set_tested(["claude"], mode="general")
+        self.assertFails("registry:", "general_tested_providers", "claude")
+        self.write_general_result(self.copy.result_path("claude"))
+        self.assertFails("registry:", "general_tested_providers", "claude")
+        approval_path = self.copy.approval_result_path("claude")
+        self.write_general_result(approval_path)
+        history_path = self.copy.approvals / "runs.json"
+        history = self.copy.case(history_path)
+        claude_run = next(run for run in history["runs"] if run["provider"] == "claude")
+        general_history = history_path.with_name("runs-general.json")
+        history["runs"] = [{**claude_run, "mode": "general", "role_file_sha256": None}]
+        self.copy.write_case(general_history, history)
+        self.assertPasses("OK")
+        del history["runs"][0]["role_file_sha256"]
+        self.copy.write_case(general_history, history)
+        self.assertFails("runs:", "claude", "role_file_sha256")
+
+    def test_general_results_require_explicit_null_role_file_hash_and_mode(self):
+        path = self.copy.result_path("claude")
+        general_path = self.write_general_result(path, role_file_sha256="1" * 64)
+        self.assertFails("results:", "claude", "role_file_sha256")
+        for key in ("role_file_sha256", "mode"):
+            with self.subTest(missing=key):
+                self.write_general_result(path)
+                result = self.copy.case(general_path)
+                del result[key]
+                self.copy.write_case(general_path, result)
+                self.assertFails("results:", "claude", key)
+
+    def test_an_orchestrator_result_cannot_claim_general_mode(self):
+        result = self.copy.result("claude")
+        self.copy.write_result("claude", {**result, "mode": "general"})
+        self.assertFails("results:", "claude", "mode")
+
+    def test_explicit_orchestrator_results_require_a_role_file_hash(self):
+        result = self.copy.result("claude")
+        del result["role_file_sha256"]
+        self.copy.write_result("claude", {**result, "mode": "orchestrator"})
+        self.assertFails("results:", "claude", "role_file_sha256")
 
     def test_the_shipped_approval_rule_requires_its_suite(self):
         shutil.rmtree(self.copy.approvals)

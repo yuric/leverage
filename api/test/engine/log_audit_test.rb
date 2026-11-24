@@ -21,6 +21,60 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(walk.workspace_id)
   end
 
+  test "a cost report that pauses a project can withdraw another task's provisional claim" do
+    walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
+    key = "walk-383196552-121"
+    command = Command.find_by!(workspace_id: walk.workspace_id, key: key)
+    assert_equal "report_cost", command.command
+
+    written = Event.where(workspace_id: walk.workspace_id, command_id: key).order(:seq).to_a
+    cost = written.find { |event| event.type == "cost.reported" }
+    pause = written.find { |event| event.type == "project.paused" }
+    sibling = written.find do |event|
+      event.type == "hold.opened" && event.task_id != cost.task_id && event.cause_id == pause.id
+    end
+    assert sibling, "the pause must hold another task"
+    withdrawal = written.find do |event|
+      event.task_id == sibling.task_id && event.type == "check.finished" &&
+        event.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
+    end
+    assert withdrawal, "the sibling task's claim check must be withdrawn"
+    assert_operator pause.seq, :<, withdrawal.seq
+    assert_operator withdrawal.seq, :<, sibling.seq
+    assert written.any? { |event| event.type == "job.withdrawn" && event.task_id == sibling.task_id }
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+  end
+
+  test "a project pause does not allow withdrawal of an unrelated job on another task" do
+    walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
+    written = Event.where(workspace_id: walk.workspace_id, command_id: "walk-383196552-121").order(:seq).to_a
+    cost = written.find { |event| event.type == "cost.reported" }
+    withdrawal = written.find { |event| event.type == "job.withdrawn" && event.task_id != cost.task_id }
+    assert withdrawal, "the pause must withdraw the sibling task's claim job"
+    unrelated = withdrawal.dup
+    unrelated.subject_id = SecureRandom.uuid
+    written[written.index(withdrawal)] = unrelated
+
+    assert_equal [ "touches 2 tasks" ], Leverage::LogAudit.match("report_cost", written, { cost.task_id => "working" })
+  end
+
+  test "a project pause does not allow withdrawal of an older attempt of the same check" do
+    walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
+    written = Event.where(workspace_id: walk.workspace_id, command_id: "walk-383196552-121").order(:seq).to_a
+    cost = written.find { |event| event.type == "cost.reported" }
+    withdrawal = written.find { |event| event.type == "job.withdrawn" && event.task_id != cost.task_id }
+    assert withdrawal, "the pause must withdraw the sibling task's claim job"
+    job = Job.find(withdrawal.subject_id)
+    older = job.dup
+    older.update!(state: "timed_out", finished_at: job.queued_at, queued_at: job.queued_at - 1.second)
+    job.update!(attempt_number: older.attempt_number + 1)
+    replaced = withdrawal.dup
+    replaced.subject_id = older.id
+    written[written.index(withdrawal)] = replaced
+
+    assert_equal [ "touches 2 tasks" ], Leverage::LogAudit.match("report_cost", written, { cost.task_id => "working" })
+  end
+
   test "releasing a lease after the last approved action was overturned leaves the stopped action" do
     walk = Walk.new(seed: 10_101, steps: 120).run
     events = Event.where(workspace_id: walk.workspace_id)

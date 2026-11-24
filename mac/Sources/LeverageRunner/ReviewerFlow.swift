@@ -10,9 +10,12 @@ import LeverageKit
 /// is decided, a pass or a failed review alike, the flow ends.
 struct ReviewerFlow: Sendable {
     let context: FlowContext
+    /// General can run on Gemini, which cannot drive the review prompt (GA-9).
+    let canRunReview: Bool
 
     /// Claims the next review and does it; nil when nothing was claimed.
     func claim() async throws -> FlowEnd? {
+        guard canRunReview else { return nil }
         let api = context.api
         guard case .completed(let claim?) = try await context.command("claim_next_review", {
             try await api.claimNextReview(key: $0)
@@ -33,8 +36,13 @@ struct ReviewerFlow: Sendable {
         _ reviewID: UUID, start: BriefingResponse?, leaseDue: Date?, acknowledgement: Acknowledgement = .always
     ) async throws -> FlowEnd {
         context.state.hold(.review(reviewID))
-        let end = try await Heartbeat.around(.review(reviewID), leaseDue: leaseDue, context: context) {
-            try await steps(reviewID, start: start, acknowledgement: acknowledgement)
+        let end: FlowEnd
+        if canRunReview {
+            end = try await Heartbeat.around(.review(reviewID), leaseDue: leaseDue, context: context) {
+                try await steps(reviewID, start: start, acknowledgement: acknowledgement)
+            }
+        } else {
+            end = try await release(reviewID)
         }
         if end != .paused { context.state.hold(.nothing) }
         if case .accountStopped(let report) = end { context.state.accountStopped(report) }

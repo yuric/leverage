@@ -143,7 +143,7 @@ enum CardWording {
                     text: (accountWait.signedOut ? BoardCopy.chipLoginSignedOut : BoardCopy.chipNoLoginLeft).text,
                     tone: accountWait.signedOut ? .stop : .wait)
             }
-        } else if state == .inReview, !reviewerSeatExists {
+        } else if state == .inReview, !(task.reviewerSeatExists ?? reviewerSeatExists) {
             note = BoardCopy.noteNoReviewer.text
         }
         if note == nil {
@@ -249,7 +249,7 @@ final class BoardModel {
             do {
                 let seats = try await api.seats()
                 names = Dictionary(seats.seats.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-                builders = seats.seats.filter { $0.role == .builder }
+                builders = seats.seats.filter { $0.role.actsAs(.builder) }
                 position = min(position, seats.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
                 throw error

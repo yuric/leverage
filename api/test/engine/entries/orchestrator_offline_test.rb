@@ -12,8 +12,8 @@ require_relative "job_timers_support"
 #   the role went offline and the time the oldest check began to wait. Its
 #   facts: the role, the count then, and the account that is the cause.
 # - It resolves the item when the orchestrator is online again, at the time
-#   it came back. Then every errored check gets a new attempt, but an
-#   errored check at task.before_claim, whose hold only closes (RC-37); a
+#   it came back. An eligible errored check gets a new attempt. An
+#   errored check at task.before_claim only loses its hold (RC-37); a
 #   check still queued keeps its job (RD-19).
 # - It writes nothing while nothing changes, and never opens an item for
 #   the planner (RD-20).
@@ -239,6 +239,54 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     assert hold.reload.closed_at
   end
 
+  [ 1, 2 ].each do |seat_count|
+    test "return through #{seat_count} General seats requeues both eligible errored checks" do
+      checks = Array.new(2) { errored_check.first }
+      offline = open_item
+      seat_count.times { scenario.seat(role: "general", last_polled_at: scenario.database_now) }
+
+      with_writers { timer("orchestrator_offline") }
+
+      assert_equal "resolved", offline.reload.state
+      assert_equal [ 3, 3 ], checks.map { |check| job_of(check).attempt_number }
+      assert_equal [ nil, nil ], checks.map { |check| check.reload.result }
+      refute InboxItem.exists?(workspace_id: scenario.workspace_id, kind: "check_could_not_run", state: "open")
+    end
+  end
+
+  test "an already queued check does not prevent General retrying another check" do
+    errored, = errored_check
+    offline = open_item
+    queued, = waiting_check(5)
+    queued_job = job_of(queued)
+    scenario.seat(role: "general", last_polled_at: scenario.database_now)
+
+    with_writers { timer("orchestrator_offline") }
+
+    assert_equal "resolved", offline.reload.state
+    assert_equal [ queued_job.id, "queued" ], [ job_of(queued).id, queued_job.reload.state ]
+    assert_equal 3, job_of(errored).attempt_number
+    assert_nil errored.reload.result
+    refute InboxItem.exists?(workspace_id: scenario.workspace_id, kind: "check_could_not_run", state: "open")
+  end
+
+  test "General presence closes all errored claim holds even when a seat built one of their tasks" do
+    checks = Array.new(2) { errored_check(hook: "task.before_claim", task_state: "ready", command: "claim") }
+    offline = open_item
+    general = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    barred = checks.first.first
+    scenario.append("task.claimed", task: Task.find(barred.task_id), actor_kind: "seat", actor_id: general.id,
+      payload: { seat_id: general.id, credential_id: nil, model: general.model })
+
+    calls = with_writers { timer("orchestrator_offline") }
+
+    assert_equal "resolved", offline.reload.state
+    assert_empty calls
+    assert checks.all? { |_, hold| hold.reload.closed_at }
+    assert_equal [ 2, 2 ], checks.map { |check, _| job_of(check).attempt_number }
+    refute InboxItem.exists?(workspace_id: scenario.workspace_id, kind: "check_could_not_run", state: "open")
+  end
+
   test "a hold that names its check is read by that check, not by its rule's latest one" do
     orchestrator_polled(600)
     check, hold = errored_check
@@ -264,5 +312,34 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     assert_equal without_item.id, calls.sole.arguments.second.id
     refute(events_after(before).any? { |event| event.type.start_with?("inbox.") })
     assert_empty(with_writers { timer("orchestrator_offline") }, "queued again once: the check waits for its result")
+  end
+
+  test "on return through a General seat, an errored check it cannot claim gets an owner item while a claimable one is queued" do
+    app_rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count")
+    decided = scenario.rule_check(scenario.task, rule: app_rule, result: "passed")
+    RuleCheckAttempt.find_by!(rule_check_id: decided.id).update_columns(queued_at: scenario.database_now - 600)
+    claimable, claimable_hold = errored_check
+    barred, barred_hold = errored_check
+    general = scenario.seat(role: "general")
+    scenario.append("task.claimed", task: Task.find(barred.task_id), actor_kind: "seat", actor_id: general.id,
+      payload: { seat_id: general.id, credential_id: nil, model: general.model })
+    open_item
+    general.update_columns(last_polled_at: scenario.database_now)
+    before = last_seq
+
+    timer("orchestrator_offline")
+
+    assert_equal "resolved", item.reload.state
+    assert_equal %w[inbox.resolved check.queued job.queued inbox.opened], events_after(before).map(&:type)
+    assert_nil claimable.reload.result
+    assert_equal 3, job_of(claimable).attempt_number
+    assert_nil claimable_hold.reload.closed_at
+    assert_equal "error", barred.reload.result
+    assert_equal 2, job_of(barred).attempt_number
+    assert_nil barred_hold.reload.closed_at
+    owner_item = InboxItem.find_by!(hold_id: barred_hold.id, state: "open")
+    assert_equal [ "check_could_not_run", %w[override_once run_again turn_rule_off], barred.id ],
+      [ owner_item.kind, owner_item.choices.sort, owner_item.facts.fetch("rule_check_id") ]
+    assert_equal "hold.opened", Event.find(events_after(before).last.cause_id).type
   end
 end

@@ -55,14 +55,16 @@ struct EvalRunTests {
             try writeInputs(ids: ids, suite: suite) { JobFixture.checkInput() }
         }
 
-        func writeApprovalInputs(count: Int) throws {
+        @discardableResult
+        func writeApprovalInputs(count: Int, general: Bool = false) throws -> ApprovalMaterial {
             let check = JobFixture.checkMaterial()
             let description = EvalRunTests.approvalAction
             let contract = ActionJobContract(
                 title: check.contract.title, goal: check.contract.goal, details: check.contract.details,
                 criteria: check.contract.criteria, actions: [.init(kind: .send, description: description)])
             let material = ApprovalMaterial(
-                roleFile: check.roleFile, instruction: check.instruction,
+                roleFile: general ? nil : check.roleFile, jobRules: general ? SeatRole.general.jobRules : [],
+                instruction: check.instruction,
                 action: .init(kind: .send, description: description, position: 1), contract: contract,
                 quoted: [.init(label: .evidence, text: JobFixture.evidence)])
             try writeInputs(
@@ -71,6 +73,7 @@ struct EvalRunTests {
             ) {
                 ApprovalJobInput(actionID: UUID(), ruleCheckID: UUID(), taskID: UUID(), material: material)
             }
+            return material
         }
 
         /// A stand-in run's environment, with values of the parent that must
@@ -214,6 +217,77 @@ struct EvalRunTests {
     }
 
     // MARK: - Approval eval
+
+    @Test("a General rule check uses the production prompt with every General job rule")
+    func generalCheckPrompt() async throws {
+        let setup = try Setup(cases: 1)
+        let material = Self.checkMaterial(roleFile: nil, jobRules: SeatRole.general.jobRules)
+        try setup.writeInputs(ids: ["made-up-case"], suite: Self.suite) { JobFixture.checkInput(material) }
+
+        try #require(await setup.run(setup.arguments() + ["--mode", "general"]) == 0)
+
+        let prompt = try Self.generalPrompt(setup)
+        let nonce = try #require(JobFixture.nonce(of: prompt))
+        #expect(prompt == JobPrompts.check(material: material, nonce: nonce))
+    }
+
+    @Test("a General approval uses the production prompt with every General job rule")
+    func generalApprovalPrompt() async throws {
+        let setup = try Setup(cases: 1)
+        let material = try setup.writeApprovalInputs(count: 1, general: true)
+        let environment = setup.environment(["LEVERAGE_EVAL": Self.approvalSuite])
+
+        try #require(await setup.run(setup.arguments() + ["--mode", "general"], environment: environment) == 0)
+
+        let prompt = try Self.generalPrompt(setup)
+        let nonce = try #require(prompt.firstMatch(of: /LEVERAGE-DECISION-([0-9a-f]{12}):/)?.output.1)
+        #expect(prompt == JobPrompts.approval(material: material, nonce: String(nonce)))
+    }
+
+    @Test("General mode refuses a supplied role file or missing job rule before looking for the tool",
+          arguments: [true, false])
+    func refusesMismatchedGeneralCheck(hasRoleFile: Bool) async throws {
+        let setup = try Setup(cases: 1)
+        let rules = SeatRole.general.jobRules
+        let material = Self.checkMaterial(
+            roleFile: hasRoleFile ? JobFixture.roleFile : nil, jobRules: hasRoleFile ? rules : Array(rules.dropLast()))
+        try setup.writeInputs(ids: ["made-up-case"], suite: Self.suite) { JobFixture.checkInput(material) }
+
+        #expect(await setup.run(setup.arguments() + ["--mode", "general"]) == 2)
+        #expect(setup.lines == ["eval: refused: case made-up-case does not contain General job material"])
+        #expect(try setup.tools.calls().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: setup.out.path))
+    }
+
+    @Test("General mode refuses dedicated approval material before looking for the tool")
+    func refusesDedicatedApprovalAsGeneral() async throws {
+        let setup = try Setup(cases: 1)
+        try setup.writeApprovalInputs(count: 1)
+        let environment = setup.environment(["LEVERAGE_EVAL": Self.approvalSuite])
+
+        #expect(await setup.run(setup.arguments() + ["--mode", "general"], environment: environment) == 2)
+        #expect(setup.lines == ["eval: refused: case 01-made-up-case does not contain General job material"])
+        #expect(try setup.tools.calls().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: setup.out.path))
+    }
+
+    static func checkMaterial(roleFile: String?, jobRules: [String]) -> CheckMaterial {
+        let check = JobFixture.checkMaterial()
+        return CheckMaterial(
+            roleFile: roleFile, jobRules: jobRules, instruction: check.instruction, moment: check.moment,
+            mayAnswerNotApplicable: check.mayAnswerNotApplicable, contract: check.contract, quoted: check.quoted)
+    }
+
+    static func generalPrompt(_ setup: Setup) throws -> String {
+        let calls = try setup.prompts()
+        try #require(calls.count == 1)
+        let prompt = try #require(calls[0].argv.dropFirst().first)
+        for rule in SeatRole.general.jobRules {
+            #expect(prompt.split(separator: "\n").contains(Substring(rule)))
+        }
+        #expect(!prompt.contains(JobFixture.roleFile))
+        return prompt
+    }
 
     @Test("the approval eval resolves the stand-in without starting it")
     func resolveApprovalTool() async throws {

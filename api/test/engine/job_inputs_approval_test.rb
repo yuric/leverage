@@ -21,6 +21,8 @@ class JobInputsApprovalTest < ActiveSupport::TestCase
     input = result.result.fetch("input")
     assert_equal @action.id, input.fetch("action_id")
     assert_equal @project.id, input.fetch("project_id")
+    assert_equal Leverage::RoleFiles.text("orchestrator"), input.dig("material", "role_file")
+    assert_equal [], input.dig("material", "job_rules")
     assert_equal "Sample notice", input.dig("material", "action", "description")
     assert_equal @task.title, input.dig("material", "contract", "title")
     refute_includes input.to_json, @other.title

@@ -15,6 +15,11 @@ public struct AgentClient: AgentAPI {
         transport = HTTPTransport(baseURL: baseURL, token: seatToken, session: session)
     }
 
+    public func join(connection: LandingPromptConnection = .http) async throws -> JoinInstructions {
+        let query = connection == .http ? [] : [URLQueryItem(name: "connection", value: connection.rawValue)]
+        return try await transport.read(.getJoin, query: query)
+    }
+
     public func next(wait: Int?) async throws -> NextItem {
         // Send the IF-14 default so the transport adds its timeout margin.
         try await transport.read(.getNext, waitSeconds: wait ?? 30)
