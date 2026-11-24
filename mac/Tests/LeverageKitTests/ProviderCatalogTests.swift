@@ -244,13 +244,16 @@ struct ProviderCatalogTests {
     }
 
     @Test("each login provider has a model list with evidence")
-    func models() throws {
+    func models() {
         for entry in ProviderCatalog.entries {
-            let list = try #require(
-                Mirror(reflecting: entry).descendant("models") as? Evidenced<[String]>, "\(entry.id)")
-            #expect(list.evidence == (list.value.isEmpty ? .unverified : .documented), "\(entry.id)")
+            let list = entry.models
+            #expect(list.evidence == .documented, "\(entry.id)")
+            #expect(!list.value.isEmpty, "\(entry.id)")
             #expect(Set(list.value).count == list.value.count, "\(entry.id)")
             #expect(list.value.allSatisfy { !$0.isEmpty }, "\(entry.id)")
+            if let model = entry.defaultModel {
+                #expect(list.value.contains(model.value), "\(entry.id)")
+            }
         }
     }
 

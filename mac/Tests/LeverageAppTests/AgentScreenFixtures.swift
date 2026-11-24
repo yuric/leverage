@@ -67,7 +67,7 @@ enum AgentFixtures {
 
     static func board(building title: String, by seat: UUID, asOfSeq: Int = 9) -> Board {
         let summary = TaskSummary(
-            id: UUID(), title: title, goal: "g", details: nil, state: .working, round: 0, holderSeatID: seat,
+            id: UUID(), title: title, state: .working, round: 0, holderSeatID: seat,
             builderSeatID: seat, workReference: nil, priority: .normal)
         return Board(tasks: [BoardTask(task: summary, blocked: false, holdReasons: [])], asOfSeq: asOfSeq, reviewerSeatExists: true)
     }

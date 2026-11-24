@@ -4,23 +4,23 @@ import SwiftUI
 struct CredentialsView: View {
     @Environment(ScreenContext.self) private var context
     @State private var box = ScreenModelBox<CredentialsModel>()
-    @State private var isAdding = false
 
     var body: some View {
+        @Bindable var navigator = context.navigator
         let model = box.model {
             CredentialsModel(
                 api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
                 helper: context.runtime.helper)
         }
-        CredentialsContent(model: model, add: { isAdding = true })
+        CredentialsContent(model: model, add: { navigator.presentAddCredential() })
             .task {
                 model.attach(to: context.feed)
                 await model.keepCurrent()
             }
             .onDisappear { model.detach() }
-            .sheet(isPresented: $isAdding) {
+            .sheet(isPresented: $navigator.isAddCredentialPresented) {
                 AddCredentialSheet(finish: {
-                    isAdding = false
+                    navigator.isAddCredentialPresented = false
                     Task { await model.load() }
                 })
                 .environment(context)

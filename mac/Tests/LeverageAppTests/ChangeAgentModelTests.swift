@@ -98,14 +98,34 @@ struct ChangeAgentModelTests {
         #expect(!model.canSave)
     }
 
-    @Test("renaming a Native seat keeps its existing model when the owner leaves it selected")
-    func keepsExistingModel() async {
+    @Test("Change offers a Native seat's existing model after the default and keeps it when left selected",
+          arguments: ["older-model", " older-model "])
+    func keepsExistingModel(_ existing: String) async throws {
         let owner = owner()
-        let model = makeModel(owner, seat: appSeat(model: "older-model"))
-        #expect(model.modelName == "older-model")
+        let model = makeModel(owner, seat: appSeat(model: existing))
+        let provider = try #require(model.modelProvider)
+        let entry = try #require(ProviderCatalog.entry(for: provider.rawValue))
+        let menu = AgentModelPicker(
+            provider: provider, existingModel: model.existingModel, selection: .constant(model.modelName))
+        #expect(menu.choices == ["", existing] + entry.models.value)
+        #expect(model.modelName == existing)
         model.name = "Renamed agent"
         await model.save()
         #expect(body(owner) == ["name": .string("Renamed agent")])
+    }
+
+    @Test("selecting the tool's default in Change clears an explicit model")
+    func changesToDefaultModel() async throws {
+        let owner = owner()
+        let claude = try #require(ProviderCatalog.entry(for: "claude"))
+        let existing = try #require(claude.models.value.first)
+        let model = makeModel(owner, seat: appSeat(model: existing))
+        let menu = AgentModelPicker(
+            provider: .claude, existingModel: model.existingModel, selection: .constant(model.modelName))
+        #expect(menu.choices == [""] + claude.models.value)
+        model.modelName = try #require(menu.choices.first)
+        await model.save()
+        #expect(body(owner) == ["model": .null])
     }
 
     @Test("changing a Prompt seat sends no model, including when the seat has an older model")
@@ -113,6 +133,7 @@ struct ChangeAgentModelTests {
         let owner = owner()
         let seat = Fixtures.seat(Fixtures.ownID, name: "Example agent", model: "older-model")
         let model = makeModel(owner, seat: seat)
+        #expect(model.modelProvider == nil)
         model.modelName = "another-model"
         model.name = "Renamed agent"
         await model.save()
@@ -208,6 +229,8 @@ struct ChangeAgentModelTests {
         let model = makeModel(owner)
         model.credentialID = Fixtures.secondLoginID
         #expect(model.modelName.isEmpty && model.effort.isEmpty)
+        #expect(model.modelProvider == .codex)
+        #expect(model.existingModel == nil)
         #expect(!model.offersEffort)
         await model.save()
         let sent = body(owner)

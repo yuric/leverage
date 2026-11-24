@@ -42,17 +42,6 @@ struct ChangeAgentForm: View {
                     }
                 }
             }
-            FormField(label: AgentsCopy.modelLabel.text, hint: AgentsCopy.modelHint.text) {
-                TextField(AgentsCopy.defaultModel.text, text: $model.modelName)
-                    .textFieldStyle(.roundedBorder)
-            }
-            AgentStrengthPicker(selection: $model.strengthRank)
-            if model.offersEffort {
-                FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
-                    TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
-                        .textFieldStyle(.roundedBorder)
-                }
-            }
             if model.offersLogin {
                 FormField(
                     label: AgentsCopy.loginLabel.text,
@@ -64,6 +53,16 @@ struct ChangeAgentForm: View {
                         }
                     }
                     .labelsHidden()
+                }
+            }
+            if let provider = model.modelProvider {
+                AgentModelPicker(provider: provider, existingModel: model.existingModel, selection: $model.modelName)
+            }
+            AgentStrengthPicker(selection: $model.strengthRank)
+            if model.offersEffort {
+                FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
+                    TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
+                        .textFieldStyle(.roundedBorder)
                 }
             }
             FormField(label: AgentsCopy.changeEnabledLabel.text, hint: model.enabledNote) {

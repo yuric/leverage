@@ -2,8 +2,8 @@ import Foundation
 import LeverageKit
 import Observation
 
-/// The Change sheet of an agent (HM-51, HE-27): its name, model, effort, the
-/// login it runs on (for an agent the app runs), model strength, and on or off.
+/// The Change sheet of an agent (HM-51, HE-27): its name, effort, strength and
+/// on or off, and the login and model for an agent the app runs.
 ///
 /// Only the fields the owner changed are sent. A model or effort the owner
 /// emptied is sent as null, which is the tool's own default. A new login must
@@ -57,7 +57,7 @@ final class ChangeAgentModel {
         self.allLogins = logins
         self.onChanged = onChanged
         name = seat.name
-        modelName = seat.model ?? ""
+        modelName = seat.credentialID == nil ? "" : seat.model ?? ""
         effort = seat.effort ?? ""
         credentialID = seat.credentialID
         enabled = seat.enabled
@@ -72,6 +72,11 @@ final class ChangeAgentModel {
 
     /// Only an agent the app runs has a login to change.
     var offersLogin: Bool { seat.credentialID != nil }
+
+    var modelProvider: Provider? { offersLogin ? chosenProvider : nil }
+
+    /// Keep a model already stored for this provider available in the picker.
+    var existingModel: String? { modelProvider == seat.provider ? seat.model : nil }
 
     /// The logins the agent can move to: a Gemini login is left out for a
     /// Reviewer, which the runner cannot do yet (CL-8).
@@ -119,9 +124,11 @@ final class ChangeAgentModel {
             guard let chosen = credentialID, loginChoices.contains(where: { $0.id == chosen }) else { return nil }
             login = .set(chosen)
         }
+        let model: Setting<String> = offersLogin && modelName != (seat.model ?? "")
+            ? Self.setting(modelName, was: seat.model) : .keep
         let request = ChangeSeatRequest(
             name: trimmedName != seat.name ? trimmedName : nil,
-            model: Self.setting(modelName, was: seat.model),
+            model: model,
             effort: offersEffort ? Self.setting(effort, was: seat.effort) : .keep,
             strengthRank: strengthRank != originalStrengthRank ? .set(strengthRank) : .keep,
             credentialID: login,

@@ -18,6 +18,8 @@ final class Navigator {
     private(set) var openTaskID: UUID?
     /// Whether the Add task sheet is showing. The shell presents it.
     var isAddTaskPresented = false
+    /// Whether Credentials should show its Add credential sheet.
+    var isAddCredentialPresented = false
     /// The task whose page was opened to change it; its page takes the
     /// request once. Not observed: taking it changes nothing on screen.
     @ObservationIgnored private var editRequest: UUID?
@@ -27,6 +29,7 @@ final class Navigator {
         self.place = place
         openTaskID = nil
         editRequest = nil
+        isAddCredentialPresented = false
     }
 
     /// Opens the Board scoped to this project, or to All projects for nil.
@@ -39,7 +42,7 @@ final class Navigator {
     /// asks the page to open the contract editor once it has read the task
     /// (Needs you's Change the task, HM-24, HM-49).
     func open(task id: UUID, editing: Bool = false) {
-        place = .board
+        show(.board)
         openTaskID = id
         editRequest = editing ? id : nil
     }
@@ -58,6 +61,11 @@ final class Navigator {
     }
 
     func presentAddTask() { isAddTaskPresented = true }
+
+    func presentAddCredential() {
+        show(.credentials)
+        isAddCredentialPresented = true
+    }
 
     /// After Add task saved: the sheet closes and the board shows.
     func finishAddTask() {

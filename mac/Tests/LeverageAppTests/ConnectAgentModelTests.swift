@@ -71,6 +71,7 @@ struct ConnectAgentModelTests {
     func noLogins() async {
         let owner = owner(logins: [])
         let model = makeModel(owner)
+        #expect(!model.needsLogin, "wait until Credentials confirms the list is empty")
         await model.load()
         #expect(model.logins.isEmpty)
         #expect(model.credentialID == nil)
@@ -90,16 +91,32 @@ struct ConnectAgentModelTests {
         #expect(body(owner)["credential_id"] == .null)
     }
 
-    @Test("Connect picks the tool's default after changing the login's provider")
-    func resetsModelForAnotherProvider() async {
-        let owner = owner()
+    @Test("Connect offers the selected login's models in order and defaults on a provider change")
+    func resetsModelForAnotherProvider() async throws {
+        let sameProviderID = UUID()
+        let sameProvider = Fixtures.credential(sameProviderID, name: "Second Claude", position: 3)
+        let owner = owner(logins: Fixtures.credentials().credentials + [sameProvider])
         let model = makeModel(owner)
         await model.load()
+        let claude = try #require(ProviderCatalog.entry(for: "claude"))
+        let menu = AgentModelPicker(
+            provider: .claude, existingModel: nil, selection: .constant(model.modelName))
+        #expect(menu.choices == [""] + claude.models.value)
+        #expect(menu.choices.first == model.modelName)
         #expect(model.modelName.isEmpty)
         #expect(AgentsCopy.defaultModel.text == "The tool's default")
-        model.modelName = "claude-made-up"
+        let modelChoice = try #require(claude.models.value.first)
+        model.modelName = modelChoice
+        model.credentialID = sameProviderID
+        #expect(model.modelName == modelChoice)
         model.credentialID = Fixtures.secondLoginID
         #expect(model.modelName.isEmpty)
+        let provider = try #require(model.chosenProvider)
+        let codex = try #require(ProviderCatalog.entry(for: "codex"))
+        let newMenu = AgentModelPicker(
+            provider: provider, existingModel: nil, selection: .constant(model.modelName))
+        #expect(newMenu.choices == [""] + codex.models.value)
+        #expect(newMenu.choices.first == model.modelName)
         model.name = "Example agent"
         await model.connect()
         #expect(body(owner)["provider"] == .string("codex"))
@@ -117,6 +134,35 @@ struct ConnectAgentModelTests {
         await model.connect()
         #expect(model.phase == .shown)
         #expect(body(owner)["model"] == .null)
+    }
+
+    @Test("Add credential opens with the Credentials tab and can be dismissed")
+    func opensAddCredential() {
+        let navigator = Navigator()
+        navigator.show(.agents)
+        navigator.presentAddCredential()
+        #expect(navigator.place == .credentials)
+        #expect(navigator.isAddCredentialPresented)
+        navigator.show(.agents)
+        navigator.show(.credentials)
+        #expect(!navigator.isAddCredentialPresented)
+    }
+
+    @Test("a Reviewer with only Gemini logins can still change the role")
+    func noEligibleReviewerLogin() async {
+        let gemini = Fixtures.credential(Fixtures.geminiLoginID, name: "Gemini", provider: .gemini)
+        let model = makeModel(owner(logins: [gemini]))
+        await model.load()
+        model.name = "Example agent"
+        model.role = .reviewer
+        #expect(model.logins.isEmpty)
+        #expect(!model.needsLogin)
+        #expect(model.chosenProvider == nil)
+        #expect(model.geminiHiddenForReviewer)
+        #expect(!model.canConnect)
+        model.role = .general
+        #expect(model.credentialID == gemini.credential.id)
+        #expect(model.canConnect)
     }
 
     @Test("General offers Gemini and Reviewer hides it")
@@ -644,6 +690,14 @@ struct ConnectAgentModelTests {
         await model.load()
         #expect(model.failure == ShellCopy.cannotReach.text)
         #expect(model.logins.isEmpty)
+        #expect(!model.needsLogin)
+        model.mode = .connectsOnItsOwn
+        model.name = "Example agent"
+        #expect(model.failure == nil)
+        #expect(model.canConnect)
+        model.mode = .runOnLogin
+        #expect(model.failure == ShellCopy.cannotReach.text)
+        #expect(!model.canConnect)
     }
 
     // MARK: the screen
