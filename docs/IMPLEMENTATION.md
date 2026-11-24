@@ -62,7 +62,7 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| App round 1 | `feat/app-round-1` | | Integrated locally with fixes for all four review findings. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
+| App round 1 | `feat/app-round-1` | | Integrated locally with both rounds of review addressed. The second round covers a builder's submitted work reference and the draft parser's marker and criteria tests. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
 
 ## Milestones
 

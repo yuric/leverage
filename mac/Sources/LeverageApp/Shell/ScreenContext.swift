@@ -129,7 +129,8 @@ final class ScreenContext {
         let subscription = feed.subscribe { events in
             if events.contains(where: {
                 switch $0.type {
-                case .projectCreated, .taskCreated, .taskChanged, .taskContractChanged, .contentDeleted: true
+                case .projectCreated, .taskCreated, .taskChanged, .taskContractChanged, .taskSubmitted, .contentDeleted:
+                    true
                 default: false
                 }
             }) {
