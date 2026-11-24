@@ -14,7 +14,7 @@ body:
     id: proposal
     attributes:
       label: Proposal
-      description: What should leverage do? Describe behavior, not implementation.
+      description: What should Leverage do? Describe behavior, not implementation.
     validations:
       required: true
   - type: textarea

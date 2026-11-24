@@ -63,7 +63,7 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .priorityHigh: "High"
         case .workLabel: "Where the work is"
         case .workPlaceholder: "A folder on this Mac, or a link"
-        case .workHint: "Optional. leverage does not open it. Don't put sign-in details here."
+        case .workHint: "Optional. Leverage does not open it. Don't put sign-in details here."
         case .footnote: "An agent that did not build it reviews the work before it counts as done."
         case .footnoteProviderRule: "An agent from another provider reviews the work before it counts as done."
         case .cancel: "Cancel"

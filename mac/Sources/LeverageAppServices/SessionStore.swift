@@ -79,7 +79,7 @@ public final class KeychainSessionStore: SessionStoring, @unchecked Sendable {
         var item = query
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-        item[kSecAttrLabel as String] = "leverage sign-in"
+        item[kSecAttrLabel as String] = "Leverage sign-in"
         let added = SecItemAdd(item as CFDictionary, nil)
         guard added == errSecSuccess else { throw SessionStoreError.keychain(status: added) }
     }

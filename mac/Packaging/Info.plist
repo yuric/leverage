@@ -19,9 +19,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>leverage</string>
+	<string>Leverage</string>
 	<key>CFBundleDisplayName</key>
-	<string>leverage</string>
+	<string>Leverage</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<!-- Set by scripts/build_app.sh. -->

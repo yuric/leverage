@@ -1,6 +1,6 @@
 # The contract
 
-This folder is the one home of everything two parts of leverage share: the
+This folder is the one home of everything two parts of Leverage share: the
 fixed lists, the event payload schemas, the state, step, hook, job, role,
 timer and Needs you tables, the interface schema and the golden traces.
 
@@ -173,7 +173,7 @@ one file for each number in the type's `schema_versions`. Every file follows
 `payloads/<type>.v<n+1>.json` and appends `n+1` to the type's
 `schema_versions`; the server writes the newest version, and every reader
 handles every listed version. Old events are never rewritten. Until the
-first release of leverage no log holds an event a released build wrote, so
+first release of Leverage no log holds an event a released build wrote, so
 a version may still change in place; each such change is recorded in
 [decisions.md](decisions.md) (DB-48 is the first, DB-49 the second).
 

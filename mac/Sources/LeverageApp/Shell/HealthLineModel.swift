@@ -5,7 +5,7 @@ import Observation
 /// The one line at the foot of the pane (MA-23, L806): whether the timer
 /// sweep is running on time, whether the agents are running on this Mac, whether
 /// the agent that checks tasks is set up and running (RD-17), and whether
-/// leverage answers at all.
+/// Leverage answers at all.
 @MainActor
 @Observable
 final class HealthLineModel {
@@ -69,7 +69,7 @@ final class HealthLineModel {
     }
 
     /// Try again is offered once the helper has given up, and when
-    /// leverage does not answer and there is a server to start again.
+    /// Leverage does not answer and there is a server to start again.
     var offersTryAgain: Bool { status == .agentsStopped || (status == .unreachable && server != nil) }
 
     /// Reads the server's health and the helper's state once.
@@ -115,7 +115,7 @@ final class HealthLineModel {
         }
     }
 
-    /// Starts the server again when leverage does not answer (it goes
+    /// Starts the server again when Leverage does not answer (it goes
     /// through Docker again when it must), or the helper again after it gave
     /// up, then reads the line again.
     func tryAgain() async {

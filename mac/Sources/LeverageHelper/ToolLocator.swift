@@ -8,7 +8,7 @@ struct LocatedTool: Equatable, Sendable {
 }
 
 /// Finds a provider's tool and its version (PV-3): only in `LEVERAGE_TOOL_DIR`
-/// when that is set; otherwise where leverage installs an archive, the
+/// when that is set; otherwise where Leverage installs an archive, the
 /// vendors' folders, then the helper's `PATH`.
 struct ToolLocator: Sendable {
     let settings: HelperSettings

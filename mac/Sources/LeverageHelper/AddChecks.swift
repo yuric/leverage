@@ -7,7 +7,7 @@ import LeverageKit
 /// request loop.
 ///
 /// Add waits for the owner: for a missing tool to be installed (from the
-/// pop-up, or by hand where leverage cannot install it, PV-5) and for the
+/// pop-up, or by hand where Leverage cannot install it, PV-5) and for the
 /// sign-in in the provider's own window (PV-4), looking again on its own
 /// for up to 10 minutes (CL-19). A failed add deletes the folder it made
 /// (CL-18); the server deletes the row (IN-24).
@@ -151,7 +151,7 @@ struct AddChecks: Sendable {
         return run.result(.finished)
     }
 
-    /// What would be installed and from where, or that leverage cannot
+    /// What would be installed and from where, or that Leverage cannot
     /// install it (PV-5).
     static func offer(for entry: ProviderEntry) -> InstallOffer {
         guard let installer = entry.installer.value else {

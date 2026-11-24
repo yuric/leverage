@@ -39,7 +39,7 @@ enum ShellCopy: OwnerFacingCopy {
 
     var text: String {
         switch self {
-        case .appName: "leverage"
+        case .appName: "Leverage"
         case .tabBoard: "Board"
         case .tabNeedsYou: "Needs you"
         case .tabDecided: DecidedCopy.title.text
@@ -60,29 +60,29 @@ enum ShellCopy: OwnerFacingCopy {
         case .healthRunning: "System is running"
         case .healthLate: "Background work is late"
         case .healthAgentsStopped: "Agents are not running on this Mac"
-        case .healthUnreachable: "Can't reach leverage on this Mac"
+        case .healthUnreachable: "Can't reach Leverage on this Mac"
         case .healthBackupLate: "The daily backup is late"
         case .healthNoOrchestrator: "No agent is set up to check tasks. Connect one in Agents."
         case .healthOrchestratorOffline: "The agent that checks tasks is not running."
         case .tryAgain: "Try again"
 
-        case .startingTitle: "Starting leverage"
+        case .startingTitle: "Starting Leverage"
         case .startingBody: "Getting the server ready on this Mac. This takes a few seconds."
-        case .dockerMissingTitle: "leverage needs Docker Desktop"
+        case .dockerMissingTitle: "Leverage needs Docker Desktop"
         case .dockerMissingBody:
-            "leverage keeps your work in a small server that runs in Docker Desktop on this Mac. Install Docker Desktop, open it once, then check again."
+            "Leverage keeps your work in a small server that runs in Docker Desktop on this Mac. Install Docker Desktop, open it once, then check again."
         case .getDockerDesktop: "Get Docker Desktop"
         case .checkAgain: "Check again"
         case .dockerStartingTitle: "Starting Docker Desktop"
-        case .dockerStartingBody: "This can take a minute. leverage opens by itself when Docker Desktop is ready."
+        case .dockerStartingBody: "This can take a minute. Leverage opens by itself when Docker Desktop is ready."
         case .dockerNotStartingTitle: "Docker Desktop did not start"
         case .dockerNotStartingBody:
             "Open Docker Desktop yourself and wait until it says it is running, then check again."
-        case .imageMissingTitle: "This copy of leverage was not built on this Mac."
+        case .imageMissingTitle: "This copy of Leverage was not built on this Mac."
         case .imageMissingBody: "The server it needs is not in Docker on this Mac. Build the app again on this Mac, then open it."
-        case .serverFailedTitle: "leverage could not start"
+        case .serverFailedTitle: "Leverage could not start"
         case .serverFailedBody: "Something stopped the server from starting. Check that Docker Desktop is running, then try again."
-        case .cannotReachTitle: "Can't reach leverage on this Mac"
+        case .cannotReachTitle: "Can't reach Leverage on this Mac"
         case .cannotReachBody: "The server did not answer. Check that Docker Desktop is running, then try again."
 
         case .refusalLeaseExpired: "The agent stopped responding, so the task went back to waiting."
@@ -106,7 +106,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .transportKeyReused: "That was already sent with different details. Try again."
         case .transportInvalid: "Something in that is not valid. Check it and try again."
 
-        case .cannotReach: "Can't reach leverage on this Mac. Check that it is running, then try again."
+        case .cannotReach: "Can't reach Leverage on this Mac. Check that it is running, then try again."
         case .somethingWentWrong: "Something went wrong. Try again."
         }
     }

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-leverage has not made a release yet. Once it does, this section will list
+Leverage has not made a release yet. Once it does, this section will list
 which versions receive security fixes. Until then, fixes land on `main`.
 
 ## Reporting a vulnerability
@@ -41,7 +41,7 @@ and will be closed. See also
 
 ## What to expect
 
-leverage has one maintainer (see the
+Leverage has one maintainer (see the
 [maintenance policy](MAINTENANCE.md)), so these are targets rather than
 guarantees:
 
@@ -57,5 +57,5 @@ issue publicly. We will coordinate the disclosure date with you.
 In scope: the code and configuration in this repository.
 
 Out of scope: vulnerabilities in third-party dependencies (report those
-upstream, though we want to know if leverage is affected), and problems that
+upstream, though we want to know if Leverage is affected), and problems that
 require an already-compromised machine or account.

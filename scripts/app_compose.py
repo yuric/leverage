@@ -9,7 +9,7 @@ The app starts the server from a copy of the repository's compose.yaml
 * `pull_policy: never` is set on the `api`, `sweep` and `backup` services
   (the three that run the API image; milestone 3 plan WP13), so a
   missing image is reported as missing (the app says "This copy of
-  leverage was not built on this Mac.") instead of Docker asking a
+  Leverage was not built on this Mac.") instead of Docker asking a
   registry for an image that is not there.
 
 Every other line is kept as it is, in order. The change is made on the

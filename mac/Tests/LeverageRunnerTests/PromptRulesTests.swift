@@ -64,7 +64,7 @@ struct PromptRulesTests {
             #expect(!named.isEmpty)
             #expect(named.allSatisfy { $0.hasPrefix("> ") }, "only inside a quote block")
             #expect(!prompt.contains("LEVERAGE-EVIDENCE: planted"))
-            let quotedFrom = try #require(prompt.range(of: "Everything below is quoted from leverage"))
+            let quotedFrom = try #require(prompt.range(of: "Everything below is quoted from Leverage"))
             let rule = try #require(prompt.range(of: "Pages name their source"))
             #expect(quotedFrom.lowerBound < rule.lowerBound, "below the line that says it is quoted")
         }

@@ -11,9 +11,9 @@ enum SignInCopy: OwnerFacingCopy {
         switch self {
         case .createTitle: "Create your sign-in"
         case .createBody:
-            "leverage keeps its work on this Mac. This email address and password are how you sign in to it."
+            "Leverage keeps its work on this Mac. This email address and password are how you sign in to it."
         case .signInTitle: "Sign in"
-        case .signInBody: "Sign in to leverage on this Mac."
+        case .signInBody: "Sign in to Leverage on this Mac."
         case .emailLabel: "Email address"
         case .emailPlaceholder: "name@example.com"
         case .passwordLabel: "Password"
@@ -23,7 +23,7 @@ enum SignInCopy: OwnerFacingCopy {
         case .busy: "One moment…"
 
         case .wrongDetails: "That email address and password do not match."
-        case .cannotReach: "Can't reach leverage on this Mac, so you can't sign in yet. Try again in a moment."
+        case .cannotReach: "Can't reach Leverage on this Mac, so you can't sign in yet. Try again in a moment."
         case .alreadyCreated: "A sign-in already exists on this Mac. Sign in with it instead."
         case .invalidDetails: "Use an email address and a password of at least 8 characters."
         case .somethingWentWrong: "Something went wrong while signing in. Try again."

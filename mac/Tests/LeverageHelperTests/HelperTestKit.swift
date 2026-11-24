@@ -16,7 +16,7 @@ import Glibc
 // API that answers every report. No test reaches a real provider's tool:
 // `toolDir` is always set, so the stand-ins are the only tools there are.
 
-/// Made-up tokens, shaped like leverage's (IN-18), so a test can look for
+/// Made-up tokens, shaped like Leverage's (IN-18), so a test can look for
 /// them where they must not be.
 enum MadeUp {
     static let helperToken = "lvh_madeUpHelperTokenForTestsOnly0000"

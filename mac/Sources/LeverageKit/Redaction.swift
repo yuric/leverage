@@ -1,7 +1,7 @@
 import Foundation
 
 /// What is removed from a line before the Mac side writes it (plan CL-29):
-/// leverage's tokens, recognised by their prefix (`lvs_` seat, `lvh_`
+/// Leverage's tokens, recognised by their prefix (`lvs_` seat, `lvh_`
 /// helper, `lvo_` owner session, IN-18), key-shaped provider tokens (TK-5),
 /// the value of a bearer header, email addresses, and any value the caller
 /// names. A tool's raw output is never logged at all.

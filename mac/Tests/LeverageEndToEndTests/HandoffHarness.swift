@@ -57,7 +57,7 @@ struct HandoffWorld {
         ProviderCatalog.entry(for: provider.rawValue)?.defaultModel?.value
     }
 
-    /// Plays the owner signing a login out in its own tool, outside leverage.
+    /// Plays the owner signing a login out in its own tool, outside Leverage.
     func signOutInTool(_ tool: String, account: URL) throws {
         try FileManager.default.removeItem(at: account.appendingPathComponent(".standin-signed-in"))
     }

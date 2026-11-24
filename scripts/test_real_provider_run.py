@@ -16,7 +16,7 @@ test's own. They prove:
   prompt run;
 - a pass (exit 0) for each of the four tools, through the driver's build
   arguments, with the result on standard output and in the --evidence file,
-  no leverage variable and no account folder variable in the tool's
+  no Leverage variable and no account folder variable in the tool's
   environment, and the temporary folder removed;
 - a failure (exit 1) when the tool reports an error;
 - a timeout (exit 1) that ends the tool and the child it started.

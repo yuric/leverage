@@ -115,7 +115,7 @@ extension ToolRunRecord {
     /// True when the tool ended by itself with exit status 0.
     var exitedZero: Bool { termination == .exited(0) }
 
-    /// True when the tool exited by itself: leverage did not end it (its
+    /// True when the tool exited by itself: Leverage did not end it (its
     /// time limit, a stop) and no signal killed it (a crash, an outside
     /// kill). Only such a run is read for a limit or a sign-out: any other
     /// was cut off before it finished its reply.

@@ -247,16 +247,16 @@ struct CopyTests {
         #expect(ShellCopy.healthRunning.text == "System is running")
         #expect(ShellCopy.healthLate.text == "Background work is late")
         #expect(ShellCopy.healthAgentsStopped.text == "Agents are not running on this Mac")
-        #expect(ShellCopy.healthUnreachable.text == "Can't reach leverage on this Mac")
+        #expect(ShellCopy.healthUnreachable.text == "Can't reach Leverage on this Mac")
     }
 
     @Test("the start-up sentences are the ones PK-3 names")
     func startupSentences() {
-        #expect(ShellCopy.dockerMissingTitle.text == "leverage needs Docker Desktop")
+        #expect(ShellCopy.dockerMissingTitle.text == "Leverage needs Docker Desktop")
         #expect(ShellCopy.getDockerDesktop.text == "Get Docker Desktop")
         #expect(ShellCopy.checkAgain.text == "Check again")
         #expect(ShellCopy.dockerStartingTitle.text == "Starting Docker Desktop")
-        #expect(ShellCopy.imageMissingTitle.text == "This copy of leverage was not built on this Mac.")
+        #expect(ShellCopy.imageMissingTitle.text == "This copy of Leverage was not built on this Mac.")
     }
 
     @Test("sign-in sentences follow IN-2 and the mockup's wording")
@@ -281,7 +281,7 @@ struct CopyTests {
             NeedsYouCopy.limitBody.text
                 == "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues.")
         #expect(NeedsYouCopy.allCases.map(\.text).contains(
-            "{task} is waiting. {provider} did not say when {account} is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."))
+            "{task} is waiting. {provider} did not say when {account} is available again. Leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."))
         #expect(NeedsYouCopy.sentBackHeading.text == "{task} was sent back {count} times")
         #expect(NeedsYouCopy.letItTryOnceMore.text == "Let it try once more")
         #expect(NeedsYouCopy.changeTask.text == "Change the task")
@@ -330,7 +330,7 @@ struct CopyTests {
         for copy in RulesCopy.allCases {
             #expect(!copy.text.lowercased().contains("checker"), "\(copy)")
         }
-        #expect(RulesCopy.checkerApp.text == "leverage checks this itself")
+        #expect(RulesCopy.checkerApp.text == "Leverage checks this itself")
         #expect(RulesCopy.checkerModel.text == "An agent checks this")
         #expect(RulesCopy.onFailBlock.text == "Stop the task")
         #expect(RulesCopy.onFailWarn.text == "Only note it")

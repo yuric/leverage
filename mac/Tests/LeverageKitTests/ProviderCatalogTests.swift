@@ -186,7 +186,7 @@ struct ProviderCatalogTests {
         #expect(installer.permits(URL(string: address)!) == permitted)
     }
 
-    @Test("a tool gets PATH, HOME, TMPDIR, LANG, its own extras and its folder, and no leverage token")
+    @Test("a tool gets PATH, HOME, TMPDIR, LANG, its own extras and its folder, and no Leverage token")
     func toolEnvironment() throws {
         let parent = [
             "PATH": "/somewhere/else", "HOME": "/Users/someone", "TMPDIR": "/tmp/x/", "LANG": "en_US.UTF-8",

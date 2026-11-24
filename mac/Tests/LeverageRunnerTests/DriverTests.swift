@@ -6,7 +6,7 @@ import Testing
 @testable import LeverageRunner
 
 // Each driver against its stand-in tool (PV-7): arguments exactly as PV-2,
-// the account variable set, no leverage token in the tool's environment, a
+// the account variable set, no Leverage token in the tool's environment, a
 // signed-out stand-in is a failure.
 @Suite("Drivers against the stand-ins", .timeLimit(.minutes(Patience.minutes(2))))
 struct DriverTests {
@@ -176,7 +176,7 @@ struct DriverTests {
         #expect(try setup.lastCall().argv.contains("made-up-effort") == ProviderCatalog.takesEffort(provider))
     }
 
-    @Test("the tool's environment: the allow-list, the account variable, no leverage token", arguments: cases)
+    @Test("the tool's environment: the allow-list, the account variable, no Leverage token", arguments: cases)
     func environment(test: Case) async throws {
         let setup = try Setup()
         try setup.signIn(test)

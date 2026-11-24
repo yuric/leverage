@@ -5,7 +5,7 @@ secret_scan.py is step 5 of the end-to-end run (milestone 2 plan §5.2):
 it looks through the containers' logs, the helper's and the runs' logs
 and a data-only dump of the database for the secrets the run used (the
 owner's password, the session and helper tokens, the stand-ins' made-up
-email and organisation) and for anything shaped like a leverage token
+email and organisation) and for anything shaped like a Leverage token
 (IN-18), and one hit fails the run (L721). These cases prove that it
 finds each kind of hit, says where without ever printing the secret,
 passes what the redaction leaves (`lvs_[removed]`) and a token's SHA-256

@@ -1,10 +1,10 @@
-# leverage
+# Leverage
 
 > **Status: in development.** The Mac app takes work from a task form to
 > Done with connected agents. See [Implementation progress](docs/IMPLEMENTATION.md)
 > for the milestones and what each check proved.
 
-leverage is an open source project that is being specified in the open. The
+Leverage is an open source project that is being specified in the open. The
 requirements are written first, in [docs/PRD.md](docs/PRD.md); architecture,
 deployment, and implementation follow from them.
 
@@ -14,7 +14,7 @@ deployment, and implementation follow from them.
 |------|---------|
 | [docs/PRD.md](docs/PRD.md) | Product requirements. The source of truth for what gets built. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The architecture rules every pull request answers, and the system design, filled in as requirements settle. |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | How to run and operate leverage on the owner's Mac. |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | How to run and operate Leverage on the owner's Mac. |
 | [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Where the build stands, milestone by milestone. |
 | `docs/adr/` | Architecture decision records, listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#architecture-decision-records). |
 | `api/` | The server: a Rails application in API mode, run with PostgreSQL in Docker containers (`compose.yaml`, `.env.example`). |
@@ -40,21 +40,21 @@ The most useful contribution right now is feedback on the requirements:
   not need to open an issue first.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before you start, and
-[MAINTENANCE.md](MAINTENANCE.md) to know what to expect: leverage has one
+[MAINTENANCE.md](MAINTENANCE.md) to know what to expect: Leverage has one
 maintainer, and responses are best effort.
 
 ## How it is built
 
-leverage is developed largely with AI coding agents, directed and reviewed by
+Leverage is developed largely with AI coding agents, directed and reviewed by
 the maintainer. Every change to `main` goes through a pull request and
 automated checks. Contributors may use AI tools too, under the
 [same rules](CONTRIBUTING.md#ai-assisted-contributions).
 
 ## Attribution
 
-leverage is created and maintained by Yuri ([@yuric](https://github.com/yuric))
+Leverage is created and maintained by Yuri ([@yuric](https://github.com/yuric))
 and its contributors, listed in [AUTHORS](AUTHORS).
 
 ## License
 
-[MIT](LICENSE) © 2026 leverage contributors.
+[MIT](LICENSE) © 2026 Leverage contributors.

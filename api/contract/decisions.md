@@ -364,7 +364,7 @@ Where two inventories chose differently, the decision names the conflict.
   replay columns, and Complete contract (later Edit contract) sets it, so
   the event that sets it carries it, as `task.reassigned` does for
   escalation (SM-9). The field was added to `v1` in place, not as a `v2`:
-  no build of leverage has been released, so no log holds a `v1` event
+  no build of Leverage has been released, so no log holds a `v1` event
   without it. Every golden trace's `task.contract_changed` gained
   `"minimum_strength_rank": null`, the value its command sends.
 - **DB-49** `[shape]` Added by the Rule checks milestone (its plan

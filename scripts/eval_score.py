@@ -474,9 +474,9 @@ def report(suite):
             f"| {'yes' if result['met_bar'] else 'no'} |")
     lines += ["",
               "\"The tool's default\" means no model was passed. Claude Code and Codex, run on the sign-in "
-              "they hold, with no account folder leverage made (`--account-folder`), read the Mac user's own "
+              "they hold, with no account folder Leverage made (`--account-folder`), read the Mac user's own "
               "settings folders (`~/.claude`, and `~/.codex` unless `LEVERAGE_EVAL_CODEX_HOME` names another), "
-              "not a folder leverage made for a seat: a model, a setting or a memory file set there may have "
+              "not a folder Leverage made for a seat: a model, a setting or a memory file set there may have "
               "applied, and the model that ran is not known."]
     lines.append("")
     for provider in absent:

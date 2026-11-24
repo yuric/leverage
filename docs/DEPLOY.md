@@ -7,10 +7,10 @@
 
 This document says how to run and operate leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
-written so that someone who has never run leverage can follow it without
+written so that someone who has never run Leverage can follow it without
 help.
 
-leverage runs on the owner's Mac. The Mac app, `Leverage.app`, starts the
+Leverage runs on the owner's Mac. The Mac app, `Leverage.app`, starts the
 server (the API, its timer sweep, its daily backup and PostgreSQL) in
 Docker containers, and after the owner signs in it starts the helper, which
 runs the agents on the owner's logins. How the parts are packaged is
@@ -53,10 +53,10 @@ environment.
 2. Create the sign-in: an email address and a password of at least 8
    characters. There is no way to recover a forgotten password.
 3. In Credentials, choose Add credential, pick a provider, name the login,
-   and sign in to the provider's tool when leverage asks. Whether the
+   and sign in to the provider's tool when Leverage asks. Whether the
    tool's own window opens by itself for Claude, Codex and Grok remains to be verified;
    for Gemini, sign in to Antigravity yourself first, since it has no
-   sign-in command. leverage checks that the tool is installed (offering to
+   sign-in command. Leverage checks that the tool is installed (offering to
    install it where it can), that the login is signed in, and that it
    answers a test prompt.
 4. In Agents, choose Connect: a builder on one login, a reviewer on a
@@ -120,7 +120,7 @@ client speaks MCP with the child over standard input and output.
 | The API | `http://127.0.0.1:<port>`, the first free port from 47130 to 47139, kept in `API_PORT` in the server folder's `.env` |
 | A Claude or Codex login's settings | `<support folder>/accounts/<credential id>/` |
 | Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
-| Tools leverage unpacked | `<support folder>/tools/<provider>/` |
+| Tools Leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
@@ -139,7 +139,7 @@ record the confirmed credential ID in the support folder and sends the
 cleanup request to the running helper even if recording fails. The
 helper deletes the Keychain item and removes settings folders it can
 verify, including private folders made by earlier versions. A folder
-whose ownership leverage cannot verify is kept, as are shared Mac
+whose ownership Leverage cannot verify is kept, as are shared Mac
 sign-ins. The app resends pending cleanup when the helper starts. The
 helper clears the pending ID after deleting any saved token and either
 removing the folder, finding it absent or keeping it because ownership
@@ -213,7 +213,7 @@ How the backup and the restore are built is
   copied in by hand stays.
 - **What is in a dump.** The whole database: the owner's email and
   password digest, account names, every task's text and the event log. No
-  provider secret is in it: leverage stores none. Keep copies private.
+  provider secret is in it: Leverage stores none. Keep copies private.
 - **Is it running.** The health line at the foot of the app's left pane
   says "The daily backup is late" when the newest dump is older than 26
   hours, or when there is none an hour after the workspace was made.

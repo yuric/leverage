@@ -168,7 +168,7 @@ class LandingPromptTest < CommittingTestCase
   # it ends and its task stays in Backlog (JobTimer.draft_miss).
   test "an orchestrator is told its jobs wait while it is offline; a planner that a draft not claimed in time is dropped" do
     orchestrator = text_for(scenario.seat(role: "orchestrator", provider: "codex", name: "Made-up orchestrator agent"))
-    assert_includes orchestrator, "leverage counts you offline 90 seconds after your last check, and the jobs wait while you are."
+    assert_includes orchestrator, "Leverage counts you offline 90 seconds after your last check, and the jobs wait while you are."
     refute_includes orchestrator, "dropped"
 
     planner = text_for(scenario.seat(role: "planner", provider: "codex", name: "Made-up planner agent"))

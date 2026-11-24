@@ -110,7 +110,7 @@ struct SignInModelTests {
         #expect(model.email == ShellFixtures.madeUpEmail)
     }
 
-    @Test("when leverage cannot be reached, trying again sends the same command with the same key")
+    @Test("when Leverage cannot be reached, trying again sends the same command with the same key")
     func retryKeepsKey() async {
         let attempts = Locked(0)
         let owner = scripted(signIn: { _, key in

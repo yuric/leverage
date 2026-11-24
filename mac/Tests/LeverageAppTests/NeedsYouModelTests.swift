@@ -644,7 +644,7 @@ struct NeedsYouModelTests {
     }
 
     // Review: Antigravity has no sign-in command, so no window opens; the
-    // owner signs in on this Mac and leverage continues on its own.
+    // owner signs in on this Mac and Leverage continues on its own.
     @Test("while Sign in again waits for a Gemini account the row says to sign in to Antigravity, not to a window")
     func signInAgainGemini() async throws {
         let gemini = CredentialsList(credentials: [
@@ -673,7 +673,7 @@ struct NeedsYouModelTests {
         await model.load()
         let id = try #require(model.rows.first?.id)
         await model.perform(.signInAgain, on: id)
-        #expect(lines.value == ["Sign in to Antigravity on this Mac. leverage continues on its own."])
+        #expect(lines.value == ["Sign in to Antigravity on this Mac. Leverage continues on its own."])
         #expect(model.signInWaitingLine(id) == nil)
     }
 

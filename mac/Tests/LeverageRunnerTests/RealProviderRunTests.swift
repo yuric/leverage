@@ -53,7 +53,7 @@ enum RealProviderRun {
         let toolPath: String
         let folder: URL
         /// The environment `ToolConfiguration` reads: this process's own
-        /// without any leverage variable, then only the check's.
+        /// without any Leverage variable, then only the check's.
         let environment: [String: String]
 
         init?(environment process: [String: String]) {
@@ -193,7 +193,7 @@ enum RealProviderRun {
         versions: BriefingVersions(roleFileVersion: "0.0.0", contractVersion: 1),
         roleFile: "You build what the contract asks, in the folder you are run in.",
         contract: BriefingContract(
-            contractVersion: 1, goal: "A file shows that this tool can work in a folder for leverage.",
+            contractVersion: 1, goal: "A file shows that this tool can work in a folder for Leverage.",
             details: nil, criteria: [checkCriterion]))
 
     static func exitStatus(_ failure: ToolFailure) -> String {
