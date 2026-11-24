@@ -1,6 +1,6 @@
 import Foundation
 
-/// The helper's calls, one method per operation milestone 2 serves. The
+/// The helper's calls, one method per served operation. The
 /// helper takes `any HelperAPI`: `HelperClient` sends them over HTTP with
 /// the helper's token, and LeverageTestSupport's `FakeHelperAPI` answers
 /// them in memory.
@@ -27,5 +27,8 @@ public protocol HelperAPI: Sendable {
     func reportLimit(credentialID: UUID, _ report: LimitReport, key: IdempotencyKey) async throws -> PlainOutcome
     /// `report_signed_out`: a run found this credential's login signed out.
     func reportSignedOut(credentialID: UUID, _ report: SignOutReport, key: IdempotencyKey) async throws
+        -> PlainOutcome
+    /// `report_reading`: a usage reading, with figures and times only.
+    func reportReading(credentialID: UUID, _ reading: CredentialReading, key: IdempotencyKey) async throws
         -> PlainOutcome
 }

@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active in the Questions and approvals milestone. |
-| **Last updated** | 2026-11-20 |
+| **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
+| **Last updated** | 2026-11-21 |
 
 This document says how to run and operate leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -54,7 +54,7 @@ environment.
    characters. There is no way to recover a forgotten password.
 3. In Credentials, choose Add credential, pick a provider, name the login,
    and sign in to the provider's tool when leverage asks. Whether the
-   tool's own window opens by itself is not yet known for any provider;
+   tool's own window opens by itself for Claude, Codex and Grok remains to be verified;
    for Gemini, sign in to Antigravity yourself first, since it has no
    sign-in command. leverage checks that the tool is installed (offering to
    install it where it can), that the login is signed in, and that it
@@ -119,10 +119,33 @@ client speaks MCP with the child over standard input and output.
 | The last Needs you item the app announced | `<support folder>/inbox-cursor`, one number, mode 0600 |
 | The API | `http://127.0.0.1:<port>`, the first free port from 47130 to 47139, kept in `API_PORT` in the server folder's `.env` |
 | A Claude or Codex login's settings | `<support folder>/accounts/<credential id>/` |
+| Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
 | Tools leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
+
+For an API token, choose Add credential, pick an API token provider,
+name the credential and paste the token into the secure field. The
+bundled helper saves a verified token and its provider in a generic
+password item, service `leverage API token`, account the credential ID.
+The default macOS setup uses the login Keychain. A custom default or
+search list affects where the file-based Security API stores and finds
+the item. A rebuilt app may prompt for Keychain access. Tokens stay on
+this Mac. If an item has no saved provider, Remove and Add it again.
+
+Remove first deletes the server row and its readings. The app tries to
+record the confirmed credential ID in the support folder and sends the
+cleanup request to the running helper even if recording fails. The
+helper deletes the Keychain item and removes settings folders it can
+verify, including private folders made by earlier versions. A folder
+whose ownership leverage cannot verify is kept, as are shared Mac
+sign-ins. The app resends pending cleanup when the helper starts. The
+helper clears the pending ID after deleting any saved token and either
+removing the folder, finding it absent or keeping it because ownership
+could not be verified.
+Readings are kept with their credential. The sweep deletes finished
+and failed read requests after seven days.
 
 ## Where the log is, and what destroys it
 
@@ -259,8 +282,9 @@ These app-form lines have not been run against an owner's installation;
 the drill runs the repository's form.
 
 **Afterwards, the owner** opens the app, which issues the helper a new
-token, and in Credentials runs Verify on each login, choosing Sign in again
-on any that says it is signed out. Tokens issued after the dump no longer
+token. In Credentials the owner runs Verify all and chooses Sign in again
+for any login that needs it. A provider token missing from this Mac needs
+to be removed and added again. Leverage tokens issued after the dump no longer
 match, and the log holds nothing written after the dump. The app finds by
 itself that the Needs you cursor it keeps (`<support folder>/inbox-cursor`)
 is of the log before the restore, starts it again, and announces every
@@ -389,6 +413,7 @@ scripts/e2e_core_loop.sh
 scripts/e2e_handoff.sh
 scripts/e2e_rule_checks.sh
 scripts/e2e_questions_approvals.sh
+scripts/e2e_credentials.sh
 scripts/restore_drill.sh
 scripts/build_app.sh && scripts/smoke_app.sh
 ```
@@ -413,10 +438,13 @@ for markers and for the test's task text in events and logs.
 `scripts/e2e_questions_approvals.sh` exercises questions, outward actions,
 project budgets and the built MCP server with stand-ins. Each of seven
 cases runs in its own project and checks replay, audit and the secret scan.
+`scripts/e2e_credentials.sh` runs Add and usage, API tokens, and reorder
+and capacity in three separate projects with stand-ins. Each checks replay,
+the audit and the secret scan. The reorder case also checks recovery times.
 `scripts/restore_drill.sh` alone fills a project of its own with a seeded
 log, dumps it, removes the volume and restores into the new cluster.
 `scripts/smoke_app.sh` opens the built app with a support folder and a
-compose project of its own (`leverage-smoke-<pid>`), notifications off,
+compose project of its own (`leverage-smoke-<pid>`), notifications off and tokens in memory,
 waits for the server's health and the first dump, checks that sign-up
 wrote the seven shipped rules and that a second start of the server wrote
 none again, and removes both.
@@ -440,6 +468,24 @@ skipped because the tool is not installed, and 4 when it was skipped
 because the tool is not signed in. `--evidence <file>` also writes the
 result to a file, and `--timeout` limits the tool run (300 seconds by
 default).
+
+### Credential reader settings
+
+| Setting | Effect |
+| --- | --- |
+| `LEVERAGE_TOKEN_STORE=memory` | The helper uses a process-local vault. Smoke and stand-in runs set this. Unbundled developer helpers use memory by default. |
+| `LEVERAGE_READ_TIMEOUT_SECONDS` | One usage read's ceiling, from 1 to 15 seconds. Invalid or absent values use 15. |
+| `LEVERAGE_PROVIDER_API_BASE` | Test-only provider endpoint on IPv4 loopback. The unbundled helper accepts only marked stand-in tokens through this override. The bundled helper refuses it. |
+
+A developer launch of the app bundle uses `LEVERAGE_TOKEN_STORE=memory`
+to exercise the same local channel without storing tokens. The app passes
+that setting to its helper. The read timeout and provider endpoint
+override are settings for direct helper runs. The app uses the default
+timeout and the catalog endpoints. The maintainer's separately guarded
+`scripts/capture_reader_reply.py` developer check uses a signed-in tool to
+record scrubbed structure outside the repository. Its self-test uses
+stand-ins. The evidence for each login is in
+[Implementation progress](IMPLEMENTATION.md#credentials-readers-and-recordings).
 
 ### Eval suites and real checks
 

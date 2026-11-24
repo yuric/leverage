@@ -166,7 +166,7 @@
     "check_queue_timeout", "check_run_timeout", "question_job_queue_timeout",
     "question_job_run_timeout", "contract_draft_job_queue_timeout",
     "contract_draft_job_run_timeout", "credential_hold_release", "orchestrator_offline",
-    "reviewer_eligibility", "command_key_retention", "seat_run_placement"
+    "reviewer_eligibility", "command_key_retention", "seat_run_placement", "usage_read_due"
   ],
   "operations": [
     {"operation_id": "get_next", "method": "GET", "path": "/v1/next", "caller": "any", "commands": ["read"], "tag": "agent"},

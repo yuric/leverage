@@ -1,8 +1,8 @@
 require "test_helper"
 require_relative "../support/trace_runner"
 
-# Golden traces (PRD test 8, AT-6): run every trace through the engine with
-# its setup's rules, and compare its events and steps field for field.
+# Golden traces (PRD test 8, AT-6, CT-3): run each trace through the engine
+# and compare its events and steps field for field.
 class GoldenTracesTest < ActiveSupport::TestCase
   NAMES = Dir[Rails.root.join("contract/traces/*.json")].map { |path| File.basename(path, ".json") }.sort.freeze
 
@@ -10,8 +10,10 @@ class GoldenTracesTest < ActiveSupport::TestCase
     test "trace #{name} runs whole and writes exactly its events and steps" do
       runner = TraceRunner.new(name).run
       assert_empty runner.failures, runner.failures.join("\n")
-      assert_empty Leverage::Replay.diff(runner.workspace_id), "the replay of #{name}'s log"
-      assert_empty Leverage::LogAudit.call(runner.workspace_id, after_seq: runner.setup_seq), "the log audit of #{name}"
+      diff = Leverage::Replay.diff(runner.workspace_id)
+      assert_empty diff, "the replay of #{name}'s log: #{diff.inspect}"
+      findings = Leverage::LogAudit.call(runner.workspace_id, after_seq: runner.setup_seq)
+      assert_empty findings, findings.join("\n")
     end
   end
 

@@ -24,6 +24,6 @@
     "marker": "LVRG-REPLY-fd2389b37da5"
   },
   "exit_status": 1,
-  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-fd2389b37da5\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"item.completed\", \"item\": {\"id\": \"item_0\", \"type\": \"agent_message\", \"text\": \"The 5-hour limit test returns 401 Unauthorized.\"}}\n{\"type\": \"error\", \"message\": \"stream disconnected before completion\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"stream disconnected before completion\"}}\n",
+  "stdout": "{\"type\": \"thread.started\", \"thread_id\": \"LVRG-REPLY-fd2389b37da5\"}\n{\"type\": \"turn.started\"}\n{\"type\": \"item.completed\", \"item\": {\"id\": \"<scrubbed>\", \"type\": \"agent_message\", \"text\": \"The 5-hour limit test returns 401 Unauthorized.\"}}\n{\"type\": \"error\", \"message\": \"stream disconnected before completion\"}\n{\"type\": \"turn.failed\", \"error\": {\"message\": \"stream disconnected before completion\"}}\n",
   "stderr": ""
 }

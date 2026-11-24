@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "provider": "openrouter",
+    "tool": "openrouter",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Unauthorized token",
+    "expect": {
+      "state": "signed_out",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c000003"
+  },
+  "status": 401,
+  "headers": {},
+  "body": {
+    "error": {
+      "code": 401,
+      "message": "LVRG-REPLY-60002c000003"
+    }
+  }
+}

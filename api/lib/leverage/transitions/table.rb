@@ -16,7 +16,7 @@ module Leverage
       TIMERS = %w[
         builder_lease_expiry review_lease_expiry command_key_retention credential_hold_release seat_run_placement
         check_queue_timeout check_run_timeout contract_draft_job_queue_timeout contract_draft_job_run_timeout
-        orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout
+        orchestrator_offline reviewer_eligibility question_job_queue_timeout question_job_run_timeout usage_read_due
       ].freeze
       SIGN_IN = %w[create_owner sign_in sign_out issue_seat_token].freeze
       ACCOUNTS = %w[
@@ -38,8 +38,9 @@ module Leverage
         change_task_project change_task_cap
       ].freeze
       WORKSPACE = %w[delete_content change_workspace_settings].freeze
+      CREDENTIALS = %w[rename_credential remove_credential reorder_credentials refresh_usage report_reading].freeze
       COMMANDS = (TASK_LOOP + TIMERS + SIGN_IN + ACCOUNTS + HANDOFF + OWNER_CONTROLS + RULES + CHECKS + JOBS +
-        FINISHING + QUESTIONS + PROJECTS + WORKSPACE).freeze
+        FINISHING + QUESTIONS + PROJECTS + WORKSPACE + CREDENTIALS).freeze
 
       @overrides = {}
 

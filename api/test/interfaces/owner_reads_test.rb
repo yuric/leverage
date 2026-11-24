@@ -151,7 +151,7 @@ class OwnerReadsTest < CommittingTestCase
     credential = scenario.credential
     reset = Time.current.change(usec: 0) + 3600
     credential.update_columns(limited_since: Time.current.change(usec: 0), limited_until: reset)
-    task = scenario.task(state: "working", builder: scenario.seat(role: "builder"))
+    task = scenario.task(state: "working", builder: scenario.seat(role: "builder", credential: credential))
     ActiveRecord::Base.transaction do
       Leverage::Holds.open(scenario.context, task: task, reason: "credential_limit", credential_id: credential.id)
     end
@@ -361,6 +361,76 @@ class OwnerReadsTest < CommittingTestCase
   def page_and_card(task)
     page = assert_read("/v1/owner/tasks/#{task.id}")
     [ page.slice(*WAITING), ready_card(task).slice(*WAITING) ]
+  end
+
+  def reorder_credentials(*credentials)
+    post "/v1/owner/credentials/order", params: { order: credentials.map(&:id) }.to_json,
+      headers: { "Authorization" => "Bearer #{@owner_token}", "Idempotency-Key" => SecureRandom.uuid,
+                 "Content-Type" => "application/json" }
+    assert_response :ok, response.body
+    assert_response_matches_contract
+  end
+
+  test "both reads show the earliest reset that becomes eligible after reorder" do
+    soon = scenario.credential
+    later = scenario.credential
+    own = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    reset = scenario.database_now.change(usec: 0) + 1800
+    scenario.limit_credential(soon, reset_at: reset)
+    scenario.limit_credential(later, reset_at: reset + 1800)
+    scenario.limit_credential(own)
+    hold = scenario.hold(task, reason: "credential_limit", credential: own, facts: { credential_id: own.id })
+    step = TaskStep.where(task_id: task.id, closed_at: nil).sole
+    before = [ hold.reload.attributes, step.attributes ]
+    assert_equal [ { "waiting_for_credential_id" => own.id, "waiting_until" => nil } ] * 2, page_and_card(task)
+
+    reorder_credentials(own, later, soon)
+
+    assert_equal [ { "waiting_for_credential_id" => soon.id, "waiting_until" => reset.utc.iso8601(6) } ] * 2, page_and_card(task)
+    assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
+  end
+
+  test "both reads drop the reset that becomes ineligible after reorder" do
+    own = scenario.credential
+    dated = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    reset = scenario.database_now.change(usec: 0) + 1800
+    scenario.limit_credential(own)
+    scenario.limit_credential(dated, reset_at: reset)
+    hold = scenario.hold(task, reason: "credential_limit", credential: dated, item: false)
+    step = TaskStep.where(task_id: task.id, closed_at: nil).sole
+    before = [ hold.reload.attributes, step.attributes ]
+    assert_equal [ { "waiting_for_credential_id" => dated.id, "waiting_until" => reset.utc.iso8601(6) } ] * 2, page_and_card(task)
+
+    reorder_credentials(dated, own)
+
+    expected = [ { "waiting_for_credential_id" => own.id, "waiting_until" => nil } ] * 2
+    assert_equal expected, page_and_card(task), "the remaining login has no reset time"
+    scenario.sign_out_credential(own)
+    assert_equal expected, page_and_card(task), "the remaining login now needs sign-in"
+    assert_equal before, [ hold.reload.attributes, step.reload.attributes ]
+  end
+
+  test "both reads omit the account once its reset passed while the hold is still open" do
+    own = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    scenario.limit_credential(own, reset_at: scenario.database_now - 1)
+    scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    assert_equal [ { "waiting_for_credential_id" => nil, "waiting_until" => nil } ] * 2, page_and_card(task)
+  end
+
+  test "both reads omit a future reset when another eligible account is already available" do
+    own = scenario.credential
+    spare = scenario.credential
+    task = scenario.task(state: "working", builder: scenario.seat(credential: own))
+    now = scenario.database_now
+    scenario.limit_credential(own, reset_at: now - 1)
+    scenario.limit_credential(spare, reset_at: now + 1800)
+    scenario.hold(task, reason: "credential_limit", credential: own, item: false)
+
+    assert_equal [ { "waiting_for_credential_id" => nil, "waiting_until" => nil } ] * 2, page_and_card(task)
   end
 
   test "the task page names the signed-out account a Ready task waits for, as its card does (HE-16)" do
@@ -609,6 +679,38 @@ class OwnerReadsTest < CommittingTestCase
     shown = scenario.credential(name: "Added")
 
     assert_equal [ shown.id ], assert_read("/v1/owner/credentials")["credentials"].map { |row| row.dig("credential", "id") }
+  end
+
+  test "the credentials list pairs each added credential in handoff order with its newest reading or null" do
+    token = scenario.token_credential(position: 4)
+    running = scenario.credential(added: false, position: 2)
+    login = scenario.credential(position: 1)
+    unread = scenario.credential(position: 3)
+    other = Scenario.new
+    foreign = other.credential
+    now = scenario.database_now
+    observed_at = now - 30
+    figures = [ { "label" => "Five hours", "kind" => "limit", "window" => "five_hour",
+                  "percent_used" => 0, "reset_at" => nil, "value" => nil } ]
+    resets = [ { "kind" => "five_hour", "count" => 0, "expires_at" => nil } ]
+
+    scenario.reading(login, observed_at: observed_at, created_at: now - 10, tool_version: "0.0.0-made-up", figures: figures, resets: resets)
+    scenario.reading(login, observed_at: now - 60, created_at: now, state: "unavailable")
+    scenario.reading(token, observed_at: now, state: "unavailable")
+    scenario.reading(running, observed_at: now)
+    other.reading(foreign, observed_at: now)
+
+    body = assert_read("/v1/owner/credentials")
+
+    assert_equal last_seq, body["as_of_seq"]
+    rows = body["credentials"]
+    assert_equal [ login.id, unread.id, token.id ], rows.map { |row| row.dig("credential", "id") }
+    assert_equal({ "credential_id" => login.id, "observed_at" => observed_at.utc.iso8601(6), "state" => "ok",
+                   "tool_version" => "0.0.0-made-up", "figures" => figures, "resets" => resets }, rows.first.fetch("reading"))
+    assert_nil rows.second.fetch("reading")
+    assert_equal({ "credential_id" => token.id, "observed_at" => now.utc.iso8601(6), "state" => "unavailable",
+                   "tool_version" => nil, "figures" => [], "resets" => nil }, rows.last.fetch("reading"))
+    assert_no_match(/"[^" ]*(?:token|secret|password|digest|hash)[^" ]*"\s*:/i, response.body)
   end
 
   # --- get_system_health ----------------------------------------------------------------------------------------------

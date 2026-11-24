@@ -37,7 +37,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   TABLES = [
     Event, Command, Task, Criterion, Evidence, Review, TaskStep, Hold, BriefingAcknowledgement, Seat, Credential,
     HelperRequest, Helper, Session, User, Workspace, InboxItem, Rule, RuleVersion, RuleCheck, RuleCheckAttempt, Job,
-    PendingTransition, Action, Question, Project, BriefEntry
+    PendingTransition, Action, Question, Project, BriefEntry, CredentialReading
   ].freeze
 
   # One call: who sends it and with what. Each case below returns one.
@@ -127,7 +127,14 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     "waive_action" => :waive_action,
     "mark_action_done" => :mark_action_done,
     "overturn_approval" => :overturn_approval,
-    "change_workspace_settings" => :change_workspace_settings
+    "change_workspace_settings" => :change_workspace_settings,
+    # Milestone 6 (CT-1).
+    "rename_credential" => :rename_credential,
+    "remove_credential" => :remove_credential,
+    "reorder_credentials" => :reorder_credentials,
+    "refresh_usage" => :refresh_usage,
+    "verify_all_credentials" => :verify_all_credentials,
+    "report_reading" => :report_reading
   }.freeze
 
   # A second case for an operation that runs two commands.
@@ -496,6 +503,38 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   def verify_credential
     @scenario.helper
     owner_call(ids: { "id" => @scenario.credential.id })
+  end
+
+  def rename_credential
+    owner_call(ids: { "id" => @scenario.credential.id }, body: { "name" => "Renamed account" })
+  end
+
+  def remove_credential
+    owner_call(ids: { "id" => @scenario.token_credential.id })
+  end
+
+  def reorder_credentials
+    logins = Array.new(3) { @scenario.credential }
+    owner_call(body: { "order" => logins.rotate.map(&:id) })
+  end
+
+  def refresh_usage
+    @scenario.helper
+    @scenario.credential
+    owner_call
+  end
+
+  def verify_all_credentials
+    @scenario.helper
+    @scenario.credential
+    @scenario.token_credential
+    owner_call
+  end
+
+  def report_reading
+    id = @scenario.credential.id
+    helper_call(ids: { "id" => id }, body: { "credential_id" => id, "observed_at" => @scenario.database_now.utc.iso8601(6),
+      "state" => "unavailable", "figures" => [], "resets" => nil, "tool_version" => nil })
   end
 
   def install_tool

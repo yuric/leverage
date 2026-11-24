@@ -161,7 +161,7 @@
         {"choice": "sign_in_again", "operation_id": "sign_in_again", "when": null}
       ],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
-      "closes": null
+      "closes": "When this item’s credential is verified or its hold closes. A reading that restores a signed-in candidate closes the hold and resolves its item at the reading command time."
     },
     {
       "item": "limit_with_no_reset_time",
@@ -171,7 +171,7 @@
       "prd_choices": "None. It closes when a reading shows capacity.",
       "choices": [],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"credential_id": {"type": "string", "format": "uuid"}}, "required": ["credential_id"]},
-      "closes": "When a reading shows capacity for the credential (L199, L696). Until the usage readers exist, a passed Verify or Sign in again of the credential is that reading (milestone 3 plan HE-2)."
+      "closes": "When a new ok reading shows capacity in every window refused since the current limit began. When any refusal named no window the reading must also show room in every limit figure and include at least one (milestone 6 plan CR-14). A passed Verify or Sign in again of the credential still clears a limit with no reset time (milestone 3 plan HE-2). The item is also resolved when its hold has a reset time to wait for again (milestone 6 plan CR-28)."
     },
     {
       "item": "no_reviewer_eligible",

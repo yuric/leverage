@@ -23,6 +23,81 @@ struct ProviderCatalogTests {
         #expect(logins == ["claude", "codex", "gemini", "grok"])
     }
 
+    @Test("token entries match the registry's token providers in order")
+    func tokensMatchRegistry() throws {
+        let data = try Data(contentsOf: RegistryDecodingTests.registryURL)
+        let registry = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let providers = try #require(registry?["credential_providers"] as? [[String: Any]])
+        let tokens = providers.filter { $0["kind"] as? String == "api_token" }.compactMap { $0["provider"] as? String }
+
+        #expect(ProviderCatalog.tokenEntries.map(\.provider.rawValue) == tokens)
+        #expect(tokens == ["claude_api", "openai_api", "gemini_api", "grok_api", "openrouter"])
+        for provider in Provider.allCases where provider.kind == .login {
+            #expect(ProviderCatalog.tokenEntry(for: provider) == nil)
+        }
+    }
+
+    @Test("each token check has a documented HTTPS endpoint and sends the token in a header", arguments: [
+        (Provider.claudeApi, "Claude API", "https://api.anthropic.com/v1/models", "Authorization", "Bearer"),
+        (Provider.openaiApi, "OpenAI API", "https://api.openai.com/v1/models", "Authorization", "Bearer"),
+        (Provider.geminiApi, "Gemini API", "https://generativelanguage.googleapis.com/v1beta/models", "x-goog-api-key", ""),
+        (Provider.grokApi, "Grok API", "https://api.x.ai/v1/api-key", "Authorization", "Bearer"),
+        (Provider.openrouter, "OpenRouter", "https://openrouter.ai/api/v1/key", "Authorization", "Bearer"),
+    ])
+    func tokenCheck(provider: Provider, name: String, address: String, header: String, scheme: String) throws {
+        let entry = try #require(ProviderCatalog.tokenEntry(for: provider))
+        #expect(entry.provider == provider)
+        #expect(entry.displayName == name)
+        #expect(entry.url.value.absoluteString == address)
+        #expect(entry.url.evidence == .documented)
+        #expect(entry.method == Evidenced("GET", .prd))
+        let url = entry.url.value
+        #expect(url.scheme == "https")
+        #expect(url.user == nil && url.password == nil && url.query == nil && url.fragment == nil)
+        let authentication = TokenAuthentication(header: header, scheme: scheme.isEmpty ? nil : scheme)
+        #expect(entry.authentication == Evidenced(authentication, .documented))
+        let extra = provider == .claudeApi ? ["anthropic-version": "2026-10-21"] : [:]
+        #expect(entry.extraHeaders == Evidenced(extra, .documented))
+        #expect(ProviderCatalog.loginUsage(for: provider) == nil)
+    }
+
+    @Test("only documented request allowances may be read from response headers", arguments: [
+        (Provider.claudeApi, ["anthropic-ratelimit-requests-remaining"]),
+        (Provider.openaiApi, ["x-ratelimit-remaining-requests"]),
+        (Provider.geminiApi, []),
+        (Provider.grokApi, []),
+        (Provider.openrouter, []),
+    ])
+    func tokenResponseHeaders(provider: Provider, headers: [String]) throws {
+        let entry = try #require(ProviderCatalog.tokenEntry(for: provider))
+        #expect(entry.responseHeaders == Evidenced(headers, .documented))
+    }
+
+    @Test("Claude's usage report and Codex's app-server retain evidence for each fact")
+    func loginCommands() throws {
+        let claude = try #require(ProviderCatalog.loginUsage(for: .claude))
+        #expect(claude.arguments == Evidenced(["-p", "/usage", "--output-format", "json"], .prd))
+        #expect(claude.details.contains(Evidenced("cachedUsageUtilization.utilization.cedar_ember", .prd)))
+        #expect(claude.details.contains(Evidenced(".claude.json in CLAUDE_CONFIG_DIR", .probe)))
+        #expect(claude.details.contains(Evidenced("Whether the entry is kept in that file", .unverified)))
+
+        let codex = try #require(ProviderCatalog.loginUsage(for: .codex))
+        #expect(codex.arguments == Evidenced(["app-server"], .help))
+        #expect(codex.details.contains(Evidenced("account/rateLimits/read", .schema)))
+        #expect(codex.details.contains(Evidenced("account/usage/read", .schema)))
+        #expect(codex.details.contains(Evidenced("One JSON object per line", .unverified)))
+    }
+
+    @Test("Gemini's usage screen and Grok's help are descriptive sources", arguments: [
+        (Provider.gemini, "Antigravity interactive /usage", Evidence.documented),
+        (Provider.grok, "grok usage --json", Evidence.help),
+    ])
+    func loginSources(provider: Provider, source: String, evidence: Evidence) throws {
+        let usage = try #require(ProviderCatalog.loginUsage(for: provider))
+        #expect(usage.source == Evidenced(source, evidence))
+        #expect(usage.arguments == Evidenced(nil, .help))
+    }
+
     @Test("names: the provider as the app shows it, the tool and its program")
     func names() {
         #expect(ProviderCatalog.entries.map(\.displayName) == ["Claude", "Codex", "Gemini", "Grok"])
@@ -152,7 +227,7 @@ struct ProviderCatalogTests {
     @Test("no evidence level below probe is called proven")
     func evidenceNames() {
         #expect(Evidence.allCases.map(\.rawValue)
-            == ["probe", "probe (full environment)", "help", "documented", "unverified"])
+            == ["probe", "probe (full environment)", "help", "documented", "unverified", "schema", "PRD"])
         #expect(Evidence.allCases.filter(\.isProven) == [.probe])
     }
 

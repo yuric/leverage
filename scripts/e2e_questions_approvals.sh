@@ -142,10 +142,14 @@ for test in "${tests[@]}"; do
   U exec -T backup ls -l /backups >"$folder/backups.txt"
   # Real tokens stay in memory. The scan checks their common prefixes
   # and Bearer shapes, plus the literals of the made-up owner and tools.
-  scan=(python3 -I scripts/secret_scan.py --replies "$replies"
+  scan=(python3 -I scripts/secret_scan.py --replies "$replies" --credentials-dump "$folder/dump.sql"
     --literal "made-up-e2e-owner-password"
     --literal "standin.owner@example.invalid"
     --literal "Stand-in Example Org")
+  # Only action cases connect a builder on a Claude login.
+  case "$test" in
+    OutwardActionEndToEndTests/*) scan+=(--account-email "standin.owner@example.invalid") ;;
+  esac
   for logs in "$folder"/*/support/logs; do scan+=("$logs" --logs "$logs"); done
   for calls in "$folder"/*/StandIns/state/calls.jsonl; do
     if [ -f "$calls" ]; then scan+=("$calls"); fi
@@ -164,7 +168,7 @@ for test in "${tests[@]}"; do
     exit 1
   fi
   scan+=(--events-dump "$folder/dump.sql" --logs "$folder/containers.log")
-  scan+=("$folder/containers.log" "$folder/dump.sql" "$folder/backups.txt")
+  scan+=("$folder/containers.log" "$folder/backups.txt")
   say "$n. $test: scanning the logs, the dump and the backup folder's listing"
   "${scan[@]}"
 

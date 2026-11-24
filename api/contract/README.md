@@ -705,3 +705,58 @@ allows the recovery time ceiling to be cleared (AP-39).
   within each project before making their positions required and unique.
   It checks the question outcome and basis lists, lets job input be
   cleared, and indexes Finishing tasks with no holder by workspace.
+
+## What the Credentials milestone added
+
+The milestone serves the existing owner operations for rename, remove,
+Refresh, Verify all and reorder, and the helper's `report_reading`.
+Refresh and Verify all return their request ids as `helper_request_ids`
+in the completed outcome's result.
+
+- `usage_read_due` is a workspace timer on every sweep. It queues due
+  usage reads and writes no event (CR-10).
+- The sweep and Refresh expire usage pickups older than 90 seconds.
+  They use the existing failed result with `reading_taken` and
+  `timed_out`. Late results cannot replace the timed-out receipt.
+- A reorder writes `credential.order_changed` for each added credential
+  whose rank among added credentials changed, in the new order. Reorder
+  and Remove can close credential holds, switch credentials, and resolve or open
+  Needs you items. Remove keeps unfinished `stop_seat` requests. The
+  helper can finish a seat stop after forgetting its credential. A limit
+  item also resolves if its hold has a reset time to wait for again
+  (CR-28, CR-30, CR-32).
+- Reorder can resolve an item whose login is no longer a candidate.
+  The hold keeps its original reason and subject.
+- Add and Rename trim surrounding whitespace and require a nonblank name
+  unique within its provider and kind. An unchanged name writes no event.
+- A reading at most 60 seconds ahead of the command time is stored
+  without a credential event. To clear a limit, an `ok` reading must
+  have been observed after the latest refusal in the current limit.
+  Every named window refused since the limit began needs at least one
+  limit figure, with every such figure below 100 percent used. When any
+  refusal named no window, or no refusal is recorded, the reading must
+  also include a limit figure and every limit figure must be below 100.
+  When this restores a candidate, either credential hold can close at
+  the command time. A passed Verify still clears an undated limit (CR-14).
+- Add accepts an API token with the fixed mask `••••••••` and a login
+  with a null label. The database clears any older nonconforming labels
+  before enforcing those two values. The helper's successful add result
+  places the credential in the handoff order and queues its first read.
+  The result of `read_usage` writes no event. Verify can record
+  `credential.signed_out` v1 for a rejected or missing token using the
+  existing payload (CR-7, CR-13, CR-29, TK-3).
+- The helper reports `token_store_unavailable` when the Mac cannot read
+  or save a token, and `provider_mismatch` when the token lacks a local
+  binding to the requested provider. Neither signs the credential out.
+  A connection failure is `unreachable`. A token check that receives an
+  unexpected HTTP reply fails with `no_answer`.
+- The reading schema limits figures to 32, resets to 16, tool version
+  to 64 characters, and figure labels and string values to 80 characters
+  each. The account reads keep their existing response fields.
+- `readers.json` names the sources and the labels, including US dollars
+  in OpenRouter's money labels and Requests remaining for Claude API and
+  OpenAI API. A tested tool version requires a recorded usage reply.
+  Every reader stays provisional (CR-5, CR-17, RD-3, RD-5, RD-6, RD-7).
+- Trace `24-reading-ends-a-limit-wait` covers when a reading clears a
+  limit, how reorders change a held task's candidates, and the events and
+  steps the task records (CT-3).

@@ -36,6 +36,9 @@ struct AddChecks: Sendable {
     let timings: HelperTimings
     let prober: any TestPrompting
     let log: Log
+    var cleanup: CredentialCleanup? = nil
+    var tokens: TokenChecks? = nil
+    var facts = AccountFacts()
 
     var locator: ToolLocator { ToolLocator(settings: settings, timings: timings) }
     var folders: AccountFolders { AccountFolders(supportFolder: settings.supportFolder) }
@@ -56,11 +59,14 @@ struct AddChecks: Sendable {
 
     private func run(_ request: HelperRequest, mode: Mode) async -> HelperRequestResult {
         var run = CheckRun(request: request, api: api, log: log)
-        guard let credential = request.credentialID, request.params.credentialKind != .apiToken,
-              let provider = request.params.provider,
-              let entry = ProviderCatalog.entry(for: provider.rawValue)
-        else {
-            // Tokens arrive in milestone 6; the server refuses them at Add.
+        guard let credential = request.credentialID, let provider = request.params.provider else {
+            return await run.fail(.toolInstalled, .notInstalled)
+        }
+        if request.params.credentialKind == .apiToken {
+            guard let tokens, mode != .signInAgain else { return await run.fail(.tokenWorks, .notSignedIn) }
+            return await tokens.run(provider, credentialID: credential, adding: mode == .add, check: &run)
+        }
+        guard let entry = ProviderCatalog.entry(for: provider.rawValue) else {
             return await run.fail(.toolInstalled, .notInstalled)
         }
         for check in Self.loginChecks {
@@ -74,7 +80,11 @@ struct AddChecks: Sendable {
             if mode == .verify, folder == nil { return await run.fail(.signedIn, .notSignedIn) }
             if mode == .add || folder == nil {
                 do {
-                    folder = try folders.createFresh(for: credential)
+                    if let cleanup {
+                        folder = try cleanup.createFolder(for: credential)
+                    } else {
+                        folder = try folders.createFresh(for: credential)
+                    }
                 } catch {
                     log.error("could not make the folder of credential \(credential.contractString)")
                     return await run.fail(.signedIn, .rejected)
@@ -132,6 +142,12 @@ struct AddChecks: Sendable {
             return await run.fail(.testPrompt, .noAnswer)
         }
         await run.pass(.testPrompt)
+        if mode != .signInAgain, !Task.isCancelled {
+            run.facts = await facts.read(ReaderAccount(
+                entry: entry, tool: tool, accountFolder: folder,
+                environment: locator.toolEnvironment(entry, toolPath: tool.path, accountFolder: folder),
+                workingDirectory: settings.supportFolder, deadline: ContinuousClock.now + timings.commandLimit))
+        }
         return run.result(.finished)
     }
 
@@ -152,6 +168,7 @@ struct CheckRun {
     let log: Log
     var checks: [HelperCheckResult] = []
     var toolVersion: String?
+    var facts = AccountFacts.Result()
 
     init(request: HelperRequest, api: any HelperAPI, log: Log) {
         self.request = request
@@ -162,6 +179,7 @@ struct CheckRun {
     /// Reports one check's state, with a key of its own; a failed report is
     /// logged and the checks go on (the result is what counts).
     func report(_ progress: HelperCheckProgress) async {
+        guard !Task.isCancelled else { return }
         do {
             _ = try await api.reportRequestProgress(requestID: request.id, progress, key: IdempotencyKey())
         } catch {
@@ -183,7 +201,9 @@ struct CheckRun {
     }
 
     func result(_ outcome: HelperRequestOutcome) -> HelperRequestResult {
-        // IN-25: no plan and no email in this milestone.
-        HelperRequestResult(outcome: outcome, checks: checks, toolVersion: toolVersion, plan: nil, accountEmail: nil)
+        HelperRequestResult(
+            outcome: outcome, checks: checks, toolVersion: toolVersion,
+            plan: facts.plan.flatMap { $0.count <= 40 ? $0 : nil },
+            accountEmail: facts.email.flatMap { $0.count <= 254 ? $0 : nil })
     }
 }

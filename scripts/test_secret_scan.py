@@ -586,6 +586,195 @@ class TaskTextTests(unittest.TestCase):
         self.assertIn("no log file", output)
 
 
+class CredentialScanTests(unittest.TestCase):
+    def setUp(self):
+        self.scan = Scan()
+        self.addCleanup(self.scan.close)
+        self.log = self.scan.file("helper.log", "nothing here\n")
+
+    def run_scan(self, *arguments):
+        return self.scan.run("--secrets", self.scan.secrets(PASSWORD), self.log, *arguments)
+
+    def run_dump(self, email=EMAIL, plan="stand-in plan", name="One", outside="no secret"):
+        # The five scripts use pg_dump --data-only --no-owner and COPY's
+        # actual column order. PostgreSQL quotes the position column.
+        dump_path = self.scan.root / "dump.sql"
+        dump_path.write_text(
+            "-- PostgreSQL database dump\n"
+            "COPY public.credentials (id, workspace_id, kind, provider, name, masked_label, plan, "
+            'account_email, state, limited_until, "position", model, effort, strength_rank, last_verified_at, '
+            "created_at, updated_at, limited_since) FROM stdin;\n"
+            f"1\t2\tlogin\tclaude\t{name}\t\\N\t{plan}\t{email}\tactive\t\\N\t0\t\\N\t\\N\t1\t\\N\t"
+            "2026-11-21 12:00:00+00\t2026-11-21 12:00:00+00\t\\N\n\\.\n"
+            "COPY public.helper_requests (id, result) FROM stdin;\n"
+            f"1\t{json.dumps({'account_email': outside})}\n\\.\n", encoding="utf-8")
+        return self.run_scan("--credentials-dump", dump_path, "--account-email", EMAIL)
+
+    def test_the_expected_email_in_the_account_email_column_passes(self):
+        code, output = self.run_dump()
+        self.assertEqual(code, 0, output)
+        self.assertIn("1 expected account email found", output)
+        self.assertNotIn(EMAIL, output)
+
+    def test_a_missing_or_partial_account_email_fails(self):
+        for email in (r"\N", "prefix-" + EMAIL):
+            with self.subTest(case="partial" if email.endswith(EMAIL) else "null"):
+                code, output = self.run_dump(email=email)
+                self.assertEqual(code, 1, output)
+                self.assertIn("expected account email missing", output)
+                if email.endswith(EMAIL):
+                    self.assertIn("dump.sql:3:", output)
+                self.assertNotIn(EMAIL, output)
+
+    def test_the_expected_email_is_found_in_other_columns_and_logs(self):
+        for column in ("name", "plan", "outside"):
+            with self.subTest(column=column):
+                code, output = self.run_dump(**{column: EMAIL})
+                self.assertEqual(code, 1, output)
+                self.assertIn("dump.sql:", output)
+                self.assertNotIn(EMAIL, output)
+        self.log.write_text(EMAIL, encoding="utf-8")
+        code, output = self.run_dump()
+        self.assertEqual(code, 1, output)
+        self.assertIn("helper.log:1:", output)
+        self.assertNotIn(EMAIL, output)
+
+    def test_other_secrets_in_account_fact_columns_still_fail(self):
+        code, output = self.run_dump(email=PASSWORD, plan=PASSWORD)
+        self.assertEqual(code, 1, output)
+        self.assertIn("dump.sql:3: secret 1", output)
+        self.assertNotIn(PASSWORD, output)
+
+    def test_a_dump_without_account_columns_is_refused(self):
+        path = self.scan.file("dump.sql", "COPY public.credentials (id, name) FROM stdin;\n1\tOne\n\\.\n")
+        code, output = self.run_scan("--credentials-dump", path, "--account-email", EMAIL)
+        self.assertEqual(code, 2, output)
+        self.assertIn("no account_email or plan column", output)
+
+    def test_malformed_credentials_copy_cannot_pass(self):
+        header = "COPY public.credentials (id, plan, account_email) FROM stdin;\n"
+        for dump_text, message in (("", "no credentials table"),
+                                   (header + "1\tOne\t\\N\n", "does not end"),
+                                   (header + "1\tOne\n\\.\n", "does not match its columns")):
+            with self.subTest(message=message):
+                path = self.scan.file("dump.sql", dump_text)
+                code, output = self.run_scan("--credentials-dump", path, "--account-email", EMAIL)
+                self.assertEqual(code, 2, output)
+                self.assertIn(message, output)
+
+    def test_an_expected_account_email_without_a_dump_is_refused(self):
+        code, output = self.run_scan("--account-email", EMAIL)
+        self.assertEqual(code, 2, output)
+        self.assertIn("needs --credentials-dump", output)
+
+    def token_record(self, *markers, extra=""):
+        path = self.scan.root / "provider-calls.jsonl"
+        entries = [json.dumps({"method": "GET", "path": "/api/v1/key",
+                               "headers": {"authorization": "Bearer " + marker}}) for marker in markers]
+        path.write_text("\n".join(entries) + "\n" + extra, encoding="utf-8")
+        return path
+
+    def test_each_expected_token_marker_must_be_in_the_stand_in_record(self):
+        markers = ["LVRG-TOKEN-" + f"{index:012x}" for index in (1, 2)]
+        expected = self.scan.secrets(*markers, name="markers.txt")
+        path = self.token_record(*markers)
+        code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+        self.assertEqual(code, 0, output)
+        self.assertIn("2 expected token markers found", output)
+        for marker in markers:
+            self.assertNotIn(marker, output)
+
+        path = self.token_record(markers[0])
+        code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+        self.assertEqual(code, 1, output)
+        self.assertIn("expected token marker missing", output)
+        self.assertNotIn(markers[1], output)
+
+    def test_token_markers_are_found_outside_their_stand_in_header(self):
+        marker = "LVRG-TOKEN-" + "a" * 12
+        expected = self.scan.secrets(marker, name="markers.txt")
+        path = self.token_record(marker, extra=json.dumps(
+            {"method": "GET", "path": "/" + marker, "headers": {}}) + "\n")
+        self.log.write_bytes(base64.b64encode(b"!" + marker.encode()) + b"\n")
+        code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+        self.assertEqual(code, 1, output)
+        self.assertIn("helper.log:1:", output)
+        self.assertIn("provider-calls.jsonl:2:", output)
+        self.assertNotIn(marker, output)
+
+    def test_only_get_in_the_stand_in_record_can_prove_the_positive_control(self):
+        marker = "LVRG-TOKEN-" + "a" * 12
+        expected = self.scan.secrets(marker, name="markers.txt")
+        path = self.scan.file("provider-calls.jsonl", json.dumps(
+            {"method": "POST", "path": "/api/v1/key", "headers": {"authorization": "Bearer " + marker}}
+        ) + "\n")
+        code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+        self.assertEqual(code, 1, output)
+        self.assertIn("expected token marker missing", output)
+        self.assertNotIn(marker, output)
+
+    def test_the_marker_and_record_inputs_are_required_together(self):
+        marker = "LVRG-TOKEN-" + "a" * 12
+        expected = self.scan.secrets(marker, name="markers.txt")
+        for flag, path in (("--provider-api-record", self.token_record(marker)), ("--token-markers", expected)):
+            with self.subTest(flag=flag):
+                code, output = self.run_scan(flag, path)
+                self.assertEqual(code, 2, output)
+                self.assertIn("must be used together", output)
+
+    def test_an_invalid_marker_list_or_record_cannot_pass(self):
+        marker = "LVRG-TOKEN-" + "a" * 12
+        path = self.token_record(marker)
+        cases = (([], "invalid or empty token marker list"),
+                 (["no-marker-here"], "invalid or empty token marker list"),
+                 ([marker, marker], "duplicate token marker"))
+        for values, message in cases:
+            with self.subTest(message=message):
+                expected = self.scan.secrets(*values, name="markers.txt")
+                code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+                self.assertEqual(code, 2, output)
+                self.assertIn(message, output)
+                self.assertNotIn(marker, output)
+        expected = self.scan.secrets(marker, name="markers.txt")
+        # A duplicate JSON key must not hide an occurrence outside an
+        # allowed header when the scanner parses the line.
+        path.write_text('{"path": "' + marker + '", "path": "/api/v1/key", "headers": {}}\n', encoding="utf-8")
+        code, output = self.run_scan("--provider-api-record", path, "--token-markers", expected)
+        self.assertEqual(code, 2, output)
+        self.assertIn("invalid stand-in API record", output)
+        self.assertNotIn(marker, output)
+
+    def test_token_marker_shape_is_found_without_a_stand_in_record(self):
+        marker = "LVRG-TOKEN-" + "b" * 12
+        self.log.write_text(marker, encoding="utf-8")
+        code, output = self.run_scan()
+        self.assertEqual(code, 1, output)
+        self.assertIn("test token marker", output)
+        self.assertNotIn(marker, output)
+
+    def test_usage_bodies_are_found_in_the_form_the_stand_ins_play(self):
+        replies = self.scan.root / "replies"
+        replies.mkdir()
+        body = {"data": {"label": "made-up usage for secret scanner verification"}}
+        message = {"result": {"account": {"planType": "made-up subscription type"}}}
+        account_id = "made-up-settings-account-id"
+        settings = {"oauthAccount": {"accountUuid": account_id}, "cachedUsageUtilization": None}
+        cases = [({"status": 200, "headers": {}, "body": body}, json.dumps(body)),
+                 ({"status": 200, "headers": {}, "body": body}, json.dumps(body, indent=2).splitlines()[2]),
+                 ({"session": {"account/read": message}}, json.dumps({**message, "id": 2}, separators=(",", ":"))),
+                 ({"settings": settings}, account_id)]
+        for index, (fixture, leak) in enumerate(cases):
+            with self.subTest(case=index):
+                fixture["meta"] = {"kind": "usage", "provider": "claude" if "settings" in fixture else "stand-in",
+                                   "marker": "LVRG-REPLY-" + f"{index:012x}"}
+                (replies / "usage-test.json").write_text(json.dumps(fixture), encoding="utf-8")
+                self.log.write_text(leak, encoding="utf-8")
+                code, output = self.run_scan("--replies", replies)
+                self.assertEqual(code, 1, output)
+                self.assertIn("usage-test.json", output)
+                self.assertNotIn(leak, output)
+
+
 if __name__ == "__main__":
     verbosity = 2 if "-v" in sys.argv[1:] else 1
     argv = [arg for arg in sys.argv if arg != "-v"]

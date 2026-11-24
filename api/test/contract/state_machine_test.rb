@@ -14,8 +14,10 @@ class StateMachineTest < Minitest::Test
   HOLDER_CLEARING_EVENTS = %w[task.submitted task.released task.lease_expired task.returned task.cancelled].freeze
   # The commands that close a credential hold and let the run go on (L118,
   # L694-L697): each may start the run on another credential. A change of
-  # the seat's credential is one of them (milestone 3 plan HE-10, HE-27).
-  CREDENTIAL_HOLD_RELEASES = %w[credential_hold_release report_reading report_request_result change_seat].freeze
+  # the seat's credential is one of them (milestone 3 plan HE-10, HE-27),
+  # as are a reorder and a removal (milestone 6 plan CR-30).
+  CREDENTIAL_HOLD_RELEASES = %w[credential_hold_release report_reading report_request_result change_seat
+                                reorder_credentials remove_credential].freeze
   CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
 
   def machine = Leverage::Contract.state_machine

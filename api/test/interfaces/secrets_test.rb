@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../support/http_calls"
 
 # No secret is kept or written where it does not belong (PRD L823; milestone
 # 2 plan IN-9, IN-11, IN-17, IN-18): a session, a seat and a helper token is
@@ -12,6 +13,7 @@ require "test_helper"
 # red until WP9 lands and first passes in WP17's whole-suite run.
 class SecretsTest < ActionDispatch::IntegrationTest
   include OpenapiAssertions
+  include HttpCalls
 
   T = Leverage::Transitions
 
@@ -138,5 +140,72 @@ class SecretsTest < ActionDispatch::IntegrationTest
     refute_includes text, scenario.helper_token
     refute_match TOKEN_SHAPE, text
     refute_match(/\blv[sho]_/, text, "nothing shaped like a token, not even a prefix")
+  end
+
+  test "credential operations keep account facts off the log and credentials off the wire" do
+    scenario = Scenario.new
+    credential = scenario.token_credential
+    request = scenario.helper_request(kind: "verify", credential: credential, state: "picked_up")
+    name = "00000000-0000-4000-8000-00000000f00a"
+    plan = "00000000-0000-4000-8000-00000000f00b"
+    email = "made-up-account@example.test"
+    marker = "LVRG-TOKEN-00000000f00c"
+    result = { "result" => { "outcome" => "finished", "tool_version" => nil, "plan" => plan, "account_email" => email,
+      "checks" => [ { "check" => "token_works", "passed" => true, "failure" => nil } ] } }
+    reading = { "credential_id" => credential.id, "observed_at" => scenario.database_now.utc.iso8601(6),
+      "state" => "ok", "tool_version" => nil, "figures" => [], "resets" => nil }
+    ids = { "id" => credential.id }
+
+    call("report_reading", token: scenario.helper_token, key: new_key, ids: ids,
+      body: reading.merge("unexpected" => "sk-#{marker}"), check_request: false)
+    assert_response :unprocessable_content
+    assert_response_matches_contract
+    assert_private_response(marker, email, plan, name)
+
+    calls = [
+      [ "report_request_result", scenario.helper_token, { "id" => request.id }, result ],
+      [ "rename_credential", scenario.owner_token, ids, { "name" => name } ],
+      [ "report_reading", scenario.helper_token, ids, reading ],
+      [ "refresh_usage", scenario.owner_token, {}, nil ],
+      [ "verify_all_credentials", scenario.owner_token, {}, nil ],
+      [ "reorder_credentials", scenario.owner_token, {}, { "order" => [ credential.id ] } ]
+    ]
+    calls.each do |operation, token, path_ids, body|
+      call(operation, token: token, key: new_key, ids: path_ids, body: body)
+      assert_response :ok
+      assert_response_matches_contract
+      assert_private_response(marker, email, plan, name)
+    end
+    assert_equal [ nil, nil ], request.reload.result.values_at("plan", "account_email")
+
+    call("list_credentials", token: scenario.owner_token)
+    assert_response :ok
+    assert_response_matches_contract
+    listed = response.parsed_body.fetch("credentials").sole.fetch("credential")
+    assert listed.values_at("name", "plan", "account_email") == [ name, plan, email ], "the owner sees the account facts"
+    assert_equal "••••••••", listed.fetch("masked_label")
+    assert_private_response(marker)
+
+    call("get_helper_request", token: scenario.owner_token, ids: { "id" => request.id }, query: { "wait" => 0 })
+    assert_response :ok
+    assert_response_matches_contract
+    assert_private_response(marker, email, plan, name)
+    call("remove_credential", token: scenario.owner_token, key: new_key, ids: ids)
+    assert_response :ok
+    assert_response_matches_contract
+    assert_private_response(marker, email, plan, name)
+
+    assert @log.string.include?("Parameters"), "the request parameters were logged"
+    { marker: marker, email: email, plan: plan, name: name }.each do |field, value|
+      refute @log.string.include?(value), "#{field} reached the request log"
+      refute stored_rows.include?(value), "#{field} reached a command, helper request or event"
+    end
+  end
+
+  private
+
+  def assert_private_response(*values)
+    values.each { |value| refute response.body.include?(value), "a private value reached the response" }
+    refute TOKEN_SHAPE.match?(response.body), "a leverage token reached the response"
   end
 end

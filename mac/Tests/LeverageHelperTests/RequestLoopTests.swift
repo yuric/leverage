@@ -316,16 +316,62 @@ struct RequestLoopTests {
 
     // MARK: The helper's own dispatch
 
-    @Test("the helper answers the kind this milestone does not serve, read_usage, with a failed result")
-    func unservedKinds() async throws {
+    @Test("stop_seat still stops a registered run after its credential is forgotten")
+    func stopsSeatAfterCredentialIsForgotten() async throws {
         let rig = try HelperRig()
         let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
+        let seat = UUID()
+        let credential = UUID()
+        _ = try runtime.cleanup.createFolder(for: credential)
+        let start = helperRequest(
+            .startSeat, seat: seat, credential: credential, params: .init(provider: .claude, role: .builder))
+        let started = await runtime.handle(start)
+        #expect(started?.outcome == .finished)
+        #expect(await runtime.launcher.runningSeats() == [seat])
 
-        // open_sign_in is served from milestone 3 (HE-36); usage readers are
-        // milestone 6's.
-        let result = await runtime.handle(helperRequest(.readUsage, credential: UUID()))
-        #expect(result?.outcome == .failed)
-        #expect(rig.api.calls.isEmpty)
+        await runtime.cleanup.forget(credential)
+        let result = await runtime.handle(helperRequest(.stopSeat, seat: seat, credential: credential))
+        let remaining = await runtime.launcher.runningSeats()
+        let stopped = rig.calls(.reportRunStopped)
+        await runtime.shutdown()
+
+        #expect(result?.outcome == .finished)
+        #expect(remaining.isEmpty)
+        #expect(stopped.map { $0.path["id"] } == [seat.contractString])
+    }
+
+    @Test("forget does not cancel a stop_seat already in flight with that credential ID")
+    func forgettingCredentialKeepsInFlightStop() async {
+        let running = RunningRequests()
+        let gate = Gate()
+        let credential = UUID()
+        running.start(helperRequest(.stopSeat, seat: UUID(), credential: credential)) {
+            await gate.wait()
+        }
+
+        let workToCancel = running.forget(credential)
+        gate.release()
+        await running.cancelAll()
+
+        #expect(workToCancel.isEmpty)
+    }
+
+    @Test("the helper dispatches read_usage and reports an unavailable reading for a login with no reader")
+    func dispatchesUsage() async throws {
+        let rig = try HelperRig()
+        rig.api.script {
+            $0.reportReading = { _, _, key in
+                .completed(.object([:]), key: key.value, command: .reportReading)
+            }
+        }
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog)
+
+        let result = await runtime.handle(helperRequest(
+            .readUsage, credential: UUID(), params: .init(provider: .gemini, credentialKind: .login)))
+
+        #expect(result?.checks == [HelperCheckResult(check: .readingTaken, passed: true)])
+        #expect(rig.calls(.reportReading).count == 1)
+        #expect(try rig.tools.calls().isEmpty)
     }
 
     @Test("the helper sends each kind to the part that does it")

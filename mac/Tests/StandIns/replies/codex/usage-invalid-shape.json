@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "provider": "codex",
+    "tool": "codex",
+    "tool_version": "0.169.0",
+    "date": "2026-11-21",
+    "basis": "made_from_recorded",
+    "kind": "usage",
+    "command": [
+      "app-server"
+    ],
+    "shows": "The usage summary is the wrong shape",
+    "expect": {
+      "state": "unavailable",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-800000000002"
+  },
+  "session": {
+    "initialize": {
+      "result": {
+        "codexHome": "<scrubbed>",
+        "userAgent": "codex-standin LVRG-REPLY-800000000002",
+        "platformFamily": "unix",
+        "platformOs": "macos"
+      }
+    },
+    "account/read": {
+      "result": {
+        "account": {
+          "type": "chatgpt",
+          "email": "<scrubbed>",
+          "planType": "<scrubbed>"
+        },
+        "requiresOpenaiAuth": true,
+        "userId": null
+      }
+    },
+    "account/rateLimits/read": {
+      "result": {
+        "rateLimits": {
+          "primary": {
+            "windowDurationMins": 300,
+            "usedPercent": 30,
+            "resetsAt": 1767243600
+          },
+          "secondary": {
+            "windowDurationMins": 10080,
+            "usedPercent": 12,
+            "resetsAt": 1767830400
+          },
+          "credits": null,
+          "planType": "<scrubbed>"
+        },
+        "rateLimitResetCredits": null,
+        "rateLimitsByLimitId": {
+          "codex": {
+            "primary": {
+              "windowDurationMins": 300,
+              "usedPercent": 30,
+              "resetsAt": 1767243600
+            },
+            "secondary": {
+              "windowDurationMins": 10080,
+              "usedPercent": 12,
+              "resetsAt": 1767830400
+            },
+            "credits": null,
+            "planType": "<scrubbed>"
+          }
+        }
+      }
+    },
+    "account/usage/read": {
+      "result": {
+        "summary": [],
+        "dailyUsageBuckets": [],
+        "threadUsage": null
+      }
+    }
+  }
+}

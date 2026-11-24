@@ -143,6 +143,7 @@ env -i \
   LEVERAGE_SUPPORT_DIR="$support" \
   LEVERAGE_COMPOSE_PROJECT="$project" \
   LEVERAGE_SESSION_STORE=memory \
+  LEVERAGE_TOKEN_STORE=memory \
   LEVERAGE_NOTIFICATIONS=off \
   LEVERAGE_TOOL_DIR="$support/tools" \
   "$program" >"$output" 2>&1 &

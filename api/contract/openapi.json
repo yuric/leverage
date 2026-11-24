@@ -6117,6 +6117,7 @@
       "post": {
         "operationId": "verify_all_credentials",
         "summary": "Verifies every credential.",
+        "description": "Queues Verify for every added credential and keeps any unfinished Verify requests. The completed outcome's result contains `helper_request_ids` for those requests.",
         "tags": [
           "owner"
         ],
@@ -6404,6 +6405,7 @@
       "post": {
         "operationId": "refresh_usage",
         "summary": "Asks the helper to read usage now.",
+        "description": "Queues a reading for every added, active credential and keeps any unfinished reading requests. The completed outcome's result contains `helper_request_ids` for those requests.",
         "tags": [
           "owner"
         ],
@@ -7552,7 +7554,8 @@
           "orchestrator_offline",
           "reviewer_eligibility",
           "command_key_retention",
-          "seat_run_placement"
+          "seat_run_placement",
+          "usage_read_due"
         ]
       },
       "Refusal": {
@@ -12214,7 +12217,7 @@
               "null"
             ],
             "format": "date-time",
-            "description": "When a limit was reported for the credential; null when it is not limited. limited_until is when that limit ends, or null when the provider gave no reset time. Limited means limited_since is set and limited_until is null or later than now (milestone 3 plan HE-3)."
+            "description": "When the current or most recent limit began. Cleared when capacity is restored by a reading or Verify. limited_until is when that limit ends, or null when the provider gave no reset time. Limited means limited_since is set and limited_until is null or later than now (milestone 3 plan HE-3)."
           },
           "position": {
             "type": "integer",
@@ -12270,7 +12273,7 @@
             "kind": "login",
             "provider": "claude",
             "name": "example",
-            "masked_label": "example",
+            "masked_label": null,
             "plan": "example",
             "account_email": "example",
             "state": "active",
@@ -12291,7 +12294,8 @@
         "properties": {
           "label": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 80
           },
           "kind": {
             "type": "string",
@@ -12334,7 +12338,8 @@
               "number",
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 80
           }
         },
         "required": [
@@ -12406,7 +12411,8 @@
           },
           "observed_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "The time the provider's usage was observed. report_reading accepts at most 60 seconds ahead of the server's command time."
           },
           "state": {
             "type": "string",
@@ -12420,10 +12426,12 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "maxLength": 64
           },
           "figures": {
             "type": "array",
+            "maxItems": 32,
             "items": {
               "$ref": "#/components/schemas/Figure"
             }
@@ -12433,6 +12441,7 @@
               "array",
               "null"
             ],
+            "maxItems": 16,
             "items": {
               "$ref": "#/components/schemas/Reset"
             }
@@ -12719,7 +12728,7 @@
               "kind": "login",
               "provider": "claude",
               "name": "example",
-              "masked_label": "example",
+              "masked_label": null,
               "plan": "example",
               "account_email": "example",
               "state": "active",
@@ -12789,15 +12798,19 @@
           },
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Add trims surrounding whitespace and requires a nonblank name unique within this provider and kind, including pending adds."
           },
           "masked_label": {
             "type": [
               "string",
               "null"
             ],
-            "minLength": 1,
-            "description": "For an API token, the masked label the Mac app makes from it (the last characters only); null for a login."
+            "enum": [
+              "••••••••",
+              null
+            ],
+            "description": "The same fixed mask for every API token, with no characters of the token. Null for a login."
           },
           "model": {
             "type": [
@@ -12848,7 +12861,7 @@
             "kind": "api_token",
             "provider": "claude_api",
             "name": "example",
-            "masked_label": "...wxyz",
+            "masked_label": "••••••••",
             "model": "claude-model-1",
             "effort": "high",
             "strength_rank": 2
@@ -12885,7 +12898,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Rename trims surrounding whitespace and requires a nonblank name unique within this provider and kind, including pending adds. Keeping the same name completes without an event."
           }
         },
         "required": [
@@ -12900,15 +12914,14 @@
       "ReorderCredentialsRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Every credential id, in the new handoff order.",
+        "description": "Every added credential id, in the new handoff order. An empty workspace may send an empty order.",
         "properties": {
           "order": {
             "type": "array",
             "items": {
               "type": "string",
               "format": "uuid"
-            },
-            "minItems": 1
+            }
           }
         },
         "required": [
@@ -12971,6 +12984,8 @@
               "rejected",
               "unreachable",
               "timed_out",
+              "token_store_unavailable",
+              "provider_mismatch",
               null
             ]
           }
@@ -15413,7 +15428,7 @@
                   "kind": "login",
                   "provider": "claude",
                   "name": "example",
-                  "masked_label": "example",
+                  "masked_label": null,
                   "plan": "example",
                   "account_email": "example",
                   "state": "active",
@@ -15426,7 +15441,7 @@
                   "last_verified_at": "2026-01-01T00:00:00Z"
                 },
                 "reading": {
-                  "credential_id": "00000000-0000-4000-8000-000000000239",
+                  "credential_id": "00000000-0000-4000-8000-000000000238",
                   "observed_at": "2026-01-01T00:00:00Z",
                   "state": "ok",
                   "tool_version": "example",
@@ -16803,6 +16818,8 @@
               "rejected",
               "unreachable",
               "timed_out",
+              "token_store_unavailable",
+              "provider_mismatch",
               null
             ]
           },

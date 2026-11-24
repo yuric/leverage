@@ -17,6 +17,12 @@ public enum EnvironmentKeys {
     /// When set, the only folder searched for providers' tools (the
     /// stand-ins in tests).
     public static let toolDir = "LEVERAGE_TOOL_DIR"
+    /// `memory` keeps pasted tokens out of the Keychain.
+    public static let tokenStore = "LEVERAGE_TOKEN_STORE"
+    /// The stand-in provider API address, accepted only by unbundled helpers.
+    public static let providerAPIBase = "LEVERAGE_PROVIDER_API_BASE"
+    /// The limit of one account's usage read, in seconds. Defaults to 15.
+    public static let readTimeoutSeconds = "LEVERAGE_READ_TIMEOUT_SECONDS"
 
     // Read by the runner.
 

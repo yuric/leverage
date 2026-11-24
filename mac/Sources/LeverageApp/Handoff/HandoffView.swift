@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// The Handoff tab (HM-32 to HM-37): the one order of accounts, each naming
-/// the account it hands off to, and the PRD's eight rules as sentences. It has
-/// no switch and no way to reorder. Built with no arguments; the shell puts
-/// its `ScreenContext` in the environment.
+/// The Handoff tab shows the editable order and the PRD's eight fixed rules.
+/// The shell puts its `ScreenContext` in the environment.
 struct HandoffView: View {
     @Environment(ScreenContext.self) private var context
     @State private var box = ScreenModelBox<HandoffModel>()
@@ -24,10 +22,11 @@ struct HandoffView: View {
 /// What the tab draws from its model.
 struct HandoffContent: View {
     let model: HandoffModel
+    @State private var draggedID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            heading(HandoffCopy.title.text, hint: HandoffCopy.hint.text)
+            heading(HandoffCopy.title.text, hint: model.dropPreview?.hint ?? HandoffCopy.hint.text)
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     order
@@ -55,8 +54,18 @@ struct HandoffContent: View {
             if model.state == .loaded, model.rows.isEmpty {
                 note(HandoffCopy.empty.text)
             }
+            if let failure = model.reorderFailure {
+                note(failure, tone: Tokens.Tone.stop.foreground)
+            }
             ForEach(model.rows) { row in
-                HandoffRowView(row: row)
+                HandoffRowView(
+                    row: row, model: model,
+                    startDrag: { draggedID = row.id }
+                )
+                .onDrop(
+                    of: [HandoffDrop.rowType],
+                    delegate: HandoffDrop(model: model, targetID: row.id, draggedID: $draggedID)
+                )
             }
         }
     }
@@ -98,25 +107,41 @@ struct HandoffContent: View {
     }
 }
 
-/// One account of the order: its number, its name and state, and who it hands off to.
-struct HandoffRowView: View {
+/// One account of the order and its keyboard and pointer controls.
+private struct HandoffRowView: View {
     let row: HandoffRow
+    let model: HandoffModel
+    let startDrag: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(verbatim: "\(row.number)")
-                .font(.system(size: Tokens.FontSize.body, weight: .semibold))
-                .foregroundStyle(Tokens.Palette.text2)
-                .frame(width: 22, alignment: .trailing)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: row.name)
+        HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(verbatim: "\(row.number)")
                     .font(.system(size: Tokens.FontSize.body, weight: .semibold))
-                Text(verbatim: row.handsOff)
-                    .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
+                    .frame(width: 22, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: row.name)
+                        .font(.system(size: Tokens.FontSize.body, weight: .semibold))
+                    Text(verbatim: row.handsOff)
+                        .font(.system(size: Tokens.FontSize.small))
+                        .foregroundStyle(Tokens.Palette.text2)
+                }
+                Spacer(minLength: 0)
+                Chip(text: row.state, tone: row.tone)
             }
-            Spacer(minLength: 0)
-            Chip(text: row.state, tone: row.tone)
+            .contentShape(Rectangle())
+            .onDrag {
+                guard model.canMoveUp(row.id) || model.canMoveDown(row.id) else { return NSItemProvider() }
+                startDrag()
+                return HandoffDrop.provider()
+            }
+            moveButton(.moveUp, icon: "chevron.up", enabled: model.canMoveUp(row.id)) {
+                await model.moveUp(row.id)
+            }
+            moveButton(.moveDown, icon: "chevron.down", enabled: model.canMoveDown(row.id)) {
+                await model.moveDown(row.id)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,6 +149,71 @@ struct HandoffRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous)
                 .strokeBorder(Tokens.Palette.line, lineWidth: 1))
-        .accessibilityElement(children: .combine)
+        .overlay {
+            if let preview = model.dropPreview, preview.targetID == row.id {
+                Rectangle()
+                    .fill(Tokens.Palette.focus)
+                    .frame(height: 2)
+                    .frame(maxHeight: .infinity, alignment: preview.above ? .top : .bottom)
+                    .offset(y: preview.above ? -4 : 4)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(verbatim: row.name))
+    }
+
+    private func moveButton(
+        _ copy: HandoffCopy, icon: String, enabled: Bool, action: @escaping @MainActor () async -> Void
+    ) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Image(systemName: icon)
+        }
+        .disabled(!enabled)
+        .help(copy.text)
+        .accessibilityLabel(Text(verbatim: copy.text))
+    }
+}
+
+/// The drag marker is visible to this app only. No account details travel in it.
+private struct HandoffDrop: DropDelegate {
+    static let rowType = "com.leverage.handoff-row"
+    let model: HandoffModel
+    let targetID: UUID
+    @Binding var draggedID: UUID?
+
+    static func provider() -> NSItemProvider {
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: rowType, visibility: .ownProcess) { complete in
+            complete(Data(), nil)
+            return nil
+        }
+        return provider
+    }
+
+    func dropEntered(info: DropInfo) {
+        if let draggedID { model.previewDrop(of: draggedID, over: targetID) }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        if let draggedID { model.previewDrop(of: draggedID, over: targetID) }
+        return DropProposal(operation: model.dropPreview?.targetID == targetID ? .move : .cancel)
+    }
+
+    func dropExited(info: DropInfo) {
+        model.clearDropPreview(over: targetID)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let id = draggedID else { return false }
+        draggedID = nil
+        model.previewDrop(of: id, over: targetID)
+        guard model.dropPreview?.targetID == targetID else { return false }
+        model.clearDropPreview(over: targetID)
+        Task { await model.drop(id, over: targetID) }
+        return true
     }
 }

@@ -12,7 +12,7 @@ struct CopyCatalogListTests {
         let names = CopyCatalogs.all.map { String(describing: $0) }
         #expect(names == [
             "ShellCopy", "SignInCopy", "BoardCopy", "AddTaskCopy", "TaskPageCopy", "AgentsCopy",
-            "CredentialsCopy", "NeedsYouCopy", "HandoffCopy", "RulesCopy", "DecidedCopy",
+            "CredentialsCopy", "AddTokenCopy", "NeedsYouCopy", "HandoffCopy", "RulesCopy", "DecidedCopy",
             "ActivityCopy", "ProjectsCopy", "WorkspaceSettingsCopy",
         ])
         for catalog in CopyCatalogs.all {

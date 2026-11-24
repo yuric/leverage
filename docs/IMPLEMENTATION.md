@@ -54,15 +54,15 @@ ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-20 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3) and Rule checks (milestone 4) |
-| **Next** | Review Questions and approvals on `feat/questions-and-approvals`. |
+| **As of** | 2026-11-21 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4) and Questions and approvals (milestone 5) |
+| **Next** | Review Credentials on `feat/credentials`. |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 5 Questions and approvals | `feat/questions-and-approvals` | [#16](https://github.com/yuric/leverage/pull/16) | In review. The managing agent ran both evals and both developer checks. Local verification and findings are recorded in the pull request description. |
+| Milestone 6 Credentials | `feat/credentials` | [#17](https://github.com/yuric/leverage/pull/17) | In review: built, reviewed twice, every check passing on the owner's Mac and in CI. Real provider and Keychain acceptance await the owner. |
 
 ## Milestones
 
@@ -78,8 +78,8 @@ the PRD's milestone list. How the build is run locally is in
 | 2 | Core loop | Merged | [#13](https://github.com/yuric/leverage/pull/13) | With account setup and the part that starts agents. The first milestone usable without a terminal. Built on `feat/core-loop`; the PRD changes Q-1 to Q-15 and ADRs 0004 to 0007; the choices made for the owner are question 10 |
 | 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 11. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Merged | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 12. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
-| 5 | Questions and approvals | In review | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run and pull request checks are ahead. See question 13 and [Measurements](#measurements). |
-| 6 | Credentials | Not started | | The last milestone of this build; the release acceptance run follows it |
+| 5 | Questions and approvals | Merged | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run is ahead. See question 13 and [Measurements](#measurements). |
+| 6 | Credentials | In review | [#17](https://github.com/yuric/leverage/pull/17) | Token Add, usage readings, row actions and reordering. See [reader evidence](#credentials-readers-and-recordings), [measurements](#credentials-runs) and question 14. |
 | 7 | Analytics page | Not in this build | | See question 1 |
 
 Status is one of `Not started`, `In progress`, `In review`, `Merged`,
@@ -793,6 +793,125 @@ with a test that failed first:
   orchestrator's question prompt and its answer and basis parser ran
   against stand-in tools.
 
+### The Credentials milestone
+
+- **CS-1, CS-3.** Serve the six existing operations. Keep the fixed lists
+  and the earlier flows, with a first read added after a passed Add.
+- **CS-4.** Reorder and Remove look again at credential holds in the
+  command. Reviewer eligibility follows on the next sweep.
+- **CR-1, CR-35.** Rename and Remove belong on the row. A rejected or
+  missing token found by Verify is signed out. The row says to Remove
+  and add again.
+- **CR-4, CR-34.** The provisional Claude settings reader looks at
+  one cache entry. A fresh empty entry yields zero. A grant yields a
+  dash. The planned per-model tile takes the fullest model without
+  naming it. Claude quota grammar remains unavailable.
+- **CR-5.** The reader catalog has fixed labels and matched examples.
+  Swift reads its generated version and label lists.
+- **CR-6.** Bounded plan and email from Add and Verify live in the
+  credential row. The saved helper result has nulls for these fields.
+- **CR-8, RD-3.** The existing subprocess mechanism gains a session
+  with open standard input. Codex uses JSON lines, checks the home in
+  the initialize reply and sends four request methods.
+- **CR-10, CR-11, CR-13.** The server schedules usage. Add completes
+  before the first read. Refresh and the sweep find or queue a read
+  per active credential. Verify all reuses unfinished Verify requests.
+- **CR-12, RD-8.** Scrubbed developer recordings stay outside the
+  repository. Made-up usage fixtures carry a typed expectation and
+  have separate reader tests.
+- **CR-14, CR-15, CR-16.** A fresh reading below 100 percent in every
+  window refused since the limit began clears the limit and reassesses
+  both credential hold reasons. A passed Verify can still clear an
+  undated limit. Readings alone can neither set a limit nor sign out
+  the credential.
+- **CR-17, CR-18, RD-6.** The catalog owns figure labels and response
+  headers. A provider's limits may be computed from the numbers it
+  supplies. OpenRouter's Spending limit tile shows percent used.
+  The remaining amount and each period's usage are dollar figures.
+- **CR-19.** A missing reset count is a dash. An empty list reads zero.
+- **CR-22, CR-23.** Readings remain until the credential is removed.
+  Finished or failed requests expire after seven days. The Mac
+  displays reading age from observation time and rereads the visible
+  list every ten seconds.
+- **CR-25, CR-26.** Token rows do not hand off work. A login's row
+  points to the next login. Credentials uses a sign-in dot and
+  presents the limit on its own line.
+- **CR-28, CR-29, CR-30, CR-32.** Reorder takes the complete added set.
+  A confirmed Add places a login above the first token and a token
+  at the end. Remove refuses live references. Reorder and Remove
+  reassess credential holds and the associated Needs you item.
+- **CR-31.** The helper forgets removed credentials through standard
+  input. A stop request for a removed seat remains eligible after forget.
+  The app sends forget to the running helper even if recording the
+  pending ID fails. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md)
+  records how the helper acknowledges cleanup.
+- **CR-33.** Codex counts its available rate-limit reset credits as
+  full resets and groups credits with the same expiry.
+- **CR-38.** The row describes the configured handoff model. Model,
+  effort and strength rank have no edit command.
+- **RD-1, RD-2, RD-4, RD-5.** Provider calls are separated from parsing.
+  Unsupported shapes report unavailable. A malformed figure is
+  omitted when the remaining figures can be read. Claude command
+  flags have stand-in coverage. Grok's source is a command from help.
+- **TK-1, TK-2.** The bundled helper uses the platform vault and a
+  fixed HTTPS catalog. Development uses a memory vault. The test
+  override is local to the unbundled helper.
+- **TK-3, TK-4, TK-5.** A successful token check confirms Add. A
+  token is never a candidate. Fixture and workflow scans distinguish
+  synthetic provider authentication and the one account email column
+  from all other scanned storage and logs.
+- **CT-1, CT-2, CT-3.** All operations and commands are served.
+  The state table, walks and trace 24 cover credential changes and
+  the task step partition. The temporary pending tables are gone.
+- **CT-4, CT-5, CT-6.** Dedicated usage fixture suites, three
+  credential workflows and the recorded stand-in calls cover parsing,
+  timeout isolation, safe reads, audit and replay.
+- **Finishing integration.** Walk seed 290 showed that Offer task again
+  could record a fresh lease while an action still blocked approval.
+  The command and state table now use the existing approvals guard.
+- **Final integration.** Walk seed 991672114 found an override that
+  reentered an action and stopped it on another failed gate. The audit
+  checks the app actor, earlier failed check and matching action for
+  this case. Removed credential IDs remain reserved in the workspace,
+  the API enforces one Grok login, and reorder resolves an item whose
+  account is no longer a candidate. Refresh and the sweep can replace an
+  abandoned usage pickup after 90 seconds.
+- **Contract reconciliation.** An exact empty order is accepted for
+  an empty added set. The response example pairs its credential with
+  the matching reading. The API validates the row and filters
+  UUID-shaped names and plans from logs. The case where a hold regains
+  a dated candidate is described in the Handoff paragraphs and the
+  Needs you contract. The earlier summary cells remain as written.
+- **Adversarial review.** Limits retain their start through overlapping
+  refusals. A reading that restores a candidate reassesses the wait in
+  that command. The API bounds observation times, compares places
+  among added credentials at reorder and leaves an unchanged rename
+  event-free. Needs you offers automatic recovery when a reading
+  identifies a tested tool version. The Codex reader completes after
+  receiving the required replies and reaping the child.
+
+### Credentials readers and recordings
+
+Step 0 ran on the tools' existing sign-ins. The managing agent saved
+only scrubbed copies outside the repository. The product path uses
+the helper's own account selection. Its proof is from stand-ins.
+
+| Provider | Source, evidence and fixtures | Tested tool versions | Product usage today |
+| --- | --- | --- | --- |
+| Claude | Claude Code usage probe returned a JSON envelope without a model turn. The scrub left no usable quota grammar. Cache tests use made-up settings. | None. Probe 2.1.325. | Unavailable. The experimental reader is unregistered. |
+| Codex | `codex app-server` recorded as JSON lines. Usage fixtures follow the observed structure and generated schema. Account facts fixtures use the schema. | 0.169.0 | Available on that version with supported replies. |
+| Gemini | Antigravity's terminal-free probe returned JSON without prompt tokens. The PRD names the interactive usage screen. | None. Probe 1.5.13. | Unavailable. |
+| Grok | Tool help names `grok usage --json`. Step 0 ran no Grok command because the tool was signed out. | None. Preflight help and version 1.0.77. | Unavailable. |
+| OpenRouter token | Catalog key GET. Vendor reference and made replies. | No tool | Used percentage, amount left and period spending. |
+| Claude API token | Catalog models GET. Vendor reference and made replies. | No tool | Requests remaining when the named header is supplied. |
+| OpenAI API token | Catalog models GET. Vendor reference and made replies. | No tool | Requests remaining when the named header is supplied. |
+| Gemini API token | Catalog models GET. Vendor reference and made replies. | No tool | Reading state without figures. |
+| Grok API token | Catalog API key GET. Vendor reference and made replies. | No tool | Reading state without figures. |
+
+All entries remain provisional. The two model-list headers remain
+unverified on the actual endpoints.
+[Architecture](ARCHITECTURE.md#usage-readers)
+
 ## What the Rule checks milestone proves, and how far
 
 - **The rules work end to end with stand-in tools.**
@@ -1205,6 +1324,53 @@ every rule off and supplied its own MCP settings. It pre-allowed the
 leverage tools and confirmed the defaults in its prompt.
 The real checks ran on the code at 4dd2872, before the documents step
 and the adversarial review.
+
+### Credentials runs
+
+The three stand-in cases cover Add and usage, API token checks and
+cleanup, and recovery after a reading or a reorder. In the three WP13
+Mac runs every Credentials database passed replay, audit and scans.
+The final Mac gate also passed all five end-to-end scripts. In its
+Credentials run, replay and audit passed with 33, 23 and 74 events,
+and both recoveries took two and one seconds against the working
+900-second bar. The pinned Swift 6.4.2 arm64 Linux run
+passed all three cases, with 33, 23 and 74 events respectively. This
+exercises the Linux-built token path. The hosted x86_64 job remains
+unverified by the local package.
+
+Before the adversarial review, final integration exercised 124 focused
+API tests with 985 assertions.
+The full API suite passed 4,208 tests with no failures, errors or skips.
+The 1,000-walk gate reported 1,007 tests and 8,073 assertions.
+The Mac suite reported 1,562 tests in 177 suites. Its 29 environment
+gates cover the separately invoked end-to-end cases and real developer
+checks. No gate waits for another package. The Refresh count test now
+scopes its assertion to its own workspace and proves an unrelated
+workspace's old request stays untouched.
+
+After the review fixes, the API suite passed 4,227 tests on each of
+three seeds. The 1,000-walk gate passed 1,007 tests. The full Mac suite
+passed 1,572 tests in 177 suites, and the pinned arm64 Linux build ran
+all three Credentials cases with replay, audit and secret scans.
+All five end-to-end scripts passed three consecutive Mac runs each.
+The standalone restore drill and bundled app smoke check passed.
+
+The four login providers can be added and verified with stand-ins.
+The app model tests cover the two steps and checks, and the
+cross-process cases cover Add, the automatic first reading and Verify
+all. The cross-process sign-out and Sign in again case is Claude. The
+first reading shows usage for Codex 0.169.0 and unavailable for Claude,
+Gemini and Grok. Two Codex stand-ins produced distinct figures and reset
+counts. The bundle smoke checked launch, health, a mode 600 backup and
+a restart with seven shipped rules. The vault selection and package
+launch used stand-ins or memory.
+
+This milestone did not add a real login, run a reading through the
+product on a real account, or use a real API token or Keychain item.
+The earlier Gemini developer check added a real login through the
+app. The Claude reset grant, effect of reading an account during a
+real run, native Handoff drag and the real Keychain prompt remain
+unverified.
 
 ## Installed for the build
 
@@ -2079,6 +2245,64 @@ skeleton's pull request description, as rule AR-004 asks.
     - **Remaining PRD gaps.** Reviewers report cost with a verdict only, despite the Roles text. The alternative is a reviewer cost call. There is no command to change credential strength. A failure routed to the orchestrator still goes to the owner (RD-24). The alternatives are a credential edit command and defining the orchestrator's action on that failure.
     - **Held-out integrity.** The offline checker warns about two frozen candidates that disagree with their contract action. A real held-out run refuses that set. Changing the approval wording is blocked until the owner decides. A separately reviewed, refrozen set would require amending the PRD's “No case changes after that run” rule. The other option keeps the shipped wording and measured main-set results.
 
+14. **The choices made for the owner in Credentials.** The managing
+    agent took these working assumptions for the local build.
+
+    - **CR-37.** An unlisted tool version shows unavailable. Alternative: accept later versions when decoding succeeds.
+    - **CR-3.** Register only Codex with its usable recording. Alternative: write Claude, Gemini and Grok readers from conjectured formats.
+    - **CS-2, RD-7, CR-12.** Step 0 used the tools' existing sign-ins and saved scrubbed copies outside the repository. Alternative: wait for the owner to record each reply.
+    - **CR-14.** Fresh capacity below 100 percent in every refused
+      window clears dated and undated limits, with Verify retained for
+      undated limits. A reading that restores a candidate can release
+      either credential hold reason at the reading's command time. The
+      Handoff paragraphs now describe the same rule for both kinds of
+      wait. The alternatives were to consider only the latest refusal
+      or to wait for the sweep to release a signed-out hold.
+    - **CR-7.** Every token has the same fixed mask. Alternative: expose a short suffix.
+    - **CR-9.** Send a pasted token over helper standard input and save only after validation. Alternative: route it through the server or store it before checking.
+    - **CR-31.** Use the local channel to forget after Remove. Store the
+      confirmed ID in the support folder so interrupted cleanup can
+      resume at helper startup. The alternative was to track local
+      cleanup with a server request.
+    - **CR-4.** The provisional Claude cache checks `.claude.json` and shows a dash for an unknown grant. Alternative: infer the grant count or wait to implement the cache.
+    - **CR-10.** The server schedules due reads and Refresh. Alternative: have the helper keep a local schedule.
+    - **CR-36.** Read an account even when an agent is using it. Alternative: delay reads until the account is idle.
+    - **CR-8.** Keep standard input open for the helper and Codex sessions. Alternative: add a pseudo-terminal.
+    - **CR-2.** Use both parser fixtures and stand-in process runs. Alternative: test only the parsers or only the composed runs.
+    - **CR-17.** Show fixed figure labels, omit OpenRouter free-tier and expiry and Grok key and team details. Alternative: print the provider's other metadata.
+    - **CR-20.** Compare Codex reset counts with the stand-in. Alternative: wait for a real visual comparison.
+    - **CR-21.** Treat Grok as one login per Mac. Alternative: add separate Grok account folders without evidence.
+    - **CR-22.** Keep readings until Remove and purge completed requests after seven days. Alternative: expire readings or keep request history indefinitely.
+    - **CR-25.** Show token positions as unused for work and pass over them. Alternative: omit tokens from Handoff.
+    - **CR-27.** Extend the mockup with grouping, reading details, row actions, token Add and drag hints. Alternative: keep the mockup's flat list, login-only sheet and arrow controls. [Design reference](design/README.md#credentials-in-the-app)
+    - **CR-34.** Plan one per-model tile for the fullest model without its name. Alternative: one named tile per model. Claude grammar remains unavailable.
+    - **TK-1.** Use the platform Keychain for bundled helpers and memory in development. Alternative: maintain a separate file vault.
+    - **CR-24.** Leave token-backed work open. Alternative: define a token-backed runner here.
+    - **CR-38.** Show the model without adding an edit command. Alternative: let the owner edit model, effort and strength rank.
+    - **U-1.** Name the Claude cache path and unknown-grant limit. Alternative: leave the settings source unspecified.
+    - **U-2.** Name the Codex app-server methods and full reset type. Alternative: describe only the tool's figures.
+    - **U-3.** Name Grok's usage command and evidence gap. Alternative: retain the earlier usage-screen description.
+    - **U-4.** Require an exact tested version for reads. Alternative: allow versions with a decodable reply.
+    - **U-5.** Use the server sweep and nine-minute threshold. Alternative: let the helper schedule reads.
+    - **U-6.** Define capacity, Verify fallback and the reorder or removal case. Alternative: retain the older temporary Verify wording.
+    - **U-7.** Remove and add a failed token and treat Verify rejection or absence as sign-out. Alternative: introduce token replacement or a new state.
+    - **U-8.** Define which open references prevent removal. Alternative: count every historical reference or only seats.
+    - **U-9.** Place at successful Add and log changed places at reorder. Alternative: place at the initial request and log both.
+    - **U-10.** Keep usage recordings outside git and make fixtures. Alternative: commit scrubbed real usage replies.
+    - **U-11.** Use a common mask and a distinct name. Alternative: reveal a token suffix.
+    - **U-12.** Keep pending tokens in memory and reuse the local channel for cleanup. Alternative: save before Verify and add server-visible cleanup.
+    - **U-13.** Keep model editing open and use Verify all after restore. Alternative: add an edit command and verify each row separately.
+    - **U-14.** Deliver Rename and Remove here. Alternative: defer the menu actions.
+    - **U-15.** Add one Credentials trace. Alternative: spread the cases across existing Handoff traces.
+    - **U-16.** Have logins pass over tokens in Handoff. Alternative: hide token rows or treat them as candidates.
+    - **U-17.** Specify supported token figures and discard extra metadata. Alternative: show every documented field.
+
+    A successful reading can end a dated limit before the originally
+    reported reset time. Reviewer eligibility can take one sweep after
+    reorder or Remove. An interruption before the app records a
+    confirmed removal can leave local data. A stopped token is replaced
+    by Remove and Add. The API still has no security scanner.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -2122,3 +2346,11 @@ run is also listed here until the owner has read it.
 | The owner's MCP run | Connect an agent through MCP from Agents and let the agent finish one task. |
 | The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
 | Grok | Outside both committed eval runs and untried as an MCP client. After sign-in, the maintainer can run `LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 LEVERAGE_EVAL_PROVIDERS=grok scripts/eval_rule.sh approves-actions`. Both shipped suites must cover and pass Grok for it to appear in the registry. |
+| [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) and [ADR 0018](adr/0018-usage-readers-and-their-tested-versions.md) | Read both Credentials records. |
+| The four-login release line | Stand-ins prove Add and Verify, including the automatic first reading. Add and verify real Claude and Codex logins in helper-created folders, and add and verify the first real Grok login. Try the pop-up installers where offered. The earlier real Gemini check remains the evidence for Gemini Add. |
+| Real account usage | Check Codex figures and resets against the tool, compare two accounts of one provider, and check that a read leaves a running account signed in. Claude figures also need a usable recording and an enabled reader. |
+| Claude resets | Check whether the cache entry is in the named file and record the structure of a real grant. The build has never opened a real cache file. |
+| Missing usage sources | Capture a usable Claude quota structure, the Gemini usage screen or another read-only source, and a Grok usage reply after sign-in. |
+| Tool updates | Record each new Claude or Codex version before enabling a reader on that version. |
+| Five real provider tokens | Add and verify each token, check its reading, and check the rebuilt app's Keychain prompt. |
+| Native Handoff controls | Drag a row in the live app and verify keyboard and cancellation behavior. |

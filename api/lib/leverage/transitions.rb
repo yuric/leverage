@@ -22,6 +22,8 @@ module Leverage
   #      then ReviewerEligibility.after_command looks at what it changed
   #      (milestone 4 plan SM-42). Finishing.after_command runs once after
   #      the outer command's outcome is decided, including refusals (AE-2).
+  #      Usage bookkeeping, an unchanged name or order and a receipt
+  #      ignored after Remove do not trigger either workspace check (CR-10, CR-14, CR-30, CR-31).
   #   7. Idempotency.store writes the commands row, for a refusal too, so
   #      the timer events of step 3 and the rule checks of step 5 commit
   #      with it (test 7, RE-7). A command whose key now names a pending
@@ -85,7 +87,7 @@ module Leverage
       # ReviewerEligibility.after_command with what it changed.
       def perform(ctx, entry)
         entry.perform(ctx)
-        ReviewerEligibility.after_command(ctx, entry)
+        ReviewerEligibility.after_command(ctx, entry) unless credential_bookkeeping?(entry, ctx)
       end
 
       # Tests only: answers apply from the stand-in inside the block.
@@ -113,7 +115,7 @@ module Leverage
           entry.load(ctx)
           refusal = Precedence.first(refusals(ctx, entry))
           outcome = refusal ? Outcome.refused(refusal) : gated(ctx, entry, timing)
-          Finishing.after_command(ctx)
+          Finishing.after_command(ctx) unless credential_bookkeeping?(entry, ctx)
           pending = PendingTransitions.for_request(request)
           outcome = Outcome.new(outcome: :pending) if pending && !outcome.refused?
           unless request.by_app?
@@ -126,6 +128,17 @@ module Leverage
         CommandLog.write(request, outcome, lock_wait: timing[:lock_wait], writes: timing[:writes],
           total: monotonic - started, gate: timing[:gate])
         outcome
+      end
+
+      def credential_bookkeeping?(entry, ctx)
+        case entry.command
+        when "refresh_usage", "usage_read_due" then true
+        when "report_request_result" then entry.usage_or_removed?
+        when "report_reading" then !entry.capacity_restored
+        when "rename_credential" then ctx.events.none? { |event| event.type == "credential.renamed" }
+        when "reorder_credentials" then ctx.events.none? { |event| event.type == "credential.order_changed" }
+        else false
+        end
       end
 
       # The entry's refusals and pending: for a seat waiting on its task's

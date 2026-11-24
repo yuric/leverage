@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "basis": "invented",
+    "kind": "run",
+    "command": [
+      "-p",
+      "Work on criterion 1. End with LEVERAGE-EVIDENCE: <where> or LEVERAGE-CANNOT: <why>.",
+      "--output-format",
+      "json",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits"
+    ],
+    "shows": "a limit on the 5-hour window that states no reset time",
+    "expect": "limit",
+    "expect_window": "five_hour",
+    "expect_reset": "none",
+    "marker": "LVRG-REPLY-600000000001"
+  },
+  "exit_status": 1,
+  "stdout": "{\"type\": \"result\", \"subtype\": \"success\", \"is_error\": true, \"result\": \"You have reached your 5-hour limit.\", \"api_error_status\": 429, \"terminal_reason\": \"api_error\", \"stop_reason\": \"stop_sequence\", \"session_id\": \"LVRG-REPLY-600000000001\", \"num_turns\": 1, \"total_cost_usd\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}, \"modelUsage\": {}}\n",
+  "stderr": ""
+}

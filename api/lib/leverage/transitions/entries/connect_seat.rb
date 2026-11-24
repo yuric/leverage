@@ -6,8 +6,8 @@ module Leverage
       # seat.connected. The SM-42 side events (No reviewer is eligible) are
       # not written in this milestone (SC-11).
       #
-      # With credential_id, a seat the app runs: the login must be an added
-      # one (its checks passed, IN-24), else 404; the provider is the
+      # With credential_id, a seat the app runs: a token is 422 invalid
+      # (TK-4). An unknown or unfinished login is 404. The provider is the
       # login's, and naming another is 422 invalid. The seat has no token
       # until the helper picks up its start (issue_seat_token); it is
       # stopped, wanted running, and start_seat is queued (IN-30). The
@@ -62,9 +62,9 @@ module Leverage
         private
 
         def load_login(ctx, credential_id)
-          @credential = Credential.where.not(last_verified_at: nil)
-            .find_by(id: credential_id, workspace_id: ctx.workspace.id, kind: "login")
-          raise NotFound, "No such login" unless @credential
+          @credential = Credential.find_by(id: credential_id, workspace_id: ctx.workspace.id)
+          raise Invalid, "A seat's credential must be a login" if @credential && @credential.kind != "login"
+          raise NotFound, "No such login" unless @credential&.last_verified_at
           raise Invalid, "The seat's provider is its login's" if @provider && @provider != @credential.provider
 
           @provider = @credential.provider

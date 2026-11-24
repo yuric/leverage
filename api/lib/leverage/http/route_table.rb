@@ -114,7 +114,14 @@ module Leverage
         "mark_action_done" => "v1/owner/actions#mark_done",
         "overturn_approval" => "v1/owner/actions#overturn",
         "get_workspace_settings" => "v1/owner/settings#show",
-        "change_workspace_settings" => "v1/owner/settings#update"
+        "change_workspace_settings" => "v1/owner/settings#update",
+        # Milestone 6's six (its plan §2.3, CT-1).
+        "rename_credential" => "v1/owner/credentials#rename",
+        "remove_credential" => "v1/owner/credentials#remove",
+        "reorder_credentials" => "v1/owner/credentials#reorder",
+        "refresh_usage" => "v1/owner/credentials#refresh",
+        "verify_all_credentials" => "v1/owner/credentials#verify_all",
+        "report_reading" => "v1/helper/credentials#readings"
       }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",

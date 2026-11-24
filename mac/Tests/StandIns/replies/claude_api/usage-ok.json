@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "provider": "claude_api",
+    "tool": "claude_api",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Requests remaining",
+    "expect": {
+      "state": "ok",
+      "figures": [
+        {
+          "label": "Requests remaining",
+          "kind": "allowance",
+          "window": null,
+          "percent_used": null,
+          "reset_at": null,
+          "value": 900
+        }
+      ],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c000004"
+  },
+  "status": 200,
+  "headers": {
+    "anthropic-ratelimit-requests-remaining": "900"
+  },
+  "body": {
+    "data": [
+      {
+        "id": "LVRG-REPLY-60002c000004",
+        "display_name": "<scrubbed>",
+        "type": "model",
+        "created_at": "2026-01-01T00:00:00Z",
+        "lifecycle": "active"
+      }
+    ],
+    "first_id": "LVRG-REPLY-60002c000004",
+    "last_id": "LVRG-REPLY-60002c000004",
+    "has_more": false
+  }
+}

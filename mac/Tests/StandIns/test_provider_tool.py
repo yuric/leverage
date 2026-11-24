@@ -12,10 +12,12 @@ account folder can be reached. Standard library only.
 import calendar
 import glob
 import gzip
+import http.client
 import io
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import subprocess
@@ -1162,6 +1164,227 @@ def kill_group(process):
     except ProcessLookupError:
         pass
     process.wait()
+
+
+class UsageDirectives(StandInTestCase):
+    def write_reply(self, provider, name, payload):
+        path = os.path.join(self.root, "replies", provider, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+        return provider + "/" + name
+
+    def records(self, name):
+        with open(self.state(name), encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle]
+
+    def test_each_tool_uses_its_accounts_version_override(self):
+        claude = self.account("c")
+        codex = self.account("x")
+        self.write_scenario({"usage": [
+            {"tool": "claude", "account": claude, "version": "2.3.4 (test Claude)"},
+            {"tool": "codex", "account": codex, "version": "codex-cli 2.3.5"},
+            {"tool": "agy", "version": "2.3.6"},
+            {"tool": "grok", "version": "grok 2.3.7"},
+        ]})
+        env = self.env(CLAUDE_CONFIG_DIR=claude, CODEX_HOME=codex)
+        for tool, expected in zip(TOOLS, ("2.3.4 (test Claude)", "codex-cli 2.3.5",
+                                            "2.3.6", "grok 2.3.7")):
+            self.assertEqual(self.run_tool(tool, "--version", env=env).stdout.strip(), expected)
+        other = self.env(CLAUDE_CONFIG_DIR=self.account("other"))
+        self.assertIn("0.0.1", self.run_tool("claude", "--version", env=other).stdout)
+
+    def test_claude_plays_usage_and_places_fresh_or_stale_settings(self):
+        payload = {"stdout": '{"result":"made-up usage"}\n', "stderr": "made-up detail\n",
+                   "exit_status": 0}
+        reply = self.write_reply("claude", "usage-test.json", payload)
+        settings = {"cachedUsageUtilization": {"fetchedAtMs": 0, "utilization": {"cedar_ember": []}}}
+        settings_file = self.write_reply("claude", "usage-settings-test.json", {"settings": settings})
+        for name, stale in (("fresh", False), ("stale", True)):
+            with self.subTest(name=name):
+                account = self.account(name)
+                self.write_scenario({"usage": [{"tool": "claude", "account": account,
+                                                "reply": reply, "settings": settings_file,
+                                                "stale_settings": stale}]})
+                before = int(time.time() * 1000)
+                run = self.run_tool("claude", "-p", "/usage", "--output-format", "json",
+                                    env=self.env(CLAUDE_CONFIG_DIR=account))
+                self.assertEqual((run.returncode, run.stdout, run.stderr),
+                                 (payload["exit_status"], payload["stdout"], payload["stderr"]))
+                with open(os.path.join(account, ".claude.json"), encoding="utf-8") as handle:
+                    cache = json.load(handle)["cachedUsageUtilization"]
+                self.assertEqual(cache["utilization"], settings["cachedUsageUtilization"]["utilization"])
+                if stale:
+                    self.assertLess(cache["fetchedAtMs"], before - 10 * 60 * 1000)
+                else:
+                    self.assertGreaterEqual(cache["fetchedAtMs"], before)
+                    self.assertLessEqual(cache["fetchedAtMs"], int(time.time() * 1000))
+        self.assertEqual(len(self.records("calls.jsonl")), 2)
+
+    def test_codex_records_every_method_and_answers_only_the_session_methods(self):
+        account = self.account("codex")
+        session = {
+            "initialize": {"result": {"codexHome": "<scrubbed>", "userAgent": "codex-standin"}},
+            "account/read": {"result": {"account": None, "requiresOpenaiAuth": True}},
+            "account/rateLimits/read": {"result": {"rateLimits": {"primary": {"usedPercent": 17}}}},
+            "account/usage/read": {"result": {"summary": {"lifetimeTokens": 345}}},
+        }
+        reply = self.write_reply("codex", "usage-test.json", {"session": session})
+        self.write_scenario({"usage": [{"tool": "codex", "account": account, "reply": reply}]})
+        requests = [
+            {"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "test", "version": "0"}}},
+            {"method": "initialized"},
+            {"id": 2, "method": "account/read", "params": {"refreshToken": False}},
+            {"id": 3, "method": "account/rateLimits/read"},
+            {"id": 4, "method": "account/usage/read"},
+            {"id": 5, "method": "account/logout"},
+        ]
+        proc = subprocess.run(
+            [os.path.join(self.root, "bin", "codex"), "app-server"],
+            input="".join(json.dumps(request) + "\n" for request in requests),
+            text=True, capture_output=True, timeout=30, cwd=self.work, env=self.env(CODEX_HOME=account),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        responses = [json.loads(line) for line in proc.stdout.splitlines()]
+        self.assertEqual([response["id"] for response in responses], [1, 2, 3, 4, 5])
+        self.assertEqual(responses[0]["result"]["codexHome"], os.path.realpath(account))
+        self.assertEqual(responses[1]["result"], session["account/read"]["result"])
+        self.assertEqual(responses[2]["result"], session["account/rateLimits/read"]["result"])
+        self.assertEqual(responses[3]["result"], session["account/usage/read"]["result"])
+        self.assertEqual(responses[4]["error"]["code"], -32601)
+        self.assertEqual(self.records("app-server.jsonl"), requests)
+
+    def test_a_usage_read_waits_without_an_answer_until_stopped(self):
+        for tool, variable, argv in (("claude", "CLAUDE_CONFIG_DIR", ["-p", "/usage"]),
+                                     ("codex", "CODEX_HOME", ["app-server"])):
+            with self.subTest(tool=tool):
+                account = self.account(tool)
+                self.write_scenario({"usage": [{"tool": tool, "account": account, "never_answers": True}]})
+                with subprocess.Popen([os.path.join(self.root, "bin", tool), *argv], cwd=self.work,
+                                      env=self.env(**{variable: account}), stdin=subprocess.PIPE,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+                    try:
+                        if tool == "codex":
+                            proc.stdin.write(b'{"id":1,"method":"initialize"}\n')
+                            proc.stdin.flush()
+                        with self.assertRaises(subprocess.TimeoutExpired):
+                            proc.wait(timeout=1)
+                        self.assertFalse(select.select([proc.stdout], [], [], 0)[0])
+                        proc.terminate()
+                        proc.wait(timeout=2)
+                    finally:
+                        if proc.poll() is None:
+                            proc.kill()
+                            proc.wait()
+
+    def test_new_limit_replies_name_five_hours_without_a_reset(self):
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                path = os.path.join(self.root, "replies", provider, "run-limit-five-hour-no-reset.json")
+                self.assertTrue(os.path.isfile(path))
+                reply = self.reply(provider, "run-limit-five-hour-no-reset")
+                self.assertEqual(reply["meta"]["expect_window"], "five_hour")
+                self.assertEqual(reply["meta"]["expect_reset"], "none")
+                self.assertIn("5-hour", reply["stdout"] + reply["stderr"])
+                self.assertNotIn("@RESET_AT_", reply["stdout"] + reply["stderr"])
+
+
+class ProviderAPI(StandInTestCase):
+    MARKERS = ("LVRG-TOKEN-000000000001", "LVRG-TOKEN-000000000002", "LVRG-TOKEN-000000000003")
+
+    def start_api(self):
+        scenario = os.path.join(self.tmp, "api-scenario.json")
+        port_file = os.path.join(self.tmp, "port")
+        self.api_scenario = scenario
+        self.write_api_scenario({"reply": "openrouter/usage-ok.json"})
+        proc = subprocess.Popen(
+            [sys.executable, "-I", os.path.join(self.root, "provider_api.py"),
+             "--scenario", scenario, "--port-file", port_file],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=self.env(), cwd=self.work,
+        )
+        self.addCleanup(self.stop_api, proc)
+        deadline = time.monotonic() + 15
+        while not os.path.exists(port_file) and proc.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(os.path.isfile(port_file), "the server did not publish a port")
+        with open(port_file, encoding="utf-8") as handle:
+            port = int(handle.read())
+        self.assertGreater(port, 0)
+        self.assertNotEqual(port, 3000)
+        return port, proc
+
+    def write_api_scenario(self, openrouter):
+        temporary = self.api_scenario + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump({"tokens": {self.MARKERS[0]: openrouter,
+                                  self.MARKERS[1]: {"reply": "gemini_api/usage-ok.json"},
+                                  self.MARKERS[2]: {"reply": "claude_api/usage-ok.json"}}}, handle)
+        os.replace(temporary, self.api_scenario)
+
+    def stop_api(self, proc):
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                self.fail("the stand-in server did not stop")
+
+    def request(self, port, path, headers):
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+        try:
+            connection.request("GET", path, headers=headers)
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally:
+            connection.close()
+
+    def log(self):
+        with open(os.path.join(self.tmp, "calls.jsonl"), encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle]
+
+    def test_the_port_serves_mapped_tokens_and_records_only_their_markers(self):
+        port, proc = self.start_api()
+        try:
+            router = self.reply("openrouter", "usage-ok")
+            self.assertEqual(self.request(port, "/api/v1/key", {
+                "Authorization": "Bearer made-up-" + self.MARKERS[0],
+            }), (router["status"], router["body"]))
+            gemini = self.reply("gemini_api", "usage-ok")
+            self.assertEqual(self.request(port, "/v1beta/models", {
+                "x-goog-api-key": self.MARKERS[1],
+            }), (gemini["status"], gemini["body"]))
+            self.assertEqual(self.request(port, "/api/v1/key", {
+                "Authorization": "Bearer made-up-no-marker",
+            })[0], 401)
+            self.assertEqual(self.request(port, "/v1/models", {
+                "Authorization": "Bearer " + self.MARKERS[2], "anthropic-version": "1900-01-01",
+            })[0], 400)
+            claude = self.reply("claude_api", "usage-ok")
+            self.assertEqual(self.request(port, "/v1/models", {
+                "Authorization": "Bearer " + self.MARKERS[2], "anthropic-version": "2026-10-21",
+            }), (claude["status"], claude["body"]))
+            calls = self.log()
+            self.assertEqual([call["method"] for call in calls], ["GET"] * 5)
+            self.assertEqual([call["path"] for call in calls],
+                             ["/api/v1/key", "/v1beta/models", "/api/v1/key", "/v1/models", "/v1/models"])
+            self.assertEqual(calls[0]["headers"]["authorization"], "Bearer " + self.MARKERS[0])
+            self.assertEqual(calls[1]["headers"]["x-goog-api-key"], self.MARKERS[1])
+            self.assertNotIn("made-up-no-marker", json.dumps(calls))
+            self.assertEqual(calls[-1]["headers"]["anthropic-version"], "2026-10-21")
+        finally:
+            self.stop_api(proc)
+
+    def test_an_unanswered_request_is_recorded_and_the_server_remains_available(self):
+        port, proc = self.start_api()
+        try:
+            self.write_api_scenario({"never_answers": True})
+            with self.assertRaises(TimeoutError):
+                self.request(port, "/api/v1/key", {"Authorization": "Bearer " + self.MARKERS[0]})
+            self.assertEqual(self.log()[0]["headers"]["authorization"], "Bearer " + self.MARKERS[0])
+            self.assertEqual(self.request(port, "/v1beta/models", {"x-goog-api-key": self.MARKERS[1]})[0], 200)
+        finally:
+            self.stop_api(proc)
 
 
 if __name__ == "__main__":

@@ -269,6 +269,17 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     assert_equal "active", Credential.find(@builder.credential_id).state
   end
 
+  test "the builder's token and the owner's session cannot report a valid reading" do
+    id = @builder.credential_id
+    body = { "credential_id" => id, "observed_at" => @scenario.database_now.utc.iso8601(6),
+             "state" => "unavailable", "figures" => [], "resets" => nil, "tool_version" => nil }
+    before = CredentialReading.count
+    [ token(@builder), @scenario.owner_token ].each do |caller_token|
+      unauthenticated("report_reading", caller_token, ids: { "id" => id }, body: body)
+    end
+    assert_equal before, CredentialReading.count
+  end
+
   private
 
   def token(seat) = @scenario.token_for(seat)

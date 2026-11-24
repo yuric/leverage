@@ -29,14 +29,16 @@ module Leverage
     # The Needs you item a sign-out opens or that its verification resolves
     # (needs_you.json).
     ACCOUNT_SIGNED_OUT = "account_signed_out".freeze
+    LIMIT_WITH_NO_RESET = "limit_with_no_reset_time".freeze
+    HANDOFF_ORDER_CHANGES = %w[reorder_credentials remove_credential].freeze
 
     module_function
 
     # Rule 5: marks the stopped credential and writes the first event,
     # credential.limit_reached or credential.signed_out, with the credential
     # as subject, on the work's task. A limit: limited_since is the
-    # command's time, and limited_until the reset time when it is after
-    # observed_at (HE-32) and no further after it than the window can last
+    # first report's time while that limit lasts. limited_until is the reset
+    # time when it is after observed_at (HE-32) and no further off than the window can last
     # (RESET_BOUNDS), never earlier than a later reset already stored
     # (HE-22); a limit with no reset time has none. A sign-out: state
     # signed_out. The seat's run is recorded as ended (HD-10).
@@ -55,7 +57,8 @@ module Leverage
       if kind == "limit"
         reset = reset_at if plausible_reset?(window, reset_at, observed_at)
         stored = credential.limited_until
-        credential.update!(limited_since: ctx.at, limited_until: reset && stored && stored > reset ? stored : reset)
+        since = credential.limited?(ctx.at) ? credential.limited_since : ctx.at
+        credential.update!(limited_since: since, limited_until: reset && stored && stored > reset ? stored : reset)
         first = ctx.emit("credential.limit_reached", task: on, subject: credential,
           payload: payload.merge(window: window, reset_at: reset&.utc&.iso8601(6)))
       else
@@ -137,6 +140,8 @@ module Leverage
     # out, nothing closes (HE-10): only a credential_limit hold that the
     # sign-out leaves with no due time and no item gets the "Account signed
     # out" item beside it, naming that account (HE-11).
+    # Reorder and Remove also open an item for a limit hold left without a
+    # due time, and resolve its no-reset item when a due time returns (CR-30).
     #
     # tasks:      - the tasks to look at; nil is every task of the
     #               workspace with an open credential hold.
@@ -255,7 +260,20 @@ module Leverage
         InboxItem.where(hold_id: open.id, state: "open", kind: ACCOUNT_SIGNED_OUT, credential_id: verified.id)
           .order(:opened_at).each { |item| resolve(ctx, item, task, choice) }
         open_blocker_item(ctx, open, task, seat, cause)
+      elsif HANDOFF_ORDER_CHANGES.include?(ctx.request.command)
+        look_at_order_items(ctx, open, task, seat, cause)
       end
+    end
+
+    def look_at_order_items(ctx, open, task, seat, cause)
+      due = Candidates.due_at(seat, task, ctx.at)
+      items = InboxItem.where(hold_id: open.id, state: "open").order(:opened_at, :id)
+      items.each do |item|
+        credential = Credential.find_by(id: item.credential_id, workspace_id: task.workspace_id)
+        still_eligible = credential && Candidates.kept_for?(seat, credential, task)
+        resolve(ctx, item, task, nil) unless still_eligible && !(due && item.kind == LIMIT_WITH_NO_RESET)
+      end
+      open_blocker_item(ctx, open, task, seat, cause, at: ctx.at) unless due
     end
 
     # The item a credential hold with no open item and no due time needs:
@@ -263,11 +281,11 @@ module Leverage
     # keeps for the task, else "Limit with no reset time" naming the first
     # such candidate limited with no reset time. No hold event: the hold
     # keeps its reason.
-    def open_blocker_item(ctx, open, task, seat, cause)
+    def open_blocker_item(ctx, open, task, seat, cause, at: nil)
       return if InboxItem.where(hold_id: open.id, state: "open").exists?
 
-      last = Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
-      return if Candidates.due_at(seat, task, last)
+      at ||= Event.where(workspace_id: task.workspace_id, task_id: task.id).maximum(:effective_at) || ctx.at
+      return if Candidates.due_at(seat, task, at)
 
       signed_out = Candidates.signed_out_for(seat, task)
       if signed_out
@@ -362,7 +380,7 @@ module Leverage
       { actor_kind: actor_kind, actor_id: actor_id, effective_at: ctx.at, command_id: ctx.request.key }
     end
 
-    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :open_blocker_item, :go_on, :open_signed_out_item,
+    private_class_method :plausible_reset?, :work_task, :cancel_reviewers_pending, :hold, :each_open_hold, :look_again, :look_at_order_items, :open_blocker_item, :go_on, :open_signed_out_item,
       :open_item, :resolve, :switch_as, :app_actor, :ctx_actor
   end
 end

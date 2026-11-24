@@ -93,6 +93,9 @@ jobs:
       - name: Self-test of the reply-file check
         working-directory: .
         run: python3 -I scripts/test_check_reply_fixtures.py
+      - name: Self-test of usage reply capture
+        working-directory: .
+        run: python3 -I scripts/test_capture_reader_reply.py
       - name: Build
         run: swift build
       # The runner has three cores. With every test at once, the app tests
@@ -185,6 +188,8 @@ jobs:
         run: scripts/e2e_rule_checks.sh
       - name: The questions and approvals end-to-end run
         run: scripts/e2e_questions_approvals.sh
+      - name: The credentials end-to-end run
+        run: scripts/e2e_credentials.sh
       # A backup restored into a cluster whose volume was removed, from a
       # seeded log (milestone 3 plan §5.3).
       - name: The restore drill

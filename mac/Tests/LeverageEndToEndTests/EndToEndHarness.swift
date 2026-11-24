@@ -149,7 +149,7 @@ final class RunningHelper: Sendable {
     let process: RunningSubprocess
     let logFile: URL
 
-    init(token: String, folder: TestFolder, tools: StandInTools?) throws {
+    init(token: String, folder: TestFolder, tools: StandInTools?, providerAPIBase: URL? = nil) throws {
         try FileManager.default.createDirectory(at: folder.logs, withIntermediateDirectories: true)
         let inherited = ProcessInfo.processInfo.environment
         var environment = [
@@ -164,17 +164,30 @@ final class RunningHelper: Sendable {
             environment[EnvironmentKeys.path] = "/usr/bin:/bin:/usr/sbin:/sbin"
             environment[EnvironmentKeys.home] = try folder.folder("home").path
             environment[EnvironmentKeys.toolDir] = tools.bin.path
+            environment[EnvironmentKeys.tokenStore] = "memory"
+            if let providerAPIBase {
+                environment[EnvironmentKeys.providerAPIBase] = providerAPIBase.absoluteString
+                environment[EnvironmentKeys.readTimeoutSeconds] = "2"
+            }
         } else {
             environment[EnvironmentKeys.path] = inherited[EnvironmentKeys.path] ?? "/usr/bin:/bin"
             environment[EnvironmentKeys.home] = inherited[EnvironmentKeys.home] ?? NSHomeDirectory()
         }
         if let tmp = inherited[EnvironmentKeys.tmpdir] { environment[EnvironmentKeys.tmpdir] = tmp }
         logFile = folder.logs.appendingPathComponent("helper.log")
-        process = try Subprocess.start(SubprocessRequest(
+        process = try Self.launch(SubprocessRequest(
             executable: try EndToEnd.program("LeverageHelper").path,
             arguments: [],
             environment: environment,
             gracePeriod: .seconds(20)))
+    }
+
+    static func launch(_ request: SubprocessRequest) throws -> RunningSubprocess {
+        try Subprocess.startSession(request)
+    }
+
+    func send(_ message: LocalHelperMessage) async throws {
+        try await process.writeLine(message.encodeLine())
     }
 
     /// Stops the helper (it stops its runs first) and keeps what it wrote

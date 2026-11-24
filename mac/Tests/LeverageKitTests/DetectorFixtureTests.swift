@@ -330,12 +330,13 @@ struct ReplyFile: Sendable {
 
     var fileName: String { (path as NSString).lastPathComponent }
 
-    /// Every reply file's path, sorted.
+    /// Every run and status reply's path, sorted. Usage replies have their
+    /// own shape and are exercised by the helper's reader fixture tests.
     static let paths: [String] = {
         let root = StandIns.replies
         let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "json" } ?? []
+            .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix("usage-") } ?? []
         return files.map { String($0.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1)) }
             .sorted()
     }()

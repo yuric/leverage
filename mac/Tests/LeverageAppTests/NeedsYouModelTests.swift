@@ -62,8 +62,29 @@ struct NeedsYouModelTests {
         let row = try? #require(model.rows.first)
         #expect(row?.heading == "Claude, Personal is at its limit")
         #expect(
-            row?.body == "Fix the totals on the invoice page is waiting. Claude did not say when Claude, Personal is available again. When it is, choose Verify on Claude, Personal in Credentials and the task continues. If the agent's time on the task runs out first, the task goes back to waiting for any agent.")
+            row?.body == "Fix the totals on the invoice page is waiting. Claude did not say when Claude, Personal is available again. When it is, choose Verify on Claude, Personal in Credentials and the task continues.")
         #expect(row?.buttons.isEmpty == true)
+    }
+
+    @Test("the limit item describes automatic recovery only for a tested login version",
+          arguments: [true, false, nil] as [Bool?])
+    func limitWithCodexReader(tested: Bool?) async throws {
+        let version = try #require(Provider.codex.testedToolVersions.first)
+        let credential = Credential(id: Fixtures.credentialID, provider: .codex, name: "Personal",
+                                    state: .active, position: 1)
+        let reading = tested.map {
+            CredentialReading(credentialID: credential.id, observedAt: Date(), state: .unavailable,
+                              toolVersion: $0 ? version : "0.0.0-untested", figures: [], resets: nil)
+        }
+        let credentials = CredentialsList(
+            credentials: [CredentialWithReading(credential: credential, reading: reading)], asOfSeq: 31)
+        let model = makeModel(Fixtures.owner(open: Locked([Fixtures.limit(seq: 6)]), credentials: credentials))
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.heading == "Codex, Personal is at its limit")
+        #expect(row.body.contains("looks every 10 minutes") == (tested == true))
+        #expect(row.body.contains("choose Verify on Codex, Personal in Credentials"))
+        #expect(row.buttons.isEmpty)
     }
 
     @Test("Past the round limit: how many times it was sent back, and three buttons")

@@ -102,7 +102,8 @@ U logs --no-color >"$out/containers.log" 2>&1
 # shellcheck disable=SC2016 # expanded by the db container's shell
 U exec -T db sh -c 'pg_dump --data-only --no-owner -U "$POSTGRES_USER" leverage_production' \
   >"$out/dump.sql" 2>"$out/dump.err"
-scan=(python3 -I scripts/secret_scan.py)
+scan=(python3 -I scripts/secret_scan.py --credentials-dump "$out/dump.sql"
+  --account-email "standin.owner@example.invalid")
 for secrets in "$out"/tests/*/secrets.txt; do scan+=(--secrets "$secrets"); done
 for logs in "$out"/tests/*/support/logs; do scan+=("$logs"); done
 # The stand-in tools' record of each call holds the environment each tool
@@ -110,6 +111,6 @@ for logs in "$out"/tests/*/support/logs; do scan+=("$logs"); done
 for calls in "$out"/tests/*/StandIns/state/calls.jsonl; do
   if [ -f "$calls" ]; then scan+=("$calls"); fi
 done
-scan+=("$out/containers.log" "$out/dump.sql")
+scan+=("$out/containers.log")
 say "scanning the logs and the database dump"
 "${scan[@]}"

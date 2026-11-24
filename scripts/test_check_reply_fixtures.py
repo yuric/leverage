@@ -33,6 +33,24 @@ def clean_reply(marker="LVRG-REPLY-0123456789ab"):
     return {"meta": meta, "exit_status": 1, "stdout": stdout + "\n", "stderr": ""}
 
 
+def usage_reply(provider="codex", basis="made_from_schema"):
+    marker = CLEAN_META["marker"]
+    meta = {key: value for key, value in CLEAN_META.items() if key not in ("expect_window", "expect_reset")}
+    meta.update(provider=provider, tool=provider, basis=basis, kind="usage",
+                expect={"state": "ok", "figures": [], "resets": None})
+    if provider == "codex":
+        return {"meta": meta, "session": {
+            "initialize": {"result": {"codexHome": marker}, "id": marker},
+            "account/read": {"result": {"account": {"type": "chatgpt", "email": None,
+                                                   "planType": "<scrubbed>", "workspaceName": ""}}},
+            "account/rateLimits/read": {"result": {"rateLimits": {"primary": {"usedPercent": 42}}}},
+            "account/usage/read": {"result": {"summary": {"lifetimeTokens": 123}}},
+        }}
+    if provider == "claude":
+        return {"meta": meta, "exit_status": 0, "stdout": json.dumps({"session_id": marker}), "stderr": ""}
+    return {"meta": meta, "status": 200, "headers": {}, "body": {}, "marker": marker}
+
+
 class CheckReplyFixtures(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="reply-fixtures-test-")
@@ -136,6 +154,23 @@ class CheckReplyFixtures(unittest.TestCase):
                            + json.dumps({"type": "turn.started", "x": "LVRG-REPLY-0123456789ab"}) + "\n")
         self.put(reply)
         self.assert_fails("a thread_id in one line of JSON lines")
+
+    def test_run_and_status_outputs_require_placeholders_for_credentials_and_names(self):
+        for kind in ("run", "status"):
+            for field in ("refresh_token", "apiKey", "password", "displayName"):
+                with self.subTest(kind=kind, field=field):
+                    reply = clean_reply()
+                    reply["meta"].update(kind=kind, expect="failed")
+                    value = "made-up-sensitive-value"
+                    reply["stderr"] = json.dumps({field: value})
+                    self.put(reply)
+                    result = self.check()
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("run-limit.json", result.stdout)
+                    self.assertNotIn(value, result.stdout + result.stderr)
+                    reply["stderr"] = json.dumps({field: "<scrubbed>"})
+                    self.put(reply)
+                    self.assert_passes()
 
     def test_a_named_field_scrubbed_or_empty_passes(self):
         reply = clean_reply()
@@ -269,6 +304,259 @@ class CheckReplyFixtures(unittest.TestCase):
     def test_a_file_that_is_not_json_fails(self):
         self.put(None, raw="{not json")
         self.assert_fails("a file that is not JSON")
+
+    def put_usage(self, reply):
+        self.put(reply, "usage-example.json", reply["meta"]["provider"])
+
+    def assert_usage_fails(self, reply, *, hidden=None):
+        self.put_usage(reply)
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage-example.json", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+        if hidden:
+            self.assertNotIn(hidden, result.stdout + result.stderr)
+
+    def test_only_made_usage_replies_are_accepted(self):
+        for basis in ("made_from_schema", "made_from_recorded", "made_from_documentation", "made_from_prd"):
+            with self.subTest(basis=basis):
+                self.put_usage(usage_reply(basis=basis))
+                self.assert_passes()
+        for basis in ("recorded_scrubbed", "recorded_no_login", "invented", "made_from_observed"):
+            with self.subTest(basis=basis):
+                self.assert_usage_fails(usage_reply(basis=basis))
+
+    def test_usage_name_and_kind_agree(self):
+        for reply, name in ((usage_reply(), "run-example.json"), (clean_reply(), "usage-example.json")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
+                self.root = folder
+                self.put(reply, name, reply["meta"]["provider"])
+                result = self.check()
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(name, result.stdout)
+
+    def test_expected_reading_needs_a_known_state_figures_and_resets(self):
+        for invalid in ("ok", {}, {"state": "ok", "figures": []},
+                        {"state": "maybe", "figures": [], "resets": []},
+                        {"state": "ok", "figures": "none", "resets": []},
+                        {"state": "ok", "figures": [], "resets": 2}):
+            with self.subTest(expect=invalid):
+                reply = usage_reply()
+                reply["meta"]["expect"] = invalid
+                self.assert_usage_fails(reply)
+
+    def test_each_payload_form_can_carry_a_marker_and_its_absence_is_rejected(self):
+        settings = usage_reply("claude")
+        settings = {"meta": settings["meta"], "settings": {"cachedUsageUtilization": {}},
+                    "marker": settings["meta"]["marker"]}
+        for reply in (usage_reply(), usage_reply("claude"), settings, usage_reply("grok_api")):
+            with self.subTest(keys=sorted(reply)), tempfile.TemporaryDirectory() as folder:
+                self.root = folder
+                self.put_usage(reply)
+                self.assert_passes()
+                payload = {key: value for key, value in reply.items() if key != "meta"}
+                clean = json.loads(json.dumps(payload).replace(reply["meta"]["marker"], "<scrubbed>"))
+                self.assert_usage_fails(dict(clean, meta=reply["meta"]))
+
+    def test_usage_refuses_incomplete_or_mixed_payloads(self):
+        for provider, overrides in (("grok_api", {"headers": []}), ("openrouter", {"status": True}),
+                                    ("claude_api", {"session": {}}), ("codex", {"session": []}),
+                                    ("codex", {"session": {"unknown/read": {"result": {}}}}),
+                                    ("claude", {"stderr": None}), ("claude", {"settings": []})):
+            with self.subTest(provider=provider, keys=sorted(overrides)), tempfile.TemporaryDirectory() as folder:
+                self.root = folder
+                reply = usage_reply(provider)
+                reply.update(overrides, marker=reply["meta"]["marker"])
+                self.assert_usage_fails(reply)
+
+    def test_only_the_providers_named_response_headers_are_allowed(self):
+        anthropic = "Anthropic-RateLimit-Requests-Remaining"
+        openai = "X-RateLimit-Remaining-Requests"
+        for provider in ("claude_api", "openai_api", "gemini_api", "grok_api", "openrouter"):
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as folder:
+                self.root = folder
+                reply = usage_reply(provider, "made_from_documentation")
+                allowed = {"claude_api": anthropic, "openai_api": openai}.get(provider)
+                if allowed:
+                    reply["headers"][allowed] = "15"
+                self.put_usage(reply)
+                self.assert_passes()
+                for header in {anthropic, openai, "Authorization", "Set-Cookie"} - {allowed}:
+                    with self.subTest(header=header):
+                        reply["headers"] = {header: "made-up-sensitive-header-value"}
+                        self.assert_usage_fails(reply, hidden="made-up-sensitive-header-value")
+
+    def test_usage_scans_structure_and_named_fields_even_at_an_encoded_layer(self):
+        bad = "made-up-private-value"
+        for field in ("id", "itemID", "creditId", "sessionID", "requestIds", "thread_id", "apiKey",
+                      "workspaceName", "orgName", "email", "account", "planType", "path", "configDir",
+                      "codexHome", "loginExpiresAt"):
+            with self.subTest(field=field):
+                reply = usage_reply()
+                message = reply["session"]["account/usage/read"]["result"]
+                message["details"] = [{"payload": json.dumps({field: bad})}]
+                self.assert_usage_fails(reply, hidden=bad)
+                message["details"] = [{"payload": json.dumps({field: "<scrubbed>"})}]
+                self.put_usage(reply)
+                self.assert_passes()
+
+    def test_usage_settings_require_placeholders_for_credentials_and_names(self):
+        for field in ("oauthRefresh", "displayName"):
+            with self.subTest(field=field):
+                meta = usage_reply("claude")["meta"]
+                value = "made-up-sensitive-value"
+                reply = {"meta": meta, "settings": {field: value}, "marker": meta["marker"]}
+                self.assert_usage_fails(reply, hidden=value)
+                reply["settings"][field] = "<scrubbed>"
+                self.put_usage(reply)
+                self.assert_passes()
+
+    def test_account_container_exemption_is_limited_to_the_account_read_reply(self):
+        reply = usage_reply()
+        reply["session"]["account/read"]["result"]["account"]["workspaceName"] = "made-up-private-workspace"
+        self.assert_usage_fails(reply, hidden="made-up-private-workspace")
+        reply = usage_reply()
+        reply["session"]["account/usage/read"]["result"]["account"] = {"name": "made-up-private-account"}
+        self.assert_usage_fails(reply, hidden="made-up-private-account")
+
+    def test_usage_token_prefixes_and_escaped_paths_are_rejected_in_all_outputs(self):
+        for secret in ("sk-" + "z" * 16, "xai-" + "q" * 16, "AIza" + "w" * 16,
+                       "LVRG-TOKEN-0123456789ab", "/Users/made-up/private", "person@example.invalid"):
+            with self.subTest(prefix=secret[:4]):
+                reply = usage_reply("claude")
+                encoded = json.dumps({"message": secret}).replace("/", r"\/").replace("@", r"\u0040")
+                reply["stdout"] = json.dumps({"session_id": reply["meta"]["marker"], "result": encoded})
+                self.assert_usage_fails(reply, hidden=secret)
+
+    def test_schema_allows_only_documented_flags_with_boolean_values(self):
+        for provider, flag in (("openrouter", "is_free_tier"), ("grok_api", "api_key_blocked"),
+                               ("grok_api", "api_key_disabled"), ("grok_api", "team_blocked")):
+            with self.subTest(flag=flag), tempfile.TemporaryDirectory() as folder:
+                self.root = folder
+                reply = usage_reply(provider)
+                fields = reply["body"].setdefault("data", {}) if provider == "openrouter" else reply["body"]
+                fields[flag] = False
+                self.put_usage(reply)
+                self.assert_passes()
+                fields[flag] = "made-up-private-value"
+                self.assert_usage_fails(reply, hidden="made-up-private-value")
+
+    def test_duplicate_encoded_keys_cannot_hide_an_earlier_account_detail(self):
+        reply = usage_reply("claude")
+        reply["stderr"] = '{"id":"made-up-private-id","id":"<scrubbed>"}'
+        self.assert_usage_fails(reply, hidden="made-up-private-id")
+
+    def test_metadata_errors_do_not_echo_values_or_unknown_field_names(self):
+        for field in ("basis", "kind", "expect"):
+            with self.subTest(field=field):
+                reply = clean_reply()
+                reply["meta"][field] = "made-up-private-value"
+                self.put(reply)
+                result = self.check()
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn("made-up-private-value", result.stdout + result.stderr)
+        reply = usage_reply()
+        reply["session"]["account/read"]["result"]["account"]["private@example.invalid"] = True
+        self.assert_usage_fails(reply, hidden="private@example.invalid")
+
+    def test_private_identifiers_as_json_keys_are_rejected_even_with_null_values(self):
+        reply = usage_reply()
+        fields = reply["session"]["account/usage/read"]["result"]
+        fields.update(account_id="<scrubbed>", org_name=None, workspace_name=None, user_id="<scrubbed>")
+        self.put_usage(reply)
+        self.assert_passes()
+        for key in ("org_made_up_enumerated", "acct_made_up", "workspace_made_up",
+                    "user_made_up", "session-made-up", "req_made_up", "thread-made-up"):
+            with self.subTest(prefix=key.split("_")[0]):
+                fields["details"] = json.dumps([{key: None}])
+                self.assert_usage_fails(reply, hidden=key)
+
+    def test_objects_keyed_by_model_organisation_or_limit_accept_only_placeholder_keys(self):
+        reply = usage_reply()
+        result = reply["session"]["account/rateLimits/read"]["result"]
+        for field in ("rateLimitsByLimitId", "usageByModel", "modelUsage", "per_model", "organizations",
+                      "workspaces"):
+            with self.subTest(field=field):
+                result[field] = {"<scrubbed>": {"primary": {"usedPercent": 4}}}
+                self.put_usage(reply)
+                self.assert_passes()
+                result[field]["private-label"] = {"primary": None}
+                self.assert_usage_fails(reply, hidden="private-label")
+                del result[field]
+        # The reference gives "codex" as an example at exactly this position.
+        result["rateLimitsByLimitId"] = {"codex": {"primary": None}}
+        self.put_usage(reply)
+        self.assert_passes()
+        result["rateLimitsByLimitId"]["codex"]["userId"] = "made-up-private"
+        self.assert_usage_fails(reply, hidden="made-up-private")
+
+    def test_rpc_ids_and_server_messages_are_checked_like_other_payload_fields(self):
+        reply = usage_reply()
+        reply["server_messages"] = [{"id": "<scrubbed>", "method": "example/read", "params": {}}]
+        self.put_usage(reply)
+        self.assert_passes()
+        for mutate in (
+            lambda item: item["session"]["initialize"].update(id=23),
+            lambda item: item["server_messages"][0]["params"].update(configPath="private-directory"),
+            lambda item: item.update(server_messages="wrong type"),
+            lambda item: item["session"].update(initialize={"id": "<scrubbed>"}),
+            lambda item: item["session"]["initialize"].update(error={}),
+            lambda item: item.update(marker="does not match meta"),
+        ):
+            broken = copy.deepcopy(reply)
+            mutate(broken)
+            self.assert_usage_fails(broken)
+
+    def test_an_allowed_header_may_not_carry_an_extra_line_or_a_structured_value(self):
+        for value in ("1\r\nSet-Cookie: made-up", {"id": "<scrubbed>"}, 1):
+            with self.subTest(value=value):
+                reply = usage_reply("openai_api")
+                reply["headers"] = {"X-RateLimit-Remaining-Requests": value}
+                self.assert_usage_fails(reply)
+
+    def test_expectation_records_use_figure_and_reset_wire_fields(self):
+        reply = usage_reply()
+        expect = reply["meta"]["expect"]
+        figure = {"label": "5-hour limit", "kind": "limit", "window": "five_hour",
+                  "percent_used": 42, "reset_at": None, "value": None}
+        reset = {"count": 1, "kind": "full", "expires_at": None}
+        expect.update(figures=[figure], resets=[reset])
+        self.put_usage(reply)
+        self.assert_passes()
+        for records, field, replacement in (("figures", "label", None), ("figures", "kind", "unknown"),
+                                            ("resets", "count", True), ("resets", "kind", "unknown")):
+            with self.subTest(records=records, field=field):
+                broken = copy.deepcopy(reply)
+                broken["meta"]["expect"][records][0][field] = replacement
+                self.assert_usage_fails(broken)
+        del reset["expires_at"]
+        self.assert_usage_fails(reply)
+
+    def test_a_symlink_is_not_a_reply_file_or_provider_folder(self):
+        with tempfile.TemporaryDirectory() as other:
+            reply_path = os.path.join(other, "run-reply.json")
+            with open(reply_path, "w") as handle:
+                json.dump(clean_reply(), handle)
+            claude_path = os.path.join(self.root, "claude")
+            os.mkdir(claude_path)
+            linked_file = os.path.join(claude_path, "run-limit.json")
+            os.symlink(reply_path, linked_file)
+            self.assert_fails("a linked reply file")
+            os.unlink(linked_file)
+            os.rmdir(claude_path)
+            os.symlink(other, claude_path)
+            result = self.check()
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("claude", result.stdout)
+
+    def test_private_filenames_and_duplicate_header_spellings_fail_without_echoing_them(self):
+        reply = usage_reply("openai_api")
+        reply["headers"] = {"x-ratelimit-remaining-requests": "2", "X-RateLimit-Remaining-Requests": "1"}
+        self.assert_usage_fails(reply)
+        self.put(None, "usage-madeup@example.invalid.json", "claude", raw="[]")
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("madeup@example.invalid", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

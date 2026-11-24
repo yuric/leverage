@@ -30,7 +30,7 @@
           "per_model",
           "full"
         ],
-        "source": "cachedUsageUtilization.utilization.cedar_ember in the account's settings folder, behind a version check; 0 only when present and empty"
+        "source": "cachedUsageUtilization.utilization.cedar_ember in .claude.json in the account's settings folder; behind a version check, 0 only when present and empty"
       },
       "capture": {
         "usage": "none",
@@ -104,7 +104,7 @@
     {
       "provider": "codex",
       "kind": "login",
-      "read_from": "app-server account/rateLimits/read and account/usage/read",
+      "read_from": "codex app-server over standard input and output: account/rateLimits/read and account/usage/read",
       "figures": [
         {
           "label": "5-hour window",
@@ -133,16 +133,16 @@
         "kinds": [
           "full"
         ],
-        "source": "rateLimitResetCredits.availableCount, with each reset's expiry date"
+        "source": "rateLimitResetCredits.availableCount and each available codexRateLimits credit in rateLimitResetCredits.credits, with its expiry date when given"
       },
       "capture": {
-        "usage": "none",
+        "usage": "recorded",
         "limit": "none",
         "sign_out": "none"
       },
       "provisional": true,
       "verified": true,
-      "tested_tool_versions": [],
+      "tested_tool_versions": ["0.169.0"],
       "prd_source": "PRD, What each account shows",
       "example_reading": {
         "credential_id": "00000000-0000-4000-8000-000000000102",
@@ -266,10 +266,10 @@
     {
       "provider": "grok",
       "kind": "login",
-      "read_from": "Grok Build's usage screen, captured from the terminal",
+      "read_from": "grok usage --json",
       "figures": [],
       "also_reports": [
-        "what the usage screen shows (not yet captured)"
+        "what the usage command shows (not yet captured)"
       ],
       "resets": {
         "available": false,
@@ -318,7 +318,13 @@
       "provider": "claude_api",
       "kind": "api_token",
       "read_from": "GET /v1/models",
-      "figures": [],
+      "figures": [
+        {
+          "label": "Requests remaining",
+          "kind": "allowance",
+          "window": null
+        }
+      ],
       "also_reports": [
         "rate limits, from the headers of each reply"
       ],
@@ -360,7 +366,13 @@
       "provider": "openai_api",
       "kind": "api_token",
       "read_from": "GET /v1/models (not verified)",
-      "figures": [],
+      "figures": [
+        {
+          "label": "Requests remaining",
+          "kind": "allowance",
+          "window": null
+        }
+      ],
       "also_reports": [
         "rate limits, from the headers of each reply"
       ],
@@ -475,22 +487,22 @@
           "window": "spend"
         },
         {
-          "label": "Left",
+          "label": "Left, in US dollars",
           "kind": "allowance",
           "window": null
         },
         {
-          "label": "Use today",
+          "label": "Use today, in US dollars",
           "kind": "activity",
           "window": null
         },
         {
-          "label": "Use this week",
+          "label": "Use this week, in US dollars",
           "kind": "activity",
           "window": null
         },
         {
-          "label": "Use this month",
+          "label": "Use this month, in US dollars",
           "kind": "activity",
           "window": null
         }
@@ -528,7 +540,7 @@
             "value": null
           },
           {
-            "label": "Left",
+            "label": "Left, in US dollars",
             "kind": "allowance",
             "window": null,
             "percent_used": null,
@@ -536,7 +548,7 @@
             "value": 87.5
           },
           {
-            "label": "Use today",
+            "label": "Use today, in US dollars",
             "kind": "activity",
             "window": null,
             "percent_used": null,
@@ -544,7 +556,7 @@
             "value": 0
           },
           {
-            "label": "Use this week",
+            "label": "Use this week, in US dollars",
             "kind": "activity",
             "window": null,
             "percent_used": null,
@@ -552,7 +564,7 @@
             "value": 3.25
           },
           {
-            "label": "Use this month",
+            "label": "Use this month, in US dollars",
             "kind": "activity",
             "window": null,
             "percent_used": null,

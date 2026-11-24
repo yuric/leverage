@@ -179,13 +179,14 @@ class ReportLimitTest < ActiveSupport::TestCase
     other = scenario.seat(role: "builder", credential: shared)
     later = from_now(3000)
     scenario.limit_credential(shared, reset_at: later)
+    began = shared.limited_since
     task = scenario.task(state: "working", builder: builder)
     second = scenario.task(state: "working", builder: other)
 
-    written = events_written { assert_completed(report_limit(shared, builder, task: task, reset_at: from_now(1000))) }
+    assert_completed(report_limit(shared, builder, task: task, reset_at: from_now(1000)))
     shared.reload
     assert_in_delta later.to_f, shared.limited_until.to_f, 0.000_001
-    assert_in_delta written.first.at.to_f, shared.limited_since.to_f, 0.000_001
+    assert_equal began, shared.limited_since
 
     observed = from_now(0)
     assert_completed(report_limit(shared, other, task: second, reset_at: observed - 5, observed_at: observed))

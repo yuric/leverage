@@ -476,6 +476,20 @@ struct TaskLogHandoffTests {
             == "An account reached its limit.")
     }
 
+    @Test("credential edits name the owner action and use the current account name when available")
+    func credentialEdits() {
+        let accounts = [personal: "personal"]
+        #expect(sentence(.credentialRenamed, subject: personal, kind: .credential, accounts: accounts)
+            == "You renamed personal.")
+        #expect(sentence(.credentialRemoved, subject: personal, kind: .credential, accounts: accounts)
+            == "You removed an account.")
+        #expect(sentence(.credentialOrderChanged, subject: personal, kind: .credential, accounts: accounts)
+            == "You moved personal in the handoff order.")
+        let unknown = UUID()
+        #expect(sentence(.credentialRenamed, subject: unknown, kind: .credential) == "You renamed an account.")
+        #expect(sentence(.credentialOrderChanged, subject: unknown, kind: .credential) == "You moved an account in the handoff order.")
+    }
+
     @Test("a sign-out says which account, and whether an agent was on it")
     func signedOut() {
         #expect(sentence(.credentialSignedOut, subject: personal, kind: .credential, payload: ["seat_id": id(builder)])

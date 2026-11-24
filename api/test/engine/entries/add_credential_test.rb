@@ -2,8 +2,8 @@ require "test_helper"
 require_relative "accounts_support"
 
 # add_credential (PRD L595-L609; milestone 2 plan IN-22 to IN-24, CL-20,
-# SC-5): the command inserts the credentials row at once, signed out and
-# not yet an added credential, queues the helper's add checks, and writes
+# milestone 6 plan CR-7): the command inserts the credentials row at once,
+# signed out and not yet added, queues the helper's add checks, and writes
 # no event. The name is kept in the credential's own row and nowhere else.
 class AddCredentialTest < ActiveSupport::TestCase
   include AccountsSupport
@@ -20,10 +20,10 @@ class AddCredentialTest < ActiveSupport::TestCase
     id = SecureRandom.uuid
 
     outcome = assert_completed(owner_command("add_credential",
-      body(id: id, masked_label: "...made", model: "made-up-model", effort: "high", strength_rank: 2)))
+      body(id: id, model: "made-up-model", effort: "high", strength_rank: 2)))
 
     row = Credential.find(id)
-    assert_equal [ @scenario.workspace_id, "login", "claude", "Made-up work account", "...made", "made-up-model", "high", 2 ],
+    assert_equal [ @scenario.workspace_id, "login", "claude", "Made-up work account", nil, "made-up-model", "high", 2 ],
       [ row.workspace_id, row.kind, row.provider, row.name, row.masked_label, row.model, row.effort, row.strength_rank ]
     assert_equal [ "signed_out", nil ], [ row.state, row.last_verified_at ]
     assert_equal 2, row.position
@@ -60,6 +60,18 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal before, counts.call
   end
 
+  test "Add trims names and rejects a blank name" do
+    id = SecureRandom.uuid
+    assert_completed owner_command("add_credential", body(id: id, name: "  Made-up account\t"))
+    assert_equal "Made-up account", Credential.find(id).name
+    assert_raises(T::Invalid) { owner_command("add_credential", body(name: " \t ")) }
+  end
+
+  test "Add checks the trimmed name against existing and pending names" do
+    scenario.credential(name: "  Made-up account ", added: false)
+    assert_refused "duplicate_name", owner_command("add_credential", body(name: "\tMade-up account "))
+  end
+
   test "the same name with another provider is a new credential" do
     assert_completed(owner_command("add_credential", body(name: "Made-up shared name")))
 
@@ -72,11 +84,77 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_refused("duplicate_name", owner_command("add_credential", body(provider: "codex", name: "Made-up taken")))
   end
 
-  test "an API token is invalid in this milestone (SC-5)" do
-    assert_raises(T::Invalid) do
-      owner_command("add_credential", body(kind: "api_token", provider: "claude_api", masked_label: "...made"))
+  %w[claude_api openai_api gemini_api grok_api openrouter].each do |provider|
+    test "adding a token for #{provider} keeps the fixed mask and queues one add check" do
+      params = body(kind: "api_token", provider: provider, name: "Made-up token name", masked_label: "••••••••")
+      id = params.fetch("credential_id")
+      written = events_written do
+        @outcome = add_token(params)
+      end
+
+      assert_empty written
+      row = Credential.find(id)
+      assert_equal [ "api_token", provider, "Made-up token name", "••••••••", "signed_out", nil ],
+        [ row.kind, row.provider, row.name, row.masked_label, row.state, row.last_verified_at ]
+      requests = HelperRequest.where(workspace_id: @scenario.workspace_id)
+      assert_equal 1, requests.count
+      request = requests.first
+      assert_equal({ "credential_id" => id, "helper_request_id" => request.id }, @outcome.result)
+      assert_equal [ "run_add_checks", "queued", id, nil ], [ request.kind, request.state, request.credential_id, request.seat_id ]
+      assert_equal({ "provider" => provider, "credential_kind" => "api_token" }, request.params)
+      assert_not_includes request.attributes.to_json, "Made-up token name"
     end
-    assert_equal 0, Credential.where(workspace_id: @scenario.workspace_id).count
+  end
+
+  test "an API token requires the fixed masked label" do
+    params = body(kind: "api_token", provider: "claude_api")
+
+    [ params, params.except("masked_label"), params.merge("masked_label" => "...made") ].each do |invalid|
+      assert_raises(T::Invalid) { owner_command("add_credential", invalid) }
+    end
+    assert_not Credential.exists?(params.fetch("credential_id"))
+    assert_empty HelperRequest.where(workspace_id: @scenario.workspace_id)
+  end
+
+  test "a login cannot have a masked label" do
+    params = body(masked_label: "••••••••")
+
+    assert_raises(T::Invalid) { owner_command("add_credential", params) }
+    assert_not Credential.exists?(params.fetch("credential_id"))
+    assert_empty HelperRequest.where(workspace_id: @scenario.workspace_id)
+  end
+
+  test "an API token of a login provider is invalid" do
+    params = body(kind: "api_token", provider: "claude", masked_label: "••••••••")
+
+    assert_raises(T::Invalid) { owner_command("add_credential", params) }
+    assert_not Credential.exists?(params.fetch("credential_id"))
+    assert_empty HelperRequest.where(workspace_id: @scenario.workspace_id)
+  end
+
+  test "a second token with the same name and provider is duplicate_name while the first still runs" do
+    params = body(kind: "api_token", provider: "openrouter", name: "Made-up twin", masked_label: "••••••••")
+    add_token(params)
+    second = params.merge("credential_id" => SecureRandom.uuid)
+
+    assert_refused("duplicate_name", owner_command("add_credential", second))
+    assert_not Credential.exists?(second.fetch("credential_id"))
+    assert_equal 1, HelperRequest.where(workspace_id: @scenario.workspace_id).count
+  end
+
+  test "a repeat of a token add key answers the same ids without another request or event" do
+    key = new_key
+    params = body(kind: "api_token", provider: "openai_api", masked_label: "••••••••")
+    first = add_token(params, key: key)
+
+    written = events_written do
+      repeat = assert_completed(owner_command("add_credential", params, key: key))
+      assert_equal first.result, repeat.result
+    end
+
+    assert_empty written
+    assert_equal 1, Credential.where(workspace_id: @scenario.workspace_id).count
+    assert_equal 1, HelperRequest.where(workspace_id: @scenario.workspace_id).count
   end
 
   test "a login of an API provider is invalid" do
@@ -94,6 +172,19 @@ class AddCredentialTest < ActiveSupport::TestCase
 
     assert_raises(T::Invalid) { owner_command("add_credential", body(id: taken.id, name: "Made-up new name")) }
     assert_equal "codex", taken.reload.provider
+  end
+
+  test "a second Grok login is invalid even while the first add still runs" do
+    assert_completed(owner_command("add_credential", body(provider: "grok")))
+    assert_raises(T::Invalid) { owner_command("add_credential", body(provider: "grok", name: "Made-up other Grok")) }
+  end
+
+  test "a removed credential id cannot be used for a new account" do
+    removed = @scenario.credential(provider: "codex")
+    assert_completed(owner_command("remove_credential", { "id" => removed.id }))
+
+    assert_raises(T::Invalid) { owner_command("add_credential", body(id: removed.id)) }
+    assert_not Credential.exists?(removed.id)
   end
 
   test "Retry after a failed add sends the same id again with a new key" do
@@ -117,5 +208,13 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_completed(owner_command("add_credential", body(id: id, model: "tool-default-model")))
 
     assert_equal [ 1, "tool-default-model", nil ], Credential.find(id).attributes.values_at("strength_rank", "model", "effort")
+  end
+
+  private
+
+  def add_token(params, **options)
+    assert_completed(owner_command("add_credential", params, **options))
+  rescue T::Invalid
+    flunk "Add rejected a token with the fixed mask and a matching provider"
   end
 end

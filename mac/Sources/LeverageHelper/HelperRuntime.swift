@@ -17,13 +17,17 @@ final class HelperRuntime: Sendable {
     let log: Log
     let launcher: Launcher
     let checks: AddChecks
-    let signInAgain: SignInAgain
+    let usageRead: UsageRead
     let installer: ToolInstaller
+    let cleanup: CredentialCleanup
     private let loopTask = LoopTask()
 
     init(
         api: any HelperAPI, settings: HelperSettings, timings: HelperTimings, log: Log,
-        prober: (any TestPrompting)? = nil, fetch: ToolInstaller.Fetch? = nil
+        prober: (any TestPrompting)? = nil, fetch: ToolInstaller.Fetch? = nil,
+        pending: PendingTokens = PendingTokens(), vault: any TokenVault = MemoryTokenVault(),
+        http: ProviderHTTP = ProviderHTTP(), usageReaders: @escaping UsageReaders.Lookup = UsageReaders.reader(for:),
+        testedVersions: @escaping @Sendable (Provider) -> [String] = { $0.testedToolVersions }
     ) {
         self.api = api
         self.settings = settings
@@ -31,13 +35,25 @@ final class HelperRuntime: Sendable {
         self.log = log
         launcher = Launcher(api: api, settings: settings, timings: timings, log: log)
         let prober = prober ?? RunnerProbe(timings: timings)
-        checks = AddChecks(api: api, settings: settings, timings: timings, prober: prober, log: log)
-        signInAgain = SignInAgain(api: api, settings: settings, timings: timings, prober: prober, log: log)
+        cleanup = CredentialCleanup(
+            folders: AccountFolders(supportFolder: settings.supportFolder), pending: pending, vault: vault,
+            requests: RunningRequests(), log: log)
+        checks = AddChecks(
+            api: api, settings: settings, timings: timings, prober: prober, log: log, cleanup: cleanup,
+            tokens: TokenChecks(pending: pending, vault: vault, http: http, timeout: timings.readLimit))
+        usageRead = UsageRead(
+            api: api, settings: settings, timings: timings, http: http, vault: vault, log: log,
+            readers: usageReaders, testedVersions: testedVersions)
         installer = ToolInstaller(settings: settings, timings: timings, fetch: fetch)
     }
 
     /// Does one request; nil when the helper is stopping.
     func handle(_ request: HelperRequest) async -> HelperRequestResult? {
+        guard !Task.isCancelled else { return nil }
+        if request.kind != .stopSeat, let credentialID = request.credentialID,
+           cleanup.requests.isForgotten(credentialID) {
+            return await rejectForgotten(request)
+        }
         let result: HelperRequestResult
         switch request.kind {
         case .startSeat: result = await launcher.start(request)
@@ -45,24 +61,32 @@ final class HelperRuntime: Sendable {
         case .runAddChecks: result = await checks.add(request)
         case .verify: result = await checks.verify(request)
         case .installTool: result = await installer.handle(request)
-        case .openSignIn: result = await signInAgain.run(request)
-        case .readUsage:
-            // Usage readers are milestone 6's.
-            log.warning("\(request.kind.rawValue) is not done by this helper")
-            result = HelperRequestResult(outcome: .failed, checks: [], toolVersion: nil)
+        case .openSignIn: result = await checks.signInAgain(request)
+        case .readUsage: result = await usageRead.run(request)
         }
         return Task.isCancelled ? nil : result
+    }
+
+    private func rejectForgotten(_ request: HelperRequest) async -> HelperRequestResult {
+        let check: HelperCheck
+        switch request.kind {
+        case .readUsage: check = .readingTaken
+        default: check = request.params.credentialKind == .apiToken ? .tokenWorks : .signedIn
+        }
+        var run = CheckRun(request: request, api: api, log: log)
+        return await run.fail(check, .notSignedIn)
     }
 
     /// Runs the request loop until `401` or `shutdown()`, and answers the
     /// helper's exit code.
     func run() async -> Int32 {
-        let loop = RequestLoop(api: api, timings: timings, log: log) { [self] request in
+        let loop = RequestLoop(api: api, timings: timings, log: log, running: cleanup.requests) { [self] request in
             await handle(request)
         }
         let task = Task { await loop.run() }
         guard loopTask.set(task) else {
             task.cancel()
+            _ = await task.value
             return HelperExitCode.stopped
         }
         let end = await task.value
@@ -108,18 +132,27 @@ private final class LoopTask: @unchecked Sendable {
 enum HelperMain {
     static func run() async -> Int32 {
         let log = Log(component: "helper")
-        let executable = Bundle.main.executableURL?.resolvingSymlinksInPath().path
+        let executable = Bundle.main.executableURL?.path
             ?? CommandLine.arguments.first ?? "LeverageHelper"
         let configuration: HelperConfiguration
         do {
             configuration = try HelperConfiguration(
                 environment: ProcessInfo.processInfo.environment, executablePath: executable)
-        } catch {
+        } catch HelperConfiguration.Failure.missingHelperToken {
             log.error("no helper token in the environment; the helper does not start")
+            return HelperExitCode.configuration
+        } catch {
+            log.error("provider API override refused; the helper does not start")
             return HelperExitCode.configuration
         }
         let api = HelperClient(baseURL: configuration.settings.apiBaseURL, helperToken: configuration.helperToken)
-        let runtime = HelperRuntime(api: api, settings: configuration.settings, timings: .standard, log: log)
+        var timings = HelperTimings.standard
+        timings.readLimit = configuration.readTimeout
+        let vault = TokenVaults.make(
+            executableURL: URL(fileURLWithPath: executable), environment: configuration.settings.environment)
+        let runtime = HelperRuntime(
+            api: api, settings: configuration.settings, timings: timings, log: log,
+            vault: vault, http: configuration.providerHTTP)
 
         let stopping = Stopping(runtime: runtime)
         var signals: [any DispatchSourceSignal] = []
@@ -139,7 +172,11 @@ enum HelperMain {
         }
 
         log.info("started, version \(leverageMacVersion)")
+        let channel = LocalChannel(cleanup: runtime.cleanup, log: log)
+        let input = Task { await channel.run(input: .standardInput) }
         let code = await runtime.run()
+        input.cancel()
+        await input.value
         await stopping.finished()
         watch?.cancel()
         for source in signals { source.cancel() }

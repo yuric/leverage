@@ -74,6 +74,15 @@ class ConnectSeatTest < ActiveSupport::TestCase
     assert_raises(T::NotFound) { owner_command("connect_seat", body(credential_id: credential.id)) }
   end
 
+  test "an API token cannot be given to a seat, even when its add still runs" do
+    [ @scenario.token_credential, @scenario.token_credential(added: false) ].each do |token|
+      assert_raises(T::Invalid) { owner_command("connect_seat", body(credential_id: token.id)) }
+    end
+
+    assert_empty Seat.where(workspace_id: @scenario.workspace_id)
+    assert_empty HelperRequest.where(workspace_id: @scenario.workspace_id)
+  end
+
   test "an unknown login is not found" do
     assert_raises(T::NotFound) { owner_command("connect_seat", body(credential_id: SecureRandom.uuid)) }
   end

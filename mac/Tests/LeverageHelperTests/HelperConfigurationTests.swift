@@ -58,6 +58,28 @@ struct HelperConfigurationTests {
         #expect(configuration.settings.toolDir == "/tmp/tools")
     }
 
+    @Test("the read defaults to fifteen seconds and the test limit can be set at startup")
+    func readTimeout() throws {
+        var environment = base
+        environment[EnvironmentKeys.helperToken] = MadeUp.helperToken
+        let program = "/test/LeverageHelper"
+        #expect(try HelperConfiguration(environment: environment, executablePath: program).readTimeout == .seconds(15))
+        environment[EnvironmentKeys.readTimeoutSeconds] = "2"
+        #expect(try HelperConfiguration(environment: environment, executablePath: program).readTimeout == .seconds(2))
+    }
+
+    @Test("an app bundle refuses to start with a provider API override, even in memory mode")
+    func bundledOverrideRefusesStartup() {
+        var environment = base
+        environment[EnvironmentKeys.helperToken] = MadeUp.helperToken
+        environment[EnvironmentKeys.tokenStore] = "memory"
+        environment[EnvironmentKeys.providerAPIBase] = "http://127.0.0.1:47198"
+        #expect(throws: ProviderHTTP.Failure.self) {
+            try HelperConfiguration(
+                environment: environment, executablePath: "/Applications/Leverage.app/Contents/MacOS/LeverageHelper")
+        }
+    }
+
     @Test("a description of the configuration never shows the token")
     func descriptionHidesToken() throws {
         var environment = base

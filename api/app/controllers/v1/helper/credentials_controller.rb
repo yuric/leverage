@@ -1,15 +1,11 @@
 module V1
   module Helper
-    # The helper's reports about an account a run used (milestone 3 plan
-    # §2.3, HE-8, HE-9; milestone 4 plan RD-40): it met a provider limit, or
-    # it was found signed out. A report names exactly one of a task, a review
-    # and a job (the schema enforces it): one that names a job runs
-    # report_job_limit or report_job_signed_out, any other report_limit or
-    # report_signed_out. The entries decide what each does; this only checks
-    # the body and runs the command with the path's credential id and the body
-    # as its params. The order of answers is IN-13's: 401, then the body (400
-    # or 422), then 404 for the id. Neither report has a result (HE-8): the
-    # helper learns what to do next from get_helper_next.
+    # The helper reports usage readings, provider limits and sign-outs.
+    # A limit or sign-out names exactly one task, review or job. A report
+    # that names a job runs its own command (milestone 4 plan RD-40).
+    # Each action checks the body and passes it with the path's credential
+    # id. The reports have no result. The helper learns what to do next
+    # from get_helper_next.
     class CredentialsController < ApplicationController
       include AuthenticatesHelper
       include RunsCommands
@@ -19,6 +15,10 @@ module V1
 
       # POST /v1/helper/credentials/{id}/signed-out
       def signed_out = report("report_signed_out", "report_job_signed_out")
+
+      def readings
+        run_command("report_reading", params: checked_body("report_reading").merge("id" => uuid_param!(:id)))
+      end
 
       private
 

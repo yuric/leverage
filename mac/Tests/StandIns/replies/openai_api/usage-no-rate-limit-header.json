@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "provider": "openai_api",
+    "tool": "openai_api",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Model list without a remaining-requests header",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c000008"
+  },
+  "status": 200,
+  "headers": {},
+  "body": {
+    "object": "list",
+    "data": [
+      {
+        "id": "LVRG-REPLY-60002c000008",
+        "created": 1767225600,
+        "object": "model",
+        "owned_by": "<scrubbed>"
+      }
+    ]
+  }
+}

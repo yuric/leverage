@@ -35,9 +35,12 @@ struct AddCredentialModelTests {
         return owner
     }
 
-    private func makeModel(_ owner: FakeOwnerAPI, added: Locked<Int> = Locked(0)) -> AddCredentialModel {
+    private func makeModel(
+        _ owner: FakeOwnerAPI, added: Locked<Int> = Locked(0), runtime: FakeAppRuntime = FakeAppRuntime()
+    ) -> AddCredentialModel {
         AddCredentialModel(
-            api: owner, credentialID: credentialID, onAdded: { added.update { $0 += 1 } }, timing: .quick)
+            api: owner, credentialID: credentialID, onAdded: { added.update { $0 += 1 } }, timing: .quick,
+            helper: runtime.helper)
     }
 
     private func passing(_ updated: Int = 5) -> HelperRequestStatus {
@@ -75,8 +78,8 @@ struct AddCredentialModelTests {
         let model = makeModel(owner(existing: existing, answers: [passing()]))
         await model.load()
         #expect(model.step == .pickProvider)
-        #expect(model.providers.map(\.name) == ["Claude", "Codex", "Gemini", "Grok"])
-        #expect(model.providers.map(\.isAdded) == [false, false, true, false])
+        #expect(model.providers.prefix(4).map(\.name) == ["Claude", "Codex", "Gemini", "Grok"])
+        #expect(model.providers.prefix(4).map(\.isAdded) == [false, false, true, false])
         model.pick(.gemini)
         #expect(model.step == .pickProvider)
         model.pick(.claude)
@@ -88,7 +91,7 @@ struct AddCredentialModelTests {
     func manyClaude() async {
         let model = makeModel(owner(existing: Fixtures.credentials().credentials, answers: [passing()]))
         await model.load()
-        #expect(model.providers.map(\.isAdded) == [false, false, false, false])
+        #expect(model.providers.prefix(4).map(\.isAdded) == [false, false, false, false])
     }
 
     @Test("Back returns to step 1, keeping the name typed")
@@ -533,6 +536,349 @@ struct AddCredentialModelTests {
         #expect(added.value == 0)
     }
 
+    // MARK: API tokens
+
+    private nonisolated static let madeUpToken = "LVRG-TOKEN-000000000010"
+
+    private func tokenPassed() -> HelperRequestStatus {
+        Fixtures.request(
+            requestID, state: .finished, progress: [Fixtures.progress(.tokenWorks, .passed)],
+            result: Fixtures.finished())
+    }
+
+    private nonisolated static func isExpectedSend(_ message: LocalHelperMessage?, credentialID: UUID, provider: Provider) -> Bool {
+        guard case .token(let id, let selected, let token)? = message else { return false }
+        return id == credentialID && selected == provider && token == madeUpToken
+    }
+
+    private static func holdsToken(_ model: AddCredentialModel) -> Bool {
+        // Inspect values the model owns, without walking into the injected fakes.
+        func containsToken(_ value: Any) -> Bool {
+            if let string = value as? String { return string.contains(madeUpToken) }
+            let mirror = Mirror(reflecting: value)
+            return mirror.displayStyle != .class && mirror.children.contains { containsToken($0.value) }
+        }
+        return Mirror(reflecting: model).children.contains { containsToken($0.value) }
+    }
+
+    @Test("the picker lists all four logins and five API token providers, with names from the catalog")
+    func tokenChoices() async {
+        let logins: [Provider] = [.claude, .codex, .gemini, .grok]
+        let tokens = ProviderCatalog.tokenEntries
+        let model = makeModel(owner(existing: [
+            Fixtures.credential(Fixtures.geminiLoginID, name: "Personal", provider: .gemini)
+        ], answers: [tokenPassed()]))
+        await model.load()
+        #expect(tokens.count == 5)
+        #expect(model.providers.map(\.provider) == logins + tokens.map(\.provider))
+        #expect(model.providers.map(\.name) ==
+            logins.compactMap { ProviderCatalog.entry(for: $0.rawValue)?.displayName } + tokens.map(\.displayName))
+        #expect(model.providers.filter(\.isAdded).map(\.provider) == [.gemini])
+    }
+
+    @Test("step 2 asks for a name and a hidden token and offers Add")
+    func tokenForm() async throws {
+        let owner = owner(answers: [tokenPassed()])
+        let model = makeModel(owner)
+        await start(model, .openrouter)
+        #expect(model.step == .nameIt)
+        #expect(!model.canAddToken)
+        await model.addToken()
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+        model.name = ""
+        model.token = Self.madeUpToken
+        #expect(!model.canAddToken)
+        model.name = "Personal"
+        #expect(model.canAddToken)
+        #expect(!model.canSignIn)
+        await model.signIn()
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+        #expect(Fixtures.draws(AddCredentialForm(model: model, cancel: {}), width: 440, height: 520))
+        model.cancel()
+
+        // The renderer checks layout but cannot tell a secure field from a plain one.
+        let sheet = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/LeverageApp/Credentials/AddCredentialSheet.swift")
+        let code = LiteralScanner.code(of: try String(contentsOf: sheet, encoding: .utf8))
+        let hasName = code.contains("TextField(CredentialsCopy.namePlaceholder.text, text: $model.name)")
+        let hasSecureToken = code.contains("SecureField(AddTokenCopy.tokenLabel.text, text: $model.token)")
+        let hasPlainToken = code.contains("TextField(AddTokenCopy.tokenLabel.text, text: $model.token)")
+        let hasAdd = code.contains("Button(AddTokenCopy.add.text)")
+        #expect(hasName)
+        #expect(hasSecureToken)
+        #expect(!hasPlainToken)
+        #expect(hasAdd)
+    }
+
+    @Test("Add sends the token to the helper first and only the fixed mask to the API, then clears the token on a pass")
+    func tokenAdd() async throws {
+        let runtime = FakeAppRuntime()
+        let owner = owner(answers: [
+            Fixtures.request(requestID, progress: [Fixtures.progress(.tokenWorks, .running)], updated: 1),
+            tokenPassed(),
+        ])
+        let id = credentialID
+        let helperSentFirst = Locked(false)
+        owner.script { answers in
+            let add = answers.addCredential
+            answers.addCredential = { request, key in
+                let messages = runtime.fakeHelper.messages.value
+                helperSentFirst.value = messages.count == 1 && Self.isExpectedSend(messages.first, credentialID: id, provider: .openaiApi)
+                return try await add(request, key)
+            }
+        }
+        let added = Locked(0)
+        let model = makeModel(owner, added: added, runtime: runtime)
+        await start(model, .openaiApi, name: "  Team  ")
+        model.token = "  " + Self.madeUpToken + "\n"
+        #expect(Self.holdsToken(model))
+        #expect(model.checks.map(\.state) == [.waiting])
+        #expect(model.checks.map(\.check) == [.tokenWorks])
+        let sawRunning = Locked(false)
+        owner.script { answers in
+            let read = answers.helperRequest
+            answers.helperRequest = { id, wait, after in
+                if after != nil {
+                    sawRunning.value = await MainActor.run { model.checks.map(\.state) == [.running] }
+                }
+                return try await read(id, wait, after)
+            }
+        }
+        await model.addToken()
+        #expect(helperSentFirst.value)
+        #expect(sawRunning.value)
+        #expect(model.step == .done)
+        #expect(model.checks.map(\.state) == [.passed])
+        #expect(added.value == 1)
+        #expect(!Self.holdsToken(model))
+        let adds = Fixtures.calls(owner, .addCredential)
+        try #require(adds.count == 1)
+        let body = try #require(adds.first?.body)
+        let encoded = try JSONEncoder().encode(body)
+        let containsTokenMarker = String(decoding: encoded, as: UTF8.self).contains("LVRG-TOKEN-")
+        #expect(!containsTokenMarker)
+        // Compare fields without printing the actual body on a failure.
+        let expected: JSONValue = .object([
+            "credential_id": .string(id.contractString), "kind": .string("api_token"), "provider": .string("openai_api"),
+            "name": .string("Team"), "masked_label": .string("••••••••"), "model": .null, "effort": .null,
+            "strength_rank": .null,
+        ])
+        let onlyExpectedFields = body == expected
+        #expect(onlyExpectedFields)
+    }
+
+    @Test("a failed token check has its own line and Retry sends the same ID and a new key")
+    func tokenRetry() async throws {
+        let cases: [(HelperCheckFailure, String)] = [
+            (.noAnswer, "OpenRouter could not complete the token check."),
+            (.tokenStoreUnavailable, "leverage could not access this Mac’s Keychain. Check Keychain access and try again."),
+            (.providerMismatch, "Check the token’s provider and add it again. Remove the old token first if it is listed."),
+            (.rejected, "OpenRouter rejected this token."),
+            (.unreachable, "OpenRouter could not be reached. Check this Mac's internet connection."),
+            (.timedOut, "OpenRouter took too long to check the token."),
+            (.notSignedIn, "This token is missing on this Mac."),
+        ]
+        for (failure, line) in cases {
+            let runtime = FakeAppRuntime()
+            let owner = owner(answers: [failing(.tokenWorks, failure), tokenPassed()])
+            let id = credentialID
+            let sendsAtAdd = Locked<[Int]>([])
+            owner.script { answers in
+                let add = answers.addCredential
+                answers.addCredential = { request, key in
+                    sendsAtAdd.update { $0.append(runtime.fakeHelper.messages.value.count) }
+                    return try await add(request, key)
+                }
+            }
+            let model = makeModel(owner, runtime: runtime)
+            await start(model, .openrouter)
+            model.token = Self.madeUpToken
+            await model.addToken()
+            #expect(model.step == .checking)
+            #expect(model.checks.map(\.state) == [.failed])
+            #expect(model.failure == line, "\(failure)")
+            #expect(model.canRetry)
+            #expect(model.signInNote == nil)
+            #expect(model.installAsk == nil)
+            await model.retry()
+            #expect(sendsAtAdd.value == [1, 2])
+            let resendsSameToken = runtime.fakeHelper.messages.value.allSatisfy {
+                Self.isExpectedSend($0, credentialID: id, provider: .openrouter)
+            }
+            #expect(resendsSameToken)
+            let adds = Fixtures.calls(owner, .addCredential)
+            try #require(adds.count == 2)
+            #expect(adds[0].key != adds[1].key)
+            let sameBody = adds[0].body == adds[1].body
+            #expect(sameBody)
+            #expect(model.step == .done)
+            #expect(model.failure == nil)
+            #expect(!Self.holdsToken(model))
+        }
+    }
+
+    @Test("a helper that cannot take the token leaves the sheet open with Retry and sends no Add")
+    func tokenHelperDown() async {
+        let runtime = FakeAppRuntime()
+        runtime.fakeHelper.sendFailure.value = HelperSendError.notRunning
+        let owner = owner(answers: [tokenPassed()])
+        let model = makeModel(owner, runtime: runtime)
+        await start(model, .geminiApi)
+        model.token = Self.madeUpToken
+        await model.addToken()
+        #expect(runtime.fakeHelper.messages.value.count == 1)
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+        #expect(model.failure == "Agents are not running on this Mac, so leverage cannot check the token.")
+        #expect(model.canRetry)
+        runtime.fakeHelper.sendFailure.value = nil
+        await model.retry()
+        #expect(runtime.fakeHelper.messages.value.count == 2)
+        #expect(Fixtures.calls(owner, .addCredential).count == 1)
+        #expect(model.step == .done)
+    }
+
+    @Test("Retry after a lost Add response resends the local token and keeps the request key")
+    func tokenNetworkRetry() async throws {
+        let runtime = FakeAppRuntime()
+        let owner = owner(answers: [tokenPassed()])
+        let attempts = Locked(0)
+        owner.script { answers in
+            let add = answers.addCredential
+            answers.addCredential = { request, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.networkConnectionLost) }
+                return try await add(request, key)
+            }
+        }
+        let model = makeModel(owner, runtime: runtime)
+        await start(model, .claudeApi)
+        model.token = Self.madeUpToken
+        await model.addToken()
+        #expect(model.canRetry)
+        await model.retry()
+        let keys = Fixtures.calls(owner, .addCredential).map(\.key)
+        try #require(keys.count == 2)
+        #expect(keys[0] == keys[1])
+        #expect(runtime.fakeHelper.messages.value.count == 2)
+        #expect(!Self.holdsToken(model))
+        #expect(model.step == .done)
+    }
+
+    @Test("Retry resumes an accepted Add if the helper check could not be read")
+    func tokenRetryFollowing() async {
+        let runtime = FakeAppRuntime()
+        let owner = owner(answers: [tokenPassed()])
+        let attempts = Locked(0)
+        owner.script { answers in
+            let read = answers.helperRequest
+            answers.helperRequest = { id, wait, after in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw LeverageClientError.invalidBody }
+                return try await read(id, wait, after)
+            }
+        }
+        let model = makeModel(owner, runtime: runtime)
+        await start(model, .claudeApi)
+        model.token = Self.madeUpToken
+        await model.addToken()
+        #expect(model.canRetry)
+        await model.retry()
+        #expect(runtime.fakeHelper.messages.value.count == 1)
+        #expect(Fixtures.calls(owner, .addCredential).count == 1)
+        #expect(Fixtures.calls(owner, .getHelperRequest).map { $0.path["id"] } ==
+            [requestID.contractString, requestID.contractString])
+        #expect(model.step == .done)
+        #expect(!Self.holdsToken(model))
+    }
+
+    @Test("a successful poll that returns after Cancel cannot finish the sheet")
+    func tokenCancelDuringCheck() async {
+        let passed = tokenPassed()
+        let owner = owner(answers: [passed])
+        let runtime = FakeAppRuntime()
+        let (holdPoll, release) = AsyncStream<Void>.makeStream()
+        owner.script { answers in
+            answers.helperRequest = { _, _, _ in
+                for await _ in holdPoll { break }
+                return passed
+            }
+        }
+        let added = Locked(0)
+        let model = makeModel(owner, added: added, runtime: runtime)
+        await start(model, .claudeApi)
+        model.token = Self.madeUpToken
+        var returned = false
+        let run = Task {
+            await model.addToken()
+            returned = true
+        }
+        #expect(await ShellFixtures.eventually { returned || !Fixtures.calls(owner, .getHelperRequest).isEmpty })
+        #expect(Fixtures.calls(owner, .getHelperRequest).count == 1)
+        model.cancel()
+        release.finish()
+        await run.value
+        #expect(added.value == 0)
+        #expect(model.checks.map(\.state) == [.waiting])
+        #expect(!Self.holdsToken(model))
+    }
+
+    @Test("Cancel during the local send discards the token and prevents Add")
+    func tokenCancelDuringSend() async {
+        let runtime = FakeAppRuntime()
+        let (duringSend, release) = AsyncStream<Void>.makeStream()
+        let helper = PausedTokenSend(base: runtime.fakeHelper, duringSend: duringSend)
+        let owner = owner(answers: [tokenPassed()])
+        let model = AddCredentialModel(
+            api: owner, credentialID: credentialID, onAdded: {}, timing: .quick, helper: helper)
+        await start(model, .claudeApi)
+        model.token = Self.madeUpToken
+        var returned = false
+        let run = Task {
+            await model.addToken()
+            returned = true
+        }
+        #expect(await ShellFixtures.eventually { returned || !runtime.fakeHelper.messages.value.isEmpty })
+        #expect(runtime.fakeHelper.messages.value.count == 1)
+        model.cancel()
+        #expect(!Self.holdsToken(model))
+        release.finish()
+        await run.value
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+    }
+
+    @Test("Cancel discards the pasted token before or after a failed check")
+    func tokenCancel() async {
+        for afterFailure in [false, true] {
+            let runtime = FakeAppRuntime()
+            let owner = owner(answers: [failing(.tokenWorks, .rejected)])
+            let model = makeModel(owner, runtime: runtime)
+            await start(model, .openrouter)
+            model.token = Self.madeUpToken
+            if afterFailure { await model.addToken() }
+            #expect(Self.holdsToken(model))
+            model.cancel()
+            #expect(!Self.holdsToken(model))
+            await model.retry()
+            #expect(runtime.fakeHelper.messages.value.count == (afterFailure ? 1 : 0))
+            #expect(Fixtures.calls(owner, .addCredential).count == (afterFailure ? 1 : 0))
+        }
+    }
+
+    @Test("a token copied into the name stays on the Mac")
+    func tokenInName() async {
+        let runtime = FakeAppRuntime()
+        let owner = owner(answers: [tokenPassed()])
+        let model = makeModel(owner, runtime: runtime)
+        await start(model, .grokApi, name: "Team \(Self.madeUpToken)")
+        model.token = Self.madeUpToken
+        await model.addToken()
+        #expect(model.step == .nameIt)
+        #expect(model.nameLine == "Give it a name that does not include the token.")
+        #expect(Fixtures.calls(owner, .addCredential).count == 0)
+        #expect(runtime.fakeHelper.messages.value.count == 0)
+        model.back()
+        #expect(!Self.holdsToken(model))
+    }
+
     // MARK: the screen
 
     @Test("the pop-up draws at each step, with an install question and with a failure, light and dark")
@@ -561,5 +907,28 @@ struct AddCredentialModelTests {
         #expect(draw(asking, false))
         asking.cancel()
         await task.value
+    }
+}
+
+/// Let the fake deliver a successful local send after the model cancels.
+private final class PausedTokenSend: HelperSupervising {
+    let base: FakeHelper
+    let duringSend: AsyncStream<Void>
+
+    init(base: FakeHelper, duringSend: AsyncStream<Void>) {
+        self.base = base
+        self.duringSend = duringSend
+    }
+
+    func state() async -> HelperState { await base.state() }
+    func start(apiBaseURL: URL, issuer: any HelperTokenIssuing) async -> HelperState {
+        await base.start(apiBaseURL: apiBaseURL, issuer: issuer)
+    }
+    func tryAgain() async -> HelperState { await base.tryAgain() }
+    func stop() async { await base.stop() }
+
+    func send(_ message: LocalHelperMessage) async throws {
+        try await base.send(message)
+        for await _ in duringSend { break }
     }
 }

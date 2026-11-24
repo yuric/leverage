@@ -2,15 +2,14 @@ import Foundation
 import LeverageKit
 import Observation
 
-/// The Add credential pop-up (MA-17, SC-5, MA-26, MA-27, IN-23, IN-24): step 1
-/// picks a provider, step 2 names the login and starts the checks, and the
-/// checks tick off as the helper reports them. A failed check stays in the
-/// pop-up with one line and a Retry; a missing tool shows what would be
-/// installed and from where, and waits for the owner's say (PV-5).
+/// The Add credential pop-up (MA-17, IN-23, IN-24, CR-9, CR-13): step 1
+/// picks a provider, and step 2 names and checks a login or API token.
+/// A failed check stays in the pop-up with one line and a Retry. A login
+/// with a missing tool also shows what leverage can install (PV-5).
 ///
-/// Add is sent once per try. Retry sends it again with a new key and the same
-/// credential id (IN-24); pressing Sign in again after the network failed
-/// sends the same command under the same key.
+/// After a failed check, Retry sends Add with the same credential id and a
+/// new key (IN-24). An unanswered Add keeps its key. An accepted token Add
+/// keeps following its existing check.
 @MainActor
 @Observable
 final class AddCredentialModel {
@@ -25,6 +24,7 @@ final class AddCredentialModel {
     struct ProviderChoice: Identifiable, Equatable, Sendable {
         let provider: Provider
         let name: String
+        let kind: CredentialKind
         /// A provider with one sign-in for the Mac that already has a login (MA-26).
         let isAdded: Bool
         var id: Provider { provider }
@@ -46,7 +46,11 @@ final class AddCredentialModel {
 
     private(set) var step: Step = .pickProvider
     private(set) var providers: [ProviderChoice] = []
-    private(set) var provider: Provider?
+    private(set) var selection: ProviderChoice?
+    var provider: Provider? { selection?.provider }
+    var isToken: Bool { selection?.kind == .apiToken }
+    /// Kept for Retry and cleared on Back, Cancel, or a pass.
+    var token = ""
     var name = "" {
         didSet { if name != oldValue { nameLine = nil } }
     }
@@ -61,14 +65,16 @@ final class AddCredentialModel {
     private(set) var isWorking = false
 
     @ObservationIgnored private let api: any OwnerAPI
+    @ObservationIgnored private let helper: any HelperSupervising
     @ObservationIgnored let credentialID: UUID
     @ObservationIgnored private let onAdded: @MainActor () -> Void
     @ObservationIgnored private let timing: FollowTiming
     @ObservationIgnored private var added: Set<Provider> = []
     @ObservationIgnored private var addKey: IdempotencyKey?
     @ObservationIgnored private var addedRequest: AddCredentialRequest?
+    @ObservationIgnored private var pendingTokenCheck: UUID?
     @ObservationIgnored private var installKey: IdempotencyKey?
-    @ObservationIgnored private var signInTask: Task<Void, Never>?
+    @ObservationIgnored private var checkTask: Task<Void, Never>?
     @ObservationIgnored private var installTask: Task<Void, Never>?
 
     /// Only these have one sign-in for the Mac (CL-20, CL-21).
@@ -76,9 +82,10 @@ final class AddCredentialModel {
 
     init(
         api: any OwnerAPI, credentialID: UUID = UUID(), onAdded: @escaping @MainActor () -> Void,
-        timing: FollowTiming = .normal
+        timing: FollowTiming = .normal, helper: any HelperSupervising
     ) {
         self.api = api
+        self.helper = helper
         self.credentialID = credentialID
         self.onAdded = onAdded
         self.timing = timing
@@ -103,13 +110,17 @@ final class AddCredentialModel {
     private func rebuildProviders() {
         providers = ProviderNames.logins.map {
             ProviderChoice(
-                provider: $0, name: ProviderNames.name($0), isAdded: Self.oneForTheMac.contains($0) && added.contains($0))
+                provider: $0, name: ProviderNames.name($0), kind: .login,
+                isAdded: Self.oneForTheMac.contains($0) && added.contains($0))
+        } + ProviderCatalog.tokenEntries.map {
+            ProviderChoice(provider: $0.provider, name: $0.displayName, kind: .apiToken, isAdded: false)
         }
     }
 
     func pick(_ choice: Provider) {
-        guard step == .pickProvider, providers.first(where: { $0.provider == choice })?.isAdded == false else { return }
-        provider = choice
+        guard step == .pickProvider,
+              let selected = providers.first(where: { $0.provider == choice }), !selected.isAdded else { return }
+        selection = selected
         failure = nil
         resetChecks()
         step = .nameIt
@@ -117,20 +128,30 @@ final class AddCredentialModel {
 
     func back() {
         guard step == .nameIt, !isWorking else { return }
+        discardTokenInput()
         step = .pickProvider
     }
 
     // MARK: step 2 and the checks
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedToken: String { token.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var nameContainsToken: Bool { !trimmedToken.isEmpty && name.contains(trimmedToken) }
+    private var canStartChecks: Bool { !isWorking && (step == .nameIt || canRetry) }
 
     /// Whether Sign in (or Retry) can be pressed.
     var canSignIn: Bool {
-        provider != nil && !trimmedName.isEmpty && !isWorking && (step == .nameIt || canRetry)
+        provider != nil && !isToken && !trimmedName.isEmpty && canStartChecks
+    }
+
+    var canAddToken: Bool {
+        isToken && !trimmedName.isEmpty && !trimmedToken.isEmpty && canStartChecks
     }
 
     /// A failed try is showing, and nothing is running.
-    var canRetry: Bool { step == .checking && failure != nil && !isWorking }
+    var canRetry: Bool {
+        step == .checking && failure != nil && !isWorking && (!isToken || !trimmedToken.isEmpty)
+    }
 
     var installNote: String? {
         guard isInstalling, let provider else { return nil }
@@ -139,12 +160,16 @@ final class AddCredentialModel {
 
     private func resetChecks() {
         guard let provider else { checks = []; return }
-        let tool = ["tool": ProviderNames.tool(provider)]
-        checks = [
-            CheckLine(check: .toolInstalled, state: .waiting, text: CredentialsCopy.checkInstalled.filled(tool)),
-            CheckLine(check: .signedIn, state: .waiting, text: CredentialsCopy.checkSignedIn.filled(tool)),
-            CheckLine(check: .testPrompt, state: .waiting, text: CredentialsCopy.checkAnswers.filled(tool)),
-        ]
+        if isToken {
+            checks = [CheckLine(check: .tokenWorks, state: .waiting, text: AddTokenCopy.checkWorks.text)]
+        } else {
+            let tool = ["tool": ProviderNames.tool(provider)]
+            checks = [
+                CheckLine(check: .toolInstalled, state: .waiting, text: CredentialsCopy.checkInstalled.filled(tool)),
+                CheckLine(check: .signedIn, state: .waiting, text: CredentialsCopy.checkSignedIn.filled(tool)),
+                CheckLine(check: .testPrompt, state: .waiting, text: CredentialsCopy.checkAnswers.filled(tool)),
+            ]
+        }
         signInNote = nil
         installAsk = nil
         isInstalling = false
@@ -154,54 +179,102 @@ final class AddCredentialModel {
     /// Sign in for a login: Add credential, then follow the helper's checks.
     /// Returns when the checks ended, failed, or were cancelled.
     func signIn() async {
-        guard step == .nameIt || canRetry, !isWorking, let provider else { return }
+        guard canStartChecks, !isToken, let provider else { return }
         let typed = trimmedName
         guard !typed.isEmpty else {
             nameLine = CredentialsCopy.nameRequired.text
             return
         }
-        isWorking = true
-        failure = nil
-        resetChecks()
-        step = .checking
-        let task = Task { await self.runChecks(provider: provider, name: typed) }
-        signInTask = task
-        await task.value
-        signInTask = nil
-        isWorking = false
-    }
 
-    private func runChecks(provider: Provider, name typed: String) async {
-
-        // The model is the one the provider's tool names as its default, where it names one (Claude, Grok);
-        // the rank is the agents' default, and the effort stays empty (HE-5).
+        // The login uses the tool's default model and the agents' default rank (HE-5).
         let request = AddCredentialRequest(
             credentialID: credentialID, kind: .login, provider: provider, name: typed,
             model: ProviderNames.defaultModel(provider), strengthRank: 1)
-        let key = (addedRequest == request ? addKey : nil) ?? IdempotencyKey()
-        addKey = key
-        addedRequest = request
-        do {
-            let outcome = try await api.addCredential(request, key: key)
-            guard let result = try outcome.completedResult() else { throw LeverageClientError.invalidBody }
-            addKey = nil
-            let follower = HelperRequestFollower(api: api, timing: timing)
-            let end = try await follower.follow(result.helperRequestID, giveUpAfter: timing.giveUpAfter) { [weak self] in
-                self?.apply($0)
-            }
-            guard let end else {
-                failure = CredentialsCopy.failTimedOut.filled(["tool": ProviderNames.tool(provider)])
+        await startChecks(request)
+    }
+
+    func addToken() async {
+        guard canAddToken, let provider else { return }
+        guard !nameContainsToken else {
+            name = ""
+            nameLine = AddTokenCopy.nameContainsToken.text
+            return
+        }
+        let request = AddCredentialRequest(
+            credentialID: credentialID, kind: .apiToken, provider: provider, name: trimmedName,
+            maskedLabel: MaskedLabel.forToken(trimmedToken))
+        await startChecks(request)
+    }
+
+    private func startChecks(_ request: AddCredentialRequest) async {
+        isWorking = true
+        failure = nil
+        nameLine = nil
+        resetChecks()
+        step = .checking
+        let task = Task { await self.runChecks(request) }
+        checkTask = task
+        await task.value
+        checkTask = nil
+        isWorking = false
+    }
+
+    private func runChecks(_ request: AddCredentialRequest) async {
+        let provider = request.provider
+        let isToken = request.kind == .apiToken
+        let tokenCheck = isToken ? pendingTokenCheck : nil
+        if isToken && tokenCheck == nil {
+            do {
+                try Task.checkCancellation()
+                try await helper.send(.token(credentialID: credentialID, provider: provider, token: trimmedToken))
+            } catch is CancellationError {
+                return
+            } catch {
+                if !Task.isCancelled { failure = AddTokenCopy.helperNotRunning.text }
                 return
             }
+        }
+
+        do {
+            try Task.checkCancellation()
+            let requestID: UUID
+            if let tokenCheck {
+                // The server already accepted Add. Keep following its check.
+                requestID = tokenCheck
+            } else {
+                let key = (addedRequest == request ? addKey : nil) ?? IdempotencyKey()
+                addKey = key
+                addedRequest = request
+                let outcome = try await api.addCredential(request, key: key)
+                guard let result = try outcome.completedResult() else { throw LeverageClientError.invalidBody }
+                addKey = nil
+                requestID = result.helperRequestID
+                if isToken { pendingTokenCheck = requestID }
+            }
+            let follower = HelperRequestFollower(api: api, timing: timing)
+            let end = try await follower.follow(requestID, giveUpAfter: timing.giveUpAfter) { [weak self] in
+                if !Task.isCancelled { self?.apply($0) }
+            }
+            try Task.checkCancellation()
+            let providerName = selection?.name ?? ProviderNames.name(provider)
+            guard let end else {
+                failure = isToken ? AddTokenCopy.failureLine(for: .timedOut, provider: providerName)
+                    : CredentialsCopy.failTimedOut.filled(["tool": ProviderNames.tool(provider)])
+                return
+            }
+            if isToken { pendingTokenCheck = nil }
             if end.succeeded {
+                if isToken { discardTokenInput() }
                 step = .done
                 onAdded()
             } else {
-                failure = CredentialsCopy.failureLine(for: end, provider: provider)
+                failure = isToken ? AddTokenCopy.failureLine(for: end.failedCheck?.failure, provider: providerName)
+                    : CredentialsCopy.failureLine(for: end, provider: provider)
             }
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled else { return }
             if CommandKey.wasAnswered(error) { addKey = nil }
             if case LeverageClientError.refused(let refusal) = error, refusal.code == .duplicateName {
                 step = .nameIt
@@ -212,7 +285,9 @@ final class AddCredentialModel {
         }
     }
 
-    func retry() async { await signIn() }
+    func retry() async {
+        if isToken { await addToken() } else { await signIn() }
+    }
 
     /// Takes in what the helper has reported so far.
     private func apply(_ request: HelperRequest) {
@@ -221,6 +296,7 @@ final class AddCredentialModel {
             guard let reported = request.progress.last(where: { $0.check == line.check }) else { return line }
             return CheckLine(check: line.check, state: reported.state, text: line.text)
         }
+        guard !isToken else { return }
         let waitingForSignIn = request.progress.contains { $0.state == .waitingForSignIn }
         signInNote = waitingForSignIn
             ? (provider == .gemini ? CredentialsCopy.waitingGemini : CredentialsCopy.waitingSignIn).text : nil
@@ -282,7 +358,13 @@ final class AddCredentialModel {
 
     /// Cancel: stops following. The helper's own wait runs out by itself (CL-19).
     func cancel() {
-        signInTask?.cancel()
+        checkTask?.cancel()
         installTask?.cancel()
+        discardTokenInput()
+    }
+
+    private func discardTokenInput() {
+        if nameContainsToken { name = "" }
+        token = ""
     }
 }

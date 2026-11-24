@@ -128,6 +128,18 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
             throw FakeAPIError.notScripted(.addCredential)
         }
         public var verifyCredential: IDCommand = { _, _ in throw FakeAPIError.notScripted(.verifyCredential) }
+        public var renameCredential: @Sendable (UUID, RenameCredentialRequest, IdempotencyKey) async throws
+            -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.renameCredential) }
+        public var removeCredential: IDCommand = { _, _ in throw FakeAPIError.notScripted(.removeCredential) }
+        public var refreshUsage: @Sendable (IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> = { _ in
+            throw FakeAPIError.notScripted(.refreshUsage)
+        }
+        public var verifyAllCredentials: @Sendable (IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> = { _ in
+            throw FakeAPIError.notScripted(.verifyAllCredentials)
+        }
+        public var reorderCredentials: Command<ReorderCredentialsRequest, JSONValue> = { _, _ in
+            throw FakeAPIError.notScripted(.reorderCredentials)
+        }
         public var signInAgain: IDCommand = { _, _ in throw FakeAPIError.notScripted(.signInAgain) }
         public var installTool: @Sendable (Provider, IdempotencyKey) async throws -> PlainOutcome = { _, _ in
             throw FakeAPIError.notScripted(.installTool)
@@ -382,6 +394,29 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     public func verifyCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
         try await record(.verifyCredential, Self.id(credentialID), key: key).verifyCredential(credentialID, key)
+    }
+
+    public func renameCredential(credentialID: UUID, _ request: RenameCredentialRequest, key: IdempotencyKey)
+        async throws -> PlainOutcome {
+        try await record(.renameCredential, Self.id(credentialID), key: key, body: request)
+            .renameCredential(credentialID, request, key)
+    }
+
+    public func removeCredential(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
+        try await record(.removeCredential, Self.id(credentialID), key: key).removeCredential(credentialID, key)
+    }
+
+    public func refreshUsage(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        try await record(.refreshUsage, key: key).refreshUsage(key)
+    }
+
+    public func verifyAllCredentials(key: IdempotencyKey) async throws -> CommandOutcome<QueuedRequests> {
+        try await record(.verifyAllCredentials, key: key).verifyAllCredentials(key)
+    }
+
+    public func reorderCredentials(_ request: ReorderCredentialsRequest, key: IdempotencyKey) async throws
+        -> PlainOutcome {
+        try await record(.reorderCredentials, key: key, body: request).reorderCredentials(request, key)
     }
 
     public func signInAgain(credentialID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {

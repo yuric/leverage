@@ -10,17 +10,22 @@ struct HandoffRow: Identifiable, Equatable, Sendable {
     let number: Int
     /// "Claude, Personal"
     let name: String
-    /// Ready, Working, "At its limit until <time>", "At its limit" or Signed out.
+    /// The login's availability or the token's "Not used for work yet".
     let state: String
     let tone: Tokens.Tone
-    /// "Hands off to Codex, Team", or on the last row "Hands off to nobody".
+    /// The next login for a login, or why the token stays in the order.
     let handsOff: String
 }
 
-/// The Handoff tab: every account in the one handoff order, from
-/// `list_credentials` in `position` order, each with its state. The tab only
-/// reads; reordering is a later milestone's, and nothing here says it can be
-/// changed (HM-37). It reads again each time the events tail delivers a batch.
+struct HandoffDropPreview: Equatable {
+    let sourceID: UUID
+    let targetID: UUID
+    let above: Bool
+    let hint: String
+}
+
+/// The Handoff tab loads the server's order and shows moves immediately
+/// while it saves the full order. The event tail keeps the rows current.
 ///
 /// Working is an agent whose run is on that account (`run_credential_id`);
 /// without the agents the accounts still show, all Ready.
@@ -37,6 +42,10 @@ final class HandoffModel {
 
     private(set) var state: State = .loading
     private(set) var rows: [HandoffRow] = []
+    private(set) var dropPreview: HandoffDropPreview?
+    private(set) var reorderFailure: String?
+
+    private var isReordering = false
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
@@ -45,6 +54,11 @@ final class HandoffModel {
     @ObservationIgnored private let locale: Locale
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var isReading = false
+    @ObservationIgnored private var refreshAfterReorder = false
+    @ObservationIgnored private var credentials: [Credential] = []
+    @ObservationIgnored private var working: Set<UUID> = []
+    @ObservationIgnored private var unanswered: (order: [UUID], key: IdempotencyKey)?
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void, now: @escaping () -> Date = Date.init,
@@ -58,8 +72,15 @@ final class HandoffModel {
     }
 
     func load() async {
+        if isReordering {
+            refreshAfterReorder = true
+            return
+        }
+
         generation += 1
         let mine = generation
+        isReading = true
+        defer { if mine == generation { isReading = false } }
         do {
             let list = try await api.credentials()
             var position = list.asOfSeq
@@ -75,35 +96,137 @@ final class HandoffModel {
                 throw CancellationError()
             } catch {}
             guard mine == generation else { return }
-            rows = Self.rows(of: list.credentials.map(\.credential), working: working, at: now(), calendar: calendar, locale: locale)
+            credentials = list.credentials.map(\.credential).sorted { $0.position < $1.position }
+            self.working = working
+            updateRows()
             state = .loaded
+            if let preview = dropPreview { previewDrop(of: preview.sourceID, over: preview.targetID) }
             noteRead(position)
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch let error as TransportError where error.code == .unauthenticated {
-            if mine == generation { state = .signedOut }
+            if mine == generation {
+                state = .signedOut
+                dropPreview = nil
+            }
         } catch {
-            if mine == generation { state = .failed(ShellCopy.sentence(for: error)) }
+            if mine == generation {
+                state = .failed(ShellCopy.sentence(for: error))
+                dropPreview = nil
+            }
         }
     }
 
-    /// The rows of the order: numbered 1 to n in position order, each naming
-    /// the account below it.
-    static func rows(
-        of credentials: [Credential], working: Set<UUID>, at now: Date, calendar: Calendar, locale: Locale
-    ) -> [HandoffRow] {
-        let ordered = credentials.sorted { $0.position < $1.position }
-        let clock = ResetClock(now: { now }, calendar: calendar, locale: locale)
-        return ordered.enumerated().map { index, credential in
-            let (state, tone) = stateWords(of: credential, working: working.contains(credential.id), at: now, clock: clock)
-            let next = ordered.indices.contains(index + 1) ? ordered[index + 1] : nil
-            return HandoffRow(
-                id: credential.id, number: index + 1, name: ProviderNames.account(credential), state: state, tone: tone,
-                handsOff: next.map { HandoffCopy.handsOffTo.filled(["account": ProviderNames.account($0)]) }
-                    ?? HandoffCopy.handsOffToNobody.text)
+    func canMoveUp(_ id: UUID) -> Bool { adjacent(to: id, offset: -1) != nil }
+    func canMoveDown(_ id: UUID) -> Bool { adjacent(to: id, offset: 1) != nil }
+
+    func moveUp(_ id: UUID) async {
+        if let target = adjacent(to: id, offset: -1) { await drop(id, over: target) }
+    }
+
+    func moveDown(_ id: UUID) async {
+        if let target = adjacent(to: id, offset: 1) { await drop(id, over: target) }
+    }
+
+    func previewDrop(of id: UUID, over targetID: UUID) {
+        guard let move = moveIndices(of: id, over: targetID) else {
+            dropPreview = nil
+            return
         }
+        dropPreview = HandoffDropPreview(
+            sourceID: id, targetID: targetID, above: move.from > move.to,
+            hint: HandoffCopy.dropHint.filled(["account": rows[move.from].name, "number": String(move.to + 1)]))
+    }
+
+    func clearDropPreview(over targetID: UUID) {
+        if dropPreview?.targetID == targetID { dropPreview = nil }
+    }
+
+    func drop(_ id: UUID, over targetID: UUID) async {
+        dropPreview = nil
+        guard let move = moveIndices(of: id, over: targetID) else { return }
+        let previous = credentials
+        let previousRows = rows
+
+        // A read started before the move cannot replace its optimistic order.
+        refreshAfterReorder = isReading
+        isReading = false
+        generation += 1
+        isReordering = true
+        reorderFailure = nil
+        let credential = credentials.remove(at: move.from)
+        credentials.insert(credential, at: move.to)
+        updateRows()
+
+        let order = credentials.map(\.id)
+        let key = unanswered.flatMap { $0.order == order ? $0.key : nil } ?? IdempotencyKey()
+        unanswered = (order, key)
+        do {
+            let outcome = try await api.reorderCredentials(ReorderCredentialsRequest(order: order), key: key)
+            _ = try outcome.completedResult()
+            unanswered = nil
+        } catch {
+            credentials = previous
+            rows = previousRows
+            if CommandKey.wasAnswered(error) { unanswered = nil }
+            if (error as? TransportError)?.code == .unauthenticated {
+                state = .signedOut
+                refreshAfterReorder = false
+            } else {
+                refreshAfterReorder = true
+                if (error as? TransportError)?.status == 422 {
+                    reorderFailure = HandoffCopy.orderChanged.text
+                } else if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
+                    reorderFailure = ShellCopy.sentence(for: error).text
+                }
+            }
+        }
+
+        isReordering = false
+        if refreshAfterReorder {
+            refreshAfterReorder = false
+            await load()
+        }
+    }
+
+    private func adjacent(to id: UUID, offset: Int) -> UUID? {
+        guard state == .loaded, !isReordering, let index = rows.firstIndex(where: { $0.id == id }),
+              rows.indices.contains(index + offset) else { return nil }
+        return rows[index + offset].id
+    }
+
+    private func moveIndices(of id: UUID, over targetID: UUID) -> (from: Int, to: Int)? {
+        guard state == .loaded, !isReordering, id != targetID,
+              let from = rows.firstIndex(where: { $0.id == id }),
+              let to = rows.firstIndex(where: { $0.id == targetID }) else { return nil }
+        return (from, to)
+    }
+
+    private func updateRows() {
+        let at = now()
+        let clock = ResetClock(now: { at }, calendar: calendar, locale: locale)
+        var nextLogin: String?
+        var fromLast: [HandoffRow] = []
+        for (index, credential) in credentials.enumerated().reversed() {
+            let name = ProviderNames.account(credential)
+            let state: String
+            let tone: Tokens.Tone
+            let handsOff: String
+            if credential.kind == .apiToken {
+                state = HandoffCopy.notUsedForWorkYet.text
+                tone = .plain
+                handsOff = state
+            } else {
+                (state, tone) = Self.stateWords(of: credential, working: working.contains(credential.id), at: at, clock: clock)
+                handsOff = nextLogin.map { HandoffCopy.handsOffTo.filled(["account": $0]) } ?? HandoffCopy.handsOffToNobody.text
+                nextLogin = name
+            }
+            fromLast.append(HandoffRow(
+                id: credential.id, number: index + 1, name: name, state: state, tone: tone, handsOff: handsOff))
+        }
+        rows = Array(fromLast.reversed())
     }
 
     private static func stateWords(
@@ -128,5 +251,6 @@ final class HandoffModel {
     func detach() {
         subscription?.cancel()
         subscription = nil
+        dropPreview = nil
     }
 }

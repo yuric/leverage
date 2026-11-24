@@ -1,8 +1,8 @@
 import LeverageKit
 
 /// The names of the providers and of their tools as the owner reads them.
-/// The four logins come from `ProviderCatalog`; the five API tokens, which
-/// the app cannot add yet, are named here so a list can still show one.
+/// The four logins come from `ProviderCatalog` and the names below cover
+/// API tokens as well.
 enum ProviderNames {
     /// The four providers a login can be added for, in the order the mockup lists them.
     static let logins: [Provider] = [.claude, .codex, .gemini, .grok]

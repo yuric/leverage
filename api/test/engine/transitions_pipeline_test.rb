@@ -230,10 +230,9 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     end
   end
 
-  # report_reading belongs to milestone 6.
   test "a command that is not in the table is refused before anything runs" do
-    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "report_reading")) }
-    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "report_reading").count
+    assert_raises(T::Table::UnknownCommand) { T.apply(request(command: "made_up_command")) }
+    assert_equal 0, Command.where(workspace_id: @scenario.workspace_id, command: "made_up_command").count
   end
 
   test "a workspace that does not exist is not found" do
@@ -276,12 +275,12 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { T::Precedence.first(%w[made_up_code]) }
   end
 
-  test "the table lists its commands in thirteen groups, each a registry command with state-table rows" do
-    assert_equal 97, T::Table::COMMANDS.size
+  test "the table lists its commands in fourteen groups, each a registry command with state-table rows" do
+    assert_equal 103, T::Table::COMMANDS.size
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
                T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS, T::Table::FINISHING,
-               T::Table::QUESTIONS, T::Table::PROJECTS, T::Table::WORKSPACE ]
-    assert_equal [ 17, 13, 4, 12, 3, 7, 7, 2, 5, 11, 5, 9, 2 ], groups.map(&:size)
+               T::Table::QUESTIONS, T::Table::PROJECTS, T::Table::WORKSPACE, T::Table::CREDENTIALS ]
+    assert_equal [ 17, 14, 4, 12, 3, 7, 7, 2, 5, 11, 5, 9, 2, 5 ], groups.map(&:size)
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
@@ -295,6 +294,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
     assert T::Table.include?("add_rule")
     assert T::Table.include?("ask_question")
     refute T::Table.const_defined?(:PENDING, false)
+    assert_equal Leverage::Contract.registry.fetch("commands").sort, T::Table::COMMANDS.sort
   end
 
   test "an entry finds its state-table row, or invalid_state where none starts" do

@@ -1,9 +1,7 @@
 module V1
   module Owner
-    # The owner's credential calls: the Credentials list, Add credential,
-    # Verify and Sign in again (milestone 2 plan IN-23, IN-24; milestone 3
-    # plan HE-36). Each command completes at once with the id of the helper
-    # request the app then follows.
+    # The owner's credential list and commands. Add, Verify, Sign in again,
+    # Refresh and Verify all return the ids of helper requests the app can follow.
     class CredentialsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
@@ -25,6 +23,26 @@ module V1
       # unfinished one, and the app follows it with get_helper_request.
       def sign_in
         run_command("sign_in_again", params: checked_body("sign_in_again").merge("id" => uuid_param!(:id)))
+      end
+
+      def rename
+        run_command("rename_credential", params: checked_body("rename_credential").merge("id" => uuid_param!(:id)))
+      end
+
+      def remove
+        run_command("remove_credential", params: checked_body("remove_credential").merge("id" => uuid_param!(:id)))
+      end
+
+      def reorder
+        run_command("reorder_credentials", params: checked_body("reorder_credentials"))
+      end
+
+      def refresh
+        run_command("refresh_usage", params: checked_body("refresh_usage"))
+      end
+
+      def verify_all
+        run_command("verify_credential", params: checked_body("verify_all_credentials"))
       end
     end
   end

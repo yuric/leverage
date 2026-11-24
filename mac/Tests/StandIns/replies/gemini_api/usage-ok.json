@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "provider": "gemini_api",
+    "tool": "gemini_api",
+    "tool_version": null,
+    "basis": "made_from_documentation",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "Model list",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-60002c00000a"
+  },
+  "status": 200,
+  "headers": {},
+  "body": {
+    "models": [
+      {
+        "name": "<scrubbed>",
+        "displayName": "LVRG-REPLY-60002c00000a"
+      }
+    ]
+  }
+}

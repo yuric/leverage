@@ -1,7 +1,7 @@
 require "digest"
 require "json"
 
-# A seeded random walk over the commands and timers of milestones 2 to 5
+# A seeded random walk over the commands and timers of milestones 2 to 6
 # (PRD test 2; milestone 2 plan EN-25, milestone 3 plan HT-3): owners add,
 # contract and cancel tasks and allow another round; builders claim,
 # acknowledge, start and pass criteria, submit, release and heartbeat;
@@ -36,6 +36,10 @@ require "json"
 # report spend and carry out approved actions. Orchestrators answer or
 # stay silent. An owner answers the choices in open Needs you items,
 # overturns decisions and changes project, task and workspace settings.
+#
+# Milestone 6 (CT-2) adds an API token, rename, reorder, removal, Refresh,
+# the usage timer and readings whose state, window and figures vary. The
+# earlier coverage walks keep their original draws and request mix.
 #
 # Every command goes through Transitions.apply, so the whole log of the
 # walk's workspace is made by the engine: the helper is made by
@@ -73,6 +77,10 @@ class Walk
     holder_command: 12, answer_needs_you: 12, review_decision: 4, project_command: 10,
     task_settings: 5, workspace_settings: 2, delete_content: 3
   }.freeze
+  CREDENTIAL_ACTIONS = {
+    rename_credential: 2, remove_credential: 3, reorder_credentials: 3, refresh_usage: 2,
+    report_reading: 6, usage_read_due: 2
+  }.freeze
   # The moments a custom rule is added at (RD-21, AP-1), and the verdicts an
   # orchestrator draws (nil: it answers none, and the job times out).
   # Submit and the pass are drawn twice as often: a task reaches them less
@@ -109,13 +117,16 @@ class Walk
 
   Step = Data.define(:index, :action, :command, :caller, :params, :answer)
 
-  attr_reader :seed, :scenario, :log
+  attr_reader :seed, :scenario, :log, :credential_step_problems
 
-  def initialize(seed:, steps: 60)
+  def initialize(seed:, steps: 60, credentials: false)
     @seed = seed
     @random = Random.new(seed)
     @steps = steps
     @log = []
+    @credential_step_problems = []
+    @credentials = credentials
+    @actions = credentials ? ACTIONS.merge(CREDENTIAL_ACTIONS) : ACTIONS
     @last = nil
     @count = 0
   end
@@ -127,6 +138,8 @@ class Walk
     @owner = scenario.owner
     @helper = make_helper
     @logins = LOGINS.each_with_index.map { |provider, index| add_login(provider, index) }
+    add_token if @credentials
+    check_first_reads
     @builders = [ connect("builder", 0, @logins[0]), connect("builder", 1, @logins[1]), connect("builder", 2) ]
     # The reviewer that connects on its own is on a provider no builder
     # uses, so the provider rule (RD-50) leaves it the reviews it refuses
@@ -243,9 +256,9 @@ class Walk
   end
 
   def pick
-    total = ACTIONS.values.sum
+    total = @actions.values.sum
     point = @random.rand(total)
-    ACTIONS.each do |action, weight|
+    @actions.each do |action, weight|
       return action if point < weight
 
       point -= weight
@@ -844,10 +857,10 @@ class Walk
   end
 
   # One timer, as the sweep runs it.
-  def timer(index, name)
+  def timer(index, name, action: :end_waiting)
     request = T::Request.new(command: name, workspace_id: workspace_id, caller_kind: nil, caller_id: nil, key: nil,
       request_hash: nil, params: {})
-    @log << Step.new(index, :end_waiting, name, "app", {}, answer(request))
+    @log << Step.new(index, action, name, "app", {}, answer(request))
   end
 
   # The orchestrator polls GET /v1/next (RD-15), or has not for over 90
@@ -1132,18 +1145,106 @@ class Walk
     command(index, :sign_in_again, "sign_in_again", @owner, "id" => credential.id)
   end
 
+  def credentials = Credential.added.where(workspace_id: workspace_id).order(:position).to_a
+
+  def rename_credential(index)
+    credential = one(credentials)
+    check_credential_steps(index, "rename_credential") do
+      command(index, :rename_credential, "rename_credential", @owner, "id" => credential.id, "name" => "Made-up name #{index}")
+    end
+  end
+
+  def remove_credential(index)
+    all = credentials
+    available = all.reject { |credential| Leverage::CredentialUse.in_use?(credential) }
+    credential = one(available) || one(all)
+    check_credential_steps(index, "remove_credential") do
+      command(index, :remove_credential, "remove_credential", @owner, "id" => credential.id)
+    end
+  end
+
+  def reorder_credentials(index)
+    order = credentials.map(&:id).shuffle(random: @random)
+    check_credential_steps(index, "reorder_credentials") do
+      command(index, :reorder_credentials, "reorder_credentials", @owner, "order" => order)
+    end
+  end
+
+  def refresh_usage(index)
+    check_credential_steps(index, "refresh_usage") { command(index, :refresh_usage, "refresh_usage", @owner, {}) }
+  end
+
+  def report_reading(index)
+    accounts = credentials
+    limited = accounts.select(&:limited_since)
+    credential = one(limited.empty? || chance(0.4) ? accounts : limited)
+    state = one(%w[ok ok ok unavailable signed_out])
+    params = { "id" => credential.id, "credential_id" => credential.id, "observed_at" => scenario.database_now.utc.iso8601(6),
+      "state" => state, "figures" => state == "ok" ? reading_figures(credential) : [], "resets" => nil, "tool_version" => nil }
+    check_credential_steps(index, "report_reading") { command(index, :report_reading, "report_reading", @helper, params) }
+  end
+
+  def reading_figures(credential)
+    if credential.kind == "api_token"
+      [ { "label" => "Made-up usage", "kind" => "activity", "window" => "spend", "percent_used" => nil,
+          "reset_at" => nil, "value" => one([ 0, 12.5, 40 ]) } ]
+    else
+      %w[five_hour weekly].filter_map do |window|
+        next if chance(0.25)
+
+        { "label" => "Made-up usage", "kind" => "limit", "window" => window,
+          "percent_used" => one([ 0, 40, 99.5, 100 ]), "reset_at" => nil, "value" => nil }
+      end
+    end
+  end
+
+  def usage_read_due(index)
+    T::RecordPoll.helper(@helper)
+    queued = HelperRequest.where(workspace_id: workspace_id, kind: "read_usage", state: "queued")
+    before = queued.count
+    check_credential_steps(index, "usage_read_due") { timer(index, "usage_read_due", action: :usage_read_due) }
+    added = queued.count - before
+    @log[-1] = @log.last.with(answer: "#{@log.last.answer}, queued #{added}") if added.positive?
+  end
+
+  # A credential command that affects no task opens and closes no step.
+  # Readings, reorders and removals can change real holds, whose steps the
+  # partition and log audit check.
+  def check_credential_steps(index, name)
+    steps = TaskStep.where(workspace_id: workspace_id).order(:id)
+    columns = %i[id opening_event_id opened_at closing_event_id closed_at]
+    before = steps.pluck(*columns)
+    before_seq = scenario.workspace.reload.last_seq
+    yield
+    written = Event.where(workspace_id: workspace_id).where("seq > ?", before_seq)
+    if !written.where.not(task_id: nil).exists? && steps.pluck(*columns) != before
+      @credential_step_problems << "#{index}: #{name} changed steps without a task event"
+    end
+    if %w[refresh_usage usage_read_due].include?(name) && written.exists?
+      @credential_step_problems << "#{index}: #{name} wrote events"
+    end
+  end
+
   # The helper picks up and answers its oldest unfinished request: a start
   # issues the seat's token first; Verify and Sign in again pass, or find
   # the login signed out; anything else finishes.
   def answer_request(index)
-    request = HelperRequest.where(workspace_id: workspace_id, state: %w[queued picked_up]).order(:created_at, :id).first
+    requests = HelperRequest.where(workspace_id: workspace_id, state: %w[queued picked_up])
+    requests = requests.where.not(kind: "read_usage") unless @credentials
+    request = requests.order(:created_at, :id).first
     return sweep(index) unless request
 
     if request.kind == "start_seat"
       command(index, :answer_request, "issue_seat_token", @helper, "id" => request.id)
     end
     result = %w[verify open_sign_in].include?(request.kind) && chance(0.3) ? SIGNED_OUT : PASSED
-    result = result.merge("checks" => []) unless %w[verify open_sign_in run_add_checks].include?(request.kind)
+    if request.kind == "read_usage"
+      # Leave this read due so a later sweep can start a fresh request.
+      result = result.merge("outcome" => "failed", "tool_version" => nil,
+        "checks" => [ { "check" => "reading_taken", "passed" => false, "failure" => "timed_out" } ])
+    elsif !%w[verify open_sign_in run_add_checks].include?(request.kind)
+      result = result.merge("checks" => [])
+    end
     command(index, :answer_request, "report_request_result", @helper, "id" => request.id, "result" => result)
   end
 
@@ -1188,6 +1289,7 @@ class Walk
       wrote = scenario.workspace.reload.last_seq - before
       @log << Step.new(index, :sweep, timer, "app", {}, wrote.positive? ? "#{said}, wrote #{wrote}" : said)
     end
+    usage_read_due(index) if @credentials
   end
 
   # The last request, sent again with its key: a repeat writes nothing.
@@ -1218,6 +1320,25 @@ class Walk
       "name" => "Made-up #{provider} #{index}", "masked_label" => nil, "model" => nil, "effort" => nil, "strength_rank" => nil)
     setup("report_request_result", @helper, "id" => added.fetch("helper_request_id"), "result" => PASSED)
     Credential.find(id)
+  end
+
+  def add_token
+    added = setup("add_credential", @owner, "credential_id" => SecureRandom.uuid, "kind" => "api_token",
+      "provider" => "openai_api", "name" => "Made-up API token", "masked_label" => "••••••••", "model" => nil,
+      "effort" => nil, "strength_rank" => nil)
+    result = PASSED.merge("tool_version" => nil,
+      "checks" => [ { "check" => "token_works", "passed" => true, "failure" => nil } ])
+    setup("report_request_result", @helper, "id" => added.fetch("helper_request_id"), "result" => result)
+  end
+
+  def check_first_reads
+    expected = credentials.map do |credential|
+      [ credential.id, { "provider" => credential.provider, "credential_kind" => credential.kind } ]
+    end.to_h
+    requests = HelperRequest.where(workspace_id: workspace_id, kind: "read_usage")
+    unless requests.count == expected.size && requests.where(state: "queued").pluck(:credential_id, :params).to_h == expected
+      raise "Add did not queue one first usage read per credential"
+    end
   end
 
   def setup(name, caller, params)

@@ -27,7 +27,7 @@ enum ContractDocument {
         }
     }
 
-    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals
+    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals + credentials
 
     // Milestone 2 (Core loop).
     static let coreLoop: [String] = [
@@ -68,6 +68,12 @@ enum ContractDocument {
         "delete_task_content", "answer_question", "overturn_answer", "approve_action",
         "stop_action", "waive_action", "mark_action_done", "overturn_approval",
         "get_workspace_settings", "change_workspace_settings",
+    ]
+
+    // Milestone 6 (Credentials).
+    static let credentials: [String] = [
+        "rename_credential", "remove_credential", "refresh_usage", "verify_all_credentials",
+        "reorder_credentials", "report_reading",
     ]
 
     /// The registry entry of one operation.
@@ -172,7 +178,7 @@ struct ContractExamplesTests {
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 101)
+        #expect(ContractDocument.served.count == 107)
         #expect(ContractDocument.handoff.first == "report_limit")
         #expect(ContractDocument.handoff.last == "change_seat")
         #expect(ContractDocument.ruleChecks.first == "claim_next_job")
@@ -204,6 +210,37 @@ struct ContractExamplesTests {
             }
         }
         #expect(decoded > 110)
+    }
+
+    @Test("every reader's contract example decodes and keeps its required fields")
+    func readerExamples() throws {
+        let file = ContractDocument.folder.appendingPathComponent("readers.json")
+        let document = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: file))
+        let readers = try #require(document["readers"]?.arrayValue)
+        #expect(readers.compactMap { $0["provider"]?.stringValue }.sorted() == Provider.allCases.map(\.rawValue).sorted())
+        let schema = try #require(ContractDocument.schema("CredentialReading"))
+        for reader in readers {
+            let example = try #require(reader["example_reading"])
+            let reading = try LeverageJSON.decoder().decode(CredentialReading.self, from: ContractDocument.data(example))
+            let encoded = try LeverageJSON.encoder().encode(reading)
+            let json = try JSONDecoder().decode(JSONValue.self, from: encoded)
+            ClientPathsTests.expect(json, fits: schema, at: reader["provider"]?.stringValue ?? "reader")
+            #expect(try LeverageJSON.decoder().decode(CredentialReading.self, from: encoded) == reading)
+        }
+    }
+
+    @Test("a credentials list without a reading keeps the required null fields")
+    func credentialsWithoutReading() throws {
+        let example = try #require(ContractDocument.examples(of: "CredentialsList").first)
+        let list = try LeverageJSON.decoder().decode(CredentialsList.self, from: ContractDocument.data(example))
+        let credential = try #require(list.credentials.first?.credential)
+        let row = CredentialWithReading(credential: credential)
+        let withoutReading = CredentialsList(credentials: [row], asOfSeq: list.asOfSeq)
+        let data = try LeverageJSON.encoder().encode(withoutReading)
+        let written = try JSONDecoder().decode(JSONValue.self, from: data)
+        let schema = try #require(ContractDocument.schema("CredentialsList"))
+        ClientPathsTests.expect(written, fits: schema, at: "CredentialsList")
+        #expect(try LeverageJSON.decoder().decode(CredentialsList.self, from: data) == withoutReading)
     }
 
     @Test("a token answer is the token the first time and repeated, with none, after",

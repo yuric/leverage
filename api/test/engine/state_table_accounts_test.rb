@@ -35,11 +35,6 @@ class StateTableAccountsTest < ActiveSupport::TestCase
   def request_for(command)
     case command
     when "issue_helper_token" then owner_request(command, { "name" => "Made-up Mac" })
-    when "add_credential"
-      owner_request(command, { "credential_id" => SecureRandom.uuid, "kind" => "login", "provider" => "codex",
-                               "name" => "Made-up table account", "masked_label" => nil, "model" => nil, "effort" => nil,
-                               "strength_rank" => nil })
-    when "verify_credential" then owner_request(command, { "id" => scenario.credential.id })
     when "install_tool" then owner_request(command, { "provider" => "claude", "confirmed" => true })
     when "connect_seat" then owner_request(command, { "name" => "Made-up table seat", "role" => "builder", "provider" => "codex" })
     when "start_seat" then owner_request(command, { "id" => scenario.seat(credential: scenario.credential).id })
@@ -50,8 +45,8 @@ class StateTableAccountsTest < ActiveSupport::TestCase
       helper_request(command, { "id" => request.id, "check" => "signed_in", "state" => "running", "failure" => nil,
                                 "install" => nil })
     when "report_request_result"
-      request = queue_request("install_tool", state: "picked_up", params: { "provider" => "claude" })
-      helper_request(command, { "id" => request.id, "result" => result_body(checks: []) })
+      request = queue_request("read_usage", credential: scenario.credential, state: "picked_up")
+      helper_request(command, { "id" => request.id, "result" => result_body(checks: [ check("reading_taken") ]) })
     when "report_run_started"
       seat = scenario.seat(credential: scenario.credential, run_state: "stopped")
       helper_request(command, { "id" => seat.id, "credential_id" => seat.credential_id,
@@ -123,7 +118,7 @@ class StateTableAccountsTest < ActiveSupport::TestCase
     end
   end
 
-  StateTableCases.define(self, Leverage::Transitions::Table::ACCOUNTS) do |kase|
+  StateTableCases.define(self, Leverage::Transitions::Table::ACCOUNTS - %w[add_credential verify_credential]) do |kase|
     assert_nil kase.from, "the accounts rows read no task state"
     assert_nil kase.to, "the accounts rows change no task state"
     assert_nil kase.refusal

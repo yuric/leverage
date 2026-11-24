@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "No settings file exists.",
+    "basis": "made_from_prd",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-a00800000001",
+    "now": "2027-01-01T00:00:00Z",
+    "file_exists": false
+  },
+  "settings": {},
+  "marker": "LVRG-REPLY-a00800000001"
+}

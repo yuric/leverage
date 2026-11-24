@@ -57,6 +57,131 @@ struct SubprocessTests {
         #expect(result.endedBy == nil)
     }
 
+    @Test("a session exchanges one line at a time until its input is closed")
+    func sessionExchangesLines() async throws {
+        let child = try Subprocess.startSession(.init(
+            executable: "/bin/cat", arguments: [], environment: [:],
+            timeLimit: Patience.scaled(.seconds(30))))
+        defer { child.stop() }
+
+        for text in ["first request", "", "third request"] {
+            let line = Data(text.utf8)
+            try await child.writeLine(line)
+            try #require(await child.readLine() == line)
+        }
+        child.closeInput()
+        child.closeInput()
+        await #expect(throws: (any Error).self) {
+            try await child.writeLine(Data("after close".utf8))
+        }
+
+        #expect(await child.readLine() == nil)
+        let result = await child.wait()
+        #expect(result.succeeded)
+        #expect(result.standardOutput == Data("first request\n\nthird request\n".utf8))
+    }
+
+    @Test("a refused line leaves the session ready for the next write")
+    func sessionRefusesEmbeddedNewlines() async throws {
+        let child = try Subprocess.startSession(.init(
+            executable: "/bin/cat", arguments: [], environment: [:],
+            timeLimit: Patience.scaled(.seconds(30))))
+        defer { child.stop() }
+
+        for text in ["first\nsecond", "first\rsecond"] {
+            await #expect(throws: (any Error).self) {
+                try await child.writeLine(Data(text.utf8))
+            }
+        }
+        try await child.writeLine(Data("valid".utf8))
+        child.closeInput()
+        let result = await child.wait()
+
+        #expect(result.succeeded)
+        #expect(result.standardOutput == Data("valid\n".utf8))
+        #expect(await child.readLine() == Data("valid".utf8))
+        #expect(await child.readLine() == nil)
+    }
+
+    @Test("a session inherits only its allow-listed environment")
+    func sessionAllowListOnly() async throws {
+        let environment = Subprocess.environment(
+            allowing: ["LEVERAGE_SESSION_ALLOWED"],
+            from: ["LEVERAGE_SESSION_ALLOWED": "allowed", "LEVERAGE_SESSION_OMITTED": "omitted"],
+            setting: ["LEVERAGE_SESSION_SET": "set"])
+        let child = try Subprocess.startSession(.init(
+            executable: "/usr/bin/env", arguments: [], environment: environment,
+            timeLimit: Patience.scaled(.seconds(30))))
+        defer { child.stop() }
+
+        let result = await child.wait()
+        let seen = String(decoding: result.standardOutput, as: UTF8.self).split(separator: "\n")
+        #expect(result.succeeded)
+        #expect(Set(seen) == ["LEVERAGE_SESSION_ALLOWED=allowed", "LEVERAGE_SESSION_SET=set"])
+    }
+
+    @Test("a child that closed its input makes a write fail without ending the parent")
+    func sessionChildClosesInput() async throws {
+        let child = try Subprocess.startSession(.init(
+            executable: "/bin/sh",
+            arguments: ["-c", "exec 0<&-; printf 'ready\\n'; exec /bin/sleep \"$1\"", "sh",
+                        String(Int(Patience.seconds(30).rounded(.up)))],
+            environment: [:], timeLimit: Patience.scaled(.seconds(30))))
+        defer { child.stop() }
+        try #require(await child.readLine() == Data("ready".utf8))
+
+        await #expect(throws: SubprocessInputError.writeFailed(errno: EPIPE)) {
+            try await child.writeLine(Data("request".utf8))
+        }
+        child.stop()
+        #expect(await child.wait().endedBy == .stop)
+    }
+
+    @Test("stopping or timing out a session ends its process group", arguments: [SubprocessEnd.stop, .timeLimit])
+    func sessionEndsTheGroup(_ reason: SubprocessEnd) async throws {
+        // The shell reports the sleeping child's id and reaps it after the group receives TERM.
+        let script = """
+            /bin/sleep "$1" &
+            child=$!
+            trap 'wait "$child"; exit' TERM
+            printf '%s\\n' "$child"
+            wait "$child"
+            """
+        let waitSeconds = String(Int(Patience.seconds(30).rounded(.up)))
+        let child = try Subprocess.startSession(.init(
+            executable: "/bin/sh", arguments: ["-c", script, "sh", waitSeconds], environment: [:],
+            timeLimit: reason == .timeLimit ? .seconds(2) : Patience.scaled(.seconds(30))))
+        defer { child.stop() }
+
+        let line = try #require(await child.readLine())
+        let grandchild = try #require(Int32(String(decoding: line, as: UTF8.self)))
+        try #require(grandchild > 0)
+        if reason == .stop { child.stop() }
+        let result = await child.wait()
+
+        #expect(result.endedBy == reason)
+        #expect(await child.readLine() == nil)
+        #expect(await gone(grandchild, timeoutSeconds: Patience.seconds(5)))
+        #expect(await gone(child.processID, timeoutSeconds: Patience.seconds(5)))
+    }
+
+    @Test("session reads preserve complete lines through EOF and truncation", arguments: [8, 30])
+    func sessionReadsOnlyCompleteLines(_ limit: Int) async throws {
+        let truncated = limit == 8
+        let output = truncated ? "first\nsecond\n" : "first\nsecond"
+        let child = try Subprocess.startSession(.init(
+            executable: "/bin/sh", arguments: ["-c", "printf '%s' \"$1\"", "sh", output], environment: [:],
+            timeLimit: Patience.scaled(.seconds(30)), maximumOutputBytes: limit))
+        defer { child.stop() }
+
+        let result = await child.wait()
+        #expect(result.succeeded)
+        #expect(result.outputTruncated == truncated)
+        #expect(result.standardOutput == Data(output.utf8.prefix(limit)))
+        #expect(await child.readLine() == Data("first".utf8))
+        #expect(await child.readLine() == nil)
+    }
+
     @Test("both outputs are read while the child runs: 1 MiB on each comes back whole")
     func largeOutputs() async throws {
         let (folder, tools) = try standIns()
@@ -207,10 +332,10 @@ private func waitForPID(_ file: URL) async throws -> Int32 {
     throw CocoaError(.fileReadNoSuchFile)
 }
 
-/// True once no process has this id. It looks for up to five seconds, so an
-/// orphan that its new parent has not reaped yet is given time.
-private func gone(_ pid: Int32) async -> Bool {
-    for _ in 0..<100 {
+/// True once no process has this id. Give an orphan's new parent time
+/// to reap it, five seconds by default.
+private func gone(_ pid: Int32, timeoutSeconds: Double = 5) async -> Bool {
+    for _ in 0..<Int((timeoutSeconds * 20).rounded(.up)) {
         if kill(pid, 0) != 0 && errno == ESRCH { return true }
         try? await Task.sleep(for: .milliseconds(50))
     }

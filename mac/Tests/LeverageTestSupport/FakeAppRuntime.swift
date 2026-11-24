@@ -63,6 +63,10 @@ public final class FakeHelper: HelperSupervising, @unchecked Sendable {
     public let starts = Locked<[URL]>([])
     public let tryAgainCount = Locked(0)
     public let stopCount = Locked(0)
+    /// The helper messages sent so far, including any whose send failed.
+    public let messages = Locked<[LocalHelperMessage]>([])
+    /// When set, every send throws this error.
+    public let sendFailure = Locked<(any Error)?>(nil)
 
     public init() {}
 
@@ -83,6 +87,11 @@ public final class FakeHelper: HelperSupervising, @unchecked Sendable {
     public func stop() async {
         stopCount.update { $0 += 1 }
         current.value = .stopped
+    }
+
+    public func send(_ message: LocalHelperMessage) async throws {
+        messages.update { $0.append(message) }
+        if let error = sendFailure.value { throw error }
     }
 }
 

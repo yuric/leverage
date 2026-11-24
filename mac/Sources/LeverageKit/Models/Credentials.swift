@@ -55,6 +55,25 @@ public struct Credential: Codable, Equatable, Sendable {
         case strengthRank = "strength_rank"
         case lastVerifiedAt = "last_verified_at"
     }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeID(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(provider, forKey: .provider)
+        try container.encode(name, forKey: .name)
+        try container.encode(maskedLabel, forKey: .maskedLabel)
+        try container.encode(plan, forKey: .plan)
+        try container.encode(accountEmail, forKey: .accountEmail)
+        try container.encode(state, forKey: .state)
+        try container.encode(limitedUntil, forKey: .limitedUntil)
+        try container.encode(limitedSince, forKey: .limitedSince)
+        try container.encode(position, forKey: .position)
+        try container.encode(model, forKey: .model)
+        try container.encode(effort, forKey: .effort)
+        try container.encode(strengthRank, forKey: .strengthRank)
+        try container.encode(lastVerifiedAt, forKey: .lastVerifiedAt)
+    }
 }
 
 /// `Figure`: one figure of a usage reading.
@@ -84,6 +103,16 @@ public struct Figure: Codable, Equatable, Sendable {
         case percentUsed = "percent_used"
         case resetAt = "reset_at"
     }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(label, forKey: .label)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(window, forKey: .window)
+        try container.encode(percentUsed, forKey: .percentUsed)
+        try container.encode(resetAt, forKey: .resetAt)
+        try container.encode(value, forKey: .value)
+    }
 }
 
 /// `Reset`: a reset a reading reports.
@@ -101,6 +130,13 @@ public struct Reset: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case count, kind
         case expiresAt = "expires_at"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(count, forKey: .count)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(expiresAt, forKey: .expiresAt)
     }
 }
 
@@ -131,6 +167,16 @@ public struct CredentialReading: Codable, Equatable, Sendable {
         case observedAt = "observed_at"
         case toolVersion = "tool_version"
     }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeID(credentialID, forKey: .credentialID)
+        try container.encode(observedAt, forKey: .observedAt)
+        try container.encode(state, forKey: .state)
+        try container.encode(toolVersion, forKey: .toolVersion)
+        try container.encode(figures, forKey: .figures)
+        try container.encode(resets, forKey: .resets)
+    }
 }
 
 /// `CredentialWithReading`: a row of the Credentials list.
@@ -141,6 +187,14 @@ public struct CredentialWithReading: Codable, Equatable, Sendable {
     public init(credential: Credential, reading: CredentialReading? = nil) {
         self.credential = credential
         self.reading = reading
+    }
+
+    enum CodingKeys: String, CodingKey { case credential, reading }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(credential, forKey: .credential)
+        try container.encode(reading, forKey: .reading)
     }
 }
 
@@ -157,6 +211,49 @@ public struct CredentialsList: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case credentials
         case asOfSeq = "as_of_seq"
+    }
+}
+
+/// `RenameCredentialRequest`.
+public struct RenameCredentialRequest: Encodable, Equatable, Sendable {
+    public let name: String
+
+    public init(name: String) {
+        self.name = name
+    }
+}
+
+/// `ReorderCredentialsRequest`: every credential id in the new handoff order.
+public struct ReorderCredentialsRequest: Encodable, Equatable, Sendable {
+    public let order: [UUID]
+
+    public init(order: [UUID]) {
+        self.order = order
+    }
+
+    enum CodingKeys: String, CodingKey { case order }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIDs(order, forKey: .order)
+    }
+}
+
+/// The helper requests queued or reused by Refresh or Verify all.
+public struct QueuedRequests: Codable, Equatable, Sendable {
+    public let helperRequestIDs: [UUID]
+
+    public init(helperRequestIDs: [UUID]) {
+        self.helperRequestIDs = helperRequestIDs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case helperRequestIDs = "helper_request_ids"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIDs(helperRequestIDs, forKey: .helperRequestIDs)
     }
 }
 

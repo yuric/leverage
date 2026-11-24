@@ -35,6 +35,7 @@ private final class RecordingHelper: HelperSupervising, @unchecked Sendable {
 
     func tryAgain() async -> HelperState { .running }
     func stop() async {}
+    func send(_ message: LocalHelperMessage) async throws {}
 }
 
 private struct RecordingRuntime: AppRuntime {

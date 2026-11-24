@@ -22,6 +22,9 @@ public struct ClaudeDetector: Detector {
                 name: "an error result naming a window's limit is a limit, with the time it states",
                 replyFile: "run-limit-five-hour.json", basis: .invented),
             DetectorRule(
+                name: "five-hour limit with no reset time",
+                replyFile: "run-limit-five-hour-no-reset.json", basis: .invented),
+            DetectorRule(
                 name: "a limit that states no time has no reset time",
                 replyFile: "run-limit-weekly-no-reset.json", basis: .invented),
             DetectorRule(

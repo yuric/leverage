@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "provider": "claude",
+    "tool": "claude",
+    "tool_version": "2.1.325",
+    "date": "2026-11-21",
+    "kind": "usage",
+    "shows": "The settings file has no usage cache.",
+    "basis": "made_from_prd",
+    "expect": {
+      "state": "ok",
+      "figures": [],
+      "resets": null
+    },
+    "marker": "LVRG-REPLY-a00800000002",
+    "now": "2027-01-01T00:00:00Z"
+  },
+  "settings": {
+    "other": {}
+  },
+  "marker": "LVRG-REPLY-a00800000002"
+}
