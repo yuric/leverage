@@ -264,6 +264,7 @@ class OpenapiTest < Minitest::Test
       [ "Question", "outcome" ] => lists["question_outcomes"], [ "Question", "basis" ] => lists["question_bases"],
       [ "BriefEntry", "kind" ] => lists["brief_entry_kinds"],
       [ "Seat", "role" ] => lists["seat_roles"], [ "ConnectSeatRequest", "role" ] => lists["seat_roles"],
+      [ "ChangeSeatRequest", "role" ] => lists["seat_roles"], [ "HelperRequestParams", "role" ] => lists["seat_roles"],
       [ "Seat", "provider" ] => providers, [ "Seat", "run_state" ] => lists["seat_run_states"],
       [ "Credential", "provider" ] => providers, [ "Credential", "kind" ] => lists["credential_kinds"],
       [ "Credential", "state" ] => lists["credential_states"],
@@ -288,6 +289,18 @@ class OpenapiTest < Minitest::Test
     end
     assert_equal lists["task_states"].values_at(0, 1), enum_of("AddTaskRequest", "state")
     assert_equal registry["custom_rule_hooks"], enum_of("AddRuleRequest", "hook")
+  end
+
+  # A General seat gets no role file (GA-2): its briefing and every job's
+  # material carry role_file null, and the briefing's versions name none.
+  def test_a_role_file_may_be_null_for_a_general_seat
+    %w[Briefing CheckMaterial DraftMaterial QuestionMaterial ApprovalMaterial].each do |component|
+      node = schemas.fetch(component).fetch("properties").fetch("role_file")
+      assert_equal %w[string null], node["type"], component
+      assert_includes node.fetch("description"), "General", component
+    end
+    node = schemas.fetch("BriefingVersions").fetch("properties").fetch("role_file_version")
+    assert_equal %w[string null], node["type"]
   end
 
   def test_the_job_components_named_by_the_registry_exist

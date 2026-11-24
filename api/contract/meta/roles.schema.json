@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "roles.json",
-  "description": "The four seat roles. prd_may_change and prd_may_read are the PRD's Roles table cells, verbatim; operations are the agent calls a seat of the role may make, which are the registry operations whose caller is one of callers.",
+  "description": "The five seat roles. prd_may_change and prd_may_read are the PRD's Roles table cells, verbatim; operations are the agent calls a seat of the role may make, which are the registry operations whose caller is one of callers; acts_as names the roles whose work a seat of the role does (a General seat does the work of the other four, contract decision GA-1); role_file says whether its briefing and its jobs' material carry a role file (none for a General seat, GA-2).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,6 +17,8 @@
           "role",
           "prd_may_change",
           "prd_may_read",
+          "acts_as",
+          "role_file",
           "callers",
           "operations"
         ],
@@ -32,6 +34,19 @@
           "prd_may_read": {
             "type": "string",
             "minLength": 1
+          },
+          "acts_as": {
+            "description": "The roles whose work a seat of this role does: itself, or every other role for General.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+            }
+          },
+          "role_file": {
+            "description": "Whether a seat of this role gets its role file, api/config/role_files/<role>.md.",
+            "type": "boolean"
           },
           "callers": {
             "type": "array",

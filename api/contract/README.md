@@ -21,7 +21,7 @@ and leaves its meaning to the PRD.
 | `hooks.json` | The hooks, what a failed gate does, hashed inputs, moment names. |
 | `shipped_rules.json` | The seven shipped rules, their version-1 fields. |
 | `jobs.json` | The job kinds: who claims them, timeouts, their input and result components. |
-| `roles.json` | The four seat roles: may change, may read, calls. |
+| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, calls. |
 | `timers.json` | Each timer: scope, due-time source, events. |
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
@@ -129,9 +129,9 @@ An operation's `caller`:
 | Caller | Who |
 | --- | --- |
 | `any` | Any signed-in seat. |
-| `builder`, `reviewer` | A seat with that role. |
+| `builder`, `reviewer` | A seat with that role, or a General seat (`roles.json` `acts_as`). |
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
-| `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts. |
+| `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
 | `job_holder` | The seat that claimed the job. |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
@@ -760,3 +760,32 @@ in the completed outcome's result.
 - Trace `24-reading-ends-a-limit-wait` covers when a reading clears a
   limit, how reorders change a held task's candidates, and the events and
   steps the task records (CT-3).
+
+## What the General role added
+
+The owner asked for a role that does everything, picked first when an
+agent is connected. Its decisions are GA-1 to GA-11 in
+[`decisions.md`](decisions.md#general-role-ga).
+
+- `seat_roles` gains `general`, last. `roles.json` gains two fields on
+  every row: `acts_as`, the roles whose work a seat of the role does
+  (each role itself; `general` the other four), and `role_file`, false
+  for `general` only. The `general` row's callers and operations are the
+  union of the other four's. The Swift generator writes both fields as
+  `SeatRole.actsAs` and `SeatRole.hasRoleFile` in `AgentTools.swift`.
+- `jobs.json`, the state table's `who` values and the operations'
+  `caller` keep naming the role whose work is done: a General seat
+  satisfies `builder`, `reviewer`, `planner`, `orchestrator`,
+  `job_claimer` and the rule's `checker_role` through `acts_as`. A job's
+  `seat_role` stays `orchestrator` or `planner`.
+- `next_kinds` puts `job` before `review`. Only a General seat can have
+  more than one of `job`, `review` and `task` true at once (GA-4).
+- `Briefing.role_file`, `BriefingVersions.role_file_version` and the
+  `role_file` of the four job materials may be null: null for a General
+  seat, whose briefing hashes no role file part. A job's stored input
+  keeps the text; a claim by a General seat returns it as null (GA-2).
+- The role enums of `Seat`, `ConnectSeatRequest`, `ChangeSeatRequest` and
+  `HelperRequestParams` gain `general`. `seats.role` is not constrained in
+  the database, so there is no migration.
+- The guards `builder_seat_enabled` and `builder_seat_unavailable` read a
+  role that builds, `builder` or `general` (GA-8).

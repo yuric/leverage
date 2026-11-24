@@ -123,7 +123,7 @@
     {"reason": "seat_removed", "chosen_by": "app"}
   ],
   "next_kinds": [
-    "command", "briefing_changed", "resume", "answer", "action", "rework", "review", "job", "task",
+    "command", "briefing_changed", "resume", "answer", "action", "rework", "job", "review", "task",
     "none"
   ],
   "step_kinds": [
@@ -351,7 +351,7 @@
     "question_bases": ["record", "decision", "owner"],
     "pending_transition_states": ["pending", "completed", "refused", "cancelled"],
     "job_states": ["queued", "claimed", "finished", "timed_out", "withdrawn"],
-    "seat_roles": ["builder", "reviewer", "planner", "orchestrator"],
+    "seat_roles": ["builder", "reviewer", "planner", "orchestrator", "general"],
     "seat_run_states": ["stopped", "running"],
     "actor_kinds": ["owner", "seat", "app"],
     "caller_kinds": ["seat", "owner", "helper"],

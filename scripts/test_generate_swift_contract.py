@@ -106,6 +106,27 @@ def check_agent_tools(cases, registry, openapi):
                             set(alternative.get("required", [])) for alternative in result["oneOf"]])
 
 
+def check_role_facts(cases):
+    """AgentTools.swift gives each seat role the roles it acts as and whether
+    it gets a role file, from roles.json (contract decisions GA-1, GA-2)."""
+    tools_text = AGENT_TOOLS.read_text(encoding="utf-8") if AGENT_TOOLS.exists() else ""
+    roles = load(ROLES)["roles"]
+    for property_name, value in (
+        ("actsAs: [SeatRole]", lambda role: "[" + ", ".join("." + name for name in role["acts_as"]) + "]"),
+        ("hasRoleFile: Bool", lambda role: "true" if role["role_file"] else "false"),
+    ):
+        match = re.search(rf"^    public var {re.escape(property_name)} \{{\n(.*?)^    \}}",
+                          tools_text, re.MULTILINE | re.DOTALL)
+        body = match[1] if match else ""
+        entries = dict(re.findall(r"^        case \.(\w+): return (.*)$", body, re.MULTILINE))
+        cases.check(f"SeatRole.{property_name} has one case per role of roles.json",
+                    len(entries) == len(roles) and len(roles) > 0, body)
+        for role in roles:
+            cases.check(f"SeatRole.{property_name} matches roles.json for {role['role']}",
+                        entries.get(role["role"]) == value(role) if "acts_as" in role and "role_file" in role
+                        else False, entries.get(role["role"], "missing"))
+
+
 def check_readers(cases, swift, readers):
     for property_name, values in (
         ("testedToolVersions", lambda reader: reader["tested_tool_versions"]),
@@ -161,6 +182,7 @@ def main():
                 swift == committed, "the outputs differ")
 
     check_agent_tools(cases, registry, openapi)
+    check_role_facts(cases)
     readers = load(READERS)
     check_readers(cases, swift, readers["readers"])
 

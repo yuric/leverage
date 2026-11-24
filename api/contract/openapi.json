@@ -15,7 +15,7 @@
   "tags": [
     {
       "name": "agent",
-      "description": "Seat calls: builder, reviewer, planner and orchestrator."
+      "description": "Seat calls: builder, reviewer, planner, orchestrator and general."
     },
     {
       "name": "owner",
@@ -35,7 +35,7 @@
       "get": {
         "operationId": "get_next",
         "summary": "Waits up to `wait` seconds and answers with one item.",
-        "description": "Does not consume what it returns: the first true item of the precedence table repeats until the seat acts.",
+        "description": "Does not consume what it returns: the first true item of the precedence table repeats until the seat acts. Of the kinds a seat claims, a job comes before a review and a review before a task, which orders them for a General seat, the one role that claims more than one kind (GA-4).",
         "tags": [
           "agent"
         ],
@@ -128,7 +128,7 @@
       "post": {
         "operationId": "claim_next_task",
         "summary": "Claims the next eligible Ready task.",
-        "description": "Runs `task.before_claim`. Answers 202 pending when a model check applies: a provisional claim with no lease and no briefing until it passes. Refused with `not_eligible` or `blocked_by_rule`.",
+        "description": "Runs `task.before_claim`. Answers 202 pending when a model check applies: a provisional claim with no lease and no briefing until it passes. Refused with `not_eligible` or `blocked_by_rule`. A General seat claims only while it holds no job either, and never a task it has reviewed (GA-3, GA-5).",
         "tags": [
           "agent"
         ],
@@ -1145,7 +1145,7 @@
       "post": {
         "operationId": "claim_next_review",
         "summary": "Claims the next review.",
-        "description": "Runs `review.assign`; refused with `not_eligible` when it refuses the reviewer.",
+        "description": "Runs `review.assign`; refused with `not_eligible` when it refuses the reviewer. A General seat claims only while it holds no job either (GA-3).",
         "tags": [
           "agent"
         ],
@@ -1553,7 +1553,7 @@
       "post": {
         "operationId": "claim_next_job",
         "summary": "Claims the next job: a rule check, a question, an approval or a contract draft.",
-        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
+        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A General seat claims every kind, and only while it holds no task, review or provisional claim and no approved action waits for it; it is not given a check at task.before_ready of a task whose contract it drafted (GA-3, GA-5). A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
         "tags": [
           "agent"
         ],
@@ -7867,8 +7867,8 @@
               "answer",
               "action",
               "rework",
-              "review",
               "job",
+              "review",
               "task",
               "none"
             ]
@@ -8535,8 +8535,12 @@
             "minimum": 0
           },
           "role_file_version": {
-            "type": "string",
-            "minLength": 1
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "The version of the seat's role file (the release); null for a General seat, which gets none, and then no role file part is hashed (GA-2)."
           },
           "contract_version": {
             "type": "integer",
@@ -8585,7 +8589,11 @@
             }
           },
           "role_file": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The seat's role file; null for a General seat, which gets none (contract decision GA-2)."
           },
           "contract": {
             "$ref": "#/components/schemas/BriefingContract"
@@ -9627,9 +9635,12 @@
         "description": "Everything a checker needs, built when the job is claimed from the frozen rule version and the task's rows or the pending request, never stored in an event (milestone 4 plan RD-30). The runner puts the contract and every quoted piece in marked quotation blocks (RD-31). The input hash still covers the hook's hashed inputs only.",
         "properties": {
           "role_file": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1,
-            "description": "The orchestrator's role file."
+            "description": "The orchestrator's role file; null when a General seat claims the job, which gets none. The job's stored input keeps the text, and only what a claim returns leaves it out (GA-2)."
           },
           "instruction": {
             "type": "string",
@@ -9793,9 +9804,12 @@
         "description": "Everything a planner needs, built when the job is claimed (milestone 4 plan RD-30, RD-37): the task's text, the criteria it already has, which the planner keeps, and the three stored values the result sends back unchanged; the server keeps the stored ones whatever the result holds.",
         "properties": {
           "role_file": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1,
-            "description": "The planner's role file."
+            "description": "The planner's role file; null when a General seat claims the job, which gets none. The job's stored input keeps the text, and only what a claim returns leaves it out (GA-2)."
           },
           "title": {
             "type": "string",
@@ -11745,7 +11759,8 @@
               "builder",
               "reviewer",
               "planner",
-              "orchestrator"
+              "orchestrator",
+              "general"
             ]
           },
           "strength_rank": {
@@ -11875,7 +11890,8 @@
               "builder",
               "reviewer",
               "planner",
-              "orchestrator"
+              "orchestrator",
+              "general"
             ]
           },
           "provider": {
@@ -11949,7 +11965,8 @@
               "builder",
               "reviewer",
               "planner",
-              "orchestrator"
+              "orchestrator",
+              "general"
             ]
           },
           "model": {
@@ -15511,7 +15528,7 @@
               "online",
               "offline"
             ],
-            "description": "not_set_up while no enabled orchestrator seat exists, online while one is online (L401: polled within 90 seconds and connects on its own or has an available candidate), offline otherwise (milestone 4 plan RD-17)."
+            "description": "not_set_up while no enabled orchestrator or General seat exists, online while one is online (L401: polled within 90 seconds and connects on its own or has an available candidate), offline otherwise (milestone 4 plan RD-17)."
           },
           "backup_last_ran_at": {
             "type": [
@@ -16617,7 +16634,7 @@
       "LandingPrompt": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `connection` gives the chosen form. `text` gives the role and its defaults, with the server address and calls for HTTP or the tool names for MCP. Neither form includes a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator or a planner, also while it works on a job: an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
+        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `connection` gives the chosen form. `text` gives the role and its defaults, with the server address and calls for HTTP or the tool names for MCP. Neither form includes a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator, a planner or a General seat, while it has no work and also while it works on a job (a General seat does not check while it builds or reviews, GA-6): an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
         "properties": {
           "text": {
             "type": "string",
@@ -16683,7 +16700,8 @@
               "builder",
               "reviewer",
               "planner",
-              "orchestrator"
+              "orchestrator",
+              "general"
             ]
           },
           "model": {
@@ -17134,7 +17152,11 @@
         "description": "The task’s own contract, project brief and earlier answers that have not been overturned.",
         "properties": {
           "role_file": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The orchestrator's role file; null when a General seat claims the job, which gets none. The job's stored input keeps the text, and only what a claim returns leaves it out (GA-2)."
           },
           "question": {
             "type": "object",
@@ -17227,7 +17249,11 @@
         "description": "The approval instruction, the action in contract order and quoted notes and evidence from its task.",
         "properties": {
           "role_file": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The orchestrator's role file; null when a General seat claims the job, which gets none. The job's stored input keeps the text, and only what a claim returns leaves it out (GA-2)."
           },
           "instruction": {
             "type": "string"

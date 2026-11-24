@@ -292,8 +292,8 @@ public enum NextKind: String, Codable, CaseIterable, Sendable {
     case answer
     case action
     case rework
-    case review
     case job
+    case review
     case task
     case none
 }
@@ -677,6 +677,7 @@ public enum SeatRole: String, Codable, CaseIterable, Sendable {
     case reviewer
     case planner
     case orchestrator
+    case general
 }
 
 /// registry.json `lists.seat_run_states`.
