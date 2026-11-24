@@ -40,7 +40,7 @@ enum ShellCopy: OwnerFacingCopy {
     var text: String {
         switch self {
         case .appName: "Leverage"
-        case .tabBoard: "Board"
+        case .tabBoard: "Task board"
         case .tabNeedsYou: "Needs you"
         case .tabDecided: DecidedCopy.title.text
         case .tabActivity: ActivityCopy.title.text
@@ -53,7 +53,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .manageProjects: "Manage"
         case .manageProjectsAccessibility: "Manage projects"
         case .addTask: "Add task"
-        case .backToBoard: "Back to the board"
+        case .backToBoard: "Back to the task board"
         case .signOut: "Sign out"
 
         case .healthChecking: "Checking…"

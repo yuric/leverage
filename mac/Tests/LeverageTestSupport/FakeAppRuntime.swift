@@ -11,6 +11,7 @@ public final class FakeAppRuntime: AppRuntime, @unchecked Sendable {
     public let fakeSessions = FakeSessionStore()
     public let fakeNotifier = FakeNotifier()
     public let fakeInboxCursor = FakeInboxCursorStore()
+    public let fakeSetupProgress = FakeSetupProgressStore()
 
     public init() {}
 
@@ -19,6 +20,7 @@ public final class FakeAppRuntime: AppRuntime, @unchecked Sendable {
     public var sessions: any SessionStoring { fakeSessions }
     public var notifier: any Notifying { fakeNotifier }
     public var inboxCursor: any InboxCursorStoring { fakeInboxCursor }
+    public var setupProgress: any SetupProgressStoring { fakeSetupProgress }
 }
 
 /// A value shared between the test and the code under test, behind a lock.

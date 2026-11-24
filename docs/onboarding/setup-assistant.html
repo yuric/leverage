@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leverage onboarding mockup 3: Setup assistant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14.4' fill='%230A63E0'/%3E%3Cpath d='M8 30 56 46' stroke='%23fff' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M21 38 29 53H13z' fill='%23fff'/%3E%3Crect x='9' y='13' width='14' height='12' rx='2.5' fill='%23fff' transform='rotate(18.4 16 25)'/%3E%3Cpath d='M44 24l5.5 6 5.5-6' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!--
+  Onboarding mockup 3, the setup assistant, as one self-contained page.
+  It loads nothing from the network.
+
+  A full-window sequence shown right after "Create your sign-in" on a new
+  installation: Welcome, two logins, the agents, a first task, then the board.
+
+  How this file is laid out, top to bottom:
+    1. DESIGN TOKENS   copied from docs/design/mockup.html (light and dark).
+    2. MOCKUP STYLES   the "lv-" classes shared with mockup.html, then the
+                       assistant's own classes, which start "lv-ob-".
+    3. INSPECTOR       the grey bar and the notes under the window (classes
+                       start "ix-"). They are not part of the design.
+    4. SCRIPT          the sample data, the state, the render functions, the
+                       actions, then the inspector.
+-->
+<style>
+/* ===== 1. DESIGN TOKENS (from docs/design/mockup.html) ===== */
+.lv-root {
+  color-scheme: light;
+  /* backdrop: soft blue and lavender light for the glass to pick up */
+  --backdrop-base: #E8EDFA;
+  --tint-a: rgba(118,160,255,0.6);
+  --tint-b: rgba(180,150,255,0.55);
+  --backdrop: radial-gradient(900px 520px at 12% 0%, var(--tint-a), transparent 70%), radial-gradient(820px 560px at 92% 12%, var(--tint-b), transparent 70%), var(--backdrop-base);
+  /* glass: the window shell and the floating navigation */
+  --shell: rgba(255,255,255,0.5);
+  --nav: rgba(255,255,255,0.34);
+  --rim: rgba(255,255,255,0.8);
+  --blur: 30px;
+  --glass-filter: blur(var(--blur)) saturate(1.6);
+  --shell-shadow: 0 30px 70px rgba(40,52,118,0.2), inset 0 1px 0 rgba(255,255,255,0.9);
+  --nav-shadow: 0 10px 26px rgba(40,52,118,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+  /* steady content surfaces */
+  --surface: rgba(255,255,255,0.95);
+  --sheet: #FFFFFF;
+  --inset: #EEF2FC;
+  --control: #F3F5FB;
+  --line: #D5DAE8;
+  --field: #7A8298;
+  --text: #1A1E29;
+  --text2: #444C60;
+  --dot: #B4BBCF;
+  --ok: #1C8A52;
+  --placeholder: #6B7280;
+  --select: #CFE0FF;
+  /* the one blue */
+  --primary: #0A63E0;
+  --primary-fg: #FFFFFF;
+  --primary-shadow: 0 6px 16px rgba(10,99,224,0.32);
+  --focus: #0A63E0;
+  --hover: 0.96;
+  /* navigation tabs */
+  --tab-fg: #2F3648;
+  --tab-hover: rgba(26,30,41,0.05);
+  --tab-pressed: rgba(26,30,41,0.11);
+  --tab-on-bg: #FFFFFF;
+  --tab-on-fg: #11141D;
+  --tab-on-edge: rgba(26,30,41,0.14);
+  --tab-on-shadow: 0 4px 12px rgba(40,52,118,0.22), inset 0 1px 0 #FFFFFF;
+  /* depth */
+  --card-shadow: 0 1px 2px rgba(30,40,90,0.08);
+  --sheet-shadow: 0 30px 80px rgba(30,40,90,0.3);
+  --scrim: rgba(24,30,58,0.3);
+  /* state colors: used only where they signal state */
+  --wait-bg: #FFEFCF;  --wait-fg: #7A4300;
+  --done-bg: #DDF5E6;  --done-fg: #0B6237;
+  --info-bg: #E2EDFF;  --info-fg: #0B4AA8;
+  --stop-bg: #FFE4D3;  --stop-fg: #8A3A0B;
+  --plain-bg: #EEF2FC; --plain-fg: #1A1E29;
+  /* shape and type (shared by every appearance) */
+  --r-window: 18px;
+  --r-nav: 14px;
+  --r-card: 12px;
+  --r-tab: 10px;
+  --r-control: 8px;
+  --r-chip: 6px;
+  --fs-head: 15px;
+  --fs-body: 13px;
+  --fs-small: 12px;
+  --fs-badge: 11px;
+}
+.lv-root[data-appearance="dark"] {
+  color-scheme: dark;
+  --backdrop-base: #0D111E;
+  --tint-a: rgba(62,104,235,0.55);
+  --tint-b: rgba(136,92,224,0.5);
+  --shell: rgba(30,34,52,0.56);
+  --nav: rgba(44,49,72,0.6);
+  --rim: rgba(255,255,255,0.16);
+  --shell-shadow: 0 30px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+  --nav-shadow: 0 10px 26px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.14);
+  --surface: rgba(27,30,45,0.95);
+  --sheet: #1D2032;
+  --inset: #262A3F;
+  --control: #262A3F;
+  --line: #3A405A;
+  --field: #6B7391;
+  --text: #F2F4FA;
+  --text2: #BAC1D6;
+  --dot: #5C6382;
+  --ok: #57D08F;
+  --placeholder: #9AA3BC;
+  --select: #2C4A86;
+  --primary: #1F6FEB;
+  --primary-shadow: 0 6px 16px rgba(31,111,235,0.42);
+  --focus: #8AB4FF;
+  --hover: 1.12;
+  --tab-fg: #D5DAEA;
+  --tab-hover: rgba(255,255,255,0.06);
+  --tab-pressed: rgba(255,255,255,0.14);
+  --tab-on-bg: #3A4160;
+  --tab-on-fg: #FFFFFF;
+  --tab-on-edge: rgba(255,255,255,0.22);
+  --tab-on-shadow: 0 4px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  --sheet-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  --scrim: rgba(5,7,14,0.55);
+  --wait-bg: #4B3611;  --wait-fg: #FFD899;
+  --done-bg: #12402A;  --done-fg: #A6ECC4;
+  --info-bg: #17336A;  --info-fg: #C2DAFF;
+  --stop-bg: #4D2613;  --stop-fg: #FFCBAA;
+  --plain-bg: #262A3F; --plain-fg: #F2F4FA;
+}
+
+/* ===== 2. MOCKUP STYLES ===== */
+/* ----- shared with docs/design/mockup.html ----- */
+.lv-root { position: relative; min-height: 800px; box-sizing: border-box; padding: 24px 16px 40px; background: var(--backdrop); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif; font-size: var(--fs-body); line-height: 1.4; font-variant-numeric: tabular-nums; text-align: left; }
+.lv-root *, .lv-root *::before, .lv-root *::after { box-sizing: border-box; }
+.lv-root h1, .lv-root h2, .lv-root h3, .lv-root h4 { margin: 0; text-wrap: balance; }
+.lv-root p { margin: 0; }
+.lv-root ::selection { background: var(--select); }
+.lv-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lv-root [tabindex="-1"]:focus { outline: none; }
+
+/* the window: a floating glass side pane, and the content beside it */
+.lv-root { container-type: inline-size; }
+.lv-frame { position: relative; max-width: 1120px; margin: 0 auto; }
+.lv-window { display: flex; align-items: stretch; gap: 6px; min-height: 720px; padding: 6px; border-radius: var(--r-window); background: var(--shell); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--shell-shadow); }
+.lv-side { flex: 0 0 188px; display: flex; flex-direction: column; gap: 14px; padding: 12px 8px; border-radius: calc(var(--r-window) - 6px); background: var(--nav); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--nav-shadow); }
+.lv-dots { display: flex; gap: 6px; padding: 2px 6px 0; }
+.lv-dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--dot); }
+.lv-brand { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+.lv-brand h1 { font-size: var(--fs-head); font-weight: 700; letter-spacing: 0.01em; }
+.lv-appicon { flex: 0 0 auto; display: block; }
+.lv-side-foot { margin-top: auto; padding: 0 6px 2px; }
+.lv-health { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fs-small); color: var(--text2); }
+.lv-health i { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--ok); }
+.lv-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.lv-toolbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px 10px 16px; }
+.lv-toolbar-title { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.lv-scope { color: var(--text2); }
+
+/* controls */
+.lv-btn { flex: 0 0 auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--control); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
+.lv-btn--strong { font-weight: 600; }
+.lv-btn--primary { padding: 0 16px; border-width: 0; background: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.lv-btn--raised { box-shadow: var(--primary-shadow); }
+.lv-btn--tint { border-color: transparent; background: var(--info-bg); color: var(--info-fg); font-weight: 600; }
+.lv-btn--icon { width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.lv-btn--row { width: 100%; text-align: left; font-weight: 400; }
+.lv-input { min-height: 36px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--field); background: var(--surface); color: var(--text); font: inherit; caret-color: var(--focus); }
+textarea.lv-input { padding: 8px 12px; resize: vertical; }
+.lv-input::placeholder { color: var(--placeholder); opacity: 1; }
+.lv-field { display: flex; flex-direction: column; gap: 4px; }
+.lv-label { font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-root button, .lv-input { transition: background-color .15s ease-out, box-shadow .15s ease-out, transform .15s ease-out, filter .15s ease-out; }
+.lv-root button:focus-visible, .lv-input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lv-root button:not([aria-disabled="true"]):hover { filter: brightness(var(--hover)); }
+.lv-root button:not([aria-disabled="true"]):active { transform: translateY(1px); }
+.lv-root button[aria-disabled="true"] { opacity: .38; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .lv-root button, .lv-input { transition: none; } }
+
+/* the navigation in the side pane; the selected row is raised slightly */
+.lv-nav { display: flex; flex-direction: column; gap: 2px; }
+.lv-tab { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-control); font: inherit; font-weight: 500; text-align: left; cursor: pointer; background: transparent; color: var(--tab-fg); }
+.lv-tab svg { flex: 0 0 16px; }
+.lv-tab-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-tab[aria-current="page"] { background: var(--tab-on-bg); color: var(--tab-on-fg); border-color: var(--tab-on-edge); box-shadow: var(--tab-on-shadow); transform: translateY(-1px); font-weight: 600; }
+.lv-tab[aria-pressed="true"] { background: var(--tab-pressed); color: var(--tab-on-fg); font-weight: 600; }
+.lv-side-section { display: flex; flex-direction: column; gap: 4px; }
+.lv-side-head { padding: 0 8px; font-size: var(--fs-badge); font-weight: 600; color: var(--text2); }
+.lv-root .lv-tab:not([aria-current="page"]):hover { background: var(--tab-hover); filter: none; }
+.lv-root .lv-tab:active { transform: none; }
+.lv-root .lv-tab[aria-current="page"]:active { transform: translateY(-1px); }
+.lv-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--wait-bg); color: var(--wait-fg); font-size: var(--fs-badge); font-weight: 700; line-height: 18px; text-align: center; }
+
+/* content */
+.lv-main { padding: 0 10px 20px 16px; }
+.lv-h { font-size: var(--fs-head); font-weight: 600; }
+.lv-h--small { font-size: var(--fs-body); font-weight: 600; }
+.lv-muted { font-size: var(--fs-small); color: var(--text2); }
+.lv-lanes { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.lv-lane { flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lv-lane-head { display: flex; align-items: baseline; gap: 6px; padding: 0 4px; }
+.lv-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-card h4 { font-size: var(--fs-body); font-weight: 600; line-height: 1.3; }
+.lv-chip { align-self: flex-start; padding: 2px 8px; border-radius: var(--r-chip); font-size: var(--fs-small); font-weight: 600; }
+.lv-chip--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-chip--done { background: var(--done-bg); color: var(--done-fg); }
+.lv-chip--info { background: var(--info-bg); color: var(--info-fg); }
+.lv-chip--stop { background: var(--stop-bg); color: var(--stop-fg); }
+.lv-chip--plain { background: var(--plain-bg); color: var(--plain-fg); }
+.lv-note { padding: 8px; border-radius: var(--r-control); background: var(--inset); font-size: var(--fs-small); }
+.lv-empty { padding: 12px; border-radius: var(--r-card); border: 1px dashed var(--field); font-size: var(--fs-small); color: var(--text2); }
+.lv-page { max-width: 760px; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.lv-page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 0 4px; }
+.lv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-list > li + li { border-top: 1px solid var(--line); }
+.lv-need { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 16px; }
+.lv-need p { color: var(--text2); }
+.lv-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.lv-cred { display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 12px 16px; }
+.lv-cred-top { display: flex; align-items: center; gap: 12px; }
+.lv-place { flex: 0 0 16px; font-weight: 600; color: var(--text2); }
+.lv-cred-name { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.lv-cred-name b { font-weight: 600; }
+.lv-cred-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.lv-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 16px; }
+.lv-row-lead { flex: 0 0 76px; font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-row-lead--name { flex-basis: 132px; font-size: var(--fs-body); color: var(--text); }
+.lv-row-text { flex: 1 1 240px; min-width: 0; }
+
+/* sheets: they belong to the window, so the scrim stays inside it */
+.lv-scrim { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding: 96px 16px 24px; border-radius: var(--r-window); background: var(--scrim); }
+.lv-sheet { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--r-window); background: var(--sheet); border: 1px solid var(--line); box-shadow: var(--sheet-shadow); }
+.lv-sheet-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.lv-spacer { flex: 1 1 8px; }
+
+/* ----- the setup assistant ----- */
+.lv-root { --ob-link: var(--primary); }
+.lv-root[data-appearance="dark"] { --ob-link: var(--focus); }
+
+/* the assistant fills the window: no side pane */
+.lv-ob-assist { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 8px 14px 18px; }
+.lv-ob-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; min-height: 44px; }
+.lv-ob-top .lv-dots { padding: 0 2px; }
+.lv-ob-later { justify-self: end; }
+.lv-ob-link { min-height: 28px; padding: 2px 6px; border: 0; border-radius: var(--r-chip); background: transparent; color: var(--ob-link); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.lv-root .lv-ob-link:hover { filter: none; text-decoration-color: currentColor; }
+.lv-ob-link--quiet { color: var(--text2); font-weight: 500; }
+
+/* the steps across the top */
+.lv-ob-steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 8px; }
+.lv-ob-steps li { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 600; color: var(--text2); white-space: nowrap; }
+.lv-ob-steps li + li::before { content: ""; width: 26px; height: 1px; margin-right: 2px; background: var(--field); opacity: .6; }
+.lv-ob-num { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--field); font-size: var(--fs-badge); font-weight: 700; }
+.lv-ob-steps li[aria-current="step"] { color: var(--text); }
+.lv-ob-steps li[aria-current="step"] .lv-ob-num { border-color: transparent; background: var(--primary); color: var(--primary-fg); }
+.lv-ob-steps li[data-done="true"] .lv-ob-num { border-color: transparent; background: var(--done-bg); color: var(--done-fg); }
+
+/* the centered column */
+.lv-ob-col { flex: 1 1 auto; width: 100%; max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; padding: 26px 0 0; }
+.lv-ob-col--wide { max-width: 700px; }
+.lv-ob-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 16px; }
+.lv-ob-body--center { justify-content: center; gap: 22px; padding-bottom: 12px; }
+.lv-ob-head { display: flex; flex-direction: column; gap: 6px; }
+.lv-ob-head h2 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.005em; }
+.lv-ob-head p { max-width: 58ch; font-size: 14px; color: var(--text2); }
+.lv-ob-head--center { align-items: center; text-align: center; }
+.lv-ob-head--center .lv-appicon { margin-bottom: 8px; }
+.lv-ob-center { text-align: center; }
+.lv-ob-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.lv-ob-enter { animation: lv-ob-in .22s ease-out; }
+@keyframes lv-ob-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Welcome: three snapshot cards, drawn with the tokens */
+.lv-ob-snaps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lv-ob-snap { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-ob-snap h3 { font-size: var(--fs-body); font-weight: 600; line-height: 1.3; }
+.lv-ob-art { height: 96px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--r-control); background: var(--inset); }
+.lv-ob-mini-board { display: flex; gap: 6px; width: 156px; height: 70px; }
+.lv-ob-mini-lane { flex: 1 1 0; display: flex; flex-direction: column; gap: 5px; }
+.lv-ob-mini-head { width: 62%; height: 4px; border-radius: 2px; background: var(--dot); }
+.lv-ob-mini-slot { height: 22px; border-radius: 5px; border: 1px dashed var(--dot); }
+.lv-ob-mini-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-ob-mini-line { height: 3px; border-radius: 2px; background: var(--text2); opacity: .75; }
+.lv-ob-mini-line--short { width: 58%; }
+.lv-ob-mini-chip { width: 22px; height: 7px; margin-top: 1px; border-radius: 3px; background: var(--primary); }
+.lv-ob-mini-need { display: flex; align-items: center; gap: 8px; width: 156px; padding: 9px 10px; border-radius: var(--r-control); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); color: var(--text2); }
+.lv-ob-mini-bars { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; }
+
+/* provider tiles */
+.lv-ob-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.lv-ob-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 104px; padding: 10px; border-radius: var(--r-card); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; box-shadow: var(--card-shadow); }
+.lv-ob-tile b { font-weight: 600; }
+.lv-ob-tile small { font-size: var(--fs-badge); line-height: 1.3; color: var(--text2); }
+.lv-ob-tile small.lv-ob-warn { color: var(--wait-fg); font-weight: 600; }
+.lv-ob-tile[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary), var(--card-shadow); }
+.lv-ob-mark { width: 28px; height: 28px; margin-bottom: 4px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: var(--inset); color: var(--text); font-weight: 700; }
+.lv-ob-form { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-ob-form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.lv-ob-form-row .lv-field { flex: 1 1 220px; min-width: 0; }
+
+/* the three checks */
+.lv-ob-check { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; }
+.lv-ob-check-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-ob-state { flex: 0 0 auto; font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-ob-ico { flex: 0 0 18px; width: 18px; height: 18px; margin-top: 1px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid var(--dot); }
+.lv-ob-ico[data-s="working"] { border-color: var(--line); border-top-color: var(--primary); animation: lv-ob-spin .8s linear infinite; }
+.lv-ob-ico[data-s="done"] { border-color: transparent; background: var(--done-bg); color: var(--done-fg); }
+@keyframes lv-ob-spin { to { transform: rotate(360deg); } }
+
+/* notes, and the row of a login or an agent */
+.lv-ob-note { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-control); background: var(--inset); font-size: var(--fs-small); }
+.lv-ob-note--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-ob-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 16px; }
+.lv-ob-item-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-ob-item-text b { font-weight: 600; }
+.lv-ob-switch-wrap { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-ob-switch { flex: 0 0 auto; width: 38px; height: 22px; padding: 2px; border: 1px solid var(--field); border-radius: 11px; background: var(--control); cursor: pointer; }
+.lv-ob-switch::after { content: ""; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--field); transition: transform .15s ease-out; }
+.lv-ob-switch[aria-checked="true"] { border-color: transparent; background: var(--primary); }
+.lv-ob-switch[aria-checked="true"]::after { background: #FFFFFF; transform: translateX(16px); }
+
+/* First task: ready-made tasks in the gallery's vivid style */
+.lv-ob-sparks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lv-ob-spark { display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: var(--r-card); border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; box-shadow: var(--card-shadow); }
+.lv-ob-spark[aria-pressed="true"] { border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus), var(--card-shadow); }
+.lv-ob-spark-top { position: relative; width: 100%; height: 86px; display: flex; align-items: center; justify-content: center; color: #FFFFFF; }
+.lv-ob-spark-cat, .lv-ob-spark-time { position: absolute; top: 8px; padding: 2px 7px; border-radius: var(--r-chip); font-size: var(--fs-badge); font-weight: 700; }
+.lv-ob-spark-cat { left: 8px; background: rgba(20,24,40,0.74); color: #FFFFFF; }
+.lv-ob-spark-time { right: 8px; background: rgba(255,255,255,0.92); color: #1A1E29; }
+.lv-ob-spark-body { display: flex; flex-direction: column; gap: 4px; padding: 10px; }
+.lv-ob-spark-body b { font-size: 14px; font-weight: 600; }
+.lv-ob-spark-body span { font-size: var(--fs-small); color: var(--text2); }
+.lv-ob-detail { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-ob-detail ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.lv-ob-own[aria-pressed="true"] { border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus); font-weight: 600; }
+
+/* the board at the end */
+.lv-ob-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-card); background: var(--done-bg); color: var(--done-fg); font-weight: 500; }
+.lv-ob-banner--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-ob-banner p { flex: 1 1 auto; min-width: 0; padding: 6px 0; }
+.lv-ob-banner .lv-btn { min-height: 30px; }
+.lv-ob-close { flex: 0 0 auto; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r-control); background: transparent; color: inherit; cursor: pointer; }
+.lv-health i[data-tone="warn"] { background: var(--wait-fg); }
+
+@container (max-width: 880px) {
+  .lv-ob-steps li:not([aria-current="step"]) .lv-ob-step-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lv-ob-steps li + li::before { width: 14px; }
+}
+@container (max-width: 640px) {
+  .lv-ob-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lv-ob-snaps, .lv-ob-sparks { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-ob-enter, .lv-ob-ico[data-s="working"] { animation: none; }
+  .lv-ob-switch::after { transition: none; }
+}
+
+/* ===== 3. INSPECTOR (not part of the design) ===== */
+html, body { margin: 0; }
+body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+.ix-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; background: #1E2026; color: #E7E9EE; border-bottom: 1px solid #000; }
+.ix-title { font-weight: 700; }
+.ix-group { display: flex; align-items: center; gap: 6px; }
+.ix-group > span { font-size: 11px; color: #A4A9B6; }
+.ix-seg { display: inline-flex; border: 1px solid #454956; border-radius: 6px; overflow: hidden; }
+.ix-seg button, .ix-btn { min-height: 28px; padding: 0 10px; border: 0; background: #2B2E37; color: #E7E9EE; font: inherit; cursor: pointer; }
+.ix-seg button + button { border-left: 1px solid #454956; }
+.ix-seg button[aria-pressed="true"], .ix-btn[aria-pressed="true"] { background: #E7E9EE; color: #16181D; font-weight: 600; }
+.ix-btn { border: 1px solid #454956; border-radius: 6px; }
+.ix-bar select { min-height: 28px; border: 1px solid #454956; border-radius: 6px; background: #2B2E37; color: #E7E9EE; padding: 0 6px; font: inherit; }
+.ix-bar button:focus-visible, .ix-bar select:focus-visible { outline: 2px solid #7FB0FF; outline-offset: 2px; }
+.ix-hint { margin: 0; padding: 6px 12px; background: #2B2E37; color: #C9CDD8; font-size: 12px; }
+.ix-notes { max-width: 1120px; margin: 0 auto; padding: 18px 16px 36px; }
+.ix-notes h2 { margin: 0 0 4px; font-size: 14px; }
+.ix-notes > p { margin: 0 0 10px; font-size: 12px; color: #4A4F5C; }
+.ix-notes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.ix-notes li { display: flex; align-items: baseline; gap: 8px; max-width: 86ch; color: #2B2E37; }
+.ix-new { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; background: #D0338A; color: #FFFFFF; font-size: 11px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="ix-bar" role="toolbar" aria-label="Mockup inspector">
+  <span class="ix-title">Onboarding mockup 3: Setup assistant</span>
+  <div class="ix-group"><span>Step</span>
+    <select id="ix-step" aria-label="Step">
+      <option value="welcome">1. Welcome</option>
+      <option value="login1">2. First login</option>
+      <option value="login2">3. Second login</option>
+      <option value="agents">4. Agents</option>
+      <option value="task">5. First task</option>
+      <option value="board">6. Board, task running</option>
+      <option value="board-done">6. Board, task done</option>
+      <option value="later">Board, set up later</option>
+    </select>
+  </div>
+  <div class="ix-group"><span>Appearance</span>
+    <div class="ix-seg" id="ix-appearance"><button type="button" data-val="light" aria-pressed="false">Light</button><button type="button" data-val="dark" aria-pressed="true">Dark</button></div>
+  </div>
+  <div class="ix-group">
+    <button type="button" class="ix-btn" id="ix-restart">Restart</button>
+  </div>
+</div>
+<p class="ix-hint">Sample data. The grey bar is not part of the design. New behaviour that the PRD does not have yet is marked ‘New’ in the notes below the window.</p>
+
+<div id="ix-stage"></div>
+
+<section class="ix-notes" aria-labelledby="ix-notes-title">
+  <h2 id="ix-notes-title">What is new here</h2>
+  <p>The app does none of this today. Each item needs a change to the PRD before it is built.</p>
+  <ul>
+    <li><span class="ix-new">New</span><span>The assistant itself: a full-window sequence after “Create your sign-in” on a new installation, with no side pane until it ends.</span></li>
+    <li><span class="ix-new">New</span><span>Logins are added inside the assistant, with the same three checks as Add credential. The tiles say which provider is already added, and that Gemini builds but does not review yet.</span></li>
+    <li><span class="ix-new">New</span><span>Agents are made automatically: one General agent for each login, named after it. Today the owner connects each agent in Agents.</span></li>
+    <li><span class="ix-new">New</span><span>“I only have one subscription” lets the owner continue with one provider, and says where finished work will wait.</span></li>
+    <li><span class="ix-new">New</span><span>A first-task picker: three ready-made tasks in the Imaginarium gallery’s style, or one the owner writes.</span></li>
+    <li><span class="ix-new">New</span><span>“Set up later” on every screen. It opens the board with what exists so far, and a banner with “Continue setup” that returns to the screen that was left.</span></li>
+  </ul>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===== sample data ===== */
+  /* the four logins the app accepts, and the tool each one runs in */
+  var PROVIDERS = [
+    { id: 'Claude', tool: 'Claude Code' },
+    { id: 'Codex', tool: 'Codex' },
+    { id: 'Gemini', tool: 'Antigravity', note: 'Builds, but does not review yet' },
+    { id: 'Grok', tool: 'Grok Build' }
+  ];
+  var REVIEW_LINE = 'A second agent reviews the work';
+  /* three ready-made tasks from the Imaginarium gallery mockup */
+  var SPARKS = [
+    { id: 'todo', cat: 'Apps', time: '~40 min', title: 'Pocket to-do', pitch: 'A calm to-do app that lives on your Mac. No account, no cloud.',
+      grad: 'linear-gradient(120deg, #4ADE80 0%, #7DF3E1 38%, #38BDF8 100%)', icon: 'apps',
+      done: ['Tasks are still there after the app restarts', 'The N and Space shortcuts work', 'Tests pass with the command in the README', REVIEW_LINE] },
+    { id: 'portfolio', cat: 'Websites', time: '~25 min', title: 'Glass portfolio', pitch: 'A one-page portfolio with frosted glass and drifting color.',
+      grad: 'linear-gradient(120deg, #60A5FA 0%, #A5B4FC 45%, #C084FC 100%)', icon: 'web',
+      done: ['The page opens from one file, with nothing to install', 'It reads well on a phone and on a wide screen', 'Text stays easy to read over the glass', REVIEW_LINE] },
+    { id: 'tidy', cat: 'Automations', time: '~15 min', title: 'Downloads tidy-up', pitch: 'Sorts a messy folder, and shows you the plan before it moves a thing.',
+      grad: 'linear-gradient(120deg, #FDE047 0%, #86EFAC 45%, #14B8A6 100%)', icon: 'spark',
+      done: ['It shows the plan before it moves anything', 'Nothing is deleted', 'Running it a second time changes nothing', REVIEW_LINE] }
+  ];
+  var LANES = ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'];
+  var TABS = [
+    ['board', 'Board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
+    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['imaginarium', 'Imaginarium'], ['settings', 'Settings']
+  ];
+  /* the steps across the top, and the screens each one covers */
+  var STEPS = [['Welcome', ['welcome']], ['Logins', ['login1', 'login2']], ['Agents', ['agents']], ['First task', ['task']]];
+  var CHECK_MS = 900, START_MS = 700, WALK_MS = 2500;
+
+  /* ===== text and icon helpers ===== */
+  function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  /* The app icon: a lever lifting a weight (from docs/design/mockup.html). */
+  function appIcon(size, id) {
+    return '<svg class="lv-appicon" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon">' +
+      '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.3"></stop><stop offset="1" stop-color="#000" stop-opacity="0.12"></stop></linearGradient></defs>' +
+      '<rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><rect width="64" height="64" rx="14.4" fill="url(#' + id + ')"></rect>' +
+      '<path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path>' +
+      '<path d="M21 38 29 53H13z" fill="#fff"></path>' +
+      '<rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect>' +
+      '<path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>';
+  }
+  /* 16 px line icons for the side pane; the last three are new, in the same style */
+  function navIcon(d) { return '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"></path></svg>'; }
+  var NAV_ICONS = {
+    board: navIcon('M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z'),
+    needs: navIcon('M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3'),
+    activity: navIcon('M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4'),
+    agents: navIcon('M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2'),
+    handoff: navIcon('M3 5.5h9.5L10 3M13 10.5H3.5L6 13'),
+    all: navIcon('M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z'),
+    project: navIcon('M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'),
+    creds: navIcon('M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2'),
+    decided: navIcon('M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12zM5.4 8.2l1.8 1.8 3.4-3.8'),
+    imaginarium: navIcon('M7 2.5l1.3 3.2L11.5 7 8.3 8.3 7 11.5 5.7 8.3 2.5 7l3.2-1.3zM12 10.5v3M10.5 12h3'),
+    settings: navIcon('M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2')
+  };
+  var CHECK = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.4l2.3 2.3 4.7-5.2"></path></svg>';
+  var CLOSE = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"></path></svg>';
+  function sparkIcon(kind) {
+    var d = kind === 'apps' ? 'M8 5h18a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3zM10 13l2 2 3.5-4M19 13h5M10 22l2 2 3.5-4M19 22h5'
+      : kind === 'web' ? 'M6 7h22a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM4 13h26M9 18h8M9 22h5M22 17h4v5h-4z'
+      : 'M15 4l3 8 8 3-8 3-3 8-3-8-8-3 8-3zM27 22v6M24 25h6';
+    return '<svg aria-hidden="true" width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"></path></svg>';
+  }
+
+  /* ===== the mockup ===== */
+  var stage = document.getElementById('ix-stage');
+  var root = document.createElement('div');
+  root.className = 'lv-root';
+  root.setAttribute('data-appearance', 'dark');
+  stage.appendChild(root);
+  var view = document.createElement('div');   /* re-rendered on every change */
+  var live = document.createElement('div');   /* stays put, so screen readers hear updates */
+  live.className = 'lv-sr';
+  live.setAttribute('aria-live', 'polite');
+  root.appendChild(view);
+  root.appendChild(live);
+
+  function fresh() {
+    return {
+      screen: 'welcome',      /* welcome, login1, login2, agents, task or board */
+      logins: [],             /* { provider, name, label }, in the order added */
+      pick: '', credName: '', /* the provider tile picked, and the name typed */
+      checks: null,           /* { step } while the three checks run */
+      oneOnly: false,         /* "I only have one subscription" is open */
+      agentsOff: {},          /* login label -> true when its agent is switched off */
+      agentsStarting: false, agentsStarted: false,
+      spark: '', own: false, title: '', done: '',
+      task: null,             /* the first task: { title, project, lane, stage, builder, reviewer } */
+      added: [],              /* tasks added from the board's Add task sheet */
+      setupLater: false, leftAt: '',
+      bannerHidden: false,
+      tab: 'board', project: 'all',
+      sheet: false, newTitle: '', newDone: '',
+      announce: ''
+    };
+  }
+  var s = fresh();
+  var focusTry = [];      /* keys to try to focus after the next render, in order */
+  var lastScreen = '';    /* so a screen fades in once, not on every timer tick */
+
+  /* timers, in two groups: the checks of one login, and the first task's walk across the board */
+  var timers = [];
+  function later(group, ms, fn) {
+    var entry = { group: group, id: 0 };
+    entry.id = setTimeout(function () {
+      timers = timers.filter(function (t) { return t !== entry; });
+      fn();
+      render();
+    }, ms);
+    timers.push(entry);
+  }
+  function clearTimers(group) {
+    timers = timers.filter(function (t) {
+      if (group && t.group !== group) { return true; }
+      clearTimeout(t.id);
+      return false;
+    });
+  }
+
+  /* ----- what the state means ----- */
+  function makeLogin(provider, name) { return { provider: provider, name: name, label: provider + ', ' + name }; }
+  function providerOf(id) { return PROVIDERS.filter(function (p) { return p.id === id; })[0]; }
+  function hasProvider(id) { return s.logins.some(function (l) { return l.provider === id; }); }
+  function agentOn(login) { return !s.agentsOff[login.label]; }
+  function runningAgents() { return s.agentsStarted ? s.logins.filter(agentOn) : []; }
+  /* an agent of another provider may review; a General agent on a Gemini login does no review */
+  function reviewerFor(builder, pool) {
+    return pool.filter(function (l) { return l.provider !== builder.provider && l.provider !== 'Gemini'; })[0] || null;
+  }
+  /* who builds the first task: an agent whose work another agent may review, when there is one */
+  function crew() {
+    var pool = runningAgents();
+    for (var i = 0; i < pool.length; i++) {
+      var r = reviewerFor(pool[i], pool);
+      if (r) { return { builder: pool[i], reviewer: r }; }
+    }
+    return { builder: pool[0] || null, reviewer: null };
+  }
+  function taskStuck() { return !!s.task && s.task.lane === 'walk' && s.task.stage === 2 && !s.task.reviewer; }
+  function canRunTasks() { return runningAgents().length > 0; }
+  function sparkOf(id) { return SPARKS.filter(function (x) { return x.id === id; })[0]; }
+
+  /* the first task walks Ready, building, in review, Done; it stops in review when nobody may review it */
+  function walk() {
+    if (!s.task || s.task.lane !== 'walk' || !s.task.builder || s.task.stage >= 3) { return; }
+    if (s.task.stage === 2 && !s.task.reviewer) { return; }
+    later('walk', WALK_MS, function () {
+      s.task.stage++;
+      if (s.task.stage === 2 && !s.task.reviewer) { s.announce = 'One item needs you.'; return; }
+      if (s.task.stage === 3) { s.announce = s.task.title + ' is done.'; return; }
+      walk();
+    });
+  }
+  function runChecks() {
+    later('checks', CHECK_MS, function () {
+      if (!s.checks) { return; }
+      s.checks.step++;
+      if (s.checks.step < 3) { runChecks(); return; }
+      var name = s.credName.trim() || 'Personal';
+      var added = makeLogin(s.pick, name);   /* a provider is added once, so the label is not taken */
+      s.logins.push(added);
+      s.agentsStarted = false;   /* its agent has not started yet */
+      s.checks = null; s.pick = ''; s.credName = ''; s.oneOnly = false;
+      s.announce = added.label + ' added.';
+      focusTry = ['ob-next'];
+    });
+  }
+
+  /* ----- the assistant's screens ----- */
+  function stepperHtml() {
+    var current = 0;
+    STEPS.forEach(function (st, i) { if (st[1].indexOf(s.screen) !== -1) { current = i; } });
+    return '<ol class="lv-ob-steps" aria-label="Setup steps">' + STEPS.map(function (st, i) {
+      return '<li' + (i === current ? ' aria-current="step"' : '') + (i < current ? ' data-done="true"' : '') + '>' +
+        '<span class="lv-ob-num" aria-hidden="true">' + (i < current ? CHECK : (i + 1)) + '</span>' +
+        '<span class="lv-ob-step-label">' + esc(st[0]) + (i < current ? '<span class="lv-sr">, done</span>' : '') + '</span></li>';
+    }).join('') + '</ol>';
+  }
+  function headHtml(title, text) {
+    return '<div class="lv-ob-head"><h2 tabindex="-1" data-k="ob-head">' + esc(title) + '</h2><p>' + esc(text) + '</p></div>';
+  }
+  function primaryHtml(label, action, disabled) {
+    return '<button type="button" class="lv-btn lv-btn--primary lv-btn--raised" data-a="' + action + '" data-k="ob-next" aria-disabled="' + (disabled ? 'true' : 'false') + '">' + esc(label) + '</button>';
+  }
+  function footHtml(back, middle, primary) {
+    return '<div class="lv-ob-foot">' + (back ? '<button type="button" class="lv-btn" data-a="back" data-k="ob-back">Back</button>' : '') +
+      '<span class="lv-spacer"></span>' + (middle || '') + primary + '</div>';
+  }
+
+  function snapHtml(art, title, line) {
+    return '<article class="lv-ob-snap"><div class="lv-ob-art" aria-hidden="true">' + art + '</div><h3>' + esc(title) + '</h3><p class="lv-muted">' + esc(line) + '</p></article>';
+  }
+  function welcomeHtml() {
+    var lane = function (inner) { return '<span class="lv-ob-mini-lane"><span class="lv-ob-mini-head"></span>' + inner + '</span>'; };
+    var board = '<span class="lv-ob-mini-board">' + lane('<span class="lv-ob-mini-slot"></span>') +
+      lane('<span class="lv-ob-mini-card"><span class="lv-ob-mini-line"></span><span class="lv-ob-mini-line lv-ob-mini-line--short"></span><span class="lv-ob-mini-chip"></span></span>') +
+      lane('<span class="lv-ob-mini-slot"></span>') + '</span>';
+    var pair = '<svg width="168" height="74" viewBox="0 0 168 74">' +
+      '<circle cx="42" cy="28" r="16" style="fill: var(--primary)"></circle>' +
+      '<path d="M38.5 22.5l-5.5 5.5 5.5 5.5M45.5 22.5l5.5 5.5-5.5 5.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>' +
+      '<path d="M66 28h34M94 22l6 6-6 6" fill="none" style="stroke: var(--field)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>' +
+      '<circle cx="126" cy="28" r="16" style="fill: var(--ok)"></circle>' +
+      '<path d="M119 28.5l5 5 8.5-10" fill="none" style="stroke: var(--sheet)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>' +
+      '<text x="42" y="64" text-anchor="middle" font-size="10" font-weight="600" style="fill: var(--text2)">Builds</text>' +
+      '<text x="126" y="64" text-anchor="middle" font-size="10" font-weight="600" style="fill: var(--text2)">Reviews</text></svg>';
+    var need = '<span class="lv-ob-mini-need">' + NAV_ICONS.needs + '<span class="lv-ob-mini-bars"><span class="lv-ob-mini-line"></span><span class="lv-ob-mini-line lv-ob-mini-line--short"></span></span><span class="lv-count">1</span></span>';
+    return '<div class="lv-ob-body lv-ob-body--center">' +
+      '<div class="lv-ob-head lv-ob-head--center">' + appIcon(56, 'ob-icon') + '<h2 tabindex="-1" data-k="ob-head">Welcome to Leverage</h2>' +
+      '<p>Your agents build the work, a second one reviews it, and you are asked only when it matters.</p></div>' +
+      '<div class="lv-ob-snaps">' +
+      snapHtml(board, 'You add a task', 'Say what should get done, and how you will know.') +
+      snapHtml(pair, 'One agent builds, another reviews', 'The reviewer comes from a different provider.') +
+      snapHtml(need, 'You are asked only when it matters', 'Questions and approvals wait in Needs you.') +
+      '</div><p class="lv-muted lv-ob-center">Setup takes about five minutes. You need two AI subscriptions you already pay for.</p></div>' +
+      footHtml(false, '', primaryHtml('Get started', 'next', false));
+  }
+
+  function loginRowHtml(l) {
+    return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login. Signed in and answering.</span></span>' +
+      '<span class="lv-chip lv-chip--done">Added</span></li>';
+  }
+  function tilesHtml() {
+    return '<div class="lv-ob-tiles" role="group" aria-label="Provider">' + PROVIDERS.map(function (p) {
+      var taken = hasProvider(p.id);
+      return '<button type="button" class="lv-ob-tile" data-a="pick" data-v="' + p.id + '" data-k="pick-' + p.id + '" aria-pressed="' + (s.pick === p.id) + '" aria-disabled="' + taken + '">' +
+        '<span class="lv-ob-mark" aria-hidden="true">' + p.id.charAt(0) + '</span><b>' + esc(p.id) + '</b>' +
+        '<small>' + (taken ? 'Already added' : 'Runs in ' + esc(p.tool)) + '</small>' +
+        (p.note && !taken ? '<small class="lv-ob-warn">' + esc(p.note) + '</small>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
+  function signInFormHtml() {
+    var p = providerOf(s.pick);
+    return '<form class="lv-ob-form" data-f="signIn"><div class="lv-ob-form-row"><div class="lv-field"><label class="lv-label" for="ob-cred">Name for this ' + esc(p.id) + ' login</label>' +
+      '<input class="lv-input" id="ob-cred" data-k="f-cred" data-m="credName" type="text" autocomplete="off" value="' + esc(s.credName) + '" placeholder="Personal"></div>' +
+      '<button type="submit" class="lv-btn lv-btn--tint" data-k="sign-in">Sign in</button></div>' +
+      '<p class="lv-muted">When you choose Sign in, we check that the ' + esc(p.id) + ' tool is installed, signed in and answering.</p></form>';
+  }
+  function checksHtml() {
+    var p = providerOf(s.pick);
+    var lines = [p.tool + ' is installed', 'You are signed in to ' + p.tool, p.tool + ' answers a short test'];
+    return '<div class="lv-field"><div class="lv-label" tabindex="-1" data-k="ob-checks">Checking ' + esc(p.id + ', ' + (s.credName.trim() || 'Personal')) + '</div><ul class="lv-list">' + lines.map(function (line, i) {
+      var st = i < s.checks.step ? 'done' : i === s.checks.step ? 'working' : 'waiting';
+      return '<li class="lv-ob-check"><span class="lv-ob-ico" data-s="' + st + '" aria-hidden="true">' + (st === 'done' ? CHECK : '') + '</span>' +
+        '<span class="lv-ob-check-text"><span>' + esc(line) + '</span>' +
+        (i === 1 && st === 'working' ? '<span class="lv-muted">Waiting for you to sign in in the window that opened</span>' : '') + '</span>' +
+        '<span class="lv-ob-state">' + (st === 'done' ? 'Done' : st === 'working' ? 'In progress' : 'Waiting') + '</span></li>';
+    }).join('') + '</ul></div>';
+  }
+  function loginHtml(idx) {
+    var mine = s.logins[idx];
+    var out = idx === 0
+      ? headHtml('Add your first login', 'Agents run on a subscription you already have. The login stays inside its own tool on this Mac.')
+      : headHtml('Add a second login, from a different provider', 'An agent from another provider reviews the work before it counts as done. With one provider, finished work waits with nobody to review it.');
+    var shown = s.logins.slice(0, idx + 1);
+    if (shown.length) { out += '<ul class="lv-list" aria-label="Logins added">' + shown.map(loginRowHtml).join('') + '</ul>'; }
+    if (!mine) {
+      if (s.checks) {
+        out += checksHtml();
+      } else {
+        out += tilesHtml() + (s.pick ? signInFormHtml() : '');
+        if (idx === 1) {
+          out += '<div><button type="button" class="lv-ob-link lv-ob-link--quiet" data-a="oneOnly" data-k="one-only" aria-expanded="' + s.oneOnly + '">I only have one subscription</button></div>';
+          if (s.oneOnly) {
+            out += '<div class="lv-ob-note lv-ob-note--wait"><p>You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings.</p>' +
+              '<button type="button" class="lv-btn" data-a="withOne" data-k="with-one">Continue with one</button></div>';
+          }
+        }
+      }
+    } else if (idx === 0) {
+      out += '<p class="lv-muted">Next, a second login from a different provider.</p>';
+    }
+    return '<div class="lv-ob-body">' + out + '</div>' + footHtml(true, '', primaryHtml('Continue', 'next', !mine));
+  }
+
+  function agentsHtml() {
+    var on = s.logins.filter(agentOn);
+    var rows = s.logins.map(function (l) {
+      var isOn = agentOn(l);
+      var state = !isOn ? 'General. Off.' : s.agentsStarted ? 'General. Running. Waiting for work.' : s.agentsStarting ? 'General. Starting…' : 'General. Runs on ' + l.label + '.';
+      return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">' + esc(state) + '</span>' +
+        (l.provider === 'Gemini' ? '<span class="lv-muted">Builds, but does not review yet.</span>' : '') + '</span>' +
+        (isOn && s.agentsStarted ? '<span class="lv-chip lv-chip--done">Running</span>' : '') +
+        '<span class="lv-ob-switch-wrap"><span aria-hidden="true">' + (isOn ? 'On' : 'Off') + '</span>' +
+        '<button type="button" class="lv-ob-switch" role="switch" aria-checked="' + isOn + '" aria-label="' + esc(l.label) + ' turned on" data-a="toggle" data-v="' + esc(l.label) + '" data-k="sw-' + esc(l.label) + '"></button></span></li>';
+    }).join('');
+    var note = '';
+    var providers = on.map(function (l) { return l.provider; }).filter(function (p, i, a) { return a.indexOf(p) === i; });
+    if (on.length && providers.length < 2) {
+      note = 'With one provider, finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings.';
+    } else if (on.length && on.some(function (l) { return l.provider === 'Gemini'; }) && on.filter(function (l) { return l.provider !== 'Gemini'; }).length === 1) {
+      var other = on.filter(function (l) { return l.provider !== 'Gemini'; })[0];
+      note = 'Gemini does not review yet. ' + other.label + ' reviews what Gemini builds, and what ' + other.label + ' builds will wait for another reviewer.';
+    } else if (!on.length) {
+      note = 'Turn on at least one agent to continue.';
+    }
+    var primary = s.agentsStarted ? primaryHtml('Continue', 'next', false)
+      : s.agentsStarting ? primaryHtml('Starting…', 'startAgents', true)
+      : primaryHtml('Start agents', 'startAgents', !on.length);
+    return '<div class="lv-ob-body">' +
+      headHtml('Your agents are ready', 'Leverage made one agent for each login. Each can build, review and check tasks.') +
+      '<ul class="lv-list" aria-label="Agents">' + rows + '</ul>' +
+      (note ? '<div class="lv-ob-note lv-ob-note--wait"><p>' + esc(note) + '</p></div>' : '') +
+      '</div>' + footHtml(true, '', primary);
+  }
+
+  function taskHtml() {
+    var cards = '<div class="lv-ob-sparks" role="group" aria-label="Ready-made tasks">' + SPARKS.map(function (x) {
+      return '<button type="button" class="lv-ob-spark" data-a="spark" data-v="' + x.id + '" data-k="spark-' + x.id + '" aria-pressed="' + (s.spark === x.id) + '">' +
+        '<span class="lv-ob-spark-top" style="background: ' + x.grad + '"><span class="lv-ob-spark-cat">' + esc(x.cat) + '</span><span class="lv-ob-spark-time">' + esc(x.time) + '</span>' + sparkIcon(x.icon) + '</span>' +
+        '<span class="lv-ob-spark-body"><b>' + esc(x.title) + '</b><span>' + esc(x.pitch) + '</span></span></button>';
+    }).join('') + '</div>';
+    var detail = '';
+    if (s.spark) {
+      var x = sparkOf(s.spark);
+      detail = '<div class="lv-ob-detail"><h3 class="lv-h--small">Done when</h3><ol>' + x.done.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ol>' +
+        '<p class="lv-muted">' + esc(x.time) + ' of agent time. It goes to your Imaginarium project.</p></div>';
+    }
+    var own = '<button type="button" class="lv-btn lv-btn--row lv-ob-own" data-a="own" data-k="own" aria-pressed="' + s.own + '" aria-expanded="' + s.own + '">Write my own</button>';
+    if (s.own) {
+      own += '<div class="lv-ob-form"><div class="lv-field"><label class="lv-label" for="ob-title">What should get done?</label>' +
+        '<input class="lv-input" id="ob-title" data-k="f-title" data-m="title" data-r="1" type="text" autocomplete="off" value="' + esc(s.title) + '" placeholder="Fix the totals on the invoice page"></div>' +
+        '<div class="lv-field"><label class="lv-label" for="ob-done">How will you know it is done?</label>' +
+        '<textarea class="lv-input" id="ob-done" data-k="f-done" data-m="done" rows="3" placeholder="Totals match the sum of the lines to the cent">' + esc(s.done) + '</textarea>' +
+        '<p class="lv-muted">One thing to check on each line. Leave this empty and the task waits in Backlog until you fill it in.</p></div>' +
+        '<p class="lv-muted">An agent from another provider reviews the work before it counts as done.</p></div>';
+    }
+    var ready = !!s.spark || (s.own && !!s.title.trim());
+    return '<div class="lv-ob-body">' +
+      headHtml('Give them something to do', 'Pick a ready-made task, or write your own. You can change every word.') +
+      cards + detail + own + '</div>' +
+      footHtml(true, '<button type="button" class="lv-ob-link lv-ob-link--quiet" data-a="skipTask" data-k="skip-task">Skip, take me to the board</button>', primaryHtml('Send to agents', 'send', !ready));
+  }
+
+  function assistHtml() {
+    var body = s.screen === 'welcome' ? welcomeHtml() : s.screen === 'login1' ? loginHtml(0) : s.screen === 'login2' ? loginHtml(1) : s.screen === 'agents' ? agentsHtml() : taskHtml();
+    return '<div class="lv-window"><div class="lv-ob-assist">' +
+      '<div class="lv-ob-top"><div class="lv-dots" aria-hidden="true"><span></span><span></span><span></span></div>' + stepperHtml() +
+      '<button type="button" class="lv-ob-link lv-ob-later" data-a="later" data-k="ob-later">Set up later</button></div>' +
+      '<main class="lv-ob-col' + (s.screen === 'task' ? ' lv-ob-col--wide' : '') + (s.screen !== lastScreen ? ' lv-ob-enter' : '') + '">' + body + '</main></div></div>';
+  }
+
+  /* ----- the board at the end ----- */
+  function card(title, line, tone, chip, note) {
+    return '<article class="lv-card"><h4>' + esc(title) + '</h4><div class="lv-muted">' + esc(line) + '</div>' +
+      (chip ? '<div class="lv-chip lv-chip--' + tone + '">' + esc(chip) + '</div>' : '') +
+      (note ? '<div class="lv-note">' + esc(note) + '</div>' : '') + '</article>';
+  }
+  function bannerHtml() {
+    if (s.setupLater && !canRunTasks()) {
+      return '<div class="lv-ob-banner lv-ob-banner--wait" role="status"><p>Setup is not finished. No task can run until two logins and their agents are connected.</p>' +
+        '<button type="button" class="lv-btn lv-btn--strong" data-a="resume" data-k="resume">Continue setup</button></div>';
+    }
+    if (s.bannerHidden) { return ''; }
+    var text, extra = '';
+    if (!s.task) {
+      text = 'You are set up. Add a task when you are ready.';
+      extra = '<button type="button" class="lv-btn" data-a="resume" data-v="task" data-k="resume">Pick a first task</button>';
+    } else if (s.task.lane === 'backlog') {
+      text = 'You are set up. ' + s.task.title + ' waits in Backlog until you say what done looks like.';
+    } else {
+      text = 'You are set up. ' + s.task.builder + ' has started on ' + s.task.title + '. Anything that needs you shows up in Needs you.';
+    }
+    return '<div class="lv-ob-banner" role="status"><p>' + esc(text) + '</p>' + extra +
+      '<button type="button" class="lv-ob-close" data-a="hideBanner" data-k="hide-banner" aria-label="Hide this message">' + CLOSE + '</button></div>';
+  }
+  function boardHtml() {
+    var lanes = LANES.map(function () { return []; });
+    var put = function (i, project, html) { lanes[i].push({ project: project, html: html }); };
+    s.added.forEach(function (a) {
+      if (a.done) { put(3, '', card(a.title, 'Waiting for a free agent', 'info', 'New', 'Done when: ' + a.done)); }
+      else { put(1, '', card(a.title, 'Say what done looks like to send it to an agent', 'wait', 'Needs details')); }
+    });
+    var t = s.task;
+    if (t && t.lane === 'backlog') { put(1, t.project, card(t.title, 'Say what done looks like to send it to an agent', 'wait', 'Needs details')); }
+    else if (t && t.stage === 0) { put(3, t.project, card(t.title, 'Waiting for a free agent', 'info', 'New')); }
+    else if (t && t.stage === 1) { put(4, t.project, card(t.title, t.builder + ' is building')); }
+    else if (t && t.stage === 2) { put(4, t.project, card(t.title, t.builder + "'s work is being reviewed", 'info', 'In review', t.reviewer ? '' : 'No connected agent can review this task. Connect one in Agents.')); }
+    else if (t) { put(5, t.project, card(t.title, 'Reviewed and finished', 'done', 'Done')); }
+    return bannerHtml() + '<div class="lv-lanes">' + lanes.map(function (items, i) {
+      var cards = items.filter(function (it) { return s.project === 'all' || it.project === s.project; });
+      return '<section class="lv-lane" aria-label="' + esc(LANES[i]) + '"><div class="lv-lane-head"><h3 class="lv-h">' + esc(LANES[i]) + '</h3><span class="lv-muted">' + cards.length + '</span></div>' +
+        (cards.length ? cards.map(function (it) { return it.html; }).join('') : '<div class="lv-empty">Nothing here</div>') + '</section>';
+    }).join('') + '</div>';
+  }
+  function emptyPage(line) { return '<div class="lv-page"><div class="lv-page-head"><div class="lv-muted">' + esc(line) + '</div></div></div>'; }
+  function needsHtml() {
+    if (!taskStuck()) { return emptyPage('Nothing needs you right now.'); }
+    return '<div class="lv-page"><ul class="lv-list"><li class="lv-need"><h3 class="lv-h--small">No agent may review this</h3>' +
+      '<p>' + esc(s.task.title + ' is built and waits for a review, but no connected agent may review it. Connect an agent from another provider, or turn the rule off. It continues on its own when an agent may review it.') + '</p>' +
+      '<div class="lv-actions"><button type="button" class="lv-btn lv-btn--tint" data-a="resume" data-v="login2" data-k="need-login">Add a second login</button></div></li></ul></div>';
+  }
+  function agentLine(l) {
+    if (!agentOn(l)) { return 'General. Off.'; }
+    if (!s.agentsStarted) { return 'General. Not running.'; }
+    if (s.task && s.task.lane === 'walk' && s.task.stage === 1 && s.task.builder === l.label) { return 'General. Building ' + s.task.title + '.'; }
+    return 'General. Running. Waiting for work.';
+  }
+  function agentsPageHtml() {
+    if (!s.logins.length) { return emptyPage('No agents yet. Connect one to give it work.'); }
+    return '<div class="lv-page"><ul class="lv-list">' + s.logins.map(function (l) {
+      return '<li class="lv-row"><span class="lv-row-lead lv-row-lead--name">' + esc(l.label) + '</span><span class="lv-row-text">' + esc(agentLine(l)) + ' Runs on ' + esc(l.label) + '.</span></li>';
+    }).join('') + '</ul></div>';
+  }
+  function credsPageHtml() {
+    if (!s.logins.length) { return emptyPage('No logins yet. Add one so an agent can run on it.'); }
+    return '<div class="lv-page"><div class="lv-page-head"><div class="lv-muted">The order they take over in is set on Handoff.</div></div><ul class="lv-list">' + s.logins.map(function (l) {
+      return '<li class="lv-cred"><div class="lv-cred-top"><div class="lv-cred-name"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login</span></div></div>' +
+        '<div class="lv-cred-state"><span class="lv-chip lv-chip--info">Ready</span><span class="lv-muted">Signed in and answering.</span></div></li>';
+    }).join('') + '</ul></div>';
+  }
+  function handoffPageHtml() {
+    if (!s.logins.length) { return emptyPage('No accounts yet. Add one in Credentials, and it appears here.'); }
+    return '<div class="lv-page"><div class="lv-page-head"><h3 class="lv-h--small">Handoff order</h3><div class="lv-muted">When one reaches its limit, the next one down takes over.</div></div><ol class="lv-list">' + s.logins.map(function (l, i) {
+      return '<li class="lv-cred"><div class="lv-cred-top"><span class="lv-place">' + (i + 1) + '</span><div class="lv-cred-name"><b>' + esc(l.label) + '</b><span class="lv-chip lv-chip--info">Ready</span></div></div></li>';
+    }).join('') + '</ol></div>';
+  }
+  function activityPageHtml() {
+    var rows = s.logins.map(function (l) { return 'You added ' + l.label + '.'; });
+    if (s.agentsStarted) { runningAgents().forEach(function (l) { rows.push(l.label + ' started.'); }); }
+    if (s.task) {
+      rows.push('You added ' + s.task.title + '.');
+      if (s.task.lane === 'walk' && s.task.stage >= 1) { rows.push(s.task.builder + ' started building ' + s.task.title + '.'); }
+      if (s.task.lane === 'walk' && s.task.stage >= 2 && s.task.reviewer) { rows.push(s.task.reviewer + ' started reviewing ' + s.task.title + '.'); }
+      if (s.task.lane === 'walk' && s.task.stage >= 3) { rows.push(s.task.title + ' finished after ' + s.task.reviewer + ' reviewed it.'); }
+    }
+    if (!rows.length) { return emptyPage('No activity to show.'); }
+    return '<div class="lv-page"><ul class="lv-list">' + rows.reverse().map(function (r) {
+      return '<li class="lv-row"><span class="lv-row-lead">Today</span><span class="lv-row-text">' + esc(r) + '</span></li>';
+    }).join('') + '</ul></div>';
+  }
+  function sheetHtml() {
+    if (!s.sheet) { return ''; }
+    return '<div class="lv-scrim"><form class="lv-sheet" data-f="addTask" role="dialog" aria-modal="true" aria-labelledby="ob-nt">' +
+      '<h2 class="lv-h" id="ob-nt" tabindex="-1" data-k="sheet-head">Add task</h2>' +
+      '<div class="lv-field"><label class="lv-label" for="ob-new-title">What should get done?</label>' +
+      '<input class="lv-input" id="ob-new-title" data-k="f-new-title" data-m="newTitle" type="text" required autocomplete="off" value="' + esc(s.newTitle) + '" placeholder="Fix the totals on the invoice page"></div>' +
+      '<div class="lv-field"><label class="lv-label" for="ob-new-done">How will you know it is done?</label>' +
+      '<textarea class="lv-input" id="ob-new-done" data-k="f-new-done" data-m="newDone" rows="3" placeholder="Totals match the sum of the lines to the cent">' + esc(s.newDone) + '</textarea>' +
+      '<div class="lv-muted">Leave this empty and the task waits in Backlog until you fill it in.</div></div>' +
+      '<div class="lv-muted">An agent from another provider reviews the work before it counts as done.</div>' +
+      '<div class="lv-sheet-actions"><button type="button" class="lv-btn" data-a="closeSheet" data-k="sheet-cancel">Cancel</button>' +
+      '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">Save task</button></div></form></div>';
+  }
+  function shellHtml() {
+    var title = TABS.filter(function (t) { return t[0] === s.tab; })[0][1];
+    var page = s.tab === 'board' ? boardHtml() : s.tab === 'needs' ? needsHtml() : s.tab === 'agents' ? agentsPageHtml() : s.tab === 'creds' ? credsPageHtml() :
+      s.tab === 'handoff' ? handoffPageHtml() : s.tab === 'activity' ? activityPageHtml() : s.tab === 'decided' ? emptyPage('Nothing has been decided for you yet.') :
+      emptyPage(title + ' is not part of this mockup.');
+    var count = taskStuck() ? 1 : 0;
+    var healthy = canRunTasks();
+    var health = healthy ? 'System is running' : 'No agent is set up to check tasks. Connect one in Agents.';
+    return '<div class="lv-window"' + (s.sheet ? ' inert' : '') + '>' +
+      '<aside class="lv-side"><div class="lv-dots" aria-hidden="true"><span></span><span></span><span></span></div>' +
+      '<div class="lv-brand">' + appIcon(22, 'ob-side-icon') + '<h1>Leverage</h1></div>' +
+      '<nav class="lv-nav" aria-label="Sections">' + TABS.map(function (t) {
+        return '<button type="button" class="lv-tab" data-a="tab" data-v="' + t[0] + '" data-k="tab-' + t[0] + '" aria-current="' + (s.tab === t[0] ? 'page' : 'false') + '" title="' + esc(t[1]) + '">' +
+          NAV_ICONS[t[0]] + '<span class="lv-tab-label">' + esc(t[1]) + '</span>' + (t[0] === 'needs' && count ? '<span class="lv-count">' + count + '</span>' : '') + '</button>';
+      }).join('') + '</nav>' +
+      '<div class="lv-side-section"><div class="lv-side-head">Projects</div><div class="lv-nav" role="group" aria-label="Projects">' +
+      ['all', 'Imaginarium'].map(function (p) {
+        return '<button type="button" class="lv-tab" data-a="project" data-v="' + p + '" data-k="proj-' + p + '" aria-pressed="' + (s.project === p) + '">' +
+          NAV_ICONS[p === 'all' ? 'all' : 'project'] + '<span class="lv-tab-label">' + (p === 'all' ? 'All projects' : p) + '</span></button>';
+      }).join('') + '</div></div>' +
+      '<div class="lv-side-foot"><div class="lv-health"><i aria-hidden="true"' + (healthy ? '' : ' data-tone="warn"') + '></i><span>' + esc(health) + '</span></div></div></aside>' +
+      '<div class="lv-content"><header class="lv-toolbar"><div class="lv-toolbar-title"><h2 class="lv-h" tabindex="-1" data-k="ob-head">' + esc(title) + '</h2>' +
+      (s.tab === 'board' ? '<div class="lv-scope">' + (s.project === 'all' ? 'All projects' : esc(s.project)) + '</div>' : '') + '</div>' +
+      '<button type="button" class="lv-btn lv-btn--primary lv-btn--raised" data-a="openSheet" data-k="open-new">Add task</button></header>' +
+      '<main class="lv-main' + (s.screen !== lastScreen ? ' lv-ob-enter' : '') + '">' + page + '</main></div></div>' + sheetHtml();
+  }
+
+  /* ----- render: rebuild the view, then put the focus back ----- */
+  function render() {
+    var active = document.activeElement, keep = null;
+    if (active && root.contains(active) && active.getAttribute('data-k')) {
+      keep = { key: active.getAttribute('data-k'), from: null, to: null };
+      try { keep.from = active.selectionStart; keep.to = active.selectionEnd; } catch (e) { /* not a text field */ }
+    }
+    view.innerHTML = '<div class="lv-frame">' + (s.screen === 'board' ? shellHtml() : assistHtml()) + '</div>';
+    lastScreen = s.screen;
+    var keys = focusTry, el = null, i;
+    focusTry = [];
+    for (i = 0; i < keys.length && !el; i++) { el = keys[i] ? root.querySelector('[data-k="' + keys[i] + '"]') : null; }
+    if (el) { el.focus({ preventScroll: true }); }
+    else if (keep) {
+      el = root.querySelector('[data-k="' + keep.key + '"]');
+      if (el) {
+        el.focus({ preventScroll: true });
+        if (typeof keep.from === 'number' && el.setSelectionRange) { try { el.setSelectionRange(keep.from, keep.to); } catch (e2) { /* not a text field */ } }
+      }
+    }
+    if (s.announce) { live.textContent = s.announce; s.announce = ''; }
+    syncInspector();
+  }
+
+  /* ----- what each control does; returning false means "nothing changed, do not re-render" ----- */
+  function stopChecks() { clearTimers('checks'); s.checks = null; }
+  function go(screen) { stopChecks(); s.screen = screen; focusTry = ['ob-head']; }
+  function toBoard() { s.screen = 'board'; s.tab = 'board'; s.project = 'all'; focusTry = ['ob-head']; }
+  var NEXT = { welcome: 'login1', login1: 'login2', login2: 'agents', agents: 'task' };
+  var BACK = { login1: 'welcome', login2: 'login1', agents: 'login2', task: 'agents' };
+  var actions = {
+    next: function () {
+      if (s.screen === 'agents' && s.task) {
+        /* setup was continued from the board: the waiting review goes on once an agent may review it */
+        var pool = runningAgents();
+        var builder = pool.filter(function (l) { return l.label === s.task.builder; })[0];
+        if (taskStuck() && builder) { var r = reviewerFor(builder, pool); if (r) { s.task.reviewer = r.label; walk(); } }
+        s.setupLater = false; toBoard(); return;
+      }
+      if (!NEXT[s.screen]) { return false; }
+      go(NEXT[s.screen]);
+    },
+    back: function () { if (!BACK[s.screen]) { return false; } go(BACK[s.screen]); },
+    later: function () { s.leftAt = s.screen; stopChecks(); s.setupLater = true; s.bannerHidden = false; toBoard(); },
+    resume: function (v) { s.setupLater = false; s.bannerHidden = false; go(v || s.leftAt || 'welcome'); },
+    pick: function (v) { s.pick = v; focusTry = ['f-cred']; },
+    oneOnly: function () { s.oneOnly = !s.oneOnly; focusTry = s.oneOnly ? ['with-one'] : ['one-only']; },
+    withOne: function () { go('agents'); },
+    toggle: function (v) {
+      if (s.agentsOff[v]) { delete s.agentsOff[v]; } else { s.agentsOff[v] = true; }
+      /* an agent turned on after the others started has not started yet */
+      if (s.agentsStarted && !s.agentsOff[v]) { s.agentsStarted = false; }
+      if (s.agentsStarted && !s.logins.some(agentOn)) { s.agentsStarted = false; }
+    },
+    startAgents: function () {
+      if (s.agentsStarting || s.agentsStarted) { return false; }
+      s.agentsStarting = true;
+      later('agents', START_MS, function () { s.agentsStarting = false; s.agentsStarted = true; s.announce = 'Agents are running.'; focusTry = ['ob-next']; });
+    },
+    spark: function (v) { s.spark = s.spark === v ? '' : v; s.own = false; },
+    own: function () { s.own = !s.own; s.spark = ''; focusTry = s.own ? ['f-title'] : ['own']; },
+    send: function () {
+      var c = crew(), x = s.spark ? sparkOf(s.spark) : null;
+      var title = x ? x.title : s.title.trim();
+      if (!title) { return false; }
+      s.task = { title: title, project: x ? 'Imaginarium' : '', lane: (x || s.done.trim()) ? 'walk' : 'backlog', stage: 0,
+        builder: c.builder ? c.builder.label : '', reviewer: c.reviewer ? c.reviewer.label : '' };
+      s.setupLater = false; s.bannerHidden = false;
+      toBoard(); walk();
+    },
+    skipTask: function () { s.setupLater = false; s.bannerHidden = false; toBoard(); },
+    hideBanner: function () { s.bannerHidden = true; focusTry = ['open-new']; },
+    tab: function (v) { s.tab = v; focusTry = ['tab-' + v]; },
+    project: function (v) { s.project = v; s.tab = 'board'; focusTry = ['proj-' + v]; },
+    openSheet: function () { s.sheet = true; s.newTitle = ''; s.newDone = ''; focusTry = ['f-new-title']; },
+    closeSheet: function () { s.sheet = false; focusTry = ['open-new']; }
+  };
+  var submits = {
+    signIn: function () {
+      if (!s.pick || s.checks) { return false; }
+      s.checks = { step: 0 };
+      focusTry = ['ob-checks'];
+      runChecks();
+    },
+    addTask: function () {
+      var title = s.newTitle.trim();
+      if (!title) { return false; }
+      s.added.unshift({ title: title, done: s.newDone.trim() });
+      s.sheet = false; s.tab = 'board'; s.project = 'all';
+      focusTry = ['open-new'];
+    }
+  };
+
+  root.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-a]') : null;
+    if (!el || !root.contains(el) || el.getAttribute('aria-disabled') === 'true') { return; }
+    var fn = actions[el.getAttribute('data-a')];
+    if (fn && fn(el.getAttribute('data-v'), el) !== false) { render(); }
+  });
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fn = submits[e.target.getAttribute('data-f')];
+    if (fn && fn() !== false) { render(); }
+  });
+  root.addEventListener('input', function (e) {
+    var m = e.target.getAttribute && e.target.getAttribute('data-m');
+    if (!m) { return; }
+    var was = s[m];
+    s[m] = e.target.value;
+    /* the title decides whether Send to agents is available */
+    if (e.target.getAttribute('data-r') && !was.trim() !== !s[m].trim()) { render(); }
+  });
+  root.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && s.sheet) { e.preventDefault(); actions.closeSheet(); render(); }
+  });
+
+  /* ===== the inspector ===== */
+  var stepSelect = document.getElementById('ix-step');
+  var appearance = document.getElementById('ix-appearance');
+
+  function syncInspector() {
+    stepSelect.value = s.screen !== 'board' ? s.screen
+      : s.setupLater && !canRunTasks() ? 'later'
+      : s.task && s.task.lane === 'walk' && s.task.stage === 3 ? 'board-done' : 'board';
+  }
+  /* jump to a screen with sample state that makes sense for it */
+  function jump(v) {
+    clearTimers();
+    s = fresh();
+    lastScreen = '';
+    focusTry = [];
+    var claude = makeLogin('Claude', 'Personal'), codex = makeLogin('Codex', 'Team');
+    if (v === 'later') {
+      s.logins = [claude]; s.screen = 'board'; s.setupLater = true; s.leftAt = 'login2';
+    } else if (v === 'login1') {
+      s.screen = 'login1';
+    } else if (v === 'login2') {
+      s.logins = [claude]; s.screen = 'login2';
+    } else if (v !== 'welcome') {
+      s.logins = [claude, codex];
+      if (v === 'agents') { s.screen = 'agents'; }
+      else {
+        s.agentsStarted = true;
+        if (v === 'task') { s.screen = 'task'; s.spark = 'todo'; }
+        else {
+          s.screen = 'board';
+          s.task = { title: SPARKS[0].title, project: 'Imaginarium', lane: 'walk', stage: v === 'board-done' ? 3 : 0, builder: claude.label, reviewer: codex.label };
+          walk();
+        }
+      }
+    }
+    render();
+  }
+  stepSelect.addEventListener('change', function () { jump(stepSelect.value); });
+  appearance.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-val]') : null;
+    if (!b) { return; }
+    root.setAttribute('data-appearance', b.getAttribute('data-val'));
+    Array.prototype.forEach.call(appearance.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+  });
+  document.getElementById('ix-restart').addEventListener('click', function () { jump('welcome'); });
+
+  /* ----- start ----- */
+  render();
+})();
+</script>
+</body>
+</html>

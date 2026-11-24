@@ -40,7 +40,7 @@ enum BoardCopy: OwnerFacingCopy {
         case .laneCancelled: "Cancelled"
         case .emptyLane: "Nothing here"
         case .showCancelled: "Show cancelled"
-        case .loading: "Loading the board…"
+        case .loading: "Loading the task board…"
         case .projectFilter: "Project"
         case .agentFilter: "Agent"
         case .allAgents: "All agents"

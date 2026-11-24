@@ -15,7 +15,7 @@ struct SidePaneTests {
             .board, .needsYou, .decided, .activity, .agents, .credentials, .handoff, .settings,
         ])
         #expect(SidePane.tabs.map(\.copy.text) == [
-            "Board", "Needs you", "Decided for you", "Activity", "Agents", "Credentials", "Handoff", "Settings",
+            "Task board", "Needs you", "Decided for you", "Activity", "Agents", "Credentials", "Handoff", "Settings",
         ])
         #expect(Set(SidePane.tabs.map(\.symbol)).count == SidePane.tabs.count)
         #expect(SidePane.tabs.allSatisfy { !$0.symbol.isEmpty })
