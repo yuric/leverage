@@ -176,6 +176,20 @@ class CheckEvalsTests(unittest.TestCase):
         self.copy.write_case(path, case)
         self.assertFails(f"cases: {case['id']}")
 
+    def test_vague_work_is_a_failed_verdict_category(self):
+        cases = [self.copy.case(path) for path in self.copy.cases()]
+        vague = [case for case in cases if case["category"] == "vague_work"]
+        self.assertEqual([case["label"] for case in vague], ["failed"] * 4)
+        code, output = self.copy.check()
+        self.assertEqual(code, 0, output)
+
+    def test_a_case_contract_with_a_goal_fails(self):
+        path = self.copy.cases()[0]
+        case = self.copy.case(path)
+        case["contract"]["goal"] = "Separate task text."
+        self.copy.write_case(path, case)
+        self.assertFails(f"cases: {case['id']}", "its contract has the keys")
+
     def test_a_contract_with_the_review_not_last_fails(self):
         path = self.copy.cases()[1]
         case = self.copy.case(path)
@@ -199,7 +213,8 @@ class CheckEvalsTests(unittest.TestCase):
         case = self.copy.case(path)
         case["why"] = case["why"].rstrip(".") + ", and a little more."
         self.copy.write_case(path, case)
-        self.assertFails("results: claude", "results: codex", "results: gemini", "another case set")
+        self.assertFails("cases: the case set does not match bar.json's cases_sha256",
+                         "results: claude", "results: codex", "results: gemini", "another case set")
 
     def test_a_supported_model_with_no_result_fails(self):
         self.copy.result_path("gemini").unlink()
@@ -536,6 +551,21 @@ class ApprovalCheckTests(unittest.TestCase):
         result = self.copy.case(path)
         self.copy.write_case(path, {**result, "date": "2026-11-21"})
         self.assertFails("results:", "claude", "latest settled run")
+
+    def test_approval_runs_against_superseded_cases_still_count_toward_the_budget(self):
+        bar_path = self.copy.approvals / "bar.json"
+        runs_path = self.copy.approvals / "runs.json"
+        bar = self.copy.case(bar_path)
+        history = self.copy.case(runs_path)
+        previous_hash = "f" * 64
+        previous = {**history["runs"][0], "cases_sha256": previous_hash}
+        self.copy.write_case(runs_path, {**history, "runs": [previous, *history["runs"]]})
+        self.assertFails("runs:", "invalid wording or case set hashes")
+
+        self.copy.write_case(bar_path, {**bar, "superseded_cases_sha256": [previous_hash]})
+        self.assertPasses("OK")
+        self.copy.write_case(runs_path, {**history, "runs": [previous] * 3 + history["runs"]})
+        self.assertFails("runs:", "claude: 4 full runs")
 
     def test_an_approval_result_cannot_use_more_than_six_second_tries(self):
         path = self.copy.approval_result_path("claude")

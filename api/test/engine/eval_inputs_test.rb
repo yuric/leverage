@@ -175,6 +175,13 @@ class EvalInputsTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { EvalInputs.input_for(CASES.first, canary_path: "word.txt") }
   end
 
+  test "a case with a separate goal is refused before building input" do
+    kase = CASES.first.merge("contract" => CASES.first.fetch("contract").merge("goal" => "Unfolded text."))
+
+    error = assert_raises(ArgumentError) { EvalInputs.contract(kase, canary_path: CANARY_PATH) }
+    assert_includes error.message, "fold it into its details"
+  end
+
   test "an approval case matches the input of its action's real claim" do
     claimed = claimed_approval_input
     input = built(APPROVAL_CASE)
