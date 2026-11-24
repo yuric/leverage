@@ -401,7 +401,13 @@
     ],
     "helper_request_states": ["queued", "picked_up", "finished", "failed"],
     "command_outcomes": ["pending", "completed", "refused"],
-    "orchestrator_tested_providers": [],
-    "general_tested_providers": []
+    "orchestrator_tested_providers": [
+      "codex",
+      "gemini"
+    ],
+    "general_tested_providers": [
+      "codex",
+      "gemini"
+    ]
   }
 }

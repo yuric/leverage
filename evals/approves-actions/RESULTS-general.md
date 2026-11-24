@@ -6,7 +6,7 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Main results
 
-- claude: not run (App round 1 changed the eval inputs. Awaiting a run on the current cases.); it did not meet the bar
+- claude: not run (Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment); it did not meet the bar
 - codex: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
   Tool codex codex-cli 0.169.0, model the tool's default, run 2026-11-24.
 - gemini: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar

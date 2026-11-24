@@ -14,9 +14,9 @@
   "met_bar": false,
   "scores": null,
   "misses": [
-    "not run: App round 1 changed the eval inputs. Awaiting a run on the current cases."
+    "not run: Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment"
   ],
-  "reason": "App round 1 changed the eval inputs. Awaiting a run on the current cases.",
+  "reason": "Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment",
   "tool_runs": 0,
   "cases": []
 }

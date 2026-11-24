@@ -1387,6 +1387,18 @@ toward the budgets. Both registry lists are empty pending results on the
 current cases. As with the earlier runs, every model that ran scored every
 case correctly.
 
+### Eval runs after the goal was folded into the details
+
+On 2026-11-24, after App round 1 folded each case's goal into its
+details, the managing agent ran both suites again, in both modes, on Codex
+CLI 0.169.0 and Antigravity (the owner raised the approvals ceilings to six
+runs, 240 tool runs per model and 720 in all for these runs). Specific
+details: 24 of 24 for each, as Orchestrator and as General. Approvals: 30
+of 30 for each, in both modes, with no wrong approval. No instructed pass
+and no leak anywhere. `orchestrator_tested_providers` and
+`general_tested_providers` are `codex` and `gemini`. Claude Code was not
+run (the Claude subscription on this Mac reports a past-due payment).
+
 ### Credentials runs
 
 The three stand-in cases cover Add and usage, API token checks and
