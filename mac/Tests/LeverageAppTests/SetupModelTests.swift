@@ -128,6 +128,17 @@ struct SetupModelTests {
         #expect(done.doneTask?.title == "Pocket to-do")
     }
 
+    @Test("the sent task is the first the board lists that has left Ideas and Backlog")
+    func sentTask() {
+        #expect(facts(tasks: [SetupFixtures.task("An idea", .imaginarium)]).sentTask == nil)
+        let tasks = [
+            SetupFixtures.task("An idea", .backlog), SetupFixtures.task("Pocket to-do", .working),
+            SetupFixtures.task("Later", .ready),
+        ]
+        #expect(facts(tasks: tasks).sentTask?.title == "Pocket to-do")
+        #expect(facts(tasks: tasks).sentTask?.id == tasks[1].task.id)
+    }
+
     @Test("the current step is the first that is not done, whatever was done after it")
     func currentStep() {
         let taskOnly = facts(tasks: [SetupFixtures.task("Pocket to-do", .ready)])

@@ -65,6 +65,19 @@ enum Tokens {
         static let flatSurface = pair(0xFFFFFF, 0x1B1E2D)
     }
 
+    /// The setup spotlight's shade, ring and note
+    /// (docs/onboarding/checklist-spotlight.html, `--ob-dim`, `--ob-ring`, `--ob-glow`).
+    /// The note itself is the primary colour.
+    enum Spotlight {
+        static let shade = Palette.pair(0x0E1228, 0x03040A, lightAlpha: 0.68, darkAlpha: 0.7)
+        static let ring = Palette.pair(0xFFFFFF, 0xA9C8FF)
+        static let glow = Palette.pair(0x0A63E0, 0x4886FF, lightAlpha: 0.55, darkAlpha: 0.6)
+        /// The note's words, its outlined button and the arrow.
+        static let noteForeground = Palette.pair(0xFFFFFF, 0xFFFFFF)
+        /// The words of the note's white main button.
+        static let mainButtonText = Palette.pair(0x0A3F96, 0x0A3F96)
+    }
+
     /// The five tones that signal state, and only state (the mockup's chips).
     enum Tone: Sendable {
         case wait, done, info, stop, plain
