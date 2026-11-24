@@ -108,11 +108,12 @@ class Owner:
         self.http = build_opener(ProxyHandler({}), LocalOnly())
         self.token = None
 
-    def request(self, path, *, post=False, body=None):
+    def request(self, path, *, post=False, body=None, seat_token=None):
         check_stop()
         headers = {}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        token = seat_token if seat_token is not None else self.token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         if post:
             headers["Idempotency-Key"] = str(uuid.uuid4())
         encoded = None
@@ -369,9 +370,18 @@ class Check:
                 owner.command(f"rules/{rule['id']}/disable")
         builder = owner.command("seats", {"name": "MCP builder", "role": "builder", "provider": "claude"})
         reviewer = owner.command("seats", {"name": "Stand-in reviewer", "role": "reviewer", "provider": "codex"})
-        landing = owner.read(f"seats/{builder['seat_id']}/landing-prompt?connection=mcp")
-        if landing["connection"] != "mcp":
+        landing = owner.command(f"seats/{builder['seat_id']}/landing-prompt", {"connection": "mcp"})
+        builder_token = landing["seat_token"]
+        if (landing["seat_id"] != builder["seat_id"] or landing["connection"] != "mcp"
+                or not builder_token or builder_token not in landing["text"]):
             raise Failed("the API did not return an MCP landing prompt")
+        reviewer_landing = owner.command(f"seats/{reviewer['seat_id']}/landing-prompt", {"connection": "http"})
+        reviewer_token = reviewer_landing["seat_token"]
+        # Follow the join instruction on the known API origin. Only the MCP
+        # settings get the bearer token when Claude starts.
+        join = owner.request("/v1/join?connection=mcp", seat_token=builder_token)
+        if join["role"] != "builder" or join["connection"] != "mcp" or builder_token in join["text"]:
+            raise Failed("the API did not return safe MCP join instructions")
         work = self.folder / "work"
         work.mkdir()
         task = owner.command("tasks", {"title": TITLE, "goal": CRITERION, "state": "backlog"})["task_id"]
@@ -383,10 +393,10 @@ class Check:
             ], "actions": [],
             "minimum_strength_rank": None, "budget_cap": None,
         })
-        self.start_reviewer(binary / "LeverageRunner", address, reviewer["seat_token"])
+        self.start_reviewer(binary / "LeverageRunner", address, reviewer_token)
         self.progress("running one Claude MCP client")
         deadline = time.monotonic() + CLIENT_LIMIT
-        self.run_client(binary / "LeverageMCP", address, builder["seat_token"], landing["text"], work, deadline)
+        self.run_client(binary / "LeverageMCP", address, builder_token, join["text"], work, deadline)
         while time.monotonic() < deadline:
             if owner.read(f"tasks/{task}")["task"]["state"] == "done":
                 break
@@ -417,7 +427,7 @@ class Check:
         for path in logs:
             scan += ["--logs", str(path), str(path)]
         scan += [str(results)]
-        known = [password, owner.token, builder["seat_token"], reviewer["seat_token"]]
+        known = [password, owner.token, builder_token, reviewer_token]
         self.progress("scanning the logs and artifacts")
         self.command(scan, "secret scan", body=("\n".join(known) + "\n").encode())
         match = re.search(r"^\S+ mcp info: MCP initialize protocol revision (\d{4}-\d{2}-\d{2})$",
