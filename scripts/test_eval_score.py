@@ -163,6 +163,15 @@ class BudgetTests(unittest.TestCase):
         code, _, err = self.budget("no-such-file.json")
         self.assertEqual(code, 0, err)
 
+    def test_general_budget_counts_orchestrator_runs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copyfile(RUNS / "three-runs.json", root / "runs.json")
+            code, _, err = run("budget", "--runs", root / "runs-general.json", "--providers", "claude",
+                               "--mode", "general")
+        self.assertEqual(code, 3, err)
+        self.assertIn("claude has had 3 full runs", err)
+
     def test_a_model_at_three_runs_is_refused(self):
         code, _, err = self.budget("three-runs.json")
         self.assertEqual(code, 3)
@@ -338,6 +347,24 @@ class ResultTests(unittest.TestCase):
         # tools ran with, so "the tool's default" is not read as a known model.
         self.assertIn("the Mac user's own settings folders", text)
         self.assertIn("the model that ran is not known", text)
+
+    def test_general_report_counts_both_ledgers_and_lists_only_its_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            suite = Path(folder) / "suite"
+            shutil.copytree(SUITE, suite)
+            shutil.copy(RUNS / "room.json", suite / "runs.json")
+            eval_score.write_json(suite / "runs-general.json", {"runs": [{
+                "provider": "claude", "mode": "general", "role_file_sha256": None,
+                "date": "2026-11-23", "tool_runs": 24, "reserved": False,
+                "instruction_sha256": "a" * 64, "cases_sha256": "b" * 64,
+            }]})
+            code, _, err = run("report", "--suite", suite, "--mode", "general")
+            self.assertEqual(code, 0, err)
+            report = (suite / "RESULTS-general.md").read_text(encoding="utf-8")
+        self.assertIn("128 of 270", report)
+        self.assertIn("The table lists General runs.", report)
+        self.assertIn("| 2026-11-23 | claude | 24 ", report)
+        self.assertNotIn("| 2026-11-20 |", report)
 
 
 class DecisionScoreTests(unittest.TestCase):

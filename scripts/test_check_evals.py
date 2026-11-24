@@ -284,6 +284,17 @@ class CheckEvalsTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("MISS: gemini was not run", output)
 
+    def test_the_budget_counts_both_ledgers_together(self):
+        claude = self.copy.run_entry("claude", 24)
+        general = {**claude, "mode": "general", "role_file_sha256": None}
+        general_path = self.copy.suite / "runs-general.json"
+        self.copy.write_runs([claude, claude])
+        self.copy.write_case(general_path, {"runs": [general]})
+        code, output = self.copy.check()
+        self.assertEqual(code, 0, output)
+        self.copy.write_case(general_path, {"runs": [general, general]})
+        self.assertFails("runs:", "claude: 4 full runs", "96 tool runs")
+
 
 class ApprovalRoot(Root):
     """A two-suite repository with synthetic approval cases and results."""
