@@ -369,6 +369,27 @@ struct ContractExamplesTests {
         #expect(written["job_rules"] == .array([]))
     }
 
+    @Test("material with an explicit null job_rules is malformed", arguments: Self.materials.keys.sorted())
+    func nullJobRules(component: String) throws {
+        let roundTrip = try #require(Self.materials[component])
+        var fields = try #require(ContractDocument.examples(of: component).first?.objectValue)
+        fields["job_rules"] = .null
+        #expect(throws: DecodingError.self) {
+            _ = try roundTrip(.object(fields))
+        }
+    }
+
+    @Test("draft material retains its required nullable values")
+    func draftKeepsNulls() throws {
+        let roundTrip = try #require(Self.materials["DraftMaterial"])
+        let draft = try #require(ContractDocument.examples(of: "DraftMaterial").first)
+        let written = try roundTrip(draft)
+        for key in ["details", "work_reference", "minimum_strength_rank", "budget_cap"] {
+            #expect(draft[key] == .null)
+            #expect(written[key] == .null, "\(key)")
+        }
+    }
+
     @Test("each General job claim round-trips its material through the claim and its typed input",
           arguments: ["rule_check", "contract_draft", "question", "approval"])
     func generalClaim(kind: String) throws {
