@@ -25,6 +25,7 @@ class JobInputsQuestionTest < ActiveSupport::TestCase
     assert_equal [ question.id, task.id, project.id ], input.values_at("question_id", "task_id", "project_id")
     material = input.fetch("material")
     assert_equal Leverage::RoleFiles.text("orchestrator"), material.fetch("role_file")
+    assert_empty material.fetch("job_rules")
     assert_equal({ "text" => "Which label should the button use?", "assumption" => "Use Continue.", "blocking" => true },
       material.fetch("question"))
     assert_equal({

@@ -54,6 +54,22 @@ class BriefingTest < ActiveSupport::TestCase
     refute_equal B.hash_for(@task, seat: @builder), B.hash_for(@task, seat: @reviewer)
   end
 
+  test "a General seat's briefing has no role file, version or hash part" do
+    general = @scenario.seat(role: "general")
+    parts = [
+      { "kind" => "brief", "id" => nil, "version" => 0 },
+      { "kind" => "contract", "id" => @task.id, "version" => @task.contract_version }
+    ]
+    expected = Digest::SHA256.hexdigest(Leverage::Gating::CanonicalJson.dump(parts))
+
+    assert_equal expected, B.hash_for(@task, seat: general)
+    briefing = B.for(@task, seat: general)
+    assert_matches_component("Briefing", briefing)
+    assert_nil briefing.fetch("role_file")
+    assert_nil briefing.fetch("versions").fetch("role_file_version")
+    assert_equal expected, briefing.fetch("hash")
+  end
+
   test "the hash changes with the contract version and with nothing outside the parts" do
     before = B.hash_for(@task, seat: @builder)
     criterion = Criterion.where(task_id: @task.id, kind: "build").first
