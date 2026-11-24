@@ -272,6 +272,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
     case stopping
     case seatDisabled = "seat_disabled"
     case seatRemoved = "seat_removed"
+    case newPrompt = "new_prompt"
 
     /// Whether a seat may send it with a release (`chosen_by: seat`).
     public var isChosenBySeat: Bool {
@@ -281,6 +282,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
         case .stopping: return true
         case .seatDisabled: return false
         case .seatRemoved: return false
+        case .newPrompt: return false
         }
     }
 }

@@ -112,7 +112,7 @@ class JoinContractTest < Minitest::Test
     assert_equal %w[text connection].sort, ColumnsTest::NOT_COLUMNS.fetch("LandingPromptIssued").sort
   end
 
-  def test_the_command_is_registered_with_a_row_that_writes_no_event
+  def test_the_command_is_registered_with_a_row_that_writes_no_seat_event
     assert_includes registry.fetch("commands"), "issue_landing_prompt"
     entry = sm.fetch("commands").find { |command| command["command"] == "issue_landing_prompt" }
     refute_nil entry, "issue_landing_prompt has no commands entry"
@@ -121,7 +121,33 @@ class JoinContractTest < Minitest::Test
     assert_equal 1, rows.size
     assert_equal [ "owner" ], rows.first["who"]
     assert_equal [], rows.first["events"]
-    assert_equal [], rows.first["side_events"]
+  end
+
+  # GA-17 (S7): a new prompt releases the work the seat holds at once, so
+  # that another seat can take it: the old agent has stopped, and the new
+  # one is not told of it. A task is released with the app's reason
+  # new_prompt, a review is released, and a job misses its run time.
+  def test_a_new_prompt_releases_the_work_the_seat_holds
+    reason = registry.fetch("release_reasons").find { |entry| entry["reason"] == "new_prompt" }
+    refute_nil reason, "no release reason new_prompt"
+    assert_equal "app", reason["chosen_by"]
+    row = sm.fetch("groups").flat_map { |group| group["rows"] }.find { |entry| entry["command"] == "issue_landing_prompt" }
+    assert_equal [ %w[task.released seat_holds_working_task], %w[review.released seat_holds_review] ],
+      row["conditional_events"].map { |entry| entry.values_at("event", "when") }
+    side = row["side_events"].map { |entry| entry["event"] }
+    %w[job.timed_out check.finished job.withdrawn hold.closed hold.opened].each { |event| assert_includes side, event }
+    assert_includes row["note"], "new_prompt"
+    assert_includes row["note"], "GA-17"
+    refute_includes row["note"], "stays with it"
+    description = operation("issue_landing_prompt").fetch("description")
+    assert_includes description, "releases"
+    refute_includes description, "stays with it"
+  end
+
+  # GA-12: the example answer starts as every join text does.
+  def test_the_join_example_starts_with_the_pinned_phrase
+    text = schemas.fetch("JoinInstructions").fetch("examples").first.fetch("text")
+    assert_match(/\AYou are connected to Leverage as an? (#{Leverage::Contract.list("seat_roles").join("|")}) agent\./, text)
   end
 
   # GA-13: a seat gets its token only from the call that issues it: the
@@ -140,7 +166,7 @@ class JoinContractTest < Minitest::Test
     readme = File.read(File.join(CONTRACT_ROOT, "README.md"))
     section = readme.split(/^## /).find { |part| part.start_with?("What the join call added") }
     refute_nil section, "README.md has no section for the join call"
-    %w[get_join issue_landing_prompt JoinInstructions LandingPromptIssued SeatConnected LEVERAGE_MCP_COMMAND].each do |name|
+    %w[get_join issue_landing_prompt JoinInstructions LandingPromptIssued SeatConnected LEVERAGE_MCP_COMMAND new_prompt].each do |name|
       assert_includes section, name
     end
   end

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "roles.json",
-  "description": "The five seat roles. prd_may_change and prd_may_read are the PRD's Roles table cells, verbatim; operations are the agent calls a seat of the role may make, which are the registry operations whose caller is one of callers; acts_as names the roles whose work a seat of the role does (a General seat does the work of the other four, contract decision GA-1); role_file says whether its briefing and its jobs' material carry a role file (none for a General seat, GA-2).",
+  "description": "The five seat roles. prd_may_change and prd_may_read are the PRD's Roles table cells, verbatim; operations are the agent calls a seat of the role may make, which are the registry operations whose caller is one of callers; acts_as names the roles whose work a seat of the role does (a General seat does the work of the other four, contract decision GA-1); role_file says whether its briefing and its jobs' material carry a role file (none for a General seat, GA-2); job_rules are the rules, as plain sentences, that the job material of a seat with no role file carries instead, and that the runner's job prompts, the join text and the eval's General mode give it (GA-7): empty for a role with a role file.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,6 +19,7 @@
           "prd_may_read",
           "acts_as",
           "role_file",
+          "job_rules",
           "callers",
           "operations"
         ],
@@ -47,6 +48,14 @@
           "role_file": {
             "description": "Whether a seat of this role gets its role file, api/config/role_files/<role>.md.",
             "type": "boolean"
+          },
+          "job_rules": {
+            "description": "The rules a job material gives a seat of this role in place of a role file (GA-7), in order; empty when role_file is true.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "callers": {
             "type": "array",

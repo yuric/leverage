@@ -224,7 +224,7 @@ class RuleChecksContractTest < Minitest::Test
     material = schemas["CheckMaterial"]
     refute_nil material, "no CheckMaterial component"
     assert_equal "#/components/schemas/CheckMaterial", property("RuleCheckJobInput", "material")&.dig("$ref")
-    assert_equal %w[contract instruction may_answer_not_applicable moment quoted role_file], material.fetch("required").sort
+    assert_equal %w[contract instruction job_rules may_answer_not_applicable moment quoted role_file], material.fetch("required").sort
     contract = schemas.fetch("CheckContract")
     assert_equal %w[criteria details goal title], contract.fetch("required").sort
     criterion_ref = contract.dig("properties", "criteria", "items", "$ref")
@@ -246,7 +246,7 @@ class RuleChecksContractTest < Minitest::Test
     material = schemas["DraftMaterial"]
     refute_nil material, "no DraftMaterial component"
     assert_equal "#/components/schemas/DraftMaterial", property("ContractDraftJobInput", "material")&.dig("$ref")
-    assert_equal %w[brief budget_cap criteria details goal minimum_strength_rank role_file title work_reference],
+    assert_equal %w[brief budget_cap criteria details goal job_rules minimum_strength_rank role_file title work_reference],
       material.fetch("required").sort
     assert_equal "#/components/schemas/CriterionInput", material.dig("properties", "criteria", "items", "$ref")
     assert_equal "#/components/schemas/BriefEntry", material.dig("properties", "brief", "items", "$ref")

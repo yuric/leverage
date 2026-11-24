@@ -320,7 +320,7 @@ class StateMachineTest < Minitest::Test
       next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
       next if %w[hold.closed credential.switched inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")
       next if %w[hold.opened inbox.opened].include?(entry["event"]) &&
-        entry["note"].include?("changes from builder to another role")
+        entry["note"].include?("changes from a role that builds to a role that does not build")
 
       assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
     end

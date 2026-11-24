@@ -120,7 +120,8 @@
     {"reason": "not_suited_to_this_seat", "chosen_by": "seat"},
     {"reason": "stopping", "chosen_by": "seat"},
     {"reason": "seat_disabled", "chosen_by": "app"},
-    {"reason": "seat_removed", "chosen_by": "app"}
+    {"reason": "seat_removed", "chosen_by": "app"},
+    {"reason": "new_prompt", "chosen_by": "app"}
   ],
   "next_kinds": [
     "command", "briefing_changed", "resume", "answer", "action", "rework", "job", "review", "task",

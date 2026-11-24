@@ -790,21 +790,30 @@ agent is connected. Its decisions are GA-1 to GA-11 in
 - The guards `builder_seat_enabled` and `builder_seat_unavailable` read a
   role that builds, `builder` or `general` (GA-8).
 
-After the design was challenged, the contract gained these (decisions
-GA-1 to GA-11 as revised):
+After the design was challenged twice, the contract holds these
+(decisions GA-1 to GA-11 as revised):
 
-- One Eligibility predicate decides who may claim a task, and escalation
-  counts only the seats it lets claim the task: the guard `escalates`
-  says so (GA-1).
-- `jobs.json`: question, approval and contract-draft jobs are also
-  queued by `orchestrator_offline`. A job whose last miss fell while its
-  role counted as offline, with an enabled seat that acts as the role,
-  waits and is queued again when the role is back, as an errored rule
-  check is; the timeout rows' side events and the `orchestrator_offline`
-  row say when. A General seat counts for a role's presence only while it
-  holds nothing and `Jobs.claimable` would give it a waiting job (GA-6).
+- Escalation counts a seat by the standing part of the claim test, busy
+  or not: enabled, not paused, acts as builder, the rank, and no
+  `review.started` by it on the task. Claims add the momentary part; the
+  guard `escalates` says so, and the Eligibility module holds both parts
+  (GA-1).
+- Presence: one sentence, the same in `needs_you.json` (Orchestrator
+  offline's `closes`) and in the `orchestrator_offline` row, says when a
+  General seat counts for the orchestrator: while it polls and holds an
+  orchestrator job, or holds nothing and could claim a waiting one, or
+  holds nothing while none waits. Question, approval and contract-draft
+  jobs end as before; only errored rule checks are queued again by
+  `orchestrator_offline` (GA-6).
 - `change_seat`: a change of role of a running seat the app runs queues
-  `stop_seat` and then `start_seat` (GA-8).
+  only `start_seat`, which the helper hands over (HD-2); Unconfirmed
+  action opens on a change to a role that does not build (GA-8).
+- `roles.json` gains `job_rules` on every row: four sentences for
+  `general`, empty for the roles with a role file. The four job materials
+  gain `job_rules`, set when a General seat claims the job, where its
+  `role_file` is null. The Swift generator writes them as
+  `SeatRole.jobRules`, which the eval's General mode and the runner's
+  tests read (GA-7).
 - `lists.general_tested_providers`: the login providers whose default
   model met both suites' bars run as a General seat, empty until the
   maintainer runs them. The Swift generator writes it as
@@ -824,12 +833,16 @@ from the server. Its decisions are GA-12 to GA-17 in
   (GA-14). The MCP form's settings name the program the API was given in
   `LEVERAGE_MCP_COMMAND` (GA-15).
 - `issue_landing_prompt` (`POST /v1/owner/seats/{id}/landing-prompt`,
-  command `issue_landing_prompt`, a derived row with no event) replaces
-  the read `get_landing_prompt` and its `LandingPrompt`. It issues the
+  command `issue_landing_prompt`, a derived row that writes no seat
+  event) replaces the read `get_landing_prompt` and its `LandingPrompt`.
+  It issues the
   seat's token, ending the one before it, and answers
   `LandingPromptIssued` once: the short prompt with the token in it, and
   the token. A repeat of the key answers `LandingPromptIssuedRepeated`
-  (GA-13).
+  (GA-13). It releases the work the seat holds, as `remove_seat` does but
+  with the seat kept: the registry gains the app's release reason
+  `new_prompt` for a Working task, a review is released and a job misses
+  its run time at once; the row lists the events (GA-17).
 - `connect_seat` returns no token: `SeatConnected` is the seat's id, and
   `SeatConnectedRepeated` is gone. The four one-time responses are
   `SeatTokenPickup`, `LandingPromptIssued`, `HelperTokenIssued` and

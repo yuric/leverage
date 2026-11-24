@@ -32,8 +32,8 @@ What is written:
     codes, helper checks and their states and failures, and a few more);
   * the agent tools, as AgentTools, from the registry's agent operations,
     roles.json, and the OpenAPI summaries and input schemas, and each seat
-    role's acts_as and role_file from roles.json, as SeatRole.actsAs and
-    SeatRole.hasRoleFile.
+    role's acts_as, role_file and job_rules from roles.json, as
+    SeatRole.actsAs, SeatRole.hasRoleFile and SeatRole.jobRules.
 
 The registry keys in SERVER_ONLY (guards, timers' due-time sources, policy
 effects, job kinds) are the server's machinery and are not written; `hooks`
@@ -527,8 +527,9 @@ public enum AgentTools {
 
 
 def role_facts(roles):
-    """The roles each seat role acts as and whether it gets a role file,
-    from roles.json (contract decisions GA-1, GA-2)."""
+    """The roles each seat role acts as, whether it gets a role file and
+    the rules its job material carries instead, from roles.json (contract
+    decisions GA-1, GA-2, GA-7)."""
     seat_roles = [role["role"] for role in roles["roles"]]
     for role in roles["roles"]:
         unknown = [name for name in role["acts_as"] if name not in seat_roles]
@@ -539,6 +540,14 @@ def role_facts(roles):
     acts_as = [(role["role"], "[" + ", ".join(f".{case_name(name)}" for name in role["acts_as"]) + "]")
                for role in roles["roles"]]
     role_file = [(role["role"], "true" if role["role_file"] else "false") for role in roles["roles"]]
+    for role in roles["roles"]:
+        rules = role.get("job_rules")
+        if not isinstance(rules, list) or not all(isinstance(rule, str) and rule for rule in rules):
+            raise Problem(f"roles.json: {role['role']}'s job_rules is not a list of sentences")
+        if bool(rules) == role["role_file"]:
+            raise Problem(f"roles.json: {role['role']} needs job_rules exactly when it has no role file")
+    job_rules = [(role["role"], "[" + ", ".join(swift_string(rule) for rule in role["job_rules"]) + "]")
+                 for role in roles["roles"]]
     return [
         "extension SeatRole {",
         switch_property("actsAs: [SeatRole]",
@@ -546,6 +555,10 @@ def role_facts(roles):
         "",
         switch_property("hasRoleFile: Bool",
                         "Whether a seat of this role gets a role file (roles.json `role_file`).", role_file),
+        "",
+        switch_property("jobRules: [String]",
+                        "The rules a job material gives a seat of this role in place of a role file "
+                        "(roles.json `job_rules`, GA-7).", job_rules),
         "",
         "    /// Whether a seat of this role does the work of `role`.",
         "    public func actsAs(_ role: SeatRole) -> Bool { actsAs.contains(role) }",

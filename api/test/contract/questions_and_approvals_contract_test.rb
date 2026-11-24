@@ -145,16 +145,13 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
       accepted(command).each { |row| assert_match(/no budget hold/, row["note"].to_s, command) }
     end
     offline = rows("orchestrator_offline").first["side_events"].find { |entry| entry["event"] == "check.queued" }
-    # An errored approval check stays with the owner once its owner_approval
-    # hold opened (AE-15); one that erred while the orchestrator counted as
-    # offline waits for it instead (GA-6).
-    assert_match(/errored approval check.*one that opened its owner_approval hold stays with the owner/, offline["note"])
+    assert_match(/errored approval check.*final/, offline["note"])
   end
 
   def test_job_inputs_require_the_material_and_results_have_length_limits
     {
-      "QuestionJobInput" => %w[role_file question contract brief earlier_answers],
-      "ApprovalJobInput" => %w[role_file instruction action contract quoted]
+      "QuestionJobInput" => %w[role_file job_rules question contract brief earlier_answers],
+      "ApprovalJobInput" => %w[role_file job_rules instruction action contract quoted]
     }.each do |component, required|
       assert_includes components.fetch(component).fetch("required"), "material"
       material_name = property(component, "material").fetch("$ref").split("/").last

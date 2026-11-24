@@ -125,6 +125,23 @@ def check_role_facts(cases):
             cases.check(f"SeatRole.{property_name} matches roles.json for {role['role']}",
                         entries.get(role["role"]) == value(role) if "acts_as" in role and "role_file" in role
                         else False, entries.get(role["role"], "missing"))
+    # GA-7: the rules a General seat's job material carries, as the runner's
+    # job prompts and the eval's General mode read them.
+    match = re.search(r"^    public var jobRules: \[String\] \{\n(.*?)^    \}", tools_text, re.MULTILINE | re.DOTALL)
+    body = match[1] if match else ""
+    entries = dict(re.findall(r"^        case \.(\w+): return (\[.*\])$", body, re.MULTILINE))
+    cases.check("SeatRole.jobRules has one case per role of roles.json",
+                len(entries) == len(roles) and len(roles) > 0, body)
+    for role in roles:
+        try:
+            actual = json.loads(entries.get(role["role"], "null"))
+        except json.JSONDecodeError:
+            actual = None
+        cases.check(f"SeatRole.jobRules matches roles.json for {role['role']}",
+                    "job_rules" in role and actual == role["job_rules"], entries.get(role["role"], "missing"))
+    cases.check("SeatRole.jobRules is not empty for a role with no role file",
+                all(role.get("job_rules") for role in roles if role.get("role_file") is False)
+                and any(role.get("role_file") is False for role in roles))
 
 
 def check_readers(cases, swift, readers):
