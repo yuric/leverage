@@ -207,5 +207,7 @@ once it makes its first release.
 
 ### Fixed
 
+- Log verification recognizes rule checks the orchestrator retries before
+  the workspace's offline item opens.
 - Saving an unchanged seat leaves reviewer eligibility updates to the
   timer sweep.
