@@ -249,7 +249,7 @@ final class BoardModel {
             do {
                 let seats = try await api.seats()
                 names = Dictionary(seats.seats.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-                builders = seats.seats.filter { $0.role == .builder }
+                builders = seats.seats.filter { $0.role.actsAs(.builder) }
                 position = min(position, seats.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
                 throw error

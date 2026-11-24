@@ -58,10 +58,6 @@ struct SessionGuard: OwnerAPI {
         try await guarded { try await base.helperRequest(id: id, wait: wait, changedAfter: changedAfter) }
     }
 
-    func landingPrompt(seatID: UUID) async throws -> LandingPrompt {
-        try await guarded { try await base.landingPrompt(seatID: seatID) }
-    }
-
     func addTask(_ request: AddTaskRequest, key: IdempotencyKey) async throws -> CommandOutcome<TaskCreatedResult> {
         try await guarded { try await base.addTask(request, key: key) }
     }
@@ -80,7 +76,7 @@ struct SessionGuard: OwnerAPI {
     }
 
     func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
-        -> CommandOutcome<SeatConnectedAnswer> {
+        -> CommandOutcome<SeatConnected> {
         try await guarded { try await base.connectSeat(request, key: key) }
     }
 
@@ -299,8 +295,9 @@ struct SessionGuard: OwnerAPI {
         try await guarded { try await base.workspaceSettings() }
     }
 
-    func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt {
-        try await guarded { try await base.landingPrompt(seatID: seatID, connection: connection) }
+    func issueLandingPrompt(seatID: UUID, connection: LandingPromptConnection, key: IdempotencyKey)
+        async throws -> CommandOutcome<LandingPromptIssuedAnswer> {
+        try await guarded { try await base.issueLandingPrompt(seatID: seatID, connection: connection, key: key) }
     }
 
     // The Credentials milestone's calls.

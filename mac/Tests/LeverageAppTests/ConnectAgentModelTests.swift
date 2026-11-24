@@ -112,8 +112,8 @@ struct ConnectAgentModelTests {
         #expect(AgentsCopy.modeOwn.text == "Prompt: paste into any agent")
         #expect(AgentsCopy.stateConnectsOnItsOwn.text == "Connected by prompt.")
         #expect(AgentsCopy.newPrompt.text == "New prompt")
-        #expect(AgentsCopy.landingNote.text.contains("holds the agent’s key"))
-        #expect(AgentsCopy.landingNote.text.contains("stops the old one and gives back its work"))
+        #expect(AgentsCopy.landingNote.text.contains("contains the agent’s key"))
+        #expect(AgentsCopy.landingNote.text.contains("stops the old agent and gives back its work"))
     }
 
     @Test("the General note is based on General eval coverage for the selected provider")

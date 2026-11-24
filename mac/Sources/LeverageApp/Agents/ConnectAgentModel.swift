@@ -2,17 +2,7 @@ import Foundation
 import LeverageKit
 import Observation
 
-/// The Connect sheet (MA-10, MA-12, MA-27, IN-29, Q-15): either "Run it on
-/// one of my logins" (role, login, name), where Leverage starts the agent
-/// and no token is shown, or "It connects on its own" (role, name, provider),
-/// where the token is shown once and, below it, a landing prompt to paste
-/// into the agent.
-///
-/// The token is kept only while the sheet shows it, is never written
-/// anywhere but the pasteboard when the owner chooses Copy, and is dropped
-/// by `finish()`. The landing prompt comes from `get_landing_prompt`; a text
-/// that holds the token or anything shaped like one is refused, never shown
-/// or copied.
+/// Connects an agent on a login or shows a one-time landing prompt.
 @MainActor
 @Observable
 final class ConnectAgentModel {
@@ -24,17 +14,10 @@ final class ConnectAgentModel {
     enum Phase: Equatable, Sendable {
         case editing
         case connecting
-        /// A seat that connects on its own: its token is on screen, once.
+        /// A seat that connects by prompt: show the prompt it will use to join.
         case shown
         /// A seat the app runs: connected, and started by Leverage.
         case done
-    }
-
-    enum Landing: Equatable, Sendable {
-        case none
-        case loading
-        case ready(String)
-        case failed(String)
     }
 
     /// One login the owner can pick.
@@ -56,13 +39,13 @@ final class ConnectAgentModel {
         }
     }
 
-    /// The roles Connect offers (MA-10): the planner and the orchestrator are connected like a builder.
-    static let roles: [SeatRole] = [.builder, .reviewer, .planner, .orchestrator]
+    /// The roles Connect offers, in the order shown by the picker (GA-10).
+    static let roles: [SeatRole] = [.general, .builder, .reviewer, .planner, .orchestrator]
 
     var mode: Mode = .runOnLogin {
         didSet { if mode != oldValue { clearFormLines() } }
     }
-    var role: SeatRole = .builder {
+    var role: SeatRole = .general {
         didSet {
             if role != oldValue { clearFormLines() }
             keepALoginPicked()
@@ -81,41 +64,35 @@ final class ConnectAgentModel {
     private(set) var phase: Phase = .editing
     private(set) var nameLine: String?
     private(set) var failure: String?
-    private(set) var shownToken: String?
-    private(set) var tokenGone = false
-    private(set) var landing: Landing = .none
-    private(set) var copiedToken = false
-    private(set) var copiedPrompt = false
-    private(set) var copiedMCPSettings = false
-    private(set) var shownConnection: LandingPromptConnection?
-    private(set) var mcpConfiguration: MCPSettings?
-    var mcpSettings: String? { mcpConfiguration?.json }
+    private(set) var prompt: LandingPromptModel?
     private var allLogins: [LoginChoice] = []
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let copy: @MainActor (String) -> Void
-    @ObservationIgnored private let apiURL: @MainActor () async -> URL?
     @ObservationIgnored private let onConnected: @MainActor () -> Void
     @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var sent: (request: ConnectSeatRequest, key: IdempotencyKey)?
-    @ObservationIgnored private var connectedSeatID: UUID?
+    @ObservationIgnored private let generalTestedProviders: [Provider]
     @ObservationIgnored private var finished = false
 
     init(
         api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
         testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
-        apiURL: @escaping @MainActor () async -> URL? = { nil }
+        generalTestedProviders: [Provider] = ContractLists.generalTestedProviders
     ) {
         self.api = api
         self.copy = copy
         self.onConnected = onConnected
         self.testedProviders = testedProviders
-        self.apiURL = apiURL
+        self.generalTestedProviders = generalTestedProviders
     }
 
-    /// Whether the sheet says an orchestrator is not tested for checking tasks (RV-5).
+    /// Whether the chosen General or Orchestrator seat has eval coverage (GA-11, RV-5).
     var showsNotTestedNote: Bool {
-        role == .orchestrator
+        if role == .general {
+            return chosenProvider.map { !generalTestedProviders.contains($0) } ?? false
+        }
+        return role == .orchestrator
             && OrchestratorTesting.isUntested(
                 provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
                 tested: testedProviders)
@@ -210,34 +187,16 @@ final class ConnectAgentModel {
         let key = (sent?.request == request ? sent?.key : nil) ?? IdempotencyKey()
         sent = (request, key)
         do {
-            let address = selectedConnection == .mcp ? await apiURL() : nil
-            guard !finished else { return }
             let outcome = try await api.connectSeat(request, key: key)
             guard !finished else { return }
             guard let answer = try outcome.completedResult() else { throw LeverageClientError.invalidBody }
             sent = nil
-            let token: String?
-            let alreadyConnected: Bool
-            switch answer {
-            case .shown(let connected):
-                connectedSeatID = connected.seatID
-                token = connected.seatToken
-                alreadyConnected = false
-            case .repeated(let repeated):
-                connectedSeatID = repeated.seatID
-                token = nil
-                alreadyConnected = true
-            }
-            if let selectedConnection, token != nil || alreadyConnected {
-                shownToken = token
-                tokenGone = alreadyConnected
-                shownConnection = selectedConnection
-                if let address {
-                    mcpConfiguration = MCPSettings(apiURL: address, role: request.role)
-                }
+            if let selectedConnection {
+                let prompt = LandingPromptModel(api: api, copy: copy, seatID: answer.seatID, connection: selectedConnection)
+                self.prompt = prompt
                 phase = .shown
                 onConnected()
-                await fetchLandingPrompt()
+                await prompt.issue()
             } else {
                 phase = .done
                 onConnected()
@@ -255,62 +214,10 @@ final class ConnectAgentModel {
         }
     }
 
-    // MARK: the token and the landing prompt
-
-    private func fetchLandingPrompt() async {
-        guard let seatID = connectedSeatID, let shownConnection else { return }
-        landing = .loading
-        do {
-            let prompt = try await api.landingPrompt(seatID: seatID, connection: shownConnection)
-            guard !finished else { return }
-            if prompt.connection != shownConnection || TokenShape.isIn(prompt.text)
-                || shownToken.map({ prompt.text.contains($0) }) == true
-            {
-                landing = .failed(ShellCopy.somethingWentWrong.text)
-            } else {
-                landing = .ready(prompt.text)
-            }
-        } catch is CancellationError {
-            landing = .none
-        } catch {
-            if !finished { landing = .failed(ShellCopy.sentence(for: error).text) }
-        }
-    }
-
-    func retryLandingPrompt() async {
-        guard phase == .shown else { return }
-        await fetchLandingPrompt()
-    }
-
-    func copyToken() {
-        guard let token = shownToken else { return }
-        copy(token)
-        copiedToken = true
-    }
-
-    func copyLandingPrompt() {
-        guard case .ready(let text) = landing else { return }
-        copy(text)
-        copiedPrompt = true
-    }
-
-    func copyMCPSettings() {
-        guard let mcpSettings else { return }
-        copy(mcpSettings)
-        copiedMCPSettings = true
-    }
-
-    /// Done: the token and the connection details are forgotten.
+    /// Closing the sheet drops the prompt and its token.
     func finish() {
         finished = true
-        connectedSeatID = nil
-        shownConnection = nil
-        mcpConfiguration = nil
-        copiedMCPSettings = false
-        shownToken = nil
-        tokenGone = false
-        landing = .none
-        copiedToken = false
-        copiedPrompt = false
+        prompt?.close()
+        prompt = nil
     }
 }

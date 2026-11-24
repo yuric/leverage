@@ -13,9 +13,7 @@ struct ConnectAgentSheet: View {
 
     var body: some View {
         let model = box.model {
-            ConnectAgentModel(
-                api: context.owner, copy: Pasteboard.copy, onConnected: connected,
-                apiURL: { [server = context.runtime.server] in await MCPSettings.liveAPIAddress(from: server) })
+            ConnectAgentModel(api: context.owner, copy: Pasteboard.copy, onConnected: connected)
         }
         ConnectAgentForm(
             model: model,
@@ -45,7 +43,10 @@ struct ConnectAgentForm: View {
                 Group {
                     switch model.phase {
                     case .editing, .connecting: fields.disabled(model.isBusy)
-                    case .shown: shown
+                    case .shown:
+                        if let prompt = model.prompt {
+                            LandingPromptContent(model: prompt)
+                        }
                     case .done: connectedOnLogin
                     }
                 }
@@ -169,102 +170,6 @@ struct ConnectAgentForm: View {
             .font(.system(size: Tokens.FontSize.body, weight: .semibold))
     }
 
-    private var shown: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                sectionTitle(AgentsCopy.tokenTitle.text)
-                if let token = model.shownToken {
-                    Text(verbatim: token)
-                        .font(.system(size: Tokens.FontSize.small, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            Tokens.Palette.inset,
-                            in: RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous))
-                    HStack(spacing: 10) {
-                        Button(model.copiedToken ? AgentsCopy.copied.text : AgentsCopy.copy.text) { model.copyToken() }
-                        Text(AgentsCopy.tokenNote.text)
-                            .font(.system(size: Tokens.FontSize.small))
-                            .foregroundStyle(Tokens.Palette.text2)
-                    }
-                } else if model.tokenGone {
-                    Text(AgentsCopy.tokenGone.text)
-                        .font(.system(size: Tokens.FontSize.body))
-                        .foregroundStyle(Tokens.Tone.stop.foreground)
-                }
-            }
-            if model.shownConnection == .mcp {
-                mcpSettingsSection
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                sectionTitle(AgentsCopy.landingTitle.text)
-                Text(AgentsCopy.landingNote.text)
-                    .font(.system(size: Tokens.FontSize.small))
-                    .foregroundStyle(Tokens.Palette.text2)
-                landingBody
-            }
-        }
-    }
-
-    private var mcpSettingsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionTitle(AgentsCopy.mcpSettingsTitle.text)
-            if let settings = model.mcpConfiguration {
-                Text(AgentsCopy.mcpSettingsNote.text)
-                    .font(.system(size: Tokens.FontSize.small))
-                    .foregroundStyle(Tokens.Palette.text2)
-                Text(verbatim: settings.json)
-                    .font(.system(size: Tokens.FontSize.small, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        Tokens.Palette.inset, in: RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous))
-                Button(model.copiedMCPSettings ? AgentsCopy.copied.text : AgentsCopy.copy.text) { model.copyMCPSettings() }
-                    .accessibilityLabel(AgentsCopy.copyMCPSettings.text)
-                Text(verbatim: settings.plainText)
-                    .font(.system(size: Tokens.FontSize.small, design: .monospaced))
-                    .foregroundStyle(Tokens.Palette.text2)
-                    .textSelection(.enabled)
-            } else {
-                Text(AgentsCopy.mcpSettingsUnavailable.text)
-                    .font(.system(size: Tokens.FontSize.small))
-                    .foregroundStyle(Tokens.Tone.stop.foreground)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var landingBody: some View {
-        switch model.landing {
-        case .none:
-            EmptyView()
-        case .loading:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(AgentsCopy.landingLoading.text)
-                    .font(.system(size: Tokens.FontSize.small))
-                    .foregroundStyle(Tokens.Palette.text2)
-            }
-        case .ready(let text):
-            Text(verbatim: text)
-                .font(.system(size: Tokens.FontSize.small, design: .monospaced))
-                .textSelection(.enabled)
-                .lineLimit(8)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Tokens.Palette.inset, in: RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous))
-            Button(model.copiedPrompt ? AgentsCopy.copied.text : AgentsCopy.copy.text) { model.copyLandingPrompt() }
-        case .failed(let line):
-            Text(verbatim: line)
-                .font(.system(size: Tokens.FontSize.body, weight: .medium))
-                .foregroundStyle(Tokens.Tone.stop.foreground)
-            Button(AgentsCopy.landingRetry.text) { Task { await model.retryLandingPrompt() } }
-        }
-    }
-
     // MARK: buttons
 
     private var actions: some View {
@@ -290,10 +195,5 @@ struct ConnectAgentForm: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-    }
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(verbatim: text)
-            .font(.system(size: Tokens.FontSize.body, weight: .semibold))
     }
 }

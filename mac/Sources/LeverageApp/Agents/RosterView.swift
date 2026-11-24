@@ -14,8 +14,7 @@ struct RosterView: View {
         let model = box.model {
             RosterModel(
                 api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
-                copy: Pasteboard.copy,
-                apiURL: { [server = context.runtime.server] in await MCPSettings.liveAPIAddress(from: server) })
+                copy: Pasteboard.copy)
         }
         RosterContent(
             model: model, connect: { isConnecting = true }, openCredentials: { context.navigator.show(.credentials) }
@@ -28,6 +27,14 @@ struct RosterView: View {
         .sheet(isPresented: changing(model)) {
             if let change = model.changing {
                 ChangeAgentForm(model: change, cancel: { model.cancelChange() })
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { model.newPrompt != nil },
+            set: { if !$0 { model.closeNewPrompt() } }
+        )) {
+            if let prompt = model.newPrompt {
+                NewLandingPromptSheet(model: prompt, dismiss: { model.closeNewPrompt() })
             }
         }
         .sheet(isPresented: $isConnecting) {
@@ -208,18 +215,13 @@ struct RosterRowView: View {
                 if row.canChange {
                     Button(AgentsCopy.change.text) { model.beginChange(row.id) }
                 }
-                if row.canCopyLandingPrompt {
-                    Menu(model.copiedPrompt == row.id ? AgentsCopy.copied.text : AgentsCopy.copyLandingPrompt.text) {
+                if row.canIssueNewPrompt {
+                    Menu(AgentsCopy.newPrompt.text) {
                         ForEach(LandingPromptConnection.allCases, id: \.self) { connection in
                             Button(AgentsCopy.connection(connection).text) {
-                                Task { await model.copyLandingPrompt(row.id, connection: connection) }
+                                model.prepareNewPrompt(row.id, connection: connection)
                             }
                         }
-                    }
-                }
-                if row.canCopyMCPSettings {
-                    Button(model.copiedMCPSettings == row.id ? AgentsCopy.copied.text : AgentsCopy.copyMCPSettings.text) {
-                        Task { await model.copyMCPSettings(row.id) }
                     }
                 }
                 Button(AgentsCopy.remove.text) { model.askToRemove(row.id) }
