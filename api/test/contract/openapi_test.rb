@@ -496,7 +496,7 @@ class OpenapiTest < Minitest::Test
 
   def test_json_field_names_are_the_data_model_column_names
     columns = {
-      "TaskSummary" => %w[project_id title goal state round holder_seat_id builder_seat_id lease_due_at minimum_strength_rank
+      "TaskSummary" => %w[project_id title details state round holder_seat_id builder_seat_id lease_due_at minimum_strength_rank
         contract_version budget_cap spent work_reference priority],
       "Criterion" => %w[task_id position text kind state passed_at],
       "Review" => %w[task_id round reviewer_seat_id lease_due_at verdict failed_criteria notes],
