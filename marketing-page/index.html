@@ -8,7 +8,9 @@
   <title>Age of Lever · Leverage for Mac</title>
   <link rel="icon" href="./assets/leverage.png" type="image/png">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./handoff.css">
   <script type="module" src="./workflow.mjs"></script>
+  <script type="module" src="./handoff.mjs"></script>
 </head>
 <body id="top">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -33,69 +35,60 @@
         <div class="hero-copy">
           <p class="eyebrow">Leverage for Mac</p>
           <h1 id="hero-title">One board.<br><span>All your agents.</span></h1>
-          <p class="lede">Leverage gives your AI agents a shared place to pick up work, hand it off, and take it to Done.</p>
-          <a class="button button-primary" href="#imaginarium">Explore the Imaginarium</a>
         </div>
 
-        <div id="board" class="board-showcase" role="group" aria-label="The Leverage board">
+        <div class="providers">
+          <p>Agents from any provider can connect through the same interface.</p>
+          <ul aria-label="Example agent providers">
+            <li><span class="provider-mark codex" aria-hidden="true">›_</span> Codex</li>
+            <li><span class="provider-mark grok" aria-hidden="true">╱</span> Grok</li>
+            <li><span class="provider-mark claude" aria-hidden="true">✳</span> Claude</li>
+            <li><span class="provider-mark gemini" aria-hidden="true">✦</span> Gemini</li>
+          </ul>
+        </div>
+
+        <div id="board" class="board-showcase" role="group" aria-label="Leverage features">
           <div class="board-light" aria-hidden="true"></div>
-          <figure class="board-window" aria-label="Example Leverage board with tasks in Ready, In progress, and Done">
+          <div class="board-window">
             <div class="window-top">
               <span class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></span>
               <span>Leverage</span>
             </div>
             <div class="window-content">
-              <aside class="board-sidebar" aria-hidden="true">
+              <nav class="board-sidebar" aria-label="Leverage features">
                 <span class="workspace"><img src="./assets/leverage.png" width="21" height="21" alt=""> Leverage</span>
-                <span class="side-selected"><i>▦</i> Board</span>
-                <span><i>◎</i> Agents</span>
-                <span><i>⇄</i> Handoff</span>
-                <span class="sidebar-projects">Projects</span>
-                <span><i>◈</i> All projects</span>
-              </aside>
-              <div class="board-main">
-                <div class="board-toolbar">
-                  <span class="board-title">Board</span>
-                  <span class="board-filter">All projects <span aria-hidden="true">⌄</span></span>
+                <a class="side-selected" href="#board"><i aria-hidden="true">▦</i> Board</a>
+                <a href="#handoffs"><i aria-hidden="true">⇄</i> Handoff</a>
+                <a href="#imaginarium"><i aria-hidden="true">✦</i> Imaginarium</a>
+              </nav>
+              <div class="feature-grid">
+                <div class="feature-card">
+                  <div class="feature-visual feature-board" aria-hidden="true">
+                    <div><span>Ready</span><i></i><i></i></div>
+                    <div><span>In progress</span><i></i></div>
+                    <div><span>Done</span><i></i><i></i></div>
+                  </div>
+                  <h2>Board</h2>
+                  <p>Track every agent’s work in one place.</p>
                 </div>
-                <div class="lanes">
-                  <div class="lane">
-                    <p class="lane-name"><i class="lane-dot ready"></i> Ready <span>1</span></p>
-                    <div class="task-card">
-                      <small>Research</small>
-                      <strong>Summarize customer feedback</strong>
-                      <span class="task-agent">Awaiting agent</span>
-                    </div>
+                <a class="feature-card" href="#handoffs">
+                  <div class="feature-visual feature-handoff" aria-hidden="true">
+                    <span class="provider-mark claude">✳</span>
+                    <span class="feature-relay"><i></i><b>›</b></span>
+                    <span class="provider-mark codex">›_</span>
                   </div>
-                  <div class="lane">
-                    <p class="lane-name"><i class="lane-dot working"></i> In progress <span>1</span></p>
-                    <div class="task-card task-working">
-                      <small>Product</small>
-                      <strong>Build a settings page</strong>
-                      <span class="task-agent"><b class="provider-mark codex" aria-hidden="true">›_</b> Codex</span>
-                    </div>
+                  <h2>Handoff</h2>
+                  <p>Switch accounts automatically when one hits a limit.</p>
+                </a>
+                <a class="feature-card" href="#imaginarium">
+                  <div class="feature-visual feature-gallery" aria-hidden="true">
+                    <span class="art-portfolio"></span><span class="art-todo"></span><span class="art-habits"></span>
                   </div>
-                  <div class="lane">
-                    <p class="lane-name"><i class="lane-dot done"></i> Done <span>1</span></p>
-                    <div class="task-card task-done">
-                      <small>Imaginarium</small>
-                      <strong>Pocket to-do</strong>
-                      <span class="task-agent"><b class="provider-mark checked" aria-hidden="true">✓</b> Review passed</span>
-                    </div>
-                  </div>
-                </div>
+                  <h2>Imaginarium</h2>
+                  <p>Send ready-made projects straight to your agents.</p>
+                </a>
               </div>
             </div>
-          </figure>
-          <div class="providers">
-            <h2>Different providers. One board.</h2>
-            <ul aria-label="Example agent providers">
-              <li><span class="provider-mark codex" aria-hidden="true">›_</span> Codex</li>
-              <li><span class="provider-mark grok" aria-hidden="true">╱</span> Grok</li>
-              <li><span class="provider-mark claude" aria-hidden="true">✳</span> Claude</li>
-              <li><span class="provider-mark gemini" aria-hidden="true">✦</span> Gemini</li>
-            </ul>
-            <p>Agents from any provider can connect through the same interface.</p>
           </div>
         </div>
       </div>
@@ -104,91 +97,149 @@
     <section id="imaginarium" class="imaginarium" aria-labelledby="imaginarium-title">
       <div class="page-width imaginarium-inner">
         <div class="section-copy">
-          <p class="eyebrow gold"><span aria-hidden="true">✦</span> Imaginarium preview</p>
-          <h2 id="imaginarium-title">Start with something worth making.</h2>
-          <p>Browse ready-made prompts for apps, websites, games, and learning projects. See what a well-defined task looks like, then send it to the board and follow it to Done.</p>
+          <h2 id="imaginarium-title">The Imaginarium</h2>
+          <p>Choose a project and watch it go from prompt to Done.</p>
         </div>
 
         <div class="workflow" data-workflow data-stage="0" role="group" aria-label="Imaginarium workflow preview">
           <div class="workflow-header">
-            <span class="workflow-title"><span aria-hidden="true">✦</span> The Imaginarium</span>
-            <span class="demo-label">Interactive demo</span>
+            <span class="workflow-title"><span aria-hidden="true">✦</span> Imaginarium</span>
+            <span class="demo-label">Interactive preview</span>
           </div>
           <div class="workflow-stage">
-            <div class="demo-panel browse-panel" data-demo-panel="0">
-              <div class="demo-panel-copy">
-                <p class="eyebrow">Browse the gallery</p>
-                <h3 data-demo-heading tabindex="-1">Pick something to build.</h3>
-                <p>Start with a prompt and a clear set of checks.</p>
+            <div class="gallery-panel" data-demo-panel="0">
+              <h3 data-demo-heading tabindex="-1">Gallery</h3>
+              <div class="catalog-grid">
+                <article class="catalog-card">
+                  <div class="catalog-art art-todo" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Apps</p><h4>Pocket to-do</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Pocket to-do"
+                      data-title="Pocket to-do" data-brief="Build a local to-do app for daily tasks."
+                      data-check="Tasks stay saved after a restart." data-delivery="A working to-do app with a Today view.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-portfolio" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Websites</p><h4>Glass portfolio</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Glass portfolio"
+                      data-title="Glass portfolio" data-brief="Build a one-page portfolio with frosted glass and selected work."
+                      data-check="Every section fits on a phone." data-delivery="A responsive portfolio you can open locally.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-habits" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Apps</p><h4>Habit streaks</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Habit streaks"
+                      data-title="Habit streaks" data-brief="Build a habit tracker with a calendar of completed days."
+                      data-check="Logging a habit updates its streak." data-delivery="A working tracker with a year-long heatmap.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-budget" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Apps</p><h4>Budget jars</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Budget jars"
+                      data-title="Budget jars" data-brief="Build an offline app that sorts spending into budget jars."
+                      data-check="Importing the sample CSV fills each jar." data-delivery="A budget dashboard with monthly totals.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-runner" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Games</p><h4>Pet runner</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Pet runner"
+                      data-title="Pet runner" data-brief="Build an endless runner starring a corgi in a red scarf."
+                      data-check="The game works with touch and keyboard." data-delivery="A playable browser game with a saved high score.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-tidy" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Automations</p><h4>Downloads tidy-up</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Downloads tidy-up"
+                      data-title="Downloads tidy-up" data-brief="Build a script to organize Downloads by file type and month."
+                      data-check="A dry run previews each move." data-delivery="An organizer with a preview and an undo command.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-flash" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Learning</p><h4>Flashcard coach</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Flashcard coach"
+                      data-title="Flashcard coach" data-brief="Build a flashcard app for Spanish travel phrases."
+                      data-check="Ratings change when cards come back." data-delivery="A study app with starter cards and spaced reviews.">Try</button>
+                  </div>
+                </article>
+                <article class="catalog-card">
+                  <div class="catalog-art art-pet" aria-hidden="true"></div>
+                  <div class="catalog-details">
+                    <div><p>Pictures</p><h4>Storybook pet portrait</h4></div>
+                    <button type="button" class="button button-demo" data-demo-try aria-label="Try Storybook pet portrait"
+                      data-title="Storybook pet portrait" data-brief="Create a pair of watercolor scenes starring a corgi."
+                      data-check="Both scenes are saved as square PNGs." data-delivery="Two storybook illustrations from different angles.">Try</button>
+                  </div>
+                </article>
               </div>
-              <article class="catalog-card">
-                <div class="catalog-art"><img src="./assets/pocket-todo.webp" width="640" height="427" alt="" loading="lazy"></div>
-                <div class="catalog-details">
-                  <div><p>Apps</p><h4>Pocket to-do</h4></div>
-                  <button type="button" class="button button-demo" data-demo-try>Try it</button>
-                </div>
-              </article>
             </div>
-            <div class="demo-panel ready-panel" data-demo-panel="1" hidden>
+            <div class="demo-panel" data-demo-panel="1" hidden>
               <div class="demo-panel-copy">
-                <p class="eyebrow">Get it ready</p>
-                <h3 data-demo-heading tabindex="-1">The brief is ready to go.</h3>
-                <p>Pocket to-do comes with a prompt and checks the agents can work from.</p>
-                <button type="button" class="button button-demo" data-demo-run>Send to Ready</button>
+                <p class="eyebrow">Ready</p>
+                <h3 data-demo-heading tabindex="-1">Sent to the board.</h3>
+                <p>The prompt and its checks are ready for an agent.</p>
               </div>
               <div class="detail-card">
-                <div class="detail-title"><span aria-hidden="true">◈</span><div><small>Imaginarium project</small><strong>Pocket to-do</strong></div></div>
-                <p>Build a small Mac app for your daily tasks.</p>
+                <div class="detail-title"><span aria-hidden="true">✦</span><div><small>Imaginarium project</small><strong data-example="title"></strong></div></div>
+                <p data-example="brief"></p>
                 <h4>Done when</h4>
                 <ul class="checklist">
-                  <li>You can add and complete a task.</li>
-                  <li>Tasks are still there when reopened.</li>
+                  <li data-example="check"></li>
                   <li>A second agent reviews the work.</li>
                 </ul>
               </div>
             </div>
-            <div class="demo-panel progress-panel" data-demo-panel="2" hidden>
+            <div class="demo-panel" data-demo-panel="2" hidden>
               <div class="demo-panel-copy">
                 <p class="eyebrow">In progress</p>
-                <h3 data-demo-heading tabindex="-1">The agents take it from here.</h3>
-                <p>One agent builds from the brief. A second reviews the work against the checks.</p>
+                <h3 data-demo-heading tabindex="-1">An agent starts building.</h3>
+                <p>Codex picks up the task and works through the brief.</p>
               </div>
-              <div class="detail-card build-card">
-                <div class="detail-title"><span aria-hidden="true">◈</span><div><small>Imaginarium project</small><strong>Pocket to-do</strong></div></div>
+              <div class="detail-card">
+                <div class="detail-title"><span aria-hidden="true">▦</span><div><small>In progress</small><strong data-example="title"></strong></div></div>
                 <div class="build-item"><span class="provider-mark codex" aria-hidden="true">›_</span><strong>Codex</strong><span>Building</span></div>
-                <div class="build-item"><span class="provider-mark claude" aria-hidden="true">✳</span><strong>Claude</strong><span>Review</span></div>
                 <div class="build-meter" aria-hidden="true"><i></i></div>
               </div>
             </div>
-            <div class="demo-panel done-panel" data-demo-panel="3" hidden>
+            <div class="demo-panel" data-demo-panel="3" hidden>
+              <div class="demo-panel-copy">
+                <p class="eyebrow">In review</p>
+                <h3 data-demo-heading tabindex="-1">A second agent checks the work.</h3>
+                <p>Claude reviews the result against the original checks.</p>
+              </div>
+              <div class="detail-card">
+                <div class="detail-title"><span aria-hidden="true">◎</span><div><small>In review</small><strong data-example="title"></strong></div></div>
+                <div class="build-item"><span class="provider-mark claude" aria-hidden="true">✳</span><strong>Claude</strong><span>Reviewing</span></div>
+                <div class="build-meter" aria-hidden="true"><i></i></div>
+              </div>
+            </div>
+            <div class="demo-panel" data-demo-panel="4" hidden>
               <div class="demo-panel-copy">
                 <p class="eyebrow">Delivered</p>
                 <h3 data-demo-heading tabindex="-1">Your work lands in Done.</h3>
-                <p>The review passed. Pocket to-do is ready to open on your Mac.</p>
-                <button type="button" class="button button-demo" data-demo-reset>Replay demo</button>
+                <p>The review passed and the result is ready.</p>
+                <button type="button" class="button button-demo" data-demo-reset>Back to gallery</button>
               </div>
               <div class="detail-card delivery-card">
-                <div class="delivery-meta">
-                  <img src="./assets/pocket-todo.webp" width="640" height="427" alt="" loading="lazy">
-                  <strong>Pocket to-do</strong>
-                  <span><span aria-hidden="true">✓</span> Done</span>
-                </div>
-                <ul class="delivery-preview" aria-label="Example tasks in Pocket to-do">
-                  <li><span aria-label="Completed">✓</span> Plan tomorrow</li>
-                  <li><span aria-label="Open"></span> Take a walk</li>
-                </ul>
+                <div class="detail-title"><span aria-hidden="true">✓</span><div><small>Done</small><strong data-example="title"></strong></div></div>
+                <p data-example="delivery"></p>
               </div>
             </div>
           </div>
-          <div class="workflow-steps" role="group" aria-label="Workflow steps">
-            <button type="button" data-demo-step="0" aria-current="step">Browse</button>
-            <button type="button" data-demo-step="1">Send</button>
-            <button type="button" data-demo-step="2">In progress</button>
-            <button type="button" data-demo-step="3">Done</button>
-          </div>
           <p class="sr-only" data-demo-status role="status"></p>
           <noscript>
-            <p class="no-script-flow">Browse a prompt, send it to Ready, then follow it through build and review to Done.</p>
+            <p class="no-script-flow">In the demo, an agent takes the brief, builds the project, and sends it for review before it reaches Done.</p>
           </noscript>
         </div>
       </div>
@@ -200,19 +251,65 @@
         <h2 id="handoffs-title">Pick up where work left off.</h2>
         <p>If a managed agent’s account reaches its limit or signs out, Leverage can resume with its saved progress on the next eligible account in your handoff order.</p>
       </div>
-      <div class="handoff-window" role="group" aria-label="Example handoff from Codex to Claude">
-        <div class="handoff-row">
-          <span class="provider-mark codex" aria-hidden="true">›_</span>
-          <div><strong>Codex</strong><span>Build a settings page</span></div>
-          <span class="handoff-state limit">Limit reached</span>
+      <figure class="handoff-window" data-handoff-diagram aria-labelledby="handoff-task-name" aria-describedby="handoff-description">
+        <div class="handoff-header">
+          <div>
+            <p class="handoff-example">Example task</p>
+            <strong id="handoff-task-name">Build a settings page</strong>
+          </div>
+          <button class="handoff-playback" type="button" data-handoff-playback hidden>Pause</button>
         </div>
-        <div class="handoff-connector" aria-hidden="true"><i></i> Saved progress</div>
-        <div class="handoff-row">
-          <span class="provider-mark claude" aria-hidden="true">✳</span>
-          <div><strong>Claude</strong><span>Continues the same task</span></div>
-          <span class="handoff-state resumed">Resumed</span>
+        <div class="handoff-map" aria-hidden="true">
+          <svg class="handoff-map-track" viewBox="0 0 320 320" focusable="false">
+            <circle class="handoff-track-halo" cx="160" cy="160" r="92"/>
+            <path class="handoff-track-perimeter" d="M83 160 A77 77 0 0 1 160 83"/>
+            <path class="handoff-track-perimeter" d="M160 83 A77 77 0 0 1 237 160" data-from="claude" data-to="codex"/>
+            <path class="handoff-track-perimeter" d="M237 160 A77 77 0 0 1 160 237" data-from="codex" data-to="grok"/>
+            <path class="handoff-track-perimeter" d="M160 237 A77 77 0 0 1 83 160" data-from="grok" data-to="gemini"/>
+            <path class="handoff-track-direct" d="M83 160 H237" data-from="gemini" data-to="codex"/>
+            <path class="handoff-track-direct" d="M237 160 L160 83" data-from="codex" data-to="claude"/>
+            <path class="handoff-track-direct" d="M160 83 V237" data-from="claude" data-to="grok"/>
+            <path class="handoff-track-direct" d="M160 237 L83 160" data-from="grok" data-to="gemini"/>
+            <path class="handoff-track-direct" d="M83 160 L160 83" data-from="gemini" data-to="claude"/>
+            <g class="handoff-track-arrows">
+              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 105.55) rotate(45)"/>
+              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 214.45) rotate(135)"/>
+              <path d="M-4-4 L0 0 -4 4" transform="translate(105.55 214.45) rotate(225)"/>
+            </g>
+            <g class="handoff-track-stops">
+              <circle cx="160" cy="83" r="4"/>
+              <circle cx="237" cy="160" r="4"/>
+              <circle cx="160" cy="237" r="4"/>
+              <circle cx="83" cy="160" r="4"/>
+            </g>
+            <g class="handoff-token" transform="translate(197 92.5) rotate(29)" data-handoff-token>
+              <circle r="11"/>
+              <path d="M-4 0 H4 M.7-3.3 L4 0 .7 3.3"/>
+            </g>
+          </svg>
+          <div class="handoff-stop handoff-stop-top" data-handoff-provider="claude" data-usage="76%" data-state="limit">
+            <span class="handoff-provider"><span class="provider-mark claude">✳</span> Claude</span>
+            <span class="handoff-status"><span data-handoff-usage>100%</span><span data-handoff-status>Limit</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-right" data-handoff-provider="codex" data-usage="38%" data-state="resumed">
+            <span class="handoff-provider"><span class="provider-mark codex">›_</span> Codex</span>
+            <span class="handoff-status"><span data-handoff-usage>38%</span><span data-handoff-status>Resumed</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-bottom" data-handoff-provider="grok" data-usage="52%" data-state="ready">
+            <span class="handoff-provider"><span class="provider-mark grok">╱</span> Grok</span>
+            <span class="handoff-status"><span data-handoff-usage>52%</span><span data-handoff-status>Ready</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-left" data-handoff-provider="gemini" data-usage="24%" data-state="ready">
+            <span class="handoff-provider"><span class="provider-mark gemini">✦</span> Gemini</span>
+            <span class="handoff-status"><span data-handoff-usage>24%</span><span data-handoff-status>Ready</span></span>
+          </div>
         </div>
-      </div>
+        <figcaption class="handoff-legend">
+          <span><i class="handoff-legend-token" aria-hidden="true">→</i> Saved progress</span>
+          <span><i class="handoff-legend-direct" aria-hidden="true"></i> Direct route</span>
+          <span class="sr-only" id="handoff-description">Claude reaches its 100% usage limit, so Codex resumes the task with its saved progress at 38% usage. The example goes clockwise from Claude to Codex, Grok, and Gemini, then takes direct routes between eligible accounts.</span>
+        </figcaption>
+      </figure>
     </section>
   </main>
 

@@ -2,130 +2,140 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mountWorkflow } from '../marketing-page/workflow.mjs'
 
+const fields = ['title', 'brief', 'check', 'delivery']
+
 function fixture() {
   const ownerDocument = { activeElement: null }
-  const elements = new Map()
 
-  function element(selector) {
-    const attributes = new Map()
+  function element() {
     const control = new EventTarget()
+    control.dataset = {}
     control.click = () => {
       control.focus()
       control.dispatchEvent(new Event('click'))
     }
     control.focus = () => { ownerDocument.activeElement = control }
-    control.setAttribute = (name, value) => attributes.set(name, value)
-    control.getAttribute = (name) => attributes.get(name)
-    control.removeAttribute = (name) => attributes.delete(name)
-    elements.set(selector, control)
+    control.hidden = false
     return control
   }
 
-  const steps = Array.from({ length: 4 }, (_, index) => element(`[data-demo-step="${index}"]`))
-  const panels = Array.from({ length: 4 }, (_, index) => element(`[data-demo-panel="${index}"]`))
+  const panels = Array.from({ length: 5 }, element)
   const headings = panels.map((panel) => {
-    const heading = element(Symbol())
+    const heading = element()
     panel.querySelector = (selector) => {
       assert.equal(selector, '[data-demo-heading]')
       return heading
     }
     return heading
   })
-  const tryIt = element('[data-demo-try]')
-  const run = element('[data-demo-run]')
-  const reset = element('[data-demo-reset]')
-  const outside = element(Symbol())
-  const status = element('[data-demo-status]')
-  const children = [[headings[0], tryIt], [headings[1], run], [headings[2]], [headings[3], reset]]
+  const cards = ['Calendar', 'Inventory'].map((example) => {
+    const button = element()
+    fields.forEach((field) => { button.dataset[field] = `${example} ${field}` })
+    return button
+  })
+  const reset = element()
+  const outside = element()
+  const status = element()
+  const examples = Object.fromEntries(fields.map((field) => [field, [element(), element()]]))
+  const children = [[headings[0], ...cards], [headings[1]], [headings[2]], [headings[3]], [headings[4], reset]]
   panels.forEach((panel, index) => {
     panel.contains = (node) => children[index].includes(node)
   })
+  const selectors = new Map([
+    ...panels.map((panel, index) => [`[data-demo-panel="${index}"]`, panel]),
+    ['[data-demo-try]', cards[0]],
+    ['[data-demo-reset]', reset],
+    ['[data-demo-status]', status],
+  ])
   const root = {
     ownerDocument,
     dataset: {},
-    querySelector: (selector) => elements.get(selector),
+    querySelector: (selector) => selectors.get(selector),
+    querySelectorAll(selector) {
+      if (selector === '[data-demo-try]') return cards
+      const [, field] = selector.match(/^\[data-example="(\w+)"\]$/)
+      return examples[field]
+    },
   }
   const timers = new Map()
   let nextTimer = 0
   const scheduler = {
     setTimeout(callback, delay) {
-      assert.equal(delay, 2300)
+      assert.ok(delay > 0)
       timers.set(++nextTimer, callback)
       return nextTimer
     },
-    clearTimeout(handle) {
-      timers.delete(handle)
-    },
   }
-  function finishPlayback() {
+  function advance() {
     assert.equal(timers.size, 1)
     const [handle, callback] = timers.entries().next().value
     timers.delete(handle)
     callback()
   }
-  function assertStage(stage) {
+  function assertStage(stage, announcement) {
     assert.equal(root.dataset.stage, String(stage))
     assert.deepEqual(panels.map((panel) => panel.hidden), panels.map((_, index) => index !== stage))
-    assert.deepEqual(steps.map((step) => step.getAttribute('aria-current')),
-      steps.map((_, index) => index === stage ? 'step' : undefined))
+    if (announcement) assert.equal(status.textContent, announcement)
+  }
+  function assertExample(card) {
+    fields.forEach((field) => {
+      examples[field].forEach((node) => assert.equal(node.textContent, card.dataset[field]))
+    })
   }
 
   mountWorkflow(root, scheduler)
-  return { root, ownerDocument, steps, headings, tryIt, run, reset, outside, status, timers, finishPlayback, assertStage }
+  return { root, ownerDocument, headings, cards, reset, outside, timers, advance, assertStage, assertExample }
 }
 
-test('Try it and Send to Ready play through Done and move focus as panels hide', () => {
+const playback = ['Ready', 'Building', 'In review', 'Done']
+
+test('one Try click fills the selected example and automatically plays through all four stages', () => {
   const demo = fixture()
   assert.equal(demo.root.dataset.enhanced, '')
   demo.assertStage(0)
 
-  demo.tryIt.click()
-  demo.assertStage(1)
-  assert.equal(demo.ownerDocument.activeElement, demo.headings[1])
-
-  demo.run.click()
-  demo.assertStage(2)
-  assert.equal(demo.ownerDocument.activeElement, demo.headings[2])
-
-  demo.finishPlayback()
-  demo.assertStage(3)
-  assert.equal(demo.ownerDocument.activeElement, demo.headings[3])
-  assert.equal(demo.status.textContent, '')
-})
-
-test('step buttons cancel playback, retain focus and announce the new stage', () => {
-  const demo = fixture()
-  demo.tryIt.click()
-  demo.run.click()
-  assert.equal(demo.timers.size, 1)
-
-  demo.steps[0].click()
-  demo.assertStage(0)
-  assert.equal(demo.ownerDocument.activeElement, demo.steps[0])
+  const card = demo.cards[1]
+  card.click()
+  playback.forEach((announcement, index) => {
+    if (index > 0) demo.advance()
+    demo.assertStage(index + 1, announcement)
+    demo.assertExample(card)
+    assert.equal(demo.ownerDocument.activeElement, demo.headings[index + 1])
+  })
   assert.equal(demo.timers.size, 0)
-  assert.match(demo.status.textContent, /browse/i)
-
-  demo.steps[3].click()
-  demo.assertStage(3)
-  assert.equal(demo.ownerDocument.activeElement, demo.steps[3])
-})
-
-test('playback announces Done without moving external focus and can be replayed', () => {
-  const demo = fixture()
-  demo.steps[1].click()
-  demo.run.click()
-  demo.outside.focus()
-
-  demo.finishPlayback()
-  demo.assertStage(3)
-  assert.equal(demo.ownerDocument.activeElement, demo.outside)
-  assert.match(demo.status.textContent, /done/i)
 
   demo.reset.click()
-  demo.assertStage(0)
-  assert.equal(demo.ownerDocument.activeElement, demo.headings[0])
-  demo.tryIt.click()
-  demo.run.click()
-  demo.finishPlayback()
-  demo.assertStage(3)
+  demo.assertStage(0, 'Gallery')
+  assert.equal(demo.ownerDocument.activeElement, card)
+
+  const otherCard = demo.cards[0]
+  otherCard.click()
+  playback.forEach((announcement, index) => {
+    if (index > 0) demo.advance()
+    demo.assertStage(index + 1, announcement)
+    demo.assertExample(otherCard)
+  })
+  assert.equal(demo.timers.size, 0)
+})
+
+test('timed transitions announce stages without stealing external focus', () => {
+  const demo = fixture()
+  demo.cards[0].click()
+  demo.outside.focus()
+
+  playback.slice(1).forEach((announcement, index) => {
+    demo.advance()
+    demo.assertStage(index + 2, announcement)
+    assert.equal(demo.ownerDocument.activeElement, demo.outside)
+  })
+})
+
+test('ignores hidden controls while playback is active', () => {
+  const demo = fixture()
+  demo.cards[0].click()
+  demo.cards[1].dispatchEvent(new Event('click'))
+  demo.reset.dispatchEvent(new Event('click'))
+  demo.assertStage(1, 'Ready')
+  demo.assertExample(demo.cards[0])
+  assert.equal(demo.timers.size, 1)
 })
