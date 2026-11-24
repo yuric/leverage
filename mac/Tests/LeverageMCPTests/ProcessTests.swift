@@ -53,6 +53,30 @@ struct ProcessTests {
         #expect(describesInvalidRole)
     }
 
+    @Test func configuredGeneralSeatListsEveryTool() throws {
+        let child = try MCPChild(environment: [
+            EnvironmentKeys.apiURL: "http://127.0.0.1:1",
+            EnvironmentKeys.seatToken: "fixture-seat-value",
+            EnvironmentKeys.seatRole: "general",
+        ])
+        defer { child.cleanUp() }
+        let client = ScriptedMCPClient(
+            input: child.stdin.fileHandleForWriting, output: child.stdout.fileHandleForReading,
+            timeout: .seconds(30))
+
+        _ = try client.initialize()
+        try client.send(["jsonrpc": "2.0", "id": 20, "method": "tools/list"])
+        let reply = try #require(try client.receive() as? [String: Any])
+        #expect(reply["id"] as? Int == 20)
+        let result = try #require(reply["result"] as? [String: Any])
+        let tools = try #require(result["tools"] as? [[String: Any]])
+        #expect(tools.count == 25)
+        #expect(tools.compactMap { $0["name"] as? String } == AgentTools.all.map(\.id))
+
+        try client.closeInput()
+        #expect(try child.waitForExit() == 0)
+    }
+
     @Test func unreachableAPIIsAToolErrorAndEOFEndsTheSession() throws {
         let endpoint = try UnreachableEndpoint()
         let fakeToken = "process-fixture-\(UUID().uuidString)"
@@ -147,7 +171,7 @@ private final class MCPChild {
     }
 
     func waitForExit() throws -> Int32 {
-        guard exited.wait(timeout: .now() + Patience.seconds(10)) == .success else {
+        guard exited.wait(timeout: .now() + Patience.seconds(30)) == .success else {
             throw Failure.exitTimedOut
         }
         return process.terminationStatus

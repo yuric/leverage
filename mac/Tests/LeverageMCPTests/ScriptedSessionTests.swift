@@ -31,7 +31,7 @@ struct ScriptedSessionTests {
             #expect(response["id"] as? Int == 20)
             let result = try #require(response["result"] as? [String: Any])
             let tools = try #require(result["tools"] as? [[String: Any]])
-            #expect(tools.count == 24)
+            #expect(tools.count == 25)
             let next = try #require(tools.first { $0["name"] as? String == "get_next" })
             let schema = try #require(next["inputSchema"] as? [String: Any])
             #expect(schema["type"] as? String == "object")
