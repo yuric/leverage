@@ -234,7 +234,7 @@ def main():
     # value kept as the raw value where the two differ.
     for line in [
         "public enum TaskState: String, Codable, CaseIterable, Sendable {",
-        "    case imaginarium\n",
+        "    case ideas\n",
         '    case inReview = "in_review"',
         '    case taskClaimed = "task.claimed"',
         '    case claimNextTask = "claim_next_task"',
