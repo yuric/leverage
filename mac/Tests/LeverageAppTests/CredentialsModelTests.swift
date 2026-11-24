@@ -395,7 +395,7 @@ struct CredentialsModelTests {
         let task = Task { await model.keepCurrent(every: .milliseconds(10)) }
         #expect(await ShellFixtures.eventually { model.rows.count == 2 })
         owner.script { $0.credentials = { CredentialsList(credentials: [], asOfSeq: 11) } }
-        #expect(await ShellFixtures.eventually(timeout: .seconds(1)) { model.rows.isEmpty })
+        #expect(await ShellFixtures.eventually { model.rows.isEmpty })
         task.cancel()
         await task.value
         #expect(Fixtures.calls(owner, .listCredentials).count >= 2)
