@@ -10,6 +10,14 @@ once it makes its first release.
 
 ### Added
 
+- A new installation opens the setup assistant: a welcome, two logins
+  from two providers, a General agent for each login, and a first task
+  from three built-in starter tasks or one the owner writes. Leaving it
+  with "Set up later" opens the task board with the setup checklist:
+  four steps that tick when they are true, setup progress in the side
+  pane, and a spotlight that dims the window and leaves the next control
+  lit. The requirements and pictures are in
+  [docs/onboarding/PRD.md](docs/onboarding/PRD.md).
 - Connect defaults to General. A General agent can build, review, draft
   contracts, check tasks, answer questions and decide approvals, one job,
   task or review at a time. A running seat the app manages restarts when
@@ -201,6 +209,7 @@ once it makes its first release.
 
 ### Changed
 
+- The Board tab is named Task board.
 - Pull requests are welcome at any time; opening an issue first is optional.
 - The product is written "Leverage", with a capital L, in the documents and
   in the app's words.

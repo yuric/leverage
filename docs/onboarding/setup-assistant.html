@@ -377,6 +377,8 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
 .ix-notes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .ix-notes li { display: flex; align-items: baseline; gap: 8px; max-width: 86ch; color: #2B2E37; }
 .ix-new { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; background: #D0338A; color: #FFFFFF; font-size: 11px; font-weight: 700; }
+/* "#shot=1": the window alone, for a screenshot */
+.ix-shot .ix-bar, .ix-shot .ix-hint, .ix-shot .ix-notes { display: none; }
 </style>
 </head>
 <body>
@@ -392,7 +394,6 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
       <option value="task">5. First task</option>
       <option value="board">6. Board, task running</option>
       <option value="board-done">6. Board, task done</option>
-      <option value="later">Board, set up later</option>
     </select>
   </div>
   <div class="ix-group"><span>Appearance</span>
@@ -408,14 +409,14 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
 
 <section class="ix-notes" aria-labelledby="ix-notes-title">
   <h2 id="ix-notes-title">What is new here</h2>
-  <p>The app does none of this today. Each item needs a change to the PRD before it is built.</p>
+  <p>What the setup assistant adds to the app. The requirements are in <a href="PRD.md">docs/onboarding/PRD.md</a>; where this mockup and that document differ, the document is right.</p>
   <ul>
     <li><span class="ix-new">New</span><span>The assistant itself: a full-window sequence after “Create your sign-in” on a new installation, with no side pane until it ends.</span></li>
     <li><span class="ix-new">New</span><span>Logins are added inside the assistant, with the same three checks as Add credential. The tiles say which provider is already added, and that Gemini builds but does not review yet.</span></li>
     <li><span class="ix-new">New</span><span>Agents are made automatically: one General agent for each login, named after it. Today the owner connects each agent in Agents.</span></li>
     <li><span class="ix-new">New</span><span>“I only have one subscription” lets the owner continue with one provider, and says where finished work will wait.</span></li>
-    <li><span class="ix-new">New</span><span>A first-task picker: three ready-made tasks in the Imaginarium gallery’s style, or one the owner writes.</span></li>
-    <li><span class="ix-new">New</span><span>“Set up later” on every screen. It opens the board with what exists so far, and a banner with “Continue setup” that returns to the screen that was left.</span></li>
+    <li><span class="ix-new">New</span><span>A first-task picker: three built-in starter tasks, or one the owner writes.</span></li>
+    <li><span class="ix-new">New</span><span>“Set up later” on every screen, and “Skip, take me to the board” on the last. Both open the task board with the setup checklist and its spotlight, which is the other mockup, <a href="checklist-spotlight.html">checklist-spotlight.html</a>.</span></li>
   </ul>
 </section>
 
@@ -432,7 +433,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     { id: 'Grok', tool: 'Grok Build' }
   ];
   var REVIEW_LINE = 'A second agent reviews the work';
-  /* three ready-made tasks from the Imaginarium gallery mockup */
+  /* three built-in starter tasks */
   var SPARKS = [
     { id: 'todo', cat: 'Apps', time: '~40 min', title: 'Pocket to-do', pitch: 'A calm to-do app that lives on your Mac. No account, no cloud.',
       grad: 'linear-gradient(120deg, #4ADE80 0%, #7DF3E1 38%, #38BDF8 100%)', icon: 'apps',
@@ -446,8 +447,8 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   ];
   var LANES = ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'];
   var TABS = [
-    ['board', 'Board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
-    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['imaginarium', 'Imaginarium'], ['settings', 'Settings']
+    ['board', 'Task board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
+    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['settings', 'Settings']
   ];
   /* the steps across the top, and the screens each one covers */
   var STEPS = [['Welcome', ['welcome']], ['Logins', ['login1', 'login2']], ['Agents', ['agents']], ['First task', ['task']]];
@@ -478,7 +479,6 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     project: navIcon('M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'),
     creds: navIcon('M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2'),
     decided: navIcon('M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12zM5.4 8.2l1.8 1.8 3.4-3.8'),
-    imaginarium: navIcon('M7 2.5l1.3 3.2L11.5 7 8.3 8.3 7 11.5 5.7 8.3 2.5 7l3.2-1.3zM12 10.5v3M10.5 12h3'),
     settings: navIcon('M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2')
   };
   var CHECK = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.4l2.3 2.3 4.7-5.2"></path></svg>';
@@ -741,7 +741,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     if (s.spark) {
       var x = sparkOf(s.spark);
       detail = '<div class="lv-ob-detail"><h3 class="lv-h--small">Done when</h3><ol>' + x.done.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ol>' +
-        '<p class="lv-muted">' + esc(x.time) + ' of agent time. It goes to your Imaginarium project.</p></div>';
+        '<p class="lv-muted">' + esc(x.time) + ' of agent time.</p></div>';
     }
     var own = '<button type="button" class="lv-btn lv-btn--row lv-ob-own" data-a="own" data-k="own" aria-pressed="' + s.own + '" aria-expanded="' + s.own + '">Write my own</button>';
     if (s.own) {
@@ -774,10 +774,6 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
       (note ? '<div class="lv-note">' + esc(note) + '</div>' : '') + '</article>';
   }
   function bannerHtml() {
-    if (s.setupLater && !canRunTasks()) {
-      return '<div class="lv-ob-banner lv-ob-banner--wait" role="status"><p>Setup is not finished. No task can run until two logins and their agents are connected.</p>' +
-        '<button type="button" class="lv-btn lv-btn--strong" data-a="resume" data-k="resume">Continue setup</button></div>';
-    }
     if (s.bannerHidden) { return ''; }
     var text, extra = '';
     if (!s.task) {
@@ -786,7 +782,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     } else if (s.task.lane === 'backlog') {
       text = 'You are set up. ' + s.task.title + ' waits in Backlog until you say what done looks like.';
     } else {
-      text = 'You are set up. ' + s.task.builder + ' has started on ' + s.task.title + '. Anything that needs you shows up in Needs you.';
+      text = 'You are set up. Your agents will pick up ' + s.task.title + '. Anything that needs you shows up in Needs you.';
     }
     return '<div class="lv-ob-banner" role="status"><p>' + esc(text) + '</p>' + extra +
       '<button type="button" class="lv-ob-close" data-a="hideBanner" data-k="hide-banner" aria-label="Hide this message">' + CLOSE + '</button></div>';
@@ -885,7 +881,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
           NAV_ICONS[t[0]] + '<span class="lv-tab-label">' + esc(t[1]) + '</span>' + (t[0] === 'needs' && count ? '<span class="lv-count">' + count + '</span>' : '') + '</button>';
       }).join('') + '</nav>' +
       '<div class="lv-side-section"><div class="lv-side-head">Projects</div><div class="lv-nav" role="group" aria-label="Projects">' +
-      ['all', 'Imaginarium'].map(function (p) {
+      ['all'].map(function (p) {
         return '<button type="button" class="lv-tab" data-a="project" data-v="' + p + '" data-k="proj-' + p + '" aria-pressed="' + (s.project === p) + '">' +
           NAV_ICONS[p === 'all' ? 'all' : 'project'] + '<span class="lv-tab-label">' + (p === 'all' ? 'All projects' : p) + '</span></button>';
       }).join('') + '</div></div>' +
@@ -923,6 +919,11 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   /* ----- what each control does; returning false means "nothing changed, do not re-render" ----- */
   function stopChecks() { clearTimers('checks'); s.checks = null; }
   function go(screen) { stopChecks(); s.screen = screen; focusTry = ['ob-head']; }
+  function leaveForChecklist() {
+    var providers = s.logins.map(function (l) { return l.provider; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    var at = !s.logins.length ? 'fresh' : providers.length < 2 ? 'login1' : !s.agentsStarted ? 'login2' : 'agents';
+    window.location.href = 'checklist-spotlight.html#at=' + at + '&look=' + root.getAttribute('data-appearance');
+  }
   function toBoard() { s.screen = 'board'; s.tab = 'board'; s.project = 'all'; focusTry = ['ob-head']; }
   var NEXT = { welcome: 'login1', login1: 'login2', login2: 'agents', agents: 'task' };
   var BACK = { login1: 'welcome', login2: 'login1', agents: 'login2', task: 'agents' };
@@ -939,7 +940,8 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
       go(NEXT[s.screen]);
     },
     back: function () { if (!BACK[s.screen]) { return false; } go(BACK[s.screen]); },
-    later: function () { s.leftAt = s.screen; stopChecks(); s.setupLater = true; s.bannerHidden = false; toBoard(); },
+    /* leaving the assistant hands over to the setup checklist: the other mockup, at the same point */
+    later: function () { stopChecks(); leaveForChecklist(); return false; },
     resume: function (v) { s.setupLater = false; s.bannerHidden = false; go(v || s.leftAt || 'welcome'); },
     pick: function (v) { s.pick = v; focusTry = ['f-cred']; },
     oneOnly: function () { s.oneOnly = !s.oneOnly; focusTry = s.oneOnly ? ['with-one'] : ['one-only']; },
@@ -961,12 +963,12 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
       var c = crew(), x = s.spark ? sparkOf(s.spark) : null;
       var title = x ? x.title : s.title.trim();
       if (!title) { return false; }
-      s.task = { title: title, project: x ? 'Imaginarium' : '', lane: (x || s.done.trim()) ? 'walk' : 'backlog', stage: 0,
+      s.task = { title: title, project: '', lane: (x || s.done.trim()) ? 'walk' : 'backlog', stage: 0,
         builder: c.builder ? c.builder.label : '', reviewer: c.reviewer ? c.reviewer.label : '' };
       s.setupLater = false; s.bannerHidden = false;
       toBoard(); walk();
     },
-    skipTask: function () { s.setupLater = false; s.bannerHidden = false; toBoard(); },
+    skipTask: function () { leaveForChecklist(); return false; },
     hideBanner: function () { s.bannerHidden = true; focusTry = ['open-new']; },
     tab: function (v) { s.tab = v; focusTry = ['tab-' + v]; },
     project: function (v) { s.project = v; s.tab = 'board'; focusTry = ['proj-' + v]; },
@@ -1018,7 +1020,6 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
 
   function syncInspector() {
     stepSelect.value = s.screen !== 'board' ? s.screen
-      : s.setupLater && !canRunTasks() ? 'later'
       : s.task && s.task.lane === 'walk' && s.task.stage === 3 ? 'board-done' : 'board';
   }
   /* jump to a screen with sample state that makes sense for it */
@@ -1028,9 +1029,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     lastScreen = '';
     focusTry = [];
     var claude = makeLogin('Claude', 'Personal'), codex = makeLogin('Codex', 'Team');
-    if (v === 'later') {
-      s.logins = [claude]; s.screen = 'board'; s.setupLater = true; s.leftAt = 'login2';
-    } else if (v === 'login1') {
+    if (v === 'login1') {
       s.screen = 'login1';
     } else if (v === 'login2') {
       s.logins = [claude]; s.screen = 'login2';
@@ -1042,7 +1041,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
         if (v === 'task') { s.screen = 'task'; s.spark = 'todo'; }
         else {
           s.screen = 'board';
-          s.task = { title: SPARKS[0].title, project: 'Imaginarium', lane: 'walk', stage: v === 'board-done' ? 3 : 0, builder: claude.label, reviewer: codex.label };
+          s.task = { title: SPARKS[0].title, project: '', lane: 'walk', stage: v === 'board-done' ? 3 : 0, builder: claude.label, reviewer: codex.label };
           walk();
         }
       }
@@ -1058,8 +1057,15 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   });
   document.getElementById('ix-restart').addEventListener('click', function () { jump('welcome'); });
 
-  /* ----- start ----- */
-  render();
+  /* ----- start: "#step=agents&look=light" opens on that screen ----- */
+  var asked = {};
+  window.location.hash.replace(/^#/, '').split('&').forEach(function (pair) { var kv = pair.split('='); if (kv[1]) { asked[kv[0]] = kv[1]; } });
+  if (asked.look === 'light' || asked.look === 'dark') {
+    root.setAttribute('data-appearance', asked.look);
+    Array.prototype.forEach.call(appearance.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-val') === asked.look ? 'true' : 'false'); });
+  }
+  if (asked.shot) { document.body.classList.add('ix-shot'); }
+  if (asked.step && stepSelect.querySelector('option[value="' + asked.step + '"]')) { jump(asked.step); } else { render(); }
 })();
 </script>
 </body>

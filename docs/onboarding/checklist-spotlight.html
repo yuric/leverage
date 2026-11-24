@@ -289,24 +289,6 @@ select.lv-input { padding: 0 8px; }
 .lv-ob-seg span { flex: 1 1 0; padding: 6px 8px; border-radius: 6px; font-size: var(--fs-small); font-weight: 600; text-align: center; color: var(--text2); }
 .lv-ob-seg span[data-on] { background: var(--surface); color: var(--text); box-shadow: var(--card-shadow); }
 
-/* Imaginarium, in the gallery mockup's own colours */
-.lv-ob-hero { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: var(--r-nav); background: linear-gradient(120deg, rgba(255,122,168,.18), rgba(255,200,87,.14) 45%, rgba(155,240,139,.16)), var(--surface); border: 1px solid var(--line); }
-.lv-ob-hero h3 { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
-.lv-ob-hero h3 span { background: linear-gradient(90deg, #FF6FA3, #FFB84A 55%, #6FD97A); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.lv-ob-sparks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.lv-ob-spark { display: flex; flex-direction: column; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); overflow: hidden; }
-.lv-ob-spark-art { position: relative; height: 76px; }
-.lv-ob-spark-art span { position: absolute; top: 8px; padding: 2px 8px; border-radius: var(--r-chip); background: rgba(16,18,30,.72); color: #FFFFFF; font-size: var(--fs-badge); font-weight: 700; }
-.lv-ob-spark-art span:first-child { left: 8px; }
-.lv-ob-spark-art span:last-child { right: 8px; background: rgba(255,255,255,.9); color: #16181D; }
-.lv-ob-spark-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
-.lv-ob-spark-body h4 { font-size: var(--fs-head); font-weight: 700; }
-.lv-ob-spark-body p { flex: 1 1 auto; font-size: var(--fs-small); color: var(--text2); }
-.lv-ob-try { min-height: 34px; border: 0; border-radius: var(--r-control); background: linear-gradient(90deg, #FF7AA8, #FFC857 55%, #9BF08B); color: #16181D; font: inherit; font-weight: 700; cursor: pointer; }
-.lv-ob-prompt { padding: 10px 12px; border-radius: var(--r-control); background: var(--inset); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-.lv-ob-donelist { display: flex; flex-direction: column; gap: 4px; padding-left: 18px; list-style: decimal; font-size: var(--fs-small); }
-.lv-root ol.lv-ob-donelist { padding-left: 18px; list-style: decimal; }
-
 @media (prefers-reduced-motion: reduce) {
   .lv-root button, .lv-input, .lv-ob-meter span { transition: none; }
   .lv-ob-ring::after, .lv-ob-arrow svg, .lv-ob-live i, .lv-ob-guide.is-new { animation: none; }
@@ -332,6 +314,8 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
 .ix-notes h2 { margin: 0 0 6px; font-size: 13px; color: #E7E9EE; }
 .ix-notes ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
 @media (max-width: 760px) { .ix-notes { grid-template-columns: 1fr; } }
+/* "#shot=1": the window alone, for a screenshot */
+.ix-shot .ix-bar, .ix-shot .ix-hint, .ix-shot .ix-notes { display: none; }
 </style>
 </head>
 <body>
@@ -369,16 +353,16 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       <li>Setup progress in the side pane, above the health line, on every tab.</li>
       <li>In Add credential, a line that asks for a different provider the second time, and a hint beside each provider.</li>
       <li>Connect agent opens with the next login that has no agent already picked.</li>
-      <li>The “first task” step lights both Imaginarium and Add task, so a ready-made task and a written one are equal choices.</li>
+      <li>The “first task” step lights Add task. When the gallery of ready-made tasks is in the app, it lights that too.</li>
+      <li>“Hide this” on the card ends setup at any point.</li>
     </ul>
   </section>
   <section>
-    <h2>Left open on purpose</h2>
+    <h2>How to read it</h2>
     <ul>
-      <li>Which two providers to suggest. A General agent on a Gemini login does not review, and after pull request 21 a General agent on Claude carries “Not tested for checking tasks.”</li>
-      <li>Whether Add task should say that nothing can run yet. Here it stays as it is today: the task waits in Ready.</li>
-      <li>The Imaginarium tab is assumed merged and is drawn far simpler than its own mockup.</li>
-      <li>Nothing here is in the PRD yet. Screens that setup does not touch (Decided for you, Settings) are placeholders.</li>
+      <li>This is what the owner gets after leaving the setup assistant (<a href="setup-assistant.html">setup-assistant.html</a>) with “Set up later” or “Skip, take me to the board”.</li>
+      <li>The requirements are in <a href="PRD.md">docs/onboarding/PRD.md</a>. Where this mockup and that document differ, the document is right.</li>
+      <li>The logins, agents, task and names are sample data. Screens that setup does not touch (Decided for you, Settings) are placeholders.</li>
     </ul>
   </section>
 </div>
@@ -394,29 +378,9 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
     { id: 'Gemini', tool: 'Antigravity', hint: 'Builds, does not review yet' },
     { id: 'Grok', tool: 'Grok Build' }
   ];
-  var SPARKS = [
-    { id: 'todo', cat: 'Apps', time: '~40 min', title: 'Pocket to-do', pitch: 'A calm to-do app that lives on your Mac. No account, no cloud.', art: 'linear-gradient(120deg,#5DE0A8,#7FF0DA 40%,#36B4E8)',
-      prompt: 'Build a local to-do app styled like a paper notebook with soft grain.\n\nFeatures: add, edit, complete and delete tasks; tags, due dates and a Today view. Save everything in a local SQLite file so it survives restarts.',
-      done: ['Tasks are still there after the app restarts', 'The N and Space shortcuts work', 'Tests pass with the command in the README'] },
-    { id: 'portfolio', cat: 'Websites', time: '~25 min', title: 'Glass portfolio', pitch: 'A one-page portfolio with frosted glass and drifting color.', art: 'linear-gradient(120deg,#5C8CFF,#9FB6FF 45%,#B07CFF)',
-      prompt: 'Build a one-page portfolio site with frosted glass panels over slowly drifting color.\n\nSections: about, three projects, contact. It opens from one HTML file with no build step.',
-      done: ['It opens from the file with no server', 'It reads well on a phone', 'Motion stops when the system asks for less'] },
-    { id: 'tidy', cat: 'Automations', time: '~15 min', title: 'Downloads tidy-up', pitch: 'Sorts a messy folder, and shows you the plan before it moves a thing.', art: 'linear-gradient(120deg,#8BE06A,#3FC7A0 55%,#2E9FB0)',
-      prompt: 'Write a script that sorts the Downloads folder by kind and age.\n\nIt prints the plan first and moves nothing until I say yes. It can undo its last run.',
-      done: ['Nothing moves before I confirm', 'Undo puts every file back', 'It never deletes a file'] },
-    { id: 'habits', cat: 'Apps', time: '~35 min', title: 'Habit streaks', pitch: 'Tick off habits and watch a glowing streak map fill in.', art: 'linear-gradient(120deg,#3FE0B0,#19C9C2 45%,#2D7FE0)',
-      prompt: 'Build a habit tracker that runs on my Mac and opens in the browser.\n\nEach habit has a streak map for the last 12 weeks. Data stays in a local file.',
-      done: ['A ticked habit is still ticked tomorrow', 'The streak count is right across a missed day', 'Tests pass with the command in the README'] },
-    { id: 'rsvp', cat: 'Websites', time: '~35 min', title: 'Party RSVP site', pitch: 'A festive event page where friends say yes, no or maybe.', art: 'linear-gradient(120deg,#FF8FC7,#C9A7FF 50%,#7FB2FF)',
-      prompt: 'Build an event page with the date, the place and an RSVP form.\n\nAnswers are saved to a local file I can open as a spreadsheet.',
-      done: ['An answer shows up in the file', 'The same person can change their answer', 'It reads well on a phone'] },
-    { id: 'cards', cat: 'Learning', time: '~30 min', title: 'Flashcard coach', pitch: 'Turns any topic into spaced-repetition flashcards.', art: 'linear-gradient(120deg,#8FA0FF,#C39BFF 50%,#F0A0D8)',
-      prompt: 'Build a flashcard app that makes 40 starter cards for a topic I type.\n\nRating a card decides when it comes back. It shows how many are due today.',
-      done: ['40 starter cards are there on first run', 'Rating a card changes when it comes back', 'The due-today count is right'] }
-  ];
   var TABS = [
-    ['board', 'Board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
-    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['imag', 'Imaginarium'], ['settings', 'Settings']
+    ['board', 'Task board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
+    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['settings', 'Settings']
   ];
   var LANES = ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'];
 
@@ -429,7 +393,6 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
     agents: navIcon('M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2'),
     creds: navIcon('M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2'),
     handoff: navIcon('M3 5.5h9.5L10 3M13 10.5H3.5L6 13'),
-    imag: navIcon('M8 1.8l1.5 4.7 4.7 1.5-4.7 1.5L8 14.2 6.5 9.5 1.8 8l4.7-1.5z'),
     settings: navIcon('M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1'),
     all: navIcon('M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z'),
     project: navIcon('M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z')
@@ -466,7 +429,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       log: [],
       cred: { provider: '', name: '', phase: 'pick', check: 0 },
       agentForm: { name: '', login: '' },
-      spark: '', taskTitle: '', taskDone: '',
+      taskTitle: '', taskDone: '',
       guide: true,           /* the spotlight is on */
       closed: false,         /* the owner chose Finish setup */
       hidden: false          /* the owner hid the finished card */
@@ -555,10 +518,9 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
         body: 'It is filled in for you' + (login ? ' to run on ' + login.label : '') + '. General means it can build, review and check tasks.' };
     }
     if (p.now === 3) {
-      if (s.tab === 'imag') { return null; }
-      return { keys: ['tab-imag', 'open-new'], side: 'right', n: 3,
+      return { keys: ['open-new'], side: 'below', n: 3,
         title: 'Give them something to do',
-        body: 'Pick a ready-made task in Imaginarium, or write your own with Add task. Both are lit.' };
+        body: 'Write what should get done, and how you will know, with Add task. A free agent picks it up.' };
     }
     if (p.now === 5) {
       return { keys: ['task-card'], side: 'left', n: 4, finish: true,
@@ -625,7 +587,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
   function setupHtml(p) {
     if (s.hidden) { return ''; }
     if (s.closed) {
-      return '<section class="lv-ob-finished" aria-label="Setup"><p><b>Setup is finished.</b> For the next one, use Add task or pick something in Imaginarium.</p>' +
+      return '<section class="lv-ob-finished" aria-label="Setup"><p><b>Setup is finished.</b> For the next one, use Add task.</p>' +
         '<button type="button" class="lv-btn lv-btn--small" data-a="hideSetup" data-k="hide-setup">Hide this</button></section>';
     }
     var names = function (list) { return list.join(' and '); };
@@ -642,12 +604,13 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
         text: p.agentsDone ? names(s.agents.map(function (a) { return a.name; })) + ' are running.'
           : 'An agent does the work and runs on a login.' + (p.agents === 1 ? ' 1 of 2 connected.' : '') },
       { n: 3, done: p.taskDone, title: 'Send your first task',
-        text: p.taskDone ? t.title + '.' : 'Pick a ready-made one, or write your own.' },
+        text: p.taskDone ? t.title + '.' : 'Say what should get done, and how you will know it is done.' },
       { n: 4, done: p.finished, title: 'See it reach Done',
         text: p.finished ? 'Built, reviewed and finished.' : 'One agent builds it, the other reviews it. You are asked only if they need you.' }
     ];
     return '<section class="lv-ob-setup" aria-label="Setup"><div class="lv-ob-setup-head"><div><h3 class="lv-h">Get your first task done</h3>' +
-      '<p class="lv-muted">Four steps. Each one ticks when it is true, so you can stop and come back.</p></div>' + meter(p.count) + '<span class="lv-muted">' + p.count + ' of 4</span></div>' +
+      '<p class="lv-muted">Four steps. Each one ticks when it is true, so you can stop and come back.</p></div>' + meter(p.count) + '<span class="lv-muted">' + p.count + ' of 4</span>' +
+      '<button type="button" class="lv-btn lv-btn--link" data-a="hideSetup" data-k="hide-setup">Hide this</button></div>' +
       '<ol class="lv-ob-steps">' + steps.map(function (st) {
         var cls = st.done ? 'is-done' : st.n === p.now ? 'is-now' : 'is-later';
         var foot = st.done ? '<span class="lv-chip lv-chip--done">Done</span>'
@@ -709,15 +672,6 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       '<div><button type="button" class="lv-btn lv-btn--tint" data-a="tab" data-v="agents">Open Agents</button></div></li></ul></div>';
   }
 
-  function imagHtml() {
-    return '<div class="lv-ob-hero"><h3>Pick a spark. <span>Your agents build it.</span></h3>' +
-      '<p class="lv-muted">Ready-made tasks for pictures, websites and small apps that run on your Mac. Send one to Ready and a free agent starts on it.</p></div>' +
-      '<div class="lv-ob-sparks">' + SPARKS.map(function (k) {
-        return '<article class="lv-ob-spark"><div class="lv-ob-spark-art" style="background:' + k.art + '"><span>' + k.cat + '</span><span>' + k.time + '</span></div>' +
-          '<div class="lv-ob-spark-body"><h4>' + k.title + '</h4><p>' + k.pitch + '</p><button type="button" class="lv-ob-try" data-a="trySpark" data-v="' + k.id + '" data-k="try-' + k.id + '">Try it</button></div></article>';
-      }).join('') + '</div>';
-  }
-
   function simpleList(rows, empty) {
     return '<div class="lv-page">' + (rows.length ? '<ul class="lv-list">' + rows.map(function (r) { return '<li class="lv-row"><div class="lv-row-main">' + r + '</div></li>'; }).join('') + '</ul>' : '<p class="lv-muted">' + empty + '</p>') + '</div>';
   }
@@ -728,7 +682,6 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       case 'creds': return credsHtml();
       case 'agents': return agentsHtml();
       case 'needs': return needsHtml();
-      case 'imag': return imagHtml();
       case 'activity': return simpleList(s.log.map(esc), 'No activity to show.');
       case 'handoff': return simpleList(s.logins.map(function (l, i) { return '<b>' + (i + 1) + '. ' + esc(l.label) + '</b>'; }), 'No accounts yet. Add one in Credentials, and it appears here.');
       case 'decided': return simpleList([], 'Nothing has been decided for you yet.');
@@ -784,17 +737,6 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       (s.logins.length ? '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">Connect</button>' : '') + '</div></form></div>';
   }
 
-  function sparkSheet() {
-    var k = SPARKS.filter(function (x) { return x.id === s.spark; })[0];
-    return '<div class="lv-scrim"><form class="lv-sheet" data-f="sendSpark" role="dialog" aria-modal="true" aria-labelledby="sh-spark">' +
-      '<div><div class="lv-muted">' + k.time + ' of agent time</div><h2 class="lv-h" id="sh-spark" style="font-size:20px;font-weight:800">' + k.title + '</h2><p class="lv-muted">' + k.pitch + '</p></div>' +
-      '<div class="lv-step"><div class="lv-label">The prompt</div><div class="lv-ob-prompt">' + esc(k.prompt) + '</div></div>' +
-      '<div class="lv-step"><div class="lv-label">Done when</div><ol class="lv-ob-donelist">' + k.done.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '<li class="lv-muted">A second agent reviews the work</li></ol></div>' +
-      (s.agents.length ? '' : '<div class="lv-note lv-note--wait">No agent is connected yet, so it will wait in Ready until one is.</div>') +
-      '<div class="lv-sheet-actions"><button type="button" class="lv-btn lv-btn--link" data-a="saveIdea">Save it to Ideas</button><span class="lv-spacer"></span>' +
-      '<button type="button" class="lv-btn" data-a="close">Cancel</button><button type="submit" class="lv-ob-try" style="padding:0 18px;min-height:36px" data-k="sheet-save">Send to Ready</button></div></form></div>';
-  }
-
   function taskSheet() {
     return '<div class="lv-scrim"><form class="lv-sheet" data-f="addTask" role="dialog" aria-modal="true" aria-labelledby="sh-task"><h2 class="lv-h" id="sh-task">Add task</h2>' +
       '<div class="lv-field"><label class="lv-label" for="f-title">What should get done?</label><input class="lv-input" id="f-title" data-k="f-title" data-m="taskTitle" type="text" required value="' + esc(s.taskTitle) + '" placeholder="Fix the totals on the invoice page"></div>' +
@@ -805,7 +747,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
   }
 
   function sheetHtml() {
-    return s.sheet === 'cred' ? credSheet() : s.sheet === 'agent' ? agentSheet() : s.sheet === 'spark' ? sparkSheet() : s.sheet === 'task' ? taskSheet() : '';
+    return s.sheet === 'cred' ? credSheet() : s.sheet === 'agent' ? agentSheet() : s.sheet === 'task' ? taskSheet() : '';
   }
 
   /* ===== render ===== */
@@ -824,7 +766,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
           '<span class="lv-tab-label">' + t[1] + '</span>' + (t[0] === 'needs' && needs ? '<span class="lv-count">' + needs + '</span>' : '') + '</button>';
       }).join('') + '</nav>' +
       '<div class="lv-side-section"><div class="lv-side-head">Projects</div><div class="lv-nav"><button type="button" class="lv-tab">' + ICONS.all + '<span class="lv-tab-label">All projects</span></button>' +
-      '<button type="button" class="lv-tab">' + ICONS.project + '<span class="lv-tab-label">Imaginarium</span></button></div></div>' +
+      '</div></div>' +
       '<div class="lv-side-foot">' + pill + health + '</div></aside>' +
       '<div class="lv-content"><header class="lv-toolbar"><div class="lv-toolbar-title"><h2 class="lv-h">' + title + '</h2></div>' +
       '<button type="button" class="lv-btn lv-btn--primary lv-btn--raised" data-a="openTask" data-k="open-new">Add task</button></header>' +
@@ -846,7 +788,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
     showMe: function () { s.guide = true; },
     notNow: function () { s.guide = false; focusKey = 'show-me'; },
     finishSetup: function () { s.guide = false; s.closed = true; focusKey = 'hide-setup'; },
-    hideSetup: function () { s.hidden = true; },
+    hideSetup: function () { s.hidden = true; s.closed = true; s.guide = false; },
     openCred: function () { s.sheet = 'cred'; s.cred = { provider: '', name: '', phase: 'pick', check: 0 }; },
     pick: function (v) { s.cred.provider = v; s.cred.phase = 'name'; focusKey = 'f-cred'; },
     back: function () { s.cred.phase = 'pick'; },
@@ -855,11 +797,8 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       var l = nextLoginWithoutAgent() || s.logins[0];
       s.sheet = 'agent'; s.agentForm = { name: l ? l.label : '', login: l ? l.label : '' }; focusKey = 'sheet-save';
     },
-    openTask: function () { s.sheet = 'task'; focusKey = 'f-title'; },
-    trySpark: function (v) { s.spark = v; s.sheet = 'spark'; focusKey = 'sheet-save'; },
-    saveIdea: function () { startTask(sparkTitle(), 'idea'); }
+    openTask: function () { s.sheet = 'task'; focusKey = 'f-title'; }
   };
-  function sparkTitle() { return SPARKS.filter(function (x) { return x.id === s.spark; })[0].title; }
   function startTask(title, stageName) {
     s.task = { title: title, stage: stageName, builder: null, reviewer: null };
     taskKey = ''; s.sheet = 'none'; s.tab = 'board';
@@ -888,7 +827,6 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       note('You connected ' + (f.name.trim() || login.label) + '.');
       s.sheet = 'none'; s.tab = 'agents';
     },
-    sendSpark: function () { startTask(sparkTitle(), 'ready'); },
     addTask: function () {
       var title = s.taskTitle.trim();
       if (!title || !s.taskDone.trim()) { return false; }
@@ -959,7 +897,16 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
   jump.addEventListener('change', function () { seed(jump.value); render(); });
   document.getElementById('ix-restart').addEventListener('click', function () { jump.value = 'fresh'; seed('fresh'); render(); });
 
-  seed('fresh');
+  /* "#at=login1&look=light&guide=off&tab=creds" opens at that point */
+  var asked = {};
+  window.location.hash.replace(/^#/, '').split('&').forEach(function (pair) { var kv = pair.split('='); if (kv[1]) { asked[kv[0]] = kv[1]; } });
+  var at = jump.querySelector('option[value="' + (asked.at || '') + '"]') ? asked.at : 'fresh';
+  jump.value = at;
+  seed(at);
+  if (asked.look === 'light' || asked.look === 'dark') { root.setAttribute('data-appearance', asked.look); }
+  if (asked.guide === 'off') { s.guide = false; }
+  if (asked.shot) { document.body.classList.add('ix-shot'); }
+  if (asked.tab && TABS.some(function (t) { return t[0] === asked.tab; })) { s.tab = asked.tab; }
   render();
 })();
 </script>

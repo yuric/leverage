@@ -10,7 +10,10 @@ and approvals, and Credentials. On the owner's Mac, the owner can sign in, add l
 connect agents, take a task from a form to Done, and see how it reached
 Done. A run that meets a provider limit or sign-out continues on the
 next eligible account or waits. The database is backed up daily, with a
-tested restore. All seven shipped rules act. The app shows questions,
+tested restore. All seven shipped rules act. A new installation opens the
+setup assistant, and the setup checklist with its spotlight takes over when
+the assistant is left ([docs/onboarding/PRD.md](docs/onboarding/PRD.md));
+the first tab is named Task board. The app shows questions,
 access requests, outward actions, projects and spending, Activity,
 Decided for you, content deletion and workspace settings. Connect offers
 five roles and defaults to General, which builds, reviews, drafts contracts
