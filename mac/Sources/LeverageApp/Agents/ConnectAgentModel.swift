@@ -3,7 +3,7 @@ import LeverageKit
 import Observation
 
 /// The Connect sheet (MA-10, MA-12, MA-27, IN-29, Q-15): either "Run it on
-/// one of my logins" (role, login, name), where leverage starts the agent
+/// one of my logins" (role, login, name), where Leverage starts the agent
 /// and no token is shown, or "It connects on its own" (role, name, provider),
 /// where the token is shown once and, below it, a landing prompt to paste
 /// into the agent.
@@ -26,7 +26,7 @@ final class ConnectAgentModel {
         case connecting
         /// A seat that connects on its own: its token is on screen, once.
         case shown
-        /// A seat the app runs: connected, and started by leverage.
+        /// A seat the app runs: connected, and started by Leverage.
         case done
     }
 

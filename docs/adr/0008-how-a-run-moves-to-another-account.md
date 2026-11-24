@@ -99,5 +99,5 @@ HD-6, HD-9 and HD-10.
 - A run that meets a limit the detectors do not recognise is still
   milestone 2's failing run: three in a row end it with code 4, and it is
   not started again until the app is opened.
-- A seat that connects on its own has no credential known to leverage, so
+- A seat that connects on its own has no credential known to Leverage, so
   nothing is detected for it.

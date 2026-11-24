@@ -215,7 +215,7 @@ enum EvalRun {
     }
 
     /// The environment `ToolConfiguration` reads for this run: this
-    /// process's own variables without any of leverage's, and the run's.
+    /// process's own variables without any of Leverage's, and the run's.
     static func toolEnvironment(
         _ environment: [String: String], provider: Provider, tool: String, source: ToolSource, accountFolder: String?
     ) -> [String: String] {

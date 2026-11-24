@@ -1,7 +1,7 @@
 # Provider terms check
 
 This is the record of what four providers' published documents say about the
-three things leverage does with a subscription login, read on 2026-11-18.
+three things Leverage does with a subscription login, read on 2026-11-18.
 
 > **Snapshot, 2026-11-18.** The reading was done by AI agents (Claude): one
 > reader per provider, then a second reader who opened every cited page again.
@@ -12,7 +12,7 @@ three things leverage does with a subscription login, read on 2026-11-18.
 
 ## What was asked
 
-leverage starts each provider's own command-line tool on the owner's Mac,
+Leverage starts each provider's own command-line tool on the owner's Mac,
 signed in with the owner's own subscription, and gives it tasks. It lets the
 owner connect more than one login of the same provider and moves work to the
 next one when a limit is reached. It never copies a login out of the
@@ -264,7 +264,7 @@ This record holds findings only. Decisions made from them belong in
     forbid using subscription logins in other tools could not be confirmed
     on an official page and are not used here.
 
-## What this means for leverage
+## What this means for Leverage
 
 - Moving work to a **different provider** was not one of the three
   questions. The readers did not look for it, and this record says nothing

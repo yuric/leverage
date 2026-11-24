@@ -125,7 +125,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .tokenGone: "This agent was connected already, and its token can't be shown again. Remove it and connect it again."
         case .copy: "Copy"
         case .landingTitle: "Landing prompt"
-        case .landingNote: "Paste this into the agent. It tells the agent how to work with leverage and what to confirm with you."
+        case .landingNote: "Paste this into the agent. It tells the agent how to work with Leverage and what to confirm with you."
         case .landingLoading: "Getting the landing prompt…"
         case .landingRetry: "Try again"
         case .done: "Done"

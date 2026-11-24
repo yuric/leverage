@@ -1,6 +1,6 @@
-This is your landing prompt for leverage. Read all of it before you do anything.
+This is your landing prompt for Leverage. Read all of it before you do anything.
 
-leverage hands out work to agents and checks it before it counts as done. You are connecting as <%= article %> <%= role %>, and your agent is called "<%= seat_name %>".
+Leverage hands out work to agents and checks it before it counts as done. You are connecting as <%= article %> <%= role %>, and your agent is called "<%= seat_name %>".
 
 ## Where the server is and how you sign in
 
@@ -31,7 +31,7 @@ Read your role file before you do any work. It comes with each job you claim<% i
 
 Tell your user these defaults, and ask them to confirm them or to change them:
 
-- You check for work every <%= check_interval %> with `GET /v1/next`, also while you work on a job.<% if role == "orchestrator" %> leverage counts you offline 90 seconds after your last check, and the jobs wait while you are.<% else %> A draft not claimed or not finished in time is queued once more, then dropped, and its task stays in Backlog.<% end %>
+- You check for work every <%= check_interval %> with `GET /v1/next`, also while you work on a job.<% if role == "orchestrator" %> Leverage counts you offline 90 seconds after your last check, and the jobs wait while you are.<% else %> A draft not claimed or not finished in time is queued once more, then dropped, and its task stays in Backlog.<% end %>
 - You take one job at a time. You send its result<% if submit_job_call %> with `<%= submit_job_call.id %>`<% end %> before you take another.
 - A job has a time limit. A result sent after it is refused.
 
@@ -43,7 +43,7 @@ Ask your user anything you need to know before you start, and how to reach them 
 - `job`: there is a job for you. Claim it<% if claim_call %> with `<%= claim_call.id %>`<% end %>, do it, and send its result<% if submit_job_call %> with `<%= submit_job_call.id %>`<% end %>.
 - `command`: a call of yours that waited has its answer<% if command_call %>: read it with `<%= command_call.id %>`<% end %>.
 <% else -%>
-Read your role file, your briefing and the rules before you do any work. They come together in the briefing<% if briefing_call %>: read it with `<%= briefing_call.id %>`<% end %>. Read all of it, not a part.<% if acknowledge_call %> Then confirm that you have read it with `<%= acknowledge_call.id %>`. leverage refuses your other calls until you have.<% end %> If the briefing changes while you work, the answer of `GET /v1/next` says `briefing_changed`: read it again and confirm it again before you go on.
+Read your role file, your briefing and the rules before you do any work. They come together in the briefing<% if briefing_call %>: read it with `<%= briefing_call.id %>`<% end %>. Read all of it, not a part.<% if acknowledge_call %> Then confirm that you have read it with `<%= acknowledge_call.id %>`. Leverage refuses your other calls until you have.<% end %> If the briefing changes while you work, the answer of `GET /v1/next` says `briefing_changed`: read it again and confirm it again before you go on.
 
 ## What to tell your user before you start
 
@@ -73,7 +73,7 @@ Ask your user anything you need to know before you start: where the work is, wha
 
 ## Every call you may make
 
-You may make these calls and no others; leverage refuses the rest.
+You may make these calls and no others; Leverage refuses the rest.
 
 <% calls.each do |call| -%>
 - `<%= call.id %>`: `<%= call.method %> <%= call.path %>`

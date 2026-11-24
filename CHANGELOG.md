@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to leverage are recorded in this file.
+All notable changes to Leverage are recorded in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project will follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
@@ -44,7 +44,7 @@ once it makes its first release.
   written at sign-up or, for an existing installation, when the server
   starts. Four first act in the Questions and approvals milestone. The owner's rules
   gate a task becoming ready, an agent starting it, its work being
-  submitted and its review passing; a rule leverage checks itself answers
+  submitted and its review passing; a rule Leverage checks itself answers
   at once, and one a model judges is a job for an orchestrator agent,
   which the helper starts like any other agent, while the task waits and
   goes on by itself when the check ends. A check that cannot run, an agent
@@ -102,7 +102,7 @@ once it makes its first release.
   form to Done. The PRD's Core loop milestone: `Leverage.app` starts the
   server and its timer sweep in Docker containers on the owner's Mac,
   creates the owner's sign-in, adds and verifies logins through the helper
-  (installing a provider's tool where leverage can), connects a builder and
+  (installing a provider's tool where Leverage can), connects a builder and
   a reviewer, which the helper runs with the reference runner on those
   logins, and takes a task from the Add task form through review to Done,
   with every step in the event log and on the task page. A seat that
@@ -185,6 +185,8 @@ once it makes its first release.
 ### Changed
 
 - Pull requests are welcome at any time; opening an issue first is optional.
+- The product is written "Leverage", with a capital L, in the documents and
+  in the app's words.
 
 ### Fixed
 

@@ -62,7 +62,7 @@ public enum SubprocessTermination: Equatable, Sendable {
     case signaled(Int32)
 }
 
-/// Why leverage ended the child, when it did.
+/// Why Leverage ended the child, when it did.
 public enum SubprocessEnd: Equatable, Sendable {
     case timeLimit
     case stop

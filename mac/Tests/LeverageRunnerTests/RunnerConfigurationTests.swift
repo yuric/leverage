@@ -164,7 +164,7 @@ struct RunnerConfigurationTests {
         #expect(!dumped.contains(fakeToken))
     }
 
-    @Test("the tool's own settings keep no leverage variable")
+    @Test("the tool's own settings keep no Leverage variable")
     func toolBaseEnvironment() throws {
         var values = environment()
         values["LEVERAGE_HELPER_TOKEN"] = "lvh_made_up_helper_token"

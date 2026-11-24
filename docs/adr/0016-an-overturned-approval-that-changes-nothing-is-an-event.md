@@ -33,4 +33,4 @@ The event type is in both the registry and the PRD's Event types table.
 Replay leaves the task and action state as recorded by earlier events.
 The owner can record an objection once to the latest approval of a
 completed action on a Finishing or Done task. The completed
-outward action cannot be undone through leverage.
+outward action cannot be undone through Leverage.

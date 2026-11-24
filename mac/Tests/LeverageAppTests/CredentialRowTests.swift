@@ -59,9 +59,9 @@ struct CredentialRowTests {
     @Test("unavailable distinguishes a reader missing, a version mismatch and a temporary failure")
     func unavailable() {
         #expect(row(provider: .gemini, reading: .unavailable).readingLine ==
-                "Unavailable. leverage does not read usage for Gemini yet.")
+                "Unavailable. Leverage does not read usage for Gemini yet.")
         #expect(row(reading: .unavailable, version: "codex 9.8.7 (built)", testedVersions: ["v0.1.2"]).readingLine ==
-                "Unavailable. leverage has not been checked with Codex 9.8.7 yet.")
+                "Unavailable. Leverage has not been checked with Codex 9.8.7 yet.")
         #expect(row(reading: .unavailable, version: "codex 0.1.2 (built)", testedVersions: ["v0.1.2"]).readingLine ==
                 "Unavailable right now.")
         #expect(row(reading: .unavailable, testedVersions: ["v0.1.2"]).readingLine == "Unavailable right now.")
@@ -83,7 +83,7 @@ struct CredentialRowTests {
     func token() {
         let token = row(kind: .apiToken, provider: .openrouter, state: .signedOut, model: "Example")
         #expect(token.usage == "This token no longer works. Remove it and add it again.")
-        #expect(token.tokenLine == "Not used for work yet. leverage checks it and shows what its provider reports.")
+        #expect(token.tokenLine == "Not used for work yet. Leverage checks it and shows what its provider reports.")
         #expect(token.modelLine == nil)
         #expect(token.actions == [.rename, .verify, .remove])
     }

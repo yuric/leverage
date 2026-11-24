@@ -347,7 +347,7 @@ struct InboxWatcherTests {
         #expect(rig.watcher.openCount == 1)
         #expect(
             NeedsYouCopy.notificationsOff.text
-                == "Notifications are off for leverage. Turn them on in System Settings to be told when something needs you.")
+                == "Notifications are off for Leverage. Turn them on in System Settings to be told when something needs you.")
     }
 
     @Test("before anything is asked the line is not shown")

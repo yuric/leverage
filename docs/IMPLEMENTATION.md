@@ -1,6 +1,6 @@
 # Implementation progress
 
-This file says where the build of leverage stands, so that any agent or
+This file says where the build of Leverage stands, so that any agent or
 person can pick it up after an interruption.
 
 ## How to use this file
@@ -258,7 +258,7 @@ The plan's `[owner-later]` choices are in question 10, not here.
   may share a provider or a login. CL-5: the runner is its own executable.
   CL-9: the account folder reaches the runner as `LEVERAGE_SETTINGS_DIR`.
   CL-10: every child gets an allow-listed environment; a tool gets no
-  leverage token. CL-11: a verdict reports the tool's tokens and spend 0.
+  Leverage token. CL-11: a verdict reports the tool's tokens and spend 0.
   CL-15: Add ends with the login listed. CL-18: no Remove credential; a
   failed add deletes its folder and row. CL-20: a second Gemini login is
   refused. CL-22: a failed tool run is a release; three in a row end the
@@ -1111,7 +1111,7 @@ evidence levels are those of
 | Claude (Claude Code) | Yes in code: the vendor's script `https://claude.ai/install.sh`, run with `/bin/bash` | By polling `claude auth status`; whether `claude auth login` opens the browser itself and needs no terminal is not known | Installer `documented`; status `probe`; sign-in `help` |
 | Codex | Yes in code: the vendor's script `https://chatgpt.com/codex/install.sh`, run with `/bin/sh` | By polling `codex login status`; what `codex login` does is not known | Installer `documented`; status `probe`; sign-in `help` |
 | Gemini (Antigravity) | Yes in code: the vendor's script `https://antigravity.google/cli/install.sh`, run with `/bin/bash` | By repeating the test prompt every 15 seconds; a signed-out `agy` has never been seen | Installer `documented`; test prompt `probe` (signed in only) |
-| Grok (Grok Build) | No: no documented source was reachable; the pop-up says leverage can't install it yet | By reading `grok models`; `grok login --oauth` is a browser login by its help | Status `probe` (signed out only); sign-in `help`; installer `unverified` |
+| Grok (Grok Build) | No: no documented source was reachable; the pop-up says Leverage can't install it yet | By reading `grok models`; `grok login --oauth` is a browser login by its help | Status `probe` (signed out only); sign-in `help`; installer `unverified` |
 
 ## Measurements
 
@@ -1203,7 +1203,7 @@ Code and Codex (its default account) signed in; Grok's tool is not signed
 in on the owner's Mac, so it was not run. Each tool ran at its default
 model ("the tool's default": none names its model in a check's answer),
 on the sign-in it holds, with no second Codex account. Claude Code and
-Codex ran with the Mac user's own settings folders, not a folder leverage
+Codex ran with the Mac user's own settings folders, not a folder Leverage
 made for a seat, so a model, a setting or a memory file set there may have
 applied, and the model they ran is not known. Two runs per model,
 each exit 0 with 72 tool runs and no second try: the first on the
@@ -1321,7 +1321,7 @@ outward action was carried out: the approved action of the approval
 check is the stand-in builder touching a file in the script's folder.
 The Claude Code MCP developer check used a stand-in reviewer, turned
 every rule off and supplied its own MCP settings. It pre-allowed the
-leverage tools and confirmed the defaults in its prompt.
+Leverage tools and confirmed the defaults in its prompt.
 The real checks ran on the code at 4dd2872, before the documents step
 and the adversarial review.
 
@@ -1633,11 +1633,11 @@ skeleton's pull request description, as rule AR-004 asks.
         agents come back when the app opens. Alternative: the owner starts
         each agent again.
       - **CL-6**: the runner makes every call itself and reads marker lines
-        from the tool's answer; the tool never calls leverage. Alternative:
+        from the tool's answer; the tool never calls Leverage. Alternative:
         give the tool the MCP server.
       - **CL-7**: the tool runs in the task's folder, or in
         `<support folder>/work/<task id>/` when the task names none.
-        Alternative: always a folder of leverage's own.
+        Alternative: always a folder of Leverage's own.
       - **CL-8**: a builder's run may edit its folder and a reviewer's is
         read-only; a Claude run does not load the folder's own settings.
         Antigravity's read-only mode answered a plain prompt with a plan,
@@ -1697,7 +1697,7 @@ skeleton's pull request description, as rule AR-004 asks.
         submit.
       - `task.contract_changed` v1 gained `minimum_strength_rank` in place
         (contract DB-48), so the replay rebuilds the rank Complete contract
-        sets; a payload version may change in place until leverage's first
+        sets; a payload version may change in place until Leverage's first
         release, each change recorded in `api/contract/decisions.md`.
         Alternative: a v2 payload, with readers for both.
       - The speed run spreads its seats' ticks evenly over one tick, as

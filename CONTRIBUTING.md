@@ -1,16 +1,16 @@
-# Contributing to leverage
+# Contributing to Leverage
 
 Thank you for considering a contribution. This document explains how to
 propose a change and what to expect when you do.
 
 By participating you agree to follow the
 [Code of Conduct](CODE_OF_CONDUCT.md). Please also read the short
-[maintenance policy](MAINTENANCE.md): leverage has one maintainer, responses
+[maintenance policy](MAINTENANCE.md): Leverage has one maintainer, responses
 are best effort, and the project's scope is deliberately narrow.
 
 ## Where the project is
 
-leverage is in its definition phase: the requirements in
+Leverage is in its definition phase: the requirements in
 [docs/PRD.md](docs/PRD.md) are being written and there is no product code yet. Right
 now the most valuable contributions are:
 
@@ -73,7 +73,7 @@ If you work in a fork, use the name of the remote that points here.
 
 ## AI-assisted contributions
 
-leverage itself is built largely with AI coding agents, so AI-assisted
+Leverage itself is built largely with AI coding agents, so AI-assisted
 contributions are welcome. What matters is that a person stands behind the
 work. The rules are the same for everyone, including the maintainer, with
 the one exception below.
@@ -117,7 +117,7 @@ Agents working in this repository should follow [AGENTS.md](AGENTS.md).
 
 ## Licensing of contributions
 
-leverage is licensed under the [MIT License](LICENSE). By submitting a
+Leverage is licensed under the [MIT License](LICENSE). By submitting a
 contribution you agree that it is licensed under the same terms, and you
 confirm that you have the right to submit it. That holds whether you wrote it
 by hand or with a tool. Do not submit code or content you do not have the

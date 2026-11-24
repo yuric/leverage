@@ -131,7 +131,7 @@ public struct ServerFiles: Sendable {
 
     private static func envText(_ values: [String: String]) -> String {
         let names = order.filter { values[$0] != nil } + values.keys.filter { !order.contains($0) }.sorted()
-        return "# Written by leverage for the server on this Mac. The values were generated\n"
+        return "# Written by Leverage for the server on this Mac. The values were generated\n"
             + "# on this Mac; keep this file private.\n"
             + names.map { "\($0)=\(values[$0]!)\n" }.joined()
     }

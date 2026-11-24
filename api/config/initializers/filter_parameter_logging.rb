@@ -8,7 +8,7 @@ Rails.application.config.filter_parameters += [
   /\A(?:name|plan)\z/
 ]
 
-# A leverage token (lvs_ seat, lvh_ helper, lvo_ owner session; milestone 2
+# A Leverage token (lvs_ seat, lvh_ helper, lvo_ owner session; milestone 2
 # plan IN-18) is filtered wherever it appears in a logged value, whatever
 # the parameter is called: the names above catch the fields meant to hold
 # one, and this catches a token sent where none belongs. The form is

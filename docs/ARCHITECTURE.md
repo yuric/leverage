@@ -5,7 +5,7 @@
 | **Status** | Rules in force. The Core loop, Handoff, Rule checks, Questions and approvals, and Credentials are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
 | **Last updated** | 2026-11-21 |
 
-This document describes how leverage is built: its components, how they
+This document describes how Leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
 describes the system **as it exists**, not as it is hoped to be. Planned work
 belongs in the PRD or in issues.
@@ -326,7 +326,7 @@ flowchart LR
   app -- "starts, token in its environment" --> helper
   helper -- "starts, seat token, account and work in its environment" --> runner
   runner -- "exit code 5 and one line: limit or signed out" --> helper
-  runner -- "starts, no leverage token" --> tool
+  runner -- "starts, no Leverage token" --> tool
   app -- "HTTP, 127.0.0.1" --> api
   helper -- "HTTP, 127.0.0.1" --> api
   runner -- "HTTP, 127.0.0.1" --> api
@@ -338,7 +338,7 @@ flowchart LR
   backup -- "one dump a day" --> backups
 ```
 
-leverage runs on the owner's Mac. The Mac app starts the server's four
+Leverage runs on the owner's Mac. The Mac app starts the server's four
 containers through Docker Desktop ([ADR 0004](adr/0004-one-app-bundle-for-the-first-run.md)):
 the API, the sweep that applies due timers, the daily backup
 ([ADR 0010](adr/0010-daily-backup-and-restore.md)) and PostgreSQL. Once
@@ -563,7 +563,7 @@ adds the MCP server.
   `PendingTokens` holds a pasted value until Add checks it. The vault
   saves successful tokens by credential ID. `CredentialCleanup` cancels
   work for a forgotten credential and handles local deletion.
-- **Owns:** the account folders, the tools leverage installed, and the
+- **Owns:** the account folders, the tools Leverage installed, and the
   runs' logs, under the support folder (see [Data](#data)).
 - **Depends on:** LeverageKit, Foundation and macOS Security when available.
 - **Code:** `mac/Sources/LeverageHelper/`; tests in
@@ -685,7 +685,7 @@ the first change that needs one chooses it and adds it here.
 | Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
 | How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
 | Child processes | None. | `Subprocess` in LeverageKit uses an absolute program path, an allow-listed environment, its own process group, drained outputs and a time limit or stop that ends the group. Standard input defaults to `/dev/null`. The session form keeps input open for the helper channel and Codex app-server. `ProviderCatalog.toolEnvironment` builds the tool environment and `HelperSupervisor` builds the helper's environment. Docker gets only `HOME` and `PATH`. |
-| Requests to a provider's API | None. | The helper's `ProviderHTTP` uses an ephemeral `URLSession` for a single bounded GET and returns only the catalog's allowed response headers. The leverage API's `HTTPTransport` uses separate authentication and exposes no headers. |
+| Requests to a provider's API | None. | The helper's `ProviderHTTP` uses an ephemeral `URLSession` for a single bounded GET and returns only the catalog's allowed response headers. The Leverage API's `HTTPTransport` uses separate authentication and exposes no headers. |
 | App to helper | Helper work is queued through the owner interface. | `HelperSupervisor` starts and stops the helper and sends the two messages in [Interfaces](#interfaces) on standard input. The support folder holds the pending cleanup queue described in [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md). |
 | Shared helpers | `Leverage::Contract` (`api/lib/leverage/contract.rb`) reads `api/contract/` and validates a payload against its schema with `json_schemer`. | LeverageKit. |
 
@@ -786,7 +786,7 @@ and `USER` for Claude.
   file and the `.env` with the database passwords and `SECRET_KEY_BASE`,
   folder 0700, files 0600), `accounts/<credential id>/` (a Claude or Codex
   login's own settings folder, made new by Add and removed after a failed
-  Add or confirmed Remove), `tools/<provider>/` (a tool leverage unpacked),
+  Add or confirmed Remove), `tools/<provider>/` (a tool Leverage unpacked),
   `work/<task id>/` (a task's folder when it names none), `logs/`
   (`helper.log` and one `seat-<id>.log` per run), `backups/` (the daily
   dumps, folder 0700), `inbox-cursor` (mode 0600: one number, the `seq` of
@@ -812,7 +812,7 @@ and `USER` for Claude.
 ## Interfaces
 
 `api/contract/` is the definition of every interface between two parts of
-leverage; [its README](../api/contract/README.md) says how each file is
+Leverage; [its README](../api/contract/README.md) says how each file is
 written and read. This section is the pointer AR-002 asks for, and states
 the stability rules.
 
@@ -1068,9 +1068,9 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   end-to-end secret scan fails if a reply's marker or long line is found
   outside the stand-ins' folder.
 - **Secrets.** A provider login, sign-in token, link, code or API token
-  stays out of the leverage API, stored outcomes, events and logs.
+  stays out of the Leverage API, stored outcomes, events and logs.
   The reference runner's
-  allow-listed tool environment excludes every leverage token. A tool
+  allow-listed tool environment excludes every Leverage token. A tool
   acting as an external MCP client needs access to the seat token via
   its settings, to pass it to the MCP process as described above. The helper's
   requests carry only non-secret inputs (`params`), and the landing prompt
@@ -1100,7 +1100,7 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   copied off the Mac.
 - **What is not protected.** Agents run as the owner's own Mac account
   (PRD, Risks): a provider's tool can read whatever that account can, and
-  leverage gates only what goes through it. A seat that connects on its
+  Leverage gates only what goes through it. A seat that connects on its
   own is whatever program holds its token. For Codex, Gemini and Grok the
   quote frame is the only wall between task text and a checker's reach
   (the table above).

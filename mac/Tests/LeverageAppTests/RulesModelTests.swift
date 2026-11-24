@@ -135,8 +135,8 @@ struct RulesModelTests {
         ])
         #expect(result.map { $0.appliesTo() } == Array(repeating: "Every task", count: 7))
         #expect(result.map(\.checkedBy) == [
-            "leverage checks this itself", "An agent checks this", "leverage checks this itself",
-            "leverage checks this itself", "leverage checks this itself", "leverage checks this itself",
+            "Leverage checks this itself", "An agent checks this", "Leverage checks this itself",
+            "Leverage checks this itself", "Leverage checks this itself", "Leverage checks this itself",
             "An agent checks this",
         ])
         #expect(result.map(\.ifItFails) == ["Stop the task", "Stop the task", nil, nil, nil, nil, nil])

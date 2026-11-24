@@ -8,7 +8,7 @@ import Foundation
 /// `acceptEdits` (help), each with `--model` and `--effort` when set (help).
 /// `--strict-mcp-config` takes no value and `--setting-sources user` is a
 /// value its help lists (WP11's step 0): with `CLAUDE_CONFIG_DIR` on the
-/// account folder leverage made, the work folder's own settings, hooks and
+/// account folder Leverage made, the work folder's own settings, hooks and
 /// MCP servers are not loaded (CL-8). Never `--bare` (it ignores the login)
 /// and never a mode or flag that skips permissions.
 ///

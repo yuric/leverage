@@ -25,10 +25,10 @@
 # the provider has one, its status command run under the same environment.
 # The prompt runs once, in a new empty folder under a
 # temporary folder, with the runner's allow-listed environment (no token,
-# no leverage variable, no account folder variable) and the time limit
+# no Leverage variable, no account folder variable) and the time limit
 # above; the driver ends the tool's whole process group when the limit
 # passes. LEVERAGE_DEV_TOOL_LOGIN=1, which nothing else sets, lets the
-# runner start Claude or Codex with no account folder of leverage's own, so
+# runner start Claude or Codex with no account folder of Leverage's own, so
 # the tool uses the sign-in it already holds for this Mac user. Nobody
 # signs in here: a status that says signed out is "skipped: not signed in"
 # (exit 4). Gemini (agy) has no status command, so a signed-out agy shows

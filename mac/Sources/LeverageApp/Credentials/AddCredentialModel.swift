@@ -5,7 +5,7 @@ import Observation
 /// The Add credential pop-up (MA-17, IN-23, IN-24, CR-9, CR-13): step 1
 /// picks a provider, and step 2 names and checks a login or API token.
 /// A failed check stays in the pop-up with one line and a Retry. A login
-/// with a missing tool also shows what leverage can install (PV-5).
+/// with a missing tool also shows what Leverage can install (PV-5).
 ///
 /// After a failed check, Retry sends Add with the same credential id and a
 /// new key (IN-24). An unanswered Add keeps its key. An accepted token Add
@@ -38,7 +38,7 @@ final class AddCredentialModel {
         var id: HelperCheck { check }
     }
 
-    /// The question a missing tool asks, or the plain sentence when leverage cannot install it.
+    /// The question a missing tool asks, or the plain sentence when Leverage cannot install it.
     struct InstallAsk: Equatable, Sendable {
         let text: String
         let canInstall: Bool

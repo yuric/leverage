@@ -116,7 +116,7 @@ struct DetectorFixtureTests {
             exit: 0, stdout: #"{"type":"result","is_error":false,"result":"done"}"#,
             stderr: "retrying after 429 Too Many Requests"),
         Inline(
-            provider: .claude, why: "a limit reply cut off by leverage's time limit",
+            provider: .claude, why: "a limit reply cut off by Leverage's time limit",
             exit: 1, stdout: #"{"type":"result","is_error":true,"result":"You have reached your weekly limit."}"#,
             stderr: "", endedBy: .timeLimit),
         Inline(
@@ -155,7 +155,7 @@ struct DetectorFixtureTests {
         #expect(detector.outcome(of: record, at: Self.endedAt) == .failed)
     }
 
-    // Review: a run killed by a signal leverage did not send (a crash, an
+    // Review: a run killed by a signal Leverage did not send (a crash, an
     // outside kill) ended before it finished its reply: never read.
     @Test("a run killed by a signal is never read, whatever it printed", arguments: try ReplyFile.all().filter {
         $0.meta.kind == "run" && ["limit", "signed_out"].contains($0.meta.expect)

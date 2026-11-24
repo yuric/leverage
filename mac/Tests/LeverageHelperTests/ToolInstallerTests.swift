@@ -87,7 +87,7 @@ struct ToolInstallerTests {
         #expect(downloads.addresses.isEmpty)
     }
 
-    @Test("the installer script gets an allow-listed environment: no leverage token")
+    @Test("the installer script gets an allow-listed environment: no Leverage token")
     func scriptEnvironment() throws {
         let rig = try HelperRig()
         let installer = ToolInstaller(settings: rig.settings, timings: fastTimings)

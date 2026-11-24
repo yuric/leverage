@@ -285,7 +285,7 @@ struct AddCredentialModelTests {
         #expect(model.signInNote == nil)
     }
 
-    @Test("Gemini says to sign in to Antigravity on this Mac, and that leverage continues on its own")
+    @Test("Gemini says to sign in to Antigravity on this Mac, and that Leverage continues on its own")
     func geminiNote() async {
         let owner = owner(answers: [
             Fixtures.request(requestID, progress: [Fixtures.progress(.signedIn, .waitingForSignIn)], updated: 1),
@@ -295,7 +295,7 @@ struct AddCredentialModelTests {
         await start(model, .gemini)
         let task = Task { await model.signIn() }
         #expect(await ShellFixtures.eventually { model.signInNote != nil })
-        #expect(model.signInNote == "Sign in to Antigravity on this Mac. leverage continues on its own.")
+        #expect(model.signInNote == "Sign in to Antigravity on this Mac. Leverage continues on its own.")
         model.cancel()
         await task.value
     }
@@ -313,7 +313,7 @@ struct AddCredentialModelTests {
         await start(model)
         let task = Task { await model.signIn() }
         #expect(await ShellFixtures.eventually { model.installAsk != nil })
-        #expect(model.installAsk?.text == "Claude Code is not installed. leverage can install Claude Code from https://example.invalid/install.sh.")
+        #expect(model.installAsk?.text == "Claude Code is not installed. Leverage can install Claude Code from https://example.invalid/install.sh.")
         #expect(model.installAsk?.canInstall == true)
         model.cancel()
         await task.value
@@ -378,7 +378,7 @@ struct AddCredentialModelTests {
         await task.value
     }
 
-    @Test("a tool leverage cannot install gets the plain sentence, and no Install button")
+    @Test("a tool Leverage cannot install gets the plain sentence, and no Install button")
     func cannotInstall() async {
         let none = InstallOffer(installable: false, what: "Grok Build", sourceURL: nil)
         let owner = owner(answers: [
@@ -388,7 +388,7 @@ struct AddCredentialModelTests {
         await start(model, .grok)
         let task = Task { await model.signIn() }
         #expect(await ShellFixtures.eventually { model.installAsk != nil })
-        #expect(model.installAsk?.text == "leverage can't install Grok Build yet. Install it, and leverage continues on its own.")
+        #expect(model.installAsk?.text == "Leverage can't install Grok Build yet. Install it, and Leverage continues on its own.")
         #expect(model.installAsk?.canInstall == false)
         await model.install()
         #expect(Fixtures.calls(owner, .installTool).isEmpty)
@@ -672,7 +672,7 @@ struct AddCredentialModelTests {
     func tokenRetry() async throws {
         let cases: [(HelperCheckFailure, String)] = [
             (.noAnswer, "OpenRouter could not complete the token check."),
-            (.tokenStoreUnavailable, "leverage could not access this Mac’s Keychain. Check Keychain access and try again."),
+            (.tokenStoreUnavailable, "Leverage could not access this Mac’s Keychain. Check Keychain access and try again."),
             (.providerMismatch, "Check the token’s provider and add it again. Remove the old token first if it is listed."),
             (.rejected, "OpenRouter rejected this token."),
             (.unreachable, "OpenRouter could not be reached. Check this Mac's internet connection."),
@@ -729,7 +729,7 @@ struct AddCredentialModelTests {
         await model.addToken()
         #expect(runtime.fakeHelper.messages.value.count == 1)
         #expect(Fixtures.calls(owner, .addCredential).count == 0)
-        #expect(model.failure == "Agents are not running on this Mac, so leverage cannot check the token.")
+        #expect(model.failure == "Agents are not running on this Mac, so Leverage cannot check the token.")
         #expect(model.canRetry)
         runtime.fakeHelper.sendFailure.value = nil
         await model.retry()

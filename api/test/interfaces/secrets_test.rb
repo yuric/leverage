@@ -206,6 +206,6 @@ class SecretsTest < ActionDispatch::IntegrationTest
 
   def assert_private_response(*values)
     values.each { |value| refute response.body.include?(value), "a private value reached the response" }
-    refute TOKEN_SHAPE.match?(response.body), "a leverage token reached the response"
+    refute TOKEN_SHAPE.match?(response.body), "a Leverage token reached the response"
   end
 end

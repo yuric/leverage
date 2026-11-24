@@ -90,7 +90,7 @@ the suite, or unless exactly one of `LEVERAGE_TOOL_DIR` and
 reads no account folder: each tool uses the sign-in it already holds.
 Without `--account-folder`, Claude Code and Codex then read the Mac user's
 own settings folders (`~/.claude`, and `~/.codex` unless
-`LEVERAGE_EVAL_CODEX_HOME` names another), not a folder leverage made for a
+`LEVERAGE_EVAL_CODEX_HOME` names another), not a folder Leverage made for a
 seat, so a model, a setting or a memory file set there may apply, and the
 model that ran is not known. The runs in `RESULTS.md` were made that way.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
