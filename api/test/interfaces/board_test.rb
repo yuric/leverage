@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../engine/entries/jobs_support"
 
 # The board card's milestone 4 fields (get_board; milestone 4 plan §2.3,
 # RD-27): checking, while a transition of the task is pending and no hold
@@ -7,6 +8,7 @@ require "test_helper"
 # Read from the rows Scenario builds through Reads::Board (a Snapshot:
 # CommittingTestCase) and held to openapi.json's BoardTask.
 class BoardReadTest < CommittingTestCase
+  include JobsSupport
   include OpenapiAssertions
 
   def board
@@ -137,6 +139,37 @@ class BoardReadTest < CommittingTestCase
     assert_equal [ limited.id, reset ], account_wait(page(task))
   end
 
+  test "a General seat that reviewed a Ready task does not hide the builder's limited login" do
+    free = scenario.credential(provider: "codex", position: 1)
+    limited = scenario.credential(provider: "claude", position: 2)
+    reviewer = scenario.seat(role: "general", credential: free)
+    builder = scenario.seat(role: "builder", credential: limited)
+    reset = scenario.database_now.change(usec: 0) + 1.hour
+    scenario.limit_credential(limited, reset_at: reset)
+    task = ready_after_failed_review(builder, reviewer)
+
+    assert_equal "credential_limit", TaskStep.find_by!(task_id: task.id, kind: "wait_ready", closed_at: nil).cause_kind
+    expected = [ limited.id, reset ]
+    assert_equal [ expected, expected ], [ account_wait(card(task)), account_wait(page(task)) ]
+  end
+
+  test "Ready account waits on the board reflect each task's General review history" do
+    free = scenario.credential(provider: "codex", position: 1)
+    signed_out = scenario.credential(provider: "claude", position: 2)
+    reviewer = scenario.seat(role: "general", credential: free)
+    builder = scenario.seat(role: "builder", credential: signed_out)
+    scenario.sign_out_credential(signed_out)
+    first = scenario.task(state: "ready")
+    reviewed = ready_after_failed_review(builder, reviewer)
+    last = scenario.task(state: "ready")
+
+    cards = board.fetch("tasks")
+    assert_equal [ first.id, reviewed.id, last.id ], cards.map { |entry| entry.dig("task", "id") }
+    expected = [ [ nil, nil ], [ signed_out.id, nil ], [ nil, nil ] ]
+    assert_equal expected, cards.map { |entry| account_wait(entry) }
+    assert_equal expected, [ first, reviewed, last ].map { |task| account_wait(page(task)) }
+  end
+
   test "an eligible General seat that connects on its own removes a mixed workspace account wait" do
     limited = scenario.credential
     scenario.seat(role: "reviewer", credential: limited)
@@ -210,5 +243,19 @@ class BoardReadTest < CommittingTestCase
     assert_equal true, card(escalated)["waits_for_stronger_agent"]
     assert_equal false, card(ready)["waits_for_stronger_agent"]
     assert_equal false, card(working)["waits_for_stronger_agent"]
+  end
+
+  private
+
+  def ready_after_failed_review(builder, reviewer)
+    task = scenario.task(state: "in_review", builder: builder)
+    review = scenario.review(task, reviewer: reviewer)
+    hash = Leverage::Briefing.hash_for(task, seat: reviewer, review: review)
+    assert_completed(seat_command(reviewer, "acknowledge_review_briefing", { "id" => review.id, "briefing_hash" => hash }))
+    criterion = Criterion.find_by!(task_id: task.id, kind: "build")
+    assert_completed(seat_command(reviewer, "fail_review", { "id" => review.id, "verdict" => "failed",
+      "failed_criteria" => [ criterion.id ], "notes" => "", "tokens" => 0, "spend" => 0 }))
+    assert_equal "ready", task.reload.state
+    task
   end
 end
