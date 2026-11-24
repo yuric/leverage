@@ -354,12 +354,12 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
   end
 
   test "get_owner_command renders a token command's stored result as repeated, without a token" do
-    store_command(key: "stored-3", command: "connect_seat", result: { "seat_id" => @seat_id })
+    store_command(key: "stored-3", command: "issue_landing_prompt", result: { "seat_id" => @seat_id, "connection" => "http" })
     get "/v1/owner/commands/stored-3", headers: headers
     assert_response :ok
     assert_response_matches_contract
-    assert_equal({ "seat_id" => @seat_id, "repeated" => true }, response.parsed_body["result"])
-    assert_no_match(/token/, response.body)
+    assert_equal({ "seat_id" => @seat_id, "connection" => "http", "repeated" => true }, response.parsed_body["result"])
+    assert_no_match(/seat_token|text/, response.body)
   end
 
   test "get_owner_command is 404 for an unknown key, another caller's key and another workspace's key" do

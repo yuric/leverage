@@ -111,7 +111,7 @@ class PromptConnectedAgentsTest < ActionDispatch::IntegrationTest
     review = receipt.dig("result", "review", "id")
     acknowledge("review", review, token)
     change("give_verdict", id: review, token: token,
-      body: { "verdict" => "passed", "notes" => "The sample matches.", "tokens" => 0, "spend" => 0 })
+      body: { "verdict" => "passed", "notes" => "The sample matches.", "failed_criteria" => [], "tokens" => 0, "spend" => 0 })
   end
 
   def acknowledge(kind, id, token)

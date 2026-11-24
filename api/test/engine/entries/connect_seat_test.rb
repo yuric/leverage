@@ -43,7 +43,8 @@ class ConnectSeatTest < ActiveSupport::TestCase
 
     assert_nil repeat.once
     assert_equal first.result, repeat.result
-    assert_equal digest, Seat.find(first.result.fetch("seat_id")).token_hash
+    assert_nil digest
+    assert_nil Seat.find(first.result.fetch("seat_id")).token_hash
     assert_equal 1, Seat.where(workspace_id: @scenario.workspace_id, name: "Made-up builder").count
   end
 
