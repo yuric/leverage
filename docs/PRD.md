@@ -8,7 +8,7 @@ The first user is the owner who is building it. The intended user is a person wh
 
 Version 1 is the core task loop (contract, claim, build, review, done) with two things built in from the first commit. The first is an append-only event log that times every step. The second is system rules that the app enforces as checks on task transitions. The Analytics page comes later as a view over this data, because the data cannot be backfilled. Version 1 also has Credentials: provider logins, API tokens and the order in which one takes over from another. All of it is built, in an order set by continuity: account setup joins the core loop, and handoff comes directly after it, so the first thing added to a working loop is that work survives a provider limit or a dead login.
 
-Version 1 is three programs and two clients. The server is a Ruby on Rails application in API mode with PostgreSQL as its only datastore. It runs in Docker containers, one installation per owner, and holds the event log, the tasks and the rules. For the first run the containers run on the owner's Mac, and the same containers move to a server the owner controls later. The Mac app is the owner's interface: a native app written in Swift with SwiftUI, a thin client of the server's API. There is no browser version. The helper is a separate program on the owner's Mac, written in Swift. It starts each provider's own tool with the login that tool already holds, and reports to the server. A subscription login stays inside the provider's own tool: it never leaves the Mac and never reaches the server. The two clients are the reference runner, which the helper starts for a seat the app runs, and the MCP server (see Clients).
+Version 1 is three programs and two clients. The server is a Ruby on Rails application in API mode with PostgreSQL as its only datastore. It runs in Docker containers, one installation per owner, and holds the event log, the tasks and the rules. For the first run the containers run on the owner's Mac, and the same containers move to a server the owner controls later. The Mac app is the owner's interface: a native app written in Swift with SwiftUI, a thin client of the server's API. There is no browser version. The helper is a separate program on the owner's Mac, written in Swift. It starts each provider's own tool with the login that tool already holds, and reports to the server. A login stays inside the provider's own tool: it never leaves the Mac and never reaches the server. The two clients are the reference runner, which the helper starts for a seat the app runs, and the MCP server (see Clients).
 
 ## Goals and non-goals
 
@@ -25,6 +25,7 @@ Goals:
 7. Agents from any provider connect through one HTTP interface. A reference runner and an MCP server ship with version 1. The reference runner is built for Claude first.
 8. The owner adds provider logins and API tokens in one place, sees each account's limits and available resets, and sets which credential takes over when one hits a limit or is found signed out.
 9. Work survives an interruption. When a provider limit is hit or a login is found signed out after work is saved, the task continues on another credential or resumes from the saved work, the recovery time is recorded, and the app tells the owner what happened in plain language.
+10. The owner pays for Leverage with a monthly subscription that includes support, through Stripe, from a menu at the foot of the left pane that stays quiet until a payment needs the owner.
 
 Non-goals for version 1:
 
@@ -34,6 +35,7 @@ Non-goals for version 1:
 - Teams and sharing. One owner per workspace.
 - Managing agents' files or branches. The app stores a reference to where the work lives and links to evidence.
 - A view across workspaces for the operator. It needs a privacy decision first.
+- PayPal and Cash App Pay, yearly prices, trials, discounts and coupons, and selling through the Mac App Store.
 
 ## Terms
 
@@ -58,13 +60,15 @@ Non-goals for version 1:
 | Builder | The seat that last claimed a task. It is kept through In review and Finishing and cleared when the task returns to Ready or Backlog or is cancelled. A seat has held a task if it ever had a builder lease on it; reviews and jobs do not count. |
 | General seat | A seat whose role is General: it does the work of the other four roles, builds, reviews, drafts contracts and does the orchestrator's jobs, one piece of work at a time. It gets no role file. |
 | Briefing | What an agent must read before it works: the applicable rules, the project brief, its role file (a General seat has none) and the contract. |
-| Credential | How a seat reaches its provider: a subscription login used through the provider's own tool, or an API token. |
+| Credential | How a seat reaches its provider: a login used through the provider's own tool, or an API token. |
 | Handoff order | The owner's ordered list of all credentials, whatever their provider. When one hits a limit or is found signed out, the next one takes over. |
 | Candidate | For a seat the app runs: its own credential and every credential below it in the handoff order. A candidate is available when it is signed in and not limited. An API token is not available until what carries out a task on a token is decided. |
 | Helper | The program on the owner's Mac that starts each provider's own tool with the login that tool already holds, reads usage and reports to the server. It signs in to the server with its own token. Its launcher is the part that starts and stops the seats the app runs. |
 | Work reference | Free text saying where a task's work lives: a folder, a repository, a branch or a commit. The server never opens it. |
 | Saved work | What the app can observe of a task's progress: the criteria already passed with their evidence, and the work reference recorded on the task. |
 | Recovery time | The time from the event that records an interruption (a limit reached, or a sign-out found during a run) to the handoff when another credential takes over at once, and otherwise to the first event written for the task by the seat that continues it. |
+| Subscription | The owner's paid monthly subscription to Leverage, which includes support. Never a provider's subscription, which is reached through a login. |
+| Plan | One of the subscription's prices and what it includes. A provider's plan is always called "the provider's plan". |
 
 ## Task lifecycle
 
@@ -221,7 +225,7 @@ The log is one table that the server appends to. No row is ever updated or delet
 4. **Order and time under the lock.** `seq` comes from a counter row read under the lock, not from a database sequence. `at` is the wall clock read once after the lock is taken, and every event of one command shares it. So `seq` order is commit order, `at` never decreases as `seq` grows, and a reader that tails by `seq` misses nothing.
 5. **Timers before commands.** Any timer already due on a task is applied before a command on that task is validated, with `effective_at` set to the due time. `effective_at` never decreases within a task.
 6. **Idempotent commands.** Every mutating call carries an idempotency key. A repeat with the same key writes nothing and returns the command's current outcome: pending, completed with its result, or refused with its cause.
-7. **References, not content.** Payloads hold ids, numbers and short fixed values. They hold no prompt text, file content, question text or secrets. A credential appears in a payload by its id only, never by its name, email, plan or settings folder. Content lives in its own tables and can be deleted without touching the log.
+7. **References, not content.** Payloads hold ids, numbers and short fixed values. They hold no prompt text, file content, question text or secrets. A credential appears in a payload by its id only, never by its name, email, provider's plan or settings folder. Content lives in its own tables and can be deleted without touching the log.
 8. **Versioned payloads.** Each event type has a payload schema with a version. A change adds a version. Old events are never rewritten.
 9. **A defined replay.** The log must rebuild a named set of columns, listed under Data model. Content such as titles, criterion text and instructions is outside that set.
 
@@ -332,7 +336,7 @@ A rule is data: a hook, a scope, a checker and what happens on failure. The app 
 
 | Field | Meaning |
 | --- | --- |
-| `key`, `name` | A stable key and the one-line name shown in Settings. |
+| `key`, `name` | A stable key and the one-line name shown on the Rules tab. |
 | `hook` | The moment the rule runs. One hook per rule. |
 | `scope` | Which tasks it covers: all tasks, named projects, or tasks that end in given outward actions. A model-checked rule can also use "let the checker decide". |
 | `kind` | `gate` passes or fails, and a failure blocks the transition. `policy` chooses what happens at the hook and is recorded as applied. |
@@ -344,7 +348,7 @@ A rule is data: a hook, a scope, a checker and what happens on failure. The app 
 
 Every save creates a new immutable version, and every rule check stores the version it ran against. Revert to default writes the shipped fields as a new version.
 
-Text and behaviour cannot drift apart. For a model-checked rule the text is the instruction, so editing it changes what is enforced. For an app-checked rule the sentence in Settings is generated from its parameters, and the owner edits the parameters.
+Text and behaviour cannot drift apart. For a model-checked rule the text is the instruction, so editing it changes what is enforced. For an app-checked rule the sentence on the Rules tab is generated from its parameters, and the owner edits the parameters.
 
 ### Hooks
 
@@ -388,14 +392,14 @@ A rule check result is one of `passed`, `failed`, `not_applicable`, `applied` (p
 
 ### A rule on the move from Ready to In Progress
 
-The owner adds such a rule in Settings, Rules, with the moment "before an agent starts a task". It runs at the `task.before_claim` hook, every time a seat tries to claim.
+The owner adds such a rule on the Rules tab, with the moment "before an agent starts a task". It runs at the `task.before_claim` hook, every time a seat tries to claim.
 
 - A claim that waits on a model check is provisional. The task is reserved for that seat and no other seat can claim it.
 - The seat gets no lease and no briefing until the check passes. It learns the outcome from `GET /v1/commands/{key}`.
 - If the check fails, the reservation lapses and the task returns to Ready, and the reason goes to the seat. If it ends in `error`, the reservation also lapses, the task gets a `check_error` hold, and the errored check is not queued again, because no claim is left for it to complete. Run it again, or the orchestrator coming back online, closes the hold, so the next claim runs the check afresh. An override applies to that seat's next claim.
 - A task that fails this gate for 3 different seats is held with the reason `claim_gate_failed` and opens a Needs you item, because the rule is then about the task and not the seat. A check that ends in `error` does not count toward the 3 seats.
 
-A rule about the task alone belongs at "ready to start", where it runs once and keeps no agent waiting. "Before an agent starts" is for a rule that depends on which agent takes the task, or that must hold at the moment work begins. Settings, Rules shows every rule's moment on its row.
+A rule about the task alone belongs at "ready to start", where it runs once and keeps no agent waiting. "Before an agent starts" is for a rule that depends on which agent takes the task, or that must hold at the moment work begins. The Rules tab shows every rule's moment on its row.
 
 ### When a check cannot run
 
@@ -578,11 +582,11 @@ The Mac app uses a separate interface on the same server, with a signed-in sessi
 
 The helper is a separate program on the owner's Mac. It stays separate while the server's containers run on the same Mac, as they do for the first run, so that moving the server later changes nothing in it. It signs in to the server with its own token, and its calls are part of the contract. Through them it learns what the server wants done on the Mac: start or stop a seat the app runs, run the checks of Add credential, install a provider's tool, open a provider's sign-in window, or read usage. Through them it reports what happened: a run started or stopped, a limit was reached, a login was found signed out, the result of each check, and each usage reading.
 
-The helper acts as the app. Its reports go through the transition function, and it never writes an event or changes a task itself. When it starts a seat the app runs, it receives that seat's fresh token from the server and hands it to the run. No subscription login, sign-in token, sign-in link, code or API token is ever sent in these calls.
+The helper acts as the app. Its reports go through the transition function, and it never writes an event or changes a task itself. When it starts a seat the app runs, it receives that seat's fresh token from the server and hands it to the run. No login, sign-in token, sign-in link, code or API token is ever sent in these calls.
 
 ## Credentials
 
-A credential is how a seat reaches its provider: a subscription login used through the provider's own tool on the owner's Mac, or an API token. The Credentials screen has its own tab in the left pane. It lists them and shows what each provider reports about limits. The order in which one takes over from another is on the Handoff tab. The approved mock-up in the prototype is the design reference.
+A credential is how a seat reaches its provider: a login used through the provider's own tool on the owner's Mac, or an API token. The Credentials screen has its own tab in the left pane. It lists them and shows what each provider reports about limits. The order in which one takes over from another is on the Handoff tab. The approved mock-up in the prototype is the design reference.
 
 A credential is not the seat's own token. The seat token signs a seat in to this app. The credential signs it in to its provider.
 
@@ -625,7 +629,7 @@ The app then runs the checks itself through the helper, ticks each one off, save
 
 ### What each account shows
 
-Each account is one row: a status dot (active or signed out), the name, the plan and account email where the provider gives them, and one small tile per figure. A limit tile shows percent used and the reset time. Actions sit behind one menu: rename, verify, sign in again, remove. A token has no sign in again; one that stopped working is removed and added again.
+Each account is one row: a status dot (active or signed out), the name, the provider's plan and the account email where the provider gives them, and one small tile per figure. A limit tile shows percent used and the reset time. Actions sit behind one menu: rename, verify, sign in again, remove. A token has no sign in again; one that stopped working is removed and added again.
 
 - Only figures the provider supplied are shown. Nothing is estimated, and a real zero shows as 0.
 - Every login account shows its available resets. A provider with no resets shows a dash.
@@ -737,7 +741,7 @@ When no candidate is available:
 - [ ] A Codex account shows the same number of resets as the Codex tool reports for it.
 - [ ] A Claude account with a reset grant shows its count and kind. This needs an account that has one.
 - [ ] A saved token is not returned by any interface, appears only masked, and is never sent to the server.
-- [ ] No subscription login, sign-in token, sign-in link, code or API token appears in any request to the server, any log, any event, any test fixture or any screenshot in the repository.
+- [ ] No login, sign-in token, sign-in link, code or API token appears in any request to the server, any log, any event, any test fixture or any screenshot in the repository.
 - [ ] One account whose usage read times out shows "unavailable" while the others still show their figures.
 - [ ] When a run hits a limit, the next available credential in the order takes over, whatever its provider, and the log records the switch.
 - [ ] With every candidate limited, the task is held with `credential_limit` and resumes after the earliest candidate reset, or returns to Ready when the seat's lease ends first.
@@ -746,7 +750,82 @@ When no candidate is available:
 - [ ] Refreshing usage spends no reset and changes no sign-in.
 - [ ] The Handoff tab shows the fixed rules and the one order, and has no switch for any rule.
 
-The limit and sign-out lines are shown by replaying recorded provider replies with a near reset time. Recorded replies are scrubbed of account emails, account ids, tokens and plan identifiers before they are committed. A usage reply recorded from a real account is not committed: the repository holds made-up replies that follow its shape.
+The limit and sign-out lines are shown by replaying recorded provider replies with a near reset time. Recorded replies are scrubbed of account emails, account ids, tokens and the providers' plan identifiers before they are committed. A usage reply recorded from a real account is not committed: the repository holds made-up replies that follow its shape.
+
+## Subscription
+
+The owner pays for Leverage with a monthly subscription that includes support. One row at the foot of the left pane opens a menu for the subscription, the settings and signing out. It stays quiet while everything is paid and says so plainly when a payment needs the owner. Payment goes through Stripe, with Apple Pay, Link or a card. The design reference is [docs/subscription](subscription/README.md): a self-contained mockup page and a screenshot of each screen.
+
+The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends subscription events to an address on the internet, and neither can live on the owner's Mac, so the subscription also needs a small service that the maintainer runs.
+
+### The account menu: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-001 | The left pane ends with one row below the system health line, separated from it by a thin line. It shows an initial, the owner's sign-in email, and a second line: the plan's name, "No subscription", or "Card declined" in the stop colour when a payment has failed. It shows no badge, upgrade prompt or offer. |
+| FR-002 | Clicking the row opens a menu above it. The menu's header shows the email and the plan with its price. Its items are Subscription, Settings (⌘ ,) and Sign out. While the Subscription or Settings page is open, the row is drawn as selected, as a tab is. |
+| FR-003 | The menu works from the keyboard: Return or Space opens it, the arrow keys move, Return chooses, and Escape closes it and returns focus to the row. VoiceOver reads the row as "Subscription, settings and sign out" with the email and the second line. |
+| FR-004 | Sign out in the menu does what Sign out in the app menu does. The app menu keeps its item. |
+
+### Settings and the Rules tab: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-005 | The Settings page has one section, Appearance, with two choices, Light and Dark, each shown as a small picture of the window. The choice applies at once, is kept on this Mac, and is the same after the app restarts. |
+| FR-006 | The left pane has no Settings tab. A tab called Rules holds the rules and the workspace settings, and later Skills, Roles and Analytics (What the app shows in version 1). |
+
+### Choosing a plan and paying: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-007 | With no subscription, the Subscription page shows three plans side by side, in this order: Pro at $100, Starter at $7 and Plus at $20 a month, in US dollars. Each card shows its name, its price, what it includes, Support, and a Choose button. Under the cards one line says the owner can pay with Apple Pay, Link or a card, through Stripe. |
+| FR-008 | Choose opens a sheet naming the plan and its price, "starting today", and the three ways to pay: Apple Pay ("In Safari, with Touch ID or your iPhone"), Link, and a credit or debit card. One line says that checkout opens in the browser on Stripe's secure page and that Leverage never sees the card. The sheet has Cancel and Continue to checkout. |
+| FR-009 | Continue to checkout opens Stripe Checkout for that plan in the owner's default browser, as a monthly subscription, with Apple Pay, Link and cards turned on. Apple Pay is offered only where Stripe and the browser support it, which on a Mac means Safari. |
+| FR-010 | While checkout is open, the app shows "Finish paying in your browser" with Open checkout again and Cancel. It changes by itself when the payment goes through, to "You're on [plan]" with the next payment date. Cancel closes the sheet and charges nothing. |
+| FR-011 | Choosing twice, or pressing Continue to checkout twice, never starts two subscriptions. |
+
+### The Subscription page: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-012 | While a subscription is active, the page shows: the plan and its price, with Change plan; the next payment's amount and date; what the plan includes; the payment method (Apple Pay, Link, or the card's brand, last four digits and expiry date) with Update; the receipts, newest first, each with its date, amount, plan, "Paid" and View; and Cancel subscription. |
+| FR-013 | Update opens Stripe's own page for changing the payment method in the browser, where Apple Pay, Link and cards are offered as at checkout. View opens Stripe's receipt. |
+| FR-014 | Change plan shows the three plans with the current one marked "Your plan". Choosing another changes the subscription. |
+| FR-015 | Cancel subscription asks once, saying the date the subscription ends, that no further payment is taken, and that the owner's tasks, rules and history stay on this Mac. Confirming cancels at the end of the paid period. Leverage shows no offer to stay. |
+| FR-016 | The app never receives, stores or logs a card number or security code. It knows only what Stripe reports about a payment method: its kind, and for a card its brand, last four digits and expiry date. |
+
+### When a payment fails: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-017 | When Stripe reports a failed subscription payment, three things change and nothing else does. The row's second line reads "Card declined". The Subscription page shows a banner: "Your subscription payment didn't go through. Update your payment method by [date]. Until then, everything keeps working." Needs you gets one item. |
+| FR-018 | The Needs you item has the chip "Subscription", the heading "Your subscription payment didn't go through", the amount, the plan and the date it was declined, and two buttons: Update payment method, which opens Stripe's page, and Open Subscription. It is a new item in `api/contract/needs_you.json` and in Needs you choices, added in the same pull request, and the macOS notification of every Needs you item applies to it. |
+| FR-019 | The item, the banner and the row's line clear by themselves when Stripe reports the payment made. |
+| FR-020 | A failed payment never stops a run that has started, and never moves a task. |
+
+### The subscription service: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-021 | A subscription service, run by the maintainer, holds the Stripe secret key, creates the Checkout and payment-method sessions, receives Stripe's events, and answers the app's question "what is this owner's subscription?". The secret key is never on the owner's Mac or in this repository. |
+| FR-022 | The app knows the owner to the service by the sign-in email and an id the service issues. Stripe receives the email to send receipts. The service stores no task, project, rule, credential or event of the owner's. |
+| FR-023 | On the owner's Mac, the subscription's state (no subscription, active, payment due, cancelled at a date), the plan, the next payment date and the payment method summary of FR-016 are kept outside the event log. No event payload carries any of them. |
+| FR-024 | The service is a new external service under rule AR-004, and how the app reaches it is a new ADR. Both are written before any of FR-007 to FR-020 is built. |
+| FR-025 | The app's copy and the design mockup use the words of the Terms table: a provider's login row reads "Login", not "Subscription login"; Leverage's own Needs you items always say "subscription", so that they are not read as an agent's Pay action; and no screen calls Leverage's subscription an "account". |
+
+### Acceptance criteria for Subscription
+
+- [ ] The row, the menu, Settings with Light and Dark, and the Rules tab work with no subscription service at all.
+- [ ] With Stripe in test mode, an owner with no subscription chooses Plus, pays in the browser with Stripe's test card, and the app shows "You're on Plus" without being restarted.
+- [ ] With Stripe's test card that fails on renewal, the row, the banner and one Needs you item appear, a run in progress goes on, and all three clear when the card is updated.
+- [ ] A search of the repository, the logs and the event log after those runs finds no card number, security code or Stripe secret key.
+
+### Build order for Subscription
+
+1. The words (FR-025), the Rules tab (FR-006) and Settings with Light and Dark (FR-005).
+2. The row and the menu with Sign out (FR-001 to FR-004). Until the service exists, the row's second line is left out.
+3. The ADR and the service (FR-021 to FR-024).
+4. Choosing and paying (FR-007 to FR-011), then the Subscription page (FR-012 to FR-016), then failed payments (FR-017 to FR-020).
 
 ## Data model
 
@@ -754,7 +833,7 @@ These tables are part of the shared contract, which is listed in full under Buil
 
 | Table | Holds | Key fields |
 | --- | --- | --- |
-| `workspaces` | One row per owner | Settings: lease length, check timeouts, maximum rounds, re-run limit, recovery time ceiling |
+| `workspaces` | One row per owner | Workspace settings: lease length, check timeouts, maximum rounds, re-run limit, recovery time ceiling |
 | `users` | The owner's sign-in | Workspace, sign-in identity |
 | `projects` | Projects | Name, goal, budget, spent, paused |
 | `brief_entries` | Each project's rules, decisions and lessons | Project, kind, text, author |
@@ -824,12 +903,15 @@ One rule covers every word the owner reads: a word on an owner-facing screen tha
 | Activity | The event log as a feed, with the Important and Everything filter. No chat. Important keeps the event types the contract lists as important. |
 | Agent roster | Seats with provider, model, effort, role, on or off, and last polled. Connecting a seat the app runs picks its credential and starts it, and no token is shown. Connecting a seat that connects on its own shows its landing prompt, with the token inside, once, with a Copy button; the row's New prompt explains what gets released and asks for confirmation before it issues a new token and ends the old one. The Connect sheet offers the two as "Native: run on my login" and "Prompt: paste into any agent", and General is the role it picks first. Changing the role of a running seat the app runs to or from General restarts it in the new role. |
 | Projects | The list, each brief, budget and pause. A brief is edited as one list and saved whole. |
-| Settings, Rules | Each rule's switch, moment, scope, checker, and parameters or instruction. Save, revert to default, add a custom rule. Each row shows how often the rule ran, its average time and its tokens. How often a rule ran counts its checks that applied, and its average time is queue plus run for each attempt. The row also shows how often its checks were overridden. |
+| Rules | Each rule's switch, moment, scope, checker, and parameters or instruction. Save, revert to default, add a custom rule. Each row shows how often the rule ran, its average time and its tokens. How often a rule ran counts its checks that applied, and its average time is queue plus run for each attempt. The row also shows how often its checks were overridden. |
 | System health | One line on every screen: whether the timer sweep and the orchestrator are running, and whether the daily backup is late. |
+| Account menu | One row at the foot of the left pane, below the system health line, that opens Subscription, Settings and Sign out. See Subscription. |
+| Subscription | Choosing a plan, paying through Stripe, the plan, the payment method, receipts and cancelling. See Subscription. |
+| Settings | Appearance: Light or Dark. Opened from the account menu. |
 | Credentials | Its own tab in the left pane. Logins and API tokens grouped by provider, each account's limits and available resets, Refresh and Verify all, and the Add credential pop-up. Add credential for logins arrives in the Core loop milestone; a row's limit sentence and Sign in again in the Handoff milestone; API tokens and the rest in the Credentials milestone. |
 | Handoff | Its own tab in the left pane. The handoff rules as plain sentences, with no switch, and the one order of accounts, which the owner can reorder. The tab and the default order arrive in the Handoff milestone, reordering in the Credentials milestone. |
 
-Settings has four sections: Rules, Skills, Roles and Analytics. Later: the Analytics section, the Skills and Roles sections, Routines, the Activity chat and the orchestrator conversation. Settings also holds the workspace's settings: the lease length, the two check timeouts, the maximum rounds, the re-run limit and the recovery time ceiling, each within fixed bounds. A changed setting applies from the next time it is used.
+The Rules tab has four sections: Rules, Skills, Roles and Analytics. Later: the Analytics section, the Skills and Roles sections, Routines, the Activity chat and the orchestrator conversation. The Rules tab also holds the workspace's settings: the lease length, the two check timeouts, the maximum rounds, the re-run limit and the recovery time ceiling, each within fixed bounds. A changed setting applies from the next time it is used.
 
 ## Quality requirements
 
@@ -904,7 +986,7 @@ The contract is written first by one person. After that, seven tracks with separ
 | D. Clients | MCP server, reference runner. The reference runner is what the helper starts for a seat the app runs. | The interface schema | A full task run against C |
 | E. Mac app | The screens listed above except the Credentials and Handoff screens and the Add credential pop-up, which are track G's. The Needs you items and the macOS notification. Sign-in, the Agent roster, Add task and the task page in the Core loop milestone. | The owner interface schema and F's queries | UI tests of each screen |
 | F. Read queries | Timing and rule queries, the task timeline, recovery time | The tables and the golden traces | Query tests on logs produced from the golden traces |
-| G. Credentials | The helper with its launcher for seats the app runs, installing the providers' tools, limit and sign-out detection, the usage readers for each provider, the add flow, and the Credentials and Handoff screens. The launcher and the add flow are delivered in the Core loop milestone, detection in the Handoff milestone. | The contract, A's handoff transitions, C for the owner and helper calls, and D's reference runner, which the launcher starts | The acceptance criteria for Credentials, and tests 9 and 10 together with A. Track G first records a real reply from each of the Claude, Codex, Gemini and Grok login tools, and writes each reader from it. Recorded replies are committed only after account emails, account ids, tokens and plan identifiers are removed. |
+| G. Credentials | The helper with its launcher for seats the app runs, installing the providers' tools, limit and sign-out detection, the usage readers for each provider, the add flow, and the Credentials and Handoff screens. The launcher and the add flow are delivered in the Core loop milestone, detection in the Handoff milestone. | The contract, A's handoff transitions, C for the owner and helper calls, and D's reference runner, which the launcher starts | The acceptance criteria for Credentials, and tests 9 and 10 together with A. Track G first records a real reply from each of the Claude, Codex, Gemini and Grok login tools, and writes each reader from it. Recorded replies are committed only after account emails, account ids, tokens and the providers' plan identifiers are removed. |
 
 Every track starts from the contract. B and C build against the gating and transition interfaces with stubs, then integrate on A. Track A owns all timer logic, and the sweep in track C only triggers it. The same split holds for handoff. Track A owns the two credential hold reasons, the `wait_limit` step, the timer that lifts a credential hold at the earliest reset, the handoff transitions and the per-claim credential record. Track B owns the comparison the provider rule makes. Track C builds the owner commands and track E the Needs you items. Track G's helper detects a limit or a sign-out and reports it to the transition function only through the helper interface in the contract. The server lives in `api/`. The Mac app and the helper live in `mac/`. Test 12 belongs to the contract and runs in continuous integration.
 
@@ -970,7 +1052,7 @@ One gate stands before the contract. The contract is not started until these are
 | --- | --- | --- |
 | Stack and hosting | Decided: the server is a Ruby on Rails application in API mode, with PostgreSQL as its only datastore. The Mac app is native, written in Swift with SwiftUI, and is a thin client of the API. The helper is written in Swift. The server lives in `api/`, and the Mac app and the helper live in `mac/`. | The workspace lock and the state trigger are written for PostgreSQL. |
 | Where it runs | Decided: the server and PostgreSQL run in Docker containers, one installation per owner. For the first run the containers run on the owner's Mac. The same containers move to a server the owner controls later. The Mac app and the helper run on the owner's Mac. | Sign-in, the helper interface, and where data is kept: the event log, tasks and rules in the server's database, provider logins and API tokens in the providers' own tools and the macOS Keychain. The helper is a separate program that signs in to the server, so the move changes where the containers run and nothing else. Agents run only while the Mac is awake. A hosted service for many owners is a different build. |
-| Logins or API tokens for the first run | Decided: subscription logins. Claude, Codex, Gemini and Grok logins are accepted. API tokens stay in version 1 as a second kind of credential and are not the first-run path. | The helper, getting the providers' tools onto the Mac without a terminal, and the providers' terms (see Risks). |
+| Logins or API tokens for the first run | Decided: logins. Claude, Codex, Gemini and Grok logins are accepted. API tokens stay in version 1 as a second kind of credential and are not the first-run path. | The helper, getting the providers' tools onto the Mac without a terminal, and the providers' terms (see Risks). |
 | How the orchestrator runs | Decided: as a seat the app runs. The helper starts it on a login the owner picks, it pulls jobs like any other seat, and handoff applies to it. | The server holds no provider login and no provider code, so it cannot call a model itself. Every model call is timed the same way. Checks that need the orchestrator wait while the Mac is off or the helper is not running, and the orchestrator-offline Needs you item covers that. |
 | First provider | Decided: all four logins are accepted. The reference runner is built for Claude first. | The provider rule ships on, so the first run needs two providers connected. With one, a Needs you item says no reviewer is eligible. |
 | A blocking check that cannot run | Fail closed, with an owner override. | Safer, but work stalls until the owner acts. |
@@ -995,7 +1077,7 @@ One gate stands before the contract. The contract is not started until these are
 | Is this product Campus | Decided: no. Leverage is a separate open-source product. It shares nothing with Campus, the owner's earlier tool: no code, no usage readers, no storage and no credentials. | Credentials is new work, written and tested in this repository. |
 | Handoff to another provider | Decided: allowed. Handoff follows the one order, whatever the provider. | The model doing a task can change part-way through. The server records every provider that has built a task, and the provider rule refuses a reviewer from any of them. |
 | Handoff rules | Decided: fixed in version 1. Only the order can be changed. Handoff between two logins of the same provider is always automatic, with no switch. | The alternative gives each rule its own switch. Google's documentation does not support automated account rotation, and the other providers' terms are unclear (see Risks). |
-| Gemini login | Decided: Gemini keeps its subscription login, at the owner's own risk. No warning is shown when a Gemini login is added. | Google's documentation says that driving its consumer tool from another application is not supported and can lead to suspension. Leverage runs the provider's own tool on the owner's own Mac. The alternative is a Gemini API token only. |
+| Gemini login | Decided: Gemini keeps its login, at the owner's own risk. No warning is shown when a Gemini login is added. | Google's documentation says that driving its consumer tool from another application is not supported and can lead to suspension. Leverage runs the provider's own tool on the owner's own Mac. The alternative is a Gemini API token only. |
 | First usable milestone | Decided: the Core loop milestone. The launcher that starts agents arrives there, with account setup. | The owner can use the product end to end without a terminal from that milestone on. |
 | Figures a provider does not report | Hidden, except resets, which show a dash. | How uniform the account rows look. |
 | Percent used or percent left | Used only. | The wording on every limit tile. |
@@ -1011,3 +1093,11 @@ One gate stands before the contract. The contract is not started until these are
 | How the helper signs in to the server | With its own token, which the server stores as a hash. The Mac app issues a new token each time it starts the helper and passes it in the helper's process environment; it is never stored or shown. While the containers run on the Mac the transport is HTTP on its loopback address; HTTPS is required once they do not. Ending the token stops the helper's calls; runs keep their own seat tokens. | How the token reaches the Mac, the transport between the Mac and the server, and what stops when the token is ended. |
 | How a pasted token reaches the helper | Working assumption: the Mac app hands it to the helper over the helper's standard input, and the helper writes it to the macOS Keychain. It never passes through the server. It is built with API tokens in the Credentials milestone. The helper keeps a pasted token in memory until its check passes and writes the Keychain item only then. The same channel tells the helper to forget a removed credential: its Keychain item, or the settings folder the helper made for it. | Whether the Mac app writes the token into the macOS Keychain for the helper to read, or hands it to the helper on the Mac. |
 | Packaging | Working assumption, chosen in the Core loop build: the helper and the reference runner ship inside the Mac app, which starts the helper while it is open. The app starts the server's containers through Docker Desktop, which must already be installed, and says so when it is not. The app is built on the owner's Mac and is not notarized. | Agents run only while the app is open. A notarized installer and a helper that outlives the app are later. |
+| What each plan includes | Not decided. The plans are Pro, Starter and Plus; the owner describes what each includes. | The plan cards (FR-007) and the Subscription page (FR-012). |
+| Using Leverage with no subscription | Not decided. The mockups assume the app works and the row says "No subscription". | Whether anything is limited without a subscription, and for how long. |
+| How long a failed payment may stay unpaid | Not decided. Nothing stops before the date shown (FR-017, FR-020). | What stops at that date. |
+| Changing plans in the middle of a month | Not decided: charge the difference at once, or from the next payment. | Change plan (FR-014). |
+| Support for subscribers | Not decided. MAINTENANCE.md says no support is owed under the MIT License. | A line in MAINTENANCE.md on what a subscriber's support is and how to reach it. |
+| The service's host, its privacy notice and sales tax | Not decided. Stripe Tax can work out tax, at a fee. | The ADR of FR-024. |
+| Following the Mac's appearance | Not decided. Today the app follows the Mac's light or dark setting; with only Light and Dark (FR-005) an owner loses that. Recommendation: a third choice, "Same as this Mac", as the default. | Settings (FR-005). |
+| Stripe's details | To confirm in Stripe's documents when the ADR is written: that Link and Apple Pay work in subscription-mode Checkout, and that Apple Pay needs no domain set up for hosted Checkout. | Checkout (FR-009). |
