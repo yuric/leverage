@@ -18,7 +18,7 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Runs on real tools
 
-151 of 360 tool runs counted.
+151 of 720 tool runs counted.
 
 The table lists General runs.
 

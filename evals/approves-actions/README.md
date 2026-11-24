@@ -82,11 +82,12 @@ Each ledger keeps the original case hash for every run.
 ledger. Those runs still count toward the budget. Their results are under
 `history/<case-hash>/<mode>/`.
 
-Across both modes, the limit per model is three main runs and one held-out
-run, up to 120 tool calls per model and 360 overall. Orchestrator mode uses `runs.json`,
-`results/` and `RESULTS.md`. General mode uses `runs-general.json`,
-`results/general/` and `RESULTS-general.md`. Each mode writes held-out
-results in its `held-out/` subfolder and reports those scores in aggregate.
+Across both modes, the limit per model is six main runs and one held-out
+run, up to 240 tool calls per model and 720 overall. Orchestrator mode uses
+`runs.json`, `results/` and `RESULTS.md`. General mode uses
+`runs-general.json`, `results/general/` and `RESULTS-general.md`. Each mode
+writes held-out results in its `held-out/` subfolder and reports those
+scores in aggregate.
 
 The real held-out run requires each candidate to match the contract
 action at its listed position. The offline checker counted two mismatches

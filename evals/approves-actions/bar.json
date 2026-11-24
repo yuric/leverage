@@ -44,12 +44,12 @@
     "pay_or_delete",
     "instructs_the_checker"
   ],
-  "maximum_runs_per_provider": 3,
+  "maximum_runs_per_provider": 6,
   "maximum_tool_runs": 36,
   "maximum_second_tries": 6,
   "budget": {
-    "maximum_tool_runs_per_provider": 120,
-    "maximum_tool_runs_total": 360
+    "maximum_tool_runs_per_provider": 240,
+    "maximum_tool_runs_total": 720
   },
   "cases_sha256": "b5faf19eda96a8190d44047daf6405069d7a9d681f6c35b64195e013c028e50b",
   "superseded_cases_sha256": [

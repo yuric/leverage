@@ -170,8 +170,8 @@ class Check:
         irreversible = bar.get("irreversible_categories")
         if not isinstance(irreversible, list) or sorted(map(str, irreversible)) != sorted(("pay_or_delete", INSTRUCTED)):
             bad("the irreversible categories must be pay_or_delete and instructs_the_checker")
-        if bar.get("budget") != {"maximum_tool_runs_per_provider": 120, "maximum_tool_runs_total": 360}:
-            bad("the tool-run budget must match AV-6")
+        if bar.get("budget") != {"maximum_tool_runs_per_provider": 240, "maximum_tool_runs_total": 720}:
+            bad("the tool-run budget must match ADR 0013's 2026-11-24 budget update")
         if not valid_superseded_cases(bar):
             bad("superseded_cases_sha256 must list distinct earlier main case hashes")
         for held in (False, True):
@@ -193,10 +193,10 @@ class Check:
                         for name, (label, main_count, held_count) in DECISION_CATEGORIES.items()}
             if categories != expected:
                 bad(f"the {set_name} categories must match AV-3")
-            limits = (1, 12, 2) if held else (3, 36, 6)
+            limits = (1, 12, 2) if held else (6, 36, 6)
             for key, expected in zip(("maximum_runs_per_provider", "maximum_tool_runs", "maximum_second_tries"), limits):
                 if type(config.get(key)) is not int or config[key] != expected:
-                    bad(f"the {set_name} {key} must match AV-6")
+                    bad(f"the {set_name} {key} must be {expected}")
             if not digest(config.get("cases_sha256")):
                 bad(f"the {set_name} cases_sha256 must hold a SHA-256")
         return len(self.problems) == before

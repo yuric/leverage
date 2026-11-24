@@ -110,6 +110,9 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
+- **Approval eval budget (2026-11-24).** The owner added three main runs
+  per model across Orchestrator and General mode so Codex and Antigravity
+  can repeat both. [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update)
 - **`API_PORT`.** `compose.yaml` publishes the API on `127.0.0.1` at the
   port in `API_PORT`, 3000 by default, because port 3000 on the owner's Mac
   was already taken by another program during the skeleton's checks.
