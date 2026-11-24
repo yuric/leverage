@@ -98,6 +98,27 @@ struct ChangeAgentModelTests {
         #expect(!model.canSave)
     }
 
+    @Test("renaming a Native seat keeps its existing model when the owner leaves it selected")
+    func keepsExistingModel() async {
+        let owner = owner()
+        let model = makeModel(owner, seat: appSeat(model: "older-model"))
+        #expect(model.modelName == "older-model")
+        model.name = "Renamed agent"
+        await model.save()
+        #expect(body(owner) == ["name": .string("Renamed agent")])
+    }
+
+    @Test("changing a Prompt seat sends no model, including when the seat has an older model")
+    func changesPromptWithoutAModel() async {
+        let owner = owner()
+        let seat = Fixtures.seat(Fixtures.ownID, name: "Example agent", model: "older-model")
+        let model = makeModel(owner, seat: seat)
+        model.modelName = "another-model"
+        model.name = "Renamed agent"
+        await model.save()
+        #expect(body(owner) == ["name": .string("Renamed agent")])
+    }
+
     @Test("an agent with no model or effort of its own starts with both empty")
     func startsEmpty() {
         let model = makeModel(owner(), seat: appSeat(model: nil, effort: nil))

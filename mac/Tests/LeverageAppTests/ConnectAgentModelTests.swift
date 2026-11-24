@@ -69,16 +69,54 @@ struct ConnectAgentModelTests {
 
     @Test("with no login added, the form says so and offers to add one; it cannot be sent")
     func noLogins() async {
-        let model = makeModel(owner(logins: []))
+        let owner = owner(logins: [])
+        let model = makeModel(owner)
         await model.load()
         #expect(model.logins.isEmpty)
         #expect(model.credentialID == nil)
         model.name = "Builder one"
         #expect(!model.canConnect)
         #expect(model.needsLogin)
+        #expect(AgentsCopy.noLogins.text ==
+            "A Native agent runs on one of your logins. Add a login first, then connect the agent.")
+        #expect(AgentsCopy.addLogin.text == "Add a login")
+        await model.connect()
+        #expect(Fixtures.calls(owner, .connectSeat).isEmpty)
         model.mode = .connectsOnItsOwn
         #expect(!model.needsLogin)
         #expect(model.canConnect)
+        await model.connect()
+        #expect(model.phase == .shown)
+        #expect(body(owner)["credential_id"] == .null)
+    }
+
+    @Test("Connect picks the tool's default after changing the login's provider")
+    func resetsModelForAnotherProvider() async {
+        let owner = owner()
+        let model = makeModel(owner)
+        await model.load()
+        #expect(model.modelName.isEmpty)
+        #expect(AgentsCopy.defaultModel.text == "The tool's default")
+        model.modelName = "claude-made-up"
+        model.credentialID = Fixtures.secondLoginID
+        #expect(model.modelName.isEmpty)
+        model.name = "Example agent"
+        await model.connect()
+        #expect(body(owner)["provider"] == .string("codex"))
+        #expect(body(owner)["model"] == .null)
+    }
+
+    @Test("Prompt Connect sends no model from the Native form")
+    func promptConnectSendsNoModel() async {
+        let owner = owner()
+        let model = makeModel(owner)
+        await model.load()
+        model.modelName = "claude-made-up"
+        model.mode = .connectsOnItsOwn
+        model.name = "Example agent"
+        await model.connect()
+        #expect(model.phase == .shown)
+        #expect(body(owner)["model"] == .null)
     }
 
     @Test("General offers Gemini and Reviewer hides it")
