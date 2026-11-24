@@ -25,6 +25,36 @@ struct NeedsYouDecidedRenderSmokeTests {
         #expect(drawsSomething(DecidedView().environment(context)))
     }
 
+    @Test("the notification settings button draws only when notifications are off", arguments: [true, false])
+    func notificationSettingsButton(notificationsAreOff: Bool) async throws {
+        let owner = NeedsYouFixtures.owner(open: Locked([]))
+        let model = NeedsYouModel(api: owner, noteRead: { _ in }, openTask: { _ in })
+        await model.load()
+        try #require(model.state == .loaded && model.rows.isEmpty)
+        let content = NeedsYouContent(model: model, notificationsAreOff: notificationsAreOff)
+        let rendered = try #require(picture(content.buttonStyle(TestButtonStyle()), height: 150))
+        let bitmap = NSBitmapImageRep(cgImage: rendered)
+        #expect(hasButtonMarker(bitmap) == notificationsAreOff)
+    }
+
+    private struct TestButtonStyle: ButtonStyle {
+        func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+            configuration.label.padding(4).background(Color(red: 1, green: 0, blue: 1))
+        }
+    }
+
+    private func hasButtonMarker(_ bitmap: NSBitmapImageRep) -> Bool {
+        for row in 0..<bitmap.pixelsHigh {
+            for column in 0..<bitmap.pixelsWide {
+                if let color = bitmap.colorAt(x: column, y: row)?.usingColorSpace(.sRGB),
+                   color.redComponent > 0.95, color.greenComponent < 0.05, color.blueComponent > 0.95 {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     @Test("loaded question and decision rows and their confirmations draw")
     func loadedScreens() async throws {
         let taskID = NeedsYouFixtures.taskID
@@ -64,11 +94,9 @@ struct NeedsYouDecidedRenderSmokeTests {
     }
 
     private func drawsSomething(_ view: some View) -> Bool {
-        let renderer = ImageRenderer(content: view.frame(width: 900, height: 620).background(Color.white))
-        renderer.scale = 1
-        guard let tiff = renderer.nsImage?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-              let data = bitmap.bitmapData
-        else { return false }
+        guard let rendered = picture(view) else { return false }
+        let bitmap = NSBitmapImageRep(cgImage: rendered)
+        guard let data = bitmap.bitmapData else { return false }
         let pixel = max(1, bitmap.bitsPerPixel / 8)
         for row in 0..<bitmap.pixelsHigh {
             for column in 0..<bitmap.pixelsWide {
@@ -77,5 +105,11 @@ struct NeedsYouDecidedRenderSmokeTests {
             }
         }
         return false
+    }
+
+    private func picture(_ view: some View, height: CGFloat = 620) -> CGImage? {
+        let renderer = ImageRenderer(content: view.frame(width: 900, height: height).background(Color.white))
+        renderer.scale = 1
+        return renderer.cgImage
     }
 }
