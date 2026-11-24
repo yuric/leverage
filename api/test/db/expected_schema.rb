@@ -142,7 +142,11 @@ module ExpectedSchema
         # Milestone 3 plan HD-3: the credential the seat's current token was
         # issued for (no foreign key, as DB-10), and why its last run ended.
         "run_credential_id" => uuid(null: true),
-        "run_stop_reason" => text(null: true)
+        "run_stop_reason" => text(null: true),
+        # App round 2 (UX-10): the seat's permissions, all on by default.
+        "may_work" => bool("true"),
+        "may_deliver" => bool("true"),
+        "may_create" => bool("true")
       ).merge(STAMPS),
       indexes: [ idx("workspace_id"), idx("credential_id"), idx("token_hash", unique: true) ],
       foreign_keys: [ fk("workspace_id", "workspaces"), fk("credential_id", "credentials") ]

@@ -603,7 +603,10 @@ CREATE TABLE public.seats (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     wanted_running boolean DEFAULT false NOT NULL,
     run_credential_id uuid,
-    run_stop_reason text
+    run_stop_reason text,
+    may_work boolean DEFAULT true NOT NULL,
+    may_deliver boolean DEFAULT true NOT NULL,
+    may_create boolean DEFAULT true NOT NULL
 );
 
 
@@ -2410,6 +2413,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261124231440'),
 ('20261124171356'),
 ('20261124150000'),
 ('20261124100000'),
