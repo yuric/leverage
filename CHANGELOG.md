@@ -10,6 +10,18 @@ once it makes its first release.
 
 ### Added
 
+- Connect defaults to General. A General agent can build, review, draft
+  contracts, check tasks, answer questions and decide approvals, one job,
+  task or review at a time. A running seat the app manages restarts when
+  its role changes to or from General. A General seat can build and do
+  jobs on a Gemini login. Its review work passes over Gemini logins.
+- Prompt connections use one landing prompt with the seat's token and
+  instructions to fetch `GET /v1/join` for HTTP or MCP. New prompt in the
+  roster ends the old token and gives back work the seat holds. A Working
+  task returns to Ready, a review is released, a held job times out, and a
+  Finishing lease ends with any open actions that need confirmation sent to
+  the owner.
+
 - Added the Credentials screen with limits and resets where available, API
   tokens, Refresh and Verify all, renaming and removing a credential, and
   reordering the handoff order. A usage reading can resume a waiting task
