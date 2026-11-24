@@ -4,7 +4,7 @@
     "title": "leverage interfaces",
     "version": "1.0.0",
     "summary": "The agent, owner and helper interfaces of the leverage server.",
-    "description": "One server, three interfaces. Agents (tag `agent`) sign in with a seat token, the Mac app (tag `owner`) with a session, and the helper (tag `helper`) with its own token, all as `Authorization: Bearer`. Every call that changes something carries an `Idempotency-Key` header and answers one outcome body: 200 completed, 202 pending, 409 refused. JSON fields are the Data model's column names in snake case. Operations are exactly the registry's `operations`; `x-leverage-caller` and `x-leverage-command` say who may call and which commands of the state table it can run. No subscription login, sign-in token, sign-in link, code or API token appears in any request (Credentials); the only secrets in any response are the four one-time tokens, each returned once by the call that issues it."
+    "description": "One server, three interfaces. Agents (tag `agent`) sign in with a seat token, the Mac app (tag `owner`) with a session, and the helper (tag `helper`) with its own token, all as `Authorization: Bearer`. Every call that changes something carries an `Idempotency-Key` header and answers one outcome body: 200 completed, 202 pending, 409 refused. JSON fields are the Data model's column names in snake case. Operations are exactly the registry's `operations`; `x-leverage-caller` and `x-leverage-command` say who may call and which commands of the state table it can run. No subscription login, sign-in token, sign-in link, code or API token appears in any request (Credentials); the only secrets in any response are the four one-time tokens, each returned once by the call that issues it; the token of a seat that connects on its own is returned inside its landing prompt (GA-13)."
   },
   "servers": [
     {
@@ -120,6 +120,66 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/join": {
+      "get": {
+        "operationId": "get_join",
+        "summary": "Answers the agent's instructions for its role and connection.",
+        "description": "The landing prompt tells the agent to read this first, with its token, and to follow it (GA-12). Any signed-in seat may read it, in any state: a disabled or paused seat reads the same text, and its `GET /v1/next` answers `none`. Reading it is not a poll: presence reads `GET /v1/next` only. The HTTP form names the address this request came in on, the calls the role may make and the loop; the MCP form gives the MCP settings and the tools. The text never holds the token.",
+        "tags": [
+          "agent"
+        ],
+        "x-leverage-caller": "any",
+        "x-leverage-command": [
+          "read"
+        ],
+        "parameters": [
+          {
+            "name": "connection",
+            "in": "query",
+            "required": false,
+            "description": "`http`: the agent works through this interface. `mcp`: through the bundled MCP server, whose settings the text gives.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http",
+                "mcp"
+              ],
+              "default": "http"
+            }
+          }
+        ],
+        "security": [
+          {
+            "seatBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinInstructions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 `malformed`: an unknown connection, or the Host of an HTTP request cannot be put in a pasted command.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransportError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
           }
         }
       }
@@ -2285,7 +2345,7 @@
       "post": {
         "operationId": "connect_seat",
         "summary": "Connects a seat.",
-        "description": "A seat that connects on its own gets its token once. A seat the app runs picks its credential and starts it; no token is shown.",
+        "description": "A seat the app runs picks its credential and starts it. A seat that connects on its own is made with no token: the app then issues its landing prompt (issue_landing_prompt), which carries one (GA-13). No token is returned here.",
         "tags": [
           "owner"
         ],
@@ -2315,7 +2375,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The command completed. The first answer for the key carries the token in `result` (SeatConnected); a repeat of the key answers 200 with the same envelope and SeatConnectedRepeated, without the token.",
+            "description": "The command completed with the new seat's id; a repeat of the key answers the same result.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5746,35 +5806,35 @@
       }
     },
     "/v1/owner/seats/{id}/landing-prompt": {
-      "get": {
-        "operationId": "get_landing_prompt",
-        "summary": "Reads the landing prompt of a seat that connects on its own.",
-        "description": "The owner pastes this text into an agent that connects on its own. The HTTP form gives the server address and the calls the role may make. The MCP form lists the role’s tools. Either form gives defaults the agent confirms with its user. The seat’s token is shown once by connect_seat.",
+      "post": {
+        "operationId": "issue_landing_prompt",
+        "summary": "Issues the landing prompt of a seat that connects on its own, with a new token.",
+        "description": "In one transaction the server issues a new token for the seat, stores only its hash in `seats.token_hash`, which ends the token before it (an agent still using that one gets 401 and stops), and returns the short prompt with the new token in it, in this response only (GA-13). The prompt names the address this request came in on; the app's is `http://127.0.0.1:<port>`, so only an agent on the owner's Mac can land. The Connect sheet calls it right after connect_seat, and the roster's New prompt calls it again. Work the seat holds stays with it (GA-17). A repeat with the same key answers the outcome without the token or the text; the app asks again with a new key, which issues another token.",
         "tags": [
           "owner"
         ],
         "x-leverage-caller": "owner",
         "x-leverage-command": [
-          "read"
+          "issue_landing_prompt"
         ],
         "parameters": [
           {
             "$ref": "#/components/parameters/PathId"
           },
           {
-            "name": "connection",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "http",
-                "mcp"
-              ],
-              "default": "http"
-            },
-            "description": "The HTTP prompt names the server address. The MCP prompt names the tools the seat can call."
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueLandingPromptRequest"
+              }
+            }
+          }
+        },
         "security": [
           {
             "ownerSession": []
@@ -5782,17 +5842,27 @@
         ],
         "responses": {
           "200": {
-            "description": "The answer.",
+            "description": "The command completed. The first answer for the key carries the token and the prompt in `result` (LandingPromptIssued); a repeat of the key answers 200 with the same envelope and LandingPromptIssuedRepeated, without either.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LandingPrompt"
+                  "$ref": "#/components/schemas/LandingPromptIssuedCompleted"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
                 }
               }
             }
           },
           "400": {
-            "description": "400 `malformed` when the Host of an HTTP landing prompt cannot be put in a pasted command.",
+            "description": "400 `malformed`: the request could not be parsed, or the Host it came in on cannot be put in a pasted command.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5815,14 +5885,17 @@
             }
           },
           "409": {
-            "description": "The seat is one the app runs, which needs no prompt: the body is a Refusal with code `invalid_state` and `rule_id` and `reason` null.",
+            "description": "The command was refused; the body names the cause: `invalid_state` for a seat the app runs, which the helper gives its token (issue_seat_token).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Refusal"
+                  "$ref": "#/components/schemas/RefusedOutcome"
                 }
               }
             }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
           }
         }
       }
@@ -7537,6 +7610,7 @@
           "claim_job",
           "submit_job_result",
           "issue_seat_token",
+          "issue_landing_prompt",
           "report_run_started",
           "report_run_stopped",
           "report_request_progress",
@@ -11878,7 +11952,7 @@
       "ConnectSeatRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "`credential_id` set connects a seat the app runs (it picks its credential and starts it, no token shown); null connects a seat that runs on its own and shows its token once.",
+        "description": "`credential_id` set connects a seat the app runs (it picks its credential and starts it); null connects a seat that connects on its own, whose token comes with its landing prompt (issue_landing_prompt, GA-13).",
         "properties": {
           "name": {
             "type": "string",
@@ -12057,28 +12131,19 @@
       "SeatConnected": {
         "type": "object",
         "additionalProperties": false,
-        "description": "`seat_token` is set for a seat that connects on its own and null for a seat the app runs. Returned once, in this response only. It is stored hashed, never stored in a command outcome, a helper request or an event; a repeat of the key answers SeatConnectedRepeated instead.",
+        "description": "The new seat. No token: a seat that connects on its own gets one in its landing prompt, a seat the app runs from the helper's issue_seat_token (GA-13).",
         "properties": {
           "seat_id": {
             "type": "string",
             "format": "uuid"
-          },
-          "seat_token": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1
           }
         },
         "required": [
-          "seat_id",
-          "seat_token"
+          "seat_id"
         ],
         "examples": [
           {
-            "seat_id": "00000000-0000-4000-8000-000000000147",
-            "seat_token": "example"
+            "seat_id": "00000000-0000-4000-8000-000000000147"
           }
         ]
       },
@@ -16350,35 +16415,10 @@
           }
         ]
       },
-      "SeatConnectedRepeated": {
-        "type": "object",
-        "additionalProperties": false,
-        "description": "The result a repeat of the key answers in place of SeatConnected: the same ids with no token, which was shown once and never stored. `repeated` tells it apart from a first answer.",
-        "properties": {
-          "seat_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "repeated": {
-            "type": "boolean",
-            "const": true
-          }
-        },
-        "required": [
-          "seat_id",
-          "repeated"
-        ],
-        "examples": [
-          {
-            "seat_id": "00000000-0000-4000-8000-000000000147",
-            "repeated": true
-          }
-        ]
-      },
       "SeatConnectedCompleted": {
         "type": "object",
         "additionalProperties": false,
-        "description": "200: the command completed. `result` is SeatConnected the first time the key is answered, with the token shown once, and SeatConnectedRepeated for a repeat of the key (L241, IF-4).",
+        "description": "200: the command completed. `result` is SeatConnected, the first time the key is answered and for a repeat of the key alike (L241, IF-4).",
         "properties": {
           "key": {
             "type": "string",
@@ -16392,14 +16432,7 @@
             "const": "completed"
           },
           "result": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SeatConnected"
-              },
-              {
-                "$ref": "#/components/schemas/SeatConnectedRepeated"
-              }
-            ]
+            "$ref": "#/components/schemas/SeatConnected"
           },
           "refusal": {
             "type": "null"
@@ -16418,18 +16451,7 @@
             "command": "connect_seat",
             "outcome": "completed",
             "result": {
-              "seat_id": "00000000-0000-4000-8000-000000000147",
-              "seat_token": "example"
-            },
-            "refusal": null
-          },
-          {
-            "key": "example",
-            "command": "connect_seat",
-            "outcome": "completed",
-            "result": {
-              "seat_id": "00000000-0000-4000-8000-000000000147",
-              "repeated": true
+              "seat_id": "00000000-0000-4000-8000-000000000147"
             },
             "refusal": null
           }
@@ -16628,43 +16650,6 @@
         "examples": [
           {
             "owner_exists": false
-          }
-        ]
-      },
-      "LandingPrompt": {
-        "type": "object",
-        "additionalProperties": false,
-        "description": "The landing prompt of a seat that connects on its own (milestone 2 plan Q-15). `connection` gives the chosen form. `text` gives the role and its defaults, with the server address and calls for HTTP or the tool names for MCP. Neither form includes a token. `check_interval_minutes` is how often the agent checks for work: 20 for a builder or a reviewer, when it has none; 1 for an orchestrator, a planner or a General seat, while it has no work and also while it works on a job (a General seat does not check while it builds or reviews, GA-6): an orchestrator counts as offline 90 seconds after its last poll and its jobs wait while it is (PRD L401), and a planner's draft not claimed or not finished within the check timeouts is queued once more, then dropped, its task staying in Backlog (PRD L399; milestone 4 review, finding 19, and its second review).",
-        "properties": {
-          "text": {
-            "type": "string",
-            "minLength": 1
-          },
-          "check_interval_minutes": {
-            "type": "integer",
-            "enum": [
-              1,
-              20
-            ]
-          },
-          "connection": {
-            "type": "string",
-            "enum": [
-              "http",
-              "mcp"
-            ]
-          }
-        },
-        "required": [
-          "text",
-          "check_interval_minutes",
-          "connection"
-        ],
-        "examples": [
-          {
-            "text": "You are the builder seat Example of leverage. Read your role file, your briefing and your rules before any work.",
-            "check_interval_minutes": 20,
-            "connection": "http"
           }
         ]
       },
@@ -17360,6 +17345,205 @@
                 "text": "The made-up review passed."
               }
             ]
+          }
+        ]
+      },
+      "IssueLandingPromptRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The connection the prompt names: `http` sends the agent to `GET /v1/join`, `mcp` to `GET /v1/join?connection=mcp`, whose text gives the MCP settings (GA-12).",
+        "properties": {
+          "connection": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp"
+            ]
+          }
+        },
+        "required": [
+          "connection"
+        ],
+        "examples": [
+          {
+            "connection": "http"
+          }
+        ]
+      },
+      "LandingPromptIssued": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The landing prompt of a seat that connects on its own: one short text, made to be pasted whole into an agent, that names the server's address, carries the seat's fresh token and tells the agent to read `GET /v1/join` with it and follow it exactly (GA-13). `seat_token` is the same token, so that the app can check the text holds it and nothing else shaped like a token. Returned once, in this response only. The token is stored hashed, never in a command outcome, a helper request or an event; a repeat of the key answers LandingPromptIssuedRepeated instead.",
+        "properties": {
+          "seat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seat_token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp"
+            ]
+          }
+        },
+        "required": [
+          "seat_id",
+          "seat_token",
+          "text",
+          "connection"
+        ],
+        "examples": [
+          {
+            "seat_id": "00000000-0000-4000-8000-000000000149",
+            "seat_token": "example-seat-token",
+            "text": "Join leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+            "connection": "http"
+          }
+        ]
+      },
+      "LandingPromptIssuedRepeated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The result a repeat of the key answers in place of LandingPromptIssued: the seat and the connection, with no token and no text, which were shown once and never stored. `repeated` tells it apart from a first answer.",
+        "properties": {
+          "seat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp"
+            ]
+          },
+          "repeated": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "seat_id",
+          "connection",
+          "repeated"
+        ],
+        "examples": [
+          {
+            "seat_id": "00000000-0000-4000-8000-000000000149",
+            "connection": "http",
+            "repeated": true
+          }
+        ]
+      },
+      "LandingPromptIssuedCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the command completed. `result` is LandingPromptIssued the first time the key is answered, with the token shown once inside the prompt, and LandingPromptIssuedRepeated for a repeat of the key (L241, IF-4).",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LandingPromptIssued"
+              },
+              {
+                "$ref": "#/components/schemas/LandingPromptIssuedRepeated"
+              }
+            ]
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "issue_landing_prompt",
+            "outcome": "completed",
+            "result": {
+              "seat_id": "00000000-0000-4000-8000-000000000149",
+              "seat_token": "example-seat-token",
+              "text": "Join leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+              "connection": "http"
+            },
+            "refusal": null
+          },
+          {
+            "key": "example",
+            "command": "issue_landing_prompt",
+            "outcome": "completed",
+            "result": {
+              "seat_id": "00000000-0000-4000-8000-000000000149",
+              "connection": "http",
+              "repeated": true
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "JoinInstructions": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The agent's whole instructions for its role and connection (GA-12, GA-14), as Markdown in `text`: what to read first (its briefing, before any work on a task or a review); the work loop (long-poll `GET /v1/next?wait=30`, act on the answer, claim, work, heartbeat while it holds a task or a review, submit, and ask again at once, never stopping on its own); what each next kind means; how a stop arrives (a 401: the seat was removed, or a new prompt ended its token) and that it then stops at once and tells its user; what it may not do, and how it says what it cannot do (release the work, ask a question, fail a review with notes, or pass a job's question to the owner); and every call (HTTP) or the MCP settings and every tool (MCP) its role may make. A General seat's text names no role file and carries the short safety rules a checker needs (GA-2). The text never holds the token: the agent has it from its landing prompt.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "builder",
+              "reviewer",
+              "planner",
+              "orchestrator",
+              "general"
+            ]
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "http",
+              "mcp"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "role",
+          "connection"
+        ],
+        "examples": [
+          {
+            "text": "You are a general agent of leverage. Keep asking GET /v1/next?wait=30 until a call answers 401.",
+            "role": "general",
+            "connection": "http"
           }
         ]
       }

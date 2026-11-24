@@ -157,6 +157,12 @@
           "type": "array",
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/name"}
+        },
+        "general_tested_providers": {
+          "description": "The login providers whose tool's default model met both suites' bars run as a General seat (contract decision GA-11). Empty until the suites have been run that way; it refuses nothing.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/name"}
         }
       },
       "additionalProperties": {"$ref": "#/$defs/names"}

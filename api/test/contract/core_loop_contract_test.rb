@@ -4,8 +4,10 @@ require_relative "columns_test"
 # The core loop's additions to the contract (milestone 2 plan, section 2.3
 # and TS-8): six operations, the three commands they bring, the helper
 # request's non-secret inputs and per-check progress, the shapes of the
-# provisional owner reads, the landing prompt, and two traces written for a
-# workspace with no rules. Every name is read from the contract files.
+# provisional owner reads, and two traces written for a workspace with no
+# rules. Every name is read from the contract files. The landing prompt
+# read it added became the issue_landing_prompt command (GA-13), which
+# JoinContractTest holds.
 class CoreLoopContractTest < Minitest::Test
   include ContractTestHelpers
 
@@ -14,8 +16,7 @@ class CoreLoopContractTest < Minitest::Test
     "create_owner" => [ "POST", "/v1/owner/setup", "public", [ "create_owner" ] ],
     "sign_out_owner" => [ "POST", "/v1/owner/session/sign-out", "owner", [ "sign_out" ] ],
     "get_helper_request" => [ "GET", "/v1/owner/helper-requests/{id}", "owner", [ "read" ] ],
-    "report_request_progress" => [ "POST", "/v1/helper/requests/{id}/progress", "helper", [ "report_request_progress" ] ],
-    "get_landing_prompt" => [ "GET", "/v1/owner/seats/{id}/landing-prompt", "owner", [ "read" ] ]
+    "report_request_progress" => [ "POST", "/v1/helper/requests/{id}/progress", "helper", [ "report_request_progress" ] ]
   }.freeze
 
   ADDED_COMMANDS = %w[create_owner sign_out report_request_progress].freeze
@@ -51,7 +52,7 @@ class CoreLoopContractTest < Minitest::Test
 
   def validator(component) = JSONSchemer.openapi(doc).ref("#/components/schemas/#{component}")
 
-  def test_the_six_operations_are_in_the_registry_and_in_openapi
+  def test_the_five_operations_still_in_the_registry_and_in_openapi
     ADDED_OPERATIONS.each do |id, (method, path, caller, commands)|
       entry = registry.fetch("operations").find { |op| op["operation_id"] == id }
       refute_nil entry, "#{id} is not a registry operation"
@@ -96,21 +97,6 @@ class CoreLoopContractTest < Minitest::Test
     assert_includes parameter_names("sign_out_owner"), "Idempotency-Key"
     assert_nil op["requestBody"]
     assert_equal [ { "ownerSession" => [] } ], op["security"]
-  end
-
-  def test_the_landing_prompt_is_a_read_that_answers_text_or_a_refusal
-    op = operation("get_landing_prompt")
-    refute_includes parameter_names("get_landing_prompt"), "Idempotency-Key"
-    assert_equal "#/components/schemas/LandingPrompt", response_ref("get_landing_prompt", "200")
-    assert_equal "#/components/schemas/Refusal", response_ref("get_landing_prompt", "409")
-    %w[401 404].each { |status| assert op["responses"].key?(status), "get_landing_prompt lacks #{status}" }
-    prompt = schemas.fetch("LandingPrompt")
-    assert_equal %w[check_interval_minutes connection text], prompt.fetch("required").sort
-    # 20 for a builder or a reviewer, 1 for an orchestrator or a planner (milestone 4 review, finding 19).
-    assert_equal [ 1, 20 ], prompt.dig("properties", "check_interval_minutes", "enum")
-    refused = { "code" => "invalid_state", "rule_id" => nil, "reason" => nil }
-    assert validator("Refusal").valid?(refused)
-    assert_equal %w[text check_interval_minutes connection].sort, ColumnsTest::NOT_COLUMNS.fetch("LandingPrompt").sort
   end
 
   def test_the_helper_request_carries_its_non_secret_inputs_and_its_progress

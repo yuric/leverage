@@ -145,7 +145,10 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
       accepted(command).each { |row| assert_match(/no budget hold/, row["note"].to_s, command) }
     end
     offline = rows("orchestrator_offline").first["side_events"].find { |entry| entry["event"] == "check.queued" }
-    assert_match(/errored approval check.*final/, offline["note"])
+    # An errored approval check stays with the owner once its owner_approval
+    # hold opened (AE-15); one that erred while the orchestrator counted as
+    # offline waits for it instead (GA-6).
+    assert_match(/errored approval check.*one that opened its owner_approval hold stays with the owner/, offline["note"])
   end
 
   def test_job_inputs_require_the_material_and_results_have_length_limits
@@ -186,12 +189,7 @@ class QuestionsAndApprovalsContractTest < Minitest::Test
     assert schema.valid?({ "recovery_time_ceiling_seconds" => nil })
   end
 
-  def test_landing_prompt_and_seat_request_shapes
-    path = "/v1/owner/seats/{id}/landing-prompt"
-    connection = openapi.dig("paths", path, "get", "parameters").find { |entry| entry["name"] == "connection" }
-    assert_equal "http", connection&.dig("schema", "default")
-    assert_equal %w[http mcp], connection.dig("schema", "enum")
-    assert_equal %w[http mcp], property("LandingPrompt", "connection")&.fetch("enum")
+  def test_seat_request_shapes
     %w[ConnectSeatRequest ChangeSeatRequest].each do |name|
       assert_equal [ 1, 3 ], property(name, "strength_rank").values_at("minimum", "maximum")
       refute_includes components.fetch(name).fetch("required"), "strength_rank"

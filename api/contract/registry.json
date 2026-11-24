@@ -161,7 +161,7 @@
     "remove_seat", "start_seat", "stop_seat", "add_credential", "verify_credential",
     "sign_in_again", "rename_credential", "remove_credential", "refresh_usage",
     "reorder_credentials", "install_tool", "heartbeat", "heartbeat_review", "claim_job",
-    "submit_job_result", "issue_seat_token", "report_run_started", "report_run_stopped",
+    "submit_job_result", "issue_seat_token", "issue_landing_prompt", "report_run_started", "report_run_stopped",
     "report_request_progress", "report_request_result", "report_reading", "builder_lease_expiry", "review_lease_expiry",
     "check_queue_timeout", "check_run_timeout", "question_job_queue_timeout",
     "question_job_run_timeout", "contract_draft_job_queue_timeout",
@@ -171,6 +171,7 @@
   "operations": [
     {"operation_id": "get_next", "method": "GET", "path": "/v1/next", "caller": "any", "commands": ["read"], "tag": "agent"},
     {"operation_id": "get_command", "method": "GET", "path": "/v1/commands/{key}", "caller": "any", "commands": ["read"], "tag": "agent"},
+    {"operation_id": "get_join", "method": "GET", "path": "/v1/join", "caller": "any", "commands": ["read"], "tag": "agent"},
     {"operation_id": "claim_next_task", "method": "POST", "path": "/v1/tasks/claim-next", "caller": "builder", "commands": ["claim"], "tag": "agent"},
     {"operation_id": "get_task_briefing", "method": "GET", "path": "/v1/tasks/{id}/briefing", "caller": "holder", "commands": ["read"], "tag": "agent"},
     {"operation_id": "acknowledge_task_briefing", "method": "POST", "path": "/v1/tasks/{id}/ack-briefing", "caller": "holder", "commands": ["acknowledge_briefing"], "tag": "agent"},
@@ -254,7 +255,7 @@
     {"operation_id": "resume_seat", "method": "POST", "path": "/v1/owner/seats/{id}/resume", "caller": "owner", "commands": ["resume_seat"], "tag": "owner"},
     {"operation_id": "change_seat", "method": "POST", "path": "/v1/owner/seats/{id}/change", "caller": "owner", "commands": ["change_seat"], "tag": "owner"},
     {"operation_id": "remove_seat", "method": "POST", "path": "/v1/owner/seats/{id}/remove", "caller": "owner", "commands": ["remove_seat"], "tag": "owner"},
-    {"operation_id": "get_landing_prompt", "method": "GET", "path": "/v1/owner/seats/{id}/landing-prompt", "caller": "owner", "commands": ["read"], "tag": "owner"},
+    {"operation_id": "issue_landing_prompt", "method": "POST", "path": "/v1/owner/seats/{id}/landing-prompt", "caller": "owner", "commands": ["issue_landing_prompt"], "tag": "owner"},
     {"operation_id": "start_seat", "method": "POST", "path": "/v1/owner/seats/{id}/start", "caller": "owner", "commands": ["start_seat"], "tag": "owner"},
     {"operation_id": "stop_seat", "method": "POST", "path": "/v1/owner/seats/{id}/stop", "caller": "owner", "commands": ["stop_seat"], "tag": "owner"},
     {"operation_id": "issue_helper_token", "method": "POST", "path": "/v1/owner/helpers", "caller": "owner", "commands": ["issue_helper_token"], "tag": "owner"},
@@ -403,6 +404,7 @@
       "claude",
       "codex",
       "gemini"
-    ]
+    ],
+    "general_tested_providers": []
   }
 }

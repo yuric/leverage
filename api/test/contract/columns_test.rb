@@ -32,10 +32,12 @@ class ColumnsTest < Minitest::Test
     # Needs you list has a meaning (IF-18). Detail comes from the access
     # hold or the stopped action's approval job.
     "InboxItem" => %w[opened_seq detail],
-    # Text made from the seat's role, the contract and a template, and the
-    # fixed interval it tells the agent (milestone 2 plan, Q-15, the owner's
-    # issue 11). A read with no table behind it.
-    "LandingPrompt" => %w[text check_interval_minutes connection],
+    # Text made from the seat's role, the connection, the contract and a
+    # template (GA-12, GA-14). A read with no table behind it.
+    "JoinInstructions" => %w[text role connection],
+    # The short prompt with the token in it, and the connection it names
+    # (GA-13). Nothing of it is stored.
+    "LandingPromptIssued" => %w[text connection],
     # Derived from the action's approval event and the rule check that stopped it.
     "Action" => %w[approved_at stopped_by_rule_check_id],
     # The project pause's actor, the count of unfinished tasks and the current brief.

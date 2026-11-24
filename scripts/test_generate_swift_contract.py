@@ -69,9 +69,9 @@ def check_agent_tools(cases, registry, openapi):
         rf"summary: {quoted}, inputSchema: {quoted}, roles: \[([^\]]*)\]\),$",
         tools_text, re.MULTILINE)
     operations = [op for op in registry["operations"] if op["tag"] == "agent"]
-    cases.check("AgentTools.swift has all 24 agent operations in registry order",
+    cases.check("AgentTools.swift has all 25 agent operations in registry order (get_join included, GA-12)",
                 [json.loads(row[0]) for row in rows] == [op["operation_id"] for op in operations]
-                and len(rows) == 24, f"found {len(rows)} tool declarations")
+                and len(rows) == 25, f"found {len(rows)} tool declarations")
     roles = load(ROLES)["roles"]
     for raw_id, method, raw_path, raw_summary, raw_schema, role_list in rows:
         tool_id = json.loads(raw_id)
@@ -226,7 +226,9 @@ def main():
         "public enum CommandName: String, Codable, CaseIterable, Sendable {",
         "public enum ContractOperation: String, CaseIterable, Sendable {",
         'case .claimNextTask: return (.post, "/v1/tasks/claim-next", .builder, .agent)',
-        'case .getLandingPrompt: return (.get, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)',
+        'case .issueLandingPrompt: return (.post, "/v1/owner/seats/{id}/landing-prompt", .owner, .owner)',
+        'case .getJoin: return (.get, "/v1/join", .any, .agent)',
+        '    case issueLandingPrompt = "issue_landing_prompt"',
         "public enum TransportErrorCode: String, Codable, CaseIterable, Sendable {",
         '    case keyReused = "key_reused"',
         "public enum HelperCheck: String, Codable, CaseIterable, Sendable {",
@@ -334,6 +336,15 @@ def main():
     ]:
         cases.check(f"writes {line.strip()!r}", line in swift, line)
     cases.check("a list of providers is no enum", "enum OrchestratorTestedProvider" not in swift)
+    cases.check("the providers tested as a General seat are written, as a list (GA-11)",
+                "generalTestedProviders: [Provider] = []" in swift and "enum GeneralTestedProvider" not in swift)
+    cases.check("the landing prompt is no longer a read", "getLandingPrompt" not in swift)
+
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["general_tested_providers"] = ["claude_api"]
+    code, out, _ = run(doctored, openapi)
+    cases.check("a General-tested provider that is not a login fails and names it",
+                code == 1 and "claude_api" in out and "login" in out, out)
 
     # The list's committed values are the managing agent's eval results, so
     # what an empty list gives is asked of a doctored registry, not of the

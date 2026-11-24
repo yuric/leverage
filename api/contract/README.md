@@ -21,7 +21,7 @@ and leaves its meaning to the PRD.
 | `hooks.json` | The hooks, what a failed gate does, hashed inputs, moment names. |
 | `shipped_rules.json` | The seven shipped rules, their version-1 fields. |
 | `jobs.json` | The job kinds: who claims them, timeouts, their input and result components. |
-| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, calls. |
+| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, calls (every role may read `GET /v1/join`). |
 | `timers.json` | Each timer: scope, due-time source, events. |
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
@@ -789,3 +789,48 @@ agent is connected. Its decisions are GA-1 to GA-11 in
   the database, so there is no migration.
 - The guards `builder_seat_enabled` and `builder_seat_unavailable` read a
   role that builds, `builder` or `general` (GA-8).
+
+After the design was challenged, the contract gained these (decisions
+GA-1 to GA-11 as revised):
+
+- One Eligibility predicate decides who may claim a task, and escalation
+  counts only the seats it lets claim the task: the guard `escalates`
+  says so (GA-1).
+- `jobs.json`: question, approval and contract-draft jobs are also
+  queued by `orchestrator_offline`. A job whose last miss fell while its
+  role counted as offline, with an enabled seat that acts as the role,
+  waits and is queued again when the role is back, as an errored rule
+  check is; the timeout rows' side events and the `orchestrator_offline`
+  row say when. A General seat counts for a role's presence only while it
+  holds nothing and `Jobs.claimable` would give it a waiting job (GA-6).
+- `change_seat`: a change of role of a running seat the app runs queues
+  `stop_seat` and then `start_seat` (GA-8).
+- `lists.general_tested_providers`: the login providers whose default
+  model met both suites' bars run as a General seat, empty until the
+  maintainer runs them. The Swift generator writes it as
+  `ContractLists.generalTestedProviders` (GA-11).
+
+## What the join call added
+
+The owner asked that an agent connected by prompt land from one short
+prompt that carries its token, and read the rest of its instructions
+from the server. Its decisions are GA-12 to GA-17 in
+[`decisions.md`](decisions.md#general-role-ga).
+
+- `get_join` (`GET /v1/join`, caller `any`, tag `agent`): every role
+  lists it in `roles.json`, so the generated agent tools include it. It
+  answers `JoinInstructions`, the whole text for the seat's role and the
+  `connection` query (`http` or `mcp`), as JSON with a `text` field
+  (GA-14). The MCP form's settings name the program the API was given in
+  `LEVERAGE_MCP_COMMAND` (GA-15).
+- `issue_landing_prompt` (`POST /v1/owner/seats/{id}/landing-prompt`,
+  command `issue_landing_prompt`, a derived row with no event) replaces
+  the read `get_landing_prompt` and its `LandingPrompt`. It issues the
+  seat's token, ending the one before it, and answers
+  `LandingPromptIssued` once: the short prompt with the token in it, and
+  the token. A repeat of the key answers `LandingPromptIssuedRepeated`
+  (GA-13).
+- `connect_seat` returns no token: `SeatConnected` is the seat's id, and
+  `SeatConnectedRepeated` is gone. The four one-time responses are
+  `SeatTokenPickup`, `LandingPromptIssued`, `HelperTokenIssued` and
+  `OwnerSession`.

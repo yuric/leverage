@@ -126,6 +126,10 @@ LIST_REFERENCES = [
      "provider", "login",
      "The login providers whose tool's default model passed the eval suite (RV-5). "
      "It refuses nothing: the app says \"Not tested for checking tasks.\" beside every other choice."),
+    ("general_tested_providers", "generalTestedProviders", "Provider", "credential_providers",
+     "provider", "login",
+     "The login providers whose tool's default model passed both eval suites run as a General seat (GA-11). "
+     "It refuses nothing: the app says \"Not tested for checking tasks.\" beside a General seat of every other provider."),
     ("important_event_types", "importantEventTypes", "EventType", "event_types",
      "type", None, "The event types shown by the Important filter in Activity."),
 ]
