@@ -68,14 +68,28 @@ struct RulesContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     status
-                    ForEach(model.lines) { line in
-                        RuleRowView(
-                            line: line, isChanging: model.changing.contains(line.id),
-                            turn: { on in Task { await model.setEnabled(line.id, to: on) } },
-                            change: { change(line) }, projects: projects)
-                    }
+                    ruleSection(.orchestratorRules, checker: .model)
+                    ruleSection(.otherAgentRules, checker: .app)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ruleSection(_ title: RulesCopy, checker: RuleChecker) -> some View {
+        let lines = model.lines.filter { $0.row.version.checker == checker }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(verbatim: title.text)
+                    .font(.system(size: Tokens.FontSize.body, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(lines) { line in
+                    RuleRowView(
+                        line: line, isChanging: model.changing.contains(line.id),
+                        turn: { on in Task { await model.setEnabled(line.id, to: on) } },
+                        change: { change(line) }, projects: projects)
+                }
             }
         }
     }
