@@ -53,7 +53,10 @@ FAKE_SWIFT = """#!/bin/sh
 case "$1" in
   build) exit 0 ;;
   test)
-    for name in CoreLoop StoppedReviewer; do
+    names="CoreLoop StoppedReviewer PromptJoin"
+    if [ -n "${FAKE_NO_PROMPT_JOIN:-}" ]; then names="CoreLoop StoppedReviewer"; fi
+    case "$*" in *"--filter LeverageEndToEnd.*PromptJoinEndToEndTests"*) names="PromptJoin" ;; esac
+    for name in $names; do
       folder="$LEVERAGE_E2E_DIR/$name"
       mkdir -p "$folder/support/logs" "$folder/StandIns/state"
       printf '%s\\n' "$FAKE_SECRET" >"$folder/secrets.txt"
@@ -117,6 +120,16 @@ class EndToEndScriptTests(unittest.TestCase):
         code, output = self.run_.run()
         self.assertEqual(code, 0, output)
         self.assertIn("no secret found", output)
+
+    def test_the_full_run_requires_the_prompt_join_case(self):
+        code, output = self.run_.run(FAKE_NO_PROMPT_JOIN="1")
+        self.assertEqual(code, 1, output)
+        self.assertIn("expected all 3 end-to-end tests to run", output)
+
+    def test_the_prompt_join_case_can_run_on_its_own(self):
+        code, output = self.run_.run(LEVERAGE_E2E_ONLY="PromptJoinEndToEndTests")
+        self.assertEqual(code, 0, output)
+        self.assertIn("running 1 end-to-end test", output)
 
     def test_the_api_image_has_a_tag_of_its_own_and_is_removed_after_the_run(self):
         code, output = self.run_.run(FAKE_UP_FAILS="1")
