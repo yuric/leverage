@@ -145,7 +145,7 @@ class JoinContractTest < Minitest::Test
     opened = row["side_events"].select { |entry| entry["event"] == "hold.opened" }.map { |entry| entry["note"] }.join(" ")
     %w[action_unconfirmed check_error owner_approval owner_question].each { |hold| assert_includes opened, hold }
     items = row["side_events"].select { |entry| entry["event"] == "inbox.opened" }.map { |entry| entry["note"] }.join(" ")
-    ["Check could not run", "Approval", "Question passed on"].each { |item| assert_includes items, item }
+    [ "Check could not run", "Approval", "Question passed on" ].each { |item| assert_includes items, item }
     assert_includes row["note"], "new_prompt"
     assert_includes row["note"], "GA-17"
     refute_includes row["note"], "stays with it"

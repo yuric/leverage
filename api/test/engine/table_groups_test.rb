@@ -63,7 +63,7 @@ class TableGroupsTest < ActiveSupport::TestCase
   }.freeze
 
   test "the Questions and approvals commands are served in their groups" do
-    assert_equal 103, Table::COMMANDS.size
+    assert_equal 104, Table::COMMANDS.size
     assert_equal registry.fetch("commands").sort, Table::COMMANDS.sort
     assert_equal MILESTONE_5_TIMERS, Table::TIMERS.drop(11).first(2)
     MILESTONE_5.each do |group, commands|
@@ -100,11 +100,11 @@ class TableGroupsTest < ActiveSupport::TestCase
     end
   end
 
-  test "the table names 103 distinct served commands with registry rows" do
+  test "the table names 104 distinct served commands with registry rows" do
     with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }
       .map { |row| row.fetch("command") }
 
-    assert_equal 103, Table::COMMANDS.size
+    assert_equal 104, Table::COMMANDS.size
     assert_equal Table::COMMANDS.uniq, Table::COMMANDS
     Table::COMMANDS.each do |command|
       assert_includes registry.fetch("commands"), command
