@@ -39,6 +39,7 @@ VERDICTS = FIXTURES / "verdicts"
 RUNS = FIXTURES / "runs"
 SHIPPED = FIXTURES / "shipped_rules.json"
 SPECIFIC_DETAILS = HERE.parent / "evals" / "specific-details"
+APPROVES_ACTIONS = HERE.parent / "evals" / "approves-actions"
 # The made-up canary word of the recorded verdict files.
 CANARY = "vorpelquint"
 
@@ -194,6 +195,21 @@ class BudgetTests(unittest.TestCase):
         entries = [dict(claude, provider=provider) for provider in self.PROVIDERS.split() for _ in range(6)]
         reasons = eval_score.budget_refusals({"runs": entries}, ["grok"], bar)
         self.assertEqual(reasons, ["540 tool runs have been made; 30 more would pass 540 tool runs in all"])
+
+    def test_approves_actions_allows_a_fourth_main_run_across_modes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            entry = {"provider": "codex", "tool_runs": 30}
+            general = {**entry, "mode": "general", "role_file_sha256": None}
+            root = Path(folder)
+            eval_score.write_json(root / "runs.json", {"runs": [entry] * 2})
+            eval_score.write_json(root / "runs-general.json", {"runs": [general]})
+            for mode in eval_score.MODES:
+                with self.subTest(mode=mode):
+                    code, out, err = run("budget", "--suite", APPROVES_ACTIONS,
+                                         "--runs", eval_score.runs_file(root, mode),
+                                         "--providers", "codex", "--mode", mode)
+                    self.assertEqual(code, 0, err)
+                    self.assertIn("room for one more full run of codex", out)
 
     def test_a_model_at_three_runs_is_refused(self):
         code, _, err = self.budget("three-runs.json")
