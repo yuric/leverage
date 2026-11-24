@@ -10,6 +10,10 @@ once it makes its first release.
 
 ### Added
 
+- Every workspace has an Imaginarium project, where tasks from the coming
+  prompt gallery will go. A new installation gets it at setup, and an
+  existing one gets it once when the updated app starts its server. The
+  side pane lists it first among the projects, on a faint rainbow tint.
 - A new installation opens the setup assistant: a welcome, two logins
   from two providers, a General agent for each login, and a first task
   from three built-in starter tasks or one the owner writes. Leaving it
@@ -18,6 +22,8 @@ once it makes its first release.
   pane, and a spotlight that dims the window and leaves the next control
   lit. The requirements and pictures are in
   [docs/onboarding/PRD.md](docs/onboarding/PRD.md).
+- Added the Age of Lever marketing page with a provider-neutral board, a
+  handoff example, and an interactive preview of the Imaginarium.
 - Connect defaults to General. A General agent can build, review, draft
   contracts, check tasks, answer questions and decide approvals, one job,
   task or review at a time. A running seat the app manages restarts when

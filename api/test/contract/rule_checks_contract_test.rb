@@ -75,9 +75,10 @@ class RuleChecksContractTest < Minitest::Test
 
   # L434, SM-33: creating the workspace writes the shipped rules, the
   # workspace's first events, with the owner as actor and the command's key.
+  # DB-53: the Imaginarium project's project.created comes after them.
   def test_create_owner_writes_the_shipped_rules
     row = rows_of("create_owner").first
-    assert_equal [ "rule.created" ], row["events"]
+    assert_equal [ "rule.created", "project.created" ], row["events"]
     refute_includes row["note"], "with no rule"
     assert_includes row["note"], "SM-33"
     assert_includes row["note"], "shipped rule"

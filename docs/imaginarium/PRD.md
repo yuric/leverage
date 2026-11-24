@@ -75,10 +75,12 @@ entries, the generated Swift in `LeverageKit`, the board, tests and docs.
 
 ## Part 2: every workspace has an Imaginarium project
 
+Part 2 is built, and IM-5 to IM-7 are now in [docs/PRD.md](../PRD.md#the-imaginarium-project), which is their home.
+
 | ID | Requirement |
 | --- | --- |
 | IM-5 | Creating the owner's sign-in on a new installation, the setup command in [`setup_controller.rb`](../../api/app/controllers/v1/owner/setup_controller.rb), also creates a project named "Imaginarium" in the same transaction, writing `project.created`. Setup cannot finish without it. |
-| IM-6 | An existing installation gets the project once, through a migration that skips a workspace that already has it. Running the migration twice creates nothing new. |
+| IM-6 | An existing installation gets the project once, when an update of the app starts its server, through a command that skips a workspace that already has it. Running it twice creates nothing new. No payment or plan change is involved. |
 | IM-7 | The workspace records which project is the Imaginarium project by its id, not by its name. In every other way it is an ordinary project, with a brief, a budget and a pause. It is listed first among the projects in the side pane, as a plain project row with a faint rainbow tint and no icon, so that it reads as related to the Imaginarium tab. |
 | IM-8 | Every task sent from the Imaginarium goes to this project. The Try it sheet offers no project choice. The owner can still move a task to another project later with the existing command that changes a task's project. |
 
@@ -111,11 +113,10 @@ entries, the generated Swift in `LeverageKit`, the board, tests and docs.
 
 1. No task state, effect or label named `imaginarium` is left, an old event
    log still replays, and every test passes (IM-1 to IM-4).
-2. A new installation has the Imaginarium project right after setup, and an
-   upgraded one gets it exactly once (IM-5, IM-6).
+2. A new installation has the Imaginarium project right after setup,    updated one gets it exactly once (IM-5, IM-6).
 3. From the tab, Send to Ready puts a task in Ready in the Imaginarium
    project, with the catalog's checks as its criteria and the text shown,
-   edited or not, as its goal.
+   edited or not, as its details.
 4. Copy prompt puts the text shown on the clipboard and changes nothing on
    the board. Save it to Ideas puts the task in Ideas.
 5. The catalog test passes on all 32 entries.
@@ -123,7 +124,7 @@ entries, the generated Swift in `LeverageKit`, the board, tests and docs.
 ## Build order
 
 1. The rename (Part 1), as its own pull request.
-2. The Imaginarium project at setup and on upgrade (Part 2).
+2. The Imaginarium project at setup and on an app update (Part 2).
 3. The catalog file and its test (Part 4).
 4. The tab, the Try it sheet, and the Copy, Edit, Send to Ready and Save to
    Ideas actions (Part 3).

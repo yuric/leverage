@@ -43,7 +43,8 @@ module Leverage
     # What Timers.apply_workspace runs (milestone 4 plan §0.1 fact 6,
     # RD-2): the workspace timers of timers.json, and the commands the app
     # runs on a workspace with no state (every state_machine.json row of
-    # the command is the app's and reads no state: install_shipped_rules).
+    # the command is the app's and reads no state: install_shipped_rules,
+    # install_imaginarium_project).
     WORKSPACE_COMMANDS = begin
       timers = Contract.timers.fetch("timers").select { |timer| timer.fetch("scope") == "workspace" }
       rows = Contract.state_machine.fetch("groups").flat_map { |group| group.fetch("rows") }.group_by { |row| row.fetch("command") }

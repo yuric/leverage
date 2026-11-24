@@ -9,7 +9,8 @@ module Leverage
       # password, a session whose token is returned once, and the seven
       # shipped rules, whose rule.created by the owner with the command's
       # key are the workspace's first events (L434, SM-33; this replaces
-      # milestone 2's EN-4, a workspace with no rule). Allowed once: once any
+      # milestone 2's EN-4, a workspace with no rule), and then the
+      # Imaginarium project, whose project.created follows them (DB-53). Allowed once: once any
       # owner exists, a new key is 404 not_found; a repeat of the key that
       # created it is answered by Idempotency before this entry runs.
       class CreateOwner < Entry
@@ -37,6 +38,7 @@ module Leverage
             created_at: ctx.at, updated_at: ctx.at)
           ctx.caller_id = user.id
           RuleRecords.install_shipped(ctx)
+          Projects.create_imaginarium(ctx)
           @result, @once = SignIn.open_session(ctx, user)
         end
       end

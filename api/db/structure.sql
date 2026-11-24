@@ -721,7 +721,8 @@ CREATE TABLE public.workspaces (
     recovery_time_ceiling_seconds integer,
     last_seq bigint DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    imaginarium_project_id uuid
 );
 
 
@@ -2251,6 +2252,14 @@ ALTER TABLE ONLY public.jobs
 
 
 --
+-- Name: workspaces fk_rails_d6d6fd5197; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workspaces
+    ADD CONSTRAINT fk_rails_d6d6fd5197 FOREIGN KEY (imaginarium_project_id) REFERENCES public.projects(id);
+
+
+--
 -- Name: holds fk_rails_d75e664cb3; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2402,6 +2411,7 @@ SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
 ('20261124171356'),
+('20261124150000'),
 ('20261124100000'),
 ('20261121114342'),
 ('20261121011155'),

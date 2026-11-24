@@ -12,9 +12,11 @@ module Leverage
           open = Task.where(workspace_id: workspace_id, project_id: ids).where.not(state: %w[done cancelled]).group(:project_id).count
           pauses = pause_actors(workspace_id, projects.select(&:paused).map(&:id))
           references = latest_work_references(workspace_id, ids)
+          imaginarium_id = Workspace.where(id: workspace_id).pick(:imaginarium_project_id)
 
           { projects: projects.map do |project|
-            shape(project, briefs.fetch(project.id, []), open.fetch(project.id, 0), pauses[project.id], references[project.id])
+            shape(project, briefs.fetch(project.id, []), open.fetch(project.id, 0), pauses[project.id], references[project.id],
+              imaginarium: project.id == imaginarium_id)
           end }
         end
       end
@@ -30,8 +32,8 @@ module Leverage
           .pluck(Arel.sql("DISTINCT ON (project_id) project_id"), :work_reference).to_h
       end
 
-      def shape(project, brief, open_tasks, pause_actor, latest_work_reference)
-        { id: project.id, name: project.name.to_s, goal: project.goal.to_s,
+      def shape(project, brief, open_tasks, pause_actor, latest_work_reference, imaginarium:)
+        { id: project.id, name: project.name.to_s, imaginarium: imaginarium, goal: project.goal.to_s,
           budget: Shapes.number(project.budget), spent: Shapes.number(project.spent), paused: project.paused,
           brief_version: project.brief_version, brief: brief.map { |entry| brief_entry(entry) },
           paused_by: { "owner" => "owner", "app" => "budget" }[pause_actor],

@@ -8,9 +8,21 @@ module Leverage
 
     module_function
 
-    def create(ctx, name:, goal: nil, budget: nil)
+    IMAGINARIUM_NAME = "Imaginarium".freeze
+
+    # imaginarium: is true only for the workspace's Imaginarium project
+    # (DB-53), which create_imaginarium makes.
+    def create(ctx, name:, goal: nil, budget: nil, imaginarium: false)
       project = Project.create!(workspace_id: ctx.workspace.id, name: name, goal: goal, budget: budget)
-      ctx.emit("project.created", project_id: project.id)
+      ctx.emit("project.created", project_id: project.id, payload: { imaginarium: imaginarium })
+      project
+    end
+
+    # The workspace's Imaginarium project, recorded on the workspace by id
+    # (DB-53). One path for create_owner and install_imaginarium_project.
+    def create_imaginarium(ctx)
+      project = create(ctx, name: IMAGINARIUM_NAME, imaginarium: true)
+      ctx.workspace.update!(imaginarium_project_id: project.id)
       project
     end
 

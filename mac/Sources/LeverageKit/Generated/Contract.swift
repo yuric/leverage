@@ -62,6 +62,7 @@ public enum CommandName: String, Codable, CaseIterable, Sendable {
     case revertRule = "revert_rule"
     case removeRule = "remove_rule"
     case installShippedRules = "install_shipped_rules"
+    case installImaginariumProject = "install_imaginarium_project"
     case createProject = "create_project"
     case editBrief = "edit_brief"
     case deleteContent = "delete_content"

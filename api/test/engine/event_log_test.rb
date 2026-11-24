@@ -25,7 +25,8 @@ class EventLogTest < ActiveSupport::TestCase
   test "seq comes from the workspace's counter, which each append moves on" do
     before = @scenario.workspace.reload.last_seq
     _task, first = with_task
-    second = append("project.created", project_id: Project.create!(workspace_id: @scenario.workspace_id).id)
+    second = append("project.created", project_id: Project.create!(workspace_id: @scenario.workspace_id).id,
+      payload: { imaginarium: false })
 
     assert_equal [ before + 1, before + 2 ], [ first.seq, second.seq ]
     assert_equal before + 2, @scenario.workspace.reload.last_seq

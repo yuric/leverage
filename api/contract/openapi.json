@@ -7582,6 +7582,7 @@
           "revert_rule",
           "remove_rule",
           "install_shipped_rules",
+          "install_imaginarium_project",
           "create_project",
           "edit_brief",
           "delete_content",
@@ -11568,6 +11569,10 @@
           "name": {
             "type": "string"
           },
+          "imaginarium": {
+            "type": "boolean",
+            "description": "True for the workspace's Imaginarium project, the one every workspace gets at setup (DB-53, IM-7)."
+          },
           "goal": {
             "type": "string"
           },
@@ -11629,6 +11634,7 @@
         "required": [
           "id",
           "name",
+          "imaginarium",
           "goal",
           "budget",
           "spent",
@@ -11644,6 +11650,7 @@
           {
             "id": "00000000-0000-4000-8000-000000000142",
             "name": "example",
+            "imaginarium": false,
             "goal": "example",
             "latest_work_reference": null,
             "budget": 0.0,
@@ -15455,6 +15462,7 @@
               {
                 "id": "00000000-0000-4000-8000-000000000232",
                 "name": "example",
+                "imaginarium": false,
                 "goal": "example",
                 "latest_work_reference": null,
                 "budget": 0.0,

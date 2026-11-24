@@ -27,14 +27,15 @@ class CreateOwnerTest < ActiveSupport::TestCase
   end
 
   test "it creates the workspace, the owner and a session, and returns the token once" do
-    counts = [ Workspace.count, Event.count, Rule.count ]
+    counts = [ Workspace.count, Event.count, Rule.count, Project.count ]
     outcome = T.apply(request)
 
     assert outcome.completed?
     user = User.find_by!(email_address: EMAIL)
     workspace = Workspace.find(user.workspace_id)
-    assert_equal [ counts[0] + 1, counts[1] + 7, counts[2] + 7 ], [ Workspace.count, Event.count, Rule.count ],
-      "one workspace, its seven shipped rules and their seven events (L434, RD-1)"
+    assert_equal [ counts[0] + 1, counts[1] + 8, counts[2] + 7, counts[3] + 1 ],
+      [ Workspace.count, Event.count, Rule.count, Project.count ],
+      "one workspace, its seven shipped rules and their seven events (L434, RD-1), and the Imaginarium project with its event (DB-53)"
     assert_equal 3600, workspace.lease_length_seconds, "the workspace has the default settings"
     assert user.authenticate(PASSWORD), "the password is kept as a digest that authenticates"
     refute_includes user.password_digest, PASSWORD
@@ -101,10 +102,11 @@ class CreateOwnerTest < ActiveSupport::TestCase
     events = Event.where(workspace_id: user.workspace_id).order(:seq).to_a
     rules = Rule.where(workspace_id: user.workspace_id).to_a.index_by(&:id)
     shipped = Leverage::Rules::Shipped.all
-    assert_equal [ "rule.created" ] * 7, events.map(&:type)
-    assert_equal (1..7).to_a, events.map(&:seq), "nothing comes before them"
-    assert_equal shipped.map(&:key), events.map { |event| rules.fetch(event.subject_id).key }
-    events.each do |event|
+    assert_equal [ "rule.created" ] * 7 + [ "project.created" ], events.map(&:type), "the project comes after the rules (DB-53)"
+    assert_equal (1..8).to_a, events.map(&:seq), "nothing comes before them"
+    rule_events = events.first(7)
+    assert_equal shipped.map(&:key), rule_events.map { |event| rules.fetch(event.subject_id).key }
+    rule_events.each do |event|
       rule = rules.fetch(event.subject_id)
       version = RuleVersion.find_by!(rule_id: rule.id, version: 1)
       assert_equal({ "rule_version_id" => version.id, "version" => 1, "enabled" => true }, event.payload)
@@ -116,10 +118,25 @@ class CreateOwnerTest < ActiveSupport::TestCase
     assert outcome.completed?
   end
 
-  test "a password that is too short creates no rule either" do
-    counts = [ Rule.count, RuleVersion.count, Event.count ]
+  test "it creates the workspace's one project, the Imaginarium, and records its id (DB-53)" do
+    T.apply(request)
+
+    user = User.find_by!(email_address: EMAIL)
+    workspace = Workspace.find(user.workspace_id)
+    projects = Project.where(workspace_id: workspace.id).to_a
+    assert_equal [ "Imaginarium" ], projects.map(&:name)
+    assert_equal projects.first.id, workspace.imaginarium_project_id
+    event = Event.where(workspace_id: workspace.id, type: "project.created").sole
+    assert_equal({ "imaginarium" => true }, event.payload)
+    assert_equal [ projects.first.id, "owner", user.id, "setup-1" ],
+      [ event.project_id, event.actor_kind, event.actor_id, event.command_id ]
+    assert_empty Leverage::Replay.diff(workspace.id)
+  end
+
+  test "a password that is too short creates no rule or project either" do
+    counts = [ Rule.count, RuleVersion.count, Event.count, Project.count ]
 
     assert_raises(T::Invalid) { T.apply(request(password: "short-7")) }
-    assert_equal counts, [ Rule.count, RuleVersion.count, Event.count ]
+    assert_equal counts, [ Rule.count, RuleVersion.count, Event.count, Project.count ]
   end
 end

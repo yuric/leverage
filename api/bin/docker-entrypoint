@@ -19,9 +19,12 @@ fi
 # creates leverage_api and sets its password from LEVERAGE_API_DB_PASSWORD.
 # Then the transition function installs the shipped rules where there are
 # none and updates any rule still on a superseded shipped default (UI-5).
+# Then every workspace that has no Imaginarium project gets it, once, the
+# same way (DB-53); one that has it is left alone.
 if $server; then
   ./bin/rails db:prepare
   ./bin/rails leverage:install_shipped_rules
+  ./bin/rails leverage:install_imaginarium_project
 fi
 
 # If running the tests then create or migrate the test database first, so

@@ -176,7 +176,7 @@
             "subject_id": null,
             "cause_id": null,
             "command_id": "$key:create_project_1",
-            "payload": {}
+            "payload": {"imaginarium": false}
           }
         ],
         "steps_opened": [],

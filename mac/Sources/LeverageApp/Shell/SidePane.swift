@@ -1,3 +1,4 @@
+import LeverageKit
 import SwiftUI
 
 /// The floating left pane: tabs, project filters, setup's progress while the
@@ -106,24 +107,34 @@ struct SidePane: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     projectRow(ShellCopy.allProjects.text, id: nil, symbol: "square.grid.2x2")
-                    ForEach(context.paneProjects, id: \.id) { project in
+                    ForEach(Self.orderedProjects(context.paneProjects), id: \.id) { project in
                         projectRow(
                             project.name.isEmpty ? ProjectsCopy.deletedProject.text : project.name,
-                            id: project.id, symbol: "folder")
+                            id: project.id, symbol: "folder",
+                            tint: project.imaginarium ? Tokens.Palette.imaginariumTint : nil)
                     }
                 }
             }
         }
     }
 
-    private func projectRow(_ name: String, id: UUID?, symbol: String) -> some View {
-        row(name, symbol: symbol, selected: context.navigator.boardFilter.projectID == id) {
+    /// The projects in the order the pane lists them: the Imaginarium project
+    /// first, the rest in the order they came.
+    static func orderedProjects(_ projects: [Project]) -> [Project] {
+        projects.filter(\.imaginarium) + projects.filter { !$0.imaginarium }
+    }
+
+    private func projectRow(
+        _ name: String, id: UUID?, symbol: String, tint: LinearGradient? = nil
+    ) -> some View {
+        row(name, symbol: symbol, selected: context.navigator.boardFilter.projectID == id, tint: tint) {
             context.navigator.selectProject(id)
         }
     }
 
     private func row(
-        _ title: String, symbol: String, selected: Bool, badge: String? = nil, action: @escaping () -> Void
+        _ title: String, symbol: String, selected: Bool, badge: String? = nil, tint: LinearGradient? = nil,
+        action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -150,6 +161,9 @@ struct SidePane: View {
                     RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous)
                         .fill(Tokens.Palette.tabOnBackground)
                         .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                } else if let tint {
+                    RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous)
+                        .fill(tint)
                 }
             }
             .contentShape(Rectangle())

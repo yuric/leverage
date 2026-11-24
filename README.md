@@ -19,6 +19,7 @@ deployment, and implementation follow from them.
 | `docs/adr/` | Architecture decision records, listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#architecture-decision-records). |
 | `api/` | The server: a Rails application in API mode, run with PostgreSQL in Docker containers (`compose.yaml`, `.env.example`). |
 | `mac/` | A Swift package with the Mac app, helper, reference runner, MCP server and shared library. |
+| [`marketing-page/`](marketing-page/) | Age of Lever, the public-facing site for Leverage. |
 | [docs/design/](docs/design/README.md) | The design reference: a working mockup of the owner-facing screens. |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents working in this repository. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to propose changes, including the rules for AI-assisted contributions. |
@@ -28,6 +29,17 @@ deployment, and implementation follow from them.
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes, release by release. |
 | [docs/research/](docs/research/open-source-practices/README.md) | Research behind the project's repository practices: advice versus what young popular repositories do. |
 | [docs/research/prd-review/](docs/research/prd-review/README.md) | The adversarial review of the PRD: 89 findings for the owner to accept or reject. |
+
+## Preview the marketing page locally
+
+From the repository root, serve the static files:
+
+```bash
+python3 -m http.server 8765 --bind 127.0.0.1 --directory marketing-page
+```
+
+Open <http://127.0.0.1:8765/>. Run the workflow demo tests with
+`node --test scripts/test_marketing_demo.mjs`.
 
 ## Getting involved
 

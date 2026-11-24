@@ -83,7 +83,7 @@ class TimersSeamsTest < ActiveSupport::TestCase
   end
 
   test "it runs only the workspace timers and the app's own commands, never a task timer or a caller's command" do
-    assert_equal %w[command_key_retention install_shipped_rules orchestrator_offline reviewer_eligibility seat_run_placement usage_read_due],
+    assert_equal %w[command_key_retention install_imaginarium_project install_shipped_rules orchestrator_offline reviewer_eligibility seat_run_placement usage_read_due],
       Timers::WORKSPACE_COMMANDS.sort
     %w[builder_lease_expiry check_queue_timeout add_task claim made_up_timer].each do |name|
       assert_raises(ArgumentError, name) { Timers.apply_workspace(@scenario.workspace, name, at: @scenario.database_now) }
@@ -94,7 +94,7 @@ class TimersSeamsTest < ActiveSupport::TestCase
     names = Leverage::Contract.timers.fetch("timers").map { |timer| timer.fetch("timer") }
     names.each { |name| assert Timers.timer_command?(name), name }
     T::Table::TIMERS.each { |name| assert Timers.timer_command?(name), name }
-    %w[add_task claim install_shipped_rules].each { |name| refute Timers.timer_command?(name), name }
+    %w[add_task claim install_shipped_rules install_imaginarium_project].each { |name| refute Timers.timer_command?(name), name }
   end
 
   # --- job_due_at -------------------------------------------------------------

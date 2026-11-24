@@ -276,11 +276,11 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   end
 
   test "the table lists its commands in fourteen groups, each a registry command with state-table rows" do
-    assert_equal 104, T::Table::COMMANDS.size
+    assert_equal 105, T::Table::COMMANDS.size
     groups = [ T::Table::TASK_LOOP, T::Table::TIMERS, T::Table::SIGN_IN, T::Table::ACCOUNTS, T::Table::HANDOFF,
                T::Table::OWNER_CONTROLS, T::Table::RULES, T::Table::CHECKS, T::Table::JOBS, T::Table::FINISHING,
                T::Table::QUESTIONS, T::Table::PROJECTS, T::Table::WORKSPACE, T::Table::CREDENTIALS ]
-    assert_equal [ 17, 14, 5, 12, 3, 7, 7, 2, 5, 11, 5, 9, 2, 5 ], groups.map(&:size)
+    assert_equal [ 17, 14, 5, 12, 3, 7, 7, 2, 5, 11, 5, 10, 2, 5 ], groups.map(&:size)
     assert_equal T::Table::COMMANDS, groups.flatten
     assert_equal T::Table::COMMANDS.uniq, T::Table::COMMANDS
     commands_with_rows = Leverage::Contract.state_machine.fetch("groups").flat_map { |g| g.fetch("rows") }.map { |r| r.fetch("command") }
