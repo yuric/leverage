@@ -22,7 +22,7 @@ require_relative "state_table_workspace_test"
 # invalid_state pair for its commands; this file proves that together they
 # leave nothing out:
 #
-# - the fourteen groups are the whole Table of 104, each command in exactly one;
+# - the fourteen groups are the whole Table of 105, each command in exactly one;
 # - the state-table test classes cover the Table, each command in exactly one;
 # - the commands the served operations run (Http::RouteTable, the
 #   registry's commands of each operation) are exactly the Table's
@@ -58,12 +58,12 @@ class StateTableAllTest < ActiveSupport::TestCase
   # operation runs them.
   def app_only = T::Table::COMMANDS.select { |command| StateTableCases.rows(command).all? { |row| row.fetch("who") == %w[app] } }
 
-  test "the fourteen groups are the whole Table of 104, each command in exactly one" do
-    assert_equal 104, T::Table::COMMANDS.size
+  test "the fourteen groups are the whole Table of 105, each command in exactly one" do
+    assert_equal 105, T::Table::COMMANDS.size
     commands = TABLE_GROUPS.flat_map { |group| T::Table.const_get(group) }
     assert_equal commands.uniq, commands, "a command is in two groups"
     assert_equal T::Table::COMMANDS.sort, commands.sort
-    assert_equal 104, commands.size
+    assert_equal 105, commands.size
   end
 
   test "the state-table test classes cover the Table, each command in exactly one" do
@@ -72,8 +72,8 @@ class StateTableAllTest < ActiveSupport::TestCase
     assert_equal T::Table::COMMANDS.sort, commands.sort
   end
 
-  test "the app alone runs the timers, installs shipped rules and requests actions or grants their leases" do
-    assert_equal (T::Table::TIMERS + %w[install_shipped_rules request_action grant_action_lease]).sort, app_only.sort
+  test "the app alone runs the timers, installs shipped rules and the Imaginarium project, and requests actions or grants their leases" do
+    assert_equal (T::Table::TIMERS + %w[install_shipped_rules install_imaginarium_project request_action grant_action_lease]).sort, app_only.sort
   end
 
   test "the commands the served operations run are exactly the Table's commands but those the app alone runs" do

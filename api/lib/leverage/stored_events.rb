@@ -15,5 +15,9 @@ module Leverage
     # other value, nil included, passes through, so each reader keeps its
     # own strictness about a missing state.
     def self.task_state(state) = RENAMED_TASK_STATES.fetch(state, state)
+
+    # Whether a stored project.created says it made the Imaginarium project
+    # (DB-53). One written before the field has none, which reads as false.
+    def self.imaginarium(flag) = flag == true
   end
 end

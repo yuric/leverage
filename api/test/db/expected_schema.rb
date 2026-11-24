@@ -51,10 +51,12 @@ module ExpectedSchema
         "maximum_rounds" => int(default: "3"),
         "rerun_limit" => int(default: "3"),
         "recovery_time_ceiling_seconds" => int(null: true),
-        "last_seq" => col("bigint", default: "0")
+        "last_seq" => col("bigint", default: "0"),
+        # DB-53: the workspace's Imaginarium project, known by its id.
+        "imaginarium_project_id" => uuid(null: true)
       ).merge(STAMPS),
       indexes: [],
-      foreign_keys: []
+      foreign_keys: [ fk("imaginarium_project_id", "projects") ]
     },
     "users" => {
       columns: OWNED.merge(

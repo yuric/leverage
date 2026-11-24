@@ -19,10 +19,12 @@ fi
 # creates leverage_api and sets its password from LEVERAGE_API_DB_PASSWORD.
 # Then every workspace that has no rule gets the seven shipped rules, once,
 # through the transition function (milestone 4 plan RD-2); a workspace that
-# has its rules is left alone.
+# has its rules is left alone. Then every workspace that has no Imaginarium
+# project gets it, once, the same way (DB-53); one that has it is left alone.
 if $server; then
   ./bin/rails db:prepare
   ./bin/rails leverage:install_shipped_rules
+  ./bin/rails leverage:install_imaginarium_project
 fi
 
 # If running the tests then create or migrate the test database first, so

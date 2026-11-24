@@ -14,7 +14,9 @@ module Leverage
   #   holds         the open set with reasons
   #   rule_checks   result, and override (who and when)
   #   rules         enabled and current version
-  #   projects      paused and spent
+  #   projects      paused and spent, and which one is the Imaginarium project
+  #                 (the workspace's imaginarium_project_id, from
+  #                 project.created's imaginarium; none reads as false)
   #   task_steps    every row
   #
   # Holder rules (L781, DB-43): set by task.claimed, and by any event whose
@@ -139,10 +141,15 @@ module Leverage
         holds: rows(scope.call(Hold).where(closed_at: nil), %w[reason]),
         rule_checks: rows(scope.call(RuleCheck), %w[result overridden_by_user_id overridden_at]),
         rules: rows(scope.call(Rule), %w[enabled current_version]),
-        projects: rows(scope.call(Project), %w[paused spent]).transform_values do |row|
-          row.merge("spent" => BigDecimal(row.fetch("spent").to_s))
-        end
+        projects: project_rows(workspace_id, scope.call(Project))
       }
+    end
+
+    def project_rows(workspace_id, projects)
+      imaginarium_id = Workspace.where(id: workspace_id).pick(:imaginarium_project_id)
+      rows(projects, %w[paused spent]).to_h do |id, row|
+        [ id, row.merge("spent" => BigDecimal(row.fetch("spent").to_s), "imaginarium" => id == imaginarium_id) ]
+      end
     end
 
     # --- projecting one event ----------------------------------------------
@@ -159,7 +166,8 @@ module Leverage
       when /\Arule\./ then return rule(projection, event, payload)
       when /\Acheck\./ then return check(projection, event, payload, task)
       when "project.created"
-        projection[:projects][event.project_id] = { "paused" => false, "spent" => BigDecimal("0") }
+        projection[:projects][event.project_id] = { "paused" => false, "spent" => BigDecimal("0"),
+          "imaginarium" => StoredEvents.imaginarium(payload["imaginarium"]) }
       when "project.paused", "project.resumed"
         projection[:projects].fetch(event.project_id)["paused"] = event.type == "project.paused"
       when "cost.reported"

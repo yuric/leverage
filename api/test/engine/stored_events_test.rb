@@ -47,11 +47,30 @@ class StoredEventsTest < ActiveSupport::TestCase
     assert_equal "ideas", Leverage::LogAudit.observe(nil, [ event ])
   end
 
+  test "a stored project.created with no imaginarium field reads as false, and replays clean" do
+    ctx = @scenario.context
+    project = Project.create!(workspace_id: @scenario.workspace_id, name: "A made-up project")
+    event = Event.create!(workspace_id: @scenario.workspace_id, seq: ctx.workspace.last_seq + 1, at: ctx.at,
+      effective_at: ctx.at, type: "project.created", schema_version: 1, actor_kind: "owner", actor_id: @owner.id,
+      project_id: project.id, payload: {})
+    ctx.workspace.update_columns(last_seq: event.seq)
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+    assert_equal false, Leverage::Replay.project(@scenario.workspace_id).fetch(:projects).fetch(project.id).fetch("imaginarium")
+  end
+
+  test "replay finds the workspace's imaginarium_project_id pointing at another project" do
+    project = @scenario.project
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+    @scenario.workspace.update!(imaginarium_project_id: project.id)
+    assert_match(/projects #{project.id} imaginarium/, Leverage::Replay.diff(@scenario.workspace_id).join("\n"))
+  end
+
   test "the mapping turns the old spelling into the new one and passes everything else through" do
     assert_equal "ideas", Leverage::StoredEvents.task_state("imaginarium")
     assert_equal "ideas", Leverage::StoredEvents.task_state("ideas")
     assert_equal "backlog", Leverage::StoredEvents.task_state("backlog")
     assert_nil Leverage::StoredEvents.task_state(nil)
+    assert_equal [ true, false, false ], [ true, false, nil ].map { |flag| Leverage::StoredEvents.imaginarium(flag) }
   end
 
   test "replaying a task.created with no state still raises KeyError" do
