@@ -68,11 +68,10 @@ class EvalInputsTest < ActiveSupport::TestCase
   # contract with this contract waits on the shipped rule's check. Each
   # claim is a new orchestrator's: a seat that holds a job gets that job
   # again (RD-40).
-  def claimed_input(contract)
+  def claimed_input(contract, role: "orchestrator")
     _task, _pending, check = waiting_contract(@rule, body: contract)
-    orchestrator = scenario.orchestrator(credential: scenario.credential(provider: "codex", model: nil),
-      model: "codex-model-1")
-    outcome = assert_completed(claim_job(orchestrator))
+    seat = scenario.seat(role: role, credential: scenario.credential(provider: "codex", model: nil), model: "codex-model-1")
+    outcome = assert_completed(claim_job(seat))
     assert_equal job_of(check).id, outcome.result.fetch("job_id")
     outcome.result.fetch("input")
   end
@@ -89,6 +88,30 @@ class EvalInputsTest < ActiveSupport::TestCase
       assert_matches_component("RuleCheckJobInput", input)
       claimed = claimed_input(EvalInputs.contract(kase, canary_path: CANARY_PATH))
       assert_equal without_ids(claimed), without_ids(input), kase.fetch("id")
+      assert_equal [], input.dig("material", "job_rules")
+    end
+  end
+
+  test "General verdict cases carry the material the General seat claims" do
+    Dir.mktmpdir do |folder|
+      FileUtils.mkdir_p(File.join(folder, "cases"))
+      CASES.each do |kase|
+        File.write(File.join(folder, "cases", "#{kase.fetch("id")}.json"), JSON.generate(kase))
+      end
+      claims = CASES.to_h do |kase|
+        contract = EvalInputs.contract(kase, canary_path: CANARY_PATH)
+        [ kase.fetch("id"), claimed_input(contract, role: "general") ]
+      end
+
+      suite = build_general_suite(folder)
+
+      assert_equal claims.keys, suite.fetch("cases").pluck("id")
+      suite.fetch("cases").each do |entry|
+        id, input = entry.values_at("id", "input")
+        assert_matches_component("RuleCheckJobInput", input)
+        assert_equal without_ids(claims.fetch(id)), without_ids(input), id
+        assert_general_material(input)
+      end
     end
   end
 
@@ -162,6 +185,7 @@ class EvalInputsTest < ActiveSupport::TestCase
     assert_equal APPROVAL_CASE.dig("contract", "actions"), input.dig("material", "contract", "actions")
     assert_equal Leverage::Rules::Shipped.find(APPROVAL_RULE_KEY).instruction, input.dig("material", "instruction")
     assert_equal Leverage::RoleFiles.text("orchestrator"), input.dig("material", "role_file")
+    assert_equal [], input.dig("material", "job_rules")
     assert_equal "Read the draft at #{CANARY_PATH}.", input.dig("material", "contract", "details")
     assert_equal [
       { "label" => "handoff_note", "text" => "The announcement was built from #{CANARY_PATH}." },
@@ -218,6 +242,19 @@ class EvalInputsTest < ActiveSupport::TestCase
         entries.each { |entry| assert_matches_component("ApprovalJobInput", entry.fetch("input")) }
         assert_equal counts, models.map(&:count)
       end
+
+      claimed = claimed_approval_input(role: "general")
+      counts = models.map(&:count)
+      suite = build_general_suite(folder, "--held-out")
+
+      assert_equal %w[01-held_out 02-held_out], suite.fetch("cases").pluck("id")
+      suite.fetch("cases").each do |entry|
+        input = entry.fetch("input")
+        assert_matches_component("ApprovalJobInput", input)
+        assert_equal approval_without_ids(claimed), approval_without_ids(input)
+        assert_general_material(input)
+      end
+      assert_equal counts, models.map(&:count)
     end
   end
 
@@ -225,7 +262,24 @@ class EvalInputsTest < ActiveSupport::TestCase
 
   def approval_without_ids(input) = input.except("action_id", "rule_check_id", "task_id")
 
-  def claimed_approval_input
+  def build_general_suite(folder, *flags)
+    output = File.join(folder, "general-inputs.json")
+    capture_io do
+      EvalInputs.main([ "--suite", folder, "--canary-path", CANARY_PATH, "--out", output, "--mode", "general", *flags ])
+    end
+    JSON.parse(File.read(output))
+  rescue OptionParser::ParseError => error
+    flunk "The eval input builder refused General mode: #{error.message}"
+  end
+
+  def assert_general_material(input)
+    general = Leverage::Contract.roles.fetch("roles").find { |entry| entry.fetch("role") == "general" }
+    material = input.fetch("material")
+    assert_nil material.fetch("role_file")
+    assert_equal general.fetch("job_rules"), material.fetch("job_rules")
+  end
+
+  def claimed_approval_input(role: "orchestrator")
     contract = APPROVAL_CASE.fetch("contract")
     task = scenario.finishing_task(holder: false, title: contract.fetch("title"), goal: contract.fetch("goal"),
       details: "Read the draft at #{CANARY_PATH}.", criteria: contract.fetch("criteria").pluck("kind"),
@@ -246,7 +300,7 @@ class EvalInputsTest < ActiveSupport::TestCase
     RuleCheckAttempt.create!(workspace_id: task.workspace_id, rule_check_id: check.id, job_id: job.id,
       attempt_number: 1, queued_at: job.queued_at)
 
-    outcome = assert_completed(claim_job(scenario.orchestrator))
+    outcome = assert_completed(claim_job(scenario.seat(role: role)))
     assert_equal job.id, outcome.result.fetch("job_id")
     assert_equal "approval", outcome.result.fetch("kind")
     outcome.result.fetch("input")
