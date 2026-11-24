@@ -21,7 +21,12 @@ struct CopyCatalogListTests {
         }
     }
 
-    @Test("where the services are not built, the app runs with nothing started")
+    // Only where the services are not built: with them, Live.runtime()
+    // opens the real support folder, and when the owner's Leverage is
+    // running there it quits the whole test process (exit 0), ending the
+    // run early with a false pass.
+    @Test("where the services are not built, the app runs with nothing started",
+          .enabled(if: !Live.servicesAreBuilt))
     func liveRuntime() async {
         #expect(await Live.runtime().server.state() == .notStarted)
     }
