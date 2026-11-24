@@ -46,7 +46,7 @@
 #    and the runner's logs, a data-only dump and the output folder: what
 #    milestones 2 and 3 scan for, every frame's nonce in a log, and the two
 #    tasks' titles in any event's payload or log line (RT-8).
-# The seat token connect_seat shows once, the owner's session token and the
+# The seat token issued with the landing prompt, the owner's session token and the
 # helper's token go from the response into the test's memory and from there
 # only into a child process's environment or a request header. The script
 # never runs under set -x and prints no response body; the output folder
