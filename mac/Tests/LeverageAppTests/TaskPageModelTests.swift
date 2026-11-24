@@ -347,13 +347,13 @@ struct TaskPageModelTests {
     func moveToBacklogOffered() async {
         for state in TaskState.allCases {
             let (model, _, _) = await loaded(page(state))
-            #expect(model.canMoveToBacklog == (state == .imaginarium), "\(state)")
+            #expect(model.canMoveToBacklog == (state == .ideas), "\(state)")
         }
     }
 
     @Test("Move to Backlog sends Promote for this task with no body, reads again, and an idea that moved no longer offers it")
     func moveToBacklog() async throws {
-        let (model, owner, shared) = await loaded(page(.imaginarium))
+        let (model, owner, shared) = await loaded(page(.ideas))
         shared.value = page(.backlog)
         await model.moveToBacklog()
         #expect(owner.calls.map(\.operation) == [.getTask, .promoteTask, .getTask])
@@ -367,7 +367,7 @@ struct TaskPageModelTests {
 
     @Test("Move to Backlog that failed is sent again with the same key, and a refusal is a plain line")
     func moveToBacklogRetry() async {
-        let (model, owner, _) = await loaded(page(.imaginarium))
+        let (model, owner, _) = await loaded(page(.ideas))
         owner.script { $0.promoteTask = { _, _ in throw URLError(.timedOut) } }
         await model.moveToBacklog()
         #expect(model.actionFailure == .cannotReach)
@@ -589,7 +589,7 @@ struct TaskPageModelTests {
         #expect(owner.calls.map(\.operation) == [.getTask])
         model.beginEditing()
         model.endEditing()
-        let (idle, _, _) = await loaded(page(.imaginarium))
+        let (idle, _, _) = await loaded(page(.ideas))
         idle.beginEditing()
         #expect(idle.editor == nil)
     }
@@ -606,7 +606,7 @@ struct TaskPageModelTests {
         await model.load()
         #expect(model.editor == nil, "only the first read opens it")
 
-        let idea = Locked(page(.imaginarium))
+        let idea = Locked(page(.ideas))
         let ideaModel = TaskPageModel(taskID: taskID, api: ownerShowing(idea), noteRead: { _ in }, editOnOpen: true)
         await ideaModel.load()
         #expect(ideaModel.editor == nil, "a task the editor is not for shows its page")
@@ -1073,7 +1073,7 @@ struct TaskPageModelTests {
 
     @Test("a task that is not in Backlog, or is being checked, is not offered Draft the details")
     func draftNotOffered() async {
-        for state in [TaskState.imaginarium, .ready, .working, .inReview, .done, .cancelled] {
+        for state in [TaskState.ideas, .ready, .working, .inReview, .done, .cancelled] {
             let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(state, id: taskID)))
             #expect(!model.canDraftDetails, "\(state)")
         }
@@ -1291,7 +1291,7 @@ struct TaskPageRenderTests {
         let idea = TaskPageModel(
             taskID: id, api: { () -> FakeOwnerAPI in
                 let owner = FakeOwnerAPI()
-                owner.script { $0.task = { _ in Fixtures.page(Fixtures.summary(.imaginarium, id: id)) } }
+                owner.script { $0.task = { _ in Fixtures.page(Fixtures.summary(.ideas, id: id)) } }
                 return owner
             }(), noteRead: { _ in })
         await idea.load()

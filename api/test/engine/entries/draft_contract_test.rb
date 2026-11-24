@@ -43,7 +43,7 @@ class DraftContractTest < ActiveSupport::TestCase
   end
 
   test "outside Backlog it is invalid_state and nothing is queued" do
-    %w[imaginarium ready working cancelled].each do |state|
+    %w[ideas ready working cancelled].each do |state|
       task = scenario.task(state: state)
       assert_refused("invalid_state", draft(task))
     end

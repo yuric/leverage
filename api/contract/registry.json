@@ -297,7 +297,7 @@
     "needs_action_unconfirmed_hold",
     "reviewer_holds_review", "has_outward_action", "no_outward_action", "escalates",
     "does_not_escalate", "credential_differs", "stopped_by_check",
-    "adds_to_imaginarium", "adds_to_backlog", "not_held_action_unconfirmed", "no_reviewer_holds_review",
+    "adds_to_ideas", "adds_to_backlog", "not_held_action_unconfirmed", "no_reviewer_holds_review",
     "candidate_available", "no_candidate_available", "approvals_complete", "approvals_pending",
     "held_owner_hold", "not_held_owner_hold", "approved_action_open", "approved_action_done",
     "first_miss", "second_miss", "owner_must_act", "seat_holds_working_task", "seat_holds_review",
@@ -343,7 +343,7 @@
       "rule.reverted", "rule.removed", "seat.connected", "seat.removed",
       "workspace.settings_changed", "content.deleted"
     ],
-    "task_states": ["imaginarium", "backlog", "ready", "working", "in_review", "finishing", "done", "cancelled"],
+    "task_states": ["ideas", "backlog", "ready", "working", "in_review", "finishing", "done", "cancelled"],
     "criterion_states": ["open", "started", "passed"],
     "criterion_kinds": ["build", "review"],
     "action_states": ["contracted", "requested", "approved", "started", "stopped", "waived", "revoked", "done"],

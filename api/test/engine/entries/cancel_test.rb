@@ -74,8 +74,8 @@ class CancelTest < ActiveSupport::TestCase
     assert_equal "resolved", InboxItem.find_by!(hold_id: hold.id).state
   end
 
-  test "Imaginarium, Backlog, Ready and In review cancel too" do
-    %w[imaginarium backlog ready in_review].each do |state|
+  test "Ideas, Backlog, Ready and In review cancel too" do
+    %w[ideas backlog ready in_review].each do |state|
       task = @scenario.task(state: state)
       assert cancel(task).completed?, state
       assert_equal "cancelled", task.reload.state

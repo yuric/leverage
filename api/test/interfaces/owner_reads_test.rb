@@ -68,7 +68,7 @@ class OwnerReadsTest < CommittingTestCase
   test "the board lists every task with its state, and the log position it reflects" do
     builder = scenario.seat(role: "builder", credential: scenario.credential)
     scenario.seat(role: "reviewer")
-    states = %w[imaginarium backlog ready working in_review done cancelled]
+    states = %w[ideas backlog ready working in_review done cancelled]
     tasks = states.to_h { |state| [ state, scenario.task(state: state, builder: (builder if state == "working"), title: "A #{state} task") ] }
 
     body = assert_read("/v1/owner/board")

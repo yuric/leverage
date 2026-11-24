@@ -2,7 +2,7 @@ require "test_helper"
 require_relative "call_spy"
 
 # Add task (PRD Lifecycle L77; milestone 2 plan SC-3, SC-4, SC-8): the owner
-# adds a task to the Backlog, or to the Imaginarium now that Promote exists
+# adds a task to the Backlog, or to Ideas now that Promote exists
 # (milestone 3 plan HE-24), and task.created is written. Complete contract
 # writes criteria. The task can name a project in the workspace (RD-52).
 class AddTaskTest < ActiveSupport::TestCase
@@ -48,18 +48,18 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal %w[backlog normal], [ task.state, task.priority ]
   end
 
-  test "a task added to the Imaginarium is an idea, with task.created there (HE-24)" do
-    outcome = apply(body(state: "imaginarium"))
+  test "a task added to Ideas is an idea, with task.created there (HE-24)" do
+    outcome = apply(body(state: "ideas"))
 
     assert outcome.completed?
     task = Task.find(outcome.result.fetch("task_id"))
-    assert_equal "imaginarium", task.state
+    assert_equal "ideas", task.state
     event = written.sole
-    assert_equal [ "task.created", { "state" => "imaginarium", "added_action_ids" => [] } ], [ event.type, event.payload ]
+    assert_equal [ "task.created", { "state" => "ideas", "added_action_ids" => [] } ], [ event.type, event.payload ]
     assert_equal [ [ "idea", event.id ] ], TaskStep.where(task_id: task.id).pluck(:kind, :opening_event_id)
   end
 
-  test "a state other than the Imaginarium or the Backlog is 422 invalid" do
+  test "a state other than Ideas or the Backlog is 422 invalid" do
     assert_raises(T::Invalid) { apply(body(state: "ready")) }
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
   end

@@ -716,7 +716,7 @@ public enum StepSubjectKind: String, Codable, CaseIterable, Sendable {
 
 /// registry.json `lists.task_states`.
 public enum TaskState: String, Codable, CaseIterable, Sendable {
-    case imaginarium
+    case ideas
     case backlog
     case ready
     case working

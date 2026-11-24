@@ -43,7 +43,7 @@ class HoldTest < ActiveSupport::TestCase
   end
 
   test "the state does not change, from every state that has a row" do
-    %w[imaginarium backlog ready working in_review].each do |state|
+    %w[ideas backlog ready working in_review].each do |state|
       task = scenario.task(state: state)
       outcome, events = owner_run("hold", "id" => task.id)
 

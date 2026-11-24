@@ -51,14 +51,14 @@ struct ContractDraft: Equatable, Sendable {
             projectID: projectID, priority: priority, workReference: Self.nonEmpty(workReference), state: .backlog)
     }
 
-    /// Save as an idea: Add task alone, into the Imaginarium. It keeps the
+    /// Save as an idea: Add task alone, into Ideas. It keeps the
     /// details too and leaves the criteria out, which are the contract's and
     /// go with Complete contract after Move to Backlog (HM-48).
     func ideaRequest(projectID: UUID?) -> AddTaskRequest {
         AddTaskRequest(
             title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details),
             actions: actions.isEmpty ? nil : actionInputs, projectID: projectID, priority: priority,
-            workReference: Self.nonEmpty(workReference), state: .imaginarium)
+            workReference: Self.nonEmpty(workReference), state: .ideas)
     }
 
     /// Whether the owner typed criteria, which an idea does not keep.
@@ -244,7 +244,7 @@ final class AddTaskModel {
     /// Whether the criteria typed would be left out of an idea (HM-48).
     var ideaDropsCriteria: Bool { draft.hasTypedCriteria }
 
-    /// Save as an idea: Add task alone, into the Imaginarium (HM-48).
+    /// Save as an idea: Add task alone, into Ideas (HM-48).
     func saveAsIdea() async {
         guard canSaveAsIdea else { return }
         state = .saving

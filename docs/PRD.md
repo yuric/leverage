@@ -68,7 +68,7 @@ Non-goals for version 1:
 
 ## Task lifecycle
 
-A task has eight states and moves between them only through commands the server carries out. Six are drawn below. The picture leaves out Finishing, which only a task with an outward action passes through between In review and Done, and Cancelled. The lanes on the board are Imaginarium, Backlog, Blocked, Ready, In Progress (working, in review or finishing) and Done. Cancelled tasks show only under a filter. Blocked is a lane, not a state: it shows every task with an open hold that waits on the owner or the project, whatever its state, and the card says where it came from. The table under Holds says which hold reasons those are. The task returns to its own lane when the hold lifts.
+A task has eight states and moves between them only through commands the server carries out. Six are drawn below. The picture leaves out Finishing, which only a task with an outward action passes through between In review and Done, and Cancelled. The lanes on the board are Ideas, Backlog, Blocked, Ready, In Progress (working, in review or finishing) and Done. Cancelled tasks show only under a filter. Blocked is a lane, not a state: it shows every task with an open hold that waits on the owner or the project, whatever its state, and the card says where it came from. The table under Holds says which hold reasons those are. The task returns to its own lane when the hold lifts.
 
 _The lifecycle diagram (6 states, 5 gated moves, 2 loops) did not survive the export. The table below is the authority._
 
@@ -76,8 +76,8 @@ Each forward move names the hook where rules run. A failed review loops back to 
 
 | Command | From | To | Who may ask | Hook | Events written |
 | --- | --- | --- | --- | --- | --- |
-| Add task | None | Imaginarium or Backlog | Owner | None | `task.created` |
-| Promote | Imaginarium | Backlog | Owner | None | `task.promoted` |
+| Add task | None | Ideas or Backlog | Owner | None | `task.created` |
+| Promote | Ideas | Backlog | Owner | None | `task.promoted` |
 | Draft contract | Backlog | Backlog | Owner | None | `job.queued` |
 | Complete contract | Backlog | Ready | Owner or planner seat | `task.before_ready` | `task.contract_changed`, `task.ready` |
 | Edit contract | Backlog | Backlog | Owner | None | `task.contract_changed` |
@@ -281,14 +281,14 @@ A task's life is a row of steps that touch end to end, so every minute of it bel
 4. Each step records its kind, its class (working, waiting or rule check), its subject and the seat responsible.
 5. A builder can announce the criterion it is starting, and the `build` step then carries that criterion. Without an announcement the step has no criterion. When a criterion passes, an open step without one, for the same seat and round, is given that criterion. Whatever is left is reported as unattributed build time. The reference runner and the MCP server always announce the criterion; neither announces an outward action for an agent that did not.
 6. The sum of a task's steps equals its lifetime. This is a tested invariant.
-7. Reports measure a task from its promotion to Backlog, or from its creation if it was added straight to Backlog. Time in Imaginarium is shown apart.
+7. Reports measure a task from its promotion to Backlog, or from its creation if it was added straight to Backlog. Time in Ideas is shown apart.
 8. A step's cause and subject are fixed when it opens. A change of credential state with no task event does not open a new step.
 
 ### Step kinds
 
 | Kind | Class | Open while | Subject |
 | --- | --- | --- | --- |
-| `idea` | Waiting | The task is in Imaginarium. | None |
+| `idea` | Waiting | The task is in Ideas. | None |
 | `draft` | Working | A planner job is writing the contract. | The job |
 | `wait_contract` | Waiting | The task is in Backlog and nobody is writing its contract. | None |
 | `check` | Rule check | A transition is pending on one or more model checks, or an outward action is waiting on its checks or its approval job. | The pending transition, or the action |
@@ -809,7 +809,7 @@ Everything else is outside the replay: text, links, the work reference, lease du
 
 The clickable prototype is the design reference. Version 1 makes these screens real and leaves the rest for later.
 
-One rule covers every word the owner reads: a word on an owner-facing screen that a person trying the app asks about, or stops at, is a defect. As a starting list, these engine terms do not appear on an owner-facing screen without a plain-language replacement: hook, lease, rule version, pending transition, seat, hold, round, strength rank, override and Imaginarium. The table below, and the Needs you choices table under Holds, use the engine's own names to say what each screen holds, not what it says.
+One rule covers every word the owner reads: a word on an owner-facing screen that a person trying the app asks about, or stops at, is a defect. As a starting list, these engine terms do not appear on an owner-facing screen without a plain-language replacement: hook, lease, rule version, pending transition, seat, hold, round, strength rank and override. The table below, and the Needs you choices table under Holds, use the engine's own names to say what each screen holds, not what it says.
 
 | Screen | In version 1 |
 | --- | --- |
