@@ -262,4 +262,76 @@ class JobQueueTest < ActiveSupport::TestCase
     assert_equal %w[withdrawn withdrawn], [ queued.reload.state, claimed.reload.state ]
     assert_nil J.next_for(@orchestrator)
   end
+  test "General claims and completes each job with only the General role's job rules" do
+    seat = scenario.seat(role: "general", provider: "codex")
+    task = scenario.task(state: "backlog")
+    [ "rule_check", "approval", "question", "contract_draft" ].each do |kind|
+      current = kind == "approval" ? scenario.finishing_task(actions: [ { state: "requested" } ]) : task
+      job, result = general_job(kind, current)
+      offered = assert_completed(claim_job(seat)).result
+      assert_equal [ job.id, kind ], offered.values_at("job_id", "kind")
+      assert_nil offered.dig("input", "material", "role_file")
+      instructions = Leverage::Contract.roles.fetch("roles").find { |row| row.fetch("role") == "general" }.fetch("job_rules")
+      assert_equal instructions, offered.dig("input", "material", "job_rules")
+      assert_completed(submit_result(seat, job, result))
+      assert_equal "finished", job.reload.state
+    end
+  end
+
+  test "General cannot work on a job for a task it built, which another orchestrator can take" do
+    general = scenario.seat(role: "general", provider: "codex")
+    task = scenario.task(state: "working", builder: general)
+    question, = general_job("question", task)
+    other, = general_job("question", scenario.task)
+
+    assert_equal other, J.next_for(general)
+    assert_equal question, J.next_for(@orchestrator)
+  end
+
+  test "General cannot take the ready check of its own draft but can take another check" do
+    general = scenario.seat(role: "general")
+    task = scenario.task
+    scenario.job(kind: "contract_draft", task: task, state: "finished", seat: general)
+    own, = general_job("rule_check", task)
+    assert_nil J.next_for(general)
+    assert_equal own, J.next_for(@orchestrator)
+  end
+
+  %i[task review provisional].each do |work|
+    test "a General seat holding a #{work} cannot claim a job" do
+      general = scenario.seat(role: "general")
+      general_job("question", scenario.task)
+      case work
+      when :task then scenario.task(state: "working", builder: general)
+      when :review
+        task = scenario.task(state: "in_review")
+        review = scenario.review(task, reviewer: general)
+        scenario.pending_transition(task, command: "pass_review", requester: general, params: { "id" => review.id })
+      when :provisional then scenario.task(state: "ready").update!(holder_seat_id: general.id)
+      end
+      assert_nil J.next_for(general)
+    end
+  end
+
+  private
+
+  def general_job(kind, task)
+    case kind
+    when "rule_check"
+      _task, _pending, check = waiting_contract(model_rule, task: task)
+      [ job_of(check), { "result" => "passed", "reason" => "The made-up details are sufficient." } ]
+    when "approval"
+      action = Action.find_by!(task_id: task.id, state: "requested")
+      rule = model_rule(hook: "action.requested")
+      check = scenario.rule_check(task, rule: rule, subject: action, attempts: 0)
+      attempt = Leverage::RuleChecks.queue_attempt(scenario.context, check, kind: kind)
+      [ Job.find(attempt.job_id), { "decision" => "pass_to_owner", "reason" => "The made-up action needs a change." } ]
+    when "question"
+      question = scenario.question(task, asking_seat: task.builder_seat_id ? Seat.find(task.builder_seat_id) : scenario.seat)
+      [ scenario.job(kind: kind, task: task, target: question), { "outcome" => "pass_on" } ]
+    when "contract_draft"
+      [ draft_job(task), contract_body ]
+    end
+  end
+
 end

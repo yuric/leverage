@@ -388,4 +388,60 @@ class EligibilityTest < ActiveSupport::TestCase
       payload: { seat_id: @reviewer.id, credential_id: @reviewer.credential_id, model: nil })
     refute E.may_review?(@reviewer, review, at: @scenario.database_now)
   end
+  test "General may claim a task returned by another provider group and review a task it never built" do
+    general = @scenario.seat(role: "general", provider: "codex")
+    task = @scenario.task(state: "working", builder: @builder)
+    task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil, lease_due_at: nil)
+    review_task = @scenario.task(state: "in_review", builder: @builder)
+
+    assert_equal task, E.next_task(general)
+    assert_equal review_task.id, E.next_review(general)&.task_id
+  end
+
+  test "busy and paused builders stand for a task but cannot claim it now" do
+    task = ready
+    busy = @scenario.seat(role: "general")
+    paused = @scenario.seat(role: "general", paused: true)
+    @scenario.task(state: "working", builder: busy)
+
+    assert_respond_to E, :standing?
+    assert_respond_to E, :momentary?
+    [ busy, paused ].each do |seat|
+      assert E.standing?(seat, task, rank: seat.strength_rank)
+      refute E.momentary?(seat, task, at: @scenario.database_now)
+    end
+  end
+
+  %i[removed disabled paused].each do |state|
+    test "a General reviewer can build a returned task when the other builder is #{state}" do
+      general = @scenario.seat(role: "general", provider: "codex")
+      task = @scenario.task(state: "in_review", builder: @builder)
+      review = @scenario.review(task, reviewer: general)
+      review.update!(reviewer_seat_id: nil, lease_due_at: nil)
+      task.update!(state: "ready", holder_seat_id: nil, builder_seat_id: nil)
+      assert_nil E.next_task(general), "the other builder still stands for this task"
+
+      changes = { removed: { removed_at: @scenario.database_now }, disabled: { enabled: false }, paused: { paused: true } }
+      @builder.update!(changes.fetch(state))
+      assert_equal task, E.next_task(general)
+    end
+  end
+
+  %i[task review job provisional].each do |work|
+    test "a General seat with a #{work} gets no new task or review" do
+      general = @scenario.seat(role: "general", provider: "codex")
+      ready
+      review_task = @scenario.task(state: "in_review", builder: @builder)
+      case work
+      when :task then @scenario.task(state: "working", builder: general)
+      when :review then @scenario.review(review_task, reviewer: general)
+      when :job then @scenario.job(kind: "contract_draft", task: @scenario.task, state: "claimed", seat: general)
+      when :provisional then ready.update!(holder_seat_id: general.id)
+      end
+
+      assert_nil E.next_task(general)
+      assert_nil E.next_review(general)
+    end
+  end
+
 end

@@ -430,4 +430,21 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
     other = scenario.task(state: "in_review", builder: @builder)
     assert_equal [ other.id ], reevaluate(task_ids: [ other.id ]).map(&:task_id)
   end
+  test "a General Claude login may review but a General Gemini login may not" do
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id)
+    gemini = @scenario.credential(provider: "gemini")
+    claude = @scenario.credential(provider: "claude")
+    general = @scenario.seat(role: "general", credential: claude)
+    on_gemini = @scenario.seat(role: "general", credential: gemini)
+    dedicated = @scenario.seat(role: "reviewer", credential: gemini)
+
+    assert Leverage::Eligibility.may_review?(general, review)
+    assert_equal review, Leverage::Eligibility.next_review(general)
+    refute Leverage::Eligibility.may_review?(on_gemini, review)
+    assert_nil Leverage::Eligibility.next_review(on_gemini)
+    assert Leverage::Eligibility.may_review?(dedicated, review)
+    assert_equal review, Leverage::Eligibility.next_review(dedicated)
+  end
+
 end

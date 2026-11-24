@@ -241,4 +241,48 @@ class QuestionsTest < ActiveSupport::TestCase
   ensure
     lock.define_singleton_method(:clock, original) if original
   end
+  test "the shipped policy sends a question to a recently polled, eligible General seat" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    seat = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    job = Job.find_by(target_id: question.id, kind: "question")
+    refute_nil job
+    assert_equal job, Leverage::Jobs.next_for(seat)
+  end
+
+  %i[asking busy paused stale queued_job].each do |condition|
+    test "the shipped policy sends a question to the owner when General is #{condition}" do
+      @orchestrator.update!(enabled: false)
+      scenario.with_shipped_rules
+      if condition == :asking
+        @builder.update!(role: "general")
+      else
+        seat = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+        case condition
+        when :busy then scenario.task(state: "working", builder: seat)
+        when :paused then seat.update!(paused: true)
+        when :stale then seat.update!(last_polled_at: scenario.database_now - 90.seconds)
+        when :queued_job then scenario.job(kind: "contract_draft", task: scenario.task)
+        end
+      end
+      acknowledge
+
+      question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+      assert_equal "passed_on", question.outcome
+      refute Job.exists?(target_id: question.id, kind: "question")
+    end
+  end
+
+  test "an enabled paused Orchestrator still routes questions to a job" do
+    @orchestrator.update!(paused: true)
+    scenario.with_shipped_rules
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    assert Job.exists?(target_id: question.id, kind: "question", state: "queued")
+  end
+
 end

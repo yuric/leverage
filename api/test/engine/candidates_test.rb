@@ -607,4 +607,17 @@ class CandidatesTest < ActiveSupport::TestCase
       [ finishing.state, finishing.holder_seat_id, finishing.lease_due_at.nil? ]
     assert Event.exists?(task_id: finishing.id, type: "task.claimed")
   end
+  test "only a General seat passes over a Gemini login for review work" do
+    gemini = @scenario.credential(provider: "gemini")
+    claude = @scenario.credential(provider: "claude")
+    general = @scenario.seat(role: "general", credential: gemini)
+    reviewer = @scenario.seat(role: "reviewer", credential: gemini)
+    task = @scenario.task(state: "in_review")
+    review = Review.find_by!(task_id: task.id)
+
+    assert_equal claude, C.first_available(general, review, @now)
+    assert_equal gemini, C.first_available(general, task, @now)
+    assert_equal gemini, C.first_available(reviewer, review, @now)
+  end
+
 end
