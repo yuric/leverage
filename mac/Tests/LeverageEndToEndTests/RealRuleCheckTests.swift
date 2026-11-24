@@ -95,11 +95,7 @@ struct RealRuleCheckTests {
         try folder.record(markers: [cases.0.title, cases.1.title])
         let tool = try RealRuleCheck.tool()
 
-        let connected = try await owner.connectSeat(
-            ConnectSeatRequest(name: "Orchestrator", role: .orchestrator, provider: provider), key: IdempotencyKey())
-        guard case .shown(let seat)? = try connected.completedResult(), let token = seat.seatToken else {
-            throw EndToEndFailure("connect_seat showed no token for the orchestrator")
-        }
+        let token = try await owner.connectByPrompt("Orchestrator", role: .orchestrator, provider: provider).seatToken
         try folder.record(secrets: [token])
 
         var environment = [

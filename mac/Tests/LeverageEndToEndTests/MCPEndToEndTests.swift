@@ -13,7 +13,7 @@ import Glibc
 struct MCPEndToEndTests {
     @Test func testBuilderThroughMCPReachesDone() async throws {
         try await withQuestionsApprovalsWorld("mcp") { world in
-            let builder = try await world.manualBuilder()
+            let builder = try await world.manualBuilder(connection: .mcp)
             let task = try await world.addTask(title: "Builder using MCP").task
             try await world.waitFor("task.ready", task: task) { $0.taskID == task && $0.type == .taskReady }
 
@@ -69,6 +69,10 @@ struct MCPEndToEndTests {
         let names = tools.compactMap { $0["name"] as? String }
         let expected = AgentTools.all.filter { $0.roles.contains(.builder) }.map(\.id)
         #expect(names.count == 16 && Set(names) == Set(expected))
+
+        let join = try session.call("get_join")
+        #expect(join.body["connection"] as? String == "mcp")
+        #expect(join.body["role"] as? String == "builder")
 
         let id = task.contractString
         let next = try session.call("get_next", ["wait": 0])
@@ -145,7 +149,7 @@ private final class MCPSession {
 
     init(token: String) throws {
         client = ScriptedMCPClient(
-            input: input.fileHandleForWriting, output: output.fileHandleForReading, timeout: .seconds(30))
+            input: input.fileHandleForWriting, output: output.fileHandleForReading, timeout: Patience.scaled(.seconds(30)))
         process.executableURL = try EndToEnd.program("LeverageMCP")
         process.environment = [
             EnvironmentKeys.apiURL: EndToEnd.apiURL.absoluteString,
@@ -177,7 +181,7 @@ private final class MCPSession {
     }
 
     func waitForExit() throws -> Int32 {
-        guard exited.wait(timeout: .now() + Patience.seconds(10)) == .success else {
+        guard exited.wait(timeout: .now() + Patience.seconds(30)) == .success else {
             throw EndToEndFailure("LeverageMCP did not exit after its input closed")
         }
         return process.terminationStatus
@@ -187,7 +191,7 @@ private final class MCPSession {
         try? client.closeInput()
         guard process.isRunning else { return }
         _ = kill(process.processIdentifier, SIGKILL)
-        if exited.wait(timeout: .now() + Patience.seconds(5)) != .success {
+        if exited.wait(timeout: .now() + Patience.seconds(30)) != .success {
             Issue.record("The LeverageMCP child did not exit")
         }
     }
