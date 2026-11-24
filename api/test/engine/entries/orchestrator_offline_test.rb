@@ -265,4 +265,30 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
     refute(events_after(before).any? { |event| event.type.start_with?("inbox.") })
     assert_empty(with_writers { timer("orchestrator_offline") }, "queued again once: the check waits for its result")
   end
+
+  test "on return through a General seat, an errored check it cannot claim gets an owner item while a claimable one is queued" do
+    claimable, claimable_hold = errored_check
+    barred, barred_hold = errored_check
+    general = scenario.seat(role: "general")
+    scenario.append("task.claimed", task: Task.find(barred.task_id), actor_kind: "seat", actor_id: general.id,
+      payload: { seat_id: general.id, credential_id: nil, model: general.model })
+    open_item
+    general.update_columns(last_polled_at: scenario.database_now)
+    before = last_seq
+
+    timer("orchestrator_offline")
+
+    assert_equal "resolved", item.reload.state
+    assert_equal %w[inbox.resolved check.queued job.queued inbox.opened], events_after(before).map(&:type)
+    assert_nil claimable.reload.result
+    assert_equal 3, job_of(claimable).attempt_number
+    assert_nil claimable_hold.reload.closed_at
+    assert_equal "error", barred.reload.result
+    assert_equal 2, job_of(barred).attempt_number
+    assert_nil barred_hold.reload.closed_at
+    owner_item = InboxItem.find_by!(hold_id: barred_hold.id, state: "open")
+    assert_equal [ "check_could_not_run", %w[override_once run_again turn_rule_off], barred.id ],
+      [ owner_item.kind, owner_item.choices.sort, owner_item.facts.fetch("rule_check_id") ]
+    assert_equal "hold.opened", Event.find(events_after(before).last.cause_id).type
+  end
 end
