@@ -14,6 +14,7 @@ import Vision
 @Suite("Rules screen")
 struct RulesScreenTests {
     private typealias Fixtures = AgentFixtures
+    private let headings: Set<String> = ["Orchestrator rules", "Other agent rules"]
 
     private func loadedModel() async throws -> RulesModel {
         var rows = try RulesFixtures.shippedRows()
@@ -50,7 +51,7 @@ struct RulesScreenTests {
         let request = VNRecognizeTextRequest()
         request.recognitionLanguages = ["en-US"]
         try VNImageRequestHandler(cgImage: try #require(bitmap.cgImage)).perform([request])
-        let listText = Set(model.lines.map(\.name) + ["Orchestrator rules", "Other agent rules"])
+        let listText = headings.union(model.lines.map(\.name))
         let text = try #require(request.results)
             .sorted { $0.boundingBox.midY > $1.boundingBox.midY }
             .compactMap { $0.topCandidates(1).first?.string }
@@ -78,11 +79,11 @@ struct RulesScreenTests {
 
     @Test("the screen hides empty rule sections", arguments: [RuleChecker.model, .app])
     func hidesEmptySections(_ checker: RuleChecker) async throws {
-        let name = "Require a date"
-        let model = await loadedModel(rows: [RulesFixtures.row(name: name, checker: checker)])
+        let rows = try RulesFixtures.shippedRows().filter { $0.version.checker == checker }
+        let model = await loadedModel(rows: rows)
         let heading = checker == .model ? "Orchestrator rules" : "Other agent rules"
-        let visible = try visibleRuleList(model)
-        #expect(visible == [heading, name])
+        let visibleHeadings = try visibleRuleList(model).filter { headings.contains($0) }
+        #expect(visibleHeadings == [heading])
     }
 
     @Test("the screen draws with every rule, in both appearances")
