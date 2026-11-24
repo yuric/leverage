@@ -30,5 +30,7 @@ enum CopyCatalogs {
         ActivityCopy.self,
         ProjectsCopy.self,
         WorkspaceSettingsCopy.self,
+        SetupAssistantCopy.self,
+        SetupChecklistCopy.self,
     ]
 }
