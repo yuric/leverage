@@ -19,6 +19,30 @@ below was run on an Apple silicon Mac with the pinned versions in
 [ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md), unless it
 says otherwise.
 
+## Marketing page
+
+[Age of Lever](https://ageoflever.com/) serves the static files in
+`marketing-page/`. The `Deploy Age of Lever` workflow checks that the `CI`
+and `Docs checks` push runs passed for the same `main` commit before it
+publishes. It publishes only when the site's Git tree differs from the last
+successful deployment or an interrupted deployment needs repair.
+
+The workflow assumes the `AgeOfLeverGitHubDeploy` IAM role through GitHub
+OIDC. Its trust is limited to this repository's immutable `main` subject and
+the `Deploy Age of Lever` workflow. The role can manage files in the
+`ageoflever-web-sitebucket-wymjk9jfrnqo` bucket and create and check invalidations
+on distribution `E2753A9QFGUJ6U`. Long-lived credentials are unnecessary.
+
+GitHub Actions serializes deployments. The publisher uploads assets before
+the index, removes retired files, waits for CloudFront invalidation, and
+checks that both public HTTPS URLs serve the checked index. It then records
+the published Git tree in `.well-known/deployed-marketing-revision`.
+
+To retry an interrupted deployment, run **Deploy Age of Lever** from the
+GitHub Actions tab on `main`. A retry still requires successful `CI` and
+`Docs checks` push runs for the current `main` commit. Revert a site change
+through a pull request to publish the previous contents.
+
 ## Prerequisites
 
 - To use the app: a Mac with macOS 14 or later and Docker Desktop
