@@ -324,8 +324,8 @@ Where two inventories chose differently, the decision names the conflict.
   entries at the new version. An unchanged list writes nothing. D-G46, R-G28.
 - **DB-42** `[shape]` Content columns are nullable and blanked by Delete
   content (which writes `content.deleted`); `tasks.content_deleted_at`,
-  `projects.content_deleted_at`. Content: task title, goal, details, work
-  reference; review handoff note and notes; criterion text; evidence
+  `projects.content_deleted_at`. Content: task title, details (UI-1),
+  work reference; review handoff note and notes; criterion text; evidence
   value; question text, assumption, answer; action description; brief
   entry text; project name and goal; hold detail. D-G47.
 - **DB-43** `[shape]` Replay holder rules: set by `task.claimed` and by
@@ -1239,9 +1239,10 @@ except the one read UI-6 adds.
 - **UI-4** `[shape]` `task.before_ready` hashes the title, the details,
   the criteria and the outward actions (`hooks.json`; PRD Check identity,
   re-runs and overrides). The specific-details rule now judges the title,
-  so a title change must not reuse a stored result. A result stored
-  before the upgrade carries the old hash and is not reused: the next
-  command that runs the hook checks again, as after any contract change.
+  so a title change requires a new result. A new command checks again
+  after the upgrade. A Complete contract command that was already
+  pending settles with the rule version and hash it queued, and folds
+  the proposed text into details when it completes.
 - **UI-5** `[shape]` The shipped instruction of "Every task needs
   specific details" judges the title, the details and the criteria, and
   changes no more words than the goal's removal needs. Its earlier

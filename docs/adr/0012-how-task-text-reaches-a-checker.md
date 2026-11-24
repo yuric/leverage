@@ -34,9 +34,10 @@ and RD-39.
    checker, that the `contract` block says what the task is and the others
    are claims by the agent that did the work, and that the answer ends
    with `LEVERAGE-VERDICT-<nonce>:` and `LEVERAGE-REASON-<nonce>:` (RD-31).
-   A draft's blocks are `title`, `goal`, `details`, `criteria` and
-   `brief`, and its answer is one JSON object between
-   `LEVERAGE-DRAFT-<nonce>-BEGIN` and `-END`.
+   A draft quotes the task text defined by
+   [UI-1](../../api/contract/decisions.md#app-round-1-ui) in the
+   `title`, `details`, `criteria` and `brief` blocks. Its answer is
+   one JSON object between `LEVERAGE-DRAFT-<nonce>-BEGIN` and `-END`.
    The text inside a block has its markers broken: every `<` that follows
    two others gets a space before it, so no run of `<` is longer than two
    (`<<<` becomes `<< <`), and `LEVERAGE` followed by a hyphen or a dash

@@ -54,32 +54,15 @@ ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-23 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5) and Credentials (milestone 6) |
-| **Next** | Integrate and verify the General role and landing prompt. |
+| **As of** | 2026-11-24 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), and the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)) |
+| **Next** | Review App round 1 and read the choices in question 16. |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| General role and landing prompt | `feat/general-agent` | | In progress. The contract is on the branch. The API, Mac app, end-to-end checks and eval changes are being integrated. The choices made for the owner are in question 15. |
-
-The other four roles keep their existing work behavior. The new restart
-on a role change applies only to running seats the app manages when
-changing to or from General. The new Gemini review pass-over applies
-only to General seats.
-
-The review fixes make orchestrator recovery test each eligible retry,
-surface an independent reviewer or account wait per task, and give General
-builds, reviews and jobs their instructions in the corresponding material.
-General eval coverage is for app-managed default models. New prompt
-confirms the replacement before displaying paste instructions.
-
-The second review fixes apply the build claim standing test to Ready
-account waits on the board and task page. Both reads preserve the
-builder's login wait when a General seat that reviewed the task cannot
-claim it. The PRD's first-build briefing description specifies the work
-instructions a General seat receives.
+| App round 1 | `feat/app-round-1` | | Integrated locally. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
 
 ## Milestones
 
@@ -2371,6 +2354,30 @@ skeleton's pull request description, as rule AR-004 asks.
     - **GA-10** `[owner]`. The PRD keeps "connects on its own". The app
       uses the words "Connected by prompt." **Alternative.** Rename it
       throughout.
+
+16. **The choices made for the owner for App round 1.** The
+    [contract decisions](../api/contract/decisions.md#app-round-1-ui) record
+    the changes to task text and project reads.
+
+    - **Project work reference (UI-6).** Add task fills the empty field from
+      the project's most recent task with a usable work reference. The
+      project has no folder field today. **Alternative.** Add a folder
+      field to each project.
+    - **Project goal (UI-7).** Projects keep their goal. The owner asked to
+      remove the task goal. **Alternative.** Remove the project goal too.
+    - **Question routing.** "Workers ask the orchestrator before they ask
+      you" appears under Other agent rules because Leverage routes the
+      question. **Alternative.** List it under Orchestrator rules because
+      the orchestrator answers the questions it receives.
+    - **Eval coverage (UI-8).** The earlier runs used the old task text.
+      Until a passing run covers the current wording and cases, the Agent
+      roster says "Not tested for checking tasks." The specific-details
+      suite has exhausted its earlier run budget. Two held-out approval
+      cases also name a different action from the one at their listed
+      position. The maintainer handles both before rerunning the suites.
+    - **Notification settings.** The owner can verify which pane opens on
+      their Mac and that the banner clears when they return to Leverage
+      after turning notifications on.
 
 ## Waiting for the owner
 

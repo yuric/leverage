@@ -25,6 +25,13 @@ helper starts. The Handoff tab supports reordering. Codex CLI 0.169.0 is
 the only registered login usage reader. The five API token readers have
 stand-in coverage.
 
+Add task and Edit contract use the task's title and details. Upgrading
+folds existing task goals into their details. Add task can fill the work
+reference from a project, paste a link or choose a local folder. Needs you
+can open notification settings. Native Connect guides the owner to Add
+credential if there are no logins, and Native Connect and Change use the
+provider's documented model choices. Settings groups rules by checker.
+
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
 and approvals with real orchestrators on Claude Code, Codex and
@@ -43,7 +50,8 @@ research, and the following code and checks.
   `bin/rails leverage:recovery_times` prints each interrupted run's
   recovery time, `bin/rails leverage:rule_timing` each rule's runs and
   times, and `bin/rails leverage:install_shipped_rules` (run before the
-  server starts) writes the shipped rules of a workspace that has none;
+  server starts) installs the shipped rules in workspaces with no rules
+  and updates rules that still match an earlier shipped default;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
@@ -57,10 +65,10 @@ research, and the following code and checks.
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
-  specific details" (24 made-up cases, the bar, and the results of the
-  maintainer's run on Claude Code, Codex and Antigravity);
+  specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
-  30 main cases, a 10-case held-out set, and the recorded main results;
+  30 main cases, a 10-case held-out set, and the run record. Earlier results
+  for both suites predate the task text change. Current runs are pending;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
