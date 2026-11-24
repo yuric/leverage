@@ -99,9 +99,11 @@ research, and the following code and checks.
   `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
-  scripts), on every pull request;
+  scripts), and the marketing page and deployment tests, on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
-  checks, and the comparison of the PRD's tables with the contract.
+  checks, and the comparison of the PRD's tables with the contract;
+- `.github/workflows/deploy-marketing.yml`: publishes the checked marketing
+  page from `main`, as described in [Deployment](docs/DEPLOY.md#marketing-page).
 
 Update this file in the same pull request that changes any of that.
 

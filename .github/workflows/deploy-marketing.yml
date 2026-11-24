@@ -1,0 +1,83 @@
+name: Deploy Age of Lever
+
+on:
+  workflow_run:
+    workflows: [CI, Docs checks]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # An ignored completion must not replace a pending production run.
+  group: >-
+    ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
+    (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' &&
+    github.event.workflow_run.head_repository.full_name == github.repository))) &&
+    'ageoflever-production' || format('ageoflever-skip-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Find checked main revision
+    if: >-
+      github.repository == 'yuric/leverage' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      revision: ${{ steps.check.outputs.revision }}
+    steps:
+      - name: Require successful CI and docs runs for main
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Select main at execution time so out-of-order completion events
+          # cannot publish older work or miss a change carried by a later push.
+          revision=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          for workflow in ci.yml docs.yml; do
+            conclusion=$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+              -f branch=main -f event=push -f head_sha="$revision" -f per_page=1 \
+              --jq '.workflow_runs[0].conclusion // "pending"')
+            if [[ "$conclusion" != success ]]; then
+              printf '%s for %s is %s.\n' "$workflow" "$revision" "$conclusion"
+              exit 0
+            fi
+          done
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish Age of Lever
+    needs: check
+    if: needs.check.outputs.revision != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.revision }}
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::138035228493:role/AgeOfLeverGitHubDeploy
+          role-session-name: ageoflever-${{ github.run_id }}
+          aws-region: us-east-1
+          allowed-account-ids: '138035228493'
+      - name: Publish changed marketing files
+        env:
+          MARKETING_BUCKET: ageoflever-web-sitebucket-wymjk9jfrnqo
+          MARKETING_DISTRIBUTION: E2753A9QFGUJ6U
+        run: bash scripts/deploy_marketing_page.sh
