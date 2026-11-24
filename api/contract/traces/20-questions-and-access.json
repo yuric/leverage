@@ -237,7 +237,7 @@
       "path_params": {},
       "body": {
         "title": "Prepare the sample report",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": "$project:sample",
         "priority": "normal",
         "state": "backlog"
@@ -295,8 +295,7 @@
       },
       "body": {
         "title": "Prepare the sample report",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",

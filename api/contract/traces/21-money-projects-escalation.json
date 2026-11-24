@@ -222,7 +222,7 @@
       "path_params": {},
       "body": {
         "title": "Sample ledger",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": "$project:samples",
         "priority": "normal",
         "state": "backlog"
@@ -280,8 +280,7 @@
       },
       "body": {
         "title": "Sample ledger",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -495,7 +494,7 @@
       "path_params": {},
       "body": {
         "title": "Sample appendix",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": "$project:samples",
         "priority": "normal",
         "state": "backlog"
@@ -553,8 +552,7 @@
       },
       "body": {
         "title": "Sample appendix",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -1969,7 +1967,7 @@
       "path_params": {},
       "body": {
         "title": "Sample index",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"

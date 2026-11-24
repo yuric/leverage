@@ -19,6 +19,14 @@ class FoldTaskGoalTest < ActiveSupport::TestCase
     sql("SELECT 1 FROM information_schema.columns WHERE table_name = 'tasks' AND column_name = 'goal'").rows.any?
   end
 
+  # Fires the deferred checks of the rows inserted so far (the state
+  # trigger, C7), which PostgreSQL requires before an ALTER TABLE of tasks in
+  # the same transaction, then defers them again.
+  def settle_inserts
+    sql("SET CONSTRAINTS ALL IMMEDIATE")
+    sql("SET CONSTRAINTS ALL DEFERRED")
+  end
+
   def details_of(id)
     sql("SELECT details FROM tasks WHERE id = $1", id).rows.first.first
   end
@@ -40,10 +48,13 @@ class FoldTaskGoalTest < ActiveSupport::TestCase
     ids = examples.to_h do |example|
       [ example.fetch("name"), task(title: example["title"], goal: example["goal"], details: example["details"]) ]
     end
+    settle_inserts
     change.migrate(:up)
     refute goal_column?
     examples.each do |example|
-      assert_equal example.fetch("details_after"), details_of(ids.fetch(example["name"])), example["name"]
+      expected = example.fetch("details_after")
+      actual = details_of(ids.fetch(example["name"]))
+      expected.nil? ? assert_nil(actual, example["name"]) : assert_equal(expected, actual, example["name"])
     end
   end
 
@@ -51,6 +62,7 @@ class FoldTaskGoalTest < ActiveSupport::TestCase
     change = migration
     change.migrate(:down)
     id = task(title: nil, goal: nil, details: nil, content_deleted_at: Time.utc(2026, 11, 24))
+    settle_inserts
     change.migrate(:up)
     assert_nil details_of(id)
   end

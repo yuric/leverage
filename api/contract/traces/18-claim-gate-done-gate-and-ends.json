@@ -72,7 +72,7 @@
       "operation_id": "add_task",
       "key": "$key:t1_add",
       "path_params": {},
-      "body": {"title": "Fix the refund rounding", "goal": "Refunds are exact to the cent.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Fix the refund rounding", "details": "Refunds are exact to the cent.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -92,7 +92,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t1_complete",
       "path_params": {"id": "$task:1"},
-      "body": {"title": "Fix the refund rounding", "goal": "Refunds are exact to the cent.", "details": "Follow the payments notes.", "criteria": [{"text": "Criterion build of task 1 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Fix the refund rounding", "details": "Refunds are exact to the cent.\n\nFollow the payments notes.", "criteria": [{"text": "Criterion build of task 1 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -116,7 +116,7 @@
       "operation_id": "add_task",
       "key": "$key:t2_add",
       "path_params": {},
-      "body": {"title": "Add the refund export", "goal": "Refunds are exact to the cent.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Add the refund export", "details": "Refunds are exact to the cent.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -136,7 +136,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t2_complete",
       "path_params": {"id": "$task:2"},
-      "body": {"title": "Add the refund export", "goal": "Refunds are exact to the cent.", "details": "Follow the payments notes.", "criteria": [{"text": "Criterion build of task 2 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Add the refund export", "details": "Refunds are exact to the cent.\n\nFollow the payments notes.", "criteria": [{"text": "Criterion build of task 2 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "completed",
         "refusal": null,

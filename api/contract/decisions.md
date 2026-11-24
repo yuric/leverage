@@ -3,7 +3,8 @@
 This file records each choice the contract makes where the PRD leaves a
 gap, under the IDs the contract files cite (`plan DB-31`, `"decision":
 "SM-24"`): `DB-` data, `SM-` state machine, `RC-` rules and checks, `IF-`
-interfaces, `TM-` timers, `P-` PRD changes.
+interfaces, `TM-` timers, `P-` PRD changes, `GA-` the General role,
+`UI-` app round 1.
 
 It is the decisions section of the Contract milestone's build plan, kept
 as it was written, with three notes on reading it now:
@@ -1194,6 +1195,88 @@ on, which the owner may reverse later; it is listed there too.
   the new agent is offered it as kind `action`. A repeat of the key
   releases nothing more. Alternative: refuse New prompt while the seat
   holds work, or let the work lapse at its lease's end.
+
+## App round 1 (UI)
+
+Added for the owner's request of 2026-11-24, which goes through the app
+tab by tab. The owner asked that "What is the goal?" leave Add task, and
+the goal leave the database, the contract, the API, the agents' text,
+the task page and the eval cases, with nothing lost. PRD places are named
+by their section. The app's own choices (the Add task buttons, the Needs
+you button, the Connect and Change sheets, the Rules split) are in the
+PRD's "What the app shows in version 1" table and need no contract shape,
+except the one read UI-6 adds.
+
+- **UI-1** `[shape]` A task has no goal. Its goal is folded into its
+  details as `goal_fold.json` says, the one statement of the fold that the
+  migration, the eval cases and their tests share: the goal is trimmed of
+  spaces, tabs and line ends at both ends; a goal that is then empty, or
+  equal to the title trimmed the same way (Add task used to send the
+  title as the goal when the owner left it empty), adds nothing; details
+  that are null or blank become the trimmed goal; other details become
+  the trimmed goal, a blank line, then the details unchanged. The goal
+  comes first because it was shown first. The migration
+  `FoldTaskGoalIntoDetails` folds every row, a row whose content was
+  deleted included (its goal is null, so nothing changes), and then drops
+  `tasks.goal`; its `down` adds the column back empty. Every shape that
+  carried a task's goal loses it: `AddTaskRequest` (now requiring only
+  `title`), `CompleteContractRequest` (so Edit contract and a contract
+  draft's result), `TaskSummary`, `BriefingContract`, `CheckContract`,
+  `ActionJobContract` and `DraftMaterial`, with every example and every
+  golden trace body folded the same way. No event payload carries a goal,
+  so the log and the replay need nothing. The requests and reads change
+  in place, not as new versions, under DB-48's reasoning: no build of
+  Leverage has been released, so no client depends on the old shapes.
+- **UI-2** `[shape]` The details' limit in `AddTaskRequest` and
+  `CompleteContractRequest` is 24,002 characters: the old 20,000, the
+  goal's 4,000 and the blank line between them, so that any folded task
+  can be saved again unchanged.
+- **UI-3** `[shape]` `BriefingContract` carries the task's `title`
+  (required, the column's text), so that a builder reading its briefing
+  still has the line that says what the task is. The briefing hash is
+  unchanged in kind: it covers the contract version, which every title
+  change already raises.
+- **UI-4** `[shape]` `task.before_ready` hashes the title, the details,
+  the criteria and the outward actions (`hooks.json`; PRD Check identity,
+  re-runs and overrides). The specific-details rule now judges the title,
+  so a title change must not reuse a stored result. A result stored
+  before the upgrade carries the old hash and is not reused: the next
+  command that runs the hook checks again, as after any contract change.
+- **UI-5** `[shape]` The shipped instruction of "Every task needs
+  specific details" judges the title, the details and the criteria, and
+  changes no more words than the goal's removal needs. Its earlier
+  default is kept in `shipped_rules.json` as `superseded_instructions`.
+  Write the shipped rules (`install_shipped_rules`), which the server
+  runs when it starts, also runs for every workspace that has rules: a
+  rule whose current version has an instruction listed there, and whose
+  other version fields equal the shipped ones, gets a new version with
+  the shipped fields through `rule.reverted`, with actor app and no key
+  (guard `rule_on_superseded_default`). The rule stays on or off as it
+  was. A rule the owner changed is not touched, so the owner's own words
+  are never replaced. The PRD's lifecycle row and Shipped rules section
+  say so. The recorded eval runs used the earlier default and the
+  earlier cases; they are run again by the maintainer (UI-8).
+- **UI-6** `[shape]` `Project` carries `latest_work_reference`: the work
+  reference of the project's most recently added task (by `created_at`,
+  then id) whose work reference is not empty and whose content is
+  present, or null. It is read, not stored (`columns_test.rb`). Add task
+  fills "Where the work is" from it when the owner picks a project and
+  the field is empty; a project has no folder of its own, and adding one
+  would change the Projects screen, which the owner did not ask for.
+  Alternative: a folder field on each project.
+- **UI-7** `[reading]` A project's goal is not a task's goal. The owner
+  named the Add task form; `projects.goal`, `Project.goal` and
+  `CreateProjectRequest.goal` stay.
+- **UI-8** `[reading]` The eval suites read as migrated tasks: each case's
+  goal is folded into its details by `goal_fold.json`, held-out cases
+  too, mechanically, and the case hashes in `bar.json` are frozen again.
+  The specific-details category `vague_goal` becomes `vague_work`, with
+  its meaning restated: the title and the details could mean several
+  pieces of work, or only say that something should be better. A case's
+  `why` may be reworded only where it names the goal. The recorded
+  results were run against the earlier instruction and cases, so they no
+  longer count; only the maintainer runs the suites on real tools
+  (AGENTS.md), and the rerun waits for the maintainer.
 
 ## Coverage index
 

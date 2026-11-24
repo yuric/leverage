@@ -304,7 +304,7 @@
     "add_checks_passed", "verify_passed", "found_signed_out", "question_answered",
     "project_budget_reached", "project_under_budget", "builder_seat_enabled",
     "seat_disabled_by_change", "disables_seat_holding_working_task", "target_project_paused",
-    "source_project_paused", "rerun_queues", "rerun_of_claim_check"
+    "source_project_paused", "rerun_queues", "rerun_of_claim_check", "rule_on_superseded_default"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",

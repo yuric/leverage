@@ -55,7 +55,8 @@ class RuleChecksContractTest < Minitest::Test
     lifecycle = group("install_shipped_rules")
     refute_nil lifecycle, "no install_shipped_rules group"
     assert_equal "prd", lifecycle["source"]
-    assert_equal [ "Write the shipped rules", "None", "Unchanged", "The app", "None", "`rule.created`" ], lifecycle["prd_cells"]
+    assert_equal [ "Write the shipped rules", "None", "Unchanged", "The app", "None",
+                   "`rule.created`, and `rule.reverted` for a rule still at an earlier default" ], lifecycle["prd_cells"]
     assert_equal 1, lifecycle.fetch("rows").size
     row = lifecycle.fetch("rows").first
     assert_equal "install_shipped_rules", row["command"]

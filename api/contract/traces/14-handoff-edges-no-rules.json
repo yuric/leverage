@@ -218,7 +218,7 @@
       "path_params": {},
       "body": {
         "title": "Write the release notes",
-        "goal": "Write the release notes, done and checked.",
+        "details": "Write the release notes, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/task-1",
         "state": "backlog"
@@ -276,8 +276,7 @@
       },
       "body": {
         "title": "Write the release notes",
-        "goal": "Write the release notes, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Write the release notes, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "Write the release notes: the work is done.",
@@ -551,7 +550,7 @@
       "path_params": {},
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
+        "details": "Update the pricing page, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/task-2",
         "state": "backlog"
@@ -609,8 +608,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "Update the pricing page: the work is done.",
@@ -884,7 +882,7 @@
       "path_params": {},
       "body": {
         "title": "Fix the sign-up form",
-        "goal": "Fix the sign-up form, done and checked.",
+        "details": "Fix the sign-up form, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/task-3",
         "state": "backlog"
@@ -942,8 +940,7 @@
       },
       "body": {
         "title": "Fix the sign-up form",
-        "goal": "Fix the sign-up form, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Fix the sign-up form, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "Fix the sign-up form: the work is done.",

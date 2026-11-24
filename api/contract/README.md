@@ -25,6 +25,7 @@ and leaves its meaning to the PRD.
 | `timers.json` | Each timer: scope, due-time source, events. |
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
+| `goal_fold.json` | How a task's goal was folded into its details, with examples (decisions.md, UI-1). |
 | `openapi.json` | The agent, owner and helper interfaces, in OpenAPI 3.1. |
 | `traces/<nn>-<name>.json` | The golden traces. |
 | `meta/<file>.schema.json` | The shape of each data file above, in JSON Schema 2020-12. |
@@ -869,3 +870,30 @@ from the server. Its decisions are GA-12 to GA-17 in
   `SeatConnectedRepeated` is gone. The four one-time responses are
   `SeatTokenPickup`, `LandingPromptIssued`, `HelperTokenIssued` and
   `OwnerSession`.
+
+## What app round 1 changed
+
+The owner went through the app tab by tab on 2026-11-24 and asked, among
+other things, that a task have no goal. Its decisions are UI-1 to UI-8 in
+[`decisions.md`](decisions.md#app-round-1-ui).
+
+- A task's goal is folded into its details (`goal_fold.json`), and
+  `tasks.goal` is dropped by the migration that folds it. `AddTaskRequest`,
+  `CompleteContractRequest`, `TaskSummary`, `BriefingContract`,
+  `CheckContract`, `ActionJobContract` and `DraftMaterial` lose `goal`;
+  their examples and every golden trace body are folded the same way. The
+  requests and reads change in place (DB-48's reasoning); no event payload
+  carried a goal.
+- The details' limit is 24,002 characters, so a folded task can be saved
+  again unchanged. `BriefingContract` gains `title`.
+- `task.before_ready` hashes the title, the details, the criteria and the
+  actions. Trace 07's digest is the engine's hash of its new inputs.
+- The specific-details instruction judges the title, the details and the
+  criteria. `shipped_rules.json` keeps the replaced default in
+  `superseded_instructions`, and `install_shipped_rules` gains the
+  conditional event `rule.reverted` (guard `rule_on_superseded_default`,
+  added to the registry's guards), which moves a rule still at that
+  default to the new one.
+- `Project` gains `latest_work_reference`, read from the project's tasks,
+  which Add task uses to fill "Where the work is".
+- A project keeps its goal.

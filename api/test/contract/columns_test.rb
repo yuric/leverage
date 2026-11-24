@@ -40,8 +40,9 @@ class ColumnsTest < Minitest::Test
     "LandingPromptIssued" => %w[text connection],
     # Derived from the action's approval event and the rule check that stopped it.
     "Action" => %w[approved_at stopped_by_rule_check_id],
-    # The project pause's actor, the count of unfinished tasks and the current brief.
-    "Project" => %w[paused_by open_tasks brief],
+    # The project pause's actor, the count of unfinished tasks, the current
+    # brief, and the work reference of its latest task that has one (UI-6).
+    "Project" => %w[paused_by open_tasks brief latest_work_reference],
     # True when the question's outcome is overturned.
     "Question" => %w[overturned],
     # A step's length, closed_at (or the read's as_of for the open one)
@@ -92,7 +93,9 @@ class ColumnsTest < Minitest::Test
   end
 
   def test_shipped_rule_fields_are_rule_and_rule_version_columns
-    allowed = columns("rules") + columns("rule_versions") + %w[scope]
+    # superseded_instructions: earlier shipped defaults, read by Write the
+    # shipped rules and stored nowhere (UI-5).
+    allowed = columns("rules") + columns("rule_versions") + %w[scope superseded_instructions]
     Leverage::Contract.shipped_rules.fetch("rules").each do |rule|
       fields = rule.keys.reject { |key| key.start_with?("prd_") }
       assert_empty fields - allowed, rule["key"]

@@ -45,7 +45,7 @@
       "operation_id": "add_task",
       "key": "$key:t1_add",
       "path_params": {},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -65,7 +65,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t1_complete_1",
       "path_params": {"id": "$task:1"},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "details": "Make it nicer.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.\n\nMake it nicer.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "pending",
         "refusal": null,
@@ -136,7 +136,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t1_complete_2",
       "path_params": {"id": "$task:1"},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "details": "Replace the three prices on /pricing with the figures in the 2026 brief, keep the layout.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.\n\nReplace the three prices on /pricing with the figures in the 2026 brief, keep the layout.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "pending",
         "refusal": null,
@@ -206,7 +206,7 @@
       "operation_id": "add_task",
       "key": "$key:t2_add",
       "path_params": {},
-      "body": {"title": "Write the release notes", "goal": "The release notes list every change in 2.4.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Write the release notes", "details": "The release notes list every change in 2.4.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -268,7 +268,7 @@
       "operation_id": "submit_job_result",
       "key": "$key:job_result_300",
       "path_params": {"id": "$job:t2_draft"},
-      "body": {"result": {"title": "Write the release notes", "goal": "The release notes list every change in 2.4.", "details": "List each merged change of version 2.4 under Added, Changed or Fixed, one line each, linking its pull request.", "criteria": [{"text": "The release notes of 2.4 list every merged change with its pull request.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null}, "tokens": 900, "spend": 0},
+      "body": {"result": {"title": "Write the release notes", "details": "The release notes list every change in 2.4.\n\nList each merged change of version 2.4 under Added, Changed or Fixed, one line each, linking its pull request.", "criteria": [{"text": "The release notes of 2.4 list every merged change with its pull request.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null}, "tokens": 900, "spend": 0},
       "expect": {
         "outcome": "pending",
         "refusal": null,

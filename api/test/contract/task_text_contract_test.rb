@@ -45,6 +45,11 @@ class TaskTextContractTest < Minitest::Test
     "#{trimmed}\n\n#{details}"
   end
 
+  # assert_equal, also when the text expected is null.
+  def assert_same_text(expected, actual, message)
+    expected.nil? ? assert_nil(actual, message) : assert_equal(expected, actual, message)
+  end
+
   # Every object under `value` that has a "goal" key, with its path, except
   # a schema's properties list.
   def goals_in(value, path = [], found = [])
@@ -90,10 +95,12 @@ class TaskTextContractTest < Minitest::Test
     assert_includes briefing.fetch("required"), "title"
   end
 
-  # UI-1: no example in the interface schema gives a task a goal.
+  # UI-1: no example in the interface schema gives a task a goal. A
+  # project, named and with no title, keeps its goal (UI-7).
   def test_no_interface_example_gives_a_task_a_goal
-    found = goals_in(openapi).reject { |path, _| PROJECT_SHAPES.any? { |name| path.start_with?("components/schemas/#{name}/") } }
+    found = goals_in(openapi).reject { |_, object| object.key?("name") && !object.key?("title") }
     assert_empty found.map(&:first)
+    refute_empty goals_in(openapi), "a project example keeps its goal"
   end
 
   # UI-1: no golden trace sends a task's goal; a project's goal is sent.
@@ -141,7 +148,7 @@ class TaskTextContractTest < Minitest::Test
   # to the new one.
   def test_write_the_shipped_rules_may_revert_an_earlier_default
     row = rows.find { |entry| entry["command"] == "install_shipped_rules" }
-    assert_includes row.fetch("conditional_events"), "rule.reverted"
+    assert_includes row.fetch("conditional_events").map { |event| event["event"] }, "rule.reverted"
     assert_match(/superseded_instructions/, row.fetch("note"))
   end
 
@@ -153,8 +160,8 @@ class TaskTextContractTest < Minitest::Test
     assert_equal " \t\r\n", data.fetch("trimmed")
     examples = data.fetch("examples")
     examples.each do |example|
-      assert_equal example.fetch("details_after"),
-        fold(example.fetch("title"), example.fetch("goal"), example.fetch("details")), example.fetch("name")
+      folded = fold(example.fetch("title"), example.fetch("goal"), example.fetch("details"))
+      assert_same_text example.fetch("details_after"), folded, example.fetch("name")
     end
     assert_operator examples.map { |example| example["name"] }.uniq.size, :>=, 7
   end

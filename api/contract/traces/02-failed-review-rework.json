@@ -45,7 +45,7 @@
       "operation_id": "add_task",
       "key": "$key:t1_add",
       "path_params": {},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -65,7 +65,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t1_complete",
       "path_params": {"id": "$task:1"},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "details": "Use the figures in the brief.", "criteria": [{"text": "Criterion build of task 1 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.\n\nUse the figures in the brief.", "criteria": [{"text": "Criterion build of task 1 holds.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "completed",
         "refusal": null,
