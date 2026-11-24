@@ -238,20 +238,22 @@ struct JobPromptsTests {
         #expect(JobFixture.nonce(of: prompt) == Self.nonce, "the closing names the run's nonce last")
     }
 
-    @Test("a draft prompt quotes the title, goal, details, criteria and brief, each in its labelled block")
+    @Test("a draft prompt quotes task material and asks for a two-key JSON object")
     func draftBlocks() throws {
         let material = JobFixture.draftMaterial()
         let prompt = JobPrompts.draft(material: material, nonce: Self.nonce)
         #expect(prompt.split(separator: "\n", omittingEmptySubsequences: false).first == "LEVERAGE DRAFT")
         let (blocks, outside) = try Self.blocks(prompt, nonce: Self.nonce)
-        #expect(blocks.map(\.0) == ["title", "goal", "details", "criteria", "brief"])
-        try #require(blocks.count == 5)
+        #expect(blocks.map(\.0) == ["title", "details", "criteria", "brief"])
+        try #require(blocks.count == 4)
         #expect(blocks[0].1 == JobFixture.title)
-        #expect(blocks[1].1 == JobFixture.goal)
-        #expect(blocks[2].1 == JobFixture.details)
-        for piece in [JobFixture.title, JobFixture.goal, JobFixture.details, "The walrus discount is named."] {
+        #expect(blocks[1].1 == JobFixture.details)
+        for piece in [JobFixture.title, JobFixture.details, "The walrus discount is named."] {
             #expect(!outside.contains(piece))
         }
+        #expect(outside.contains("one JSON object with two keys: \"details\""))
+        #expect(outside.contains("\"criteria\", a list of sentences"))
+        #expect(!outside.contains("\"goal\""))
         #expect(outside.contains("LEVERAGE-DRAFT-\(Self.nonce)-BEGIN"))
         #expect(outside.contains("LEVERAGE-DRAFT-\(Self.nonce)-END"))
         let roleFile = try #require(material.roleFile)

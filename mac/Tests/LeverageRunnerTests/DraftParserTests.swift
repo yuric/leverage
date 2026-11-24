@@ -21,7 +21,7 @@ struct DraftParserTests {
     func answer(_ json: String) -> String { "Here it is.\n\(Self.begin)\n\(json)\n\(Self.end)\nDone." }
 
     static let good = """
-        {"goal": "The alpaca page shows this year's prices.", "details": "Figures from the llama sheet.", \
+        {"details": "Figures from the llama sheet.", \
         "criteria": ["The walrus discount is named.", "Every price matches the sheet."]}
         """
 
@@ -29,7 +29,6 @@ struct DraftParserTests {
     func good() throws {
         let contract = try #require(parse(answer(Self.good)))
         #expect(contract.title == JobFixture.title)
-        #expect(contract.goal == "The alpaca page shows this year's prices.")
         #expect(contract.details == "Figures from the llama sheet.")
         #expect(contract.criteria == [
             CriterionInput(text: "The walrus discount is named.", kind: .build),
