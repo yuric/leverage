@@ -10,6 +10,10 @@ once it makes its first release.
 
 ### Added
 
+- Every workspace has an Imaginarium project, where tasks from the coming
+  prompt gallery will go. A new installation gets it at setup, and an
+  existing one gets it once when the updated app starts its server. The
+  side pane lists it first among the projects, on a faint rainbow tint.
 - A new installation opens the setup assistant: a welcome, two logins
   from two providers, a General agent for each login, and a first task
   from three built-in starter tasks or one the owner writes. Leaving it

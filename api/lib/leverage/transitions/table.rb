@@ -35,7 +35,7 @@ module Leverage
       QUESTIONS = %w[ask_question request_access answer_question overturn_answer grant_access].freeze
       PROJECTS = %w[
         report_cost create_project edit_brief pause_project resume_project change_budget change_task_priority
-        change_task_project change_task_cap
+        change_task_project change_task_cap install_imaginarium_project
       ].freeze
       WORKSPACE = %w[delete_content change_workspace_settings].freeze
       CREDENTIALS = %w[rename_credential remove_credential reorder_credentials refresh_usage report_reading].freeze

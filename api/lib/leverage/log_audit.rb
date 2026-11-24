@@ -104,6 +104,7 @@ module Leverage
     # The workspace timers and the one-time write, by what their events name.
     ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility" }.freeze
     INSTALL = "install_shipped_rules".freeze
+    INSTALL_IMAGINARIUM = "install_imaginarium_project".freeze
     # The withdrawals a timer that ends a waiting command writes before its
     # lease end (rule 11).
     CANCEL_EVENTS = %w[check.finished job.withdrawn hold.closed inbox.resolved].freeze
@@ -288,6 +289,7 @@ module Leverage
     # command applies no workspace timer.
     def workspace_timer(events)
       return INSTALL if events.any? { |event| event.type == "rule.created" }
+      return INSTALL_IMAGINARIUM if events.any? { |event| event.type == "project.created" }
       return if events.any? { |event| TIMER_EVENTS.key?(event.type) }
 
       kinds = events.select { |event| event.type.start_with?("inbox.") }.filter_map do |event|

@@ -10,6 +10,15 @@ class ProjectsTest < ActiveSupport::TestCase
     Leverage::Gating.implementation = Leverage::Gating::StandIn.new
   end
 
+  test "create_project writes project.created with imaginarium false, and records no Imaginarium project (DB-53)" do
+    events = events_written { assert_completed(owner_command("create_project", { "name" => "Made-up new project" })) }
+
+    created = events.sole
+    assert_equal [ "project.created", { "imaginarium" => false } ], [ created.type, created.payload ]
+    assert_nil scenario.workspace.reload.imaginarium_project_id
+    assert_equal false, Leverage::Replay.project(scenario.workspace_id).fetch(:projects).fetch(created.project_id).fetch("imaginarium")
+  end
+
   test "a budget pause holds 450 open tasks in batches of 200 and opens one project item" do
     builder = own_seat
     task = scenario.task(state: "working", builder: builder, project: @project)

@@ -1,12 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "project.created v1",
-  "description": "Create a project.",
+  "description": "Create a project. imaginarium is true for the workspace's Imaginarium project (DB-53).",
   "type": "object",
   "additionalProperties": false,
-  "properties": {},
-  "required": [],
+  "properties": {
+    "imaginarium": {
+      "description": "True when this is the workspace's Imaginarium project, created by create_owner or install_imaginarium_project. A project.created written before DB-53 has no field, and readers treat that as false.",
+      "type": "boolean"
+    }
+  },
+  "required": ["imaginarium"],
   "examples": [
-    {}
+    {"imaginarium": false},
+    {"imaginarium": true}
   ]
 }

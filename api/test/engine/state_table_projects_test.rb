@@ -8,7 +8,8 @@ class StateTableProjectsTest < ActiveSupport::TestCase
   include JobsSupport
 
   COMMANDS = %w[report_cost change_task_priority change_task_project change_task_cap
-                change_budget pause_project resume_project create_project edit_brief].freeze
+                change_budget pause_project resume_project create_project edit_brief
+                install_imaginarium_project].freeze
 
   setup { use_scenario }
 
@@ -18,7 +19,11 @@ class StateTableProjectsTest < ActiveSupport::TestCase
     outcome = nil
     events = events_written do
       assert_nothing_raised do
-        outcome = caller ? seat_command(caller, kase.command, params) : owner_command(kase.command, params)
+        outcome = if caller == :app
+          Leverage::Timers.apply_workspace(scenario.workspace, kase.command, at: scenario.database_now)
+        else
+          caller ? seat_command(caller, kase.command, params) : owner_command(kase.command, params)
+        end
       end
     end
 
@@ -53,6 +58,8 @@ class StateTableProjectsTest < ActiveSupport::TestCase
       project = scenario.project(paused: true)
       scenario.append("project.paused", project_id: project.id, actor_kind: "owner", actor_id: scenario.owner.id)
       [ nil, nil, { "id" => project.id } ]
+    when "install_imaginarium_project"
+      [ nil, :app, {} ]
     when "create_project"
       [ nil, nil, { "name" => "Made-up new project" } ]
     when "edit_brief"

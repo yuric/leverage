@@ -145,7 +145,8 @@ class Scenario
   def project(name: "Made-up project", id: nil, brief: [], **columns)
     transaction do
       project = Project.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, name: name, **columns)
-      append("project.created", project_id: project.id, actor_kind: "owner", actor_id: owner.id)
+      append("project.created", project_id: project.id, actor_kind: "owner", actor_id: owner.id,
+        payload: { imaginarium: false })
       if brief.any?
         version = project.brief_version + 1
         project.update!(brief_version: version)

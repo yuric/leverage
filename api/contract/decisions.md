@@ -405,6 +405,21 @@ Where two inventories chose differently, the decision names the conflict.
   migration moves stored tasks to `ideas`, with the task-state trigger
   turned off for that one update: the state's name changes, not the
   task's place in its lifecycle, so no event is written.
+- **DB-53** `[shape]` Every workspace has an Imaginarium project (IM-5 to
+  IM-7 of `docs/imaginarium/PRD.md`, now in the PRD). `workspaces` gains
+  `imaginarium_project_id`, a nullable reference to `projects`: the project
+  is known by its id, not its name. `create_owner` creates it after the
+  shipped rules, writing `project.created`. A workspace created before
+  this gets it once from the app command `install_imaginarium_project`,
+  which `bin/rails leverage:install_imaginarium_project` runs before the
+  server starts, as `install_shipped_rules` does for rules; a workspace
+  that has one is refused `invalid_state`. The `Project` read gains
+  `imaginarium`, true for that project only. In every other way it is an
+  ordinary project.
+  The `project.created` payload gains `imaginarium`, true for that
+  project, so that a replay of the log knows it. The field is added to
+  `v1` in place, as DB-51's was; a `project.created` written before it
+  has no field, and readers treat that as false.
 
 ## State machine (SM)
 

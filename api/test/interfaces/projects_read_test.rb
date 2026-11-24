@@ -43,6 +43,17 @@ class ProjectsReadTest < CommittingTestCase
     assert_equal [ false, nil ], row.values_at("paused", "paused_by")
   end
 
+  test "imaginarium is true only for the workspace's Imaginarium project (DB-53)" do
+    other = scenario.project(name: "Imaginarium")
+    outcome = Leverage::Timers.apply_workspace(scenario.workspace, "install_imaginarium_project", at: scenario.database_now)
+    assert outcome.completed?
+    imaginarium = scenario.workspace.reload.imaginarium_project_id
+
+    rows = projects.to_h { |row| [ row.fetch("id"), row.fetch("imaginarium") ] }
+
+    assert_equal({ imaginarium => true, other.id => false }, rows)
+  end
+
   private
 
   def projects

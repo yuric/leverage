@@ -111,8 +111,13 @@ Each forward move names the hook where rules run. A failed review loops back to 
 | Report a limit or a sign-out | Working, Finishing, or In review while a reviewer holds the review | Unchanged | The helper, acting as the app | None | `credential.limit_reached` or `credential.signed_out`, then `credential.switched` when the work is handed off. When no candidate is available: `hold.opened`, with `inbox.opened` when the owner must act, or `review.released` for a review |
 | Cancel | Any except Done | Cancelled | Owner | None | `task.cancelled` |
 | Write the shipped rules | None | Unchanged | The app | None | `rule.created` |
+| Create the Imaginarium project | None | Unchanged | The app | None | `project.created` |
 
 Saving the Add task form is two commands in a row: Add task, then Complete contract.
+
+### The Imaginarium project
+
+Every workspace has a project named Imaginarium, where tasks from the prompt gallery go. Creating the owner's sign-in creates it, in the same transaction, after the shipped rules, writing `project.created`. A workspace created before then gets it once, through the transition function, with the app as actor, with the command Create the Imaginarium project, which the server runs when it starts for a workspace that has none. The workspace knows the project by its id, not its name. In every other way it is an ordinary project, with a brief, a budget and a pause. The side pane lists it first among the projects, as a plain row with a faint rainbow tint and no icon.
 
 Draft contract queues a planner job. Its result is the Complete contract command (see `POST /v1/jobs/{id}/result`).
 
@@ -833,7 +838,7 @@ These tables are part of the shared contract, which is listed in full under Buil
 
 | Table | Holds | Key fields |
 | --- | --- | --- |
-| `workspaces` | One row per owner | Workspace settings: lease length, check timeouts, maximum rounds, re-run limit, recovery time ceiling |
+| `workspaces` | One row per owner | Workspace settings: lease length, check timeouts, maximum rounds, re-run limit, recovery time ceiling, the Imaginarium project |
 | `users` | The owner's sign-in | Workspace, sign-in identity |
 | `projects` | Projects | Name, goal, budget, spent, paused |
 | `brief_entries` | Each project's rules, decisions and lessons | Project, kind, text, author |

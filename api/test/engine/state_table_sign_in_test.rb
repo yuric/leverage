@@ -75,8 +75,14 @@ class StateTableSignInTest < ActiveSupport::TestCase
 
     assert outcome.completed?, "#{kase.command} completed (got #{outcome.outcome} #{outcome.refusal&.code})"
     written = Event.where.not(id: events_before).order(:seq).map(&:type)
-    times = kase.command == "create_owner" ? Leverage::Rules::Shipped.all.size : 1
-    assert_equal kase.events * times, written, "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
+    # create_owner's row names rule.created once for each shipped rule, then
+    # the Imaginarium project's project.created once (DB-53).
+    expected = if kase.command == "create_owner"
+      [ "rule.created" ] * Leverage::Rules::Shipped.all.size + [ "project.created" ]
+    else
+      kase.events
+    end
+    assert_equal expected, written, "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
     if kase.command == "issue_landing_prompt"
       assert_equal %w[task.released review.released], kase.conditional_events.map { |event| event.fetch("event") }
       assert_match Leverage::Tokens::FORM, outcome.once.fetch("seat_token")
