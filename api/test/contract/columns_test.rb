@@ -40,8 +40,9 @@ class ColumnsTest < Minitest::Test
     "LandingPromptIssued" => %w[text connection],
     # Derived from the action's approval event and the rule check that stopped it.
     "Action" => %w[approved_at stopped_by_rule_check_id],
-    # The project pause's actor, the count of unfinished tasks and the current brief.
-    "Project" => %w[paused_by open_tasks brief],
+    # The project pause's actor, the count of unfinished tasks, the current
+    # brief, and whether it is the workspace's Imaginarium project (DB-53).
+    "Project" => %w[paused_by open_tasks brief imaginarium],
     # True when the question's outcome is overturned.
     "Question" => %w[overturned],
     # A step's length, closed_at (or the read's as_of for the open one)

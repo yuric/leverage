@@ -526,6 +526,14 @@ check result. What it added and changed, each from the milestone 4 plan
   `rule.created` as a workspace's first events, holds for workspaces
   created from this milestone on; an older workspace gets them from this
   command, after its earlier events.
+- **One command and its Lifecycle row**, `install_imaginarium_project`
+  (DB-53): a registry `commands` entry, the `CommandName` enum, and a
+  `state_machine.json` group with `source: prd` that copies the PRD's row
+  "Create the Imaginarium project": actor `app`, no key, one
+  `project.created`. No operation runs it: `bin/rails
+  leverage:install_imaginarium_project` applies it before the server
+  starts to each workspace with no Imaginarium project. `create_owner`
+  also writes that `project.created`, after the shipped rules' events.
 - **`create_owner`'s row** writes `rule.created` for each shipped rule,
   with the owner as actor and the command's key (L434, RD-1). Its note no
   longer says the workspace starts with no rule.

@@ -104,6 +104,7 @@
     {"command": "revert_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "remove_rule", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "install_shipped_rules", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "install_imaginarium_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "create_project", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "edit_brief", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "delete_content", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
@@ -492,6 +493,14 @@
       ]
     },
     {
+      "id": "install_imaginarium_project",
+      "source": "prd",
+      "prd_cells": ["Create the Imaginarium project", "None", "Unchanged", "The app", "None", "`project.created`"],
+      "rows": [
+        {"command": "install_imaginarium_project", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["project.created"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Creates the workspace's Imaginarium project and records it as workspaces.imaginarium_project_id, writing project.created with the app as actor and no key (DB-53, IM-6). No operation runs it: bin/rails leverage:install_imaginarium_project applies it before the server starts to each workspace with no Imaginarium project. A workspace that has one is refused invalid_state and gets nothing, so a second start writes nothing."}
+      ]
+    },
+    {
       "id": "request_action",
       "source": "derived",
       "prd_lines": [112, 138, 354],
@@ -718,9 +727,9 @@
       "source": "derived",
       "prd_lines": [560, 870],
       "decision": "IN-2, IN-5, IN-9",
-      "note": "Milestone 2's owner commands for the first sign-in and the sign-out (milestone 2 plan IN-2, IN-5, IN-9). They change sessions and the workspace's first rows; sign_out writes nothing to the log, and create_owner writes the shipped rules' rule.created (milestone 4 plan RD-2).",
+      "note": "Milestone 2's owner commands for the first sign-in and the sign-out (milestone 2 plan IN-2, IN-5, IN-9). They change sessions and the workspace's first rows; sign_out writes nothing to the log, and create_owner writes the shipped rules' rule.created (milestone 4 plan RD-2) and the Imaginarium project's project.created (DB-53).",
       "rows": [
-        {"command": "create_owner", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.created"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Creates the workspace with its default settings, the one owner and a session in one transaction, and writes rule.created for each shipped rule, with the owner as actor and the command's key: the workspace's first events (L434, plan SM-33; milestone 4 plan RD-1, RD-2). Once an owner exists a new key is answered 404; the session token is shown once (IN-9, IN-11)."},
+        {"command": "create_owner", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["rule.created", "project.created"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Creates the workspace with its default settings, the one owner and a session in one transaction, and writes rule.created for each shipped rule, with the owner as actor and the command's key: the workspace's first events (L434, plan SM-33; milestone 4 plan RD-1, RD-2). It then creates the Imaginarium project, writing project.created, and records it as workspaces.imaginarium_project_id (DB-53, IM-5). Once an owner exists a new key is answered 404; the session token is shown once (IN-9, IN-11)."},
         {"command": "sign_out", "from": null, "guard": [], "to": null, "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": [], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Deletes the session's row, so its token answers 401 from then on (milestone 2 plan IN-5); no event."}
       ]
     },
