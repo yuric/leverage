@@ -1,9 +1,9 @@
 {
   "name": "15-owner-controls-no-rules",
-  "description": "The owner's controls in a workspace with no rules. An idea is added to the Imaginarium and promoted; its contract is written in Backlog with Edit contract and completed; the owner pauses the task in Ready and continues it; the builder claims it, and while it holds the task the owner pauses the agent and resumes it; the owner changes a criterion while the task is Working, which returns it to Backlog and ends the lease, and completes the contract again, the passed criterion staying passed; three failed reviews hold the task with rounds_exceeded and the Past the round limit item, which an edit of the contract resolves; the task is completed again and passes. A second task's builder is turned off while it works, which releases the task with seat_disabled, and the first builder takes it to Done.",
+  "description": "The owner's controls in a workspace with no rules. An idea is added to Ideas and promoted; its contract is written in Backlog with Edit contract and completed; the owner pauses the task in Ready and continues it; the builder claims it, and while it holds the task the owner pauses the agent and resumes it; the owner changes a criterion while the task is Working, which returns it to Backlog and ends the lease, and completes the contract again, the passed criterion staying passed; three failed reviews hold the task with rounds_exceeded and the Past the round limit item, which an edit of the contract resolves; the task is completed again and passes. A second task's builder is turned off while it works, which releases the task with seat_disabled, and the first builder takes it to Done.",
   "covers": [
     "PRD test 8 and Build order, Handoff: one of the five golden traces for a workspace with no rules (milestone 3 plan HT-1, PRD R-7); the owner commands the Needs you choices rest on (PRD Build order, Handoff: promote, edit a contract, hold and resume, and pause, resume and change a seat).",
-    "PRD Task lifecycle, Add task and Promote: Add task into the Imaginarium opens the idea step (milestone 3 plan HE-24); Promote writes task.promoted and opens wait_contract.",
+    "PRD Task lifecycle, Add task and Promote: Add task into Ideas opens the idea step (milestone 3 plan HE-24); Promote writes task.promoted and opens wait_contract.",
     "PRD Task lifecycle, Edit contract in Backlog: task.contract_changed only, and the task stays in Backlog; criteria keep their identity by position and kind (milestone 3 plan HE-25).",
     "PRD Contract edits and cancel: an edit from Working returns the task to Backlog and ends the lease with no event of its own; an unchanged criterion that has passed stays passed, a criterion whose text changed is reset to open (milestone 3 plan HE-25); Complete contract with the same criteria changes none of them.",
     "PRD Holds and the Needs you choices: Hold opens owner_hold (wait_owner) and Resume closes it; a paused agent holds its task with seat_paused (wait_seat, the lease keeps running, milestone 3 plan HE-26) until it is resumed; Edit contract answers Past the round limit: hold.closed, then inbox.resolved with the choice edit_contract (milestone 3 plan HE-25, HE-29), and the round is kept.",
@@ -118,7 +118,7 @@
         "details": "Update the pricing page, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/pricing-page",
-        "state": "imaginarium"
+        "state": "ideas"
       },
       "expect": {
         "outcome": "completed",
@@ -140,7 +140,7 @@
             "cause_id": null,
             "command_id": "$key:t1_add",
             "payload": {
-              "state": "imaginarium",
+              "state": "ideas",
               "added_action_ids": []
             }
           }

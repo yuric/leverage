@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onboarding mockup 1: Checklist + spotlight</title>
+<!--
+  Onboarding mockup 1 for the Leverage app: a setup checklist on the board that
+  drives a spotlight. One self-contained page; it loads nothing from the network.
+
+  Top to bottom:
+    1. DESIGN TOKENS   copied from docs/design/mockup.html (light and dark).
+    2. MOCKUP STYLES   the "lv-" classes of the design reference this page uses.
+    3. ONBOARDING      what this mockup adds (classes start with "lv-ob-").
+    4. INSPECTOR       the grey bar and the notes (classes start with "ix-").
+                       They are not part of the design.
+    5. SCRIPT          sample data, the state, the screens, the spotlight.
+-->
+<style>
+/* ===== 1. DESIGN TOKENS (from docs/design/mockup.html) ===== */
+.lv-root {
+  color-scheme: light;
+  --backdrop-base: #E8EDFA;
+  --tint-a: rgba(118,160,255,0.6);
+  --tint-b: rgba(180,150,255,0.55);
+  --backdrop: radial-gradient(900px 520px at 12% 0%, var(--tint-a), transparent 70%), radial-gradient(820px 560px at 92% 12%, var(--tint-b), transparent 70%), var(--backdrop-base);
+  --shell: rgba(255,255,255,0.5);
+  --nav: rgba(255,255,255,0.34);
+  --rim: rgba(255,255,255,0.8);
+  --blur: 30px;
+  --glass-filter: blur(var(--blur)) saturate(1.6);
+  --shell-shadow: 0 30px 70px rgba(40,52,118,0.2), inset 0 1px 0 rgba(255,255,255,0.9);
+  --nav-shadow: 0 10px 26px rgba(40,52,118,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+  --surface: rgba(255,255,255,0.95);
+  --sheet: #FFFFFF;
+  --inset: #EEF2FC;
+  --control: #F3F5FB;
+  --line: #D5DAE8;
+  --field: #7A8298;
+  --text: #1A1E29;
+  --text2: #444C60;
+  --dot: #B4BBCF;
+  --ok: #1C8A52;
+  --placeholder: #6B7280;
+  --select: #CFE0FF;
+  --primary: #0A63E0;
+  --primary-fg: #FFFFFF;
+  --primary-shadow: 0 6px 16px rgba(10,99,224,0.32);
+  --focus: #0A63E0;
+  --hover: 0.96;
+  --tab-fg: #2F3648;
+  --tab-hover: rgba(26,30,41,0.05);
+  --tab-pressed: rgba(26,30,41,0.11);
+  --tab-on-bg: #FFFFFF;
+  --tab-on-fg: #11141D;
+  --tab-on-edge: rgba(26,30,41,0.14);
+  --tab-on-shadow: 0 4px 12px rgba(40,52,118,0.22), inset 0 1px 0 #FFFFFF;
+  --card-shadow: 0 1px 2px rgba(30,40,90,0.08);
+  --sheet-shadow: 0 30px 80px rgba(30,40,90,0.3);
+  --scrim: rgba(24,30,58,0.3);
+  --wait-bg: #FFEFCF;  --wait-fg: #7A4300;
+  --done-bg: #DDF5E6;  --done-fg: #0B6237;
+  --info-bg: #E2EDFF;  --info-fg: #0B4AA8;
+  --stop-bg: #FFE4D3;  --stop-fg: #8A3A0B;
+  --plain-bg: #EEF2FC; --plain-fg: #1A1E29;
+  --r-window: 18px;
+  --r-nav: 14px;
+  --r-card: 12px;
+  --r-tab: 10px;
+  --r-control: 8px;
+  --r-chip: 6px;
+  --fs-head: 15px;
+  --fs-body: 13px;
+  --fs-small: 12px;
+  --fs-badge: 11px;
+  /* onboarding only: the spotlight's shade and the ring around what it points at */
+  --ob-dim: rgba(14,18,40,0.68);
+  --ob-ring: #FFFFFF;
+  --ob-glow: rgba(10,99,224,0.55);
+}
+.lv-root[data-appearance="dark"] {
+  color-scheme: dark;
+  --backdrop-base: #0D111E;
+  --tint-a: rgba(62,104,235,0.55);
+  --tint-b: rgba(136,92,224,0.5);
+  --shell: rgba(30,34,52,0.56);
+  --nav: rgba(44,49,72,0.6);
+  --rim: rgba(255,255,255,0.16);
+  --shell-shadow: 0 30px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+  --nav-shadow: 0 10px 26px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.14);
+  --surface: rgba(27,30,45,0.95);
+  --sheet: #1D2032;
+  --inset: #262A3F;
+  --control: #262A3F;
+  --line: #3A405A;
+  --field: #6B7391;
+  --text: #F2F4FA;
+  --text2: #BAC1D6;
+  --dot: #5C6382;
+  --ok: #57D08F;
+  --placeholder: #9AA3BC;
+  --select: #2C4A86;
+  --primary: #1F6FEB;
+  --primary-shadow: 0 6px 16px rgba(31,111,235,0.42);
+  --focus: #8AB4FF;
+  --hover: 1.12;
+  --tab-fg: #D5DAEA;
+  --tab-hover: rgba(255,255,255,0.06);
+  --tab-pressed: rgba(255,255,255,0.14);
+  --tab-on-bg: #3A4160;
+  --tab-on-fg: #FFFFFF;
+  --tab-on-edge: rgba(255,255,255,0.22);
+  --tab-on-shadow: 0 4px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  --sheet-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  --scrim: rgba(5,7,14,0.55);
+  --wait-bg: #4B3611;  --wait-fg: #FFD899;
+  --done-bg: #12402A;  --done-fg: #A6ECC4;
+  --info-bg: #17336A;  --info-fg: #C2DAFF;
+  --stop-bg: #4D2613;  --stop-fg: #FFCBAA;
+  --plain-bg: #262A3F; --plain-fg: #F2F4FA;
+  --ob-dim: rgba(3,4,10,0.7);
+  --ob-ring: #A9C8FF;
+  --ob-glow: rgba(72,134,255,0.6);
+}
+
+/* ===== 2. MOCKUP STYLES (from docs/design/mockup.html) ===== */
+.lv-root { position: relative; min-height: 800px; box-sizing: border-box; padding: 24px 16px 40px; background: var(--backdrop); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif; font-size: var(--fs-body); line-height: 1.4; font-variant-numeric: tabular-nums; text-align: left; }
+.lv-root *, .lv-root *::before, .lv-root *::after { box-sizing: border-box; }
+.lv-root h1, .lv-root h2, .lv-root h3, .lv-root h4 { margin: 0; text-wrap: balance; }
+.lv-root p { margin: 0; }
+.lv-root ol, .lv-root ul { margin: 0; padding: 0; list-style: none; }
+.lv-root ::selection { background: var(--select); }
+.lv-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lv-root [tabindex="-1"]:focus { outline: none; }
+
+.lv-frame { position: relative; max-width: 1120px; margin: 0 auto; }
+.lv-window { display: flex; align-items: stretch; gap: 6px; min-height: 720px; padding: 6px; border-radius: var(--r-window); background: var(--shell); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--shell-shadow); }
+.lv-side { flex: 0 0 188px; display: flex; flex-direction: column; gap: 14px; padding: 12px 8px; border-radius: calc(var(--r-window) - 6px); background: var(--nav); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--nav-shadow); }
+.lv-dots { display: flex; gap: 6px; padding: 2px 6px 0; }
+.lv-dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--dot); }
+.lv-brand { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+.lv-brand h1 { font-size: var(--fs-head); font-weight: 700; letter-spacing: 0.01em; }
+.lv-appicon { flex: 0 0 auto; display: block; }
+.lv-side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 6px 2px; }
+.lv-health { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fs-small); color: var(--text2); }
+.lv-health i { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--ok); }
+.lv-health[data-tone="warning"] i { background: var(--wait-fg); }
+.lv-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.lv-toolbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px 10px 16px; }
+.lv-toolbar-title { flex: 1 1 auto; min-width: 0; }
+
+.lv-btn { flex: 0 0 auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--control); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
+.lv-btn--strong { font-weight: 600; }
+.lv-btn--primary { padding: 0 16px; border-width: 0; background: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.lv-btn--raised { box-shadow: var(--primary-shadow); }
+.lv-btn--tint { border-color: transparent; background: var(--info-bg); color: var(--info-fg); font-weight: 600; }
+.lv-btn--row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-weight: 500; }
+.lv-btn--small { min-height: 28px; padding: 0 10px; font-size: var(--fs-small); }
+.lv-btn--link { min-height: 0; padding: 0; border: 0; background: none; color: var(--info-fg); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.lv-input { min-height: 36px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--field); background: var(--surface); color: var(--text); font: inherit; caret-color: var(--focus); }
+textarea.lv-input { padding: 8px 12px; resize: vertical; }
+select.lv-input { padding: 0 8px; }
+.lv-input::placeholder { color: var(--placeholder); opacity: 1; }
+.lv-field { display: flex; flex-direction: column; gap: 4px; }
+.lv-label { font-size: var(--fs-small); font-weight: 600; color: var(--text2); }
+.lv-root button, .lv-input { transition: background-color .15s ease-out, box-shadow .15s ease-out, transform .15s ease-out, filter .15s ease-out; }
+.lv-root button:focus-visible, .lv-input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lv-root button:not([aria-disabled="true"]):hover { filter: brightness(var(--hover)); }
+.lv-root button:not([aria-disabled="true"]):active { transform: translateY(1px); }
+.lv-root button[aria-disabled="true"] { opacity: .38; cursor: not-allowed; }
+
+.lv-nav { display: flex; flex-direction: column; gap: 2px; }
+.lv-tab { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--r-control); font: inherit; font-weight: 500; text-align: left; cursor: pointer; background: transparent; color: var(--tab-fg); }
+.lv-tab svg { flex: 0 0 16px; }
+.lv-tab-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-tab[aria-current="page"] { background: var(--tab-on-bg); color: var(--tab-on-fg); border-color: var(--tab-on-edge); box-shadow: var(--tab-on-shadow); transform: translateY(-1px); font-weight: 600; }
+.lv-side-section { display: flex; flex-direction: column; gap: 4px; }
+.lv-side-head { padding: 0 8px; font-size: var(--fs-badge); font-weight: 600; color: var(--text2); }
+.lv-root .lv-tab:not([aria-current="page"]):hover { background: var(--tab-hover); filter: none; }
+.lv-root .lv-tab:active { transform: none; }
+.lv-root .lv-tab[aria-current="page"]:active { transform: translateY(-1px); }
+.lv-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--wait-bg); color: var(--wait-fg); font-size: var(--fs-badge); font-weight: 700; line-height: 18px; text-align: center; }
+
+.lv-main { display: flex; flex-direction: column; gap: 14px; padding: 0 10px 20px 16px; }
+.lv-h { font-size: var(--fs-head); font-weight: 600; }
+.lv-h--small { font-size: var(--fs-body); font-weight: 600; }
+.lv-muted { font-size: var(--fs-small); color: var(--text2); }
+.lv-lanes { display: flex; align-items: flex-start; gap: 10px; }
+.lv-lane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lv-lane-head { display: flex; align-items: baseline; gap: 6px; padding: 0 4px; }
+.lv-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-card h4 { font-size: var(--fs-body); font-weight: 600; line-height: 1.3; }
+.lv-chip { align-self: flex-start; padding: 2px 8px; border-radius: var(--r-chip); font-size: var(--fs-small); font-weight: 600; white-space: nowrap; }
+.lv-chip--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-chip--done { background: var(--done-bg); color: var(--done-fg); }
+.lv-chip--info { background: var(--info-bg); color: var(--info-fg); }
+.lv-chip--plain { background: var(--plain-bg); color: var(--plain-fg); }
+.lv-note { padding: 8px 10px; border-radius: var(--r-control); background: var(--inset); font-size: var(--fs-small); }
+.lv-note--info { background: var(--info-bg); color: var(--info-fg); }
+.lv-note--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-empty { padding: 12px; border-radius: var(--r-card); border: 1px dashed var(--field); font-size: var(--fs-small); color: var(--text2); }
+.lv-page { max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
+.lv-page-head { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.lv-page-head-text { flex: 1 1 auto; min-width: 0; }
+.lv-list { display: flex; flex-direction: column; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-list > li + li { border-top: 1px solid var(--line); }
+.lv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 16px; }
+.lv-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-row-main b { font-weight: 600; }
+.lv-need { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 16px; }
+.lv-need p { color: var(--text2); }
+
+.lv-scrim { position: absolute; inset: 0; z-index: 4; display: flex; align-items: flex-start; justify-content: center; padding: 88px 16px 24px; border-radius: var(--r-window); background: var(--scrim); }
+.lv-sheet { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--r-window); background: var(--sheet); border: 1px solid var(--line); box-shadow: var(--sheet-shadow); }
+.lv-sheet--small { max-width: 440px; }
+.lv-step { display: flex; flex-direction: column; gap: 8px; }
+.lv-step--form { gap: 12px; }
+.lv-sheet-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.lv-spacer { flex: 1 1 8px; }
+
+/* ===== 3. ONBOARDING (new in this mockup) ===== */
+
+/* the checklist card at the top of the board */
+.lv-ob-setup { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-nav); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-ob-setup-head { display: flex; align-items: center; gap: 14px; }
+.lv-ob-setup-head > div:first-child { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-ob-meter { flex: 0 0 120px; height: 6px; border-radius: 3px; background: var(--inset); overflow: hidden; }
+.lv-ob-meter span { display: block; height: 100%; border-radius: 3px; background: var(--primary); transition: width .3s ease-out; }
+.lv-ob-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.lv-ob-step { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-card); background: var(--inset); border: 1px solid transparent; }
+.lv-ob-step-top { display: flex; align-items: center; gap: 8px; }
+.lv-ob-step-top b { font-weight: 600; line-height: 1.25; }
+.lv-ob-mark { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px solid var(--field); font-size: var(--fs-small); font-weight: 700; color: var(--text2); }
+.lv-ob-step p { flex: 1 1 auto; font-size: var(--fs-small); color: var(--text2); }
+.lv-ob-step.is-now { background: var(--surface); border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+.lv-ob-step.is-now .lv-ob-mark { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
+.lv-ob-step.is-done .lv-ob-mark { border-color: transparent; background: var(--done-bg); color: var(--done-fg); }
+.lv-ob-step.is-later { opacity: .62; }
+.lv-ob-step-foot { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.lv-ob-live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 600; color: var(--info-fg); }
+.lv-ob-live i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: lv-ob-blink 1.2s ease-in-out infinite; }
+@keyframes lv-ob-blink { 50% { opacity: .25; } }
+.lv-ob-finished { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r-card); background: var(--done-bg); color: var(--done-fg); }
+.lv-ob-finished p { flex: 1 1 auto; }
+.lv-ob-finished b { font-weight: 600; }
+
+/* setup progress in the side pane, above the health line */
+.lv-ob-pill { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer; }
+.lv-ob-pill span { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.lv-ob-pill em { font-style: normal; font-weight: 500; color: var(--text2); }
+.lv-ob-pill .lv-ob-meter { flex: 0 0 auto; width: 100%; height: 4px; }
+
+/* the spotlight: a shade over the window with a hole, a ring, an arrow and a note */
+.lv-ob-guide { position: absolute; inset: 0; z-index: 5; border-radius: var(--r-window); overflow: hidden; pointer-events: none; }
+.lv-ob-guide.is-new { animation: lv-ob-fade .22s ease-out; }
+@keyframes lv-ob-fade { from { opacity: 0; } }
+.lv-ob-guide svg.lv-ob-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lv-ob-guide svg.lv-ob-shade path { fill: var(--ob-dim); pointer-events: fill; }
+.lv-ob-ring { position: absolute; border-radius: 12px; border: 2px solid var(--ob-ring); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ob-glow) 45%, transparent), 0 0 30px var(--ob-glow); }
+.lv-ob-ring::after { content: ""; position: absolute; inset: -2px; border-radius: 14px; border: 2px solid var(--ob-ring); animation: lv-ob-pulse 1.7s ease-out infinite; }
+@keyframes lv-ob-pulse { from { inset: -2px; opacity: .9; } to { inset: -16px; opacity: 0; border-radius: 22px; } }
+.lv-ob-arrow { position: absolute; width: 28px; height: 28px; color: #FFFFFF; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.lv-ob-arrow svg { display: block; animation: lv-ob-nudge 1s ease-in-out infinite; }
+@keyframes lv-ob-nudge { 50% { transform: translateX(-6px); } }
+.lv-ob-arrow[data-side="below"] { transform: rotate(90deg); }
+.lv-ob-arrow[data-side="left"] { transform: rotate(180deg); }
+.lv-ob-coach { position: absolute; width: 292px; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 12px; border-radius: 14px; background: var(--primary); color: #FFFFFF; box-shadow: 0 18px 44px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25); pointer-events: auto; }
+.lv-ob-coach-step { font-size: var(--fs-badge); font-weight: 600; letter-spacing: .02em; opacity: .82; }
+.lv-ob-coach h3 { font-size: var(--fs-head); font-weight: 700; line-height: 1.25; }
+.lv-ob-coach p { font-size: var(--fs-body); line-height: 1.45; opacity: .95; }
+.lv-ob-coach-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+.lv-ob-coach-foot button { min-height: 28px; padding: 0 10px; border-radius: var(--r-control); border: 1px solid rgba(255,255,255,.4); background: transparent; color: #FFFFFF; font: inherit; font-size: var(--fs-small); font-weight: 600; cursor: pointer; }
+.lv-ob-coach-foot button.is-main { border-color: #FFFFFF; background: #FFFFFF; color: #0A3F96; }
+.lv-root .lv-ob-coach-foot button:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 2px; }
+
+/* Add credential: the checks, and the provider hints */
+.lv-ob-hint { margin-left: auto; font-size: var(--fs-small); font-weight: 500; color: var(--text2); }
+.lv-ob-checks { display: flex; flex-direction: column; border-radius: var(--r-card); border: 1px solid var(--line); }
+.lv-ob-checks li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.lv-ob-checks li + li { border-top: 1px solid var(--line); }
+.lv-ob-checks li > span:first-of-type { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lv-ob-checks li > span:last-child { flex: 0 0 auto; white-space: nowrap; }
+.lv-ob-state { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--field); }
+.lv-ob-state[data-s="working"] { border-color: var(--primary); border-top-color: transparent; animation: lv-ob-spin .8s linear infinite; }
+.lv-ob-state[data-s="done"] { border-color: transparent; background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.4l2.6 2.6L13 6.6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat; }
+@keyframes lv-ob-spin { to { transform: rotate(360deg); } }
+.lv-ob-seg { display: flex; padding: 2px; border-radius: var(--r-control); background: var(--inset); }
+.lv-ob-seg span { flex: 1 1 0; padding: 6px 8px; border-radius: 6px; font-size: var(--fs-small); font-weight: 600; text-align: center; color: var(--text2); }
+.lv-ob-seg span[data-on] { background: var(--surface); color: var(--text); box-shadow: var(--card-shadow); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-root button, .lv-input, .lv-ob-meter span { transition: none; }
+  .lv-ob-ring::after, .lv-ob-arrow svg, .lv-ob-live i, .lv-ob-guide.is-new { animation: none; }
+  .lv-ob-state[data-s="working"] { animation-duration: 2.4s; }
+}
+
+/* ===== 4. INSPECTOR (not part of the design) ===== */
+html, body { margin: 0; }
+body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+.ix-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; background: #1E2026; color: #E7E9EE; border-bottom: 1px solid #000; }
+.ix-title { font-weight: 700; }
+.ix-group { display: flex; align-items: center; gap: 6px; }
+.ix-group > span { font-size: 11px; color: #A4A9B6; }
+.ix-seg { display: inline-flex; border: 1px solid #454956; border-radius: 6px; overflow: hidden; }
+.ix-seg button, .ix-btn { min-height: 28px; padding: 0 10px; border: 0; background: #2B2E37; color: #E7E9EE; font: inherit; cursor: pointer; }
+.ix-seg button + button { border-left: 1px solid #454956; }
+.ix-seg button[aria-pressed="true"] { background: #E7E9EE; color: #16181D; font-weight: 600; }
+.ix-btn { border: 1px solid #454956; border-radius: 6px; }
+.ix-bar select { min-height: 28px; border: 1px solid #454956; border-radius: 6px; background: #2B2E37; color: #E7E9EE; padding: 0 6px; font: inherit; }
+.ix-bar button:focus-visible, .ix-bar select:focus-visible { outline: 2px solid #7FB0FF; outline-offset: 2px; }
+.ix-hint { margin: 0; padding: 6px 12px; background: #2B2E37; color: #C9CDD8; font-size: 12px; }
+.ix-notes { max-width: 1120px; margin: 0 auto; padding: 18px 16px 40px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 32px; color: #C9CDD8; font-size: 12.5px; }
+.ix-notes h2 { margin: 0 0 6px; font-size: 13px; color: #E7E9EE; }
+.ix-notes ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+@media (max-width: 760px) { .ix-notes { grid-template-columns: 1fr; } }
+/* "#shot=1": the window alone, for a screenshot */
+.ix-shot .ix-bar, .ix-shot .ix-hint, .ix-shot .ix-notes { display: none; }
+</style>
+</head>
+<body>
+
+<div class="ix-bar" role="toolbar" aria-label="Mockup inspector">
+  <span class="ix-title">Onboarding mockup 1: Checklist + spotlight</span>
+  <div class="ix-group"><span>Jump to</span>
+    <select id="ix-jump" aria-label="Jump to a point in setup">
+      <option value="fresh">New installation</option>
+      <option value="login1">One login added</option>
+      <option value="login2">Two logins added</option>
+      <option value="agents">Agents connected</option>
+      <option value="running">First task running</option>
+      <option value="done">First task done</option>
+    </select>
+  </div>
+  <div class="ix-group"><span>Spotlight</span>
+    <div class="ix-seg" data-set="guide"><button type="button" data-val="on">On</button><button type="button" data-val="off">Off</button></div>
+  </div>
+  <div class="ix-group"><span>Appearance</span>
+    <div class="ix-seg" data-set="appearance"><button type="button" data-val="light">Light</button><button type="button" data-val="dark">Dark</button></div>
+  </div>
+  <div class="ix-group"><button type="button" class="ix-btn" id="ix-restart">Restart</button></div>
+</div>
+<p class="ix-hint">Sample data. The grey bar is not part of the design. Click the lit control to move on; the task runs by itself on a timer once two agents are connected. Esc is the same as “Not now”.</p>
+
+<div id="stage"></div>
+
+<div class="ix-notes">
+  <section>
+    <h2>What is new here</h2>
+    <ul>
+      <li>A “Get your first task done” card at the top of the board, shown until setup is finished or hidden. Its four steps tick from what is true in the workspace, not from what was clicked, so it survives a quit, a browser sign-in and a tool install.</li>
+      <li>The spotlight: the window dims and one control stays lit, with one sentence saying why. Only the lit control can be clicked. “Not now” ends it; “Show me” on the card brings it back.</li>
+      <li>Setup progress in the side pane, above the health line, on every tab.</li>
+      <li>In Add credential, a line that asks for a different provider the second time, and a hint beside each provider.</li>
+      <li>Connect agent opens with the next login that has no agent already picked.</li>
+      <li>The “first task” step lights Add task. When the gallery of ready-made tasks is in the app, it lights that too.</li>
+      <li>“Hide this” on the card ends setup at any point.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>How to read it</h2>
+    <ul>
+      <li>This is what the owner gets after leaving the setup assistant (<a href="setup-assistant.html">setup-assistant.html</a>) with “Set up later” or “Skip, take me to the task board”.</li>
+      <li>The requirements are in <a href="PRD.md">docs/onboarding/PRD.md</a>. Where this mockup and that document differ, the document is right.</li>
+      <li>The logins, agents, task and names are sample data. Screens that setup does not touch (Decided for you, Settings) are placeholders.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===== sample data ===== */
+  var PROVIDERS = [
+    { id: 'Claude', tool: 'Claude Code' },
+    { id: 'Codex', tool: 'Codex' },
+    { id: 'Gemini', tool: 'Antigravity', hint: 'Builds, does not review yet' },
+    { id: 'Grok', tool: 'Grok Build' }
+  ];
+  var TABS = [
+    ['board', 'Task board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
+    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['settings', 'Settings']
+  ];
+  var LANES = ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'];
+
+  function navIcon(d) { return '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"></path></svg>'; }
+  var ICONS = {
+    board: navIcon('M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z'),
+    needs: navIcon('M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3'),
+    decided: navIcon('M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12zM5.4 8.2l1.8 1.8 3.4-3.6'),
+    activity: navIcon('M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4'),
+    agents: navIcon('M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2'),
+    creds: navIcon('M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2'),
+    handoff: navIcon('M3 5.5h9.5L10 3M13 10.5H3.5L6 13'),
+    settings: navIcon('M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1'),
+    all: navIcon('M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z'),
+    project: navIcon('M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z')
+  };
+  function appIcon(size) {
+    return '<svg class="lv-appicon" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon">' +
+      '<defs><linearGradient id="ob-icon" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.3"></stop><stop offset="1" stop-color="#000" stop-opacity="0.12"></stop></linearGradient></defs>' +
+      '<rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><rect width="64" height="64" rx="14.4" fill="url(#ob-icon)"></rect>' +
+      '<path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path>' +
+      '<rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect>' +
+      '<path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>';
+  }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function tool(provider) { return PROVIDERS.filter(function (p) { return p.id === provider; })[0].tool; }
+  function uniq(list) { return list.filter(function (v, i) { return list.indexOf(v) === i; }); }
+
+  /* ===== state ===== */
+  var stage = document.getElementById('stage');
+  var root = document.createElement('div');
+  root.className = 'lv-root';
+  root.setAttribute('data-appearance', 'dark');
+  stage.appendChild(root);
+  var view = document.createElement('div');
+  root.appendChild(view);
+
+  var s, timers = [], taskKey = '', lastGuideKey = '', focusKey = '';
+
+  function fresh() {
+    return {
+      tab: 'board', sheet: 'none',
+      logins: [],            /* { provider, name, label } */
+      agents: [],            /* { name, provider, login } */
+      task: null,            /* { title, stage: idea | ready | building | review | noreviewer | done, builder, reviewer } */
+      log: [],
+      cred: { provider: '', name: '', phase: 'pick', check: 0 },
+      agentForm: { name: '', login: '' },
+      taskTitle: '', taskDone: '',
+      guide: true,           /* the spotlight is on */
+      closed: false,         /* the owner chose Finish setup */
+      hidden: false          /* the owner hid the finished card */
+    };
+  }
+  function later(ms, fn) { timers.push(setTimeout(function () { fn(); render(); }, ms)); }
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; taskKey = ''; }
+  function note(text) { s.log.unshift(text); }
+
+  /* what is true now; the checklist and the spotlight both read this and nothing else */
+  function progress() {
+    var loginProviders = uniq(s.logins.map(function (l) { return l.provider; }));
+    var agentProviders = uniq(s.agents.map(function (a) { return a.provider; }));
+    var p = {
+      logins: Math.min(loginProviders.length, 2), loginsDone: loginProviders.length >= 2,
+      agents: Math.min(agentProviders.length, 2), agentsDone: agentProviders.length >= 2,
+      taskDone: !!s.task && s.task.stage !== 'idea',
+      finished: !!s.task && s.task.stage === 'done'
+    };
+    p.count = [p.loginsDone, p.agentsDone, p.taskDone, p.finished].filter(Boolean).length;
+    p.now = !p.loginsDone ? 1 : !p.agentsDone ? 2 : !p.taskDone ? 3 : !p.finished ? 4 : 5;
+    return p;
+  }
+  function nextLoginWithoutAgent() {
+    return s.logins.filter(function (l) { return !s.agents.some(function (a) { return a.login === l.label; }); })[0] || null;
+  }
+  function reviewerFor(builder) {
+    return s.agents.filter(function (a) { return a.provider !== builder.provider && a.provider !== 'Gemini'; })[0] || null;
+  }
+
+  /* the task moves by itself once agents exist, as it would in the app */
+  function schedule() {
+    var t = s.task;
+    if (!t || t.stage === 'idea' || t.stage === 'done') { return; }
+    var key = t.stage + ':' + s.agents.length;
+    if (key === taskKey) { return; }
+    taskKey = key;
+    if (t.stage === 'ready' && s.agents.length) {
+      later(2200, function () {
+        /* the mockup lets the agent that can be reviewed build, so the happy path shows */
+        t.builder = s.agents.filter(function (a) { return reviewerFor(a); })[0] || s.agents[0];
+        t.stage = 'building'; note(t.builder.name + ' started building ' + t.title + '.');
+      });
+    } else if (t.stage === 'building') {
+      later(3400, function () {
+        t.reviewer = reviewerFor(t.builder);
+        t.stage = t.reviewer ? 'review' : 'noreviewer';
+        note(t.reviewer ? t.reviewer.name + ' started reviewing ' + t.title + '.' : t.title + ' is built and waits for a review.');
+      });
+    } else if (t.stage === 'noreviewer' && reviewerFor(t.builder)) {
+      later(900, function () { t.reviewer = reviewerFor(t.builder); t.stage = 'review'; note(t.reviewer.name + ' started reviewing ' + t.title + '.'); });
+    } else if (t.stage === 'review') {
+      later(3200, function () { t.stage = 'done'; note(t.title + ' finished after ' + t.reviewer.name + ' reviewed it.'); });
+    }
+  }
+
+  /* ===== the spotlight: what to light, and what to say ===== */
+  function guideSpec(p) {
+    if (!s.guide || s.sheet !== 'none' || s.closed) { return null; }
+    var first, other;
+    if (p.now === 1) {
+      first = s.logins.length === 0;
+      other = first ? '' : s.logins[0].provider;
+      if (s.tab !== 'creds') {
+        return { keys: ['tab-creds'], side: 'right', n: 1,
+          title: first ? 'Start here: add a login' : 'One more login to add',
+          body: first ? 'Agents run on a subscription you already have, like Claude or Codex. Until one is added, no task can run.'
+            : 'It has to come from a different provider than ' + other + ', so one agent can review the other’s work.' };
+      }
+      return { keys: ['open-cred'], side: 'below', n: 1,
+        title: first ? 'Add your first login' : 'Now a second, from a different provider',
+        body: first ? 'Pick the provider, name it and sign in. Leverage checks that it is installed, signed in and answering.'
+          : 'An agent from another provider reviews the work before it counts as done. Pick anything but ' + other + '.' };
+    }
+    if (p.now === 2) {
+      first = s.agents.length === 0;
+      var login = nextLoginWithoutAgent();
+      if (s.tab !== 'agents') {
+        return { keys: ['tab-agents'], side: 'right', n: 2,
+          title: first ? 'Next: connect your agents' : 'Connect the second agent',
+          body: first ? 'A login is only a way in. An agent is what does the work. Connect one for each login.'
+            : 'With two agents, one builds and the other reviews.' };
+      }
+      return { keys: ['open-agent'], side: 'below', n: 2,
+        title: first ? 'Connect an agent' : 'One more, on ' + (login ? login.label : 'your other login'),
+        body: 'It is filled in for you' + (login ? ' to run on ' + login.label : '') + '. General means it can build, review and check tasks.' };
+    }
+    if (p.now === 3) {
+      return { keys: ['open-new'], side: 'below', n: 3,
+        title: 'Give them something to do',
+        body: 'Write what should get done, and how you will know, with Add task. A free agent picks it up.' };
+    }
+    if (p.now === 5) {
+      return { keys: ['task-card'], side: 'left', n: 4, finish: true,
+        title: 'Your first task is done',
+        body: 'Open the card any time to see how it got there, and who reviewed it.' };
+    }
+    return null;   /* step 4: the task is running, nothing to click */
+  }
+
+  function roundRect(x, y, w, h, r) {
+    return 'M' + (x + r) + ' ' + y + 'h' + (w - 2 * r) + 'a' + r + ' ' + r + ' 0 0 1 ' + r + ' ' + r + 'v' + (h - 2 * r) + 'a' + r + ' ' + r + ' 0 0 1 ' + (-r) + ' ' + r +
+      'h' + (-(w - 2 * r)) + 'a' + r + ' ' + r + ' 0 0 1 ' + (-r) + ' ' + (-r) + 'v' + (-(h - 2 * r)) + 'a' + r + ' ' + r + ' 0 0 1 ' + r + ' ' + (-r) + 'z';
+  }
+
+  function drawGuide(p) {
+    var frame = view.querySelector('.lv-frame');
+    var old = frame.querySelector('.lv-ob-guide');
+    if (old) { old.remove(); }
+    var spec = guideSpec(p);
+    if (!spec) { lastGuideKey = ''; return; }
+    var fr = frame.getBoundingClientRect();
+    var holes = spec.keys.map(function (k) { return frame.querySelector('[data-k="' + k + '"]'); }).filter(Boolean).map(function (el) {
+      var r = el.getBoundingClientRect(); var pad = 6;
+      return { x: r.left - fr.left - pad, y: r.top - fr.top - pad, w: r.width + 2 * pad, h: r.height + 2 * pad };
+    });
+    if (!holes.length) { lastGuideKey = ''; return; }
+    var W = fr.width, H = fr.height;
+    var key = spec.keys.join('+') + ':' + spec.title;
+    var g = document.createElement('div');
+    /* fade in only when the shade appears; moving between controls keeps it steady */
+    g.className = 'lv-ob-guide' + (lastGuideKey ? '' : ' is-new');
+    lastGuideKey = key;
+    var path = 'M0 0H' + W + 'V' + H + 'H0Z' + holes.map(function (b) { return roundRect(b.x, b.y, b.w, b.h, 12); }).join('');
+    var html = '<svg class="lv-ob-shade" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><path fill-rule="evenodd" d="' + path + '"></path></svg>' +
+      holes.map(function (b) { return '<div class="lv-ob-ring" style="left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px"></div>'; }).join('') +
+      '<div class="lv-ob-arrow" data-side="' + spec.side + '" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M24 14H6M13 6.5L5.5 14l7.5 7.5"></path></svg></div>' +
+      '<div class="lv-ob-coach" role="dialog" aria-label="Setup guide"><div class="lv-ob-coach-step">Step ' + spec.n + ' of 4</div><h3>' + esc(spec.title) + '</h3><p>' + esc(spec.body) + '</p>' +
+      '<div class="lv-ob-coach-foot">' + (spec.finish
+        ? '<button type="button" class="is-main" data-a="finishSetup" data-k="coach-main">Finish setup</button>'
+        : '<button type="button" data-a="notNow" data-k="coach-skip">Not now</button>') + '</div></div>';
+    g.innerHTML = html;
+    frame.appendChild(g);
+    /* place the arrow and the note beside the first lit control */
+    var b = holes[0], coach = g.querySelector('.lv-ob-coach'), arrow = g.querySelector('.lv-ob-arrow');
+    var cw = coach.offsetWidth, ch = coach.offsetHeight, cx = b.x + b.w / 2, cy = b.y + b.h / 2, left, top;
+    var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
+    if (spec.side === 'right') {
+      arrow.style.left = (b.x + b.w + 8) + 'px'; arrow.style.top = (cy - 14) + 'px';
+      left = b.x + b.w + 44; top = clamp(cy - 44, 12, H - ch - 12);
+    } else if (spec.side === 'left') {
+      arrow.style.left = (b.x - 36) + 'px'; arrow.style.top = (cy - 14) + 'px';
+      left = b.x - 44 - cw; top = clamp(cy - 44, 12, H - ch - 12);
+    } else {
+      arrow.style.left = (cx - 14) + 'px'; arrow.style.top = (b.y + b.h + 8) + 'px';
+      left = clamp(b.x + b.w - cw, 12, W - cw - 12); top = b.y + b.h + 44;
+    }
+    coach.style.left = clamp(left, 12, W - cw - 12) + 'px';
+    coach.style.top = top + 'px';
+  }
+
+  /* ===== the screens ===== */
+  function meter(count) { return '<div class="lv-ob-meter" role="img" aria-label="' + count + ' of 4 done"><span style="width:' + (count * 25) + '%"></span></div>'; }
+
+  function setupHtml(p) {
+    if (s.hidden) { return ''; }
+    if (s.closed) {
+      return '<section class="lv-ob-finished" aria-label="Setup"><p><b>Setup is finished.</b> For the next one, use Add task.</p>' +
+        '<button type="button" class="lv-btn lv-btn--small" data-a="hideSetup" data-k="hide-setup">Hide this</button></section>';
+    }
+    var names = function (list) { return list.join(' and '); };
+    var t = s.task;
+    var live = !t ? '' : t.stage === 'ready' ? (s.agents.length ? 'Waiting for a free agent' : 'Waiting. No agent is connected yet')
+      : t.stage === 'building' ? t.builder.name + ' is building'
+      : t.stage === 'review' ? t.reviewer.name + ' is reviewing'
+      : t.stage === 'noreviewer' ? 'No agent may review it. See Needs you' : '';
+    var steps = [
+      { n: 1, done: p.loginsDone, title: 'Add two logins',
+        text: p.loginsDone ? names(s.logins.map(function (l) { return l.label; })) + '.'
+          : 'From different providers, so one agent can review the other’s work.' + (p.logins === 1 ? ' 1 of 2 added.' : '') },
+      { n: 2, done: p.agentsDone, title: 'Connect an agent for each',
+        text: p.agentsDone ? names(s.agents.map(function (a) { return a.name; })) + ' are running.'
+          : 'An agent does the work and runs on a login.' + (p.agents === 1 ? ' 1 of 2 connected.' : '') },
+      { n: 3, done: p.taskDone, title: 'Send your first task',
+        text: p.taskDone ? t.title + '.' : 'Say what should get done, and how you will know it is done.' },
+      { n: 4, done: p.finished, title: 'See it reach Done',
+        text: p.finished ? 'It reached Done.' : 'One agent builds it, the other reviews it. You are asked only if they need you.' }
+    ];
+    return '<section class="lv-ob-setup" aria-label="Setup"><div class="lv-ob-setup-head"><div><h3 class="lv-h">Get your first task done</h3>' +
+      '<p class="lv-muted">Four steps. Each one ticks when it is true, so you can stop and come back.</p></div>' + meter(p.count) + '<span class="lv-muted">' + p.count + ' of 4</span>' +
+      '<button type="button" class="lv-btn lv-btn--link" data-a="hideSetup" data-k="hide-setup">Hide this</button></div>' +
+      '<ol class="lv-ob-steps">' + steps.map(function (st) {
+        var cls = st.done ? 'is-done' : st.n === p.now ? 'is-now' : 'is-later';
+        var foot = st.done ? '<span class="lv-chip lv-chip--done">Done</span>'
+          : st.n === 4 && p.now === 4 ? '<span class="lv-ob-live"><i aria-hidden="true"></i>' + esc(live) + '</span>'
+          : st.n === p.now ? '<button type="button" class="lv-btn lv-btn--tint lv-btn--small" data-a="showMe" data-k="show-me">Show me</button>' : '';
+        return '<li class="lv-ob-step ' + cls + '"' + (st.n === p.now ? ' aria-current="step"' : '') + '><div class="lv-ob-step-top"><span class="lv-ob-mark" aria-hidden="true">' + (st.done ? '✓' : st.n) + '</span><b>' + st.title + '</b></div>' +
+          '<p>' + esc(st.text) + '</p><div class="lv-ob-step-foot">' + foot + '</div></li>';
+      }).join('') + '</ol></section>';
+  }
+
+  function card(title, line, tone, chip, noteText, key) {
+    return '<article class="lv-card"' + (key ? ' data-k="' + key + '"' : '') + '><h4>' + esc(title) + '</h4><div class="lv-muted">' + esc(line) + '</div>' +
+      (chip ? '<div class="lv-chip lv-chip--' + tone + '">' + chip + '</div>' : '') + (noteText ? '<div class="lv-note">' + esc(noteText) + '</div>' : '') + '</article>';
+  }
+  function boardHtml(p) {
+    var lanes = [[], [], [], [], [], []], t = s.task;
+    if (t) {
+      if (t.stage === 'idea') { lanes[0].push(card(t.title, 'Not started yet')); }
+      else if (t.stage === 'ready') { lanes[3].push(card(t.title, 'Waiting for a free agent', 'info', 'New')); }
+      else if (t.stage === 'building') { lanes[4].push(card(t.title, t.builder.name + ' is building')); }
+      else if (t.stage === 'review') { lanes[4].push(card(t.title, t.builder.name + '’s work is being reviewed', 'info', 'In review')); }
+      else if (t.stage === 'noreviewer') { lanes[4].push(card(t.title, t.builder.name + '’s work is being reviewed', 'wait', 'In review', 'No connected agent can review this task. Connect one in Agents.')); }
+      else { lanes[5].push(card(t.title, 'Reviewed and finished', 'done', 'Done', '', 'task-card')); }
+    }
+    return setupHtml(p) + '<div class="lv-lanes">' + lanes.map(function (cards, i) {
+      return '<section class="lv-lane" aria-label="' + LANES[i] + '"><div class="lv-lane-head"><h3 class="lv-h--small">' + LANES[i] + '</h3><span class="lv-muted">' + cards.length + '</span></div>' +
+        (cards.length ? cards.join('') : '<div class="lv-empty">Nothing here</div>') + '</section>';
+    }).join('') + '</div>';
+  }
+
+  function credsHtml() {
+    var rows = s.logins.map(function (l) {
+      return '<li class="lv-row"><div class="lv-row-main"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login. Signed in and answering.</span></div><span class="lv-chip lv-chip--done">Ready</span></li>';
+    }).join('');
+    return '<div class="lv-page"><div class="lv-page-head"><div class="lv-page-head-text lv-muted">The order they take over in is set on Handoff.</div>' +
+      '<button type="button" class="lv-btn" aria-disabled="' + !s.logins.length + '">Refresh</button><button type="button" class="lv-btn" aria-disabled="' + !s.logins.length + '">Verify all</button>' +
+      '<button type="button" class="lv-btn lv-btn--primary" data-a="openCred" data-k="open-cred">Add credential</button></div>' +
+      '<h3 class="lv-h--small">Logins</h3>' + (rows ? '<ul class="lv-list">' + rows + '</ul>' : '<p class="lv-muted">No logins yet. Add one so an agent can run on it.</p>') +
+      '<h3 class="lv-h--small">API tokens</h3><p class="lv-muted">No API tokens yet.</p></div>';
+  }
+
+  function agentsHtml() {
+    var t = s.task;
+    var rows = s.agents.map(function (a) {
+      var busy = t && ((t.stage === 'building' && t.builder === a) ? 'Building ' + t.title + '.' : (t.stage === 'review' && t.reviewer === a) ? 'Reviewing ' + t.title + '.' : '');
+      return '<li class="lv-row"><div class="lv-row-main"><b>' + esc(a.name) + '</b><span class="lv-muted">General. ' + esc(busy || 'Running. Waiting for work.') + ' Runs on ' + esc(a.login) + '.</span></div><span class="lv-chip lv-chip--done">Running</span></li>';
+    }).join('');
+    return '<div class="lv-page"><div class="lv-page-head"><div class="lv-page-head-text lv-muted">Agents do the work. Each one runs on a login.</div>' +
+      '<button type="button" class="lv-btn lv-btn--primary" data-a="openAgent" data-k="open-agent">Connect agent</button></div>' +
+      (rows ? '<ul class="lv-list">' + rows + '</ul>' : '<p class="lv-muted">No agents yet. Connect one to give it work.</p>' +
+        (s.logins.length ? '' : '<div><button type="button" class="lv-btn" data-a="tab" data-v="creds">Add a login</button></div>')) + '</div>';
+  }
+
+  function needsHtml() {
+    var t = s.task;
+    if (!t || t.stage !== 'noreviewer') { return '<div class="lv-page"><p class="lv-muted">Nothing needs you right now.</p></div>'; }
+    return '<div class="lv-page"><ul class="lv-list"><li class="lv-need"><h3 class="lv-h--small">No agent may review this</h3>' +
+      '<p>' + esc(t.title) + ' is built and waits for a review, but no connected agent may review it. Connect an agent from another provider, or turn the rule off. It continues on its own when an agent may review it.</p>' +
+      '<div><button type="button" class="lv-btn lv-btn--tint" data-a="tab" data-v="agents">Open Agents</button></div></li></ul></div>';
+  }
+
+  function simpleList(rows, empty) {
+    return '<div class="lv-page">' + (rows.length ? '<ul class="lv-list">' + rows.map(function (r) { return '<li class="lv-row"><div class="lv-row-main">' + r + '</div></li>'; }).join('') + '</ul>' : '<p class="lv-muted">' + empty + '</p>') + '</div>';
+  }
+
+  function pageHtml(p) {
+    switch (s.tab) {
+      case 'board': return boardHtml(p);
+      case 'creds': return credsHtml();
+      case 'agents': return agentsHtml();
+      case 'needs': return needsHtml();
+      case 'activity': return simpleList(s.log.map(esc), 'No activity to show.');
+      case 'handoff': return simpleList(s.logins.map(function (l, i) { return '<b>' + (i + 1) + '. ' + esc(l.label) + '</b>'; }), 'No accounts yet. Add one in Credentials, and it appears here.');
+      case 'decided': return simpleList([], 'Nothing has been decided for you yet.');
+      default: return simpleList([], 'Rules and workspace settings. Not part of this mockup.');
+    }
+  }
+
+  /* ===== the sheets ===== */
+  function credSheet() {
+    var c = s.cred, body, actions;
+    var taken = uniq(s.logins.map(function (l) { return l.provider; }));
+    if (c.phase === 'pick') {
+      body = '<div class="lv-step"><div class="lv-label">Step 1 of 2. Which provider?</div>' +
+        (taken.length === 1 ? '<div class="lv-note lv-note--info">Pick a different provider from ' + taken[0] + ', so one agent can review the other’s work.</div>' : '') +
+        PROVIDERS.map(function (p) {
+          var hint = taken.indexOf(p.id) >= 0 ? 'Already added' : (p.hint || '');
+          return '<button type="button" class="lv-btn lv-btn--row" data-a="pick" data-v="' + p.id + '" data-k="pick-' + p.id + '">' + p.id + (hint ? '<span class="lv-ob-hint">' + hint + '</span>' : '') + '</button>';
+        }).join('') + '</div>';
+      actions = '<span class="lv-spacer"></span><button type="button" class="lv-btn" data-a="close">Cancel</button>';
+    } else if (c.phase === 'name') {
+      body = '<div class="lv-step lv-step--form"><div class="lv-label">Step 2 of 2. Name it and sign in.</div>' +
+        '<div class="lv-field"><label class="lv-label" for="f-cred">Name for this ' + c.provider + ' login</label>' +
+        '<input class="lv-input" id="f-cred" data-k="f-cred" data-m="cred.name" type="text" value="' + esc(c.name) + '" placeholder="Personal"></div>' +
+        '<div class="lv-muted">When you choose Sign in, we check that the ' + c.provider + ' tool is installed, signed in and answering.</div></div>';
+      actions = '<button type="button" class="lv-btn" data-a="back">Back</button><span class="lv-spacer"></span><button type="button" class="lv-btn" data-a="close">Cancel</button>' +
+        '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">Sign in</button>';
+    } else {
+      var t = tool(c.provider);
+      var checks = [t + ' is installed', 'You are signed in to ' + t, t + ' answers a short test'];
+      body = '<div class="lv-step"><div class="lv-label">' + (c.check >= 3 ? 'Added' : 'Checking ' + c.provider + '…') + '</div><ul class="lv-ob-checks">' + checks.map(function (label, i) {
+        var st = i < c.check ? 'done' : i === c.check ? 'working' : 'waiting';
+        var word = st === 'done' ? 'Done' : st === 'working' ? 'In progress' : 'Waiting';
+        return '<li><i class="lv-ob-state" data-s="' + st + '" aria-hidden="true"></i><span>' + label +
+          (i === 1 && st === 'working' ? '<span class="lv-muted">Waiting for you to sign in in the window that opened</span>' : '') + '</span><span class="lv-muted">' + word + '</span></li>';
+      }).join('') + '</ul></div>';
+      actions = '<span class="lv-spacer"></span><button type="button" class="lv-btn" data-a="close">Cancel</button>';
+    }
+    return '<div class="lv-scrim"><form class="lv-sheet lv-sheet--small" data-f="signIn" role="dialog" aria-modal="true" aria-labelledby="sh-cred">' +
+      '<h2 class="lv-h" id="sh-cred">Add credential</h2>' + body + '<div class="lv-sheet-actions">' + actions + '</div></form></div>';
+  }
+
+  function agentSheet() {
+    var f = s.agentForm;
+    var body = s.logins.length
+      ? '<div class="lv-ob-seg" aria-label="How it runs"><span data-on>Native: run on my login</span><span>Prompt: paste into any agent</span></div>' +
+        '<div class="lv-field"><label class="lv-label" for="f-role">What it does</label><select class="lv-input" id="f-role"><option>General</option><option>Builder</option><option>Reviewer</option><option>Planner</option><option>Orchestrator</option></select></div>' +
+        '<div class="lv-field"><label class="lv-label" for="f-agent">Name</label><input class="lv-input" id="f-agent" data-k="f-agent" data-m="agentForm.name" type="text" value="' + esc(f.name) + '" placeholder="Claude, Personal"></div>' +
+        '<div class="lv-field"><label class="lv-label" for="f-login">Login</label><select class="lv-input" id="f-login" data-m="agentForm.login">' +
+        s.logins.map(function (l) { return '<option' + (l.label === f.login ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</select></div>'
+      : '<p class="lv-muted">No login has been added yet.</p><div><button type="button" class="lv-btn" data-a="tab" data-v="creds">Add a login</button></div>';
+    return '<div class="lv-scrim"><form class="lv-sheet lv-sheet--small" data-f="connect" role="dialog" aria-modal="true" aria-labelledby="sh-agent">' +
+      '<h2 class="lv-h" id="sh-agent">Connect agent</h2>' + body + '<div class="lv-sheet-actions"><button type="button" class="lv-btn" data-a="close">Cancel</button>' +
+      (s.logins.length ? '<button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">Connect</button>' : '') + '</div></form></div>';
+  }
+
+  function taskSheet() {
+    return '<div class="lv-scrim"><form class="lv-sheet" data-f="addTask" role="dialog" aria-modal="true" aria-labelledby="sh-task"><h2 class="lv-h" id="sh-task">Add task</h2>' +
+      '<div class="lv-field"><label class="lv-label" for="f-title">What should get done?</label><input class="lv-input" id="f-title" data-k="f-title" data-m="taskTitle" type="text" required value="' + esc(s.taskTitle) + '" placeholder="Fix the totals on the invoice page"></div>' +
+      '<div class="lv-field"><label class="lv-label" for="f-done">How will you know it is done?</label><textarea class="lv-input" id="f-done" data-m="taskDone" rows="3" required placeholder="Totals match the sum of the lines to the cent">' + esc(s.taskDone) + '</textarea>' +
+      '<div class="lv-muted">One thing to check on each line.</div></div>' +
+      '<div class="lv-muted">An agent from another provider reviews the work before it counts as done.</div>' +
+      '<div class="lv-sheet-actions"><button type="button" class="lv-btn" data-a="close">Cancel</button><button type="submit" class="lv-btn lv-btn--primary" data-k="sheet-save">Save task</button></div></form></div>';
+  }
+
+  function sheetHtml() {
+    return s.sheet === 'cred' ? credSheet() : s.sheet === 'agent' ? agentSheet() : s.sheet === 'task' ? taskSheet() : '';
+  }
+
+  /* ===== render ===== */
+  function render() {
+    var p = progress();
+    var needs = s.task && s.task.stage === 'noreviewer' ? 1 : 0;
+    var title = TABS.filter(function (t) { return t[0] === s.tab; })[0][1];
+    var pill = (s.closed || s.hidden) ? '' : '<button type="button" class="lv-ob-pill" data-a="tab" data-v="board" data-k="pill"><span>Setup<em>' + p.count + ' of 4</em></span>' + meter(p.count) + '</button>';
+    var health = s.agents.length ? '<div class="lv-health"><i aria-hidden="true"></i><span>System is running</span></div>'
+      : '<div class="lv-health" data-tone="warning"><i aria-hidden="true"></i><span>No agent is set up to check tasks. Connect one in Agents.</span></div>';
+    view.innerHTML = '<div class="lv-frame"><div class="lv-window"' + (s.sheet !== 'none' ? ' inert' : '') + '>' +
+      '<aside class="lv-side"><div class="lv-dots" aria-hidden="true"><span></span><span></span><span></span></div>' +
+      '<div class="lv-brand">' + appIcon(22) + '<h1>Leverage</h1></div>' +
+      '<nav class="lv-nav" aria-label="Sections">' + TABS.map(function (t) {
+        return '<button type="button" class="lv-tab" data-a="tab" data-v="' + t[0] + '" data-k="tab-' + t[0] + '" aria-current="' + (s.tab === t[0] ? 'page' : 'false') + '">' + ICONS[t[0]] +
+          '<span class="lv-tab-label">' + t[1] + '</span>' + (t[0] === 'needs' && needs ? '<span class="lv-count">' + needs + '</span>' : '') + '</button>';
+      }).join('') + '</nav>' +
+      '<div class="lv-side-section"><div class="lv-side-head">Projects</div><div class="lv-nav"><button type="button" class="lv-tab">' + ICONS.all + '<span class="lv-tab-label">All projects</span></button>' +
+      '</div></div>' +
+      '<div class="lv-side-foot">' + pill + health + '</div></aside>' +
+      '<div class="lv-content"><header class="lv-toolbar"><div class="lv-toolbar-title"><h2 class="lv-h">' + title + '</h2></div>' +
+      '<button type="button" class="lv-btn lv-btn--primary lv-btn--raised" data-a="openTask" data-k="open-new">Add task</button></header>' +
+      '<main class="lv-main">' + pageHtml(p) + '</main></div></div>' + sheetHtml() + '</div>';
+    drawGuide(p);
+    if (focusKey) { var el = view.querySelector('[data-k="' + focusKey + '"]'); focusKey = ''; if (el) { el.focus({ preventScroll: true }); } }
+    schedule();
+    syncInspector();
+  }
+
+  /* ===== what each control does ===== */
+  function closeSheet() { clearSheetTimers(); s.sheet = 'none'; }
+  var sheetTimers = [];
+  function clearSheetTimers() { sheetTimers.forEach(clearTimeout); sheetTimers = []; }
+  function sheetLater(ms, fn) { sheetTimers.push(setTimeout(function () { fn(); render(); }, ms)); }
+
+  var actions = {
+    tab: function (v) { closeSheet(); s.tab = v; },
+    showMe: function () { s.guide = true; },
+    notNow: function () { s.guide = false; focusKey = 'show-me'; },
+    finishSetup: function () { s.guide = false; s.closed = true; focusKey = 'hide-setup'; },
+    hideSetup: function () { s.hidden = true; s.closed = true; s.guide = false; },
+    openCred: function () { s.sheet = 'cred'; s.cred = { provider: '', name: '', phase: 'pick', check: 0 }; },
+    pick: function (v) { s.cred.provider = v; s.cred.phase = 'name'; focusKey = 'f-cred'; },
+    back: function () { s.cred.phase = 'pick'; },
+    close: function () { closeSheet(); },
+    openAgent: function () {
+      var l = nextLoginWithoutAgent() || s.logins[0];
+      s.sheet = 'agent'; s.agentForm = { name: l ? l.label : '', login: l ? l.label : '' }; focusKey = 'sheet-save';
+    },
+    openTask: function () { s.sheet = 'task'; focusKey = 'f-title'; }
+  };
+  function startTask(title, stageName) {
+    s.task = { title: title, stage: stageName, builder: null, reviewer: null };
+    taskKey = ''; s.sheet = 'none'; s.tab = 'board';
+    note(stageName === 'idea' ? 'You saved ' + title + ' as an idea.' : 'You added ' + title + '.');
+  }
+  var submits = {
+    signIn: function () {
+      var c = s.cred;
+      if (c.phase !== 'name') { return false; }
+      c.phase = 'checking'; c.check = 0;
+      sheetLater(800, function () { c.check = 1; });
+      sheetLater(2500, function () { c.check = 2; });
+      sheetLater(3300, function () { c.check = 3; });
+      sheetLater(4000, function () {
+        var name = c.name.trim() || 'Personal', label = c.provider + ', ' + name;
+        for (var n = 2, base = label; s.logins.some(function (l) { return l.label === label; }); n++) { label = base + ' ' + n; }
+        s.logins.push({ provider: c.provider, name: name, label: label });
+        note('You added ' + label + '.');
+        s.sheet = 'none'; s.tab = 'creds';
+      });
+    },
+    connect: function () {
+      var f = s.agentForm, login = s.logins.filter(function (l) { return l.label === f.login; })[0];
+      if (!login) { return false; }
+      s.agents.push({ name: f.name.trim() || login.label, provider: login.provider, login: login.label });
+      note('You connected ' + (f.name.trim() || login.label) + '.');
+      s.sheet = 'none'; s.tab = 'agents';
+    },
+    addTask: function () {
+      var title = s.taskTitle.trim();
+      if (!title || !s.taskDone.trim()) { return false; }
+      startTask(title, 'ready'); s.taskTitle = ''; s.taskDone = '';
+    }
+  };
+
+  root.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-a]') : null;
+    if (!el || el.getAttribute('aria-disabled') === 'true') { return; }
+    var fn = actions[el.getAttribute('data-a')];
+    if (fn && fn(el.getAttribute('data-v')) !== false) { render(); }
+  });
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fn = submits[e.target.getAttribute('data-f')];
+    if (fn && fn() !== false) { render(); }
+  });
+  function bind(e) {
+    var m = e.target.getAttribute && e.target.getAttribute('data-m');
+    if (!m) { return; }
+    var parts = m.split('.');
+    if (parts.length === 2) { s[parts[0]][parts[1]] = e.target.value; } else { s[m] = e.target.value; }
+  }
+  root.addEventListener('input', bind);
+  root.addEventListener('change', bind);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') { return; }
+    if (s.sheet !== 'none') { closeSheet(); render(); }
+    else if (s.guide && !s.closed) { s.guide = false; render(); }
+  });
+  window.addEventListener('resize', function () { drawGuide(progress()); });
+
+  /* ===== the inspector ===== */
+  var LOGIN_A = { provider: 'Claude', name: 'Personal', label: 'Claude, Personal' };
+  var LOGIN_B = { provider: 'Codex', name: 'Team', label: 'Codex, Team' };
+  function seed(point) {
+    clearTimers(); clearSheetTimers();
+    s = fresh(); lastGuideKey = '';
+    if (point === 'fresh') { return; }
+    s.logins.push(LOGIN_A); s.tab = 'creds';
+    if (point === 'login1') { return; }
+    s.logins.push(LOGIN_B);
+    if (point === 'login2') { return; }
+    var a = { name: LOGIN_A.label, provider: 'Claude', login: LOGIN_A.label }, b = { name: LOGIN_B.label, provider: 'Codex', login: LOGIN_B.label };
+    s.agents.push(a, b); s.tab = 'agents';
+    if (point === 'agents') { return; }
+    s.tab = 'board';
+    s.task = { title: 'Pocket to-do', stage: point === 'done' ? 'done' : 'building', builder: a, reviewer: b };
+    s.log = ['Claude, Personal started building Pocket to-do.', 'You added Pocket to-do.', 'You connected Codex, Team.', 'You connected Claude, Personal.'];
+  }
+  function syncInspector() {
+    document.querySelectorAll('.ix-seg').forEach(function (seg) {
+      var set = seg.getAttribute('data-set');
+      var val = set === 'guide' ? (s.guide ? 'on' : 'off') : root.getAttribute('data-appearance');
+      seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-val') === val)); });
+    });
+  }
+  document.querySelector('.ix-bar').addEventListener('click', function (e) {
+    var b = e.target.closest('.ix-seg button');
+    if (!b) { return; }
+    var set = b.parentNode.getAttribute('data-set'), val = b.getAttribute('data-val');
+    if (set === 'guide') { s.guide = val === 'on'; if (s.guide) { s.closed = false; } }
+    else { root.setAttribute('data-appearance', val); }
+    render();
+  });
+  var jump = document.getElementById('ix-jump');
+  jump.addEventListener('change', function () { seed(jump.value); render(); });
+  document.getElementById('ix-restart').addEventListener('click', function () { jump.value = 'fresh'; seed('fresh'); render(); });
+
+  /* "#at=login1&look=light&guide=off&tab=creds" opens at that point */
+  var asked = {};
+  window.location.hash.replace(/^#/, '').split('&').forEach(function (pair) { var kv = pair.split('='); if (kv[1]) { asked[kv[0]] = kv[1]; } });
+  var at = jump.querySelector('option[value="' + (asked.at || '') + '"]') ? asked.at : 'fresh';
+  jump.value = at;
+  seed(at);
+  if (asked.look === 'light' || asked.look === 'dark') { root.setAttribute('data-appearance', asked.look); }
+  if (asked.guide === 'off') { s.guide = false; }
+  if (asked.shot) { document.body.classList.add('ix-shot'); }
+  if (asked.tab && TABS.some(function (t) { return t[0] === asked.tab; })) { s.tab = asked.tab; }
+  render();
+})();
+</script>
+</body>
+</html>

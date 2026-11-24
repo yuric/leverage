@@ -18,6 +18,7 @@ struct CredentialsView: View {
                 await model.keepCurrent()
             }
             .onDisappear { model.detach() }
+            .setupSheetOpen(navigator.isAddCredentialPresented)
             .sheet(isPresented: $navigator.isAddCredentialPresented) {
                 AddCredentialSheet(finish: {
                     navigator.isAddCredentialPresented = false
@@ -44,6 +45,7 @@ struct CredentialsContent: View {
                     .disabled(!model.canVerifyAll)
                 Button(CredentialsCopy.addCredential.text, action: add)
                     .buttonStyle(PrimaryButtonStyle())
+                    .spotlightAnchor(.addCredential)
             }
             switch model.state {
             case .loading:
@@ -71,6 +73,7 @@ struct CredentialsContent: View {
         .sheet(item: $renaming) { row in
             RenameCredentialSheet(model: model, row: row)
         }
+        .setupSheetOpen(renaming != nil || model.pendingRemoval != nil)
         .confirmationDialog(
             model.pendingRemoval.map { CredentialsCopy.removeTitle.filled(["name": $0.name]) } ?? "",
             isPresented: removing, titleVisibility: .visible, presenting: model.pendingRemoval

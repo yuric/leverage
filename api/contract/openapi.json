@@ -2839,7 +2839,7 @@
     "/v1/owner/tasks": {
       "post": {
         "operationId": "add_task",
-        "summary": "Adds a task to the Imaginarium or the Backlog.",
+        "summary": "Adds a task to Ideas or the Backlog.",
         "tags": [
           "owner"
         ],
@@ -2913,7 +2913,7 @@
     "/v1/owner/tasks/{id}/promote": {
       "post": {
         "operationId": "promote_task",
-        "summary": "Promotes a task from the Imaginarium to the Backlog.",
+        "summary": "Promotes a task from Ideas to the Backlog.",
         "tags": [
           "owner"
         ],
@@ -8279,7 +8279,7 @@
           "state": {
             "type": "string",
             "enum": [
-              "imaginarium",
+              "ideas",
               "backlog",
               "ready",
               "working",
@@ -8384,7 +8384,7 @@
             "project_id": "00000000-0000-4000-8000-000000000015",
             "title": "example",
             "details": "example",
-            "state": "imaginarium",
+            "state": "ideas",
             "round": 1,
             "holder_seat_id": "00000000-0000-4000-8000-000000000016",
             "builder_seat_id": "00000000-0000-4000-8000-000000000017",
@@ -9006,7 +9006,7 @@
               "project_id": "00000000-0000-4000-8000-000000000061",
               "title": "example",
               "details": "example",
-              "state": "imaginarium",
+              "state": "ideas",
               "round": 1,
               "holder_seat_id": "00000000-0000-4000-8000-000000000062",
               "builder_seat_id": "00000000-0000-4000-8000-000000000063",
@@ -10781,7 +10781,7 @@
       "AddTaskRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Creates a task in the Imaginarium or the Backlog (default Backlog). Priority is normal by default.",
+        "description": "Creates a task in Ideas or the Backlog (default Backlog). Priority is normal by default.",
         "properties": {
           "title": {
             "type": "string",
@@ -10834,7 +10834,7 @@
           "state": {
             "type": "string",
             "enum": [
-              "imaginarium",
+              "ideas",
               "backlog"
             ]
           }
@@ -14180,7 +14180,7 @@
               "project_id": "00000000-0000-4000-8000-000000000196",
               "title": "example",
               "details": "example",
-              "state": "imaginarium",
+              "state": "ideas",
               "round": 1,
               "holder_seat_id": "00000000-0000-4000-8000-000000000197",
               "builder_seat_id": "00000000-0000-4000-8000-000000000198",
@@ -14242,7 +14242,7 @@
                   "project_id": "00000000-0000-4000-8000-000000000201",
                   "title": "example",
                   "details": "example",
-                  "state": "imaginarium",
+                  "state": "ideas",
                   "round": 1,
                   "holder_seat_id": "00000000-0000-4000-8000-000000000202",
                   "builder_seat_id": "00000000-0000-4000-8000-000000000203",
@@ -14273,7 +14273,7 @@
                   "project_id": "00000000-0000-4000-8000-000000000201",
                   "title": "example",
                   "details": "example",
-                  "state": "imaginarium",
+                  "state": "ideas",
                   "round": 1,
                   "holder_seat_id": "00000000-0000-4000-8000-000000000202",
                   "builder_seat_id": "00000000-0000-4000-8000-000000000203",
@@ -14928,7 +14928,7 @@
               "project_id": "00000000-0000-4000-8000-000000000206",
               "title": "example",
               "details": "example",
-              "state": "imaginarium",
+              "state": "ideas",
               "round": 1,
               "holder_seat_id": "00000000-0000-4000-8000-000000000207",
               "builder_seat_id": "00000000-0000-4000-8000-000000000208",
@@ -15767,7 +15767,7 @@
                 "project_id": "00000000-0000-4000-8000-000000000241",
                 "title": "example",
                 "details": "example",
-                "state": "imaginarium",
+                "state": "ideas",
                 "round": 1,
                 "holder_seat_id": "00000000-0000-4000-8000-000000000242",
                 "builder_seat_id": "00000000-0000-4000-8000-000000000243",

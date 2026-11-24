@@ -1040,7 +1040,7 @@ class TracesTest < Minitest::Test
     trace = Leverage::Contract.trace(name)
     commands = trace["commands"].map { |command| command["command"] }
     %w[promote edit_contract hold resume pause_seat resume_seat change_seat].each { |command| assert_includes commands, command }
-    assert_equal "imaginarium", trace["commands"].first["body"]["state"]
+    assert_equal "ideas", trace["commands"].first["body"]["state"]
     edits = trace["commands"].select { |command| command["command"] == "edit_contract" }.map { |command| command["expect"]["events"].map { |event| event["type"] } }
     assert_includes edits, %w[task.contract_changed], "an edit in Backlog"
     assert_includes edits, %w[task.contract_changed task.returned], "an edit in Working"

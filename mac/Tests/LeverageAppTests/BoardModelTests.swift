@@ -34,7 +34,7 @@ struct BoardModelTests {
         let model = makeModel(Fixtures.owner(board: Fixtures.board([])))
         await model.load()
         #expect(model.state == .loaded)
-        #expect(model.lanes.map(\.lane) == [.imaginarium, .backlog, .blocked, .ready, .inProgress, .done])
+        #expect(model.lanes.map(\.lane) == [.ideas, .backlog, .blocked, .ready, .inProgress, .done])
         #expect(model.lanes.map(\.count) == [0, 0, 0, 0, 0, 0])
     }
 
@@ -207,7 +207,7 @@ struct BoardModelTests {
 
     @Test("Ideas and Backlog cards say what is missing, in the mockup's words")
     func earlyCards() async {
-        let idea = await card(Fixtures.boardTask(.imaginarium))
+        let idea = await card(Fixtures.boardTask(.ideas))
         #expect(idea?.statusLine == "Not started yet")
         #expect(idea?.chip == nil)
         let backlog = await card(Fixtures.boardTask(.backlog))
@@ -552,16 +552,16 @@ struct BoardModelTests {
     @Test("the Ideas lane holds the ideas with their cards, and an idea says it is not started")
     func ideasLane() async {
         let tasks = [
-            Fixtures.boardTask(.imaginarium, title: "Try a weekly summary email"),
-            Fixtures.boardTask(.imaginarium, title: "Add a dark theme"),
+            Fixtures.boardTask(.ideas, title: "Try a weekly summary email"),
+            Fixtures.boardTask(.ideas, title: "Add a dark theme"),
             Fixtures.boardTask(.backlog, title: "Draft the copy"),
         ]
         let model = makeModel(Fixtures.owner(board: Fixtures.board(tasks)))
         await model.load()
-        let ideas = model.lanes.first { $0.lane == .imaginarium }
+        let ideas = model.lanes.first { $0.lane == .ideas }
         #expect(ideas?.cards.map(\.title) == ["Try a weekly summary email", "Add a dark theme"])
         #expect(ideas?.cards.map(\.statusLine) == ["Not started yet", "Not started yet"])
-        #expect(BoardLane.imaginarium.heading.text == "Ideas")
+        #expect(BoardLane.ideas.heading.text == "Ideas")
         #expect(titles(model, in: .backlog) == ["Draft the copy"])
     }
 

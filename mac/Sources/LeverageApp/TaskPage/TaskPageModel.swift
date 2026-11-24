@@ -280,7 +280,7 @@ final class TaskPageModel {
     }
 
     /// An idea moves to Backlog (HM-45).
-    var canMoveToBacklog: Bool { page?.task.state == .imaginarium && !isBusy }
+    var canMoveToBacklog: Bool { page?.task.state == .ideas && !isBusy }
 
     /// Pause this task while it can still have work and is not paused by the owner.
     var canPause: Bool {

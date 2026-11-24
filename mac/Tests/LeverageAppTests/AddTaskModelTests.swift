@@ -509,7 +509,7 @@ struct AddTaskModelTests {
 
     // MARK: Save as an idea (HM-48)
 
-    @Test("Save as an idea sends Add task alone, with the Imaginarium as its target, and no contract")
+    @Test("Save as an idea sends Add task alone, with Ideas as its target, and no contract")
     func saveAsIdea() async throws {
         let owner = scripted()
         let saved = Locked(0)
@@ -526,7 +526,7 @@ struct AddTaskModelTests {
             "details": .string("Owners get a summary on Monday. Plain text, no pictures."),
             "priority": .string("low"),
             "work_reference": .string("~/work/mail"),
-            "state": .string("imaginarium"),
+            "state": .string("ideas"),
         ]))
         #expect((try owner.call(at: 0)).key != nil)
         #expect(model.state == .saved)
@@ -544,7 +544,7 @@ struct AddTaskModelTests {
         #expect(body == .object([
             "title": .string("Try a weekly summary email"),
             "priority": .string("normal"),
-            "state": .string("imaginarium"),
+            "state": .string("ideas"),
         ]))
     }
 

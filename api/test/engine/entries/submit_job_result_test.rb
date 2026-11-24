@@ -208,7 +208,7 @@ class SubmitJobResultTest < ActiveSupport::TestCase
 
   test "a draft's result for a task no longer in Backlog is invalid_state and writes nothing (RD-37)" do
     task, job = claimed_draft
-    task.update!(state: "imaginarium")
+    task.update!(state: "ideas")
 
     written = events_written { assert_refused("invalid_state", submit_result(@planner, job, draft_result)) }
 

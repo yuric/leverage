@@ -396,12 +396,12 @@ figure.ix-art { margin: 0; }
   'use strict';
 
   /* ===== NAMES: the two sets of labels =====
-     "prd" follows docs/PRD.md, with three owner-facing labels in place of its names:
-     Ideas (the PRD's Imaginarium lane), Board (Kanban) and Agents (Agent roster).
+     "prd" follows docs/PRD.md, with two owner-facing labels in place of its names:
+     Board (Kanban) and Agents (Agent roster).
      "plain" is the earlier wording, kept so the two can be compared. The Names switch in the bar picks one. */
   var NAMES = {
     prd: {
-      tabs: { board: 'Board', needs: 'Needs you', activity: 'Activity', agents: 'Agents', creds: 'Credentials', handoff: 'Handoff' },
+      tabs: { board: 'Task board', needs: 'Needs you', activity: 'Activity', agents: 'Agents', creds: 'Credentials', handoff: 'Handoff' },
       lanes: ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'],
       addTask: 'Add task', saveTask: 'Save task',
       credPage: 'Credentials', addCred: 'Add credential', aCred: 'a credential', noCred: 'No credential left',

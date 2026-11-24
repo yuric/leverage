@@ -26,7 +26,7 @@ Waiting on you) for comparison; that wording is not the design.
 
 | Screen | In the mockup |
 | --- | --- |
-| Board | The six lanes, with cards and their states |
+| Task board | The six lanes, with cards and their states |
 | Add task | Title, acceptance criteria and project only |
 | Needs you | Approvals, a question and a credential request |
 | Activity | A short feed |
@@ -51,6 +51,12 @@ In Activity, Everything shows `You renamed <name>.`, `You removed an
 account.` and `You moved <name> in the handoff order.` The app uses
 "an account" when it cannot look up a current name.
 
+## Onboarding
+
+The setup assistant and the setup checklist have their own two mockups,
+with their requirements and pictures, in
+[docs/onboarding](../onboarding/PRD.md). This mockup does not show them.
+
 ## How to read it
 
 - [docs/PRD.md](../PRD.md) defines what is built. Where the mockup and the PRD
@@ -59,9 +65,8 @@ account.` and `You moved <name> in the handoff order.` The app uses
   data. They are not requirements.
 - The behavior in the mockup is a sketch. For example, adding a credential
   resumes a blocked task at once; the real rules are in the PRD.
-- The labels are owner-facing wording. The first lane is labelled Ideas
-  where the PRD says Imaginarium, and the Kanban and Agent roster screens are
-  labelled Board and Agents. The PRD's terms are unchanged.
+- The labels are owner-facing wording. The Kanban and Agent roster screens
+  are labelled Task board and Agents. The PRD's terms are unchanged.
 - The Mac app is to be native, written in Swift with SwiftUI. What carries
   into it is the design tokens at the top of the file (colors, glass,
   corners, type sizes) and the layout. The HTML, the CSS class names (`lv-`

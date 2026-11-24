@@ -158,6 +158,7 @@ folders remains unverified.
 | The containers | Docker Compose project `leverage-app`: services `db`, `api`, `sweep`, `backup` |
 | The daily backups | `<support folder>/backups/leverage-<UTC time>.dump`, folder mode 0700, each file 0600 |
 | The last Needs you item the app announced | `<support folder>/inbox-cursor`, one number, mode 0600 |
+| Where the owner stands with first-run setup | `<support folder>/setup-progress`, one word, mode 0600 |
 | The API | `http://127.0.0.1:<port>`, the first free port from 47130 to 47139, kept in `API_PORT` in the server folder's `.env` |
 | A Claude or Codex login's settings | `<support folder>/accounts/<credential id>/` |
 | Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |

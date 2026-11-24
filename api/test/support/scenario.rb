@@ -29,7 +29,7 @@ class Scenario
 
   # The states Scenario#task can build, in the order a task reaches them.
   # Finishing needs an outward action, which milestone 2 does not build.
-  TASK_STATES = %w[imaginarium backlog ready working in_review done cancelled].freeze
+  TASK_STATES = %w[ideas backlog ready working in_review done cancelled].freeze
 
   attr_reader :workspace
 
@@ -162,7 +162,7 @@ class Scenario
 
   # A task in the given state, with the events that brought it there:
   #
-  #   backlog, imaginarium  task.created
+  #   backlog, ideas  task.created
   #   ready                 + task.contract_changed, task.ready (criteria made)
   #   working               + task.claimed by builder (lease granted)
   #   in_review             + criterion.started and criterion.passed for each
@@ -185,7 +185,7 @@ class Scenario
 
     reach = TASK_STATES.index(state)
     transaction do
-      first = state == "imaginarium" ? "imaginarium" : "backlog"
+      first = state == "ideas" ? "ideas" : "backlog"
       task = Task.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, project_id: project&.id, title: title,
         details: details, work_reference: work_reference, priority: priority, state: first)
       append("task.created", task: task, actor_kind: "owner", actor_id: owner.id, payload: { state: first, added_action_ids: [] })

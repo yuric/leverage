@@ -153,8 +153,8 @@ module Leverage
       task = projection[:tasks][event.task_id]
       case event.type
       when "task.created"
-        projection[:tasks][event.task_id] = { "state" => payload.fetch("state"), "round" => 0, "holder_seat_id" => nil,
-          "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0 }
+        projection[:tasks][event.task_id] = { "state" => StoredEvents.task_state(payload.fetch("state")), "round" => 0,
+          "holder_seat_id" => nil, "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0 }
         return
       when /\Arule\./ then return rule(projection, event, payload)
       when /\Acheck\./ then return check(projection, event, payload, task)

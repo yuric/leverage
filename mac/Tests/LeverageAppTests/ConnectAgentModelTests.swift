@@ -726,6 +726,58 @@ struct ConnectAgentModelTests {
         #expect(model.canConnect)
     }
 
+    // MARK: the preferred login of setup
+
+    @Test("a preferred login is picked and named after its label when the name is empty")
+    func preferredLogin() async {
+        let model = ConnectAgentModel(
+            api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: Fixtures.secondLoginID)
+        await model.load()
+        #expect(model.credentialID == Fixtures.secondLoginID)
+        #expect(model.name == "Codex, Team")
+        #expect(model.canConnect)
+    }
+
+    @Test("a preferred name is filled in with the preferred login instead of its label")
+    func preferredName() async {
+        let model = ConnectAgentModel(
+            api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: Fixtures.secondLoginID,
+            preferredName: "Codex, Team 2")
+        await model.load()
+        #expect(model.credentialID == Fixtures.secondLoginID)
+        #expect(model.name == "Codex, Team 2")
+    }
+
+    @Test("a preferred login never replaces a name the owner already typed, and is applied once")
+    func preferredLoginKeepsTypedName() async {
+        let model = ConnectAgentModel(
+            api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: Fixtures.secondLoginID)
+        model.name = "Reviewer one"
+        await model.load()
+        #expect(model.credentialID == Fixtures.secondLoginID)
+        #expect(model.name == "Reviewer one")
+        model.credentialID = Fixtures.loginID
+        await model.load()
+        #expect(model.credentialID == Fixtures.loginID)
+    }
+
+    @Test("a preferred login that is not in the list changes nothing")
+    func preferredLoginMissing() async {
+        let model = ConnectAgentModel(api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: UUID())
+        await model.load()
+        #expect(model.credentialID == Fixtures.loginID)
+        #expect(model.name.isEmpty)
+    }
+
+    @Test("without a preferred login the form opens as it always has")
+    func noPreferredLogin() async {
+        let model = ConnectAgentModel(api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: nil)
+        await model.load()
+        #expect(model.credentialID == Fixtures.loginID)
+        #expect(model.name.isEmpty)
+        #expect(!model.canConnect)
+    }
+
     // MARK: the screen
 
     @Test("the Connect sheet draws in each of its states, light and dark")

@@ -11,7 +11,7 @@ require_relative "owner_controls_support"
 # the seat-bound ones (Holds.close_seat_bound), each item resolved with the
 # choice edit_contract where the item offers it. An owner_hold stays. The
 # criteria keep their identity by position and kind (ContractDiff); the
-# round is kept. Imaginarium, Finishing, Done and Cancelled are
+# round is kept. Ideas, Finishing, Done and Cancelled are
 # invalid_state.
 class EditContractTest < ActiveSupport::TestCase
   include CallSpy
@@ -200,8 +200,8 @@ class EditContractTest < ActiveSupport::TestCase
     assert hold.reload.closed_at
   end
 
-  test "Imaginarium, Done and Cancelled are invalid_state and write nothing" do
-    %w[imaginarium done cancelled].each do |state|
+  test "Ideas, Done and Cancelled are invalid_state and write nothing" do
+    %w[ideas done cancelled].each do |state|
       task = scenario.task(state: state)
       outcome, events = edit(task)
 

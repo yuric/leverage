@@ -39,7 +39,7 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
   test "the log each owner control writes replays to the tables and passes the log audit (tests 1 and 2)" do
     reviewer = scenario.seat(role: "reviewer", credential: scenario.credential(provider: "codex"))
     other = scenario.seat(role: "builder", credential: scenario.credential)
-    idea = scenario.task(state: "imaginarium")
+    idea = scenario.task(state: "ideas")
     working = scenario.task(state: "working", builder: @builder, criteria: %w[build build review])
     first = Criterion.find_by!(task_id: working.id, position: 1)
     first.update!(state: "passed", passed_at: scenario.database_now)

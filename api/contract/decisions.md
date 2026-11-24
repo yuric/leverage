@@ -165,7 +165,7 @@ Where two inventories chose differently, the decision names the conflict.
 - **DB-17** `[owner]` Strength rank is an integer, higher is stronger;
   `tasks.minimum_strength_rank` null means no minimum. Escalation sets it
   to the previous builder's rank plus one (R-G42).
-- **DB-18** `[shape]` Task states `imaginarium, backlog, ready, working,
+- **DB-18** `[shape]` Task states `ideas, backlog, ready, working,
   in_review, finishing, done, cancelled`; criterion states `open, started,
   passed` (reopen returns to `open`); criterion kinds `build, review`;
   action states as L744; verdicts `passed, failed`; `reviews.failed_criteria
@@ -396,6 +396,16 @@ Where two inventories chose differently, the decision names the conflict.
   command. A done action's overturn still writes `action.overturn_recorded`
   (AP-13). The field is added to `v1` in place under DB-48. The reader
   treats a stop without the field as a stop without an overturn.
+- **DB-52** `[shape]` The task state `imaginarium` is renamed `ideas`, and
+  the add_task guard `adds_to_imaginarium` is renamed `adds_to_ideas`, so
+  that "Imaginarium" names only the prompt gallery proposed in
+  `docs/imaginarium/PRD.md` (IM-1 to IM-4). `task.created` keeps `v1`:
+  its `state` enum now reads `ideas`. The event log is append-only, so
+  events written before the rename still say `imaginarium`. Every reader
+  of a stored `task.created` treats that old spelling as `ideas`. A
+  migration moves stored tasks to `ideas`, with the task-state trigger
+  turned off for that one update: the state's name changes, not the
+  task's place in its lifecycle, so no event is written.
 
 ## State machine (SM)
 
@@ -419,8 +429,8 @@ Where two inventories chose differently, the decision names the conflict.
   O44.
 - **SM-2** `[reading]` Hold in Done or Cancelled, and Cancel in Cancelled,
   are refused with `invalid_state`. M-G2.
-- **SM-3** `[reading]` Edit contract in Imaginarium: `invalid_state`. M-G3.
-- **SM-4** `[reading]` The Add task form adds to Backlog; Imaginarium only
+- **SM-3** `[reading]` Edit contract in Ideas: `invalid_state`. M-G3.
+- **SM-4** `[reading]` The Add task form adds to Backlog; Ideas only
   through Add task alone. M-G4.
 - **SM-5** `[reading]` A review that fails at the round limit makes the
   normal move (Working with a fresh lease, or Ready) and opens

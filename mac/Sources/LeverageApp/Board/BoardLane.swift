@@ -4,10 +4,10 @@ import LeverageKit
 /// One lane of the board (MA-1): six from a task's state and its holds, and a
 /// seventh for cancelled tasks that shows only under Show cancelled.
 enum BoardLane: Equatable, Hashable, Sendable, CaseIterable {
-    case imaginarium, backlog, blocked, ready, inProgress, done, cancelled
+    case ideas, backlog, blocked, ready, inProgress, done, cancelled
 
     /// The six lanes the board always draws, Blocked just before Ready.
-    static let standard: [BoardLane] = [.imaginarium, .backlog, .blocked, .ready, .inProgress, .done]
+    static let standard: [BoardLane] = [.ideas, .backlog, .blocked, .ready, .inProgress, .done]
 
     /// The holds that put a task in Blocked: the registry's `in_blocked` ones
     /// (`api/contract/registry.json`, `hold_reasons`), as the generated
@@ -17,7 +17,7 @@ enum BoardLane: Equatable, Hashable, Sendable, CaseIterable {
     /// The lane a task would be in with no hold.
     static func lane(forState state: TaskState) -> BoardLane {
         switch state {
-        case .imaginarium: .imaginarium
+        case .ideas: .ideas
         case .backlog: .backlog
         case .ready: .ready
         case .working, .inReview, .finishing: .inProgress
@@ -39,7 +39,7 @@ enum BoardLane: Equatable, Hashable, Sendable, CaseIterable {
     /// The heading the lane is drawn with.
     var heading: BoardCopy {
         switch self {
-        case .imaginarium: .laneIdeas
+        case .ideas: .laneIdeas
         case .backlog: .laneBacklog
         case .blocked: .laneBlocked
         case .ready: .laneReady

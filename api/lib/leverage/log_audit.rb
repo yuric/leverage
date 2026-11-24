@@ -554,7 +554,7 @@ module Leverage
       events.reduce(state) do |current, event|
         payload = event.payload || {}
         case event.type
-        when "task.created" then payload["state"]
+        when "task.created" then StoredEvents.task_state(payload["state"])
         when "task.promoted", "task.returned" then "backlog"
         when "task.ready", "task.reassigned" then "ready"
         when "task.claimed" then "working"

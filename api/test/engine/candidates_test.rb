@@ -597,12 +597,12 @@ class CandidatesTest < ActiveSupport::TestCase
     assert events.exists?(type: "seat.paused", subject_id: seat.id)
   end
 
-  test "Scenario: a task in the Imaginarium, and a Finishing row whose builder holds it" do
-    idea = @scenario.task(state: "imaginarium")
+  test "Scenario: a task in Ideas, and a Finishing row whose builder holds it" do
+    idea = @scenario.task(state: "ideas")
     builder = @scenario.seat
     finishing = @scenario.finishing_task(builder: builder)
 
-    assert_equal "imaginarium", idea.state
+    assert_equal "ideas", idea.state
     assert_equal [ "finishing", builder.id, false ],
       [ finishing.state, finishing.holder_seat_id, finishing.lease_due_at.nil? ]
     assert Event.exists?(task_id: finishing.id, type: "task.claimed")

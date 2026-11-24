@@ -34,7 +34,7 @@ module V1
       end
 
       # The owner's controls of milestone 3 (plan HE-24, HE-25): Add task
-      # into the Backlog from the Imaginarium, Edit contract (the Complete
+      # into the Backlog from Ideas, Edit contract (the Complete
       # contract body), and hold and resume.
       def promote = control("promote_task", "promote")
       def contract = control("edit_contract", "edit_contract")

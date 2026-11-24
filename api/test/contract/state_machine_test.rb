@@ -140,8 +140,8 @@ class StateMachineTest < Minitest::Test
     assert_equal "invalid_state", machine["unlisted_pair_refusal"]
     stated = rows.map { |row| [ row["command"], row["from"] ] }
     # Plan SM-2 and SM-3: no hold in Done or Cancelled, no cancel in
-    # Cancelled, no contract edit in Imaginarium, Finishing or Done.
-    [ %w[hold done], %w[hold cancelled], %w[cancel cancelled], %w[cancel done], %w[edit_contract imaginarium],
+    # Cancelled, no contract edit in Ideas, Finishing or Done.
+    [ %w[hold done], %w[hold cancelled], %w[cancel cancelled], %w[cancel done], %w[edit_contract ideas],
       %w[edit_contract finishing], %w[edit_contract done] ].each do |pair|
       refute_includes stated, pair
     end

@@ -27,14 +27,34 @@ struct RootView: View {
     }
 }
 
-/// The signed-in window: the floating side pane, the toolbar, and the screen
-/// the owner is on, with the Add task sheet over it.
+/// The signed-in window. On a new installation it is the setup assistant,
+/// with no side pane (docs/onboarding/PRD.md). Otherwise it is the app: the
+/// floating side pane, the toolbar, and the screen the owner is on, with
+/// the Add task sheet over it, and the setup spotlight while the checklist shows.
 struct AppShell: View {
     let context: ScreenContext
 
     var body: some View {
+        Group {
+            switch context.setup.presentation {
+            case .undecided:
+                // Nothing until the first read says which it is, so the app
+                // never shows for a moment before the assistant.
+                Color.clear
+            case .assistant:
+                SetupAssistantView()
+            case .checklist, .none:
+                app
+            }
+        }
+        .environment(context)
+        .task { await context.watchSetup() }
+        .task { await context.startInbox() }
+    }
+
+    private var app: some View {
         @Bindable var navigator = context.navigator
-        HStack(alignment: .top, spacing: Tokens.Spacing.window) {
+        return HStack(alignment: .top, spacing: Tokens.Spacing.window) {
             SidePane(context: context)
             VStack(spacing: 0) {
                 Toolbar(context: context)
@@ -46,8 +66,10 @@ struct AppShell: View {
             }
         }
         .padding(Tokens.Spacing.window)
-        .environment(context)
-        .task { await context.startInbox() }
+        .overlayPreferenceValue(SpotlightAnchorKey.self) { anchors in
+            SpotlightLayer(setup: context.setup, navigator: context.navigator, anchors: anchors)
+        }
+        .setupSheetOpen(navigator.isAddTaskPresented)
         .sheet(isPresented: $navigator.isAddTaskPresented) {
             AddTaskSheet().environment(context)
         }

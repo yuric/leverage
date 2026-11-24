@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leverage subscription mockups</title>
+<style>
+/* Leverage mockup styles. Tokens copied from docs/design/mockup.html. */
+
+/* ===== tokens ===== */
+.lv-root {
+  color-scheme: light;
+  --backdrop-base: #E8EDFA;
+  --tint-a: rgba(118,160,255,0.6);
+  --tint-b: rgba(180,150,255,0.55);
+  --backdrop: radial-gradient(900px 520px at 12% 0%, var(--tint-a), transparent 70%), radial-gradient(820px 560px at 92% 12%, var(--tint-b), transparent 70%), var(--backdrop-base);
+  --shell: rgba(255,255,255,0.5);
+  --nav: rgba(255,255,255,0.34);
+  --rim: rgba(255,255,255,0.8);
+  --glass-filter: blur(30px) saturate(1.6);
+  --shell-shadow: 0 30px 70px rgba(40,52,118,0.2), inset 0 1px 0 rgba(255,255,255,0.9);
+  --nav-shadow: 0 10px 26px rgba(40,52,118,0.16), inset 0 1px 0 rgba(255,255,255,0.9);
+  --surface: rgba(255,255,255,0.95);
+  --sheet: #FFFFFF;
+  --inset: #EEF2FC;
+  --control: #F3F5FB;
+  --line: #D5DAE8;
+  --field: #7A8298;
+  --text: #1A1E29;
+  --text2: #444C60;
+  --ok: #1C8A52;
+  --primary: #0A63E0;
+  --primary-fg: #FFFFFF;
+  --primary-shadow: 0 6px 16px rgba(10,99,224,0.32);
+  --focus: #0A63E0;
+  --tab-fg: #2F3648;
+  --tab-hover: rgba(26,30,41,0.05);
+  --tab-pressed: rgba(26,30,41,0.11);
+  --tab-on-bg: #FFFFFF;
+  --tab-on-fg: #11141D;
+  --tab-on-edge: rgba(26,30,41,0.14);
+  --tab-on-shadow: 0 4px 12px rgba(40,52,118,0.22), inset 0 1px 0 #FFFFFF;
+  --card-shadow: 0 1px 2px rgba(30,40,90,0.08);
+  --sheet-shadow: 0 18px 48px rgba(30,40,90,0.28);
+  --wait-bg: #FFEFCF;  --wait-fg: #7A4300;
+  --done-bg: #DDF5E6;  --done-fg: #0B6237;
+  --info-bg: #E2EDFF;  --info-fg: #0B4AA8;
+  --stop-bg: #FFE4D3;  --stop-fg: #8A3A0B;
+  --plain-bg: #EEF2FC; --plain-fg: #1A1E29;
+}
+.lv-root.lv-dark {
+  color-scheme: dark;
+  --backdrop-base: #0D111E;
+  --tint-a: rgba(62,104,235,0.55);
+  --tint-b: rgba(136,92,224,0.5);
+  --shell: rgba(30,34,52,0.56);
+  --nav: rgba(44,49,72,0.6);
+  --rim: rgba(255,255,255,0.16);
+  --shell-shadow: 0 30px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+  --nav-shadow: 0 10px 26px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.14);
+  --surface: rgba(27,30,45,0.95);
+  --sheet: #1D2032;
+  --inset: #262A3F;
+  --control: #262A3F;
+  --line: #3A405A;
+  --field: #6B7391;
+  --text: #F2F4FA;
+  --text2: #BAC1D6;
+  --ok: #57D08F;
+  --primary: #1F6FEB;
+  --primary-shadow: 0 6px 16px rgba(31,111,235,0.42);
+  --focus: #8AB4FF;
+  --tab-fg: #D5DAEA;
+  --tab-hover: rgba(255,255,255,0.06);
+  --tab-pressed: rgba(255,255,255,0.14);
+  --tab-on-bg: #3A4160;
+  --tab-on-fg: #FFFFFF;
+  --tab-on-edge: rgba(255,255,255,0.22);
+  --tab-on-shadow: 0 4px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.18);
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  --sheet-shadow: 0 18px 48px rgba(0,0,0,0.6);
+  --wait-bg: #4B3611;  --wait-fg: #FFD899;
+  --done-bg: #12402A;  --done-fg: #A6ECC4;
+  --info-bg: #17336A;  --info-fg: #C2DAFF;
+  --stop-bg: #4D2613;  --stop-fg: #FFCBAA;
+  --plain-bg: #262A3F; --plain-fg: #F2F4FA;
+}
+
+/* ===== base ===== */
+.lv-root { box-sizing: border-box; background: var(--backdrop); color: var(--text); font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.lv-root *, .lv-root *::before, .lv-root *::after { box-sizing: border-box; }
+.lv-root h1, .lv-root h2, .lv-root h3, .lv-root h4, .lv-root p { margin: 0; }
+.lv-root a { color: inherit; text-decoration: none; }
+.lv-root a:focus-visible, .lv-root button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lv-root svg.i { flex: 0 0 16px; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.lv-root svg.i--sm { flex-basis: 12px; width: 12px; height: 12px; stroke-width: 1.8; color: var(--text2); }
+
+/* ===== window and side pane ===== */
+.lv-root .lv-window { position: relative; display: flex; align-items: stretch; gap: 6px; width: 1040px; height: 760px; padding: 6px; border-radius: 18px; background: var(--shell); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--rim); box-shadow: var(--shell-shadow); }
+.lv-root .lv-side { position: relative; z-index: 2; flex: 0 0 188px; width: 188px; display: flex; flex-direction: column; gap: 14px; padding: 12px 8px 8px; border-radius: 12px; background: var(--nav); border: 1px solid var(--rim); box-shadow: var(--nav-shadow); }
+.lv-root .lv-brand { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+.lv-root .lv-brand h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+.lv-root .lv-appicon { flex: 0 0 24px; width: 24px; height: 24px; display: block; }
+.lv-root .lv-nav { display: flex; flex-direction: column; gap: 2px; }
+.lv-root .lv-tab { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; margin: 0; padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--tab-fg); font: inherit; font-weight: 500; text-align: left; cursor: pointer; }
+.lv-root .lv-tab:hover { background: var(--tab-hover); }
+.lv-root .lv-tab-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-root .lv-tab--on, .lv-root .lv-tab--on:hover { background: var(--tab-on-bg); color: var(--tab-on-fg); border-color: var(--tab-on-edge); box-shadow: var(--tab-on-shadow); font-weight: 600; }
+.lv-root .lv-tab--pressed, .lv-root .lv-tab--pressed:hover { background: var(--tab-pressed); color: var(--tab-on-fg); font-weight: 600; }
+.lv-root .lv-tab--gone { opacity: 0.45; text-decoration: line-through; }
+.lv-root .lv-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--wait-bg); color: var(--wait-fg); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.lv-root .lv-side-section { display: flex; flex-direction: column; gap: 4px; }
+.lv-root .lv-side-head { display: flex; justify-content: space-between; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--text2); }
+.lv-root .lv-link { color: var(--info-fg); font-weight: 600; }
+.lv-root a.lv-link:hover { text-decoration: underline; }
+
+/* ===== the foot of the side pane ===== */
+.lv-root .lv-side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.lv-root .lv-health { display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--text2); }
+.lv-root .lv-health i { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.lv-root .lv-foot-rule { height: 1px; margin: 0 6px; background: var(--line); }
+.lv-root .lv-acct { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 6px 8px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--tab-fg); font: inherit; text-align: left; cursor: pointer; }
+.lv-root .lv-acct:hover { background: var(--tab-hover); }
+.lv-root .lv-acct--open, .lv-root .lv-acct--open:hover { background: var(--tab-pressed); color: var(--tab-on-fg); }
+.lv-root .lv-acct--on, .lv-root .lv-acct--on:hover { background: var(--tab-on-bg); color: var(--tab-on-fg); border-color: var(--tab-on-edge); box-shadow: var(--tab-on-shadow); }
+.lv-root .lv-avatar { flex: 0 0 24px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--info-bg); color: var(--info-fg); font-size: 11px; font-weight: 700; }
+.lv-root .lv-acct-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.lv-root .lv-acct-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-root .lv-acct-sub { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-root .lv-acct-sub--stop { display: flex; align-items: center; gap: 5px; color: var(--stop-fg); font-weight: 600; }
+.lv-root .lv-acct-sub--stop::before { content: ""; flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* ===== the menu that opens upward from the foot ===== */
+.lv-root .lv-menu { position: absolute; left: 6px; bottom: 60px; z-index: 5; width: 236px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: var(--sheet); border: 1px solid var(--line); box-shadow: var(--sheet-shadow); }
+.lv-root .lv-menu--static { position: static; }
+.lv-root .lv-menu-head { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.lv-root .lv-menu-head b { font-weight: 600; }
+.lv-root .lv-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; margin: 0; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-weight: 500; text-align: left; cursor: pointer; }
+.lv-root .lv-menu-item:hover { background: var(--tab-hover); }
+.lv-root .lv-menu-hint { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--text2); }
+.lv-root .lv-menu-hint--stop { color: var(--stop-fg); font-weight: 600; }
+.lv-root .lv-menu-rule { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* ===== content ===== */
+.lv-root .lv-content { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.lv-root .lv-toolbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px 10px 16px; }
+.lv-root .lv-toolbar h2 { flex: 1 1 auto; font-size: 15px; font-weight: 600; }
+.lv-root .lv-main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 20px 16px; }
+.lv-root .lv-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; margin: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--control); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; }
+.lv-root .lv-btn--primary { min-height: 36px; padding: 0 16px; border-color: transparent; background: var(--primary); color: var(--primary-fg); font-weight: 600; box-shadow: var(--primary-shadow); }
+.lv-root .lv-btn--tint { border-color: transparent; background: var(--info-bg); color: var(--info-fg); font-weight: 600; }
+.lv-root .lv-btn--strong { border-color: transparent; background: var(--stop-fg); color: var(--stop-bg); font-weight: 600; }
+.lv-root .lv-muted { font-size: 12px; color: var(--text2); }
+.lv-root .lv-grow { flex: 1 1 auto; min-width: 0; }
+.lv-root .lv-chip { flex: 0 0 auto; align-self: flex-start; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.lv-root .lv-chip--wait { background: var(--wait-bg); color: var(--wait-fg); }
+.lv-root .lv-chip--done { background: var(--done-bg); color: var(--done-fg); }
+.lv-root .lv-chip--info { background: var(--info-bg); color: var(--info-fg); }
+.lv-root .lv-chip--stop { background: var(--stop-bg); color: var(--stop-fg); }
+.lv-root .lv-chip--plain { background: var(--plain-bg); color: var(--plain-fg); }
+
+/* board */
+.lv-root .lv-lanes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.lv-root .lv-lane { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.lv-root .lv-lane-head { display: flex; align-items: baseline; gap: 6px; padding: 0 4px; font-weight: 600; }
+.lv-root .lv-lane-head span { font-size: 12px; font-weight: 400; color: var(--text2); }
+.lv-root .lv-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-root .lv-card h4 { font-size: 13px; font-weight: 600; line-height: 1.3; }
+
+/* pages made of panels */
+.lv-root .lv-page { max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
+.lv-root .lv-panel { display: flex; flex-direction: column; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-root .lv-panel-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.lv-root .lv-panel-head h3 { font-size: 13px; font-weight: 600; }
+.lv-root .lv-prow { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 16px; border-top: 1px solid var(--line); }
+.lv-root .lv-prow--first { border-top: 0; }
+.lv-root .lv-prow b { font-weight: 600; }
+.lv-root .lv-lead { flex: 0 0 150px; color: var(--text2); }
+.lv-root .lv-stack { display: flex; flex-direction: column; gap: 2px; }
+.lv-root .lv-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--stop-bg); color: var(--stop-fg); }
+.lv-root .lv-banner b { font-weight: 700; }
+.lv-root .lv-need { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 16px; border-top: 1px solid var(--line); }
+.lv-root .lv-need--first { border-top: 0; }
+.lv-root .lv-need h3 { font-size: 13px; font-weight: 600; }
+.lv-root .lv-need p { color: var(--text2); }
+.lv-root .lv-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+
+/* appearance choice */
+.lv-root .lv-appearance { display: flex; gap: 12px; padding: 4px 16px 16px; }
+.lv-root .lv-tile { display: flex; flex-direction: column; gap: 8px; width: 176px; margin: 0; padding: 8px; border: 2px solid var(--line); border-radius: 12px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.lv-root .lv-tile--on { border-color: var(--primary); }
+.lv-root .lv-thumb { display: flex; gap: 4px; height: 96px; padding: 6px; border-radius: 8px; }
+.lv-root .lv-thumb span { border-radius: 4px; }
+.lv-root .lv-thumb span:first-child { flex: 0 0 34px; }
+.lv-root .lv-thumb span:last-child { flex: 1 1 auto; }
+.lv-root .lv-thumb--light { background: #DCE4F8; }
+.lv-root .lv-thumb--light span { background: #FFFFFF; }
+.lv-root .lv-thumb--dark { background: #0D111E; }
+.lv-root .lv-thumb--dark span { background: #2C3148; }
+.lv-root .lv-tile-label { display: flex; align-items: center; gap: 8px; padding: 0 2px 2px; font-weight: 600; }
+.lv-root .lv-radio { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--field); }
+.lv-root .lv-tile--on .lv-radio { border: 4px solid var(--primary); }
+
+/* the side pane comparison */
+.lv-root .lv-compare { display: flex; justify-content: center; gap: 56px; }
+.lv-root .lv-compare-col { display: flex; flex-direction: column; gap: 12px; width: 300px; }
+.lv-root .lv-compare-col h2 { font-size: 15px; font-weight: 700; }
+.lv-root .lv-compare-col p { min-height: 72px; color: var(--text2); }
+.lv-root .lv-compare-stage { position: relative; display: flex; align-items: flex-end; gap: 10px; }
+.lv-root .lv-compare-stage .lv-side { height: 600px; }
+
+/* ===== choosing and subscribing ===== */
+.lv-root .lv-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lv-root .lv-plan { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow); }
+.lv-root .lv-plan h4 { font-size: 15px; font-weight: 700; }
+.lv-root .lv-price { display: flex; align-items: baseline; gap: 4px; }
+.lv-root .lv-price b { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+.lv-root .lv-plan ul { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; color: var(--text2); flex: 1 1 auto; }
+.lv-root .lv-plan .lv-btn { width: 100%; }
+.lv-root .lv-plan--current { border: 2px solid var(--primary); }
+.lv-root .lv-scrim { position: absolute; inset: 0; z-index: 10; display: flex; align-items: flex-start; justify-content: center; padding: 110px 16px 24px; border-radius: 18px; background: rgba(24,30,58,0.3); }
+.lv-root.lv-dark .lv-scrim { background: rgba(5,7,14,0.55); }
+.lv-root .lv-sheet { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 18px; background: var(--sheet); border: 1px solid var(--line); box-shadow: var(--sheet-shadow); }
+.lv-root .lv-sheet h3 { font-size: 15px; font-weight: 700; }
+.lv-root .lv-sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.lv-root .lv-label { font-size: 12px; font-weight: 600; color: var(--text2); }
+.lv-root .lv-methods { display: flex; flex-direction: column; border-radius: 12px; border: 1px solid var(--line); }
+.lv-root .lv-method { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 14px; }
+.lv-root .lv-method + .lv-method { border-top: 1px solid var(--line); }
+.lv-root .lv-method-icon { flex: 0 0 32px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--inset); color: var(--text); }
+.lv-root .lv-spinner { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--primary); }
+
+body { margin: 0; padding: 24px; background: #E9EAEE; font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: #1B1D22; }
+body.dark { background: #111319; color: #E7E9EE; }
+.bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 12px; align-items: center; margin: -24px -24px 16px; padding: 10px 24px; background: #1E2026; color: #E7E9EE; }
+.bar button { min-height: 28px; padding: 0 10px; border: 1px solid #454956; border-radius: 6px; background: #2B2E37; color: inherit; font: inherit; cursor: pointer; }
+.board { margin: 0 0 32px; }
+.board > h2 { margin: 0 0 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="bar"><b>Leverage subscription mockups</b><span>Proposal. Prices are the owner's; [bracketed] text is not decided.</span><button type="button" id="theme">Dark</button></div>
+<section id="main" class="board"><h2>Side pane at rest</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab lv-tab--on" href="#main" aria-current="page"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab lv-tab--pressed" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Board</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-lanes">
+<div class="lv-lane">
+<div class="lv-lane-head">Backlog <span>1</span></div>
+<div class="lv-card"><h4>Add a dark theme to the docs site</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--wait">Needs details</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Blocked <span>1</span></div>
+<div class="lv-card"><h4>Add CSV export to reports</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--stop">Paused</span><span class="lv-muted">Claude, Work reached its limit. It resumes at 6:00 PM.</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Ready <span>1</span></div>
+<div class="lv-card"><h4>Draft the spring newsletter</h4><span class="lv-muted">Newsletter</span><span class="lv-chip lv-chip--plain">Ready</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">In progress <span>2</span></div>
+<div class="lv-card"><h4>Fix rounding in invoice totals</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--info">Codex is building</span></div>
+<div class="lv-card"><h4>Write the onboarding email</h4><span class="lv-muted">Newsletter</span><span class="lv-chip lv-chip--wait">In review</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Done <span>1</span></div>
+<div class="lv-card"><h4>Move the blog to the new domain</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--done">Done</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="menu" class="board"><h2>Menu open</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab lv-tab--on" href="#main" aria-current="page"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab lv-tab--pressed" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<div class="lv-menu" role="menu" aria-label="Subscription, settings and sign out">
+<div class="lv-menu-head"><b>name@example.com</b><span class="lv-muted">Plus, $20 a month</span></div>
+<a class="lv-menu-item" href="#account" role="menuitem"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM1.5 6.5h13M4 10h2"></path></svg>Subscription</a>
+<a class="lv-menu-item" href="#settings" role="menuitem"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg>Settings<span class="lv-menu-hint">⌘ ,</span></a>
+<div class="lv-menu-rule" role="separator"></div>
+<button class="lv-menu-item" type="button" role="menuitem"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 5l3 3-3 3M13.5 8H6"></path></svg>Sign out</button>
+</div>
+<a class="lv-acct lv-acct--open" href="#main" aria-haspopup="menu" aria-expanded="true" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Board</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-lanes">
+<div class="lv-lane">
+<div class="lv-lane-head">Backlog <span>1</span></div>
+<div class="lv-card"><h4>Add a dark theme to the docs site</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--wait">Needs details</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Blocked <span>1</span></div>
+<div class="lv-card"><h4>Add CSV export to reports</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--stop">Paused</span><span class="lv-muted">Claude, Work reached its limit. It resumes at 6:00 PM.</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Ready <span>1</span></div>
+<div class="lv-card"><h4>Draft the spring newsletter</h4><span class="lv-muted">Newsletter</span><span class="lv-chip lv-chip--plain">Ready</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">In progress <span>2</span></div>
+<div class="lv-card"><h4>Fix rounding in invoice totals</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--info">Codex is building</span></div>
+<div class="lv-card"><h4>Write the onboarding email</h4><span class="lv-muted">Newsletter</span><span class="lv-chip lv-chip--wait">In review</span></div>
+</div>
+<div class="lv-lane">
+<div class="lv-lane-head">Done <span>1</span></div>
+<div class="lv-card"><h4>Move the blog to the new domain</h4><span class="lv-muted">Website</span><span class="lv-chip lv-chip--done">Done</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="choose" class="board"><h2>No subscription: choose a plan</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">No subscription</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<div class="lv-stack" style="padding: 0 4px; gap: 4px">
+<h3 style="font-size: 17px; font-weight: 700">Choose a subscription</h3>
+<span class="lv-muted">Every plan includes support. You can change plans or cancel at any time.</span>
+</div>
+<div class="lv-plans">
+<div class="lv-plan">
+<h4>Pro</h4>
+<div class="lv-price"><b>$100</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Pro includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Pro</a>
+</div>
+<div class="lv-plan">
+<h4>Starter</h4>
+<div class="lv-price"><b>$7</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Starter includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Starter</a>
+</div>
+<div class="lv-plan">
+<h4>Plus</h4>
+<div class="lv-price"><b>$20</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Plus includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Plus</a>
+</div>
+</div>
+<span class="lv-muted" style="padding: 0 4px">Pay with Apple Pay, Link or a card. Payments are handled by Stripe.</span>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="subscribe" class="board"><h2>Subscribe: how you can pay</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">No subscription</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<div class="lv-stack" style="padding: 0 4px; gap: 4px">
+<h3 style="font-size: 17px; font-weight: 700">Choose a subscription</h3>
+<span class="lv-muted">Every plan includes support. You can change plans or cancel at any time.</span>
+</div>
+<div class="lv-plans">
+<div class="lv-plan">
+<h4>Pro</h4>
+<div class="lv-price"><b>$100</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Pro includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Pro</a>
+</div>
+<div class="lv-plan">
+<h4>Starter</h4>
+<div class="lv-price"><b>$7</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Starter includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Starter</a>
+</div>
+<div class="lv-plan">
+<h4>Plus</h4>
+<div class="lv-price"><b>$20</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Plus includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Plus</a>
+</div>
+</div>
+<span class="lv-muted" style="padding: 0 4px">Pay with Apple Pay, Link or a card. Payments are handled by Stripe.</span>
+</div>
+</div>
+</div>
+<div class="lv-scrim">
+<div class="lv-sheet" role="dialog" aria-modal="true" aria-labelledby="sub-h">
+<div class="lv-stack"><h3 id="sub-h">Subscribe to Plus</h3><span class="lv-muted">$20 a month, starting today. Cancel at any time.</span></div>
+<span class="lv-label">You can pay with</span>
+<ul class="lv-methods" style="list-style: none; margin: 0; padding: 0" aria-label="Ways to pay"><li class="lv-method"><span class="lv-method-icon"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 1.5h7a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1zM7 12.5h2"></path></svg></span><span class="lv-stack"><b>Apple Pay</b><span class="lv-muted">In Safari, with Touch ID or your iPhone</span></span></li><li class="lv-method"><span class="lv-method-icon"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"></path></svg></span><span class="lv-stack"><b>Link</b><span class="lv-muted">Pay with details you saved with Link</span></span></li><li class="lv-method"><span class="lv-method-icon"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM1.5 6.5h13M4 10h2"></path></svg></span><span class="lv-stack"><b>Credit or debit card</b><span class="lv-muted">Visa, Mastercard, American Express and others</span></span></li></ul>
+<p class="lv-muted">Checkout opens in your browser, on Stripe’s secure page. Leverage never sees your card.</p>
+<div class="lv-sheet-actions"><a class="lv-btn" href="#choose">Cancel</a><a class="lv-btn lv-btn--primary" href="#waiting">Continue to checkout<svg class="i i--sm" style="margin-left: 6px; color: inherit" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg></a></div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="waiting" class="board"><h2>Finishing in the browser</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">No subscription</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<div class="lv-stack" style="padding: 0 4px; gap: 4px">
+<h3 style="font-size: 17px; font-weight: 700">Choose a subscription</h3>
+<span class="lv-muted">Every plan includes support. You can change plans or cancel at any time.</span>
+</div>
+<div class="lv-plans">
+<div class="lv-plan">
+<h4>Pro</h4>
+<div class="lv-price"><b>$100</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Pro includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Pro</a>
+</div>
+<div class="lv-plan">
+<h4>Starter</h4>
+<div class="lv-price"><b>$7</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Starter includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Starter</a>
+</div>
+<div class="lv-plan">
+<h4>Plus</h4>
+<div class="lv-price"><b>$20</b><span class="lv-muted">a month</span></div>
+<ul><li>[What Plus includes]</li><li>Support</li></ul>
+<a class="lv-btn lv-btn--primary" href="#subscribe">Choose Plus</a>
+</div>
+</div>
+<span class="lv-muted" style="padding: 0 4px">Pay with Apple Pay, Link or a card. Payments are handled by Stripe.</span>
+</div>
+</div>
+</div>
+<div class="lv-scrim">
+<div class="lv-sheet" role="dialog" aria-modal="true" aria-labelledby="wait-h">
+<div style="display: flex; align-items: center; gap: 12px"><span class="lv-spinner" aria-hidden="true"></span><h3 id="wait-h">Finish paying in your browser</h3></div>
+<p class="lv-muted">Stripe’s checkout for Plus, $20 a month, is open in your browser. This window updates by itself when the payment goes through.</p>
+<div class="lv-sheet-actions"><a class="lv-btn" href="#choose">Cancel</a><button class="lv-btn lv-btn--tint" type="button">Open checkout again</button></div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="subscribed" class="board"><h2>Subscribed</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<section class="lv-panel" aria-labelledby="plan-h">
+<div class="lv-panel-head"><h3 id="plan-h" class="lv-grow">Your subscription</h3><span class="lv-chip lv-chip--done">Active</span></div>
+<div class="lv-prow"><span class="lv-lead">Plan</span><b class="lv-grow">Plus, $20 a month</b><a class="lv-btn lv-btn--tint" href="#choose">Change plan</a></div>
+<div class="lv-prow"><span class="lv-lead">Next payment</span><span class="lv-grow">$20.00 on [DATE]</span></div>
+<div class="lv-prow"><span class="lv-lead">Includes</span><span class="lv-grow">[What Plus includes], and support</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="pay-h">
+<div class="lv-panel-head"><h3 id="pay-h" class="lv-grow">Payment method</h3></div>
+<div class="lv-prow">
+<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM1.5 6.5h13M4 10h2"></path></svg>
+<span class="lv-grow lv-stack"><span>Card ending [0000]</span><span class="lv-muted">Expires [MM/YY]</span></span>
+<button class="lv-btn" type="button">Update<svg class="i i--sm" style="margin-left: 6px; color: inherit" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg></button>
+</div>
+<div class="lv-prow"><span class="lv-muted">Update opens Stripe in your browser, where you can pay with Apple Pay, Link or a card. Leverage never sees your card.</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="rec-h">
+<div class="lv-panel-head"><h3 id="rec-h" class="lv-grow">Receipts</h3></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+</section>
+<div class="lv-prow lv-prow--first" style="padding: 0 4px; border: 0">
+<span class="lv-muted lv-grow">Cancelling ends your subscription on [DATE], and you are not charged again. Your tasks, rules and history stay on this Mac.</span>
+<button class="lv-btn" type="button">Cancel subscription</button>
+</div>
+</div>
+</div>
+</div>
+<div class="lv-scrim">
+<div class="lv-sheet" role="dialog" aria-modal="true" aria-labelledby="done-h">
+<div class="lv-stack"><span class="lv-chip lv-chip--done">Subscribed</span><h3 id="done-h" style="margin-top: 6px">You’re on Plus</h3></div>
+<p class="lv-muted">$20 a month. Your next payment is on [DATE]. A receipt is on its way to name@example.com.</p>
+<div class="lv-sheet-actions"><a class="lv-btn lv-btn--primary" href="#account">Done</a></div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="account" class="board"><h2>Subscription</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<section class="lv-panel" aria-labelledby="plan-h">
+<div class="lv-panel-head"><h3 id="plan-h" class="lv-grow">Your subscription</h3><span class="lv-chip lv-chip--done">Active</span></div>
+<div class="lv-prow"><span class="lv-lead">Plan</span><b class="lv-grow">Plus, $20 a month</b><a class="lv-btn lv-btn--tint" href="#choose">Change plan</a></div>
+<div class="lv-prow"><span class="lv-lead">Next payment</span><span class="lv-grow">$20.00 on [DATE]</span></div>
+<div class="lv-prow"><span class="lv-lead">Includes</span><span class="lv-grow">[What Plus includes], and support</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="pay-h">
+<div class="lv-panel-head"><h3 id="pay-h" class="lv-grow">Payment method</h3></div>
+<div class="lv-prow">
+<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM1.5 6.5h13M4 10h2"></path></svg>
+<span class="lv-grow lv-stack"><span>Card ending [0000]</span><span class="lv-muted">Expires [MM/YY]</span></span>
+<button class="lv-btn" type="button">Update<svg class="i i--sm" style="margin-left: 6px; color: inherit" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg></button>
+</div>
+<div class="lv-prow"><span class="lv-muted">Update opens Stripe in your browser, where you can pay with Apple Pay, Link or a card. Leverage never sees your card.</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="rec-h">
+<div class="lv-panel-head"><h3 id="rec-h" class="lv-grow">Receipts</h3></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+</section>
+<div class="lv-prow lv-prow--first" style="padding: 0 4px; border: 0">
+<span class="lv-muted lv-grow">Cancelling ends your subscription on [DATE], and you are not charged again. Your tasks, rules and history stay on this Mac.</span>
+<button class="lv-btn" type="button">Cancel subscription</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="accountproblem" class="board"><h2>Subscription, payment problem</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">2</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub lv-acct-sub--stop">Card declined</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Subscription</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<div class="lv-banner" role="status">
+<span class="lv-grow lv-stack"><b>Your subscription payment didn’t go through.</b><span>Update your payment method by [DATE]. Until then, everything keeps working.</span></span>
+<button class="lv-btn lv-btn--strong" type="button">Update</button>
+</div>
+<section class="lv-panel" aria-labelledby="plan-h">
+<div class="lv-panel-head"><h3 id="plan-h" class="lv-grow">Your subscription</h3><span class="lv-chip lv-chip--stop">Payment due</span></div>
+<div class="lv-prow"><span class="lv-lead">Plan</span><b class="lv-grow">Plus, $20 a month</b><a class="lv-btn lv-btn--tint" href="#choose">Change plan</a></div>
+<div class="lv-prow"><span class="lv-lead">Payment due</span><span class="lv-grow">$20.00, tried on [DATE] and again on [DATE]</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="pay-h">
+<div class="lv-panel-head"><h3 id="pay-h" class="lv-grow">Payment method</h3></div>
+<div class="lv-prow">
+<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM1.5 6.5h13M4 10h2"></path></svg>
+<span class="lv-grow lv-stack"><span>Card ending [0000]</span><span class="lv-muted" style="color: var(--stop-fg); font-weight: 600">Declined on [DATE]</span></span>
+<button class="lv-btn lv-btn--primary" type="button">Update<svg class="i i--sm" style="margin-left: 6px; color: inherit" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg></button>
+</div>
+<div class="lv-prow"><span class="lv-muted">Update opens Stripe in your browser, where you can pay with Apple Pay, Link or a card. Leverage never sees your card.</span></div>
+</section>
+<section class="lv-panel" aria-labelledby="rec-h">
+<div class="lv-panel-head"><h3 id="rec-h" class="lv-grow">Receipts</h3></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+<div class="lv-prow"><span class="lv-lead">[DATE]</span><span class="lv-grow">$20.00, Plus</span><span class="lv-chip lv-chip--done">Paid</span><a class="lv-link" href="#">View</a></div>
+</section>
+<div class="lv-prow lv-prow--first" style="padding: 0 4px; border: 0">
+<span class="lv-muted lv-grow">Cancelling ends your subscription on [DATE], and you are not charged again. Your tasks, rules and history stay on this Mac.</span>
+<button class="lv-btn" type="button">Cancel subscription</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="needsyou" class="board"><h2>Needs you, payment problem</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab lv-tab--on" href="#needsyou" aria-current="page"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">2</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub lv-acct-sub--stop">Card declined</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Needs you</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+<section class="lv-panel" aria-label="Waiting for you">
+<div class="lv-need lv-need--first">
+<span class="lv-chip lv-chip--stop">Subscription</span>
+<h3>Your subscription payment didn’t go through</h3>
+<p>$20.00 for Plus was declined on [DATE]. Update your payment method by [DATE]. Until then, everything keeps working.</p>
+<div class="lv-actions">
+<button class="lv-btn lv-btn--primary" type="button">Update payment method<svg class="i i--sm" style="margin-left: 6px; color: inherit" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg></button>
+<a class="lv-btn" href="#accountproblem">Open Subscription</a>
+</div>
+</div>
+<div class="lv-need">
+<span class="lv-chip lv-chip--wait">Question</span>
+<h3>Add CSV export to reports</h3>
+<p>Codex asks: should the export include reports that were archived?</p>
+<div class="lv-actions"><button class="lv-btn lv-btn--tint" type="button">Answer</button></div>
+</div>
+</section>
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="settings" class="board"><h2>Settings</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 40px; display: flex; align-items: flex-start; justify-content: center">
+<div class="lv-window">
+<nav class="lv-side" aria-label="Leverage">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<a class="lv-tab" href="#main"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></a>
+<a class="lv-tab" href="#needsyou"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></a>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></button>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Website</span></button>
+<button class="lv-tab" type="button"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"></path></svg><span class="lv-tab-label">Newsletter</span></button>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<a class="lv-acct lv-acct--on" href="#menu" aria-haspopup="menu" aria-expanded="false" aria-current="page" aria-label="Subscription, settings and sign out, name@example.com">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</a>
+</div>
+</nav>
+<div class="lv-content">
+<div class="lv-toolbar"><h2>Settings</h2><button class="lv-btn lv-btn--primary" type="button">Add task</button></div>
+<div class="lv-main">
+<div class="lv-page">
+
+<section class="lv-panel" aria-labelledby="look-h">
+<div class="lv-panel-head"><h3 id="look-h" class="lv-grow">Appearance</h3></div>
+<div class="lv-appearance" role="radiogroup" aria-labelledby="look-h">
+<button class="lv-tile lv-tile--on" type="button" role="radio" aria-checked="true">
+<span class="lv-thumb lv-thumb--light" aria-hidden="true"><span></span><span></span></span>
+<span class="lv-tile-label"><span class="lv-radio" aria-hidden="true"></span>Light</span>
+</button>
+<button class="lv-tile" type="button" role="radio" aria-checked="false">
+<span class="lv-thumb lv-thumb--dark" aria-hidden="true"><span></span><span></span></span>
+<span class="lv-tile-label"><span class="lv-radio" aria-hidden="true"></span>Dark</span>
+</button>
+
+</div>
+</section>
+
+</div>
+</div>
+</div>
+</div>
+</div></section>
+<section id="sidepane" class="board"><h2>Side pane, today and proposed</h2><div class="lv-root lv-themed" style="width: 1120px; height: 840px; padding: 56px 40px; display: flex; flex-direction: column; align-items: center">
+<div class="lv-compare">
+
+<div class="lv-compare-col">
+<h2>Today</h2>
+<p>Settings is a tab, holding Rules and Workspace settings. Sign out is only in the app menu. The window has no account or plan.</p>
+<nav class="lv-side" aria-label="Side pane today">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<span class="lv-tab lv-tab--on"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></span>
+<span class="lv-tab lv-tab--gone"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg><span class="lv-tab-label">Settings</span></span>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<span class="lv-tab lv-tab--pressed"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></span>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health" style="padding-bottom: 6px"><i></i><span>System is running</span></div>
+</div>
+</nav>
+</div>
+
+<div class="lv-compare-col">
+<h2>Proposed</h2>
+<p>The Settings tab goes. Its Rules and Workspace settings get a tab called Rules. The row at the foot opens Subscription, Settings and Sign out.</p>
+<nav class="lv-side" aria-label="Side pane proposed">
+<div class="lv-brand">
+<svg class="lv-appicon" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon"><rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path><path d="M21 38 29 53H13z" fill="#fff"></path><rect x="9" y="13" width="14" height="12" rx="2.5" fill="#fff" transform="rotate(18.4 16 25)"></rect><path d="M44 24l5.5 6 5.5-6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path></svg>
+<h1>Leverage</h1>
+</div>
+<div class="lv-nav">
+<span class="lv-tab lv-tab--on"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h3v10h-3zM6.5 3h3v6h-3zM10.5 3h3v8h-3z"></path></svg><span class="lv-tab-label">Board</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8l1.6 5.2v2.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1zM2.5 9.5h3l.8 1.5h3.4l.8-1.5h3"></path></svg><span class="lv-tab-label">Needs you</span><span class="lv-count">1</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0zM5.5 8.2l1.8 1.8 3.4-3.6"></path></svg><span class="lv-tab-label">Decided for you</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.8-4.5 3 8 1.8-3.5h3.4"></path></svg><span class="lv-tab-label">Activity</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 7.5a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6zM1.8 13c.4-2.2 2-3.4 4.2-3.4s3.8 1.2 4.2 3.4M10.2 7.3a2.1 2.1 0 0 0 0-4.1M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2"></path></svg><span class="lv-tab-label">Agents</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.6a3.4 3.4 0 1 0-3.1-2L2.5 12.2V14h2.2v-1.4h1.4v-1.4h1.3l1-1.1c.5.3 1.1.5 1.8.5zM11 5.4v.2"></path></svg><span class="lv-tab-label">Credentials</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13"></path></svg><span class="lv-tab-label">Handoff</span></span>
+<span class="lv-tab"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2l1 1 1.8-2M2.5 9.2l1 1 1.8-2M7.5 4.5h6M7.5 9.5h6M2.5 13h11"></path></svg><span class="lv-tab-label">Rules</span></span>
+</div>
+<div class="lv-side-section">
+<div class="lv-side-head"><span>Projects</span><span class="lv-link">Manage</span></div>
+<div class="lv-nav">
+<span class="lv-tab lv-tab--pressed"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5H7V7H2.5zM9 2.5h4.5V7H9zM2.5 9H7v4.5H2.5zM9 9h4.5v4.5H9z"></path></svg><span class="lv-tab-label">All projects</span></span>
+</div>
+</div>
+<div class="lv-side-foot">
+<div class="lv-health"><i></i><span>System is running</span></div>
+<div class="lv-foot-rule"></div>
+<span class="lv-acct">
+<span class="lv-avatar" aria-hidden="true">N</span>
+<span class="lv-acct-text"><span class="lv-acct-name">name@example.com</span><span class="lv-acct-sub">Plus</span></span>
+<svg class="i i--sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"></path></svg>
+</span>
+</div>
+</nav>
+</div>
+
+</div>
+</div></section>
+<script>
+var dark = false;
+document.getElementById('theme').addEventListener('click', function () {
+  dark = !dark;
+  document.body.classList.toggle('dark', dark);
+  document.querySelectorAll('.lv-themed').forEach(function (el) { el.classList.toggle('lv-dark', dark); });
+  this.textContent = dark ? 'Light' : 'Dark';
+});
+</script>
+</body>
+</html>

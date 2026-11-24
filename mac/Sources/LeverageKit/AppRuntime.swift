@@ -117,6 +117,27 @@ public protocol InboxCursorStoring: AnyObject, Sendable {
     func save(_ seq: Int) throws
 }
 
+/// What the owner chose about first-run setup on this Mac
+/// (docs/onboarding/PRD.md). The steps of setup are never stored: the app
+/// reads them from the workspace each time.
+public enum SetupChoice: String, CaseIterable, Sendable {
+    /// Nothing chosen yet: a new installation, or one from before setup existed.
+    case notChosen = "not_chosen"
+    /// The setup assistant was opened and neither finished nor left.
+    case started
+    /// The owner left the setup assistant; the setup checklist takes over.
+    case skipped
+    /// Setup is over: finished, or hidden by the owner.
+    case finished
+}
+
+/// Keeps the owner's setup choice so that it outlives the app. No secret.
+public protocol SetupProgressStoring: AnyObject, Sendable {
+    /// The stored choice; `.notChosen` when none was stored or it cannot be read.
+    func load() -> SetupChoice
+    func save(_ choice: SetupChoice) throws
+}
+
 /// The services the app runs with.
 public protocol AppRuntime: Sendable {
     var server: any ServerSupervising { get }
@@ -124,6 +145,7 @@ public protocol AppRuntime: Sendable {
     var sessions: any SessionStoring { get }
     var notifier: any Notifying { get }
     var inboxCursor: any InboxCursorStoring { get }
+    var setupProgress: any SetupProgressStoring { get }
 }
 
 extension AppRuntime {
@@ -131,6 +153,8 @@ extension AppRuntime {
     public var notifier: any Notifying { SilentNotifier.shared }
     /// A runtime that names no cursor store keeps the cursor in memory.
     public var inboxCursor: any InboxCursorStoring { InMemoryInboxCursor.shared }
+    /// A runtime that names no setup store keeps the choice in memory.
+    public var setupProgress: any SetupProgressStoring { InMemorySetupProgress.shared }
 }
 
 /// The notifier that posts nothing. Permission is never given, so the app's
@@ -159,6 +183,19 @@ public final class InMemoryInboxCursor: InboxCursorStoring, @unchecked Sendable 
     public func save(_ seq: Int) throws { lock.withLock { stored = seq } }
 }
 
+/// A setup choice kept in memory: gone when the app quits.
+public final class InMemorySetupProgress: SetupProgressStoring, @unchecked Sendable {
+    public static let shared = InMemorySetupProgress()
+
+    private let lock = NSLock()
+    private var stored = SetupChoice.notChosen
+
+    public init() {}
+
+    public func load() -> SetupChoice { lock.withLock { stored } }
+    public func save(_ choice: SetupChoice) throws { lock.withLock { stored = choice } }
+}
+
 /// The runtime where the services are not built: every service reports
 /// that it is not started, and no session is kept.
 public struct UnavailableRuntime: AppRuntime {
@@ -169,6 +206,7 @@ public struct UnavailableRuntime: AppRuntime {
     public let sessions: any SessionStoring = NoSessionStore()
     public let notifier: any Notifying = SilentNotifier()
     public let inboxCursor: any InboxCursorStoring = InMemoryInboxCursor()
+    public let setupProgress: any SetupProgressStoring = InMemorySetupProgress()
 }
 
 private final class UnavailableServer: ServerSupervising {

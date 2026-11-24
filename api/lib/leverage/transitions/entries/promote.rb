@@ -2,7 +2,7 @@ module Leverage
   module Transitions
     module Entries
       # promote (PRD Lifecycle L78; milestone 3 plan HE-24): the owner moves
-      # an idea from the Imaginarium to the Backlog; task.promoted is
+      # an idea from Ideas to the Backlog; task.promoted is
       # written, which closes the idea step and opens the contract's. Every
       # other state has no row: invalid_state. A hold does not stop it, as
       # it stops only a seat's work (L174).

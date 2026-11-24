@@ -217,7 +217,7 @@ module Leverage
     # --- what each event does -------------------------------------------
 
     def created(event)
-      kind = event.payload&.fetch("state", nil) == "imaginarium" ? "idea" : "wait_contract"
+      kind = StoredEvents.task_state(event.payload&.fetch("state", nil)) == "ideas" ? "idea" : "wait_contract"
       step(kind, round: event.round || 0)
     end
 

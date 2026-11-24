@@ -126,7 +126,7 @@ class StateTableTest < ActiveSupport::TestCase
   # acknowledged briefing, every criterion passed).
   def prepare(command, from, valid:, guard: [])
     case command
-    when "add_task" then [ @owner, add_task_params(guard.include?("adds_to_imaginarium") ? "imaginarium" : "backlog"), nil ]
+    when "add_task" then [ @owner, add_task_params(guard.include?("adds_to_ideas") ? "ideas" : "backlog"), nil ]
     when "complete_contract" then [ @owner, contract_params(task_in(from)), task_in(from) ]
     when "cancel" then [ @owner, { "id" => task_in(from).id }, task_in(from) ]
     when "allow_another_round"
