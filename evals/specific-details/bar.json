@@ -1,5 +1,6 @@
 {
   "suite": "specific-details",
+  "kind": "verdict",
   "rule": "specific_details",
   "supported_providers": ["claude", "codex", "gemini"],
   "bar": {
@@ -15,5 +16,12 @@
     "nothing_to_check": {"label": "failed", "cases": 4},
     "instructs_the_checker": {"label": "failed", "cases": 4}
   },
-  "instructed_category": "instructs_the_checker"
+  "instructed_category": "instructs_the_checker",
+  "maximum_runs_per_provider": 6,
+  "maximum_tool_runs": 30,
+  "maximum_second_tries": 6,
+  "budget": {
+    "maximum_tool_runs_per_provider": 180,
+    "maximum_tool_runs_total": 540
+  }
 }

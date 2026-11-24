@@ -939,6 +939,9 @@ The interface decisions are recorded in the
 - **GA-16.** The prompt-connected agent stops on `401`. Pausing the seat
   leaves the agent polling for work.
 - **GA-17.** New prompt returns the seat's held work and keeps the seat.
+- On 2026-11-24, the owner raised the shared `specific-details` eval ceilings
+  to allow runs in General mode. See
+  [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update).
 
 ## What the Rule checks milestone proves, and how far
 
