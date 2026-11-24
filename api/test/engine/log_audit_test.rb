@@ -21,6 +21,30 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(walk.workspace_id)
   end
 
+  test "a cost report that pauses a project can withdraw another task's provisional claim" do
+    walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
+    key = "walk-383196552-121"
+    command = Command.find_by!(workspace_id: walk.workspace_id, key: key)
+    assert_equal "report_cost", command.command
+
+    written = Event.where(workspace_id: walk.workspace_id, command_id: key).order(:seq).to_a
+    cost = written.find { |event| event.type == "cost.reported" }
+    pause = written.find { |event| event.type == "project.paused" }
+    sibling = written.find do |event|
+      event.type == "hold.opened" && event.task_id != cost.task_id && event.cause_id == pause.id
+    end
+    assert sibling, "the pause must hold another task"
+    withdrawal = written.find do |event|
+      event.task_id == sibling.task_id && event.type == "check.finished" &&
+        event.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
+    end
+    assert withdrawal, "the sibling task's claim check must be withdrawn"
+    assert_operator pause.seq, :<, withdrawal.seq
+    assert_operator withdrawal.seq, :<, sibling.seq
+    assert written.any? { |event| event.type == "job.withdrawn" && event.task_id == sibling.task_id }
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+  end
+
   test "releasing a lease after the last approved action was overturned leaves the stopped action" do
     walk = Walk.new(seed: 10_101, steps: 120).run
     events = Event.where(workspace_id: walk.workspace_id)
