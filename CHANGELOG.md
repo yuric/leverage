@@ -10,6 +10,10 @@ once it makes its first release.
 
 ### Added
 
+- Every workspace has an Imaginarium project, where tasks from the coming
+  prompt gallery will go. A new installation gets it at setup, and an
+  existing one gets it once when the updated app starts its server. The
+  side pane lists it first among the projects, on a faint rainbow tint.
 - Connect defaults to General. A General agent can build, review, draft
   contracts, check tasks, answer questions and decide approvals, one job,
   task or review at a time. A running seat the app manages restarts when
