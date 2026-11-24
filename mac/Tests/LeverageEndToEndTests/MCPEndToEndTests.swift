@@ -68,7 +68,7 @@ struct MCPEndToEndTests {
         let tools = ((catalog["result"] as? [String: Any])?["tools"] as? [[String: Any]]) ?? []
         let names = tools.compactMap { $0["name"] as? String }
         let expected = AgentTools.all.filter { $0.roles.contains(.builder) }.map(\.id)
-        #expect(names.count == 16 && Set(names) == Set(expected))
+        #expect(names.sorted() == expected.sorted())
 
         let join = try session.call("get_join")
         #expect(join.body["connection"] as? String == "mcp")
