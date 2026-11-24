@@ -45,7 +45,8 @@ module Leverage
   # "Account signed out" item a sign-out opens on another task's
   # credential_limit hold (HE-11, OTHER_TASK), and the provider rule's
   # applied rows review claim-next writes on the tasks of the reviews it
-  # skips (RC-50, RD-12; OTHER_TASK_OF).
+  # skips (RC-50, RD-12; OTHER_TASK_OF). A project pause holds its other
+  # tasks and withdraws their provisional claims before opening those holds.
   #
   # Milestone 4 (its plan RE-3, RT-4):
   #
@@ -461,8 +462,28 @@ module Leverage
     end
 
     def cross_task_side_event?(event, events)
-      event.type == "hold.opened" && event.payload["reason"] == "project_paused" && events.any? do |pause|
-        pause.type == "project.paused" && pause.project_id == event.project_id && pause.id == event.cause_id
+      return project_pause_hold?(event, events) if event.type == "hold.opened"
+
+      withdrawal = event
+      if event.type == "job.withdrawn"
+        job = Job.find_by(id: event.subject_id, workspace_id: event.workspace_id, task_id: event.task_id, target_kind: "rule_check")
+        withdrawal = job && events.find do |check|
+          check.type == "check.finished" && check.subject_id == job.target_id && check.task_id == event.task_id &&
+            check.project_id == event.project_id && check.seq < event.seq
+        end
+      end
+      return false unless withdrawal&.type == "check.finished" &&
+        withdrawal.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
+
+      events.any? do |hold|
+        hold.task_id == event.task_id && hold.project_id == event.project_id && event.seq < hold.seq &&
+          project_pause_hold?(hold, events, before: withdrawal.seq)
+      end
+    end
+
+    def project_pause_hold?(hold, events, before: hold.seq)
+      hold.type == "hold.opened" && hold.payload["reason"] == "project_paused" && events.any? do |pause|
+        pause.type == "project.paused" && pause.project_id == hold.project_id && pause.id == hold.cause_id && pause.seq < before
       end
     end
 
