@@ -186,6 +186,17 @@ class BoardReadTest < CommittingTestCase
     assert_equal false, page(task)["reviewer_seat_exists"]
   end
 
+  test "a General run on Gemini cannot review while a later login is available" do
+    gemini = scenario.credential(provider: "gemini", position: 1)
+    scenario.credential(provider: "codex", position: 2)
+    scenario.seat(role: "general", credential: gemini)
+    task = scenario.task(state: "in_review")
+
+    assert_equal false, card(task)["reviewer_seat_exists"]
+    assert_equal false, page(task)["reviewer_seat_exists"]
+    assert_nil card(task)["waiting_for_credential_id"]
+  end
+
   def account_wait(read)
     [ read.fetch("waiting_for_credential_id"), read["waiting_until"] && Time.iso8601(read["waiting_until"]) ]
   end
