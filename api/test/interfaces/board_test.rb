@@ -148,6 +148,21 @@ class BoardReadTest < CommittingTestCase
     assert_nil page(task)["waiting_for_credential_id"]
   end
 
+  test "a General seat barred by the provider rule does not hide an eligible reviewer's login wait" do
+    scenario.with_shipped_rules
+    builder = scenario.seat(role: "builder", provider: "claude")
+    login = scenario.credential(provider: "codex")
+    scenario.seat(role: "reviewer", credential: login)
+    scenario.seat(role: "general", provider: "claude")
+    reset = scenario.database_now.change(usec: 0) + 1.hour
+    scenario.limit_credential(login, reset_at: reset)
+    task = scenario.task(state: "in_review", builder: builder)
+
+    assert_equal true, card(task)["reviewer_seat_exists"]
+    assert_equal [ login.id, reset ], account_wait(card(task))
+    assert_equal [ login.id, reset ], account_wait(page(task))
+  end
+
   test "a General builder cannot hide another General reviewer's limited login" do
     builder = scenario.seat(role: "general")
     limited = scenario.credential(provider: "codex")
