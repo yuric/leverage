@@ -2,7 +2,7 @@ require "test_helper"
 require_relative "../engine/entries/jobs_support"
 
 # Exercise the engine entry points shared by the HTTP interfaces.
-class GeneralAgentsTest < ActiveSupport::TestCase
+class GeneralAgentsTest < CommittingTestCase
   include JobsSupport
 
   setup do
@@ -34,6 +34,20 @@ class GeneralAgentsTest < ActiveSupport::TestCase
     assert InboxItem.exists?(workspace_id: scenario.workspace_id, about_id: task.id,
       kind: "no_reviewer_eligible", state: "open")
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
+  end
+
+  test "turning off the provider rule still warns if the lone General reviewer built the task" do
+    task = from_form
+    assert_completed(owner_command("remove_seat", { "id" => @codex.id }))
+    build(task, @claude)
+    rule = Rule.find_by!(workspace_id: scenario.workspace_id, key: "different_provider_review")
+    item = InboxItem.find_by!(about_id: task.id, kind: "no_reviewer_eligible", state: "open")
+
+    assert_completed(owner_command("disable_rule", { "id" => rule.id }))
+
+    assert_equal "resolved", item.reload.state
+    assert_equal "in_review", task.reload.state
+    assert_equal false, Leverage::Reads::TaskPage.call(scenario.workspace_id, task.id).fetch(:reviewer_seat_exists)
   end
 
   private

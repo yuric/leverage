@@ -851,9 +851,20 @@ struct RosterModelTests {
         #expect(untested.roleLine == "General. Connected by prompt.")
         #expect(untested.notTestedNote == note)
         let tested = RosterRow(seat: seat, loginName: nil, doing: nil, now: now, generalTestedProviders: [seat.provider])
-        #expect(tested.notTestedNote == nil)
+        #expect(tested.notTestedNote == note)
         let registry = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
-        #expect(registry.notTestedNote == (ContractLists.generalTestedProviders.contains(seat.provider) ? nil : note))
+        #expect(registry.notTestedNote == note)
+
+        for model in [nil, "custom-model"] as [String?] {
+            let native = Fixtures.seat(
+                orchestratorID, name: "General agent", role: .general, credential: Fixtures.loginID, model: model)
+            let covered = RosterRow(seat: native, loginName: nil, doing: nil, now: now,
+                                    generalTestedProviders: [native.provider])
+            #expect(covered.notTestedNote == (model == nil ? nil : note))
+            let uncovered = RosterRow(seat: native, loginName: nil, doing: nil, now: now,
+                                      generalTestedProviders: [.codex])
+            #expect(uncovered.notTestedNote == note)
+        }
     }
 
     @Test("a planner's row says Planner, like the roster says every other role")

@@ -565,10 +565,22 @@ struct BoardModelTests {
         #expect(titles(model, in: .backlog) == ["Draft the copy"])
     }
 
+    @Test("the board respects a task-specific reviewer warning even when the workspace has reviewers")
+    func taskSpecificReviewerNote() async throws {
+        let review = Fixtures.boardTask(.inReview, builder: Fixtures.builderID)
+        let data = try JSONEncoder().encode(review)
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json["reviewer_seat_exists"] = false
+        let blocked = try JSONDecoder().decode(BoardTask.self, from: JSONSerialization.data(withJSONObject: json))
+
+        #expect(await card(blocked, reviewer: true)?.note == "No connected agent can review this task. Connect one in Agents.")
+        #expect(await card(review, reviewer: true)?.note == nil)
+    }
+
     @Test("a task in review with no reviewer agent connected says so on its card, and only then")
     func noReviewerNote() async {
         let without = await card(Fixtures.boardTask(.inReview, builder: Fixtures.builderID), reviewer: false)
-        #expect(without?.note == "No reviewer agent is connected. Connect one in Agents.")
+        #expect(without?.note == "No connected agent can review this task. Connect one in Agents.")
         let with = await card(Fixtures.boardTask(.inReview, builder: Fixtures.builderID), reviewer: true)
         #expect(with?.note == nil)
         let ready = await card(Fixtures.boardTask(.ready), reviewer: false)

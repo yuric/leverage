@@ -68,6 +68,35 @@ struct PromptsAndAnswersTests {
         }
     }
 
+    @Test("the runner gives General build, rule retry and review prompts their briefing instructions")
+    func generalWorkRules() throws {
+        let fixture = Fixture.briefing(hash: "h", criteria: contract)
+        let briefing = Briefing(
+            hash: fixture.hash, versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1),
+            roleFile: nil, contract: fixture.contract)
+        let data = try JSONEncoder().encode(briefing)
+        let original = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        func briefingWithRules(_ rules: [String]) throws -> Briefing {
+            var json = original
+            json["work_rules"] = rules
+            return try JSONDecoder().decode(Briefing.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+
+        let folder = URL(fileURLWithPath: "/work/t")
+        let gate = "Leverage gates only what goes through it."
+        let buildRule = "Wait for Leverage to approve an outward action before publishing, paying, sending or deleting. Carry out only what the approval covers."
+        let build = try briefingWithRules([gate, buildRule])
+        let builder = Prompts.builder(number: 1, criterion: contract[0], briefing: build, reviewNotes: [], folder: folder)
+        let retry = BuilderFlow.rulePrompt(ruleName: "Check the price", reason: "The figures are old.", briefing: build, folder: folder)
+        let reviewRule = "Change nothing, inside or outside the work folder. Take no outward action."
+        let review = try briefingWithRules([gate, reviewRule])
+        let reviewer = Prompts.reviewer(briefing: review, folder: folder)
+        for (prompt, rule) in [(builder, buildRule), (retry, buildRule), (reviewer, reviewRule)] {
+            #expect(prompt.contains("\n" + gate + "\n" + rule))
+            #expect(!prompt.contains("Your role:"))
+        }
+    }
+
     @Test("quoted material cannot carry a marker line")
     func neutralised() {
         let briefing = Fixture.briefing(

@@ -108,12 +108,13 @@ class GeneralRoleRevisionContractTest < Minitest::Test
   def test_an_errored_check_is_queued_again_only_when_a_counting_seat_could_claim_it
     side = row("orchestrator_offline")["side_events"]
     queued = side.find { |entry| entry["event"] == "check.queued" }
-    assert_includes queued["note"], "only when a seat that counts as present #{COULD_CLAIM}"
+    assert_includes queued["note"], "only when a seat that counts as present is eligible for the new attempt regardless of queue order"
     assert_includes queued["note"], "stays in its error"
+    assert_includes side.find { |entry| entry["event"] == "hold.closed" }["note"], "closes when the role is back"
     item = side.select { |entry| entry["event"] == "inbox.opened" }.map { |entry| entry["note"] }
     assert(item.any? { |note| note.include?("Check could not run") && note.include?("stays in its error") },
       "an errored check left in its error gets its owner item")
-    assert_includes decision("GA-6").gsub(/\s+/, " "), "only when a seat that counts as present #{COULD_CLAIM}"
+    assert_includes decision("GA-6").gsub(/\s+/, " "), "only when a seat that counts as present is eligible for the new attempt regardless of queue order"
   end
 
   # GA-1 (S4, round 4 T3): escalation reads the standing part of the claim

@@ -112,11 +112,16 @@ struct ConnectAgentModelTests {
         #expect(AgentsCopy.modeOwn.text == "Prompt: paste into any agent")
         #expect(AgentsCopy.stateConnectsOnItsOwn.text == "Connected by prompt.")
         #expect(AgentsCopy.newPrompt.text == "New prompt")
-        #expect(AgentsCopy.landingNote.text.contains("contains the agent’s key"))
-        #expect(AgentsCopy.landingNote.text.contains("stops the old agent and gives back its work"))
+        #expect(AgentsCopy.landingNote.text.contains("contains the agent’s token"))
     }
 
-    @Test("the General note is based on General eval coverage for the selected provider")
+    @Test("the shown landing prompt has paste instructions without the replacement confirmation")
+    func shownPromptCopy() {
+        #expect(AgentsCopy.landingNote.text.hasPrefix("Paste this into the agent."))
+        #expect(!AgentsCopy.landingNote.text.contains("gives back its work"))
+    }
+
+    @Test("the General note covers only app-run default models on tested providers")
     func generalCoverage() async {
         let model = ConnectAgentModel(
             api: owner(), copy: { _ in }, onConnected: {},
@@ -125,11 +130,15 @@ struct ConnectAgentModelTests {
         model.role = .general
         #expect(model.chosenProvider == .claude)
         #expect(!model.showsNotTestedNote)
+        model.modelName = "custom-model"
+        #expect(model.showsNotTestedNote)
+        model.modelName = ""
+        #expect(!model.showsNotTestedNote)
         model.credentialID = Fixtures.secondLoginID
         #expect(model.showsNotTestedNote)
         model.mode = .connectsOnItsOwn
         model.provider = .claude
-        #expect(!model.showsNotTestedNote)
+        #expect(model.showsNotTestedNote)
         model.provider = .codex
         #expect(model.showsNotTestedNote)
     }

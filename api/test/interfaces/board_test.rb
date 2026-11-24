@@ -110,6 +110,71 @@ class BoardReadTest < CommittingTestCase
     end
   end
 
+  test "the board and task page flag only the review with no independent General seat" do
+    first = scenario.seat(role: "general", provider: "claude")
+    second = scenario.seat(role: "general", provider: "codex")
+    blocked = scenario.task(state: "in_review", builder: first)
+    scenario.append("task.claimed", task: blocked, actor_kind: "seat", actor_id: second.id,
+      payload: { seat_id: second.id, credential_id: nil, model: second.model })
+    reviewable = scenario.task(state: "in_review", builder: first)
+
+    assert_equal true, board["reviewer_seat_exists"], "the workspace has reviewer seats"
+    assert_equal false, card(blocked)["reviewer_seat_exists"]
+    assert_equal false, page(blocked)["reviewer_seat_exists"]
+    assert_equal true, card(reviewable)["reviewer_seat_exists"]
+    assert_equal true, page(reviewable)["reviewer_seat_exists"]
+  end
+
+  test "a General-only Ready task names the limited login it waits for" do
+    limited = scenario.credential
+    scenario.seat(role: "general", credential: limited)
+    reset = scenario.database_now.change(usec: 0) + 1.hour
+    scenario.limit_credential(limited, reset_at: reset)
+    task = scenario.task(state: "ready")
+    scenario.append("task.released", task: task, payload: { reason: "unable_to_continue", wait_cause: "credential_limit" })
+
+    assert_equal [ limited.id, reset ], account_wait(card(task))
+    assert_equal [ limited.id, reset ], account_wait(page(task))
+  end
+
+  test "an eligible General seat that connects on its own removes a mixed workspace account wait" do
+    limited = scenario.credential
+    scenario.seat(role: "reviewer", credential: limited)
+    scenario.limit_credential(limited, reset_at: scenario.database_now + 1.hour)
+    scenario.seat(role: "general", provider: "codex")
+    task = scenario.task(state: "in_review")
+
+    assert_nil card(task)["waiting_for_credential_id"]
+    assert_nil page(task)["waiting_for_credential_id"]
+  end
+
+  test "a General builder cannot hide another General reviewer's limited login" do
+    builder = scenario.seat(role: "general")
+    limited = scenario.credential(provider: "codex")
+    scenario.seat(role: "general", credential: limited)
+    reset = scenario.database_now.change(usec: 0) + 1.hour
+    scenario.limit_credential(limited, reset_at: reset)
+    task = scenario.task(state: "in_review", builder: builder)
+
+    assert_equal [ limited.id, reset ], account_wait(card(task))
+    assert_equal [ limited.id, reset ], account_wait(page(task))
+  end
+
+  test "a General seat's signed-out Gemini login cannot become a review account wait" do
+    gemini = scenario.credential(provider: "gemini")
+    scenario.seat(role: "general", credential: gemini)
+    gemini.update_columns(state: "signed_out")
+    task = scenario.task(state: "in_review")
+
+    assert_nil card(task)["waiting_for_credential_id"]
+    assert_nil page(task)["waiting_for_credential_id"]
+    assert_equal false, page(task)["reviewer_seat_exists"]
+  end
+
+  def account_wait(read)
+    [ read.fetch("waiting_for_credential_id"), read["waiting_until"] && Time.iso8601(read["waiting_until"]) ]
+  end
+
   test "a card waits for a stronger agent when the task is Ready and has a minimum strength rank" do
     ready = scenario.task(state: "ready")
     escalated = scenario.task(state: "ready")
