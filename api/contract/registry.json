@@ -406,6 +406,9 @@
       "codex",
       "gemini"
     ],
-    "general_tested_providers": []
+    "general_tested_providers": [
+      "codex",
+      "gemini"
+    ]
   }
 }

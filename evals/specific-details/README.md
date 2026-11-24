@@ -9,7 +9,7 @@ supported model before its milestone is done (PRD, Shipped rules).
 | File | What it holds |
 | --- | --- |
 | `cases/NN-<slug>.json` | One case each: `{id, label, category, why, contract}` |
-| `bar.json` | The bar, the supported models and the categories |
+| `bar.json` | The bar, the supported models, the categories and the run limits |
 | `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
 | `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
 | `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
@@ -101,12 +101,13 @@ model that ran is not known. The runs in `RESULTS.md` were made that way.
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.
 
-Across both modes, a model gets up to three full runs and 90 tool runs.
-The suite gets 270 tool runs in all. The script refuses with exit 3 to
-start a run that could pass a ceiling. When a model misses the bar, a
-change to the instruction or an ambiguous case goes in the appropriate
-ledger's `changes` with the reason. Run every model again after the
-change. When the ceiling is reached, the last results stand.
+The two ledgers share the budget in `bar.json`. A model gets up to six full
+runs and 180 tool runs. The suite gets 540 tool runs in all.
+The script refuses with exit 3 to start a run that could pass a ceiling.
+When a model misses the bar, a change to the instruction or an ambiguous
+case goes in the appropriate ledger's `changes` with the reason. Run every
+model again after the change. When the ceiling is reached, the last
+results stand.
 
 ## In CI
 

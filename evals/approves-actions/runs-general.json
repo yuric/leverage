@@ -1,0 +1,25 @@
+{
+  "runs": [
+    {
+      "provider": "codex",
+      "date": "2026-11-24",
+      "tool_runs": 30,
+      "mode": "general",
+      "role_file_sha256": null,
+      "instruction_sha256": "03bacc9c7231b0ae428ca8a6b600547955f70430e44797a6a75f631a268df63c",
+      "cases_sha256": "4f625ed8ca7bdf329e51210eae4d4ffe722584914c1b6dc58837610568715579",
+      "reserved": false
+    },
+    {
+      "provider": "gemini",
+      "date": "2026-11-24",
+      "tool_runs": 30,
+      "mode": "general",
+      "role_file_sha256": null,
+      "instruction_sha256": "03bacc9c7231b0ae428ca8a6b600547955f70430e44797a6a75f631a268df63c",
+      "cases_sha256": "4f625ed8ca7bdf329e51210eae4d4ffe722584914c1b6dc58837610568715579",
+      "reserved": false
+    }
+  ],
+  "changes": []
+}
