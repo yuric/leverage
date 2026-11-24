@@ -42,7 +42,7 @@ public enum EnvironmentKeys {
     /// The limit of one tool run, in seconds; the default is 1800.
     public static let toolTimeoutSeconds = "LEVERAGE_TOOL_TIMEOUT_SECONDS"
     /// Set to `1` only by `scripts/real_provider_run.sh`: lets the runner
-    /// start Claude or Codex with no account folder of leverage's own.
+    /// start Claude or Codex with no account folder of Leverage's own.
     public static let devToolLogin = "LEVERAGE_DEV_TOOL_LOGIN"
     /// The credential this run is on. Absent for a seat that connects on
     /// its own, and then nothing is detected (plan HM-19).

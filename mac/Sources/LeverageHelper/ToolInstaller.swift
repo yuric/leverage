@@ -69,7 +69,7 @@ struct ToolInstaller: Sendable {
     }
 
     /// The installer script's run: its shell, an allow-listed environment
-    /// (no leverage token), standard input closed, and the install limit.
+    /// (no Leverage token), standard input closed, and the install limit.
     func scriptRequest(shell: String, script: URL) -> SubprocessRequest {
         SubprocessRequest(
             executable: shell, arguments: [script.path],

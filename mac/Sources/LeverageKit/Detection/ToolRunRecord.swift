@@ -8,7 +8,7 @@ public struct ToolRunRecord: Equatable, Sendable {
     public let termination: SubprocessTermination
     public let standardOutput: Data
     public let standardError: Data
-    /// Why leverage ended the run, when it did.
+    /// Why Leverage ended the run, when it did.
     public let endedBy: SubprocessEnd?
 
     public init(

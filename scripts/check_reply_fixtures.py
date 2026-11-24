@@ -58,7 +58,7 @@ NAMED_FIELDS = {
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 TOKENS = [
     ("a stand-in token", re.compile(r"LVRG-TOKEN-[0-9a-fA-F]{12}")),
-    ("a leverage token", re.compile(r"(?<![A-Za-z0-9])lv[sho]_[A-Za-z0-9_-]{8,}")),
+    ("a Leverage token", re.compile(r"(?<![A-Za-z0-9])lv[sho]_[A-Za-z0-9_-]{8,}")),
     ("an Anthropic key", re.compile(r"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{6,}")),
     ("an OpenAI key", re.compile(r"(?<![A-Za-z0-9-])sk-(proj-)?[A-Za-z0-9_-]{16,}")),
     ("an xAI key", re.compile(r"(?<![A-Za-z0-9])xai-[A-Za-z0-9_-]{16,}")),

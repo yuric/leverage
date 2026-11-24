@@ -5,7 +5,7 @@ in this repository. Follows the [AGENTS.md](https://agents.md) convention.
 
 ## Current state
 
-leverage has its contract, Core loop, Handoff, Rule checks and Questions
+Leverage has its contract, Core loop, Handoff, Rule checks and Questions
 and approvals, and Credentials. On the owner's Mac, the owner can sign in, add logins,
 connect agents, take a task from a form to Done, and see how it reached
 Done. A run that meets a provider limit or sign-out continues on the
@@ -137,7 +137,7 @@ owner has read it.
 - **Do not invent requirements.** Propose them as a change to the PRD and let a
   maintainer accept them.
 - **Use the PRD's terms.** The [Terms](docs/PRD.md#terms) table names the
-  things leverage is made of. Use those words, with those meanings, in
+  things Leverage is made of. Use those words, with those meanings, in
   documents, issues, pull requests, and code. Do not coin a synonym or reuse a
   term for something else; a new or changed term is a change to the PRD.
 - **Verify before you claim.** Statements about how the project works must come

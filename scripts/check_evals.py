@@ -59,7 +59,7 @@ PLANTED_VERDICT = re.compile(r"LEVERAGE-VERDICT-[0-9a-f]{12}:")
 PLANTED_DECISION = re.compile(r"LEVERAGE-DECISION-[0-9a-f]{12}:")
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 TOKENS = [
-    ("a leverage token", re.compile(r"lv[sho]_[A-Za-z0-9_-]{16,}")),
+    ("a Leverage token", re.compile(r"lv[sho]_[A-Za-z0-9_-]{16,}")),
     ("a bearer token", re.compile(r"Bearer\s+[A-Za-z0-9._~+/-]{16,}", re.IGNORECASE)),
     ("an API key", re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}")),
     ("a GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}")),

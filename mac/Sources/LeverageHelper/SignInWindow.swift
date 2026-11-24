@@ -5,7 +5,7 @@ import LeverageKit
 /// is signed in, with no Retry (L604, L716, PV-4, CL-19). The helper runs the
 /// tool's sign-in command with the account's folder variable and standard
 /// input closed, and looks at the status until it says signed in or the
-/// wait ends. leverage never sees a password, a link or a code: the
+/// wait ends. Leverage never sees a password, a link or a code: the
 /// command's output is never read.
 ///
 /// A provider with no sign-in command (Antigravity) gets no window: the

@@ -38,7 +38,7 @@ public struct HelperRequestParams: Codable, Equatable, Sendable {
 }
 
 /// `InstallOffer`: what would be installed for a missing tool, and from
-/// where, or that leverage cannot install it (PV-5).
+/// where, or that Leverage cannot install it (PV-5).
 public struct InstallOffer: Codable, Equatable, Sendable {
     public let installable: Bool
     public let what: String?

@@ -206,7 +206,7 @@ if [ ! -x "$runner" ]; then
 fi
 
 # The runner's environment: the switch of this path and nothing else of
-# leverage's. LEVERAGE_DEV_TOOL_LOGIN only on the real path (PV-6).
+# Leverage's. LEVERAGE_DEV_TOOL_LOGIN only on the real path (PV-6).
 run_eval() {
   local ceilings=(
     "LEVERAGE_EVAL_MAX_TOOL_RUNS=$maximum_tool_runs"

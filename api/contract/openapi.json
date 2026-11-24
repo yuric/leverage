@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "leverage interfaces",
+    "title": "Leverage interfaces",
     "version": "1.0.0",
-    "summary": "The agent, owner and helper interfaces of the leverage server.",
+    "summary": "The agent, owner and helper interfaces of the Leverage server.",
     "description": "One server, three interfaces. Agents (tag `agent`) sign in with a seat token, the Mac app (tag `owner`) with a session, and the helper (tag `helper`) with its own token, all as `Authorization: Bearer`. Every call that changes something carries an `Idempotency-Key` header and answers one outcome body: 200 completed, 202 pending, 409 refused. JSON fields are the Data model's column names in snake case. Operations are exactly the registry's `operations`; `x-leverage-caller` and `x-leverage-command` say who may call and which commands of the state table it can run. No subscription login, sign-in token, sign-in link, code or API token appears in any request (Credentials); the only secrets in any response are the four one-time tokens, each returned once by the call that issues it."
   },
   "servers": [
@@ -16645,7 +16645,7 @@
         ],
         "examples": [
           {
-            "text": "You are the builder seat Example of leverage. Read your role file, your briefing and your rules before any work.",
+            "text": "You are the builder seat Example of Leverage. Read your role file, your briefing and your rules before any work.",
             "check_interval_minutes": 20,
             "connection": "http"
           }
@@ -16741,7 +16741,7 @@
       "InstallOffer": {
         "type": "object",
         "additionalProperties": false,
-        "description": "For the tool_installed check of a missing tool: what would be installed and from where, or that leverage cannot install it (milestone 2 plan IN-23, PV-5). `source_url` is an HTTPS address on a host the helper's catalog lists.",
+        "description": "For the tool_installed check of a missing tool: what would be installed and from where, or that Leverage cannot install it (milestone 2 plan IN-23, PV-5). `source_url` is an HTTPS address on a host the helper's catalog lists.",
         "properties": {
           "installable": {
             "type": "boolean"
@@ -16783,7 +16783,7 @@
       "HelperCheckProgress": {
         "type": "object",
         "additionalProperties": false,
-        "description": "One check's state while a request runs (milestone 2 plan IN-23). `failure` is a code, never provider text, and is set only when `state` is `failed`. `install` is set only on tool_installed while it waits for the owner to confirm an install, or when it failed because leverage cannot install the tool.",
+        "description": "One check's state while a request runs (milestone 2 plan IN-23). `failure` is a code, never provider text, and is set only when `state` is `failed`. `install` is set only on tool_installed while it waits for the owner to confirm an install, or when it failed because Leverage cannot install the tool.",
         "properties": {
           "check": {
             "type": "string",

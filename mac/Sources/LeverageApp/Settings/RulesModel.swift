@@ -9,7 +9,7 @@ struct RuleLine: Identifiable, Equatable, Sendable {
     let isOn: Bool
     /// "When a task is ready to start".
     let whenItRuns: String
-    /// "leverage checks this itself" or "An agent checks this".
+    /// "Leverage checks this itself" or "An agent checks this".
     let checkedBy: String
     /// "Stop the task" or "Only note it" on a gate; nil on a policy.
     let ifItFails: String?

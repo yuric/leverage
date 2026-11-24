@@ -364,7 +364,7 @@ public enum ProviderCatalog {
 
     /// Where a provider's tool is looked for, in order (PV-3): only
     /// `toolDir` when it is set (the stand-ins in tests); otherwise where
-    /// leverage installs an archive, then the folders the vendors' installers
+    /// Leverage installs an archive, then the folders the vendors' installers
     /// and package managers use.
     public static func searchFolders(
         for id: String, home: String, supportFolder: String, toolDir: String?
@@ -380,7 +380,7 @@ public enum ProviderCatalog {
     /// tool's own folder, the search folders and `/usr/bin:/bin`; `HOME`,
     /// `TMPDIR`, `LANG` and the entry's own extras come from `parent`; the
     /// account folder variable is set when the entry has one and `accountFolder`
-    /// is given. Nothing else of `parent` passes, so no leverage token does.
+    /// is given. Nothing else of `parent` passes, so no Leverage token does.
     public static func toolEnvironment(
         for entry: ProviderEntry,
         from parent: [String: String],

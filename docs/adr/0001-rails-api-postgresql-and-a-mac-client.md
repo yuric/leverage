@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-leverage lets one owner coordinate AI agents from several providers. The PRD's
+Leverage lets one owner coordinate AI agents from several providers. The PRD's
 open decisions "Stack and hosting" and "Where it runs" recommended one server
 process with PostgreSQL per owner, and no document named a language or a
 framework. Nothing can be built until those are chosen.
@@ -19,7 +19,7 @@ Three facts shaped the choice:
 - The project is open source, so a secret must never be in the repository,
   in a log, in an event, in a test fixture or in a screenshot. Records name a
   credential by its id only.
-- leverage is its own product. It shares no code, usage readers, storage or
+- Leverage is its own product. It shares no code, usage readers, storage or
   credentials with Campus.
 
 The owner made the decisions below on 2026-11-18 and 2026-11-19.
@@ -39,7 +39,7 @@ The owner made the decisions below on 2026-11-18 and 2026-11-19.
    login never leaves the Mac and never reaches the server.
 6. The backend and the Mac app live in separate top-level directories of this
    repository, `api/` and `mac/`.
-7. leverage is not Campus. Nothing is shared with Campus: no code, no usage
+7. Leverage is not Campus. Nothing is shared with Campus: no code, no usage
    readers, no storage, no credentials.
 8. The Mac app is a native app, written in Swift with SwiftUI.
 9. The backend is shipped as a container image. For the first run the backend

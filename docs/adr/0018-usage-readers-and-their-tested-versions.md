@@ -5,7 +5,7 @@ Status: Accepted
 ## Context
 
 Provider tools and account APIs can change the shape of a usage reply
-independently of leverage. A wrong number can show false capacity
+independently of Leverage. A wrong number can show false capacity
 or resume work waiting on a limit (CR-2, CR-3, CR-4, CR-8, CR-10,
 CR-12, CR-37, RD-1 to RD-3, RD-7, RD-8).
 

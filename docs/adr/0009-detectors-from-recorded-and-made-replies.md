@@ -28,7 +28,7 @@ the milestone's plan HD-7, HD-8 and HE-32.
    `RunOutcome`: a limit with its window and stated reset time, a short
    rate limit, signed out, or failed. They read a run only when it failed,
    in one order: sign-out, then limit, then short rate limit, then
-   failure. A run leverage itself ended is always a failure.
+   failure. A run Leverage itself ended is always a failure.
 2. **What a limit is.** A refused run whose reply names one of the four
    windows, in a structured field where the tool gives one, else by the
    fixed words of `LimitWindowWords` next to the word "limit" or "quota". A

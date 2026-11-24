@@ -754,7 +754,7 @@ struct TaskPageModelTests {
         let (model, _, _) = await loaded(Fixtures.checkedPage(Fixtures.summary(.working, id: taskID), checks: checks))
         let rows = try exactly(model.checks, 5)
         #expect(rows.map(\.isGreyed) == [true, true, true, false, false])
-        #expect(rows[2].checkerText == "leverage checks this itself")
+        #expect(rows[2].checkerText == "Leverage checks this itself")
         #expect(rows[2].onFailText == nil)
         #expect(rows[4].resultText == "Did not pass")
         #expect(rows[4].onFailText == "Only note it")

@@ -5,7 +5,7 @@ require "rack"
 # application/json, whatever its method and path (PRD, Security: no secret
 # appears in a log).
 #
-# Every leverage call that has a body takes JSON (openapi.json), and the
+# Every Leverage call that has a body takes JSON (openapi.json), and the
 # controllers read the raw body. Rails, though, parses a body with a form
 # media type, or with none, into params, and ActionController's
 # "Parameters:" log line prints them; parameter filtering hides values,

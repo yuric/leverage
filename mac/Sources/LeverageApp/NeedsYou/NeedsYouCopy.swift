@@ -56,13 +56,13 @@ enum NeedsYouCopy: OwnerFacingCopy {
             "{task} stopped because {account} is signed out and no other account can take over. Sign in again to continue."
         case .signInAgain: "Sign in again"
         case .signInWaiting: "Waiting for you to sign in in the window that opened"
-        case .signInWaitingGemini: "Sign in to Antigravity on this Mac. leverage continues on its own."
+        case .signInWaitingGemini: "Sign in to Antigravity on this Mac. Leverage continues on its own."
 
         case .limitHeading: "{account} is at its limit"
         case .limitBody:
             "{task} is waiting. {provider} did not say when {account} is available again. When it is, choose Verify on {account} in Credentials and the task continues."
         case .limitBodyAutomatic:
-            "{task} is waiting. {provider} did not say when {account} is available again. leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."
+            "{task} is waiting. {provider} did not say when {account} is available again. Leverage looks every 10 minutes and continues by itself when it is. You can also choose Verify on {account} in Credentials."
 
         case .sentBackHeading: "{task} was sent back {count} times"
         case .sentBackBody: "It is paused until you choose what happens next."
@@ -162,7 +162,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .detailsUnavailable: "The details could not be read."
 
         case .notificationsOff:
-            "Notifications are off for leverage. Turn them on in System Settings to be told when something needs you."
+            "Notifications are off for Leverage. Turn them on in System Settings to be told when something needs you."
         case .settledBeforeYouSaw: "This was settled before you saw it."
         case .kindSignedOut: "Account signed out"
         case .kindLimit: "Limit with no reset time"

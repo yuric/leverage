@@ -31,12 +31,12 @@ enum RulesCopy: OwnerFacingCopy {
     var text: String {
         switch self {
         case .title: "Rules"
-        case .hint: "What leverage checks, and when. A change applies to what is asked after you save it."
+        case .hint: "What Leverage checks, and when. A change applies to what is asked after you save it."
         case .loading: "Loading the rules…"
         case .empty: "There are no rules yet."
         case .addRule: "Add a rule"
         case .change: "Change"
-        case .comesWithLeverage: "Comes with leverage"
+        case .comesWithLeverage: "Comes with Leverage"
         case .addedByYou: "Added by you"
 
         case .whenItRuns: "When it runs"
@@ -55,7 +55,7 @@ enum RulesCopy: OwnerFacingCopy {
         case .scopeActionKindsList: "Tasks that end in {name}"
         case .scopeNoProjects: "There are no projects to choose."
         case .scopeUnlistedProject: "Project no longer listed"
-        case .checkerApp: "leverage checks this itself"
+        case .checkerApp: "Leverage checks this itself"
         case .checkerModel: "An agent checks this"
         case .onFailBlock: "Stop the task"
         case .onFailWarn: "Only note it"

@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-The PRD's Contract milestone asks that what the parts of leverage share be
+The PRD's Contract milestone asks that what the parts of Leverage share be
 written down and reviewed before any part is built: the tables of the Data
 model, the fixed lists with the event payloads, the state, step, hook, job,
 role and timer tables, the agent, owner and helper interfaces, the gating

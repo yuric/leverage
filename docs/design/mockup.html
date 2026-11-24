@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>leverage mockups</title>
+<title>Leverage mockups</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14.4' fill='%230A63E0'/%3E%3Cpath d='M8 30 56 46' stroke='%23fff' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M21 38 29 53H13z' fill='%23fff'/%3E%3Crect x='9' y='13' width='14' height='12' rx='2.5' fill='%23fff' transform='rotate(18.4 16 25)'/%3E%3Cpath d='M44 24l5.5 6 5.5-6' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <!--
-  leverage app mockups, as one self-contained page.
+  Leverage app mockups, as one self-contained page.
 
   How this file is laid out, top to bottom:
     1. DESIGN TOKENS   the colors, glass, radii and type sizes. Change a value here and
@@ -340,7 +340,7 @@ figure.ix-art { margin: 0; }
 <body>
 
 <div class="ix-bar" role="toolbar" aria-label="Mockup inspector">
-  <span class="ix-title">leverage mockups</span>
+  <span class="ix-title">Leverage mockups</span>
   <div class="ix-group"><span>View</span>
     <div class="ix-seg" data-set="view"><button type="button" data-val="one">One screen</button><button type="button" data-val="all">All five</button></div>
   </div>
@@ -484,7 +484,7 @@ figure.ix-art { margin: 0; }
      a white beam on a fulcrum set close to the weight, the weight on the short raised
      end, and a small mark over the long end: push here, lift there. */
   function appIcon(size, id) {
-    return '<svg class="lv-appicon" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="leverage app icon">' +
+    return '<svg class="lv-appicon" width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="Leverage app icon">' +
       '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.3"></stop><stop offset="1" stop-color="#000" stop-opacity="0.12"></stop></linearGradient></defs>' +
       '<rect width="64" height="64" rx="14.4" style="fill: var(--primary)"></rect><rect width="64" height="64" rx="14.4" fill="url(#' + id + ')"></rect>' +
       '<path d="M8 30 56 46" stroke="#fff" stroke-width="7" stroke-linecap="round"></path>' +
@@ -692,7 +692,7 @@ figure.ix-art { margin: 0; }
       var page = s.tab === 'board' ? boardHtml(n) : s.tab === 'needs' ? needsHtml(n) : s.tab === 'creds' ? credsHtml(n) : s.tab === 'handoff' ? handoffHtml(n) : listHtml(n);
       view.innerHTML = '<div class="lv-frame"><div class="lv-window"' + (s.sheet !== 'none' ? ' inert' : '') + '>' +
         '<aside class="lv-side"><div class="lv-dots" aria-hidden="true"><span></span><span></span><span></span></div>' +
-        '<div class="lv-brand">' + appIcon(22, uid + '-icon') + '<h1>' + h('leverage') + '</h1></div>' +
+        '<div class="lv-brand">' + appIcon(22, uid + '-icon') + '<h1>' + h('Leverage') + '</h1></div>' +
         '<nav class="lv-nav" aria-label="Sections">' + TAB_IDS.map(function (id) {
           return '<button type="button" class="lv-tab" data-a="tab" data-v="' + id + '" data-k="tab-' + id + '" aria-current="' + (s.tab === id ? 'page' : 'false') + '" title="' + ha(n.tabs[id], 'tab') + '">' +
             NAV_ICONS[id] + '<span class="lv-tab-label">' + h(n.tabs[id], 'tab') + '</span>' +
@@ -1141,7 +1141,7 @@ figure.ix-art { margin: 0; }
       Object.keys(ui.edits).length + (ui.names !== 'prd' ? 1 : 0) + (ui.notes.trim() ? 1 : 0);
   }
   function changesText() {
-    var out = ['leverage mockups: requested changes', ''];
+    var out = ['Leverage mockups: requested changes', ''];
     out.push('Names: ' + (ui.names === 'prd' ? 'PRD terms (no change)' : 'plain names (Accounts, To define, Waiting on you, New task, Coordinator)'));
     var tokenLines = [];
     [['light', 'Light'], ['dark', 'Dark'], ['shared', 'Both']].forEach(function (pair) {

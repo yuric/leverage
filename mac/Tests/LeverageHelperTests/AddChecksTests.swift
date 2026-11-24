@@ -131,7 +131,7 @@ struct AddChecksTests {
         #expect(rig.folders.existing(for: request.credentialID!) == nil)
     }
 
-    @Test("a provider leverage cannot install keeps looking, and goes on when the tool appears")
+    @Test("a provider Leverage cannot install keeps looking, and goes on when the tool appears")
     func noInstallerKeepsLooking() async throws {
         let rig = try HelperRig(emptyToolDir: true)
         let request = addRequest(.grok)
@@ -168,7 +168,7 @@ struct AddChecksTests {
 
     // MARK: What leaves the helper
 
-    @Test("no leverage token reaches a tool, and check progress does not carry account facts or raw status")
+    @Test("no Leverage token reaches a tool, and check progress does not carry account facts or raw status")
     func nothingSecretLeaves() async throws {
         let rig = try HelperRig()
 

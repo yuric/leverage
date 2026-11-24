@@ -1,6 +1,6 @@
 # Design reference
 
-This folder holds the working mockup of the leverage app, which is the design
+This folder holds the working mockup of the Leverage app, which is the design
 reference for the owner-facing screens.
 
 ## The mockup

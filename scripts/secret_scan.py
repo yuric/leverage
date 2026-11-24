@@ -14,7 +14,7 @@ for:
   its three alignments inside a longer encoded text; and also with the
   file's line breaks removed, so a copy wrapped across lines is found
   where it starts;
-- anything shaped like a leverage token: lvs_, lvh_ or lvo_ followed by 16
+- anything shaped like a Leverage token: lvs_, lvh_ or lvo_ followed by 16
   or more URL-safe base64 characters (IN-18). What the redaction leaves,
   `lvs_[removed]`, is not one;
 - a bearer header's value of 16 characters or more, whatever the case of

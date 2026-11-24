@@ -56,7 +56,7 @@ struct HealthLineModelTests {
         #expect(model.tone == .warning)
     }
 
-    @Test("with no server to start again, leverage not answering offers no Try again")
+    @Test("with no server to start again, Leverage not answering offers no Try again")
     func unreachableWithoutServer() async {
         let (model, _, _) = makeModel(health: { throw URLError(.cannotConnectToHost) })
         await model.refresh()
@@ -75,7 +75,7 @@ struct HealthLineModelTests {
         }
     }
 
-    @Test("when leverage does not answer it reads Can't reach leverage on this Mac, and recovers when it does")
+    @Test("when Leverage does not answer it reads Can't reach Leverage on this Mac, and recovers when it does")
     func unreachable() async {
         let answering = Locked(false)
         let (model, _, _) = makeModel(health: {
@@ -84,7 +84,7 @@ struct HealthLineModelTests {
         })
         await model.refresh()
         #expect(model.status == .unreachable)
-        #expect(model.sentence.text == "Can't reach leverage on this Mac")
+        #expect(model.sentence.text == "Can't reach Leverage on this Mac")
         #expect(model.tone == .bad)
 
         answering.value = true
@@ -92,7 +92,7 @@ struct HealthLineModelTests {
         #expect(model.status == .running)
     }
 
-    @Test("when leverage does not answer, Try again asks the server to start again, then reads the line again")
+    @Test("when Leverage does not answer, Try again asks the server to start again, then reads the line again")
     func unreachableTryAgain() async {
         let answering = Locked(false)
         let owner = FakeOwnerAPI()
@@ -130,7 +130,7 @@ struct HealthLineModelTests {
         #expect(down.status == .unreachable)
     }
 
-    @Test("an answer that says the session ended does not say leverage is unreachable")
+    @Test("an answer that says the session ended does not say Leverage is unreachable")
     func signedOutIsNotUnreachable() async {
         let (model, _, _) = makeModel(health: { throw ShellFixtures.unauthenticated() })
         await model.refresh()

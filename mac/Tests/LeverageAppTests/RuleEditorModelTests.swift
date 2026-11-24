@@ -280,7 +280,7 @@ struct RuleEditorModelTests {
         #expect(rig.owner.calls.last?.body == body(expected))
     }
 
-    // MARK: changing a shipped rule that leverage checks itself
+    // MARK: changing a shipped rule that Leverage checks itself
 
     @Test("an app rule shows its numbers and no instruction, scope or name field")
     func appRuleShows() throws {

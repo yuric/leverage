@@ -1,12 +1,12 @@
 # Maintenance policy
 
-What you can expect from the people who maintain leverage, and what they
+What you can expect from the people who maintain Leverage, and what they
 expect from you. It is short on purpose. If it and another document disagree,
 this one describes the intent; please open an issue so the other can be fixed.
 
-## Who maintains leverage
+## Who maintains Leverage
 
-leverage has one maintainer, Yuri ([@yuric](https://github.com/yuric)). There
+Leverage has one maintainer, Yuri ([@yuric](https://github.com/yuric)). There
 is no team, no company support desk, and no on-call rotation.
 
 ## What to expect
@@ -14,7 +14,7 @@ is no team, no company support desk, and no on-call rotation.
 - **Responses are best effort.** There is no guaranteed response time for
   issues, pull requests, or questions. Some will be answered the same day and
   some will wait a long while. Silence means "not read yet", not "rejected".
-- **No support is owed.** leverage is provided under the
+- **No support is owed.** Leverage is provided under the
   [MIT License](LICENSE), "as is", without warranty. Help is given when time
   allows, not as an obligation.
 - **Security reports are the exception.** They have response targets, set out
@@ -25,7 +25,7 @@ is no team, no company support desk, and no on-call rotation.
 
 ## Scope
 
-[docs/PRD.md](docs/PRD.md) defines what leverage is, including a list of
+[docs/PRD.md](docs/PRD.md) defines what Leverage is, including a list of
 non-goals. The default answer to anything outside it is no. That is how a
 one-person project stays maintainable, and it is not a judgment of the idea or
 of you.
@@ -53,7 +53,7 @@ best way to avoid work that ends up declined. See
 
 ## How the project is built
 
-leverage is developed largely with AI coding agents, directed and reviewed by
+Leverage is developed largely with AI coding agents, directed and reviewed by
 the maintainer. Agent-authored commits carry a `Co-Authored-By` trailer. Every
 change to `main`, including the maintainer's own, goes through a pull request
 and the automated checks; direct pushes are blocked. Agents follow

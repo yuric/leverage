@@ -11,7 +11,7 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
     case unsupportedRole(String)
     /// Not one of the four logins.
     case unsupportedProvider(String)
-    /// Claude or Codex with no account folder of leverage's own, and the
+    /// Claude or Codex with no account folder of Leverage's own, and the
     /// developer switch not set (PV-6).
     case noAccountFolder(Provider)
     case accountFolderMissing(String)
@@ -34,7 +34,7 @@ enum RunnerConfigurationError: Error, Equatable, CustomStringConvertible {
         case .unsupportedRole(let role): "the role \(role) is not run by this runner"
         case .unsupportedProvider(let provider): "\(provider) is not a login this runner drives"
         case .noAccountFolder(let provider):
-            "\(provider.rawValue) needs the account folder leverage made (\(EnvironmentKeys.settingsDir))"
+            "\(provider.rawValue) needs the account folder Leverage made (\(EnvironmentKeys.settingsDir))"
         case .accountFolderMissing(let path): "the account folder \(path) does not exist"
         case .invalidTimeout(let value): "\(EnvironmentKeys.toolTimeoutSeconds) is not a positive number: \(value)"
         case .reviewerNotOffered(let provider): "\(provider.rawValue) is not offered as a reviewer yet"
@@ -88,7 +88,7 @@ struct ToolConfiguration: Sendable, Equatable {
     let timeoutSeconds: Int
     let supportFolder: String
     let toolDir: String?
-    /// The runner's own environment without any leverage variable: what
+    /// The runner's own environment without any Leverage variable: what
     /// the tool's allow-list takes `HOME`, `TMPDIR`, `LANG` and `USER` from.
     let parentEnvironment: [String: String]
 
