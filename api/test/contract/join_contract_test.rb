@@ -136,6 +136,16 @@ class JoinContractTest < Minitest::Test
       row["conditional_events"].map { |entry| entry.values_at("event", "when") }
     side = row["side_events"].map { |entry| entry["event"] }
     %w[job.timed_out check.finished job.withdrawn hold.closed hold.opened].each { |event| assert_includes side, event }
+    # Round 4 T7: the held job's miss writes its run timer's events and
+    # outcome, so the row lists them: after a first miss a new attempt
+    # (job.requeued, and check.queued for a check), after a second the
+    # kind's last-miss hold.
+    %w[job.requeued check.queued].each { |event| assert_includes side, event }
+    assert_equal %w[action_unconfirmed check_error owner_approval owner_question], row["holds_opened"].sort
+    opened = row["side_events"].select { |entry| entry["event"] == "hold.opened" }.map { |entry| entry["note"] }.join(" ")
+    %w[action_unconfirmed check_error owner_approval owner_question].each { |hold| assert_includes opened, hold }
+    items = row["side_events"].select { |entry| entry["event"] == "inbox.opened" }.map { |entry| entry["note"] }.join(" ")
+    ["Check could not run", "Approval", "Question passed on"].each { |item| assert_includes items, item }
     assert_includes row["note"], "new_prompt"
     assert_includes row["note"], "GA-17"
     refute_includes row["note"], "stays with it"
