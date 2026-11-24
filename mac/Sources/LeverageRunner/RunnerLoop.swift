@@ -62,9 +62,9 @@ struct RunnerTiming: Sendable {
 
 /// What one seat does with each next item. A builder handles its task,
 /// its approved actions and any answer for the task it holds. A reviewer
-/// handles its review. A planner or an orchestrator handles jobs. Any seat
-/// reads the outcome of a command. A stop ends the tool and flow and gives
-/// back the held work (CL-23).
+/// handles its review. A planner or an orchestrator handles jobs. General
+/// can do each of these in the same loop. Any seat reads the outcome of a
+/// command. A stop ends the tool and flow and gives back the held work (CL-23).
 final class RunnerLoop: @unchecked Sendable {
     /// How long a stop waits to give back what the seat holds. The tool is
     /// given 5 seconds to end before it is forced (Subprocess's grace
@@ -135,7 +135,8 @@ final class RunnerLoop: @unchecked Sendable {
     private func loop() async -> RunnerExit {
         let api = context.api
         let builder = BuilderFlow(context: context)
-        let reviewer = ReviewerFlow(context: context)
+        let reviewer = ReviewerFlow(
+            context: context, canRunReview: role != .general || RunnerConfiguration.reviews(context.interruption.provider))
         let jobs = JobFlow(context: context)
         if let continuing {
             let settled = await settle {
@@ -201,10 +202,10 @@ final class RunnerLoop: @unchecked Sendable {
     /// Acts on one item; false when there was nothing to do with it.
     private func act(on item: NextItem, builder: BuilderFlow, reviewer: ReviewerFlow, jobs: JobFlow) async throws
         -> Bool {
-        switch (role, item.kind) {
-        case (_, .none):
+        switch item.kind {
+        case .none:
             return true
-        case (_, .command):
+        case .command:
             // A command of this seat whose outcome changed after the seat
             // stopped waiting on it (a planner's contract, a refused submit
             // the owner let through): reading it once clears the item.
@@ -212,15 +213,15 @@ final class RunnerLoop: @unchecked Sendable {
             let api = context.api
             _ = try await context.read("get_command") { try await api.command(key: key) }
             return true
-        case (.planner, .job), (.orchestrator, .job):
+        case .job where role.actsAs(.planner) || role.actsAs(.orchestrator):
             return try await jobs.claim() != nil
-        case (.builder, .task):
+        case .task where role.actsAs(.builder):
             return try await builder.claim() != nil
-        case (.builder, .action):
+        case .action where role.actsAs(.builder):
             guard let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
             _ = try await FinishingFlow(context: context).continueTask(id)
             return true
-        case (.builder, .answer):
+        case .answer where role.actsAs(.builder):
             // NextItem names only the question. Use the task this runner
             // is holding; a fresh runner never asks a question of its own.
             guard let questionID = item.id.flatMap(UUID.init(uuidString:)),
@@ -230,16 +231,17 @@ final class RunnerLoop: @unchecked Sendable {
                 try await api.getQuestion(taskID: taskID, questionID: questionID)
             }) { return true }
             return false
-        case (.builder, .rework), (.builder, .resume), (.builder, .briefingChanged):
-            guard item.reviewID == nil, let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
+        case .rework, .resume, .briefingChanged:
+            if item.kind == .briefingChanged, role.actsAs(.reviewer), let reviewID = item.reviewID {
+                _ = try await reviewer.continueReview(reviewID)
+                return true
+            }
+            guard role.actsAs(.builder), item.reviewID == nil,
+                  let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
             _ = try await builder.continueTask(id)
             return true
-        case (.reviewer, .review):
+        case .review where role.actsAs(.reviewer):
             return try await reviewer.claim() != nil
-        case (.reviewer, .briefingChanged):
-            guard let reviewID = item.reviewID else { return false }
-            _ = try await reviewer.continueReview(reviewID)
-            return true
         default:
             return false
         }
