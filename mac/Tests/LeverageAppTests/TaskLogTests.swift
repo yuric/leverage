@@ -130,6 +130,8 @@ struct TaskLogTests {
         #expect(released("stopping") == "Builder One was stopped, so the task went back to waiting.")
         #expect(released("seat_disabled") == "Builder One was switched off, so the task went back to waiting.")
         #expect(released("seat_removed") == "Builder One was removed, so the task went back to waiting.")
+        #expect(sentence(event(.taskReleased, actorKind: .owner, payload: ["reason": .string("new_prompt"), "wait_cause": .null]))
+            == "A new prompt was issued, so the task went back to waiting.")
         #expect(Set(ReleaseReason.allCases.map { released($0.rawValue) ?? "" }).count == ReleaseReason.allCases.count)
 
         #expect(sentence(event(.taskLeaseExpired, payload: ["wait_cause": .null]))

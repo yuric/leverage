@@ -59,27 +59,27 @@ struct TaskPageSettingsAgentsRenderSmokeTests {
         #expect(AgentFixtures.draws(RuleEditorSheet(model: editor, cancel: {}).environment(\.colorScheme, .dark)))
     }
 
-    @Test("The connection picker, MCP setup and Change strength sheet draw")
+    @Test("The connection picker, landing prompt and Change strength sheet draw")
     func agents() async {
         let owner = AgentFixtures.owner()
         owner.script {
             $0.connectSeat = { _, key in
-                .completed(.shown(SeatConnected(seatID: AgentFixtures.ownID, seatToken: AgentFixtures.madeUpToken)),
+                .completed(SeatConnected(seatID: AgentFixtures.ownID),
                            key: key.value, command: .connectSeat)
             }
-            $0.landingPromptForConnection = { _, connection in
-                LandingPrompt(text: "Start with get_next.", connection: connection)
+            $0.issueLandingPrompt = {
+                AgentFixtures.issuedPrompt($0, connection: $1, key: $2)
             }
         }
         let connect = ConnectAgentModel(
-            api: owner, copy: { _ in }, onConnected: {}, apiURL: { URL(string: "http://127.0.0.1:49170") })
+            api: owner, copy: { _ in }, onConnected: {})
         connect.mode = .connectsOnItsOwn
         connect.connection = .mcp
         connect.name = "Example agent"
         let form = ConnectAgentForm(model: connect, cancel: {}, addLogin: {})
         #expect(AgentFixtures.draws(form, width: 600, height: 820))
         await connect.connect()
-        #expect(connect.mcpSettings != nil)
+        #expect(connect.prompt?.state == .ready(AgentFixtures.landingText))
         #expect(AgentFixtures.draws(form.environment(\.colorScheme, .dark), width: 600, height: 820))
 
         let change = ChangeAgentModel(

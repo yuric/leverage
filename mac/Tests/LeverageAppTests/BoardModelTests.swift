@@ -70,6 +70,17 @@ struct BoardModelTests {
         #expect(reads.value == [9])
     }
 
+    @Test("the agent filter offers seats that build, including General")
+    func builderChoicesIncludeGeneral() async {
+        let general = Fixtures.seat(UUID(), name: "General One", role: .general)
+        let planner = Fixtures.seat(UUID(), name: "Planner One", role: .planner)
+        let orchestrator = Fixtures.seat(UUID(), name: "Orchestrator One", role: .orchestrator)
+        let seats = SeatsList(seats: Fixtures.seats().seats + [general, planner, orchestrator], asOfSeq: 10)
+        let model = makeModel(Fixtures.owner(board: Fixtures.board([]), seats: seats))
+        await model.load()
+        #expect(model.builders.map(\.id) == [Fixtures.builderID, general.id])
+    }
+
     @Test("a card carries the task's id so a click can open its page")
     func cardIDs() async {
         let id = UUID()

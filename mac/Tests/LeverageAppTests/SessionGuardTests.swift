@@ -26,6 +26,9 @@ struct SessionGuardTests {
         ("pause_seat", { _ = try await $0.pauseSeat(seatID: id, key: IdempotencyKey()) }),
         ("resume_seat", { _ = try await $0.resumeSeat(seatID: id, key: IdempotencyKey()) }),
         ("change_seat", { _ = try await $0.changeSeat(seatID: id, ChangeSeatRequest(), key: IdempotencyKey()) }),
+        ("issue_landing_prompt", {
+            _ = try await $0.issueLandingPrompt(seatID: id, connection: .mcp, key: IdempotencyKey())
+        }),
         ("sign_in_again", { _ = try await $0.signInAgain(credentialID: id, key: IdempotencyKey()) }),
     ]
 
@@ -45,6 +48,10 @@ struct SessionGuardTests {
             $0.editContract = { _, _, _ in
                 if let error { throw error }
                 return outcome
+            }
+            $0.issueLandingPrompt = { seatID, connection, key in
+                if let error { throw error }
+                return AgentFixtures.issuedPrompt(seatID, connection: connection, key: key)
             }
             $0.changeSeat = { _, _, _ in
                 if let error { throw error }

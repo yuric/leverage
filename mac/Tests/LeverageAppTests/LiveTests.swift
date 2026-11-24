@@ -25,6 +25,12 @@ struct LiveTests {
         #expect(settings.helperProgram.path == "/Applications/Made Up/Leverage.app/Contents/MacOS/LeverageHelper")
     }
 
+    @Test("the bundled MCP program is next to the app executable")
+    func bundledMCPProgram() {
+        let settings = LiveSettings(info: [:], resources: resources, executable: executable)
+        #expect(settings.mcpProgram.path == "/Applications/Made Up/Leverage.app/Contents/MacOS/LeverageMCP")
+    }
+
     @Test("outside a bundle, or with a tag Docker would refuse, the tag is compose.yaml's own default")
     func imageTagFallsBack() {
         for info: [String: Any] in [

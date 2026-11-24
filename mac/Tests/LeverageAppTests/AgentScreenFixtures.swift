@@ -16,6 +16,15 @@ enum AgentFixtures {
     static let geminiLoginID = UUID(uuidString: "ffffffff-6666-4666-8666-ffffffffffff")!
     /// Obviously not a token; the made-up value the Connect tests show once.
     static let madeUpToken = "lvs_made-up-token-for-tests-only"
+    static let landingText = "Join Leverage with \(madeUpToken). Send Authorization: Bearer \(madeUpToken)."
+
+    static func issuedPrompt(
+        _ seatID: UUID, connection: LandingPromptConnection, key: IdempotencyKey, text: String = landingText
+    ) -> CommandOutcome<LandingPromptIssuedAnswer> {
+        .completed(.shown(LandingPromptIssued(seatID: seatID, seatToken: madeUpToken, text: text, connection: connection)),
+                   key: key.value, command: .issueLandingPrompt)
+    }
+
 
     static func seat(
         _ id: UUID, name: String, role: SeatRole = .builder, provider: Provider = .claude, credential: UUID? = nil,
