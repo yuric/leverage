@@ -543,6 +543,15 @@ class DecisionScoreTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("signed out", json.loads(result.read_text(encoding="utf-8"))["reason"])
 
+        current = history[-1]
+        history[-1] = {**current, "cases_sha256": "f" * 64}
+        save_history()
+        code, _, err = run(*budget)
+        self.assertEqual(code, 3, err)
+        self.assertIn("claude has no completed main run", err)
+        history[-1] = current
+        save_history()
+
         code, _, err = run("runs-add", *options, "--provider", "claude", "--date", "2026-11-21", "--held-out")
         self.assertEqual(code, 0, err)
         reservation = json.loads(self.runs.read_text(encoding="utf-8"))["runs"][-1]
