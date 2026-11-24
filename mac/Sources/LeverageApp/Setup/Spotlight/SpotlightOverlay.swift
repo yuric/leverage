@@ -2,6 +2,16 @@ import SwiftUI
 
 /// Where the hole, the arrow and the note go, as the mockup's `drawGuide()` places them.
 enum SpotlightLayout {
+    /// Whether a control can be lit: wholly inside the window and, for a
+    /// card on the task board, inside the part of the lanes that can be
+    /// seen. A control scrolled out of view is not lit, so the hole never
+    /// opens over something else.
+    static func isVisible(_ rect: CGRect, in window: CGRect, clippedBy visible: CGRect?) -> Bool {
+        guard !rect.isEmpty, window.contains(rect) else { return false }
+        guard let visible else { return true }
+        return visible.contains(rect)
+    }
+
     static let holePadding: CGFloat = 6
     static let holeRadius: CGFloat = 12
     static let arrowSize: CGFloat = 28
@@ -83,17 +93,23 @@ struct SpotlightLayer: View {
     var body: some View {
         GeometryReader { proxy in
             let note = SetupGuide.visibleNote(setup, navigator: navigator)
-            let anchor = note.flatMap { anchors[$0.target] }
+            let target = note.flatMap { note in
+                anchors[note.target].map { proxy[$0] }.flatMap { rect in
+                    SpotlightLayout.isVisible(
+                        rect, in: CGRect(origin: .zero, size: proxy.size),
+                        clippedBy: note.target == .doneTask ? anchors[.boardLanes].map { proxy[$0] } : nil) ? rect : nil
+                }
+            }
             ZStack {
-                if let note, let anchor {
+                if let note, let target {
                     SpotlightOverlay(
-                        note: note, target: proxy[anchor], size: proxy.size, notNow: { setup.notNow() },
+                        note: note, target: target, size: proxy.size, notNow: { setup.notNow() },
                         finish: { setup.finishChecklist() }
                     )
                     .transition(.opacity)
                 }
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: anchor != nil)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: target != nil)
         }
     }
 }

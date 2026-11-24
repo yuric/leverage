@@ -53,6 +53,7 @@ assistant plays the one-provider case further than the assistant does.
 | OB-6 | A workspace that already holds a login, an agent or a task when the app first has onboarding never gets the assistant. It gets the checklist if a step is not done, and nothing if all four are. |
 | OB-7 | A step turning true never moves the owner to another screen by itself. |
 | OB-8 | While the first read has not answered, the signed-in window draws nothing, so the app never shows for a moment before the assistant. If that read fails, the app shows as it is, and a later read may bring the checklist but never opens the assistant over the app. |
+| OB-9 | Once setup is over, the app stops reading the logins, agents and tasks for it. |
 
 ## Setup assistant
 
@@ -68,11 +69,11 @@ later" is at the top right of every screen.
 | OB-12 | Each provider's tile names the tool it runs in. Gemini's tile says "Builds, but does not review yet". |
 | OB-13 | **Second login.** The same screen, asking for a different provider and saying why. A provider that already has a login is marked "Already added" and cannot be picked. |
 | OB-14 | "I only have one subscription" says that finished work will wait in Needs you until a second provider is added or the review rule is turned off in Settings, and offers "Continue with one". |
-| OB-15 | **Agents.** One row for each login, named after it, with the role General and a switch that is on. "Start agents" connects a General agent the app runs for each login that is switched on and has no agent yet. Connecting starts it. When a login's name is already an agent's name, the next free "Claude, Personal 2" is used, because this screen has no name field. A login that already has an agent is shown as connected. |
+| OB-15 | **Agents.** One row for each login, named after it, with the role General and a switch that is on. "Start agents" connects a General agent the app runs for each login that is switched on and has no agent yet. Connecting starts it. When an agent already has a login's name, the app names the new one "Claude, Personal 2", or the next number that is free, because this screen has no name field and two agents may share a name. A login that already has an agent is shown as connected. |
 | OB-16 | With one provider, the Agents screen says again that finished work will wait for a review. |
 | OB-17 | **First task.** Three built-in starter tasks, each with a category, a time, one sentence and the list it is done when: Pocket to-do, Glass portfolio and Downloads tidy-up. "Write my own" takes what should get done and how the owner will know it is done; both are needed, because a task without them stays in Backlog. As on every task, the independent review is added as the last criterion. |
 | OB-18 | "Send to agents" adds the task with its contract, exactly as Add task does. Setup is then over: the app shows the task board, and one line that the owner can close names the task and says that anything that needs them shows up in Needs you. |
-| OB-19 | "Set up later" on any screen, and "Skip, take me to the board" on the last, close the assistant and open the task board with the setup checklist. |
+| OB-19 | "Set up later" on any screen, and "Skip, take me to the task board" on the last, close the assistant and open the task board with the setup checklist. |
 
 ![Welcome](screenshots/assistant-1-welcome.png)
 
@@ -109,7 +110,7 @@ arrow and a note that says in one sentence why to press it.
 | ID | Requirement |
 | --- | --- |
 | OB-30 | Only the lit control can be pressed. Every other click does nothing. |
-| OB-31 | What is lit follows the current step and the tab the owner is on: the Credentials tab, then Add credential; the Agents tab, then Connect agent; then Add task. While the first task runs nothing is lit. When it is Done, its card on the task board is lit and the note has "Finish setup". |
+| OB-31 | What is lit follows the current step and the tab the owner is on: the Credentials tab, then Add credential; the Agents tab, then Connect agent; then Add task. While the first task runs nothing is lit. When it is Done, its card on the task board is scrolled into view and lit, and the note has "Finish setup". A card that is not wholly in view is never lit. |
 | OB-32 | The note names the step, "Step 2 of 4", and uses the owner's own logins and agents by name. For the second login it asks for a different provider than the first and says why. |
 | OB-33 | "Not now" and the Escape key turn the spotlight off. "Show me" on the card turns it on again. It is on again at the next launch. |
 | OB-34 | The spotlight steps aside while a sheet is open or a task's page is showing. |
@@ -132,7 +133,7 @@ arrow and a note that says in one sentence why to press it.
 | ID | Requirement |
 | --- | --- |
 | OB-40 | While the checklist shows and exactly one provider has a login, Add credential's first step says to pick a different provider from that one, so that one agent can review the other's work. |
-| OB-41 | While the checklist shows, Connect agent opens with the next login that has no agent picked, and that login's name as the agent's name. |
+| OB-41 | While the checklist shows, Connect agent opens with the next login that has no agent picked, and that login's name as the agent's name, numbered as in OB-15 when an agent already has it. |
 
 ## The Task board name
 

@@ -138,8 +138,8 @@ struct SetupGuideTests {
             step: nil, title: nil, body: nil, offersFinish: false),
         Row(
             name: "first task done, on the task board", facts: Points.done, place: .board, target: .doneTask, side: .left,
-            step: 4, title: "Done, and reviewed",
-            body: "A second agent reviewed the work before it counted as done. Open the card any time to see how it got there.",
+            step: 4, title: "Your first task is done",
+            body: "Open the card any time to see how it got there, and who reviewed it.",
             offersFinish: true),
         Row(
             name: "first task done, on Agents", facts: Points.done, place: .agents, target: nil, side: nil, step: nil,
@@ -252,6 +252,18 @@ struct SetupGuideTests {
     }
 
     // MARK: where the arrow and the note go
+
+    @Test("a control is lit only while it is wholly in the window and, for a card, in the visible lanes")
+    func visibility() {
+        let window = CGRect(x: 0, y: 0, width: 1000, height: 700)
+        let card = CGRect(x: 600, y: 300, width: 140, height: 60)
+        #expect(SpotlightLayout.isVisible(card, in: window, clippedBy: nil))
+        #expect(!SpotlightLayout.isVisible(card.offsetBy(dx: 500, dy: 0), in: window, clippedBy: nil))
+        #expect(!SpotlightLayout.isVisible(.zero, in: window, clippedBy: nil))
+        let lanes = CGRect(x: 220, y: 320, width: 760, height: 360)
+        #expect(!SpotlightLayout.isVisible(card, in: window, clippedBy: lanes), "half under the checklist card")
+        #expect(SpotlightLayout.isVisible(card.offsetBy(dx: 0, dy: 100), in: window, clippedBy: lanes))
+    }
 
     @Test("the hole is the control grown by 6 points on each side")
     func hole() {

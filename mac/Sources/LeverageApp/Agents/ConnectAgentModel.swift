@@ -76,16 +76,19 @@ final class ConnectAgentModel {
     @ObservationIgnored private var finished = false
     /// The login setup opens the form with, once (docs/onboarding/PRD.md).
     @ObservationIgnored private let preferredLoginID: UUID?
+    /// The name to fill in with the preferred login; its label when nil.
+    @ObservationIgnored private let preferredName: String?
     @ObservationIgnored private var preferenceApplied = false
 
     init(
         api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
         testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
         generalTestedProviders: [Provider] = ContractLists.generalTestedProviders,
-        preferredLoginID: UUID? = nil
+        preferredLoginID: UUID? = nil, preferredName: String? = nil
     ) {
         self.api = api
         self.preferredLoginID = preferredLoginID
+        self.preferredName = preferredName
         self.copy = copy
         self.onConnected = onConnected
         self.testedProviders = testedProviders
@@ -153,7 +156,7 @@ final class ConnectAgentModel {
         preferenceApplied = true
         guard let id = preferredLoginID, let login = logins.first(where: { $0.id == id }) else { return }
         credentialID = login.id
-        if trimmedName.isEmpty { name = login.label }
+        if trimmedName.isEmpty { name = preferredName ?? login.label }
     }
 
     /// Reads the logins that can be picked.

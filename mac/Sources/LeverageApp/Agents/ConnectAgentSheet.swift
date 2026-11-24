@@ -15,7 +15,8 @@ struct ConnectAgentSheet: View {
         let model = box.model {
             ConnectAgentModel(
                 api: context.owner, copy: Pasteboard.copy, onConnected: connected,
-                preferredLoginID: SetupChecklistHelp.preferredLoginID(context.setup))
+                preferredLoginID: SetupChecklistHelp.preferredLoginID(context.setup),
+                preferredName: SetupChecklistHelp.preferredAgentName(context.setup))
         }
         ConnectAgentForm(
             model: model,

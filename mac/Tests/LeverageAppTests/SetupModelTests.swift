@@ -151,6 +151,18 @@ struct SetupModelTests {
         #expect(all.current == nil)
     }
 
+    @Test("a free agent name is the login's own, or the first copy no agent has and none is planned")
+    func freeAgentName() {
+        let login = SetupModel.Login(id: Fixtures.loginID, provider: .claude, label: "Claude, Personal")
+        #expect(facts().freeAgentName(for: login) == "Claude, Personal")
+        let taken = facts(seats: SeatsList(
+            seats: [
+                Fixtures.seat(UUID(), name: "Claude, Personal"), Fixtures.seat(UUID(), name: "Claude, Personal 3"),
+            ], asOfSeq: 1))
+        #expect(taken.freeAgentName(for: login) == "Claude, Personal 2")
+        #expect(taken.freeAgentName(for: login, besides: ["Claude, Personal 2"]) == "Claude, Personal 4")
+    }
+
     // MARK: what the first read decides
 
     @Test("the first read decides by the kept choice and what is true", arguments: [
@@ -279,6 +291,36 @@ struct SetupModelTests {
         #expect(await ShellFixtures.eventually { model.facts.logins.count == 1 })
         model.detach()
         feed.stop()
+    }
+
+    @Test("once setup is over, events read nothing; before that, and after a failed first read, they do")
+    func readsOnlyWhileSetupNeedsIt() async {
+        let (fresh, _) = makeModel(SetupFixtures.emptyOwner())
+        #expect(fresh.needsReading)
+        await fresh.load()
+        #expect(fresh.needsReading)
+        fresh.skipAssistant()
+        #expect(fresh.needsReading)
+        fresh.finishChecklist()
+        #expect(!fresh.needsReading)
+
+        let (failed, _) = makeModel(FakeOwnerAPI())
+        await failed.load()
+        #expect(failed.presentation == .none)
+        #expect(failed.needsReading)
+
+        let (over, _) = makeModel(Fixtures.owner(), choice: .finished)
+        await over.load()
+        #expect(!over.needsReading)
+    }
+
+    @Test("only the first read seeds the events tail")
+    func seedsOnce() async {
+        let reads = Locked<[Int]>([])
+        let (model, _) = makeModel(Fixtures.owner(), choice: .skipped, reads: reads)
+        await model.load()
+        await model.load()
+        #expect(reads.value == [9])
     }
 
     // MARK: the owner's choices

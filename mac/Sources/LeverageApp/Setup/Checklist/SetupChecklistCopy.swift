@@ -54,7 +54,7 @@ enum SetupChecklistCopy: OwnerFacingCopy {
         case .firstTaskDone: "{task}."
         case .doneTitle: "See it reach Done"
         case .doneBody: "One agent builds it, the other reviews it. You are asked only if they need you."
-        case .doneDone: "Built, reviewed and finished."
+        case .doneDone: "It reached Done."
         case .doneSent: "Sent to your agents"
         case .names: "{names}."
         case .twoNames: "{first} and {second}"
@@ -94,9 +94,9 @@ enum SetupChecklistCopy: OwnerFacingCopy {
         case .connectNoLoginBody: "Pick the login it runs on. General means it can build, review and check tasks."
         case .addTaskTitle: "Give them something to do"
         case .addTaskBody: "Use Add task to write what should get done. One agent builds it and the other reviews it."
-        case .finishedNoteTitle: "Done, and reviewed"
+        case .finishedNoteTitle: "Your first task is done"
         case .finishedNoteBody:
-            "A second agent reviewed the work before it counted as done. Open the card any time to see how it got there."
+            "Open the card any time to see how it got there, and who reviewed it."
 
         case .addCredentialHint: "Pick a different provider from {provider}, so one agent can review the other’s work."
         }

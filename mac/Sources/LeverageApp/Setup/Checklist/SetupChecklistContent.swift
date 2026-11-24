@@ -137,6 +137,13 @@ enum SetupChecklistHelp {
         guard setup.presentation == .checklist else { return nil }
         return setup.facts.nextLoginWithoutAgent?.id
     }
+
+    /// The name Connect agent fills in for that login: its own, or the next
+    /// free copy when an agent already has it.
+    static func preferredAgentName(_ setup: SetupModel) -> String? {
+        guard setup.presentation == .checklist, let login = setup.facts.nextLoginWithoutAgent else { return nil }
+        return setup.facts.freeAgentName(for: login)
+    }
 }
 
 extension SetupModel {

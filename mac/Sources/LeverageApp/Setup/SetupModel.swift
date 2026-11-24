@@ -99,6 +99,18 @@ final class SetupModel {
         var isEmpty: Bool { logins.isEmpty && agents.isEmpty && !hasAnyTask }
         /// Everything the assistant asks for is there.
         var assistantHasNothingLeft: Bool { isDone(.logins) && isDone(.agents) && isDone(.firstTask) }
+        /// A name for a new agent on `login`: the login's own name, or the
+        /// first of "{login} 2", "{login} 3" that no agent has and `taken`
+        /// does not hold. The server lets two agents share a name, so the app
+        /// keeps them apart.
+        func freeAgentName(for login: Login, besides taken: [String] = []) -> String {
+            let used = Set(agents.map(\.name) + taken)
+            if !used.contains(login.label) { return login.label }
+            var copy = 2
+            while used.contains("\(login.label) \(copy)") { copy += 1 }
+            return "\(login.label) \(copy)"
+        }
+
         /// The first login no agent runs on, in the handoff order.
         var nextLoginWithoutAgent: Login? {
             logins.first { login in !agents.contains { $0.credentialID == login.id } }
@@ -145,7 +157,7 @@ final class SetupModel {
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
     /// The first read failed and the app was shown as it is.
-    @ObservationIgnored private var shownWithoutFacts = false
+    @ObservationIgnored private(set) var shownWithoutFacts = false
 
     init(api: any OwnerAPI, store: any SetupProgressStoring, noteRead: @escaping @MainActor (Int) -> Void = { _ in }) {
         self.api = api
@@ -186,7 +198,8 @@ final class SetupModel {
             facts = Facts(
                 credentials: credentials.credentials.map(\.credential), seats: seats.seats,
                 tasks: board.tasks.map(\.task))
-            noteRead(min(credentials.asOfSeq, seats.asOfSeq, board.asOfSeq))
+            // Only the first read seeds the events tail; later ones would rewind it.
+            if presentation == .undecided { noteRead(min(credentials.asOfSeq, seats.asOfSeq, board.asOfSeq)) }
             decide()
         } catch is CancellationError {
             return
@@ -213,11 +226,19 @@ final class SetupModel {
         if let choice = entry.keep { keep(choice) }
     }
 
-    /// Reads again each time the events tail delivers a batch.
+    /// Whether setup still needs the workspace read: before the first
+    /// decision, while the assistant or the checklist shows, and after a
+    /// failed first read, which a later read may turn into the checklist
+    /// (OB-8). Once setup is over nothing is read again.
+    var needsReading: Bool { presentation != .none || shownWithoutFacts }
+
+    /// Reads again each time the events tail delivers a batch, while setup
+    /// needs it.
     func attach(to feed: EventFeed) {
         subscription?.cancel()
         subscription = feed.subscribe { [weak self] _ in
-            Task { await self?.load() }
+            guard let self, self.needsReading else { return }
+            Task { await self.load() }
         }
     }
 

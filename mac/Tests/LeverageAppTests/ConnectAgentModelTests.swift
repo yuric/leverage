@@ -620,6 +620,16 @@ struct ConnectAgentModelTests {
         #expect(model.canConnect)
     }
 
+    @Test("a preferred name is filled in with the preferred login instead of its label")
+    func preferredName() async {
+        let model = ConnectAgentModel(
+            api: owner(), copy: { _ in }, onConnected: {}, preferredLoginID: Fixtures.secondLoginID,
+            preferredName: "Codex, Team 2")
+        await model.load()
+        #expect(model.credentialID == Fixtures.secondLoginID)
+        #expect(model.name == "Codex, Team 2")
+    }
+
     @Test("a preferred login never replaces a name the owner already typed, and is applied once")
     func preferredLoginKeepsTypedName() async {
         let model = ConnectAgentModel(

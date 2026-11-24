@@ -112,7 +112,7 @@ struct SetupChecklistTests {
         let done = content(Points.done)
         #expect(done.isFinished)
         #expect(done.steps.map(\.state) == [.done, .done, .done, .done])
-        #expect(done.steps[3].body == "Built, reviewed and finished.")
+        #expect(done.steps[3].body == "It reached Done.")
         #expect(done.finishedTitle == "Setup is finished.")
         #expect(done.finishedBody == "For the next one, use Add task.")
         #expect(!content(Points.running).isFinished)

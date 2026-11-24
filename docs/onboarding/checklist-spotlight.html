@@ -360,7 +360,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
   <section>
     <h2>How to read it</h2>
     <ul>
-      <li>This is what the owner gets after leaving the setup assistant (<a href="setup-assistant.html">setup-assistant.html</a>) with “Set up later” or “Skip, take me to the board”.</li>
+      <li>This is what the owner gets after leaving the setup assistant (<a href="setup-assistant.html">setup-assistant.html</a>) with “Set up later” or “Skip, take me to the task board”.</li>
       <li>The requirements are in <a href="PRD.md">docs/onboarding/PRD.md</a>. Where this mockup and that document differ, the document is right.</li>
       <li>The logins, agents, task and names are sample data. Screens that setup does not touch (Decided for you, Settings) are placeholders.</li>
     </ul>
@@ -524,8 +524,8 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
     }
     if (p.now === 5) {
       return { keys: ['task-card'], side: 'left', n: 4, finish: true,
-        title: 'Done, and reviewed',
-        body: s.task.reviewer.name + ' reviewed what ' + s.task.builder.name + ' built before it counted as done. Open the card any time to see how it got there.' };
+        title: 'Your first task is done',
+        body: 'Open the card any time to see how it got there, and who reviewed it.' };
     }
     return null;   /* step 4: the task is running, nothing to click */
   }
@@ -606,7 +606,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
       { n: 3, done: p.taskDone, title: 'Send your first task',
         text: p.taskDone ? t.title + '.' : 'Say what should get done, and how you will know it is done.' },
       { n: 4, done: p.finished, title: 'See it reach Done',
-        text: p.finished ? 'Built, reviewed and finished.' : 'One agent builds it, the other reviews it. You are asked only if they need you.' }
+        text: p.finished ? 'It reached Done.' : 'One agent builds it, the other reviews it. You are asked only if they need you.' }
     ];
     return '<section class="lv-ob-setup" aria-label="Setup"><div class="lv-ob-setup-head"><div><h3 class="lv-h">Get your first task done</h3>' +
       '<p class="lv-muted">Four steps. Each one ticks when it is true, so you can stop and come back.</p></div>' + meter(p.count) + '<span class="lv-muted">' + p.count + ' of 4</span>' +

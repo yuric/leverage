@@ -9,6 +9,9 @@ enum SpotlightTarget: Hashable, Sendable {
     case addTask
     /// The card of the first finished task, on the task board.
     case doneTask
+    /// Not lit: the part of the task board's lanes that can be seen. A card
+    /// is lit only while it is wholly inside it.
+    case boardLanes
 }
 
 /// Where each control that can be lit is, gathered up the view tree for the

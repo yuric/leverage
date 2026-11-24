@@ -48,6 +48,7 @@ struct TaskCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .spotlightAnchor(context?.setup.facts.doneTask?.id == card.id ? .doneTask : nil)
+        .spotlightAnchor(
+            context?.setup.presentation == .checklist && context?.setup.facts.doneTask?.id == card.id ? .doneTask : nil)
     }
 }

@@ -66,19 +66,29 @@ struct SetupAssistantModelTests {
 
     /// Add credential answers, the helper answers each of `answers` in turn,
     /// and from the first Add on the Credentials list holds `after`.
+    /// Add credential answers, and from then on the list holds `after`, whose
+    /// last login carries the id the app sent, as the server keeps it.
     private func scriptLogin(_ owner: FakeOwnerAPI, answers: [HelperRequestStatus], after: CredentialsList) {
         let remaining = Locked(answers)
         let request = helperRequestID
-        let added = Locked(false)
+        let added = Locked<UUID?>(nil)
+        let before = CredentialsList(credentials: Array(after.credentials.dropLast()), asOfSeq: 3)
         owner.script {
             $0.addCredential = { body, key in
-                added.value = true
+                added.value = body.credentialID
                 return .completed(
                     AddCredentialResult(credentialID: body.credentialID, helperRequestID: request), key: key.value,
                     command: .addCredential)
             }
             $0.helperRequest = { _, _, _ in remaining.update { $0.count > 1 ? $0.removeFirst() : $0[0] } }
-            $0.credentials = { added.value ? after : CredentialsList(credentials: [], asOfSeq: 3) }
+            $0.credentials = {
+                guard let id = added.value, let last = after.credentials.last?.credential else { return before }
+                let echoed = Credential(
+                    id: id, kind: last.kind, provider: last.provider, name: last.name, state: last.state,
+                    position: last.position)
+                return CredentialsList(
+                    credentials: before.credentials + [CredentialWithReading(credential: echoed)], asOfSeq: after.asOfSeq)
+            }
         }
     }
 
@@ -129,6 +139,28 @@ struct SetupAssistantModelTests {
         #expect(rig.model.tiles.map(\.note) == [nil, nil, SetupAssistantCopy.geminiTileNote.text, nil])
         #expect(rig.model.tiles.allSatisfy { !$0.isAdded })
         #expect(rig.model.showsTiles)
+        #expect(!rig.model.canContinue)
+    }
+
+    @Test("when the read after signing in fails, the finished checks stay and the tiles are not offered again")
+    func failedReadAfterSignIn() async {
+        let rig = await AssistantRig.make()
+        scriptLogin(rig.owner, answers: [passing()], after: SetupFixtures.oneLogin)
+        rig.model.next()
+        rig.model.pick(.claude)
+        rig.model.attempt?.name = "Personal"
+        rig.owner.script {
+            let previous = $0.addCredential
+            $0.addCredential = { body, key in
+                let answer = try await previous(body, key)
+                rig.owner.script { $0.credentials = { throw URLError(.timedOut) } }
+                return answer
+            }
+        }
+        await rig.model.signIn()
+        // The screen shows a finished attempt's checks in place of the tiles.
+        #expect(rig.model.attempt?.step == .done)
+        #expect(rig.model.facts.logins.isEmpty)
         #expect(!rig.model.canContinue)
     }
 
@@ -328,37 +360,38 @@ struct SetupAssistantModelTests {
         #expect(codexKeys[2] != codexKeys[1])
     }
 
-    @Test("a name already used is tried again as the next copy, under a new key")
-    func duplicateNameTriesTheNextCopy() async {
-        let rig = await AssistantRig.twoLogins()
-        let refusal = Refusal(code: .duplicateName, ruleID: nil, reason: nil)
-        let taken: Set<String> = ["Claude, Personal", "Claude, Personal 2"]
+    @Test("an agent that already has a login's name makes the new one the next free copy")
+    func takenNameGetsTheNextCopy() async {
+        let existing = SeatsList(
+            seats: [
+                Fixtures.seat(UUID(), name: "Claude, Personal", role: .general, provider: .grok),
+                Fixtures.seat(UUID(), name: "Claude, Personal 2", role: .general, provider: .grok),
+            ], asOfSeq: 3)
+        let rig = await AssistantRig.twoLogins(seats: existing)
         rig.owner.script {
-            $0.connectSeat = { body, key in
-                taken.contains(body.name)
-                    ? .refused(refusal, key: key.value, command: .connectSeat)
-                    : .completed(SeatConnected(seatID: UUID()), key: key.value, command: .connectSeat)
-            }
+            $0.connectSeat = { _, key in .completed(SeatConnected(seatID: UUID()), key: key.value, command: .connectSeat) }
         }
         await rig.model.startAgents()
         #expect(rig.model.agentFailure == nil)
-        #expect(rig.model.agentsStarted)
-        let calls = Fixtures.calls(rig.owner, .connectSeat)
-        #expect(calls.compactMap { $0.body?["name"]?.stringValue }
-            == ["Claude, Personal", "Claude, Personal 2", "Claude, Personal 3", "Codex, Team"])
-        #expect(Set(calls.compactMap(\.key)).count == 4)
+        let names = Fixtures.calls(rig.owner, .connectSeat).compactMap { $0.body?["name"]?.stringValue }
+        #expect(names == ["Claude, Personal 3", "Codex, Team"])
     }
 
-    @Test("a name taken in every copy tried says so and stops")
-    func duplicateNameEveryCopy() async {
+    @Test("a name sent once is kept with its key, so a retry after a network failure is the same command")
+    func takenNameIsKeptForTheRetry() async {
         let rig = await AssistantRig.twoLogins()
-        let refusal = Refusal(code: .duplicateName, ruleID: nil, reason: nil)
-        rig.owner.script { $0.connectSeat = { _, key in .refused(refusal, key: key.value, command: .connectSeat) } }
+        let attempts = Locked(0)
+        rig.owner.script {
+            $0.connectSeat = { _, key in
+                if attempts.update({ $0 += 1; return $0 }) == 1 { throw URLError(.networkConnectionLost) }
+                return .completed(SeatConnected(seatID: UUID()), key: key.value, command: .connectSeat)
+            }
+        }
         await rig.model.startAgents()
-        #expect(rig.model.agentFailure == ShellCopy.refusalDuplicateName.text)
-        #expect(Fixtures.calls(rig.owner, .connectSeat).count == SetupAssistantModel.nameCopiesTried)
-        #expect(!rig.model.agentsStarted)
-        #expect(!rig.model.isStartingAgents)
+        await rig.model.startAgents()
+        let calls = Fixtures.calls(rig.owner, .connectSeat)
+        #expect(calls.prefix(2).compactMap { $0.body?["name"]?.stringValue } == ["Claude, Personal", "Claude, Personal"])
+        #expect(calls[0].key == calls[1].key)
     }
 
     @Test("Gemini with one other provider says who reviews what")
@@ -482,8 +515,10 @@ struct SetupAssistantModelTests {
     @Test("Set up later and Skip, take me to the board both bring the checklist and keep the choice")
     func skips() async {
         let later = await AssistantRig.make()
+        later.navigator.show(.needsYou)
         later.model.skip()
         #expect(later.setup.presentation == .checklist)
+        #expect(later.navigator.place == .board)
         #expect(later.store.stored.value == .skipped)
 
         let skip = await AssistantRig.make(

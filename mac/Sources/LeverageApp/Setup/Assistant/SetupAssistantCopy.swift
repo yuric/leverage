@@ -68,7 +68,7 @@ enum SetupAssistantCopy: OwnerFacingCopy {
         case .alreadyAdded: "Already added"
         case .geminiTileNote: "Builds, but does not review yet"
         case .loginsAdded: "Logins added"
-        case .loginRowLine: "Subscription login. Signed in and answering."
+        case .loginRowLine: "Subscription login."
         case .nextLogin: "Next, a second login from a different provider."
         case .checking: "Checking {login}"
         case .oneSubscription: "I only have one subscription"
@@ -76,8 +76,8 @@ enum SetupAssistantCopy: OwnerFacingCopy {
             "You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings."
         case .continueWithOne: "Continue with one"
 
-        case .agentsTitle: "Your agents are ready"
-        case .agentsBody: "Leverage made one agent for each login. Each can build, review and check tasks."
+        case .agentsTitle: "Start an agent for each login"
+        case .agentsBody: "Each one is named after its login, and can build, review and check tasks."
         case .agentsLabel: "Agents"
         case .agentSwitch: "Agent on {login}"
         case .agentStarted: "Started"
@@ -98,7 +98,7 @@ enum SetupAssistantCopy: OwnerFacingCopy {
         case .ownNeedsCriteria: "Say how you will know it is done, so it can be sent to agents."
         case .sendToAgents: "Send to agents"
         case .sending: "Sending…"
-        case .skipToBoard: "Skip, take me to the board"
+        case .skipToBoard: "Skip, take me to the task board"
 
         case .categoryApps: "Apps"
         case .categoryWebsites: "Websites"

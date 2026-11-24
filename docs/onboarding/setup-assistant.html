@@ -416,7 +416,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     <li><span class="ix-new">New</span><span>Agents are made automatically: one General agent for each login, named after it. Today the owner connects each agent in Agents.</span></li>
     <li><span class="ix-new">New</span><span>“I only have one subscription” lets the owner continue with one provider, and says where finished work will wait.</span></li>
     <li><span class="ix-new">New</span><span>A first-task picker: three built-in starter tasks, or one the owner writes.</span></li>
-    <li><span class="ix-new">New</span><span>“Set up later” on every screen, and “Skip, take me to the board” on the last. Both open the task board with the setup checklist and its spotlight, which is the other mockup, <a href="checklist-spotlight.html">checklist-spotlight.html</a>.</span></li>
+    <li><span class="ix-new">New</span><span>“Set up later” on every screen, and “Skip, take me to the task board” on the last. Both open the task board with the setup checklist and its spotlight, which is the other mockup, <a href="checklist-spotlight.html">checklist-spotlight.html</a>.</span></li>
   </ul>
 </section>
 
@@ -644,7 +644,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   }
 
   function loginRowHtml(l) {
-    return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login. Signed in and answering.</span></span>' +
+    return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login.</span></span>' +
       '<span class="lv-chip lv-chip--done">Added</span></li>';
   }
   function tilesHtml() {
@@ -725,7 +725,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
       : s.agentsStarting ? primaryHtml('Starting…', 'startAgents', true)
       : primaryHtml('Start agents', 'startAgents', !on.length);
     return '<div class="lv-ob-body">' +
-      headHtml('Your agents are ready', 'Leverage made one agent for each login. Each can build, review and check tasks.') +
+      headHtml('Start an agent for each login', 'Each one is named after its login, and can build, review and check tasks.') +
       '<ul class="lv-list" aria-label="Agents">' + rows + '</ul>' +
       (note ? '<div class="lv-ob-note lv-ob-note--wait"><p>' + esc(note) + '</p></div>' : '') +
       '</div>' + footHtml(true, '', primary);
@@ -756,7 +756,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     return '<div class="lv-ob-body">' +
       headHtml('Give them something to do', 'Pick a ready-made task, or write your own. You can change every word.') +
       cards + detail + own + '</div>' +
-      footHtml(true, '<button type="button" class="lv-ob-link lv-ob-link--quiet" data-a="skipTask" data-k="skip-task">Skip, take me to the board</button>', primaryHtml('Send to agents', 'send', !ready));
+      footHtml(true, '<button type="button" class="lv-ob-link lv-ob-link--quiet" data-a="skipTask" data-k="skip-task">Skip, take me to the task board</button>', primaryHtml('Send to agents', 'send', !ready));
   }
 
   function assistHtml() {

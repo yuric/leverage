@@ -50,6 +50,13 @@ struct BoardContent: View {
     @Bindable var navigator: Navigator
     let projects: [Project]
     let open: (UUID) -> Void
+    @Environment(ScreenContext.self) private var context: ScreenContext?
+
+    /// The finished task's card, while the setup checklist shows.
+    private var litCardID: UUID? {
+        guard let setup = context?.setup, setup.presentation == .checklist else { return nil }
+        return setup.facts.doneTask?.id
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -71,9 +78,17 @@ struct BoardContent: View {
                     .font(.system(size: Tokens.FontSize.body))
                     .foregroundStyle(Tokens.Palette.text2)
             }
-            ScrollView([.horizontal, .vertical]) {
-                BoardLanes(lanes: model.lanes(matching: navigator.boardFilter), open: open)
-                    .padding(.bottom, 8)
+            ScrollViewReader { reader in
+                ScrollView([.horizontal, .vertical]) {
+                    BoardLanes(lanes: model.lanes(matching: navigator.boardFilter), open: open)
+                        .padding(.bottom, 8)
+                }
+                .spotlightAnchor(.boardLanes)
+                .task(id: litCardID) {
+                    // The spotlight lights the finished task's card: bring it into view.
+                    guard let id = litCardID else { return }
+                    reader.scrollTo(id, anchor: .center)
+                }
             }
         }
     }
@@ -159,6 +174,7 @@ struct LaneView: View {
                 } else {
                     ForEach(content.cards) { card in
                         TaskCard(card: card, open: open)
+                            .id(card.id)
                     }
                 }
             }
