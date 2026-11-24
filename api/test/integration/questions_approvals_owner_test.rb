@@ -237,9 +237,9 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
     assert_log_consistent
   end
 
-  test "the HTTP builder landing prompt explains answer and action offers" do
+  test "the HTTP builder join instructions explain answer and action offers" do
     builder = @scenario.seat
-    landing = read("get_landing_prompt", ids: path(builder), query: { "connection" => "http" })
+    landing = read("get_join", caller: builder, query: { "connection" => "http" })
     assert_equal "http", landing.fetch("connection")
     assert_match(/^[-] `answer`: .+`get_question`/, landing.fetch("text"))
     assert_match(/^[-] `action`: .+`start_action`/, landing.fetch("text"))
