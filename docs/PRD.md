@@ -832,6 +832,19 @@ The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends
 3. The ADR and the service (FR-021 to FR-024).
 4. Choosing and paying (FR-007 to FR-011), then the Subscription page (FR-012 to FR-016), then failed payments (FR-017 to FR-020).
 
+## Imaginarium
+
+The Imaginarium is a gallery of ready-made prompts that make something fun on the owner's Mac: a picture in a style, a website in a style, a small app, a game, an automation or a gift. The owner copies a prompt, or sends it to Ready in the Imaginarium project (see [The Imaginarium project](#the-imaginarium-project)). The design and the parts not yet accepted are in [docs/imaginarium/PRD.md](imaginarium/PRD.md).
+
+### The prompt catalog: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-026 | The catalog is versioned JSON compiled into the Mac app. The app never fetches prompts from the network, and the catalog's version changes whenever an entry is added, removed or reworded. |
+| FR-027 | The catalog lists its categories, each with an id and a name, and its entries. Each entry has an id, a category, a title, a one-sentence description, a time estimate in minutes, one to four fill-ins (a key, a label and a default), a prompt that names each fill-in as `{key}`, two to four Done when checks, and what it needs beyond a coding agent, such as an image tool. |
+| FR-028 | A test loads the catalog and fails if two entries share an id, an entry names a category that does not exist, a prompt names a key with no fill-in or holds any other brace, a fill-in is unused, two fill-ins of an entry share a key, an entry has fewer than one or more than four fill-ins or fewer than two or more than four Done when checks, a text is empty, a time estimate is not positive, or an entry needs something the app does not know. |
+| FR-029 | The launch catalog has 32 entries, four in each of eight categories: Pictures, Websites, Apps, Games, Automations, Gifts, Learning, and Home and life. Each asks for something that runs or opens on the owner's Mac with no account, no sign-in, no paid or cloud service and no API key, and none names or imitates an existing game, film, brand or artist. |
+
 ## Data model
 
 These tables are part of the shared contract, which is listed in full under Build order. The database is PostgreSQL, in the server's containers. It holds no provider login and no API token: provider logins stay inside the providers' own tools and API tokens in the macOS Keychain.

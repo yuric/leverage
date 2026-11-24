@@ -102,6 +102,11 @@ Part 2 is built, and IM-5 to IM-7 are now in [docs/PRD.md](../PRD.md#the-imagina
 
 ## Part 4: the catalog
 
+Part 4 is built, and IM-20 to IM-23 are now FR-026 to FR-029 in
+[docs/PRD.md](../PRD.md#the-prompt-catalog-functional-requirements),
+which is their home. The catalog is JSON compiled into the app rather than
+a separate file in the app bundle.
+
 | ID | Requirement |
 | --- | --- |
 | IM-20 | The catalog is a versioned JSON file shipped inside the app. In version 1 the app never fetches prompts from the network. |
