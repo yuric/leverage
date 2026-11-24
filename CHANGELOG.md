@@ -228,6 +228,8 @@ once it makes its first release.
 - Settings groups the list into Orchestrator rules and Other agent rules.
 - The Agent roster marks task checking as untested until the eval suites
   pass on the updated task contract.
+- The Age of Lever page puts the Handoff demo before the Imaginarium and
+  keeps its navigation visible while scrolling.
 - The Board tab is named Task board.
 - Pull requests are welcome at any time; opening an issue first is optional.
 - The product is written "Leverage", with a capital L, in the documents and

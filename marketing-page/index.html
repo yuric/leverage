@@ -22,8 +22,8 @@
       </a>
       <nav class="nav-links" aria-label="Features">
         <a href="#board">The board</a>
+        <a href="#handoffs">Handoff</a>
         <a href="#imaginarium">Imaginarium</a>
-        <a href="#handoffs">Handoffs</a>
       </nav>
       <a class="button button-glass github-link" href="https://github.com/yuric/leverage">GitHub</a>
     </div>
@@ -92,6 +92,72 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section id="handoffs" class="handoffs page-width" aria-labelledby="handoffs-title">
+      <div class="section-copy">
+        <h2 id="handoffs-title">Handoff</h2>
+        <p>Leverage resumes work from saved progress when an account hits its limit or signs out.</p>
+      </div>
+      <figure class="handoff-window" data-handoff-diagram aria-labelledby="handoff-task-name" aria-describedby="handoff-description">
+        <div class="handoff-header">
+          <div>
+            <p class="handoff-example">Example task</p>
+            <strong id="handoff-task-name">Build a settings page</strong>
+          </div>
+          <button class="handoff-playback" type="button" data-handoff-playback hidden>Pause</button>
+        </div>
+        <div class="handoff-map" aria-hidden="true">
+          <svg class="handoff-map-track" viewBox="0 0 320 320" focusable="false">
+            <circle class="handoff-track-halo" cx="160" cy="160" r="92"/>
+            <path class="handoff-track-perimeter" d="M83 160 A77 77 0 0 1 160 83"/>
+            <path class="handoff-track-perimeter" d="M160 83 A77 77 0 0 1 237 160" data-from="claude" data-to="codex"/>
+            <path class="handoff-track-perimeter" d="M237 160 A77 77 0 0 1 160 237" data-from="codex" data-to="grok"/>
+            <path class="handoff-track-perimeter" d="M160 237 A77 77 0 0 1 83 160" data-from="grok" data-to="gemini"/>
+            <path class="handoff-track-direct" d="M83 160 H237" data-from="gemini" data-to="codex"/>
+            <path class="handoff-track-direct" d="M237 160 L160 83" data-from="codex" data-to="claude"/>
+            <path class="handoff-track-direct" d="M160 83 V237" data-from="claude" data-to="grok"/>
+            <path class="handoff-track-direct" d="M160 237 L83 160" data-from="grok" data-to="gemini"/>
+            <path class="handoff-track-direct" d="M83 160 L160 83" data-from="gemini" data-to="claude"/>
+            <g class="handoff-track-arrows">
+              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 105.55) rotate(45)"/>
+              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 214.45) rotate(135)"/>
+              <path d="M-4-4 L0 0 -4 4" transform="translate(105.55 214.45) rotate(225)"/>
+            </g>
+            <g class="handoff-track-stops">
+              <circle cx="160" cy="83" r="4"/>
+              <circle cx="237" cy="160" r="4"/>
+              <circle cx="160" cy="237" r="4"/>
+              <circle cx="83" cy="160" r="4"/>
+            </g>
+            <g class="handoff-token" transform="translate(197 92.5) rotate(29)" data-handoff-token>
+              <circle r="11"/>
+              <path d="M-4 0 H4 M.7-3.3 L4 0 .7 3.3"/>
+            </g>
+          </svg>
+          <div class="handoff-stop handoff-stop-top" data-handoff-provider="claude" data-usage="76%" data-state="limit">
+            <span class="handoff-provider"><span class="provider-mark claude">✳</span> Claude</span>
+            <span class="handoff-status"><span data-handoff-usage>100%</span><span data-handoff-status>Limit</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-right" data-handoff-provider="codex" data-usage="38%" data-state="resumed">
+            <span class="handoff-provider"><span class="provider-mark codex">›_</span> Codex</span>
+            <span class="handoff-status"><span data-handoff-usage>38%</span><span data-handoff-status>Resumed</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-bottom" data-handoff-provider="grok" data-usage="52%" data-state="ready">
+            <span class="handoff-provider"><span class="provider-mark grok">╱</span> Grok</span>
+            <span class="handoff-status"><span data-handoff-usage>52%</span><span data-handoff-status>Ready</span></span>
+          </div>
+          <div class="handoff-stop handoff-stop-left" data-handoff-provider="gemini" data-usage="24%" data-state="ready">
+            <span class="handoff-provider"><span class="provider-mark gemini">✦</span> Gemini</span>
+            <span class="handoff-status"><span data-handoff-usage>24%</span><span data-handoff-status>Ready</span></span>
+          </div>
+        </div>
+        <figcaption class="handoff-legend">
+          <span><i class="handoff-legend-token" aria-hidden="true">→</i> Saved progress</span>
+          <span><i class="handoff-legend-direct" aria-hidden="true"></i> Direct route</span>
+          <span class="sr-only" id="handoff-description">Claude reaches its 100% usage limit, so Codex resumes the task with its saved progress at 38% usage. The example goes clockwise from Claude to Codex, Grok, and Gemini, then takes direct routes between eligible accounts.</span>
+        </figcaption>
+      </figure>
     </section>
 
     <section id="imaginarium" class="imaginarium" aria-labelledby="imaginarium-title">
@@ -243,73 +309,6 @@
           </noscript>
         </div>
       </div>
-    </section>
-
-    <section id="handoffs" class="handoffs page-width" aria-labelledby="handoffs-title">
-      <div class="section-copy">
-        <p class="eyebrow">Handoffs</p>
-        <h2 id="handoffs-title">Pick up where work left off.</h2>
-        <p>If a managed agent’s account reaches its limit or signs out, Leverage can resume with its saved progress on the next eligible account in your handoff order.</p>
-      </div>
-      <figure class="handoff-window" data-handoff-diagram aria-labelledby="handoff-task-name" aria-describedby="handoff-description">
-        <div class="handoff-header">
-          <div>
-            <p class="handoff-example">Example task</p>
-            <strong id="handoff-task-name">Build a settings page</strong>
-          </div>
-          <button class="handoff-playback" type="button" data-handoff-playback hidden>Pause</button>
-        </div>
-        <div class="handoff-map" aria-hidden="true">
-          <svg class="handoff-map-track" viewBox="0 0 320 320" focusable="false">
-            <circle class="handoff-track-halo" cx="160" cy="160" r="92"/>
-            <path class="handoff-track-perimeter" d="M83 160 A77 77 0 0 1 160 83"/>
-            <path class="handoff-track-perimeter" d="M160 83 A77 77 0 0 1 237 160" data-from="claude" data-to="codex"/>
-            <path class="handoff-track-perimeter" d="M237 160 A77 77 0 0 1 160 237" data-from="codex" data-to="grok"/>
-            <path class="handoff-track-perimeter" d="M160 237 A77 77 0 0 1 83 160" data-from="grok" data-to="gemini"/>
-            <path class="handoff-track-direct" d="M83 160 H237" data-from="gemini" data-to="codex"/>
-            <path class="handoff-track-direct" d="M237 160 L160 83" data-from="codex" data-to="claude"/>
-            <path class="handoff-track-direct" d="M160 83 V237" data-from="claude" data-to="grok"/>
-            <path class="handoff-track-direct" d="M160 237 L83 160" data-from="grok" data-to="gemini"/>
-            <path class="handoff-track-direct" d="M83 160 L160 83" data-from="gemini" data-to="claude"/>
-            <g class="handoff-track-arrows">
-              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 105.55) rotate(45)"/>
-              <path d="M-4-4 L0 0 -4 4" transform="translate(214.45 214.45) rotate(135)"/>
-              <path d="M-4-4 L0 0 -4 4" transform="translate(105.55 214.45) rotate(225)"/>
-            </g>
-            <g class="handoff-track-stops">
-              <circle cx="160" cy="83" r="4"/>
-              <circle cx="237" cy="160" r="4"/>
-              <circle cx="160" cy="237" r="4"/>
-              <circle cx="83" cy="160" r="4"/>
-            </g>
-            <g class="handoff-token" transform="translate(197 92.5) rotate(29)" data-handoff-token>
-              <circle r="11"/>
-              <path d="M-4 0 H4 M.7-3.3 L4 0 .7 3.3"/>
-            </g>
-          </svg>
-          <div class="handoff-stop handoff-stop-top" data-handoff-provider="claude" data-usage="76%" data-state="limit">
-            <span class="handoff-provider"><span class="provider-mark claude">✳</span> Claude</span>
-            <span class="handoff-status"><span data-handoff-usage>100%</span><span data-handoff-status>Limit</span></span>
-          </div>
-          <div class="handoff-stop handoff-stop-right" data-handoff-provider="codex" data-usage="38%" data-state="resumed">
-            <span class="handoff-provider"><span class="provider-mark codex">›_</span> Codex</span>
-            <span class="handoff-status"><span data-handoff-usage>38%</span><span data-handoff-status>Resumed</span></span>
-          </div>
-          <div class="handoff-stop handoff-stop-bottom" data-handoff-provider="grok" data-usage="52%" data-state="ready">
-            <span class="handoff-provider"><span class="provider-mark grok">╱</span> Grok</span>
-            <span class="handoff-status"><span data-handoff-usage>52%</span><span data-handoff-status>Ready</span></span>
-          </div>
-          <div class="handoff-stop handoff-stop-left" data-handoff-provider="gemini" data-usage="24%" data-state="ready">
-            <span class="handoff-provider"><span class="provider-mark gemini">✦</span> Gemini</span>
-            <span class="handoff-status"><span data-handoff-usage>24%</span><span data-handoff-status>Ready</span></span>
-          </div>
-        </div>
-        <figcaption class="handoff-legend">
-          <span><i class="handoff-legend-token" aria-hidden="true">→</i> Saved progress</span>
-          <span><i class="handoff-legend-direct" aria-hidden="true"></i> Direct route</span>
-          <span class="sr-only" id="handoff-description">Claude reaches its 100% usage limit, so Codex resumes the task with its saved progress at 38% usage. The example goes clockwise from Claude to Codex, Grok, and Gemini, then takes direct routes between eligible accounts.</span>
-        </figcaption>
-      </figure>
     </section>
   </main>
 
