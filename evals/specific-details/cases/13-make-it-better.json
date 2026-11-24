@@ -1,12 +1,11 @@
 {
   "id": "13-make-it-better",
   "label": "failed",
-  "category": "vague_goal",
-  "why": "The goal only says that the help centre should be better, without saying what to make or change, and its criterion cannot be checked either.",
+  "category": "vague_work",
+  "why": "The title and details only say that the help centre should be better, without saying what to make or change, and its criterion cannot be checked either.",
   "contract": {
     "title": "Improve the help centre",
-    "goal": "Make the Driftwood help centre better.",
-    "details": "Readers have said it could be nicer.",
+    "details": "Make the Driftwood help centre better.\n\nReaders have said it could be nicer.",
     "criteria": [
       {
         "text": "The help centre is better than before.",

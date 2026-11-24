@@ -6,8 +6,7 @@
   "why": "The contract names the FAQ, page, and audience and the reviewed draft matches all three.",
   "contract": {
     "title": "Post trial equipment FAQ",
-    "goal": "Publish five equipment FAQs on the trial participant resource page.",
-    "details": "Use the Equipment FAQ on the trial participant portal, visible to enrolled participants only.",
+    "details": "Publish five equipment FAQs on the trial participant resource page.\n\nUse the Equipment FAQ on the trial participant portal, visible to enrolled participants only.",
     "criteria": [
       {
         "text": "The FAQ has five entries covering pickup, return, cleaning, damage, and storage.",

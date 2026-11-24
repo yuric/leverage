@@ -5,8 +5,7 @@
   "why": "What changes, where, what an expired link shows and what must keep working are all stated, and both criteria can be tried.",
   "contract": {
     "title": "Expire password reset links after 30 minutes",
-    "goal": "Make the password reset links that the Quillmoor members site sends expire 30 minutes after they are sent.",
-    "details": "Today a reset link never expires. An expired link opens a page that says This link has expired, with a button that sends a new link. A link that was already used keeps being refused, as it is now.",
+    "details": "Make the password reset links that the Quillmoor members site sends expire 30 minutes after they are sent.\n\nToday a reset link never expires. An expired link opens a page that says This link has expired, with a button that sends a new link. A link that was already used keeps being refused, as it is now.",
     "criteria": [
       {
         "text": "A reset link opened 31 minutes after it was sent shows This link has expired and does not let the password be changed.",

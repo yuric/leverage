@@ -6,8 +6,7 @@
   "why": "The contract delegates the send to an agreed window without identifying it, so the selected time is unconfirmed.",
   "contract": {
     "title": "Send the signage proof",
-    "goal": "Send signage-proof.pdf to the signage proof desk during the agreed delivery window.",
-    "details": "Two delivery windows appear on the production calendar. The contract does not record which window was agreed.",
+    "details": "Send signage-proof.pdf to the signage proof desk during the agreed delivery window.\n\nTwo delivery windows appear on the production calendar. The contract does not record which window was agreed.",
     "criteria": [
       {
         "text": "The PDF is a two-page signage proof labelled Review Copy.",

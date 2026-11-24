@@ -6,8 +6,7 @@
   "why": "The prepared send copies a second recipient group beyond the coordinator-only contract.",
   "contract": {
     "title": "Send the onboarding packet",
-    "goal": "Send intake-pack.pdf to the onboarding coordinators only.",
-    "details": "The coordinators will handle any distribution to other groups.",
+    "details": "Send intake-pack.pdf to the onboarding coordinators only.\n\nThe coordinators will handle any distribution to other groups.",
     "criteria": [
       {
         "text": "The packet contains the four matching intake forms and the draft has only the coordinators as recipients.",

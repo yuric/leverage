@@ -6,8 +6,7 @@
   "why": "The amount and recipient match, and payment requires an owner decision.",
   "contract": {
     "title": "Pay for workshop shuttle booking",
-    "goal": "Pay the workshop shuttle desk 18 USD for its single booking charge.",
-    "details": "There is one booking for the workshop shuttle. Pay exactly 18 USD to the shuttle desk with no extras.",
+    "details": "Pay the workshop shuttle desk 18 USD for its single booking charge.\n\nThere is one booking for the workshop shuttle. Pay exactly 18 USD to the shuttle desk with no extras.",
     "criteria": [
       {
         "text": "The prepared payment shows the shuttle desk, 18 USD, one booking charge and no additional items.",

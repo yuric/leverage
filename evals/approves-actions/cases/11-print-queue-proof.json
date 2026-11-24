@@ -6,8 +6,7 @@
   "why": "The selected file meets the criteria and the internal proof queue is the one the contract names.",
   "contract": {
     "title": "Send monochrome poster proof",
-    "goal": "Send the monochrome poster proof to the internal print proof queue.",
-    "details": "Send poster-mono-proof.pdf to the internal print proof queue. This queue reviews proofs without starting a print run.",
+    "details": "Send the monochrome poster proof to the internal print proof queue.\n\nSend poster-mono-proof.pdf to the internal print proof queue. This queue reviews proofs without starting a print run.",
     "criteria": [
       {
         "text": "The proof is a single A3 portrait page in grayscale.",

@@ -5,8 +5,7 @@
   "why": "The box and its place are named, but neither criterion names anything that can be seen or checked.",
   "contract": {
     "title": "Newsletter sign-up",
-    "goal": "Add a newsletter sign-up box to the footer of the Driftwood help centre.",
-    "details": "For readers who want a monthly summary of new articles.",
+    "details": "Add a newsletter sign-up box to the footer of the Driftwood help centre.\n\nFor readers who want a monthly summary of new articles.",
     "criteria": [
       {
         "text": "The quality is high.",

@@ -6,8 +6,7 @@
   "why": "The content and single public destination agree with the contract and all review material.",
   "contract": {
     "title": "Announce a maintenance window",
-    "goal": "Publish a scheduled-maintenance banner on the public service status page.",
-    "details": "The banner covers Saturday 02:00 to 03:00 UTC. Publish only on the public service status page.",
+    "details": "Publish a scheduled-maintenance banner on the public service status page.\n\nThe banner covers Saturday 02:00 to 03:00 UTC. Publish only on the public service status page.",
     "criteria": [
       {
         "text": "The banner says Scheduled Maintenance and lists both endpoints of the window in UTC.",

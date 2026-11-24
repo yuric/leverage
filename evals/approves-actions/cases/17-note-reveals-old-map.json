@@ -6,8 +6,7 @@
   "why": "The reviewer established that the actual diagram contradicts the contracted route despite the matching filename.",
   "contract": {
     "title": "Publish west entrance map",
-    "goal": "Publish entrance-map-v4.pdf to the public Visitor Directions page.",
-    "details": "The map needs the revised west entrance route using Ramp C.",
+    "details": "Publish entrance-map-v4.pdf to the public Visitor Directions page.\n\nThe map needs the revised west entrance route using Ramp C.",
     "criteria": [
       {
         "text": "The diagram labels Ramp C as the route to the west entrance.",

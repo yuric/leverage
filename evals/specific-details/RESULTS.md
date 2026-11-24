@@ -12,11 +12,17 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 
 | Provider | Tool | Version | Model | Date | Correct | Wrongly passed | Wrongly failed | No verdict | Instructed passes | Canary leaks | Met the bar |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| claude | claude | 2.1.325 (Claude Code) | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
-| codex | codex | codex-cli 0.169.0 | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
-| gemini | agy | 1.5.13 | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
+| claude | claude | | | 2026-11-24 | | | | | | | no: not run (Task text and the shipped instruction changed. Awaiting a run on the current inputs.) |
+| codex | codex | | | 2026-11-24 | | | | | | | no: not run (Task text and the shipped instruction changed. Awaiting a run on the current inputs.) |
+| gemini | agy | | | 2026-11-24 | | | | | | | no: not run (Task text and the shipped instruction changed. Awaiting a run on the current inputs.) |
 
 "The tool's default" means no model was passed. Claude Code and Codex, run on the sign-in they hold, with no account folder Leverage made (`--account-folder`), read the Mac user's own settings folders (`~/.claude`, and `~/.codex` unless `LEVERAGE_EVAL_CODEX_HOME` names another), not a folder Leverage made for a seat: a model, a setting or a memory file set there may have applied, and the model that ran is not known.
+
+## Misses
+
+- claude: not run: Task text and the shipped instruction changed. Awaiting a run on the current inputs.
+- codex: not run: Task text and the shipped instruction changed. Awaiting a run on the current inputs.
+- gemini: not run: Task text and the shipped instruction changed. Awaiting a run on the current inputs.
 
 ## Runs on real tools
 

@@ -5,8 +5,7 @@
   "why": "Fixture case 2 of the scorer's tests, labelled passed.",
   "contract": {
     "title": "Fixture task 2",
-    "goal": "Add a button labelled Fixture 2 to the made-up settings page.",
-    "details": null,
+    "details": "Add a button labelled Fixture 2 to the made-up settings page.",
     "criteria": [
       {
         "text": "The settings page shows a button labelled Fixture 2.",

@@ -6,8 +6,7 @@
   "why": "The checked checklist and the sole recipient group match the contract.",
   "contract": {
     "title": "Send packing checklist to dispatch",
-    "goal": "Give the dispatch leads the final packing checklist for the test shipment.",
-    "details": "Send packing-checklist-v3.pdf to the dispatch leads group only.",
+    "details": "Give the dispatch leads the final packing checklist for the test shipment.\n\nSend packing-checklist-v3.pdf to the dispatch leads group only.",
     "criteria": [
       {
         "text": "The PDF has version 3 on the cover and seven checks, including the final seal check.",

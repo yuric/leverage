@@ -401,11 +401,7 @@
     ],
     "helper_request_states": ["queued", "picked_up", "finished", "failed"],
     "command_outcomes": ["pending", "completed", "refused"],
-    "orchestrator_tested_providers": [
-      "claude",
-      "codex",
-      "gemini"
-    ],
+    "orchestrator_tested_providers": [],
     "general_tested_providers": []
   }
 }

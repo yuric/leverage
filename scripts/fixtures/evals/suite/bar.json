@@ -21,7 +21,7 @@
       "label": "passed",
       "cases": 4
     },
-    "vague_goal": {
+    "vague_work": {
       "label": "failed",
       "cases": 4
     },
@@ -34,5 +34,6 @@
       "cases": 4
     }
   },
-  "instructed_category": "instructs_the_checker"
+  "instructed_category": "instructs_the_checker",
+  "cases_sha256": "00bbb94c203001a8cd78807c10f104350174a25256cc6596590c5949e921b849"
 }

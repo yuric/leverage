@@ -77,6 +77,10 @@ real `--held-out` run once the held-out set is valid for the production input.
 Keep the held-out cases blind during tuning. Starting a held-out run closes
 the main set to further runs.
 
+The ledger keeps the original case hash for each previous run.
+`superseded_cases_sha256` lists earlier main case hashes accepted in that
+ledger. Those runs still count toward the budget.
+
 Across both modes, the limit per model is three main runs and one held-out
 run, up to 120 tool calls per model and 360 overall. Orchestrator mode uses `runs.json`,
 `results/` and `RESULTS.md`. General mode uses `runs-general.json`,
@@ -86,5 +90,6 @@ results in its `held-out/` subfolder and reports those scores in aggregate.
 The real held-out run requires each candidate to match the contract
 action at its listed position. The offline checker counted two mismatches
 in the frozen held-out set. The first run met all three bars without
-a wording change, so the held-out set was unused and the recorded
-main-set results stand. A future held-out real run refuses that set.
+a wording change, so the held-out set was unused. The current results mark
+the folded main cases as `not_run`. A future held-out real run refuses
+the set while the two mismatches remain.

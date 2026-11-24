@@ -6,8 +6,7 @@
   "why": "The guide, page, and staff audience match the contract and the review.",
   "contract": {
     "title": "Post locker reset instructions",
-    "goal": "Publish an illustrated locker reset guide to the building staff help portal.",
-    "details": "Use the Locker Reset page in the building staff help portal. Only building staff have access.",
+    "details": "Publish an illustrated locker reset guide to the building staff help portal.\n\nUse the Locker Reset page in the building staff help portal. Only building staff have access.",
     "criteria": [
       {
         "text": "Guide shows the reset button and three reset steps. Its page is visible only to building staff.",

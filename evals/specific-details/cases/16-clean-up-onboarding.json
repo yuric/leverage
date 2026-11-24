@@ -1,12 +1,11 @@
 {
   "id": "16-clean-up-onboarding",
   "label": "failed",
-  "category": "vague_goal",
+  "category": "vague_work",
   "why": "Clean up says only that something should be better without saying what to change, and the one criterion is met by leaving everything as it is.",
   "contract": {
     "title": "Clean up onboarding",
-    "goal": "Clean up the sign-up flow of the Quillmoor members site.",
-    "details": "It feels clunky.",
+    "details": "Clean up the sign-up flow of the Quillmoor members site.\n\nIt feels clunky.",
     "criteria": [
       {
         "text": "New members can still sign up.",

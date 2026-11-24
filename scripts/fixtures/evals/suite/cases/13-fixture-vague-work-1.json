@@ -1,12 +1,11 @@
 {
-  "id": "15-fixture-vague-goal-3",
+  "id": "13-fixture-vague-work-1",
   "label": "failed",
-  "category": "vague_goal",
-  "why": "Fixture case 15 of the scorer's tests, labelled failed.",
+  "category": "vague_work",
+  "why": "Fixture case 13 of the scorer's tests, labelled failed.",
   "contract": {
-    "title": "Fixture task 15",
-    "goal": "Make the made-up app better.",
-    "details": null,
+    "title": "Fixture task 13",
+    "details": "Make the made-up app better.",
     "criteria": [
       {
         "text": "The app is better.",

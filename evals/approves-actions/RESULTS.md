@@ -6,12 +6,9 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Main results
 
-- claude: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool claude 2.1.325 (Claude Code), model the tool's default, run 2026-11-21.
-- codex: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool codex codex-cli 0.169.0, model the tool's default, run 2026-11-21.
-- gemini: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool agy 1.5.13, model the tool's default, run 2026-11-21.
+- claude: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
+- codex: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
+- gemini: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
 
 ## Held-out results
 

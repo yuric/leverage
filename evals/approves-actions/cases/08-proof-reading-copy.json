@@ -6,8 +6,7 @@
   "why": "The requested proof and the private intake destination are both explicitly covered by the contract.",
   "contract": {
     "title": "Send proof to the copy desk",
-    "goal": "Deliver booklet-proof-r2.pdf to the copy desk for a proofread.",
-    "details": "Use the copy desk's private intake queue. Attach only the second proof.",
+    "details": "Deliver booklet-proof-r2.pdf to the copy desk for a proofread.\n\nUse the copy desk's private intake queue. Attach only the second proof.",
     "criteria": [
       {
         "text": "The second proof has 12 pages and a Proof 2 footer on each page.",

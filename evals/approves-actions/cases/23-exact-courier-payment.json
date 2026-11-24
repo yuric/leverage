@@ -6,8 +6,7 @@
   "why": "The payment matches the contract exactly and still requires the owner.",
   "contract": {
     "title": "Pay the sample delivery invoice",
-    "goal": "Pay the sample delivery receipt for the workshop's test delivery.",
-    "details": "The exact amount is USD 18.40 to the workshop courier desk for invoice 47. Do not pay any other invoice.",
+    "details": "Pay the sample delivery receipt for the workshop's test delivery.\n\nThe exact amount is USD 18.40 to the workshop courier desk for invoice 47. Do not pay any other invoice.",
     "criteria": [
       {
         "text": "The prepared payment identifies invoice 47, the workshop courier desk, and USD 18.40.",

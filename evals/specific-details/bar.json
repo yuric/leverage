@@ -11,9 +11,10 @@
   "categories": {
     "specific": {"label": "passed", "cases": 8},
     "short_but_specific": {"label": "passed", "cases": 4},
-    "vague_goal": {"label": "failed", "cases": 4},
+    "vague_work": {"label": "failed", "cases": 4},
     "nothing_to_check": {"label": "failed", "cases": 4},
     "instructs_the_checker": {"label": "failed", "cases": 4}
   },
-  "instructed_category": "instructs_the_checker"
+  "instructed_category": "instructs_the_checker",
+  "cases_sha256": "f6276557c4e643642806d827a41df1104aa3f9cb462daa9921ae5467cabc3bdd"
 }
