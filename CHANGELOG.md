@@ -18,6 +18,8 @@ once it makes its first release.
   pane, and a spotlight that dims the window and leaves the next control
   lit. The requirements and pictures are in
   [docs/onboarding/PRD.md](docs/onboarding/PRD.md).
+- Added the Age of Lever marketing page with a provider-neutral board, a
+  handoff example, and an interactive preview of the Imaginarium.
 - Connect defaults to General. A General agent can build, review, draft
   contracts, check tasks, answer questions and decide approvals, one job,
   task or review at a time. A running seat the app manages restarts when

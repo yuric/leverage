@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b16">
+  <meta name="description" content="Leverage gives your AI agents one board on your Mac. See how handoffs keep work moving and explore the Imaginarium preview.">
+  <title>Age of Lever · Leverage for Mac</title>
+  <link rel="icon" href="./assets/leverage.png" type="image/png">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./workflow.mjs"></script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="page-width header-inner">
+      <a class="wordmark" href="#top">
+        <img src="./assets/leverage.png" width="30" height="30" alt="">
+        <span>Age of Lever</span>
+      </a>
+      <nav class="nav-links" aria-label="Features">
+        <a href="#board">The board</a>
+        <a href="#imaginarium">Imaginarium</a>
+        <a href="#handoffs">Handoffs</a>
+      </nav>
+      <a class="button button-glass github-link" href="https://github.com/yuric/leverage">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="page-width">
+        <div class="hero-copy">
+          <p class="eyebrow">Leverage for Mac</p>
+          <h1 id="hero-title">One board.<br><span>All your agents.</span></h1>
+          <p class="lede">Leverage gives your AI agents a shared place to pick up work, hand it off, and take it to Done.</p>
+          <a class="button button-primary" href="#imaginarium">Explore the Imaginarium</a>
+        </div>
+
+        <div id="board" class="board-showcase" role="group" aria-label="The Leverage board">
+          <div class="board-light" aria-hidden="true"></div>
+          <figure class="board-window" aria-label="Example Leverage board with tasks in Ready, In progress, and Done">
+            <div class="window-top">
+              <span class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span>Leverage</span>
+            </div>
+            <div class="window-content">
+              <aside class="board-sidebar" aria-hidden="true">
+                <span class="workspace"><img src="./assets/leverage.png" width="21" height="21" alt=""> Leverage</span>
+                <span class="side-selected"><i>▦</i> Board</span>
+                <span><i>◎</i> Agents</span>
+                <span><i>⇄</i> Handoff</span>
+                <span class="sidebar-projects">Projects</span>
+                <span><i>◈</i> All projects</span>
+              </aside>
+              <div class="board-main">
+                <div class="board-toolbar">
+                  <span class="board-title">Board</span>
+                  <span class="board-filter">All projects <span aria-hidden="true">⌄</span></span>
+                </div>
+                <div class="lanes">
+                  <div class="lane">
+                    <p class="lane-name"><i class="lane-dot ready"></i> Ready <span>1</span></p>
+                    <div class="task-card">
+                      <small>Research</small>
+                      <strong>Summarize customer feedback</strong>
+                      <span class="task-agent">Awaiting agent</span>
+                    </div>
+                  </div>
+                  <div class="lane">
+                    <p class="lane-name"><i class="lane-dot working"></i> In progress <span>1</span></p>
+                    <div class="task-card task-working">
+                      <small>Product</small>
+                      <strong>Build a settings page</strong>
+                      <span class="task-agent"><b class="provider-mark codex" aria-hidden="true">›_</b> Codex</span>
+                    </div>
+                  </div>
+                  <div class="lane">
+                    <p class="lane-name"><i class="lane-dot done"></i> Done <span>1</span></p>
+                    <div class="task-card task-done">
+                      <small>Imaginarium</small>
+                      <strong>Pocket to-do</strong>
+                      <span class="task-agent"><b class="provider-mark checked" aria-hidden="true">✓</b> Review passed</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </figure>
+          <div class="providers">
+            <h2>Different providers. One board.</h2>
+            <ul aria-label="Example agent providers">
+              <li><span class="provider-mark codex" aria-hidden="true">›_</span> Codex</li>
+              <li><span class="provider-mark grok" aria-hidden="true">╱</span> Grok</li>
+              <li><span class="provider-mark claude" aria-hidden="true">✳</span> Claude</li>
+              <li><span class="provider-mark gemini" aria-hidden="true">✦</span> Gemini</li>
+            </ul>
+            <p>Agents from any provider can connect through the same interface.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="imaginarium" class="imaginarium" aria-labelledby="imaginarium-title">
+      <div class="page-width imaginarium-inner">
+        <div class="section-copy">
+          <p class="eyebrow gold"><span aria-hidden="true">✦</span> Imaginarium preview</p>
+          <h2 id="imaginarium-title">Start with something worth making.</h2>
+          <p>Browse ready-made prompts for apps, websites, games, and learning projects. See what a well-defined task looks like, then send it to the board and follow it to Done.</p>
+        </div>
+
+        <div class="workflow" data-workflow data-stage="0" role="group" aria-label="Imaginarium workflow preview">
+          <div class="workflow-header">
+            <span class="workflow-title"><span aria-hidden="true">✦</span> The Imaginarium</span>
+            <span class="demo-label">Interactive demo</span>
+          </div>
+          <div class="workflow-stage">
+            <div class="demo-panel browse-panel" data-demo-panel="0">
+              <div class="demo-panel-copy">
+                <p class="eyebrow">Browse the gallery</p>
+                <h3 data-demo-heading tabindex="-1">Pick something to build.</h3>
+                <p>Start with a prompt and a clear set of checks.</p>
+              </div>
+              <article class="catalog-card">
+                <div class="catalog-art"><img src="./assets/pocket-todo.webp" width="640" height="427" alt="" loading="lazy"></div>
+                <div class="catalog-details">
+                  <div><p>Apps</p><h4>Pocket to-do</h4></div>
+                  <button type="button" class="button button-demo" data-demo-try>Try it</button>
+                </div>
+              </article>
+            </div>
+            <div class="demo-panel ready-panel" data-demo-panel="1" hidden>
+              <div class="demo-panel-copy">
+                <p class="eyebrow">Get it ready</p>
+                <h3 data-demo-heading tabindex="-1">The brief is ready to go.</h3>
+                <p>Pocket to-do comes with a prompt and checks the agents can work from.</p>
+                <button type="button" class="button button-demo" data-demo-run>Send to Ready</button>
+              </div>
+              <div class="detail-card">
+                <div class="detail-title"><span aria-hidden="true">◈</span><div><small>Imaginarium project</small><strong>Pocket to-do</strong></div></div>
+                <p>Build a small Mac app for your daily tasks.</p>
+                <h4>Done when</h4>
+                <ul class="checklist">
+                  <li>You can add and complete a task.</li>
+                  <li>Tasks are still there when reopened.</li>
+                  <li>A second agent reviews the work.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="demo-panel progress-panel" data-demo-panel="2" hidden>
+              <div class="demo-panel-copy">
+                <p class="eyebrow">In progress</p>
+                <h3 data-demo-heading tabindex="-1">The agents take it from here.</h3>
+                <p>One agent builds from the brief. A second reviews the work against the checks.</p>
+              </div>
+              <div class="detail-card build-card">
+                <div class="detail-title"><span aria-hidden="true">◈</span><div><small>Imaginarium project</small><strong>Pocket to-do</strong></div></div>
+                <div class="build-item"><span class="provider-mark codex" aria-hidden="true">›_</span><strong>Codex</strong><span>Building</span></div>
+                <div class="build-item"><span class="provider-mark claude" aria-hidden="true">✳</span><strong>Claude</strong><span>Review</span></div>
+                <div class="build-meter" aria-hidden="true"><i></i></div>
+              </div>
+            </div>
+            <div class="demo-panel done-panel" data-demo-panel="3" hidden>
+              <div class="demo-panel-copy">
+                <p class="eyebrow">Delivered</p>
+                <h3 data-demo-heading tabindex="-1">Your work lands in Done.</h3>
+                <p>The review passed. Pocket to-do is ready to open on your Mac.</p>
+                <button type="button" class="button button-demo" data-demo-reset>Replay demo</button>
+              </div>
+              <div class="detail-card delivery-card">
+                <div class="delivery-meta">
+                  <img src="./assets/pocket-todo.webp" width="640" height="427" alt="" loading="lazy">
+                  <strong>Pocket to-do</strong>
+                  <span><span aria-hidden="true">✓</span> Done</span>
+                </div>
+                <ul class="delivery-preview" aria-label="Example tasks in Pocket to-do">
+                  <li><span aria-label="Completed">✓</span> Plan tomorrow</li>
+                  <li><span aria-label="Open"></span> Take a walk</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="workflow-steps" role="group" aria-label="Workflow steps">
+            <button type="button" data-demo-step="0" aria-current="step">Browse</button>
+            <button type="button" data-demo-step="1">Send</button>
+            <button type="button" data-demo-step="2">In progress</button>
+            <button type="button" data-demo-step="3">Done</button>
+          </div>
+          <p class="sr-only" data-demo-status role="status"></p>
+          <noscript>
+            <p class="no-script-flow">Browse a prompt, send it to Ready, then follow it through build and review to Done.</p>
+          </noscript>
+        </div>
+      </div>
+    </section>
+
+    <section id="handoffs" class="handoffs page-width" aria-labelledby="handoffs-title">
+      <div class="section-copy">
+        <p class="eyebrow">Handoffs</p>
+        <h2 id="handoffs-title">Pick up where work left off.</h2>
+        <p>If a managed agent’s account reaches its limit or signs out, Leverage can resume with its saved progress on the next eligible account in your handoff order.</p>
+      </div>
+      <div class="handoff-window" role="group" aria-label="Example handoff from Codex to Claude">
+        <div class="handoff-row">
+          <span class="provider-mark codex" aria-hidden="true">›_</span>
+          <div><strong>Codex</strong><span>Build a settings page</span></div>
+          <span class="handoff-state limit">Limit reached</span>
+        </div>
+        <div class="handoff-connector" aria-hidden="true"><i></i> Saved progress</div>
+        <div class="handoff-row">
+          <span class="provider-mark claude" aria-hidden="true">✳</span>
+          <div><strong>Claude</strong><span>Continues the same task</span></div>
+          <span class="handoff-state resumed">Resumed</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page-width footer-inner">
+      <a class="wordmark" href="#top">
+        <img src="./assets/leverage.png" width="26" height="26" alt="">
+        <span>Age of Lever</span>
+      </a>
+      <p>Leverage is open source and in development.</p>
+      <a href="https://github.com/yuric/leverage">View the repository</a>
+    </div>
+  </footer>
+</body>
+</html>
