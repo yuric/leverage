@@ -28,7 +28,7 @@ struct PromptsAndAnswersTests {
     }
 
     @Test("a builder prompt names its criterion first and asks for one marker line")
-    func builderPrompt() {
+    func builderPrompt() throws {
         let briefing = Fixture.briefing(hash: "h", criteria: contract)
         let prompt = Prompts.builder(
             number: 2, criterion: contract[2], briefing: briefing,
@@ -41,8 +41,31 @@ struct PromptsAndAnswersTests {
         #expect(!prompt.contains("LEVERAGE-CRITERION"))
         #expect(prompt.contains("The layout matches the rest of the site."))
         #expect(prompt.contains("See criterion 1 too."))
-        #expect(prompt.contains(briefing.roleFile))
+        let roleFile = try #require(briefing.roleFile)
+        #expect(prompt.contains("Your role:\n> \(roleFile)"))
         #expect(prompt.contains("/work/t"))
+    }
+
+    @Test("build, review and rule retry prompts omit the missing role file and keep the workspace rules")
+    func promptsWithoutRoleFile() {
+        let fixture = Fixture.briefing(hash: "h", criteria: contract)
+        let rule = BriefingRule(
+            ruleID: UUID(), ruleVersionID: UUID(), key: "price_list", name: "Check the price list",
+            instruction: "Use the current figures.", mayApply: false)
+        let briefing = Briefing(
+            hash: fixture.hash, versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1),
+            rules: [rule], roleFile: nil, contract: fixture.contract)
+        let folder = URL(fileURLWithPath: "/work/t")
+        let prompts = [
+            Prompts.builder(number: 1, criterion: contract[0], briefing: briefing, reviewNotes: [], folder: folder),
+            Prompts.reviewer(briefing: briefing, folder: folder),
+            BuilderFlow.rulePrompt(ruleName: rule.name, reason: "The figures are old.", briefing: briefing, folder: folder),
+        ]
+        for prompt in prompts {
+            #expect(!prompt.contains("Your role:"))
+            #expect(prompt.contains(Prompts.rulesHeading + "\n> - " + rule.name))
+            #expect(prompt.contains(briefing.contract.goal))
+        }
     }
 
     @Test("quoted material cannot carry a marker line")

@@ -27,6 +27,52 @@ struct JobPromptsTests {
          JobFixture.handoffNote, JobFixture.evidence]
     }
 
+    private static func prompts(roleFile: String?, jobRules: [String]) -> [String] {
+        let check = JobFixture.checkMaterial()
+        let actionContract = ActionJobContract(title: JobFixture.title, goal: JobFixture.goal, criteria: [])
+        return [
+            JobPrompts.check(material: CheckMaterial(
+                roleFile: roleFile, jobRules: jobRules, instruction: check.instruction, moment: check.moment,
+                contract: check.contract, quoted: check.quoted), nonce: nonce),
+            JobPrompts.question(material: QuestionMaterial(
+                roleFile: roleFile, jobRules: jobRules,
+                question: .init(text: "Which price list?", assumption: "The current one.", blocking: true),
+                contract: actionContract), nonce: nonce),
+            JobPrompts.approval(material: ApprovalMaterial(
+                roleFile: roleFile, jobRules: jobRules, instruction: "Check the action.",
+                action: .init(kind: .publish, description: "Publish the new prices.", position: 1),
+                contract: actionContract), nonce: nonce),
+            JobPrompts.draft(material: DraftMaterial(
+                roleFile: roleFile, jobRules: jobRules, title: JobFixture.title, goal: JobFixture.goal), nonce: nonce),
+        ]
+    }
+
+    @Test("each General job prompt puts the material's rules in order at the top, one line each")
+    func generalJobRules() {
+        let rules = SeatRole.general.jobRules
+        #expect(rules.count == 4)
+        for prompt in Self.prompts(roleFile: nil, jobRules: rules) {
+            let lines = prompt.components(separatedBy: "\n")
+            #expect(Array(lines.dropFirst(2).prefix(rules.count)) == rules)
+            for rule in rules {
+                #expect(prompt.components(separatedBy: rule).count == 2)
+            }
+            #expect(!prompt.contains("Your role:"))
+        }
+    }
+
+    @Test("every dedicated job prompt keeps its role file and omits the General job rules")
+    func dedicatedRoleFile() {
+        let roleFile = JobFixture.roleFile
+        let rules = SeatRole.general.jobRules
+        for prompt in Self.prompts(roleFile: roleFile, jobRules: rules) {
+            #expect(prompt.components(separatedBy: "\n").dropFirst(2).first == roleFile)
+            for rule in rules {
+                #expect(!prompt.contains(rule))
+            }
+        }
+    }
+
     @Test("a nonce is 12 lower-case hex characters, and two runs never share one")
     func nonces() {
         let made = (0..<500).map { _ in JobPrompts.makeNonce() }
@@ -208,7 +254,8 @@ struct JobPromptsTests {
         }
         #expect(outside.contains("LEVERAGE-DRAFT-\(Self.nonce)-BEGIN"))
         #expect(outside.contains("LEVERAGE-DRAFT-\(Self.nonce)-END"))
-        #expect(outside.contains(material.roleFile))
+        let roleFile = try #require(material.roleFile)
+        #expect(outside.contains(roleFile))
     }
 
     @Test("a draft prompt holds the criteria the task already has, in a quote block, and asks to keep them (RD-37)")
