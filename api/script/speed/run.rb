@@ -296,8 +296,13 @@ module Speed
         status, body = @owner.call("connect_seat",
           body: { "name" => "Speed #{role} #{index / 2 + 1}", "role" => role, "provider" => (role == "builder" ? "claude" : "codex"),
                   "model" => nil, "effort" => nil, "strength_rank" => nil, "credential_id" => nil })
-        abort "speed_run: connect_seat answered #{status}: #{body.to_json[0, 300]}" unless status == 200
-        @seats << [ role.to_sym, body.dig("result", "seat_token") || abort("speed_run: connect_seat showed no token") ]
+        abort "speed_run: connect_seat answered #{status}" unless status == 200
+        seat_id = body.dig("result", "seat_id") or abort "speed_run: connect_seat gave no seat id"
+
+        status, body = @owner.call("issue_landing_prompt", ids: { "id" => seat_id }, body: { "connection" => "http" })
+        abort "speed_run: issue_landing_prompt answered #{status}" unless status == 200
+        token = body.dig("result", "seat_token") or abort "speed_run: issue_landing_prompt gave no token"
+        @seats << [ role.to_sym, token ]
       end
     end
 
