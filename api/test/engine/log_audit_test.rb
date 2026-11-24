@@ -58,6 +58,23 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_equal [ "touches 2 tasks" ], Leverage::LogAudit.match("report_cost", written, { cost.task_id => "working" })
   end
 
+  test "a project pause does not allow withdrawal of an older attempt of the same check" do
+    walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
+    written = Event.where(workspace_id: walk.workspace_id, command_id: "walk-383196552-121").order(:seq).to_a
+    cost = written.find { |event| event.type == "cost.reported" }
+    withdrawal = written.find { |event| event.type == "job.withdrawn" && event.task_id != cost.task_id }
+    assert withdrawal, "the pause must withdraw the sibling task's claim job"
+    job = Job.find(withdrawal.subject_id)
+    older = job.dup
+    older.update!(state: "timed_out", finished_at: job.queued_at, queued_at: job.queued_at - 1.second)
+    job.update!(attempt_number: older.attempt_number + 1)
+    replaced = withdrawal.dup
+    replaced.subject_id = older.id
+    written[written.index(withdrawal)] = replaced
+
+    assert_equal [ "touches 2 tasks" ], Leverage::LogAudit.match("report_cost", written, { cost.task_id => "working" })
+  end
+
   test "releasing a lease after the last approved action was overturned leaves the stopped action" do
     walk = Walk.new(seed: 10_101, steps: 120).run
     events = Event.where(workspace_id: walk.workspace_id)
