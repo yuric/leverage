@@ -45,16 +45,14 @@ struct WorkReferenceInput {
     mutating func referenceChanged() { pasteProblem = nil }
 
     private static func problem(in reference: String) -> AddTaskCopy? {
-        if reference.range(of: #"(?:\A|[\s(])[^\s/@:]+:[^\s/@]+@[^\s/:]+"#, options: .regularExpression) != nil {
-            return .workLinkSignInDetails
-        }
-
         if reference.hasPrefix("/") || reference == "~" || reference.hasPrefix("~/") {
             return embeddedAddressCarriesSignInDetails(in: reference) ? .workLinkSignInDetails : nil
         }
 
         // An scp-like address has a user and a host before the path's colon.
-        if reference.range(of: #"\A[^\s/@:]+@(?:[^\s/?:#@]+|\[[^\s\]]+\]):.+"#, options: .regularExpression) != nil {
+        // Recognize the password form too so we can refuse it explicitly.
+        if reference.range(of: #"\A[^\s/@:]+(?::[^\s/@]+)?@(?:[^\s/?:#@]+|\[[^\s\]]+\]):.+"#,
+                           options: .regularExpression) != nil {
             if let queryStart = reference.firstIndex(of: "?") {
                 let query = reference[reference.index(after: queryStart)...].prefix { $0 != "#" }
                 if hasSecretParameter(in: String(query)) { return .workLinkSignInDetails }
@@ -64,16 +62,15 @@ struct WorkReferenceInput {
 
         guard let address = parseAddress(reference),
               let scheme = address.scheme?.lowercased() else { return .noClipboardReference }
-        if carriesSignInDetails(address) { return .workLinkSignInDetails }
-
         switch scheme {
         case "http", "https", "ssh", "git":
-            return address.host?.isEmpty == false ? nil : .noClipboardReference
+            guard address.host?.isEmpty == false else { return .noClipboardReference }
         case "file":
-            return address.path.hasPrefix("/") ? nil : .noClipboardReference
+            guard address.path.hasPrefix("/") else { return .noClipboardReference }
         default:
             return .noClipboardReference
         }
+        return carriesSignInDetails(address) ? .workLinkSignInDetails : nil
     }
 
     private static func parseAddress(_ reference: String) -> URLComponents? {
@@ -83,7 +80,10 @@ struct WorkReferenceInput {
 
     /// The API's LinkRules also checks addresses embedded in free text.
     private static func embeddedAddressCarriesSignInDetails(in reference: String) -> Bool {
-        reference.matches(of: #/[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"']+/#).contains { match in
+        if reference.range(of: #"(?:\A|[\s(])[^\s/@:]+:[^\s/@]+@[^\s/:]+"#, options: .regularExpression) != nil {
+            return true
+        }
+        return reference.matches(of: #/[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"']+/#).contains { match in
             guard let address = parseAddress(String(match.output)) else { return true }
             return carriesSignInDetails(address)
         }

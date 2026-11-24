@@ -18,6 +18,7 @@ module Leverage
       def perform(ctx, job, task, seat:, answer:, tokens:, spend:)
         Costs.report(ctx, task: task, subject: job, tokens: tokens, spend: spend)
         contract = answer.slice("title", "details", "criteria", "actions")
+        contract["details"] = task.details if contract["details"].blank?
         # The planner's default empty list leaves the owner's actions in place.
         if Array(contract["actions"]).empty?
           contract["actions"] = Actions.for_task(task).map { |action| action.attributes.slice("kind", "description") }

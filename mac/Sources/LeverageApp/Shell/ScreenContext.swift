@@ -123,12 +123,15 @@ final class ScreenContext {
         await inbox.run()
     }
 
-    /// Reads the pane's project names while the signed-in window is open.
+    /// Reads the pane's projects and Add task's work references while signed in.
     func watchProjects() async {
         let (updates, request) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let subscription = feed.subscribe { events in
             if events.contains(where: {
-                $0.type == .projectCreated || ($0.type == .contentDeleted && $0.taskID == nil)
+                switch $0.type {
+                case .projectCreated, .taskCreated, .taskChanged, .taskContractChanged, .contentDeleted: true
+                default: false
+                }
             }) {
                 request.yield()
             }

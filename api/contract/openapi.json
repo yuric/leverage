@@ -10613,7 +10613,7 @@
       },
       "ContractDraftJobResult": {
         "$ref": "#/components/schemas/CompleteContractRequest",
-        "description": "A contract draft's result is the Complete contract command."
+        "description": "A contract draft's result is the Complete contract command. Null or blank details preserve the task's stored details."
       },
       "JobResultRequest": {
         "type": "object",

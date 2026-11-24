@@ -220,6 +220,12 @@ once it makes its first release.
 
 ### Fixed
 
+- A planner's empty draft keeps the task's saved details, including goal
+  text folded on upgrade.
+- Add task refreshes project work references after task changes and
+  content deletion. Paste link explains when the clipboard has no
+  supported link or folder path.
+- Native Connect lets the owner retry a failed login read.
 - The server waits for PostgreSQL to accept TCP connections before
   starting, including when it starts with a new database after a restore.
 - Log verification recognizes rule checks the orchestrator retries before

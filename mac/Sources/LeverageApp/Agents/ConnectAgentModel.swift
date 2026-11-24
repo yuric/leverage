@@ -167,14 +167,18 @@ final class ConnectAgentModel {
 
     /// Reads the logins that can be picked.
     func load() async {
+        guard !finished, !Task.isCancelled else { return }
+        loginRead = .loading
         do {
             let list = try await api.credentials()
+            guard !finished, !Task.isCancelled else { return }
             allLogins = list.credentials.map(\.credential).filter { $0.kind == .login }.map(LoginChoice.init)
             keepALoginPicked()
             loginRead = .loaded
         } catch is CancellationError {
             return
         } catch {
+            guard !finished, !Task.isCancelled else { return }
             loginRead = .failed(ShellCopy.sentence(for: error).text)
         }
     }

@@ -23,7 +23,6 @@ struct ConnectAgentSheet: View {
             },
             addLogin: addLogin
         )
-        .task { await model.load() }
         .onDisappear { model.finish() }
     }
 }
@@ -33,6 +32,7 @@ struct ConnectAgentForm: View {
     @Bindable var model: ConnectAgentModel
     let cancel: () -> Void
     let addLogin: () -> Void
+    @State private var loginReadAttempt = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -53,16 +53,23 @@ struct ConnectAgentForm: View {
                 .padding(.trailing, 6)
             }
             if let line = model.failure, model.phase == .editing || model.phase == .connecting {
-                Text(verbatim: line)
-                    .font(.system(size: Tokens.FontSize.body, weight: .medium))
-                    .foregroundStyle(Tokens.Tone.stop.foreground)
-                    .padding(.top, 8)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(verbatim: line)
+                        .font(.system(size: Tokens.FontSize.body, weight: .medium))
+                        .foregroundStyle(Tokens.Tone.stop.foreground)
+                    if model.mode == .runOnLogin, case .failed = model.loginRead {
+                        Button(ShellCopy.tryAgain.text) { loginReadAttempt += 1 }
+                            .buttonStyle(.link)
+                    }
+                }
+                .padding(.top, 8)
             }
             actions.padding(.top, 14)
         }
         .padding(Tokens.Spacing.sheet)
         .frame(width: 480, height: 640)
         .background(Tokens.Palette.sheet)
+        .task(id: loginReadAttempt) { await model.load() }
     }
 
     // MARK: the form

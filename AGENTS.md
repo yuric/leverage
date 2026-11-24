@@ -27,10 +27,12 @@ stand-in coverage.
 
 Add task and Edit contract use the task's title and details. Upgrading
 folds existing task goals into their details. Add task can fill the work
-reference from a project, paste a link or choose a local folder. Needs you
-can open notification settings. Native Connect guides the owner to Add
-credential if there are no logins, and Native Connect and Change use the
-provider's documented model choices. Settings groups rules by checker.
+reference from a project, paste a link or choose a local folder. Drafts
+with empty details preserve saved task text. Needs you can open
+notification settings. Native Connect guides the owner to Add credential
+if there are no logins and offers Try again if the login read fails.
+Native Connect and Change use the provider's documented model choices.
+Settings groups rules by checker.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks

@@ -46,7 +46,7 @@ struct JobFlowTests {
                 "LEVERAGE-DRAFT-\(nonce)-BEGIN\n{\"details\": null, \"criteria\": [\"One.\"]}\nLEVERAGE-DRAFT-\(nonce)-END", tokens: 2)
         }
         let loop = harness.loop(.planner, driver: driver)
-        let claim = JobFixture.draftClaim()
+        let claim = JobFixture.draftClaim(JobFixture.draftInput(JobFixture.draftMaterial(details: nil)))
         harness.api.script { $0.claimNextJob = { key in .completed(claim, key: key.value, command: .claimJob) } }
         scriptSubmit(harness)
         harness.next([NextItem(kind: .job)], then: loop)
@@ -69,7 +69,11 @@ struct JobFlowTests {
         let driver = ScriptedDriver { prompt, _ in
             let nonce = JobFixture.nonce(of: prompt) ?? ""
             return .answer(
-                "LEVERAGE-DRAFT-\(nonce)-BEGIN\n{\"criteria\": [\"One.\"]}\nLEVERAGE-DRAFT-\(nonce)-END",
+                """
+                LEVERAGE-DRAFT-\(nonce)-BEGIN
+                {"details": "Update the prices from the supplied figures.", "criteria": ["One."]}
+                LEVERAGE-DRAFT-\(nonce)-END
+                """,
                 tokens: 2)
         }
         let loop = harness.loop(.planner, driver: driver)

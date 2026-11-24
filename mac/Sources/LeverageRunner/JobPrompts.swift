@@ -145,7 +145,8 @@ enum JobPrompts {
 
             Keep every criterion the task already has, and reword one only where a reviewer could not check it. \
             Each criterion is one sentence a reviewer can check. Do not write the review itself: it is added for \
-            you. Answer with one JSON object with two keys: "details", what the worker needs to know or null; \
+            you. Answer with one JSON object with two keys: "details", what the worker needs to know, \
+            including the information already in the task's details; \
             and "criteria", a list of sentences. Put the line \(draftBegin(nonce)) before it and \
             the line \(draftEnd(nonce)) after it, each on a line of its own.
             """
