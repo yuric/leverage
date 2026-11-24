@@ -10,7 +10,7 @@
     "properties": {
       "state": {
         "enum": [
-          "imaginarium",
+          "ideas",
           "drafting"
         ]
       }

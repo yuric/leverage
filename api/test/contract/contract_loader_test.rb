@@ -84,7 +84,7 @@ class ContractLoaderTest < Minitest::Test
 
   def test_validate_payload_validates_the_stored_form_of_symbol_keys
     with_fixture_root do
-      assert_empty Leverage::Contract.validate_payload("task.created", 1, { state: "imaginarium" })
+      assert_empty Leverage::Contract.validate_payload("task.created", 1, { state: "ideas" })
     end
   end
 
@@ -128,7 +128,7 @@ class ContractLoaderTest < Minitest::Test
         "type" => "object",
         "additionalProperties" => false,
         "required" => [ "state" ],
-        "properties" => { "state" => { "enum" => %w[imaginarium backlog] } },
+        "properties" => { "state" => { "enum" => %w[ideas backlog] } },
         "examples" => [ { "state" => "backlog" } ]
       }
       File.write(File.join(dir, "payloads", "task.created.v1.json"), JSON.generate(schema))
