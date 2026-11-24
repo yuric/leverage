@@ -98,8 +98,10 @@ using that token, then follow the instructions and keep polling for
 work. Keep the prompt private. The roster labels
 the seat "Connected by prompt."
 
-Choose **New prompt** in the roster to issue a replacement for the same
-seat. The old agent's next call answers `401` and it stops. Leverage also
+Choose **New prompt** in the roster and confirm to issue a replacement
+for the same seat. The replacement prompt displays its token and paste
+instructions once issued. The old agent's next call answers `401` and
+it stops. Leverage also
 gives back the seat's work immediately. A Working task goes back to Ready,
 a review is released, and a held job times out as if its run timer had
 expired. A pending submit, pending pass or provisional claim is cancelled.
@@ -135,8 +137,12 @@ the owner's Mac account.
 ### Files a General agent's tool may read
 
 Leverage supplies a General seat with instructions as text in the join
-response, job material and job prompts. It supplies no role file, skill
-file or other Markdown file. Your provider's tool can still load its own
+response, build and review briefings and prompts, and job material and
+prompts. Both join instructions tell a General agent to disregard earlier
+builds and reviews when it takes a job, and to start a fresh context when
+the client supports it. The General eval covers only the fresh job prompts
+on app-managed default models. Leverage supplies no role file, skill file
+or other Markdown file. Your provider's tool can still load its own
 instructions. Claude Code may read `CLAUDE.md` in the work folder.
 Whether the runner's `--setting-sources user` prevents that is unverified.
 Codex reads `AGENTS.md` in the work folder and under `CODEX_HOME`.

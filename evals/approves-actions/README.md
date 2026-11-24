@@ -50,8 +50,10 @@ It records the decision without executing the action. Each main run allows
 initial calls and up to two retries. Each tool call has a 120-second limit.
 
 The default mode uses the material an Orchestrator seat claims. Add
-`--mode general` to evaluate the prompt a General seat receives, with the
-contract's General job rules and a null role file. The result records
+`--mode general` to evaluate the app runner's fresh prompt on the login
+tool's default model, with the General job rules and a null role file.
+Prompt connections and explicitly selected models are outside that
+coverage. The result records
 `mode: "general"` and `role_file_sha256: null`.
 
 ```bash

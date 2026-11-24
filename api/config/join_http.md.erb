@@ -46,10 +46,16 @@ Read your role file in the briefing or job material before doing any work.
 <% if builds? -%>
 
 Read the briefing with `get_task_briefing` before any work on a task and acknowledge its hash with `acknowledge_task_briefing`. If you are blocked while holding a task, ask with `ask_question`. If you cannot continue, release the task with `release_task` and the reason `unable_to_continue`. Submit completed work with `submit_task`.
+<% work_rules("builder").each do |rule| -%>
+<%= rule %>
+<% end -%>
 <% end -%>
 <% if reviews? -%>
 
 Read the briefing with `get_review_briefing` before any work on a review and acknowledge its hash with `acknowledge_review_briefing`. If criteria fail, fail the review with notes that explain why and list the failed criteria in `give_verdict`. If you cannot review the work, release the review with `release_review`.
+<% work_rules("reviewer").each do |rule| -%>
+<%= rule %>
+<% end -%>
 <% end -%>
 <% if works_on_jobs? -%>
 
@@ -65,6 +71,10 @@ When you need to pass a question to the owner, send a question job result with o
 <% end -%>
 <% if job_rules.any? -%>
 
+For each job, follow these instructions.
+Use only the material for the job you hold.
+Disregard content from earlier work, including files and pages you opened while building or reviewing.
+If your client supports it, start a fresh context for each job.
 <% job_rules.each do |rule| -%>
 <%= rule %>
 <% end -%>

@@ -75,37 +75,31 @@ module Leverage
           return if item.nil? && returning.empty?
 
           came_back = [ RolePresence.online_since(ctx.workspace, ROLE, ctx.at, waiting: waiting), item && opened_at(item) ].compact.max
-          retry_ids = retryable_ids(online, returning, ctx.at)
+          dedicated = online.any? { |seat| seat.role == ROLE }
           Timers.as_timer(ctx, command, came_back) { |timer_ctx| resolve(timer_ctx, item) } if item
           returning.each do |entry|
             task = Task.find(entry.hold.task_id)
             Timers.as_timer(ctx, command, Timers.effective_at(task, came_back)) do |timer_ctx|
-              recover_check(timer_ctx, entry, task, retry_ids.include?(entry.check.id))
+              recover_check(timer_ctx, entry, task, online, dedicated: dedicated)
             end
           end
         end
 
-        def retryable_ids(online, returning, at)
-          return [] if returning.empty?
-          return returning.map { |entry| entry.check.id } if online.any? { |seat| seat.role == ROLE }
-
-          attempts = returning.map { |entry| entry.next_attempt(at) }
-          online.filter_map do |seat|
-            job = Jobs.next_for(seat, at: at, additional: attempts)
-            job.target_id if job&.new_record?
+        def recover_check(ctx, entry, task, online, dedicated:)
+          check = entry.check
+          if check.hook == CLAIM_HOOK
+            close(ctx, entry.hold, task)
+          elsif dedicated || retryable?(entry, online, ctx.at)
+            run_again(ctx, check)
+          else
+            cause = Event.find_by(workspace_id: entry.hold.workspace_id, type: "hold.opened", subject_id: entry.hold.id)
+            Holds.open_item(ctx, entry.hold, task: task, facts: { rule_id: check.rule_id, rule_check_id: check.id }, cause_id: cause&.id)
           end
         end
 
-        def recover_check(ctx, entry, task, retryable)
-          check = entry.check
-          if !retryable
-            cause = Event.find_by(workspace_id: entry.hold.workspace_id, type: "hold.opened", subject_id: entry.hold.id)
-            Holds.open_item(ctx, entry.hold, task: task, facts: { rule_id: check.rule_id, rule_check_id: check.id }, cause_id: cause&.id)
-          elsif check.hook == CLAIM_HOOK
-            close(ctx, entry.hold, task)
-          else
-            run_again(ctx, check)
-          end
+        def retryable?(entry, online, at)
+          attempt = entry.next_attempt(at)
+          online.any? { |seat| Jobs.may_claim_proposal?(attempt, seat, at: at) }
         end
 
         def resolve(ctx, item)

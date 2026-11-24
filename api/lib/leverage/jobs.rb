@@ -72,12 +72,20 @@ module Leverage
 
         return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
       end
-      return nil unless placed?(seat, at)
-      return nil if seat.role == "general" && !Eligibility.idle_for_claim?(seat, at: at)
+      return nil unless ready_to_claim?(seat, at)
 
       queued = claimable(seat, at)
       proposed = additional.select { |item| claimable_proposal?(item, seat, at) }.min_by(&:queued_at)
       proposed && (queued.nil? || proposed.queued_at < queued.queued_at) ? proposed : queued
+    end
+
+    # Recovery checks eligibility for this attempt independently of queue order.
+    def may_claim_proposal?(job, seat, at:)
+      active?(seat) && ready_to_claim?(seat, at) && claimable_proposal?(job, seat, at)
+    end
+
+    def ready_to_claim?(seat, at)
+      placed?(seat, at) && (seat.role != "general" || Eligibility.idle_for_claim?(seat, at: at))
     end
 
     # A stored claim can show its material only to the seat that can still hold it.
@@ -264,7 +272,7 @@ module Leverage
       ctx.emit(type, subject: job, payload: payload, **fields)
     end
 
-    private_class_method :active?, :placed?, :claimable, :ended_tasks, :unavailable_tasks, :claimable_proposal?, :own_draft_check?,
+    private_class_method :active?, :placed?, :ready_to_claim?, :claimable, :ended_tasks, :unavailable_tasks, :claimable_proposal?, :own_draft_check?,
       :kinds_for, :definitions_for, :built_by, :task_of, :event_fields, :emit
   end
 end

@@ -15,9 +15,13 @@ once it makes its first release.
   task or review at a time. A running seat the app manages restarts when
   its role changes to or from General. A General seat can build and do
   jobs on a Gemini login. Its review work passes over Gemini logins.
+  The board shows task-specific reviewer availability and includes General
+  seats in account waits. General build and review briefings include the
+  instructions for that work.
 - Prompt connections use one landing prompt with the seat's token and
   instructions to fetch `GET /v1/join` for HTTP or MCP. New prompt in the
-  roster ends the old token and gives back work the seat holds. A Working
+  roster confirms the replacement, then ends the old token and gives back
+  work the seat holds. A Working
   task returns to Ready, a review is released, a held job times out, and a
   Finishing lease ends with any open actions that need confirmation sent to
   the owner.

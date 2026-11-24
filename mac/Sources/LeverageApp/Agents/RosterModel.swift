@@ -90,7 +90,8 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         let untested: Bool
         switch seat.role {
         case .general:
-            untested = !generalTestedProviders.contains(seat.provider)
+            untested = OrchestratorTesting.isUntested(
+                provider: seat.provider, model: seat.model, connectsOnItsOwn: !runsOnApp, tested: generalTestedProviders)
         case .orchestrator:
             untested = OrchestratorTesting.isUntested(
                 provider: seat.provider, model: seat.model, connectsOnItsOwn: !runsOnApp, tested: testedProviders)

@@ -89,13 +89,10 @@ final class ConnectAgentModel {
 
     /// Whether the chosen General or Orchestrator seat has eval coverage (GA-11, RV-5).
     var showsNotTestedNote: Bool {
-        if role == .general {
-            return chosenProvider.map { !generalTestedProviders.contains($0) } ?? false
-        }
-        return role == .orchestrator
-            && OrchestratorTesting.isUntested(
-                provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
-                tested: testedProviders)
+        guard role == .general || role == .orchestrator else { return false }
+        return OrchestratorTesting.isUntested(
+            provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
+            tested: role == .general ? generalTestedProviders : testedProviders)
     }
 
     // MARK: the form

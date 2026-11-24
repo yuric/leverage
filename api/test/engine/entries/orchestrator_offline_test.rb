@@ -12,8 +12,8 @@ require_relative "job_timers_support"
 #   the role went offline and the time the oldest check began to wait. Its
 #   facts: the role, the count then, and the account that is the cause.
 # - It resolves the item when the orchestrator is online again, at the time
-#   it came back. Then every errored check gets a new attempt, but an
-#   errored check at task.before_claim, whose hold only closes (RC-37); a
+#   it came back. An eligible errored check gets a new attempt. An
+#   errored check at task.before_claim only loses its hold (RC-37); a
 #   check still queued keeps its job (RD-19).
 # - It writes nothing while nothing changes, and never opens an item for
 #   the planner (RD-20).

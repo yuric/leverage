@@ -14,15 +14,16 @@ module Leverage
     # credential (one that connects on its own) has none. API tokens keep
     # their place in the order but are no candidate (L672).
     #
-    # Returns an Array of Credentials.
-    def for(seat)
+    # With work, keep only the candidates allowed by rule 3.
+    def for(seat, work: nil)
       return [] unless seat&.credential_id
 
       own = Credential.find_by(id: seat.credential_id, workspace_id: seat.workspace_id)
       return [] unless own
 
-      Credential.added.where(workspace_id: seat.workspace_id, kind: "login").where(position: own.position..)
+      candidates = Credential.added.where(workspace_id: seat.workspace_id, kind: "login").where(position: own.position..)
         .order(:position, :id).to_a
+      work ? candidates.select { |credential| passes_for_work?(seat, credential, work) } : candidates
     end
 
     # Rule 2: active and not limited at time at (HE-3). Nothing is written

@@ -16,7 +16,9 @@ Decided for you, content deletion and workspace settings. Connect offers
 five roles and defaults to General, which builds, reviews, drafts contracts
 and handles orchestrator jobs. A seat that connects on its own gets one
 landing prompt and reads its instructions from `GET /v1/join`, then works
-over HTTP or the bundled MCP server. Credentials lists both kinds of
+over HTTP or the bundled MCP server. General briefings carry build or
+review instructions as text, and the join instructions bound each job to
+its own material. Credentials lists both kinds of
 credential, with token Add, Refresh, Verify all,
 Rename and Remove. Confirmed local credential cleanup resumes when the
 helper starts. The Handoff tab supports reordering. Codex CLI 0.169.0 is

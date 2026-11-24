@@ -60,6 +60,8 @@ Antigravity (Gemini) login tools. A model that misses the bar, or whose
 tool cannot be run, stays a supported model with a failed or missing
 result. For each mode, the registry lists the providers that met both
 shipped suites' bars. The suite covers the default model of each tool.
+General mode tests the app runner's fresh job prompt. A seat that connects
+on its own or runs an explicitly selected model is outside that coverage.
 
 ## How a case is run
 

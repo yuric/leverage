@@ -29,7 +29,7 @@ enum AgentsCopy: OwnerFacingCopy {
     case notTestedForChecking
     case connectButton, connecting
     case copy
-    case landingTitle, landingNote, landingLoading, landingRetry
+    case landingTitle, landingNote, landingLoading, landingRetry, newPromptConfirmation
     case done
 
     var text: String {
@@ -118,7 +118,8 @@ enum AgentsCopy: OwnerFacingCopy {
         case .connecting: "Connecting…"
         case .copy: "Copy"
         case .landingTitle: "Landing prompt"
-        case .landingNote: "Paste this into the agent. The prompt contains the agent’s key. A new prompt stops the old agent and gives back its work."
+        case .landingNote: "Paste this into the agent. The prompt contains the agent’s token."
+        case .newPromptConfirmation: "A new prompt stops the agent using the current one and gives back its work."
         case .landingLoading: "Getting the landing prompt…"
         case .landingRetry: "Try again"
         case .done: "Done"

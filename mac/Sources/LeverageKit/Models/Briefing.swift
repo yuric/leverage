@@ -119,19 +119,21 @@ public struct Briefing: Codable, Equatable, Sendable {
     public let rules: [BriefingRule]
     public let brief: [BriefEntry]
     public let roleFile: String?
+    public let workRules: [String]?
     public let contract: BriefingContract
     /// The task's answers. They do not change the briefing hash.
     public let answers: [AnsweredQuestion]
 
     public init(
         hash: String, versions: BriefingVersions, rules: [BriefingRule] = [], brief: [BriefEntry] = [],
-        roleFile: String?, contract: BriefingContract, answers: [AnsweredQuestion] = []
+        roleFile: String?, contract: BriefingContract, answers: [AnsweredQuestion] = [], workRules: [String]? = nil
     ) {
         self.hash = hash
         self.versions = versions
         self.rules = rules
         self.brief = brief
         self.roleFile = roleFile
+        self.workRules = workRules
         self.contract = contract
         self.answers = answers
     }
@@ -139,6 +141,7 @@ public struct Briefing: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case hash, versions, rules, brief, contract, answers
         case roleFile = "role_file"
+        case workRules = "work_rules"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -148,6 +151,7 @@ public struct Briefing: Codable, Equatable, Sendable {
         rules = try container.decode([BriefingRule].self, forKey: .rules)
         brief = try container.decode([BriefEntry].self, forKey: .brief)
         roleFile = try container.decode(String?.self, forKey: .roleFile)
+        workRules = try container.decodeIfPresent([String].self, forKey: .workRules)
         contract = try container.decode(BriefingContract.self, forKey: .contract)
         answers = try container.decode([AnsweredQuestion].self, forKey: .answers)
     }
@@ -159,6 +163,7 @@ public struct Briefing: Codable, Equatable, Sendable {
         try container.encode(rules, forKey: .rules)
         try container.encode(brief, forKey: .brief)
         try container.encode(roleFile, forKey: .roleFile)
+        try container.encodeIfPresent(workRules, forKey: .workRules)
         try container.encode(contract, forKey: .contract)
         try container.encode(answers, forKey: .answers)
     }

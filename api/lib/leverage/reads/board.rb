@@ -65,8 +65,7 @@ module Leverage
         end
       end
 
-      # Whether the workspace has a reviewer seat that is not removed: the
-      # board and the task page say so when it has none (SC-11).
+      # The workspace-wide fallback for cards without an unassigned review.
       def reviewer_seat?(workspace_id)
         Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("reviewer"), removed_at: nil).exists?
       end
@@ -115,7 +114,7 @@ module Leverage
         holders = Seat.where(workspace_id: workspace_id, id: holder_ids).index_by(&:id)
         recorded_ids = held.values.reject { |hold| hold.reason == "credential_limit" }.map(&:credential_id)
         credentials = Credential.where(workspace_id: workspace_id, id: recorded_ids).index_by(&:id)
-        waits = AccountWaits.new(workspace_id, tasks.select { |task| open_holds.fetch(task.id, []).empty? })
+        waits = AccountWaits.new(workspace_id, tasks)
 
         tasks.to_h do |task|
           hold = held[task.id]
@@ -124,10 +123,13 @@ module Leverage
           elsif hold
             credential = credentials[hold.credential_id]
             [ hold.credential_id, (credential.limited_until if credential && credential.state == "active") ]
-          else
+          elsif open_holds.fetch(task.id, []).empty?
             waits.for(task)
           end
-          [ task.id, { waiting_for_credential_id: account, waiting_until: Shapes.time(until_) } ]
+          values = { waiting_for_credential_id: account, waiting_until: Shapes.time(until_) }
+          reviewer = waits.reviewer_seat_exists(task)
+          values[:reviewer_seat_exists] = reviewer unless reviewer.nil?
+          [ task.id, values ]
         end
       end
 
@@ -141,7 +143,12 @@ module Leverage
           @in_review = tasks.select { |task| task.state == "in_review" }
           @asked = (@ready + @in_review).to_set(&:id)
           @builders = seats(workspace_id, "builder") if @ready.any?
-          @reviewers = seats(workspace_id, "reviewer") if @in_review.any?
+          if @in_review.any?
+            @reviewers = seats(workspace_id, "reviewer")
+            @general_in_workspace = Seat.exists?(workspace_id: workspace_id, role: "general", removed_at: nil)
+            build_history
+            @eligible_reviewers = {}
+          end
           @causes = TaskStep.where(task_id: @ready.map(&:id), closed_at: nil, kind: "wait_ready").pluck(:task_id, :cause_kind).to_h
           @reviews = Review.where(task_id: @in_review.map(&:id), verdict: nil, reviewer_seat_id: nil).order(:round, :created_at, :id)
             .index_by(&:task_id)
@@ -158,6 +165,16 @@ module Leverage
           end
         end
 
+        # A configured reviewer may still be structurally barred from this task.
+        # Account outages have their own note, so this considers allowed logins
+        # regardless of their availability.
+        def reviewer_seat_exists(task)
+          review = @reviews[task.id]
+          return unless review && @general_in_workspace
+
+          eligible_reviewers(review).any?
+        end
+
         def limit_hold(seat, task)
           return [ nil, nil ] if Candidates.first_available(seat, task, @now)
 
@@ -170,8 +187,18 @@ module Leverage
 
         private
 
+        def build_history
+          @built_by = {}
+          return unless @general_in_workspace
+
+          task_ids = @in_review.map(&:id)
+          @built_by = @reviewers.to_h do |seat|
+            [ seat.id, Eligibility.built_by(seat).where(task_id: task_ids).pluck(:task_id).to_set ]
+          end
+        end
+
         def seats(workspace_id, role)
-          Seat.where(workspace_id: workspace_id, role: role, enabled: true, paused: false, removed_at: nil)
+          Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as(role), enabled: true, paused: false, removed_at: nil)
             .order(:created_at, :id).to_a
         end
 
@@ -183,7 +210,29 @@ module Leverage
 
         def in_review(task)
           review = @reviews[task.id]
-          review && account(@reviewers, review, limit: true)
+          return unless review
+
+          account(eligible_reviewers(review), review, limit: true)
+        end
+
+        def eligible_reviewers(review)
+          return @reviewers unless @general_in_workspace
+
+          @eligible_reviewers[review.task_id] ||= @reviewers.select do |seat|
+            !@built_by.fetch(seat.id).include?(review.task_id) && review_login_possible?(seat, review)
+          end
+        end
+
+        def review_login_possible?(seat, review)
+          unless seat.credential_id
+            return Gating.provider_allowed?(task_id: review.task_id, provider: seat.provider)
+          end
+          if seat.role == "general"
+            account = Candidates.first_available(seat, nil, @now)
+            return false if Eligibility.gemini_review?(seat, account&.provider)
+          end
+
+          Candidates.for(seat, work: review).any?
         end
 
         # The account a piece of work waits for, when every seat has
@@ -193,7 +242,8 @@ module Leverage
         def account(seats, work, limit:)
           return nil if seats.empty? || seats.any? { |seat| seat.credential_id.nil? || Candidates.first_available(seat, work, @now) }
 
-          all = seats.flat_map { |seat| Candidates.for(seat) }
+          review = work if @general_in_workspace && work.is_a?(Review)
+          all = seats.flat_map { |seat| Candidates.for(seat, work: review) }
           reset = limit && seats.filter_map { |seat| Candidates.earliest_reset(seat, work, @now) }
             .min_by { |credential| [ credential.limited_until, credential.position ] }
           return [ reset.id, reset.limited_until ] if reset

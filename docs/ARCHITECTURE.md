@@ -418,11 +418,17 @@ adds the MCP server.
   and be a seat that could claim it (Jobs.next_for). A check held with
   `check_error` is considered as a new attempt. The same set of waiting
   checks drives `orchestrator_offline`. The timer queues an errored rule
-  check again only when a seat that counts could claim it (Jobs.next_for).
-  An Orchestrator seat that counts can take it once free.
+  check again when a counting General seat passes the job claim tests
+  for that attempt, independently of queue order. A counting Orchestrator
+  can take it once free. Errored claim-check holds close on recovery so the
+  next claim checks afresh.
   [PRD check errors and presence](PRD.md#when-a-check-cannot-run)
 
   `ReviewerEligibility` opens and resolves "No reviewer is eligible".
+  In a workspace with a General seat, the board and task page share the
+  independent reviewer reading for each unassigned review, including
+  when the provider rule is off. Their account waits include General
+  builders and eligible General reviewers.
   Four timers time out a check's or a draft's job in the queue and in its
   run, and two workspace timers, `orchestrator_offline` and
   `reviewer_eligibility`, run on every sweep. The 120 seconds within which
@@ -456,9 +462,10 @@ adds the MCP server.
   milestone 1's `Leverage::Contract` and `Leverage::Gating`.
   `api/script/evals/build_inputs.rb` builds the eval suite's job inputs.
   `api/config/role_files/` holds the role files for Builder, Reviewer,
-  Planner and Orchestrator. A General briefing has no role file, and a
-  job claimed by a General seat carries `job_rules` from `roles.json` in
-  place of the role file. The join instructions use the same sentences.
+  Planner and Orchestrator. A General briefing has no role file.
+  `roles.json` supplies the General briefing's `work_rules` and each job
+  material's `job_rules`. The join instructions use the same sentences
+  for the relevant kind of work.
   The templates in `api/config/` are `landing_prompt.txt.erb`,
   `join_http.md.erb` and `join_mcp.md.erb`. The API image runs in the
   `api`, `sweep` and `backup` containers that `compose.yaml` describes.
@@ -523,8 +530,10 @@ adds the MCP server.
   [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)
   The General runner uses `SeatRole.actsAs` to take
   jobs, reviews and tasks in one polling loop. While idle it is offered
-  a job first, then a review, then a task. Its prompts omit the role
-  section, and its job prompts put `job_rules` from the material there.
+  a job first, then a review, then a task. Its build and review prompts
+  give the briefing's `work_rules` before quoted task text. Its fresh
+  job prompts give `job_rules` from the material. General eval mode
+  measures these job prompts on app-managed default models.
   It writes no role, skill or Markdown file into a work folder.
   `LeverageRunner eval` runs the two eval suites through the production
   `CheckJob` or `ApprovalJob` without serving the HTTP API.

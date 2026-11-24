@@ -143,7 +143,7 @@ enum CardWording {
                     text: (accountWait.signedOut ? BoardCopy.chipLoginSignedOut : BoardCopy.chipNoLoginLeft).text,
                     tone: accountWait.signedOut ? .stop : .wait)
             }
-        } else if state == .inReview, !reviewerSeatExists {
+        } else if state == .inReview, !(task.reviewerSeatExists ?? reviewerSeatExists) {
             note = BoardCopy.noteNoReviewer.text
         }
         if note == nil {

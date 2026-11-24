@@ -119,6 +119,7 @@ struct ConnectAgentModelTests {
     func shownPromptCopy() {
         #expect(AgentsCopy.landingNote.text.hasPrefix("Paste this into the agent."))
         #expect(!AgentsCopy.landingNote.text.contains("gives back its work"))
+        #expect(AgentsCopy.newPromptConfirmation.text == "A new prompt stops the agent using the current one and gives back its work.")
     }
 
     @Test("the General note covers only app-run default models on tested providers")

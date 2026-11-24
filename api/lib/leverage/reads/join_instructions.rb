@@ -17,6 +17,7 @@ module Leverage
         def works_on_jobs? = Roles.acts_as?(role, "orchestrator") || Roles.acts_as?(role, "planner")
         def role_file? = Roles.role_file?(role)
         def job_rules = Roles.job_rules(role)
+        def work_rules(acting_as) = Roles.work_rules(role, acting_as) || []
         def offline_after = RolePresence::OFFLINE_AFTER
         def heartbeat_interval = format("%g", lease_seconds.fdiv(3).floor(1))
         def get_binding = binding

@@ -32,12 +32,14 @@ public struct BoardTask: Codable, Equatable, Sendable {
     public let checkReason: String?
     public let waitsForBuilder: Bool
     public let waitsForStrongerAgent: Bool
+    /// Whether an independent seat can review this waiting task, when supplied by the board.
+    public let reviewerSeatExists: Bool?
 
     public init(
         task: TaskSummary, blocked: Bool = false, holdReasons: [HoldReason] = [],
         waitingForCredentialID: UUID? = nil, waitingUntil: Date? = nil, inboxItem: InboxItem? = nil,
         checking: Bool = false, checkReason: String? = nil,
-        waitsForBuilder: Bool = false, waitsForStrongerAgent: Bool = false
+        waitsForBuilder: Bool = false, waitsForStrongerAgent: Bool = false, reviewerSeatExists: Bool? = nil
     ) {
         self.task = task
         self.blocked = blocked
@@ -49,6 +51,7 @@ public struct BoardTask: Codable, Equatable, Sendable {
         self.checkReason = checkReason
         self.waitsForBuilder = waitsForBuilder
         self.waitsForStrongerAgent = waitsForStrongerAgent
+        self.reviewerSeatExists = reviewerSeatExists
     }
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +63,7 @@ public struct BoardTask: Codable, Equatable, Sendable {
         case checkReason = "check_reason"
         case waitsForBuilder = "waits_for_builder"
         case waitsForStrongerAgent = "waits_for_stronger_agent"
+        case reviewerSeatExists = "reviewer_seat_exists"
     }
 }
 

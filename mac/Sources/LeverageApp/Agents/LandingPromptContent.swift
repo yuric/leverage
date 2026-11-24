@@ -8,9 +8,6 @@ struct LandingPromptContent: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AgentsCopy.landingTitle.text)
                 .font(.system(size: Tokens.FontSize.body, weight: .semibold))
-            Text(AgentsCopy.landingNote.text)
-                .font(.system(size: Tokens.FontSize.small))
-                .foregroundStyle(Tokens.Palette.text2)
             switch model.state {
             case .none:
                 EmptyView()
@@ -22,6 +19,9 @@ struct LandingPromptContent: View {
                         .foregroundStyle(Tokens.Palette.text2)
                 }
             case .ready(let text):
+                Text(AgentsCopy.landingNote.text)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
                 Text(verbatim: text)
                     .font(.system(size: Tokens.FontSize.small, design: .monospaced))
                     .textSelection(.enabled)
@@ -51,7 +51,7 @@ struct NewLandingPromptSheet: View {
             Text(AgentsCopy.newPrompt.text)
                 .font(.system(size: 20, weight: .semibold))
             if model.state == .none {
-                Text(AgentsCopy.landingNote.text)
+                Text(AgentsCopy.newPromptConfirmation.text)
                     .foregroundStyle(Tokens.Palette.text2)
             } else {
                 LandingPromptContent(model: model)

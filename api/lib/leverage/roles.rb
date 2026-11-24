@@ -17,6 +17,8 @@ module Leverage
       DEFINITIONS[role]&.fetch("role_file") || false
     end
 
+    def work_rules(role, acting_as) = DEFINITIONS.fetch(role).fetch("work_rules", {})[acting_as]
+
     def job_rules(role) = DEFINITIONS.fetch(role).fetch("job_rules")
   end
 end

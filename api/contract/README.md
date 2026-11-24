@@ -21,7 +21,7 @@ and leaves its meaning to the PRD.
 | `hooks.json` | The hooks, what a failed gate does, hashed inputs, moment names. |
 | `shipped_rules.json` | The seven shipped rules, their version-1 fields. |
 | `jobs.json` | The job kinds: who claims them, timeouts, their input and result components. |
-| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, calls (every role may read `GET /v1/join`). |
+| `roles.json` | The five seat roles: may change, may read, the roles each acts as, whether it gets a role file, General work and job instructions, calls (every role may read `GET /v1/join`). |
 | `timers.json` | Each timer: scope, due-time source, events. |
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
@@ -782,8 +782,11 @@ agent is connected. Its decisions are GA-1 to GA-11 in
   more than one of `job`, `review` and `task` true at once (GA-4).
 - `Briefing.role_file`, `BriefingVersions.role_file_version` and the
   `role_file` of the four job materials may be null: null for a General
-  seat, whose briefing hashes no role file part. A job's stored input
-  keeps the text; a claim by a General seat returns it as null (GA-2).
+  seat, whose briefing hashes no role file part. A General briefing
+  carries `work_rules` for building or reviewing, outside the hash.
+  The runner and both join responses use those instructions (GA-7).
+  A job's stored input keeps the role file text; a claim by a General
+  seat returns it as null (GA-2).
 - The role enums of `Seat`, `ConnectSeatRequest`, `ChangeSeatRequest` and
   `HelperRequestParams` gain `general`. `seats.role` is not constrained in
   the database, so there is no migration.
@@ -808,8 +811,9 @@ After the design was challenged three times, the contract holds these
   could claim a waiting check (`Jobs.next_for`), or holds nothing while
   none waits. Question, approval and contract-draft jobs end as before;
   `orchestrator_offline` queues an errored rule check again only when a
-  seat that counts could claim it, and otherwise leaves it in its error
-  as the owner's item (GA-6). A question goes to a job only when a seat
+  counting seat is eligible for that attempt, regardless of queue order,
+  and leaves other errors with the owner. Errored claim-check holds close
+  when the role is back (GA-6, RC-37). A question goes to a job only when a seat
   that acts as orchestrator could claim it now (GA-1).
 - `change_seat`: a change of role of a running seat the app runs, to or
   from General, queues only `start_seat`, which the helper hands over
@@ -825,7 +829,12 @@ After the design was challenged three times, the contract holds these
 - `lists.general_tested_providers`: the login providers whose default
   model met both suites' bars run as a General seat, empty until the
   maintainer runs them. The Swift generator writes it as
-  `ContractLists.generalTestedProviders` (GA-11).
+  `ContractLists.generalTestedProviders` (GA-11). The list applies to the
+  app runner's fresh job prompt on default models. A seat that connects
+  on its own or names a model remains outside the eval coverage.
+- `BoardTask.reviewer_seat_exists` is an optional task-level reading for
+  unassigned reviews in a workspace with a General seat. The task page
+  shares that reading. Account waits include eligible General seats.
 
 ## What the join call added
 

@@ -63,7 +63,8 @@ module Leverage
         items = InboxItem.where(workspace_id: workspace_id, about_kind: "task", about_id: task.id, state: "open")
           .order(:opened_at, :id).to_a
         holds = Hold.where(task_id: task.id).order(:opened_at, :id).to_a
-        waiting = Board.waiting(workspace_id, [ task ], { task.id => holds.select { |hold| hold.closed_at.nil? } })
+        waiting = Board.waiting(workspace_id, [ task ], { task.id => holds.select { |hold| hold.closed_at.nil? } }).fetch(task.id)
+        waiting[:reviewer_seat_exists] = Board.reviewer_seat?(workspace_id) unless waiting.key?(:reviewer_seat_exists)
         as_of = TaskTimeline.database_now
         steps = TaskTimeline.call(workspace_id, task.id, as_of: as_of)
 
@@ -73,13 +74,12 @@ module Leverage
           any_action_started: events.any? { |event| ACTION_STARTED.include?(event.type) },
           questions: ::Question.where(task_id: task.id).order(:asked_at, :id).map { |question| Question.shape(question) },
           holds: holds.map { |hold| Shapes.hold(hold) },
-          **waiting.fetch(task.id),
+          **waiting,
           reviews: reviews.map { |review| Shapes.review(review) },
           inbox_items: Board.inbox_items(workspace_id, items),
           events: events.map { |event| Shapes.event(event) },
           names: names(workspace_id, task, reviews, events),
           recovery_times: RecoveryTimes.call(workspace_id, task_id: task.id),
-          reviewer_seat_exists: Board.reviewer_seat?(workspace_id),
           as_of_seq: as_of_seq,
           steps: steps, lifetime_seconds: TaskTimeline.lifetime_seconds(steps), as_of: Shapes.time(as_of),
           rule_checks: rule_checks(task, holds),

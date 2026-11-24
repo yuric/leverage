@@ -13,8 +13,8 @@ module Leverage
   # Gating::CanonicalJson.dump of the parts as {kind, id, version}, in that
   # order: only a change to a part of this task's briefing changes it, so
   # saving, switching or removing a rule in it does, and nothing else
-  # about rules does. The work reference, review notes and answered
-  # questions are outside it.
+  # about rules does. General work instructions, the work reference,
+  # review notes and answered questions are outside it.
   #
   # The answer's rules carry each rule's version id, key, name and text: a
   # model rule's instruction, or an app rule's sentence (Rules::Sentences,
@@ -49,6 +49,7 @@ module Leverage
       project = project_for(task)
       brief_version = project&.brief_version || 0
       role_file = RoleFiles.text(seat.role) if Roles.role_file?(seat.role)
+      work_rules = Roles.work_rules(seat.role, review ? "reviewer" : "builder")
       {
         "hash" => parts_hash(task, seat, review, brief_version),
         "versions" => {
@@ -60,6 +61,7 @@ module Leverage
         "rules" => rules,
         "brief" => Projects.brief(project),
         "role_file" => role_file,
+        **(work_rules ? { "work_rules" => work_rules } : {}),
         "contract" => contract(task),
         "answers" => answers(task)
       }

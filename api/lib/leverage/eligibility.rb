@@ -233,6 +233,7 @@ module Leverage
       tasks.where(live, at).exists? || reviews.where(live, at).exists? || Jobs.held(seat, at).present?
     end
 
+    # A General runner on a Gemini login cannot take a review (GA-9).
     def gemini_review?(seat, provider)
       seat.role == "general" && seat.credential_id.present? && provider == "gemini"
     end
@@ -333,8 +334,8 @@ module Leverage
       false
     end
 
-    private_class_method :lost_task_refusal, :lost_review_refusal, :open_reviews, :builder_at_rank?, :reviewed?, :gemini_review?,
-      :review_provider, :overridden_claim_task_ids, :claim_hash, :open_hold_task_ids, :built_by, :held_when_cancelled?,
+    private_class_method :lost_task_refusal, :lost_review_refusal, :open_reviews, :builder_at_rank?, :reviewed?,
+      :review_provider, :overridden_claim_task_ids, :claim_hash, :open_hold_task_ids, :held_when_cancelled?,
       :reviewed_when_cancelled?
   end
 end

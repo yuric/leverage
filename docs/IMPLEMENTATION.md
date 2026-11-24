@@ -69,6 +69,12 @@ on a role change applies only to running seats the app manages when
 changing to or from General. The new Gemini review pass-over applies
 only to General seats.
 
+The review fixes make orchestrator recovery test each eligible retry,
+surface an independent reviewer or account wait per task, and give General
+builds, reviews and jobs their instructions in the corresponding material.
+General eval coverage is for app-managed default models. New prompt
+confirms the replacement before displaying paste instructions.
+
 ## Milestones
 
 The milestones and their content are defined in the PRD under "Build order
@@ -2324,8 +2330,8 @@ skeleton's pull request description, as rule AR-004 asks.
     choices and their effects. Work proceeds with these decisions.
 
     - **GA-2** `[owner]`. Leverage gives General agents the instructions
-      as text in the join response, job material and runner prompts, with
-      no role file, skill file or other Markdown file. The provider tool
+      as text in the join response, briefings, job material and runner
+      prompts, with no role file, skill file or other Markdown file. The provider tool
       can still read its own files. See the provider-specific details in
       [Deployment](DEPLOY.md#files-a-general-agents-tool-may-read).
       **Alternative.** Give General agents the existing role files or
