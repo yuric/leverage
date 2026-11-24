@@ -42,7 +42,9 @@ services:
 
   api:
     <<: *api
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      LEVERAGE_MCP_COMMAND: ${LEVERAGE_MCP_COMMAND:-}
     ports:
       # Loopback only: the API is not reachable from other machines.
       # API_PORT in .env moves it when 3000 is taken on the Mac.
