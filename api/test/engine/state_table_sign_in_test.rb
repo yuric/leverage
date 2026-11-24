@@ -1,7 +1,7 @@
 require "test_helper"
 
 # The state table's rows for the sign-in group (test 3, PRD L836; milestone
-# 2 plan WP6): create_owner, sign_in, sign_out and issue_seat_token. Each
+# 2 plan WP6): create_owner, sign_in, sign_out and both token commands. Each
 # row reads no task state (from: null) and changes none (to: null), so each
 # case runs the real entry through the pipeline for a caller the row's
 # "who" names and checks that the command completed and wrote exactly the
@@ -14,7 +14,8 @@ class StateTableSignInTest < ActiveSupport::TestCase
 
   # The request kind of a row's "who" for each command: the owner, or the
   # helper acting as the app (the registry's caller of issue_seat_token).
-  CALLERS = { "create_owner" => "owner", "sign_in" => "owner", "sign_out" => "owner", "issue_seat_token" => "helper" }.freeze
+  CALLERS = { "create_owner" => "owner", "sign_in" => "owner", "sign_out" => "owner", "issue_seat_token" => "helper",
+    "issue_landing_prompt" => "owner" }.freeze
 
   def key = "state-table-#{SecureRandom.hex(4)}"
 
@@ -35,6 +36,12 @@ class StateTableSignInTest < ActiveSupport::TestCase
       session = scenario.owner_session
       T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner", caller_id: session.user_id,
         key: key, request_hash: "c" * 64, params: { "session_id" => session.id })
+    when "issue_landing_prompt"
+      scenario = Scenario.new
+      seat = scenario.seat(token: false)
+      T::Request.new(command: command, workspace_id: scenario.workspace_id, caller_kind: "owner",
+        caller_id: scenario.owner.id, key: key, request_hash: "e" * 64,
+        params: { "id" => seat.id, "connection" => "http", "address" => "http://example.test" })
     when "issue_seat_token"
       scenario = Scenario.new
       seat = scenario.seat(credential: scenario.credential, token: false)
@@ -49,8 +56,8 @@ class StateTableSignInTest < ActiveSupport::TestCase
     end
   end
 
-  test "the sign-in group is the four commands of plan section 2.1" do
-    assert_equal %w[create_owner sign_in sign_out issue_seat_token], T::Table::SIGN_IN
+  test "the sign-in group covers the owner session and seat token commands" do
+    assert_equal %w[create_owner sign_in sign_out issue_seat_token issue_landing_prompt], T::Table::SIGN_IN
   end
 
   StateTableCases.define(self, Leverage::Transitions::Table::SIGN_IN) do |kase|
@@ -70,7 +77,12 @@ class StateTableSignInTest < ActiveSupport::TestCase
     written = Event.where.not(id: events_before).order(:seq).map(&:type)
     times = kase.command == "create_owner" ? Leverage::Rules::Shipped.all.size : 1
     assert_equal kase.events * times, written, "#{kase.command} writes exactly the row's events: #{kase.events.inspect}"
-    assert_empty kase.conditional_events
+    if kase.command == "issue_landing_prompt"
+      assert_equal %w[task.released review.released], kase.conditional_events.map { |event| event.fetch("event") }
+      assert_match Leverage::Tokens::FORM, outcome.once.fetch("seat_token")
+    else
+      assert_empty kase.conditional_events
+    end
     assert Command.exists?(key: request.key, command: kase.command), "#{kase.command} stores its commands row"
     if kase.command == "issue_seat_token"
       assert_equal @start.credential_id, Seat.find(@start.seat_id).run_credential_id,

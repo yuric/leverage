@@ -3,9 +3,8 @@ require_relative "accounts_support"
 
 # connect_seat (PRD L590-L591, L803; milestone 2 plan §2.1, IN-11, IN-29,
 # IN-30, SC-10, SC-11): writes seat.connected. A seat that connects on its
-# own gets its token once; a seat the app runs gets a login whose checks
-# have passed, no token (seat_token null), and is started: wanted running,
-# with a start_seat request queued.
+# own gets its token from a separate landing prompt command. A seat the app
+# runs gets a verified login and a queued start_seat request.
 class ConnectSeatTest < ActiveSupport::TestCase
   include AccountsSupport
 
@@ -16,15 +15,13 @@ class ConnectSeatTest < ActiveSupport::TestCase
       "strength_rank" => nil, "credential_id" => nil }.merge(fields.transform_keys(&:to_s))
   end
 
-  test "a seat that connects on its own gets its token once, stored only as a digest" do
+  test "a seat that connects on its own has no token until the owner issues a prompt" do
     key = new_key
     written = events_written { @outcome = assert_completed(owner_command("connect_seat", body(provider: "codex"), key: key)) }
 
-    token = @outcome.once.fetch("seat_token")
-    assert_match Leverage::Tokens::FORM, token
-    assert token.start_with?("lvs_")
+    assert_nil @outcome.once
     seat = Seat.find(@outcome.result.fetch("seat_id"))
-    assert_equal seat.id, Leverage::Tokens.find(token, kind: :seat).id
+    assert_nil seat.token_hash
     assert_equal [ "Made-up builder", "builder", "codex", "", "", 1, nil, nil, false ],
       [ seat.name, seat.role, seat.provider, seat.model, seat.effort, seat.strength_rank, seat.credential_id, seat.run_state,
         seat.wanted_running ]
@@ -34,7 +31,7 @@ class ConnectSeatTest < ActiveSupport::TestCase
         written.first.command_id, written.first.payload ]
     assert_equal 0, HelperRequest.where(seat_id: seat.id).count
     assert_equal [ "seat_id" ], @outcome.result.keys
-    assert_not_includes Command.find_by!(key: key).attributes.to_json, token
+    assert_equal @outcome.result, Command.find_by!(key: key).result
   end
 
   test "a repeat of the key answers the seat with no token and issues none" do
@@ -57,7 +54,7 @@ class ConnectSeatTest < ActiveSupport::TestCase
         body(role: "reviewer", name: "Made-up reviewer", credential_id: credential.id, model: "made-up-model", effort: nil)))
     end
 
-    assert_equal({ "seat_token" => nil }, @outcome.once, "SeatConnected with seat_token null (§2.1)")
+    assert_nil @outcome.once
     seat = Seat.find(@outcome.result.fetch("seat_id"))
     assert_equal [ "codex", credential.id, "made-up-model", "", nil, "stopped", true ],
       [ seat.provider, seat.credential_id, seat.model, seat.effort, seat.token_hash, seat.run_state, seat.wanted_running ]
@@ -122,7 +119,8 @@ class ConnectSeatTest < ActiveSupport::TestCase
         end
       end
       outcome = assert_completed(owner_command("connect_seat", body(role: role, provider: "gemini")))
-      assert outcome.once.fetch("seat_token")
+      assert_nil outcome.once
+      assert_nil Seat.find(outcome.result.fetch("seat_id")).token_hash
     end
   end
 

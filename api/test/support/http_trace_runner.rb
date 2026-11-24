@@ -157,7 +157,7 @@ class HttpTraceRunner < TraceRunner
               "strength_rank" => row.fetch("strength_rank"), "credential_id" => bound(row.fetch("credential_id")) })
       .fetch("result")
     seat_id = result.fetch("seat_id")
-    @test.assert_nil result.fetch("seat_token"), "a seat the app runs is never shown a token"
+    @test.refute result.key?("seat_token"), "connecting an app-run seat returns no token field"
     request = next_request("start_seat")
     @test.assert_equal seat_id, request.fetch("seat_id")
     bind_symbol(row.fetch("id"), seat_id, "setup")

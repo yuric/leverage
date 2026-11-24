@@ -190,13 +190,11 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_equal 1, @stand_in.requests.map(&:request_hash).uniq.size
   end
 
-  test "outcome bodies give a seat the app runs a null token the first time" do
-    first = T::Outcome.completed({ "seat_id" => "s" }, once: { "seat_token" => nil })
-    repeat = T::Outcome.completed({ "seat_id" => "s" })
+  test "a stored Connect receipt renders only the seat id" do
+    stored = T::Outcome.completed({ "seat_id" => "s" })
 
-    assert_equal({ "seat_id" => "s", "seat_token" => nil }, RunsCommands.outcome_body("connect_seat", "k", first)[:result])
-    assert_equal({ "seat_id" => "s", "repeated" => true }, RunsCommands.outcome_body("connect_seat", "k", repeat)[:result])
-    assert_equal({ "seat_id" => "s" }, RunsCommands.outcome_body("claim", "k", repeat)[:result])
+    assert_equal({ "seat_id" => "s" }, RunsCommands.outcome_body("connect_seat", "k", stored)[:result])
+    assert_equal({ "seat_id" => "s" }, RunsCommands.outcome_body("claim", "k", stored)[:result])
   end
 
   test "an error inside a controller still hides its message behind a 500" do

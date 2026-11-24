@@ -5,7 +5,7 @@ require_relative "../support/http_calls"
 # served operation that changes something, taken from Http::RouteTable and
 # the registry, is sent over HTTP through the real entries and then sent
 # again with the same key and the same body. The repeat answers what the
-# first call answered (for the four answers that carry a token: the same
+# first call answered (for the five answers that carry a token: the same
 # ids with "repeated": true and no token, IN-11) and writes nothing: no
 # event, no commands row, no other row. The same key with another body (the
 # same fields written out differently: the request hash is over the raw
@@ -27,10 +27,10 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   # The exception test 5 names (IN-9).
   SIGN_OUT = "sign_out_owner".freeze
 
-  # The token field of the four answers that carry a token, by operation.
+  # The token field of the five answers that carry a token, by operation.
   ONCE = {
     "create_owner" => "session_token", "sign_in_owner" => "session_token", "issue_helper_token" => "helper_token",
-    "connect_seat" => "seat_token", "issue_seat_token" => "seat_token"
+    "issue_landing_prompt" => "seat_token", "issue_seat_token" => "seat_token"
   }.freeze
 
   # Every table a command can write, counted before and after a repeat.
@@ -66,6 +66,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     "cancel_task" => :cancel_task,
     "allow_another_round" => :allow_another_round,
     "connect_seat" => :connect_seat,
+    "issue_landing_prompt" => :issue_landing_prompt,
     "start_seat" => :start_seat,
     "stop_seat" => :stop_seat,
     "remove_seat" => :remove_seat,
@@ -242,6 +243,38 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     assert_equal before, counts
   end
 
+  test "a legacy job claim receipt gets empty job rules only while its input is available" do
+    job = queued_check_job
+    seat = orchestrator_seat
+    key = new_key
+    call("claim_next_job", token: token(seat), key: key)
+    assert_response :ok
+
+    receipt = Command.find_by!(caller_id: seat.id, key: key)
+    legacy = receipt.result.deep_dup
+    legacy.fetch("input").fetch("material").delete("job_rules")
+    receipt.update!(result: legacy)
+    expected = legacy.deep_dup
+    expected.fetch("input").fetch("material")["job_rules"] = []
+
+    call("claim_next_job", token: token(seat), key: key)
+    assert_response :ok
+    assert_equal expected, response.parsed_body.fetch("result")
+    assert_response_matches_contract
+
+    call("get_command", token: token(seat), ids: { "key" => key })
+    assert_response :ok
+    assert_equal expected, response.parsed_body.fetch("result")
+    assert_response_matches_contract
+    assert_equal legacy, receipt.reload.result
+
+    engine("submit_job_result", seat, { "id" => job.id, "result" => { "result" => "passed", "reason" => "Made up." },
+      "tokens" => 0, "spend" => 0 })
+    call("claim_next_job", token: token(seat), key: key)
+    assert_response :conflict
+    assert_equal [ nil, "not_eligible" ], [ response.parsed_body["result"], response.parsed_body.dig("refusal", "code") ]
+  end
+
   private
 
   def assert_writes_once(operation, call_data)
@@ -302,7 +335,8 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     field = ONCE[operation]
     return first unless field && first["result"]&.fetch(field, nil)
 
-    first.merge("result" => first.fetch("result").except(field).merge("repeated" => true))
+    once_fields = operation == "issue_landing_prompt" ? [ field, "text" ] : [ field ]
+    first.merge("result" => first.fetch("result").except(*once_fields).merge("repeated" => true))
   end
 
   def counts = TABLES.to_h { |model| [ model.name, model.count ] }
@@ -471,6 +505,10 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     engine("fail_review", reviewer_seat, { "id" => review.id }.merge(verdict("failed", failed: [ criterion.id ])))
     assert Hold.exists?(task_id: review.task_id, reason: "rounds_exceeded", closed_at: nil), "the hold is open"
     owner_call(ids: { "id" => review.task_id })
+  end
+
+  def issue_landing_prompt
+    owner_call(ids: { "id" => @scenario.seat.id }, body: { "connection" => "http" })
   end
 
   def connect_seat

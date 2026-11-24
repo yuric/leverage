@@ -60,6 +60,46 @@ class TokenOnceTest < ActionDispatch::IntegrationTest
     assert_once(first, repeat, "session_token", %w[user_id created_at])
   end
 
+  test "connect returns the same seat id for both connections without issuing a token" do
+    scenario = Scenario.new
+    [ nil, scenario.credential.id ].each do |credential_id|
+      body = { "name" => "Made-up agent", "role" => "general", "provider" => (credential_id ? nil : "codex"),
+        "credential_id" => credential_id }
+      key = "connect-#{credential_id || "prompt"}"
+      first = post_json("/v1/owner/seats", body, key: key, token: scenario.owner_token)
+      assert_response :ok
+      assert_equal [ "seat_id" ], first.fetch("result").keys
+      assert_nil Seat.find(first.dig("result", "seat_id")).token_hash
+
+      repeat = post_json("/v1/owner/seats", body, key: key, token: scenario.owner_token)
+      assert_response :ok
+      assert_equal first, repeat
+    end
+  end
+
+  test "issue_landing_prompt shows the prompt once and stored reads never disclose it" do
+    scenario = Scenario.new
+    seat = scenario.seat
+    path = "/v1/owner/seats/#{seat.id}/landing-prompt"
+    key = "prompt-once"
+    body = { "connection" => "mcp" }
+    first = post_json(path, body, key: key, token: scenario.owner_token)
+    assert_response :ok
+    assert_matches_component("LandingPromptIssued", first.fetch("result"))
+    assert_match Leverage::Tokens::FORM, first.dig("result", "seat_token")
+    assert_includes first.dig("result", "text"), first.dig("result", "seat_token")
+
+    repeat = post_json(path, body, key: key, token: scenario.owner_token)
+    assert_response :ok
+    assert_matches_component("LandingPromptIssuedRepeated", repeat.fetch("result"))
+    assert_equal first.fetch("result").except("seat_token", "text").merge("repeated" => true), repeat.fetch("result")
+
+    get "/v1/owner/commands/#{key}", headers: { "Authorization" => "Bearer #{scenario.owner_token}" }
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal repeat, response.parsed_body
+  end
+
   test "issue_seat_token: SeatTokenPickup once, then SeatTokenPickupRepeated" do
     scenario = Scenario.new
     seat = scenario.seat(credential: scenario.credential, token: false)
