@@ -171,6 +171,23 @@ class SubmitJobResultTest < ActiveSupport::TestCase
     assert_nil task.details
   end
 
+  test "null and blank draft details preserve the task's text even when its model check fails" do
+    scenario.with_shipped_rules
+    details = "Folded goal.\r\nSecond line.\n\n\r\nOwner details.\r\n"
+
+    [ nil, "", " \t\r\n" ].each do |draft_details|
+      task, job = claimed_draft(details: details)
+      outcome = submit_result(@planner, job, draft_result("details" => draft_details))
+      assert_equal :pending, outcome.outcome
+      assert_completed(claim_job(@orchestrator))
+      check = RuleCheck.find_by!(task_id: task.id, rule_id: Rule.find_by!(workspace_id: scenario.workspace_id,
+        key: "specific_details").id)
+      assert_completed(submit_result(@orchestrator, job_of(check), FAILED))
+
+      assert_equal [ "backlog", details ], task.reload.attributes.values_at("state", "details")
+    end
+  end
+
   test "when the planner's Complete contract waits on a model check, the result call itself is the one waiting (RE-6)" do
     _task, job = claimed_draft
     pending = ->(*, **) { :pending }

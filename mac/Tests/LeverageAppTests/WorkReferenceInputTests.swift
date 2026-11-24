@@ -47,6 +47,7 @@ struct WorkReferenceInputTests {
     @Test("Paste link refuses an empty clipboard or text that is not a single supported reference", arguments: [
         nil, "", "a note to the team", "https://", "https://example.invalid/one two",
         "ftp://example.invalid/reports", "reports/today", "git@example.invalid:", "file:reports",
+        "mailto:sample@example.invalid", "Meeting:10am@office", "ftp://example.invalid/reports?key=made-up",
         "/tmp/one\n/tmp/two", "/" + String(repeating: "a", count: 2_000),
     ] as [String?])
     func unsupportedPaste(text: String?) {

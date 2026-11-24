@@ -43,7 +43,8 @@ enum JobFixture {
 
     static func draftMaterial(
         criteria: [CriterionInput] = [CriterionInput(text: "The walrus discount is named.", kind: .build)],
-        workReference: String? = "/Users/example/sites/alpaca", rank: Int? = 2, budget: Decimal? = 12.5
+        workReference: String? = "/Users/example/sites/alpaca", rank: Int? = 2, budget: Decimal? = 12.5,
+        details: String? = JobFixture.details
     ) -> DraftMaterial {
         DraftMaterial(
             roleFile: "You are the planner. You write a task's contract.", title: title,

@@ -700,6 +700,32 @@ struct ConnectAgentModelTests {
         #expect(!model.canConnect)
     }
 
+    @Test("retrying a failed Native login read shows loading and restores the form")
+    func retriesCredentials() async {
+        let owner = owner()
+        owner.script { $0.credentials = { throw URLError(.cannotConnectToHost) } }
+        let model = makeModel(owner)
+        model.name = "Example agent"
+        await model.load()
+        #expect(model.loginRead == .failed(ShellCopy.cannotReach.text))
+        #expect(!model.canConnect)
+
+        let observed = Locked<ConnectAgentModel.LoginRead?>(nil)
+        let credentials = Fixtures.credentials()
+        owner.script {
+            $0.credentials = { [weak model] in
+                observed.value = await model?.loginRead
+                return credentials
+            }
+        }
+        await model.load()
+
+        #expect(observed.value == .loading)
+        #expect(model.loginRead == .loaded)
+        #expect(model.failure == nil)
+        #expect(model.canConnect)
+    }
+
     // MARK: the screen
 
     @Test("the Connect sheet draws in each of its states, light and dark")

@@ -58,6 +58,56 @@ struct SidePaneTests {
         #expect(navigator.boardFilter.projectID == nil)
     }
 
+    @Test("task changes refresh the project work reference for the next Add task", arguments: [
+        EventType.taskCreated, .taskChanged, .taskContractChanged, .contentDeleted,
+    ])
+    func refreshesWorkReference(eventType: EventType) async throws {
+        let rig = ShellRig()
+        let owner = rig.owner
+        let projectID = UUID()
+        let event = EventRecord(
+            id: UUID(), workspaceID: UUID(), seq: 3, at: Date(), type: eventType, actorKind: .owner, taskID: UUID())
+        let latest = Locked<String?>("~/work/first")
+        let deliver = Locked(false)
+        owner.script {
+            $0.listProjects = {
+                ProjectsList(projects: [Project(
+                    id: projectID, name: "Example project", goal: "", briefVersion: 0,
+                    latestWorkReference: latest.value)])
+            }
+            $0.seats = { SeatsList(seats: [], asOfSeq: 2) }
+            $0.events = { after, _, _ in
+                if after == 2, deliver.value { return EventsPage(events: [event], nextAfterSeq: event.seq) }
+                try await Task.sleep(for: .milliseconds(10))
+                return EventsPage(events: [], nextAfterSeq: after)
+            }
+        }
+        let feed = EventFeed(owner: owner)
+        let context = ScreenContext(
+            owner: owner, feed: feed, health: HealthLineModel(owner: owner, helper: rig.runtime.helper),
+            runtime: rig.runtime)
+        let watch = Task { await context.watchProjects() }
+        defer {
+            watch.cancel()
+            feed.stop()
+        }
+        try #require(await ShellFixtures.eventually(timeout: .seconds(30)) {
+            context.paneProjects.first?.latestWorkReference == "~/work/first"
+        })
+
+        let changed = eventType == .contentDeleted ? nil : "~/work/second"
+        latest.value = changed
+        deliver.value = true
+        #expect(await ShellFixtures.eventually(timeout: .seconds(30)) {
+            context.paneProjects.first?.latestWorkReference == changed
+        })
+
+        let form = AddTaskModel(api: owner, onSaved: {})
+        form.updateProjects(context.paneProjects)
+        form.projectID = projectID
+        #expect(form.workReference == (changed ?? ""))
+    }
+
     @Test("the pane's projects read and the owner's action calls observe session expiry")
     func newCallsObserveSessionExpiry() async {
         let base = FakeOwnerAPI()

@@ -44,15 +44,26 @@ struct DraftParserTests {
             {"goal": 3, "details": null, "criteria": ["One."], "work_reference": "/tmp/elsewhere", \
             "minimum_strength_rank": 0, "budget_cap": 9999, "title": "Another title"}
             """
-        let contract = try #require(parse(answer(sneaky)))
+        let contract = try #require(parse(answer(sneaky), material: JobFixture.draftMaterial(details: nil)))
         #expect(contract.workReference == "/Users/example/sites/alpaca")
         #expect(contract.minimumStrengthRank == 2)
         #expect(contract.budgetCap == Decimal(string: "12.5"))
         #expect(contract.title == JobFixture.title)
         #expect(contract.details == nil)
-        let empty = JobFixture.draftMaterial(workReference: nil, rank: nil, budget: nil)
+        let empty = JobFixture.draftMaterial(workReference: nil, rank: nil, budget: nil, details: nil)
         let bare = try #require(parse(answer(sneaky), material: empty))
         #expect(bare.workReference == nil && bare.minimumStrengthRank == nil && bare.budgetCap == nil)
+    }
+
+    @Test("a draft cannot replace existing details with missing, null or blank text", arguments: [
+        #"{"criteria": ["One."]}"#,
+        #"{"details": null, "criteria": ["One."]}"#,
+        #"{"details": "", "criteria": ["One."]}"#,
+        #"{"details": " \t\r\n", "criteria": ["One."]}"#,
+    ])
+    func emptyReplacement(json: String) {
+        let material = JobFixture.draftMaterial(details: "Folded goal.\n\nOwner details.")
+        #expect(parse(answer(json), material: material) == nil)
     }
 
     @Test("a review criterion the task already has keeps its own words")
