@@ -26,10 +26,10 @@ struct DraftJobTests {
             .run(JobFixture.draftClaim(), input: JobFixture.draftInput())
         let contract = try #require(Self.contract(end))
         #expect(contract.title == JobFixture.title)
-        #expect(contract.details == "Written by the stand-in planner.")
+        #expect(contract.details == "\(JobFixture.details)\n\nWritten by the stand-in planner.")
         #expect(contract.criteria == [
-            CriterionInput(text: "The page the goal asks for exists.", kind: .build),
-            CriterionInput(text: "The page shows what the goal asks for.", kind: .build),
+            CriterionInput(text: "The requested page exists.", kind: .build),
+            CriterionInput(text: "The page includes the requested information.", kind: .build),
             CriterionInput(text: DraftParser.reviewCriterion, kind: .review),
         ])
         #expect(contract.workReference == "/Users/example/sites/alpaca")

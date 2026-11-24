@@ -30,6 +30,12 @@ def token(number):
     return f"lvs_mock_{number:024d}"
 
 
+def approval_case(index):
+    number = (1, 12)[index - 1]
+    path = next((root / "evals/approves-actions/cases").glob(f"{number:02d}-*.json"))
+    return json.loads(path.read_text())
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
@@ -83,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
             assert sum(rule["enabled"] for rule in self.server.rules.values()) == 1
             assert self.server.issued == {ident(number) for number in roles.values()}
             index = len(self.server.tasks) + 1
+            contract = approval_case(index)["contract"]
+            assert body == {key: contract[key] for key in ("title", "details")}
             task_id = ident(index + 100)
             result = {"task_id": task_id}
             self.server.tasks[task_id] = index
@@ -92,8 +100,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             task_id = self.path.split("/")[-2]
             index = self.server.tasks[task_id]
-            number = (1, 12)[index - 1]
-            expected = json.loads(next((root / "evals/approves-actions/cases").glob(f"{number:02d}-*.json")).read_text())
+            expected = approval_case(index)
             work_folder = Path(body.pop("work_reference"))
             assert body == {
                 key: value for key, value in expected["contract"].items() if key != "work_reference"

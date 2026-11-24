@@ -24,6 +24,8 @@ SEAT_TOKEN = "stand-in-builder-token"
 REVIEWER_TOKEN = "stand-in-reviewer-token"
 PRIVATE_TEXT = "stand-in raw response must stay private"
 RULES = [f"00000000-0000-4000-8000-00000000020{i}" for i in range(7)]
+TITLE = "MCP developer check"
+DETAILS = "Create a file named hello.txt that contains the word ready"
 
 SHIM = r'''
 import json, os, pathlib, subprocess, sys, time
@@ -175,11 +177,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             result = {"role": "builder", "connection": "mcp", "text": "Stand-in MCP join instructions."}
         elif path == "/v1/owner/tasks":
             assert server.disabled == set(RULES)
+            assert message == {"title": TITLE, "details": DETAILS, "state": "backlog"}
             result = completed({"task_id": TASK})
         elif path == f"/v1/owner/tasks/{TASK}/complete-contract":
+            assert "goal" not in message and message["title"] == TITLE and message["details"] == DETAILS
             assert message["actions"] == []
             assert message["criteria"] == [
-                {"text": "Create a file named hello.txt that contains the word ready", "kind": "build"},
+                {"text": DETAILS, "kind": "build"},
                 {"text": "An independent reviewer agrees.", "kind": "review"}
             ]
             folder = Path(message["work_reference"])

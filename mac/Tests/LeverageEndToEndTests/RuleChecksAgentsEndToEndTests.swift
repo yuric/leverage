@@ -185,6 +185,7 @@ struct DraftContractEndToEndTests {
 
             let page = try await world.owner.task(id: task)
             #expect(page.task.workReference == world.work.path, "the work reference the test gave")
+            #expect(page.task.details == "A page names \(world.markers[1]).\n\nWritten by the stand-in planner.")
             #expect(page.task.state == .ready)
             #expect(page.steps.map(\.kind) == [.waitContract, .draft, .check, .waitReady])
 
