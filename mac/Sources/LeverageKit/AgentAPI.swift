@@ -4,6 +4,9 @@ import Foundation
 /// takes `any AgentAPI`: `AgentClient` sends them over HTTP with the seat's
 /// token, and LeverageTestSupport's `FakeAgentAPI` answers them in memory.
 public protocol AgentAPI: Sendable {
+    /// `get_join`: instructions for the selected connection.
+    func join(connection: LandingPromptConnection) async throws -> JoinInstructions
+
     /// `get_next`: the first true item; with `wait`, a long poll.
     func next(wait: Int?) async throws -> NextItem
     /// `get_command`: a command's outcome by its key.
@@ -73,4 +76,15 @@ public protocol AgentAPI: Sendable {
     func startAction(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `report_action_done`.
     func reportActionDone(taskID: UUID, actionID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
+}
+
+extension AgentAPI {
+    public func join() async throws -> JoinInstructions {
+        try await join(connection: .http)
+    }
+
+    /// A conformer that has no server can leave join unsupported.
+    public func join(connection: LandingPromptConnection) async throws -> JoinInstructions {
+        throw LeverageClientError.unsupportedOperation(.getJoin)
+    }
 }

@@ -37,9 +37,6 @@ public protocol OwnerAPI: Sendable {
     /// `get_helper_request`: with `wait` and `changedAfter`, answers when
     /// the request changed after that time or when the wait runs out.
     func helperRequest(id: UUID, wait: Int?, changedAfter: Date?) async throws -> HelperRequestStatus
-    /// `get_landing_prompt`: for a seat that connects on its own; a seat
-    /// the app runs throws `LeverageClientError.refused` (`invalid_state`).
-    func landingPrompt(seatID: UUID) async throws -> LandingPrompt
     /// `list_inbox`: the open Needs you items whose `inbox.opened` is after
     /// `afterSeq`; with `wait`, a long poll that answers when one opens.
     func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage
@@ -67,9 +64,12 @@ public protocol OwnerAPI: Sendable {
 
     // Seats.
 
-    /// `connect_seat`: a seat that connects on its own gets its token once.
+    /// `connect_seat`: returns the ID of the connected seat.
     func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
-        -> CommandOutcome<SeatConnectedAnswer>
+        -> CommandOutcome<SeatConnected>
+    /// `issue_landing_prompt`: returns the token and prompt text on the first answer for this key.
+    func issueLandingPrompt(seatID: UUID, connection: LandingPromptConnection, key: IdempotencyKey) async throws
+        -> CommandOutcome<LandingPromptIssuedAnswer>
     /// `start_seat`; the result's `helperRequestID` is the request to follow.
     func startSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome
     /// `stop_seat`.
@@ -192,8 +192,6 @@ public protocol OwnerAPI: Sendable {
         -> CommandOutcome<WorkspaceSettings>
     /// `get_workspace_settings`.
     func workspaceSettings() async throws -> WorkspaceSettings
-    /// `get_landing_prompt` in the selected connection form.
-    func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt
 }
 
 extension OwnerAPI {

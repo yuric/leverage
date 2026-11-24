@@ -93,9 +93,6 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         public var helperRequest: @Sendable (UUID, Int?, Date?) async throws -> HelperRequestStatus = { _, _, _ in
             throw FakeAPIError.notScripted(.getHelperRequest)
         }
-        public var landingPrompt: @Sendable (UUID) async throws -> LandingPrompt = { _ in
-            throw FakeAPIError.notScripted(.getLandingPrompt)
-        }
         public var listInbox: @Sendable (Int?, Int?) async throws -> InboxPage = { _, _ in
             throw FakeAPIError.notScripted(.listInbox)
         }
@@ -111,8 +108,12 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
             -> PlainOutcome = { _, _, _ in throw FakeAPIError.notScripted(.editContract) }
         public var holdTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.holdTask) }
         public var resumeTask: IDCommand = { _, _ in throw FakeAPIError.notScripted(.resumeTask) }
-        public var connectSeat: Command<ConnectSeatRequest, SeatConnectedAnswer> = { _, _ in
+        public var connectSeat: Command<ConnectSeatRequest, SeatConnected> = { _, _ in
             throw FakeAPIError.notScripted(.connectSeat)
+        }
+        public var issueLandingPrompt: @Sendable (UUID, LandingPromptConnection, IdempotencyKey) async throws
+            -> CommandOutcome<LandingPromptIssuedAnswer> = { _, _, _ in
+            throw FakeAPIError.notScripted(.issueLandingPrompt)
         }
         public var startSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.startSeat) }
         public var stopSeat: IDCommand = { _, _ in throw FakeAPIError.notScripted(.stopSeat) }
@@ -233,7 +234,6 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         public var workspaceSettings: @Sendable () async throws -> WorkspaceSettings = {
             throw FakeAPIError.notScripted(.getWorkspaceSettings)
         }
-        public var landingPromptForConnection: (@Sendable (UUID, LandingPromptConnection) async throws -> LandingPrompt)?
 
         public init() {}
     }
@@ -250,9 +250,9 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     private func record(
         _ operation: ContractOperation, _ path: [String: String] = [:], key: IdempotencyKey? = nil,
-        body: (any Encodable)? = nil, query: [String: String] = [:]
+        body: (any Encodable)? = nil
     ) -> Answers {
-        state.record(FakeCall(operation, path: path, key: key, body: body.flatMap { FakeCall.json($0) }, query: query))
+        state.record(FakeCall(operation, path: path, key: key, body: body.flatMap { FakeCall.json($0) }))
     }
 
     private static func id(_ uuid: UUID) -> [String: String] { ["id": uuid.contractString] }
@@ -307,10 +307,6 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         try await record(.getHelperRequest, Self.id(id)).helperRequest(id, wait, changedAfter)
     }
 
-    public func landingPrompt(seatID: UUID) async throws -> LandingPrompt {
-        try await record(.getLandingPrompt, Self.id(seatID)).landingPrompt(seatID)
-    }
-
     public func listInbox(afterSeq: Int?, wait: Int?) async throws -> InboxPage {
         try await record(.listInbox).listInbox(afterSeq, wait)
     }
@@ -353,8 +349,15 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
     }
 
     public func connectSeat(_ request: ConnectSeatRequest, key: IdempotencyKey) async throws
-        -> CommandOutcome<SeatConnectedAnswer> {
+        -> CommandOutcome<SeatConnected> {
         try await record(.connectSeat, key: key, body: request).connectSeat(request, key)
+    }
+
+    public func issueLandingPrompt(seatID: UUID, connection: LandingPromptConnection, key: IdempotencyKey)
+        async throws -> CommandOutcome<LandingPromptIssuedAnswer> {
+        try await record(
+            .issueLandingPrompt, Self.id(seatID), key: key, body: IssueLandingPromptRequest(connection: connection))
+            .issueLandingPrompt(seatID, connection, key)
     }
 
     public func startSeat(seatID: UUID, key: IdempotencyKey) async throws -> PlainOutcome {
@@ -580,12 +583,5 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     public func workspaceSettings() async throws -> WorkspaceSettings {
         try await record(.getWorkspaceSettings).workspaceSettings()
-    }
-
-    public func landingPrompt(seatID: UUID, connection: LandingPromptConnection) async throws -> LandingPrompt {
-        let answers = record(.getLandingPrompt, Self.id(seatID), query: ["connection": connection.rawValue])
-        if let answer = answers.landingPromptForConnection { return try await answer(seatID, connection) }
-        guard connection == .http else { throw FakeAPIError.notScripted(.getLandingPrompt) }
-        return try await answers.landingPrompt(seatID)
     }
 }

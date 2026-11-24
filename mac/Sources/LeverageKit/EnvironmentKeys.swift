@@ -58,6 +58,8 @@ public enum EnvironmentKeys {
     public static let supportDir = "LEVERAGE_SUPPORT_DIR"
     /// The compose project name; the default is `leverage-app`.
     public static let composeProject = "LEVERAGE_COMPOSE_PROJECT"
+    /// The bundled MCP command the app passes to the server it starts.
+    public static let mcpCommand = "LEVERAGE_MCP_COMMAND"
     /// `memory` keeps the owner's session out of the Keychain.
     public static let sessionStore = "LEVERAGE_SESSION_STORE"
     /// `off` keeps the app from asking for or posting a notification. Set

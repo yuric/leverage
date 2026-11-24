@@ -21,17 +21,19 @@ public struct ActionJobContract: Codable, Equatable, Sendable {
 }
 
 public struct QuestionMaterial: Codable, Equatable, Sendable {
-    public let roleFile: String
+    public let roleFile: String?
+    public let jobRules: [String]
     public let question: AskQuestionRequest
     public let contract: ActionJobContract
     public let brief: [BriefEntry]
     public let earlierAnswers: [AnsweredQuestion]
 
     public init(
-        roleFile: String, question: AskQuestionRequest, contract: ActionJobContract,
+        roleFile: String?, jobRules: [String] = [], question: AskQuestionRequest, contract: ActionJobContract,
         brief: [BriefEntry] = [], earlierAnswers: [AnsweredQuestion] = []
     ) {
         self.roleFile = roleFile
+        self.jobRules = jobRules
         self.question = question
         self.contract = contract
         self.brief = brief
@@ -41,7 +43,28 @@ public struct QuestionMaterial: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case question, contract, brief
         case roleFile = "role_file"
+        case jobRules = "job_rules"
         case earlierAnswers = "earlier_answers"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roleFile = try container.decode(String?.self, forKey: .roleFile)
+        jobRules = container.contains(.jobRules) ? try container.decode([String].self, forKey: .jobRules) : []
+        question = try container.decode(AskQuestionRequest.self, forKey: .question)
+        contract = try container.decode(ActionJobContract.self, forKey: .contract)
+        brief = try container.decode([BriefEntry].self, forKey: .brief)
+        earlierAnswers = try container.decode([AnsweredQuestion].self, forKey: .earlierAnswers)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(roleFile, forKey: .roleFile)
+        try container.encode(jobRules, forKey: .jobRules)
+        try container.encode(question, forKey: .question)
+        try container.encode(contract, forKey: .contract)
+        try container.encode(brief, forKey: .brief)
+        try container.encode(earlierAnswers, forKey: .earlierAnswers)
     }
 }
 
@@ -131,16 +154,18 @@ public struct ApprovalMaterial: Codable, Equatable, Sendable {
         }
     }
 
-    public let roleFile: String
+    public let roleFile: String?
+    public let jobRules: [String]
     public let instruction: String
     public let action: Action
     public let contract: ActionJobContract
     public let quoted: [Quote]
 
     public init(
-        roleFile: String, instruction: String, action: Action, contract: ActionJobContract, quoted: [Quote] = []
+        roleFile: String?, jobRules: [String] = [], instruction: String, action: Action, contract: ActionJobContract, quoted: [Quote] = []
     ) {
         self.roleFile = roleFile
+        self.jobRules = jobRules
         self.instruction = instruction
         self.action = action
         self.contract = contract
@@ -150,6 +175,27 @@ public struct ApprovalMaterial: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case instruction, action, contract, quoted
         case roleFile = "role_file"
+        case jobRules = "job_rules"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roleFile = try container.decode(String?.self, forKey: .roleFile)
+        jobRules = container.contains(.jobRules) ? try container.decode([String].self, forKey: .jobRules) : []
+        instruction = try container.decode(String.self, forKey: .instruction)
+        action = try container.decode(Action.self, forKey: .action)
+        contract = try container.decode(ActionJobContract.self, forKey: .contract)
+        quoted = try container.decode([Quote].self, forKey: .quoted)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(roleFile, forKey: .roleFile)
+        try container.encode(jobRules, forKey: .jobRules)
+        try container.encode(instruction, forKey: .instruction)
+        try container.encode(action, forKey: .action)
+        try container.encode(contract, forKey: .contract)
+        try container.encode(quoted, forKey: .quoted)
     }
 }
 
