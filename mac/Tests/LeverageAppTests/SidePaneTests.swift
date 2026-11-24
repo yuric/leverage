@@ -21,6 +21,26 @@ struct SidePaneTests {
         #expect(SidePane.tabs.allSatisfy { !$0.symbol.isEmpty })
     }
 
+    @Test("the Imaginarium project is listed first, and the other projects keep their order")
+    func imaginariumProjectFirst() {
+        let first = Project(id: UUID(), name: "Invoices", goal: "", briefVersion: 0)
+        let imaginarium = Project(id: UUID(), name: "Imaginarium", imaginarium: true, goal: "", briefVersion: 0)
+        let second = Project(id: UUID(), name: "Reports", goal: "", briefVersion: 0)
+        let third = Project(id: UUID(), name: "Archive", goal: "", briefVersion: 0)
+
+        let listed = SidePane.orderedProjects([first, second, imaginarium, third])
+
+        #expect(listed.map(\.id) == [imaginarium.id, first.id, second.id, third.id])
+    }
+
+    @Test("without an Imaginarium project the list keeps its order")
+    func projectOrderWithoutImaginarium() {
+        let first = Project(id: UUID(), name: "Invoices", goal: "", briefVersion: 0)
+        let second = Project(id: UUID(), name: "Reports", goal: "", briefVersion: 0)
+
+        #expect(SidePane.orderedProjects([second, first]).map(\.id) == [second.id, first.id])
+    }
+
     @Test("showing Settings leaves a task's page and shows Settings")
     func showsSettings() {
         let navigator = Navigator()

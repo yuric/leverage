@@ -45,6 +45,27 @@ struct QuestionsAndApprovalsModelsTests {
         #expect(wrong.input.questionInput == nil && wrong.input.approvalInput == nil)
     }
 
+    @Test("a project says whether it is the workspace's Imaginarium project, and the field is required")
+    func projectImaginariumFlag() throws {
+        let example = try #require(ContractDocument.examples(of: "Project").first?.objectValue)
+        var flagged = example
+        flagged["imaginarium"] = .bool(true)
+        let read = try LeverageJSON.decoder().decode(Project.self, from: ContractDocument.data(.object(flagged)))
+        #expect(read.imaginarium)
+        #expect(read.name == example["name"]?.stringValue)
+
+        var plain = example
+        plain["imaginarium"] = .bool(false)
+        let other = try LeverageJSON.decoder().decode(Project.self, from: ContractDocument.data(.object(plain)))
+        #expect(!other.imaginarium)
+
+        var missing = example
+        missing["imaginarium"] = nil
+        #expect(throws: DecodingError.self) {
+            try LeverageJSON.decoder().decode(Project.self, from: ContractDocument.data(.object(missing)))
+        }
+    }
+
     @Test("the settings patch omits untouched values and sends null for a cleared recovery ceiling")
     func workspaceSettingsPatch() throws {
         let untouched = try Self.encoded(ChangeWorkspaceSettingsRequest())

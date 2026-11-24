@@ -57,6 +57,15 @@ enum Tokens {
         static let tabOnForeground = pair(0x11141D, 0xFFFFFF)
         static let scrim = pair(0x181E3A, 0x05070E, lightAlpha: 0.3, darkAlpha: 0.55)
 
+        /// The very faint rainbow behind the Imaginarium project's row in the side pane.
+        static let imaginariumTint = LinearGradient(
+            colors: [
+                Color(red: 1, green: 0.435, blue: 0.71).opacity(0.10),
+                Color(red: 1, green: 0.894, blue: 0.361).opacity(0.07),
+                Color(red: 0.424, green: 0.784, blue: 0.996).opacity(0.10),
+            ],
+            startPoint: .leading, endPoint: .trailing)
+
         // The same surfaces when Reduce Transparency is on: solid, no blur.
         static let flatBackdrop = pair(0xE4E9F6, 0x0D111E)
         static let flatShell = pair(0xF4F6FC, 0x171A28)
