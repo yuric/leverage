@@ -466,19 +466,24 @@ module Leverage
 
       withdrawal = event
       if event.type == "job.withdrawn"
-        job = Job.find_by(id: event.subject_id, workspace_id: event.workspace_id, task_id: event.task_id, target_kind: "rule_check")
-        withdrawal = job && events.find do |check|
-          check.type == "check.finished" && check.subject_id == job.target_id && check.task_id == event.task_id &&
-            check.project_id == event.project_id && check.seq < event.seq
+        return false unless event.subject_kind == "job" && event.subject_id
+
+        withdrawal = events.find do |check|
+          claim_withdrawal?(check) && check.task_id == event.task_id && check.project_id == event.project_id &&
+            check.seq < event.seq && Steps.queued_for(check)&.payload&.fetch("job_id", nil) == event.subject_id
         end
       end
-      return false unless withdrawal&.type == "check.finished" &&
-        withdrawal.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
+      return false unless claim_withdrawal?(withdrawal)
 
       events.any? do |hold|
         hold.task_id == event.task_id && hold.project_id == event.project_id && event.seq < hold.seq &&
           project_pause_hold?(hold, events, before: withdrawal.seq)
       end
+    end
+
+    def claim_withdrawal?(event)
+      event&.type == "check.finished" && event.subject_kind == "rule_check" &&
+        event.payload.values_at("hook", "result") == %w[task.before_claim withdrawn]
     end
 
     def project_pause_hold?(hold, events, before: hold.seq)
