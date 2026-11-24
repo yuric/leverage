@@ -892,7 +892,7 @@ later; it is listed there too.
     that has never held the task; with none, the question goes to the
     owner at once (PRD Questions);
   - presence counts a General seat only as GA-6 says.
-- **GA-2** `[owner]` What leverage gives a General seat: no role file, no
+- **GA-2** `[owner]` What Leverage gives a General seat: no role file, no
   skill file and no other Markdown file (PRD Briefing). Its briefing's
   `role_file` and `role_file_version` are null and its hash has no role
   file part; a job it claims returns the material with `role_file` null,
@@ -900,8 +900,8 @@ later; it is listed there too.
   the runner's prompts leave out the "Your role" section and the runner
   writes no file into a work folder; its join text names no role file.
   The join text carries, as plain text, the few rules a checker needs
-  (GA-7). What leverage does not control: a provider's own tool may read
-  files of its own, whatever leverage sends. Claude Code may read the work
+  (GA-7). What Leverage does not control: a provider's own tool may read
+  files of its own, whatever Leverage sends. Claude Code may read the work
   folder's `CLAUDE.md`; the runner passes `--setting-sources user`, and
   whether that keeps a work folder's `CLAUDE.md` out is unverified. Codex
   reads `AGENTS.md` in the work folder and under `CODEX_HOME`. What
@@ -1041,7 +1041,7 @@ later; it is listed there too.
   text with the token in it, one line (wrapped here):
 
   ```text
-  Join leverage at ADDRESS with token TOKEN. Fetch GET ADDRESS/v1/join
+  Join Leverage at ADDRESS with token TOKEN. Fetch GET ADDRESS/v1/join
   with header Authorization: Bearer TOKEN and follow its instructions
   exactly.
   ```
