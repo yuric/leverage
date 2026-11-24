@@ -118,40 +118,39 @@ class JoinContractTest < Minitest::Test
     refute_nil entry, "issue_landing_prompt has no commands entry"
     assert_equal [ false, false, false ], entry.values_at("work_call", "blocked_by_hold", "allowed_while_pending")
     rows = sm.fetch("groups").flat_map { |group| group["rows"] }.select { |row| row["command"] == "issue_landing_prompt" }
-    assert_equal 1, rows.size
-    assert_equal [ "owner" ], rows.first["who"]
-    assert_equal [], rows.first["events"]
+    assert_equal 2, rows.size
+    rows.each do |row|
+      assert_equal [ "owner" ], row["who"]
+      assert_equal [], row["events"]
+    end
   end
 
-  # GA-17 (S7): a new prompt releases the work the seat holds at once, so
-  # that another seat can take it: the old agent has stopped, and the new
-  # one is not told of it. A task is released with the app's reason
-  # new_prompt, a review is released, and a job misses its run time.
-  def test_a_new_prompt_releases_the_work_the_seat_holds
-    reason = registry.fetch("release_reasons").find { |entry| entry["reason"] == "new_prompt" }
-    refute_nil reason, "no release reason new_prompt"
-    assert_equal "app", reason["chosen_by"]
-    row = sm.fetch("groups").flat_map { |group| group["rows"] }.find { |entry| entry["command"] == "issue_landing_prompt" }
-    assert_equal [ %w[task.released seat_holds_working_task], %w[review.released seat_holds_review] ],
-      row["conditional_events"].map { |entry| entry.values_at("event", "when") }
-    side = row["side_events"].map { |entry| entry["event"] }
-    %w[job.timed_out check.finished job.withdrawn hold.closed hold.opened].each { |event| assert_includes side, event }
-    # Round 4 T7: the held job's miss writes its run timer's events and
-    # outcome, so the row lists them: after a first miss a new attempt
-    # (job.requeued, and check.queued for a check), after a second the
-    # kind's last-miss hold.
-    %w[job.requeued check.queued].each { |event| assert_includes side, event }
-    assert_equal %w[action_unconfirmed check_error owner_approval owner_question], row["holds_opened"].sort
-    opened = row["side_events"].select { |entry| entry["event"] == "hold.opened" }.map { |entry| entry["note"] }.join(" ")
-    %w[action_unconfirmed check_error owner_approval owner_question].each { |hold| assert_includes opened, hold }
-    items = row["side_events"].select { |entry| entry["event"] == "inbox.opened" }.map { |entry| entry["note"] }.join(" ")
-    [ "Check could not run", "Approval", "Question passed on" ].each { |item| assert_includes items, item }
-    assert_includes row["note"], "new_prompt"
-    assert_includes row["note"], "GA-17"
-    refute_includes row["note"], "stays with it"
+  # UX-2 (app round 2): the prompt is issued only until the agent lands, so
+  # it releases nothing. Once the seat has polled or holds work, it is
+  # refused with invalid_state; a new prompt is a new seat.
+  def test_the_landing_prompt_is_issued_only_before_the_seat_lands
+    rows = sm.fetch("groups").flat_map { |group| group["rows"] }.select { |row| row["command"] == "issue_landing_prompt" }
+    issued = rows.find { |row| row["refusal"].nil? }
+    refused = rows.find { |row| row["refusal"] }
+    refute_nil issued
+    refute_nil refused, "no refused row for a seat that has landed"
+    assert_equal [ "seat_has_not_landed" ], issued["guard"]
+    assert_equal [ "seat_has_landed" ], refused["guard"]
+    assert_equal "invalid_state", refused["refusal"]
+    assert_empty issued["conditional_events"], "a seat that has not landed holds nothing to release"
+    assert_empty issued["side_events"]
+    assert_empty issued["holds_opened"] + issued["holds_closed"]
+    family = sm.fetch("guard_families").find { |entry| entry["family"] == "seat_landing" }
+    refute_nil family
+    assert_equal %w[seat_has_landed seat_has_not_landed], family["guards"].map { |guard| guard["guard"] }.sort
+    %w[seat_has_landed seat_has_not_landed].each { |guard| assert_includes registry["guards"], guard }
+    assert_includes issued["note"], "UX-2"
+    refute_includes issued["note"], "new_prompt"
     description = operation("issue_landing_prompt").fetch("description")
-    assert_includes description, "releases"
-    refute_includes description, "stays with it"
+    refute_includes description, "releases"
+    refute_includes description, "New prompt"
+    assert_includes description, "has not landed"
+    assert_includes description, "connecting a new one"
   end
 
   # GA-12: the example answer starts as every join text does.

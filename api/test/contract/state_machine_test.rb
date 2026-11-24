@@ -55,7 +55,9 @@ class StateMachineTest < Minitest::Test
   end
 
   def test_states_hooks_events_refusals_and_callers_are_registered
-    callers = Leverage::Contract.list("operation_callers") + Leverage::Contract.list("seat_roles") + [ "app" ]
+    # "self" is the seat itself, for its own reported model and effort
+    # (change_seat, contract decision UX-9).
+    callers = Leverage::Contract.list("operation_callers") + Leverage::Contract.list("seat_roles") + %w[app self]
     refusals = registry["refusals"].map { |entry| entry["code"] }
     rows.each do |row|
       [ row["from"], row["to"] ].compact.each { |state| assert_includes task_states, state, label(row) }

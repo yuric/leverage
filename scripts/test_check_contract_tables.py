@@ -256,6 +256,14 @@ def doctored_prd_cases(prd):
                       row(prd, "| Every task needs specific details |") + "\n" + row(prd, "| Every task needs acceptance criteria |") + "\n"),
          ["shipped rules", "order"]),
 
+        # App round 2: the agent's Add task and its Who cells.
+        ("the creator call's seat changed",
+         change_row(prd, "| `POST /v1/tasks` |", "| Creator |", "| Builder |"),
+         ["agent calls", "POST /v1/tasks", "seat differs"]),
+        ("the creator dropped from Add task",
+         change_row(prd, "| Add task |", "Owner or creator seat", "Owner"),
+         ["lifecycle", "Add task", "creator"]),
+
         # Commands a hold blocks.
         ("a command dropped from the list a hold blocks",
          replace_once(prd, "claim, pass, submit, verdict, start action and report action done.",
@@ -461,6 +469,28 @@ def parser_cases(module, prd):
     if review_briefing is None or module.event_spans(review_briefing[5])[0] != ["task.briefing_acknowledged"]:
         FAILURES.append("parenthesised note")
         print("FAIL the review briefing row's Events cell was not read as one event type")
+
+    # App round 2 (UX-11, UX-13, UX-16): a seat whose permissions include
+    # Create tasks, the creator, adds a task and completes its contract in
+    # the same call, and the owner hears of a failed check.
+    if module.SEAT_CALLERS.get("Creator") != "creator":
+        FAILURES.append("Creator seat cell")
+        print("FAIL the Seat cell \"Creator\" was not read as the creator caller")
+    if module.who_roles("Owner or creator seat") != {"owner", "creator"}:
+        FAILURES.append("creator in Who may ask")
+        print("FAIL \"Owner or creator seat\" was not read as owner and creator")
+    if module.who_roles("Owner, planner seat, or creator seat in the call that adds the task") != {
+            "owner", "planner", "creator"}:
+        FAILURES.append("creator qualifier")
+        print("FAIL the qualifier \"in the call that adds the task\" was not dropped")
+    offered = module.choice_operations("Complete the contract, ask a planner to draft it, or cancel.")
+    if offered != ["cancel_task", "complete_contract", "draft_contract"]:
+        FAILURES.append("contract choices")
+        print(f"FAIL the agent task item's choices were read as {offered}")
+    for call in (("POST", "/v1/tasks", "creator"), ("POST", "/v1/seat/model", "any")):
+        if call not in calls.values:
+            FAILURES.append(f"agent call {call}")
+            print(f"FAIL the agent calls table did not yield {call}")
 
     if module.checkers_from_cell("App and model. A model check makes the claim provisional") != (["app", "model"], False):
         FAILURES.append("checkers with a trailing sentence")
