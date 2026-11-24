@@ -62,7 +62,7 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| Milestone 6 Credentials | `feat/credentials` | None yet | Local implementation and review. Real provider and Keychain acceptance await the owner. |
+| Milestone 6 Credentials | `feat/credentials` | [#17](https://github.com/yuric/leverage/pull/17) | In review: built, reviewed twice, every check passing on the owner's Mac and in CI. Real provider and Keychain acceptance await the owner. |
 
 ## Milestones
 
@@ -79,7 +79,7 @@ the PRD's milestone list. How the build is run locally is in
 | 3 | Handoff | Merged | [#14](https://github.com/yuric/leverage/pull/14) | With the owner commands Q-2 moved in and the daily backup (Q-14). Built on `feat/handoff`; the PRD changes R-1 to R-10 and ADRs 0008 to 0010; the choices made for the owner are question 11. Every interruption is shown with stand-in tools only. Not called done until the owner has set the recovery time ceiling (PRD, Build order and tracks) |
 | 4 | Rule checks | Merged | [#15](https://github.com/yuric/leverage/pull/15) | With the planner and Draft contract, "No reviewer is eligible", the health line's orchestrator half and a job's limit and sign-out reports, which earlier milestones left to it. Built on `feat/rule-checks`; the PRD changes S-1 to S-14 and ADRs 0011 to 0013; the choices made for the owner are question 12. The eval suite was met by all three supported models. Model checks on real tools ran only in the eval and the real checks; no real builder, reviewer or planner has run through it |
 | 5 | Questions and approvals | Merged | [#16](https://github.com/yuric/leverage/pull/16) | Both shipped eval bars were met by all three supported tools. The scripted and Claude Code MCP checks reached Done on the integrated baseline. The owner's MCP run is ahead. See question 13 and [Measurements](#measurements). |
-| 6 | Credentials | In progress | None yet | Token Add, usage readings, row actions and reordering. See [reader evidence](#credentials-readers-and-recordings), [measurements](#credentials-runs) and question 14. |
+| 6 | Credentials | In review | [#17](https://github.com/yuric/leverage/pull/17) | Token Add, usage readings, row actions and reordering. See [reader evidence](#credentials-readers-and-recordings), [measurements](#credentials-runs) and question 14. |
 | 7 | Analytics page | Not in this build | | See question 1 |
 
 Status is one of `Not started`, `In progress`, `In review`, `Merged`,
