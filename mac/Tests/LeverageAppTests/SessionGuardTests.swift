@@ -18,7 +18,7 @@ struct SessionGuardTests {
         ("edit_contract", {
             _ = try await $0.editContract(
                 taskID: id,
-                CompleteContractRequest(title: "t", goal: "g", details: nil, criteria: [], workReference: nil),
+                CompleteContractRequest(title: "t", details: nil, criteria: [], workReference: nil),
                 key: IdempotencyKey())
         }),
         ("hold_task", { _ = try await $0.holdTask(taskID: id, key: IdempotencyKey()) }),

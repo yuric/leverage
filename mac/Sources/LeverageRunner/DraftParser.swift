@@ -18,7 +18,6 @@ enum DraftParser {
     static func parse(_ text: String, nonce: String, material: DraftMaterial) -> CompleteContractRequest? {
         guard let json = between(text, nonce: nonce),
               let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
-              let goal = (object["goal"] as? String).map(trimmed), !goal.isEmpty,
               let sentences = object["criteria"] as? [Any], !sentences.isEmpty
         else { return nil }
         var criteria: [CriterionInput] = []
@@ -36,7 +35,7 @@ enum DraftParser {
         let review = material.criteria.first { $0.kind == .review }?.text ?? reviewCriterion
         criteria.append(CriterionInput(text: review, kind: .review))
         return CompleteContractRequest(
-            title: material.title, goal: goal, details: details, criteria: criteria, actions: [],
+            title: material.title, details: details, criteria: criteria, actions: [],
             minimumStrengthRank: material.minimumStrengthRank, budgetCap: material.budgetCap,
             workReference: material.workReference)
     }

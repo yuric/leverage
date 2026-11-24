@@ -96,13 +96,13 @@ struct BoardModelTests {
         let anotherBuilder = UUID()
         let tasks = [
             BoardTask(task: TaskSummary(
-                id: UUID(), projectID: project, title: "Reviewing", goal: "Publish a report", state: .inReview,
+                id: UUID(), projectID: project, title: "Reviewing", state: .inReview,
                 holderSeatID: Fixtures.reviewerID, builderSeatID: Fixtures.builderID)),
             BoardTask(task: TaskSummary(
-                id: UUID(), projectID: project, title: "Other builder", goal: "Write a report", state: .working,
+                id: UUID(), projectID: project, title: "Other builder", state: .working,
                 holderSeatID: Fixtures.builderID, builderSeatID: anotherBuilder)),
             BoardTask(task: TaskSummary(
-                id: UUID(), projectID: otherProject, title: "Other project", goal: "Write a report", state: .working,
+                id: UUID(), projectID: otherProject, title: "Other project", state: .working,
                 builderSeatID: Fixtures.builderID)),
             Fixtures.boardTask(.ready, title: "Unassigned"),
         ]
@@ -289,7 +289,7 @@ struct BoardModelTests {
     @Test("a Ready card shows when the board says it is waiting for a stronger agent")
     func waitingForStrongerAgent() async {
         let task = TaskSummary(
-            id: UUID(), title: "Write a report", goal: "Summarize the results", state: .ready, minimumStrengthRank: 2)
+            id: UUID(), title: "Write a report", state: .ready, minimumStrengthRank: 2)
         let stronger = await card(BoardTask(task: task, waitsForStrongerAgent: true))
         #expect(stronger?.lane == .ready)
         #expect(stronger?.statusLine == "Waiting for a stronger agent")
@@ -440,7 +440,7 @@ struct BoardModelTests {
         func task(minimum: Int, holds: [HoldReason], waitingFor: UUID?) -> BoardTask {
             BoardTask(
                 task: TaskSummary(
-                    id: UUID(), title: "Write a report", goal: "Summarize the results", state: .working,
+                    id: UUID(), title: "Write a report", state: .working,
                     minimumStrengthRank: minimum),
                 holdReasons: holds, waitingForCredentialID: waitingFor)
         }

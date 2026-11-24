@@ -26,7 +26,7 @@ struct ProjectsBoardActivityRenderSmokeTests {
     func populatedScreensDraw() async {
         let owner = FakeOwnerAPI()
         let project = Project(id: UUID(), name: "Example project", goal: "Prepare the example", budget: 12, briefVersion: 0)
-        let task = TaskSummary(id: UUID(), title: "Example task", goal: "Prepare the example", state: .ready)
+        let task = TaskSummary(id: UUID(), title: "Example task", state: .ready)
         let event = EventRecord(
             id: UUID(), workspaceID: UUID(), seq: 1, at: Date(),
             type: .taskCreated, actorKind: .owner, taskID: task.id)

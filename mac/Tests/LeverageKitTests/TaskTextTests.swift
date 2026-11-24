@@ -16,6 +16,7 @@ struct TaskTextTests {
     func briefing() throws {
         let example = try #require(ContractDocument.examples(of: "Briefing").first)
         let briefing = try LeverageJSON.decoder().decode(Briefing.self, from: ContractDocument.data(example))
+        #expect(briefing.contract.title == example["contract"]?["title"]?.stringValue)
         let body = try json(briefing.contract)
         #expect(body["title"] == example["contract"]?["title"])
         #expect(body["details"] == example["contract"]?["details"])
@@ -24,14 +25,14 @@ struct TaskTextTests {
 
     @Test("Add task encodes a title-only request")
     func addTask() throws {
-        let request = AddTaskRequest(title: "Refresh the price list", goal: "Old task text")
+        let request = AddTaskRequest(title: "Refresh the price list")
         #expect(try json(request) == .object(["title": .string(request.title)]))
     }
 
     @Test("Complete contract encodes details and omits the goal key")
     func completeContract() throws {
         let request = CompleteContractRequest(
-            title: "Refresh the price list", goal: "Old task text", details: nil, criteria: [], workReference: nil)
+            title: "Refresh the price list", details: nil, criteria: [], workReference: nil)
         let body = try json(request)
         #expect(body["title"] == .string(request.title))
         #expect(body["details"] == .null)
@@ -41,9 +42,15 @@ struct TaskTextTests {
     @Test("a project carries its latest work reference and keeps its own goal")
     func project() throws {
         let example = try #require(ContractDocument.examples(of: "Project").first?.objectValue)
+        #expect(example["latest_work_reference"] == .null)
+        let decoder = LeverageJSON.decoder()
+        let withoutReference = try decoder.decode(Project.self, from: ContractDocument.data(.object(example)))
+        #expect(withoutReference.latestWorkReference == nil)
+
         let reference = JSONValue.string("/work/made-up-project")
         let withReference = example.merging(["latest_work_reference": reference]) { _, incoming in incoming }
-        let project = try LeverageJSON.decoder().decode(Project.self, from: ContractDocument.data(.object(withReference)))
+        let project = try decoder.decode(Project.self, from: ContractDocument.data(.object(withReference)))
+        #expect(project.latestWorkReference == reference.stringValue)
         #expect(try json(project)["latest_work_reference"] == reference)
         #expect(project.goal == example["goal"]?.stringValue)
     }

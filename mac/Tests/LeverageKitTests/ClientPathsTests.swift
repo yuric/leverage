@@ -147,7 +147,7 @@ struct ClientPathsTests {
         "add_task": ClientCall {
             _ = try await $0.owner.addTask(
                 AddTaskRequest(
-                    title: "Made-up task", goal: "A made-up goal", priority: .normal, workReference: nil,
+                    title: "Made-up task", priority: .normal, workReference: nil,
                     state: .backlog),
                 key: F.key("add_task"))
         },
@@ -155,7 +155,7 @@ struct ClientPathsTests {
             _ = try await $0.owner.completeContract(
                 taskID: F.task,
                 CompleteContractRequest(
-                    title: "Made-up task", goal: "A made-up goal", details: nil,
+                    title: "Made-up task", details: nil,
                     criteria: [CriterionInput(text: "It works", kind: .build)], actions: [],
                     minimumStrengthRank: nil, budgetCap: nil, workReference: nil),
                 key: F.key("complete_contract"))
@@ -242,7 +242,7 @@ struct ClientPathsTests {
             _ = try await $0.owner.editContract(
                 taskID: F.task,
                 CompleteContractRequest(
-                    title: "Made-up task", goal: "A made-up goal", details: nil,
+                    title: "Made-up task", details: nil,
                     criteria: [CriterionInput(text: "It works", kind: .build)], actions: [],
                     minimumStrengthRank: nil, budgetCap: nil, workReference: nil),
                 key: F.key("edit_contract"))
@@ -602,7 +602,7 @@ struct FakeAPITests {
 
     @Test("a fake records the body the HTTP client sends")
     func fakeBodyMatchesClient() async throws {
-        let request = AddTaskRequest(title: "Made-up task", goal: "A goal", priority: .high, state: .backlog)
+        let request = AddTaskRequest(title: "Made-up task", priority: .high, state: .backlog)
         let key = IdempotencyKey()
         let fake = FakeOwnerAPI()
         fake.script { $0.addTask = { _, key in
@@ -754,13 +754,13 @@ struct RuleCheckBodyTests {
     @Test("a planner's result is the Complete contract body, with the stored values sent back")
     func contractDraftResult() throws {
         let contract = CompleteContractRequest(
-            title: "Made-up task", goal: "A goal", details: "Details.",
+            title: "Made-up task", details: "Details.",
             criteria: [CriterionInput(text: "It works", kind: .build), CriterionInput(text: "Checked", kind: .review)],
             actions: [], minimumStrengthRank: 2, budgetCap: 5, workReference: "/made/up")
         let sent = try #require(json(JobResultRequest(result: .contractDraft(contract), tokens: 1, spend: 0)).objectValue)
         let result = try #require(sent["result"]?.objectValue)
         #expect(Set(result.keys) == [
-            "title", "goal", "details", "criteria", "actions", "minimum_strength_rank", "budget_cap",
+            "title", "details", "criteria", "actions", "minimum_strength_rank", "budget_cap",
             "work_reference",
         ])
         #expect(result["minimum_strength_rank"] == .number(2) && result["work_reference"] == .string("/made/up"))
@@ -1012,7 +1012,7 @@ struct HandoffBodyTests {
         await #expect(throws: FakeAPIError.notScripted(.editContract)) {
             _ = try await fake.editContract(
                 taskID: Self.task,
-                CompleteContractRequest(title: "t", goal: "g", details: nil, criteria: [], workReference: nil),
+                CompleteContractRequest(title: "t", details: nil, criteria: [], workReference: nil),
                 key: key)
         }
         await #expect(throws: FakeAPIError.notScripted(.changeSeat)) {

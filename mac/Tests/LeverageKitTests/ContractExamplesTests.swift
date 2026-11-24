@@ -382,8 +382,9 @@ struct ContractExamplesTests {
     @Test("draft material retains its required nullable values")
     func draftKeepsNulls() throws {
         let roundTrip = try #require(Self.materials["DraftMaterial"])
-        let draft = try #require(ContractDocument.examples(of: "DraftMaterial").first)
-        let written = try roundTrip(draft)
+        var draft = try #require(ContractDocument.examples(of: "DraftMaterial").first?.objectValue)
+        draft["details"] = .null
+        let written = try roundTrip(.object(draft))
         for key in ["details", "work_reference", "minimum_strength_rank", "budget_cap"] {
             #expect(draft[key] == .null)
             #expect(written[key] == .null, "\(key)")

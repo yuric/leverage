@@ -38,10 +38,10 @@ struct DraftParserTests {
         #expect(contract.actions.isEmpty)
     }
 
-    @Test("the work reference, minimum strength rank and budget cap go back exactly as the material gave them")
+    @Test("extra keys are ignored and stored values go back exactly as the material gave them")
     func storedValues() throws {
         let sneaky = """
-            {"goal": "Goal.", "details": null, "criteria": ["One."], "work_reference": "/tmp/elsewhere", \
+            {"goal": 3, "details": null, "criteria": ["One."], "work_reference": "/tmp/elsewhere", \
             "minimum_strength_rank": 0, "budget_cap": 9999, "title": "Another title"}
             """
         let contract = try #require(parse(answer(sneaky)))
@@ -69,28 +69,27 @@ struct DraftParserTests {
     @Test("a draft with no JSON is no draft", arguments: [
         "I could not write a contract.",
         "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\nLEVERAGE-DRAFT-00aa11bb22cc-END",
-        "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\n{\"goal\": \"G.\", \"criteria\": [\"One.\"]}",
+        "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\n{\"criteria\": [\"One.\"]}",
     ])
     func noJSON(text: String) {
         #expect(parse(text) == nil)
     }
 
     @Test("a draft with bad JSON is no draft", arguments: [
-        "{goal: G}",
+        "{details: D}",
         "[\"One.\"]",
-        "{\"goal\": \"G.\", \"criteria\": \"One.\"}",
-        "{\"goal\": 3, \"criteria\": [\"One.\"]}",
-        "{\"goal\": \"G.\", \"criteria\": [\"One.\", 2]}",
+        "{\"details\": null, \"criteria\": \"One.\"}",
+        "{\"details\": 3, \"criteria\": [\"One.\"]}",
+        "{\"details\": null, \"criteria\": [\"One.\", 2]}",
     ])
     func badJSON(json: String) {
         #expect(parse(answer(json)) == nil)
     }
 
-    @Test("a draft with no criteria, an empty one, or no goal is no draft", arguments: [
-        "{\"goal\": \"G.\", \"criteria\": []}",
-        "{\"goal\": \"G.\"}",
-        "{\"goal\": \"G.\", \"criteria\": [\"  \"]}",
-        "{\"goal\": \"  \", \"criteria\": [\"One.\"]}",
+    @Test("a draft with no criteria or a blank criterion is no draft", arguments: [
+        "{\"details\": null, \"criteria\": []}",
+        "{\"details\": \"Work in the pricing page.\"}",
+        "{\"details\": null, \"criteria\": [\"  \"]}",
     ])
     func noCriteria(json: String) {
         #expect(parse(answer(json)) == nil)

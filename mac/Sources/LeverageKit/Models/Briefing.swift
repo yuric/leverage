@@ -93,21 +93,21 @@ public struct BriefEntry: Codable, Equatable, Sendable {
 /// `BriefingContract`: the task's contract as the briefing gives it.
 public struct BriefingContract: Codable, Equatable, Sendable {
     public let contractVersion: Int
-    public let goal: String
+    public let title: String
     public let details: String?
     public let criteria: [Criterion]
     public let actions: [Action]
 
-    public init(contractVersion: Int, goal: String, details: String?, criteria: [Criterion], actions: [Action] = []) {
+    public init(contractVersion: Int, title: String, details: String?, criteria: [Criterion], actions: [Action] = []) {
         self.contractVersion = contractVersion
-        self.goal = goal
+        self.title = title
         self.details = details
         self.criteria = criteria
         self.actions = actions
     }
 
     enum CodingKeys: String, CodingKey {
-        case goal, details, criteria, actions
+        case title, details, criteria, actions
         case contractVersion = "contract_version"
     }
 }

@@ -48,11 +48,10 @@ public struct ActionInput: Codable, Equatable, Sendable {
     }
 }
 
-/// `AddTaskRequest`. Add task sends title, goal, priority, work reference
+/// `AddTaskRequest`. Add task sends title, priority, work reference
 /// and the target state; the contract goes in Complete contract (IN-20).
 public struct AddTaskRequest: Encodable, Equatable, Sendable {
     public let title: String
-    public let goal: String
     public let details: String?
     public let criteria: [CriterionInput]?
     public let actions: [ActionInput]?
@@ -62,12 +61,11 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
     public let state: TaskState?
 
     public init(
-        title: String, goal: String, details: String? = nil, criteria: [CriterionInput]? = nil,
+        title: String, details: String? = nil, criteria: [CriterionInput]? = nil,
         actions: [ActionInput]? = nil, projectID: UUID? = nil, priority: Priority? = nil,
         workReference: String? = nil, state: TaskState? = nil
     ) {
         self.title = title
-        self.goal = goal
         self.details = details
         self.criteria = criteria
         self.actions = actions
@@ -78,7 +76,7 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, goal, details, criteria, actions, priority, state
+        case title, details, criteria, actions, priority, state
         case projectID = "project_id"
         case workReference = "work_reference"
     }
@@ -86,7 +84,6 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(title, forKey: .title)
-        try container.encode(goal, forKey: .goal)
         try container.encodeIfPresent(details, forKey: .details)
         try container.encodeIfPresent(criteria, forKey: .criteria)
         try container.encodeIfPresent(actions, forKey: .actions)
@@ -101,7 +98,6 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
 /// (IN-20).
 public struct CompleteContractRequest: Encodable, Equatable, Sendable {
     public let title: String
-    public let goal: String
     public let details: String?
     public let criteria: [CriterionInput]
     public let actions: [ActionInput]
@@ -110,11 +106,10 @@ public struct CompleteContractRequest: Encodable, Equatable, Sendable {
     public let workReference: String?
 
     public init(
-        title: String, goal: String, details: String?, criteria: [CriterionInput], actions: [ActionInput] = [],
+        title: String, details: String?, criteria: [CriterionInput], actions: [ActionInput] = [],
         minimumStrengthRank: Int? = nil, budgetCap: Decimal? = nil, workReference: String?
     ) {
         self.title = title
-        self.goal = goal
         self.details = details
         self.criteria = criteria
         self.actions = actions
@@ -124,7 +119,7 @@ public struct CompleteContractRequest: Encodable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, goal, details, criteria, actions
+        case title, details, criteria, actions
         case minimumStrengthRank = "minimum_strength_rank"
         case budgetCap = "budget_cap"
         case workReference = "work_reference"
@@ -133,7 +128,6 @@ public struct CompleteContractRequest: Encodable, Equatable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(title, forKey: .title)
-        try container.encode(goal, forKey: .goal)
         try container.encode(details, forKey: .details)
         try container.encode(criteria, forKey: .criteria)
         try container.encode(actions, forKey: .actions)

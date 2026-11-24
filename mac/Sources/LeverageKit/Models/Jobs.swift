@@ -21,13 +21,11 @@ public struct CheckContract: Codable, Equatable, Sendable {
     }
 
     public let title: String
-    public let goal: String
     public let details: String?
     public let criteria: [Criterion]
 
-    public init(title: String, goal: String, details: String? = nil, criteria: [Criterion]) {
+    public init(title: String, details: String? = nil, criteria: [Criterion]) {
         self.title = title
-        self.goal = goal
         self.details = details
         self.criteria = criteria
     }
@@ -150,7 +148,6 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
     public let roleFile: String?
     public let jobRules: [String]
     public let title: String
-    public let goal: String
     public let details: String?
     /// The criteria the task already has, which may be none.
     public let criteria: [CriterionInput]
@@ -161,14 +158,13 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
     public let brief: [BriefEntry]
 
     public init(
-        roleFile: String?, jobRules: [String] = [], title: String, goal: String, details: String? = nil, criteria: [CriterionInput] = [],
+        roleFile: String?, jobRules: [String] = [], title: String, details: String? = nil, criteria: [CriterionInput] = [],
         workReference: String? = nil, minimumStrengthRank: Int? = nil, budgetCap: Decimal? = nil,
         brief: [BriefEntry] = []
     ) {
         self.roleFile = roleFile
         self.jobRules = jobRules
         self.title = title
-        self.goal = goal
         self.details = details
         self.criteria = criteria
         self.workReference = workReference
@@ -178,7 +174,7 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, goal, details, criteria, brief
+        case title, details, criteria, brief
         case roleFile = "role_file"
         case jobRules = "job_rules"
         case workReference = "work_reference"
@@ -191,7 +187,6 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
         roleFile = try container.decode(String?.self, forKey: .roleFile)
         jobRules = container.contains(.jobRules) ? try container.decode([String].self, forKey: .jobRules) : []
         title = try container.decode(String.self, forKey: .title)
-        goal = try container.decode(String.self, forKey: .goal)
         details = try container.decodeIfPresent(String.self, forKey: .details)
         criteria = try container.decode([CriterionInput].self, forKey: .criteria)
         workReference = try container.decodeIfPresent(String.self, forKey: .workReference)
@@ -205,7 +200,6 @@ public struct DraftMaterial: Codable, Equatable, Sendable {
         try container.encode(roleFile, forKey: .roleFile)
         try container.encode(jobRules, forKey: .jobRules)
         try container.encode(title, forKey: .title)
-        try container.encode(goal, forKey: .goal)
         try container.encode(details, forKey: .details)
         try container.encode(criteria, forKey: .criteria)
         try container.encode(workReference, forKey: .workReference)

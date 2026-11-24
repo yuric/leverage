@@ -151,7 +151,8 @@ struct RuleChecksModelTests {
         let material = input.material
         #expect(material.instruction == "Every task names the page it changes.")
         #expect(material.moment == RuleHook.taskBeforeReady.momentName && !material.mayAnswerNotApplicable)
-        #expect(material.contract.title == "Made-up task" && material.contract.details == nil)
+        #expect(material.contract.title == "Made-up task")
+        #expect(material.contract.details == "Add a made-up button to the made-up page.")
         #expect(material.contract.criteria.map(\.kind) == [.build, .review])
         #expect(material.contract.criteria.map(\.state) == [.open, .open])
         #expect(material.quoted == [QuotedText(label: .handoffNote, text: "Made-up note.")])

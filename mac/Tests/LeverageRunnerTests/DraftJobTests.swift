@@ -26,7 +26,6 @@ struct DraftJobTests {
             .run(JobFixture.draftClaim(), input: JobFixture.draftInput())
         let contract = try #require(Self.contract(end))
         #expect(contract.title == JobFixture.title)
-        #expect(contract.goal == JobFixture.goal)
         #expect(contract.details == "Written by the stand-in planner.")
         #expect(contract.criteria == [
             CriterionInput(text: "The page the goal asks for exists.", kind: .build),
@@ -60,7 +59,7 @@ struct DraftJobTests {
 
     @Test("an answer with no draft sends nothing", arguments: [
         "I cannot write this contract.",
-        "LEVERAGE-DRAFT-@-BEGIN\n{\"goal\": \"G.\", \"criteria\": []}\nLEVERAGE-DRAFT-@-END",
+        "LEVERAGE-DRAFT-@-BEGIN\n{\"details\": null, \"criteria\": []}\nLEVERAGE-DRAFT-@-END",
         "LEVERAGE-DRAFT-@-BEGIN\n{not json}\nLEVERAGE-DRAFT-@-END",
     ])
     func noDraft(answer: String) async throws {

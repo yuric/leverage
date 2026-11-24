@@ -205,7 +205,7 @@ struct BuilderFlowTests {
         let base = Fixture.claim(taskID, criteria: criteria(copy: .passed), workReference: reference, hash: "hash-round-1")
         let claim = TaskClaim(
             task: TaskSummary(
-                id: taskID, title: "Update the pricing page", goal: "The page shows this year's prices.",
+                id: taskID, title: "Update the pricing page",
                 state: .working, round: 1, holderSeatID: Fixture.seatID, builderSeatID: Fixture.seatID,
                 workReference: reference),
             lease: base.lease, briefing: base.briefing, workReference: reference, credentialID: base.credentialID,
@@ -245,7 +245,7 @@ extension BuilderFlowTests {
                 instruction: "Every submission names the page it changes.", mayApply: false)],
             roleFile: base.briefing.roleFile, contract: base.briefing.contract)
         let task = TaskSummary(
-            id: taskID, title: base.task.title, goal: base.task.goal, state: .working, round: round,
+            id: taskID, title: base.task.title, details: base.task.details, state: .working, round: round,
             holderSeatID: Fixture.seatID, builderSeatID: Fixture.seatID, workReference: harness.existingWork.path)
         return TaskClaim(
             task: task, lease: base.lease, briefing: briefing, workReference: harness.existingWork.path,

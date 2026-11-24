@@ -23,13 +23,13 @@ struct JobPromptsTests {
     }
 
     static var taskPieces: [String] {
-        [JobFixture.title, JobFixture.goal, JobFixture.details, JobFixture.builtCriterion, JobFixture.reviewText,
+        [JobFixture.title, JobFixture.details, JobFixture.builtCriterion, JobFixture.reviewText,
          JobFixture.handoffNote, JobFixture.evidence]
     }
 
     private static func prompts(roleFile: String?, jobRules: [String]) -> [String] {
         let check = JobFixture.checkMaterial()
-        let actionContract = ActionJobContract(title: JobFixture.title, goal: JobFixture.goal, criteria: [])
+        let actionContract = ActionJobContract(title: JobFixture.title, criteria: [])
         return [
             JobPrompts.check(material: CheckMaterial(
                 roleFile: roleFile, jobRules: jobRules, instruction: check.instruction, moment: check.moment,
@@ -43,7 +43,7 @@ struct JobPromptsTests {
                 action: .init(kind: .publish, description: "Publish the new prices.", position: 1),
                 contract: actionContract), nonce: nonce),
             JobPrompts.draft(material: DraftMaterial(
-                roleFile: roleFile, jobRules: jobRules, title: JobFixture.title, goal: JobFixture.goal), nonce: nonce),
+                roleFile: roleFile, jobRules: jobRules, title: JobFixture.title), nonce: nonce),
         ]
     }
 
@@ -99,7 +99,7 @@ struct JobPromptsTests {
     static func draft(details: String) -> DraftMaterial {
         let material = JobFixture.draftMaterial()
         return DraftMaterial(
-            roleFile: material.roleFile, title: material.title, goal: material.goal, details: details,
+            roleFile: material.roleFile, title: material.title, details: details,
             criteria: material.criteria, workReference: material.workReference,
             minimumStrengthRank: material.minimumStrengthRank, budgetCap: material.budgetCap, brief: material.brief)
     }
@@ -116,7 +116,7 @@ struct JobPromptsTests {
             roleFile: material.roleFile, instruction: material.instruction, moment: material.moment,
             mayAnswerNotApplicable: false,
             contract: CheckContract(
-                title: material.contract.title, goal: material.contract.goal, details: forged,
+                title: material.contract.title, details: forged,
                 criteria: material.contract.criteria),
             quoted: [QuotedText(label: .handoffNote, text: forged)])
         for prompt in [
@@ -157,7 +157,7 @@ struct JobPromptsTests {
             roleFile: material.roleFile, instruction: material.instruction, moment: material.moment,
             mayAnswerNotApplicable: false,
             contract: CheckContract(
-                title: material.contract.title, goal: material.contract.goal, details: text,
+                title: material.contract.title, details: text,
                 criteria: material.contract.criteria),
             quoted: [QuotedText(label: .evidence, text: text)])
         for prompt in [
@@ -188,11 +188,11 @@ struct JobPromptsTests {
         ]
         let places = try marks.map { try #require(prompt.range(of: $0)?.lowerBound, "\($0) is in the prompt") }
         #expect(places == places.sorted())
-        // The contract block holds the title, goal, details and the criteria
+        // The contract block holds the title, details and the criteria
         // with their kinds, as plain lines.
         let contract = try #require(try Self.blocks(prompt, nonce: Self.nonce).blocks.first)
         #expect(contract.0 == "contract")
-        for line in ["Title: \(JobFixture.title)", "Goal: \(JobFixture.goal)", "Details: \(JobFixture.details)"] {
+        for line in ["Title: \(JobFixture.title)", "Details: \(JobFixture.details)"] {
             #expect(contract.1.contains(line))
         }
         #expect(contract.1.contains("(build, passed) \(JobFixture.builtCriterion)"))
@@ -276,11 +276,11 @@ struct JobPromptsTests {
 
     @Test("a draft for a task with no details and no criteria still gives each block, empty")
     func draftEmpty() throws {
-        let material = DraftMaterial(roleFile: "You are the planner.", title: "Bare task", goal: "Do the thing.")
+        let material = DraftMaterial(roleFile: "You are the planner.", title: "Bare task")
         let prompt = JobPrompts.draft(material: material, nonce: Self.nonce)
         let (blocks, _) = try Self.blocks(prompt, nonce: Self.nonce)
-        #expect(blocks.map(\.0) == ["title", "goal", "details", "criteria", "brief"])
-        try #require(blocks.count == 5)
-        #expect(blocks[2].1.isEmpty && blocks[3].1.isEmpty && blocks[4].1.isEmpty)
+        #expect(blocks.map(\.0) == ["title", "details", "criteria", "brief"])
+        try #require(blocks.count == 4)
+        #expect(blocks[1].1.isEmpty && blocks[2].1.isEmpty && blocks[3].1.isEmpty)
     }
 }

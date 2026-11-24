@@ -193,8 +193,8 @@ enum RealProviderRun {
         versions: BriefingVersions(roleFileVersion: "0.0.0", contractVersion: 1),
         roleFile: "You build what the contract asks, in the folder you are run in.",
         contract: BriefingContract(
-            contractVersion: 1, goal: "A file shows that this tool can work in a folder for Leverage.",
-            details: nil, criteria: [checkCriterion]))
+            contractVersion: 1, title: "Write the Leverage tool check file",
+            details: "A file shows that this tool can work in a folder for Leverage.", criteria: [checkCriterion]))
 
     static func exitStatus(_ failure: ToolFailure) -> String {
         switch failure {

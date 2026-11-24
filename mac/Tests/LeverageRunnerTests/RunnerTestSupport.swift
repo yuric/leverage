@@ -26,12 +26,12 @@ enum Fixture {
             versions: BriefingVersions(roleFileVersion: "0.0.0", contractVersion: 1),
             roleFile: roleFile,
             contract: BriefingContract(
-                contractVersion: 1, goal: "The page shows this year's prices.",
+                contractVersion: 1, title: "Update the pricing page",
                 details: "Use the figures in the price list.", criteria: criteria))
     }
 
     static func task(_ id: UUID, workReference: String?) -> TaskSummary {
-        TaskSummary(id: id, title: "Update the pricing page", goal: "The page shows this year's prices.",
+        TaskSummary(id: id, title: "Update the pricing page",
                     state: .working, holderSeatID: seatID, builderSeatID: seatID, workReference: workReference)
     }
 

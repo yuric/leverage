@@ -67,7 +67,9 @@ struct PromptsAndAnswersTests {
         for prompt in prompts {
             #expect(!prompt.contains("Your role:"))
             #expect(prompt.contains(Prompts.rulesHeading + "\n> - " + rule.name))
-            #expect(prompt.contains(briefing.contract.goal))
+            #expect(prompt.contains("The task's title:\n> Update the pricing page"))
+            #expect(prompt.contains("Details:\n> Use the figures in the price list."))
+            #expect(!prompt.contains("The task's goal:"))
         }
     }
 

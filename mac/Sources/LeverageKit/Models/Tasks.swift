@@ -9,7 +9,6 @@ public struct TaskSummary: Codable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID?
     public let title: String
-    public let goal: String
     public let details: String?
     public let state: TaskState
     public let round: Int
@@ -26,7 +25,7 @@ public struct TaskSummary: Codable, Equatable, Sendable {
     public let priority: Priority
 
     public init(
-        id: UUID, projectID: UUID? = nil, title: String, goal: String, details: String? = nil,
+        id: UUID, projectID: UUID? = nil, title: String, details: String? = nil,
         state: TaskState, round: Int = 0, holderSeatID: UUID? = nil, builderSeatID: UUID? = nil,
         leaseDueAt: Date? = nil, leaseTimeLeftWhilePaused: Int? = nil, minimumStrengthRank: Int? = nil,
         contractVersion: Int = 0, budgetCap: Decimal? = nil, spent: Decimal = 0, workReference: String? = nil,
@@ -35,7 +34,6 @@ public struct TaskSummary: Codable, Equatable, Sendable {
         self.id = id
         self.projectID = projectID
         self.title = title
-        self.goal = goal
         self.details = details
         self.state = state
         self.round = round
@@ -52,7 +50,7 @@ public struct TaskSummary: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, goal, details, state, round, spent, priority
+        case id, title, details, state, round, spent, priority
         case projectID = "project_id"
         case holderSeatID = "holder_seat_id"
         case builderSeatID = "builder_seat_id"

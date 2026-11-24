@@ -60,7 +60,7 @@ struct FinishingFlowTests {
                 hash: hash, versions: BriefingVersions(roleFileVersion: "0.0.0", contractVersion: 1),
                 roleFile: "You build what the contract asks.",
                 contract: BriefingContract(
-                    contractVersion: 1, goal: "Publish only the approved pages.", details: nil,
+                    contractVersion: 1, title: "Publish pages", details: "Publish only the approved pages.",
                     criteria: [criterion], actions: actions))
             return BriefingResponse(briefing: briefing, workReference: harness.existingWork.path)
         }

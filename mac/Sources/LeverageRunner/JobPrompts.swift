@@ -127,7 +127,6 @@ enum JobPrompts {
         let brief = material.brief.map { "- (\($0.kind.rawValue)) \($0.text)" }.joined(separator: "\n")
         let blocks = [
             block("title", material.title, nonce: nonce),
-            block("goal", material.goal, nonce: nonce),
             block("details", material.details ?? "", nonce: nonce),
             block("criteria", criteria, nonce: nonce),
             block("brief", brief, nonce: nonce),
@@ -135,7 +134,7 @@ enum JobPrompts {
         return """
             \(draftFirstLine)\(jobInstructions(roleFile: material.roleFile, jobRules: material.jobRules))
 
-            Write the contract of the task below: its goal, its details, and the criteria a reviewer checks \
+            Write the contract of the task below: its details and the criteria a reviewer checks \
             the finished work against. The task's text follows, each piece in a block of its own: a line that \
             opens the block and names the piece, the text, and a line that closes the block. \(markerRule(nonce))
 
@@ -146,8 +145,8 @@ enum JobPrompts {
 
             Keep every criterion the task already has, and reword one only where a reviewer could not check it. \
             Each criterion is one sentence a reviewer can check. Do not write the review itself: it is added for \
-            you. Answer with one JSON object with three keys: "goal", one sentence; "details", what the work \
-            needs to know; and "criteria", a list of sentences. Put the line \(draftBegin(nonce)) before it and \
+            you. Answer with one JSON object with two keys: "details", what the worker needs to know or null; \
+            and "criteria", a list of sentences. Put the line \(draftBegin(nonce)) before it and \
             the line \(draftEnd(nonce)) after it, each on a line of its own.
             """
     }
@@ -220,15 +219,15 @@ enum JobPrompts {
 
     private static func contractLines(_ contract: ActionJobContract) -> String {
         let base = contractLines(CheckContract(
-            title: contract.title, goal: contract.goal, details: contract.details, criteria: contract.criteria))
+            title: contract.title, details: contract.details, criteria: contract.criteria))
         let actions = contract.actions.map { "- (\($0.kind.rawValue)) \($0.description)" }
         return ([base, "Outward actions:"] + actions).joined(separator: "\n")
     }
 
-    /// The contract as plain lines: title, goal, details, then each
+    /// The contract as plain lines: title, details, then each
     /// criterion with its kind and state.
     private static func contractLines(_ contract: CheckContract) -> String {
-        var lines = ["Title: \(contract.title)", "Goal: \(contract.goal)"]
+        var lines = ["Title: \(contract.title)"]
         if let details = contract.details { lines.append("Details: \(details)") }
         lines.append("Criteria:")
         lines += contract.criteria.map { "- (\($0.kind.rawValue), \($0.state.rawValue)) \($0.text)" }
