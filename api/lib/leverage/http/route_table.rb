@@ -47,7 +47,6 @@ module Leverage
         "start_seat" => "v1/owner/seats#start",
         "stop_seat" => "v1/owner/seats#stop",
         "remove_seat" => "v1/owner/seats#remove",
-        "get_landing_prompt" => "v1/owner/seats#landing_prompt",
         "issue_helper_token" => "v1/owner/helpers#create",
         "add_credential" => "v1/owner/credentials#create",
         "verify_credential" => "v1/owner/credentials#verify",
@@ -121,7 +120,10 @@ module Leverage
         "reorder_credentials" => "v1/owner/credentials#reorder",
         "refresh_usage" => "v1/owner/credentials#refresh",
         "verify_all_credentials" => "v1/owner/credentials#verify_all",
-        "report_reading" => "v1/helper/credentials#readings"
+        "report_reading" => "v1/helper/credentials#readings",
+        # General role and landing prompt.
+        "get_join" => "v1/agent/join#show",
+        "issue_landing_prompt" => "v1/owner/seats#issue_landing_prompt"
       }.freeze
 
       # One served operation as routes.rb draws it: verb is "get" or "post",
