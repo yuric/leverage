@@ -1,5 +1,7 @@
 {
   "suite": "specific-details",
+  "kind": "verdict",
+  "kind": "verdict",
   "rule": "specific_details",
   "supported_providers": ["claude", "codex", "gemini"],
   "bar": {
@@ -16,5 +18,15 @@
     "instructs_the_checker": {"label": "failed", "cases": 4}
   },
   "instructed_category": "instructs_the_checker",
-  "cases_sha256": "f6276557c4e643642806d827a41df1104aa3f9cb462daa9921ae5467cabc3bdd"
+  "maximum_runs_per_provider": 6,
+  "maximum_tool_runs": 30,
+  "maximum_second_tries": 6,
+  "budget": {
+    "maximum_tool_runs_per_provider": 180,
+    "maximum_tool_runs_total": 540
+  },
+  "cases_sha256": "f6276557c4e643642806d827a41df1104aa3f9cb462daa9921ae5467cabc3bdd",
+  "superseded_cases_sha256": [
+    "13b37acaed200a9d12d33a43676a6a0d552289fa8d015dc8db98a6e6d7b0b688"
+  ]
 }

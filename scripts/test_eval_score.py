@@ -38,6 +38,7 @@ SUITE = FIXTURES / "suite"
 VERDICTS = FIXTURES / "verdicts"
 RUNS = FIXTURES / "runs"
 SHIPPED = FIXTURES / "shipped_rules.json"
+SPECIFIC_DETAILS = HERE.parent / "evals" / "specific-details"
 # The made-up canary word of the recorded verdict files.
 CANARY = "vorpelquint"
 
@@ -171,6 +172,28 @@ class BudgetTests(unittest.TestCase):
                                "--mode", "general")
         self.assertEqual(code, 3, err)
         self.assertIn("claude has had 3 full runs", err)
+
+    def test_specific_details_allows_a_fourth_full_run_in_general_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copyfile(RUNS / "three-runs.json", root / "runs.json")
+            code, out, err = run("budget", "--suite", SPECIFIC_DETAILS, "--runs", root / "runs-general.json",
+                                 "--providers", "claude", "--mode", "general")
+        self.assertEqual(code, 0, err)
+        self.assertIn("room for one more full run of claude", out)
+
+    def test_specific_details_refuses_runs_at_its_new_ceilings(self):
+        bar = eval_score.read_bar(SPECIFIC_DETAILS)
+        claude = {"provider": "claude", "tool_runs": 30}
+        self.assertEqual(eval_score.budget_refusals({"runs": [claude] * 5}, ["claude"], bar), [])
+        reasons = eval_score.budget_refusals({"runs": [claude] * 6}, ["claude"], bar)
+        self.assertEqual(reasons, [
+            "claude has had 6 full runs; a model gets 6",
+            "claude has made 180 tool runs; another run of up to 30 would pass 180 for a model",
+        ])
+        entries = [dict(claude, provider=provider) for provider in self.PROVIDERS.split() for _ in range(6)]
+        reasons = eval_score.budget_refusals({"runs": entries}, ["grok"], bar)
+        self.assertEqual(reasons, ["540 tool runs have been made; 30 more would pass 540 tool runs in all"])
 
     def test_a_model_at_three_runs_is_refused(self):
         code, _, err = self.budget("three-runs.json")

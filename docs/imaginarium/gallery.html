@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imaginarium gallery mockup</title>
+<!--
+  Design reference for docs/imaginarium/PRD.md: gallery mockup A.
+  One self-contained page; it loads nothing from the network.
+  Open a state directly with the address fragment, for example
+  #open=todo, #open=todo&edit=1 or #open=todo&sent=ready.
+-->
+<style>
+:root{
+  --bg:#0D111E; --shell:rgba(30,34,52,.56); --nav:rgba(44,49,72,.6); --rim:rgba(255,255,255,.16);
+  --surface:rgba(27,30,45,.92); --inset:#262A3F; --line:#3A405A; --text:#F2F4FA; --text2:#BAC1D6;
+  --muted:#9AA3BC; --soft:#D5DAEA; --focus:#8AB4FF; --info-bg:#17336A; --info-fg:#C2DAFF;
+  --wait-bg:#4B3611; --wait-fg:#FFD899; --ink:#0E1020;
+  --rainbow:linear-gradient(90deg,#FF6FB5,#FFB35C,#FFE45C,#6DF2A4,#6CC8FF,#A98BFF,#FF6FB5);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans)}
+a{color:var(--focus)}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.rainbow-text{background:var(--rainbow);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:slide 8s linear infinite}
+.rainbow-bg{background:var(--rainbow);background-size:200% 100%;animation:slide 8s linear infinite;color:var(--ink);border:0}
+.rainbow-ring{border:2px solid transparent;background:linear-gradient(#151a2c,#151a2c) padding-box,var(--rainbow) border-box;background-size:100% 100%,200% 100%;animation:slide 8s linear infinite}
+@keyframes slide{to{background-position:200% 0}}
+@keyframes sweep{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
+@keyframes twinkle{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}
+.foil{position:absolute;inset:0 auto 0 0;width:45%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);mix-blend-mode:overlay;animation:sweep 4.5s ease-in-out infinite;pointer-events:none}
+.twinkle{animation:twinkle 2.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.page{min-height:100vh;padding:24px 16px;background:radial-gradient(1200px 600px at 10% -10%,rgba(62,104,235,.45),transparent 60%),radial-gradient(900px 600px at 95% 10%,rgba(136,92,224,.42),transparent 60%),radial-gradient(800px 500px at 60% 100%,rgba(255,111,181,.18),transparent 60%),var(--bg)}
+.window{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;border-radius:18px;background:var(--shell);border:1px solid var(--rim);box-shadow:0 30px 80px rgba(0,0,0,.45);overflow:hidden}
+.side{flex:1 1 200px;padding:16px 12px;background:var(--nav);display:flex;flex-direction:column;gap:4px}
+.lights{display:flex;align-items:center;gap:6px;padding:6px 10px 14px}
+.lights span{width:12px;height:12px;border-radius:6px}
+.lights strong{margin-left:14px;font-size:15px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;color:var(--soft);font-size:13px;text-decoration:none}
+.nav:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav svg{flex:none}
+.badge{margin-left:auto;font-size:11px;font-weight:600;background:#FFEFCF;color:#7A4300;border-radius:6px;padding:1px 6px}
+.nav-imx{margin-top:10px;color:#fff;font-weight:600;box-shadow:0 0 24px rgba(169,139,255,.35)}
+.nav-project-imx{background:linear-gradient(90deg,rgba(255,111,181,.10),rgba(255,228,92,.07),rgba(108,200,255,.10));color:#EADFFF}
+.side-head{margin:18px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.health{margin-top:auto;padding:18px 10px 4px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.health i{width:8px;height:8px;border-radius:4px;background:#57D08F}
+
+main{flex:999 1 560px;min-width:0;padding:24px 28px 40px;display:flex;flex-direction:column;gap:24px}
+.hero{border-radius:20px;position:relative;overflow:hidden}
+.hero-in{padding:36px 36px 32px;background:radial-gradient(500px 260px at 85% 20%,rgba(255,111,181,.35),transparent 70%),radial-gradient(500px 260px at 60% 120%,rgba(108,200,255,.3),transparent 70%),radial-gradient(400px 240px at 100% 100%,rgba(255,228,92,.22),transparent 70%);display:flex;flex-wrap:wrap;gap:28px;align-items:center}
+.hero-copy{flex:2 1 420px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.eyebrow{margin:0;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#FFE45C}
+h1{margin:0;font-family:var(--display);font-size:48px;line-height:1.04;letter-spacing:-.02em}
+.lede{margin:0;max-width:560px;font-size:16px;line-height:1.55;color:var(--soft)}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+.search{flex:1 1 260px;display:flex;align-items:center;gap:10px;padding:0 14px;height:46px;border-radius:12px;background:rgba(13,17,30,.7);border:1px solid rgba(255,255,255,.18)}
+.search input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:14px;outline:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.btn-big{height:46px;padding:0 20px;border-radius:12px;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 28px rgba(255,111,181,.35)}
+.hero-art{flex:1 1 240px;height:200px;position:relative}
+.hero-art .card{position:absolute;border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.35);overflow:hidden}
+
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chip{height:36px;padding:0 16px;border-radius:18px;font-size:13px;border:1px solid var(--rim);background:rgba(255,255,255,.06);color:var(--soft)}
+.chip:hover{background:rgba(255,255,255,.12)}
+.chip[aria-pressed="true"]{border-color:transparent;font-weight:600}
+.count{margin-left:auto;font-size:13px;color:var(--text2)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}
+.tile{border-radius:16px;background:var(--surface);border:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;transition:transform .18s ease,box-shadow .18s ease}
+.tile:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(169,139,255,.28),0 0 0 1px rgba(255,255,255,.22)}
+.tile-art{position:relative;height:150px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.tile-art svg{filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
+.pill{position:absolute;top:12px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:6px}
+.pill-cat{left:12px;background:rgba(13,17,30,.72);color:var(--text);letter-spacing:.04em}
+.pill-time{right:12px;background:rgba(255,255,255,.88);color:#11141D}
+.tile-body{padding:16px 16px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+.tile h3{margin:0;font-family:var(--display);font-size:18px;line-height:1.25}
+.tile p{margin:0;font-size:13px;line-height:1.5;color:var(--text2)}
+.tile .pitch{flex:1}
+.needs{font-size:11px!important;font-weight:600;color:var(--wait-fg)!important}
+.tile-actions{display:flex;gap:8px;margin-top:6px}
+.try{flex:1;height:40px;border-radius:10px;font-weight:700;font-size:14px}
+.icon-btn{width:44px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:var(--text);display:inline-flex;align-items:center;justify-content:center}
+.foot{margin:0;font-size:13px;color:var(--muted)}
+
+.scrim{position:fixed;inset:0;z-index:30;background:rgba(5,7,14,.7);backdrop-filter:blur(8px);overflow:auto;padding:48px 16px;display:flex;justify-content:center;align-items:flex-start}
+.sheet{width:100%;max-width:980px;border-radius:20px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.6)}
+.sheet-art{position:relative;height:120px;overflow:hidden}
+.close{position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:20px;border:0;background:rgba(13,17,30,.72);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.sheet-body{padding:24px 28px 28px;display:flex;flex-direction:column;gap:20px}
+.sheet-meta{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sheet h2{margin:0;font-family:var(--display);font-size:30px}
+.sheet .pitch{margin:0;font-size:15px;color:var(--soft)}
+.cols{display:flex;flex-wrap:wrap;gap:24px}
+.col-l{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.col-r{flex:1.4 1 380px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.sheet h3{margin:0;font-size:14px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:var(--text2)}
+.field input{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--inset);color:var(--text);font:inherit;font-size:14px;font-weight:400}
+.done{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.45;color:var(--soft)}
+.done .review{color:var(--muted)}
+.prompt-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.small-btn{height:34px;padding:0 12px;border-radius:8px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:var(--text);font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.small-btn.on{border-color:var(--focus);background:var(--info-bg);color:var(--info-fg)}
+.prompt{margin:0;padding:16px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#E6E9F5;white-space:pre-wrap;max-height:260px;overflow:auto}
+textarea.prompt{width:100%;max-height:none;border:2px solid var(--focus);resize:vertical}
+.edited-note{margin:0;font-size:12px;line-height:1.5;color:var(--wait-fg)}
+.link-btn{border:0;background:none;padding:0;color:var(--focus);text-decoration:underline;font-size:12px}
+.project-line{margin:2px 0 0;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)}
+.project-line strong{color:var(--text)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.btn-copy{flex:1 1 160px;height:48px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:var(--text);font-weight:600;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn-send{flex:1.4 1 200px;height:48px;border-radius:12px;font-weight:700;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 30px rgba(169,139,255,.4)}
+.later{margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
+.sent{padding:36px 28px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px}
+.sent .tick{width:64px;height:64px;border-radius:32px;display:flex;align-items:center;justify-content:center}
+.sent p{margin:0;max-width:520px;font-size:15px;line-height:1.55;color:var(--soft)}
+.sent .row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:8px}
+.sent a{height:46px;padding:0 22px;border-radius:12px;font-weight:700;display:inline-flex;align-items:center;text-decoration:none}
+.sent .ghost{height:46px;padding:0 22px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:var(--text);font-weight:600}
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);padding:12px 18px;border-radius:12px;background:var(--text);color:#11141D;font-size:14px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.4);z-index:40}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="window">
+    <aside class="side" aria-label="Sections">
+      <div class="lights" aria-hidden="true"><span style="background:#FF5F57"></span><span style="background:#FEBC2E"></span><span style="background:#28C840"></span><strong>Leverage</strong></div>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="12" rx="1"/><rect x="6.25" y="2" width="3.5" height="8" rx="1"/><rect x="11" y="2" width="3.5" height="10" rx="1"/></svg>Board</a>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11z"/><path d="M6.5 14h3"/></svg>Needs you<span class="badge">2</span></a>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1.5 8h3l2-5 3 10 2-5h3"/></svg>Activity</a>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="5.5" r="3"/><path d="M2.5 14a5.5 5.5 0 0 1 11 0"/></svg>Agents</a>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h6M12.5 8v2.5"/></svg>Credentials</a>
+      <a class="nav" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 5h10l-2.5-2.5M14 11H4l2.5 2.5"/></svg>Handoff</a>
+      <a class="nav nav-imx rainbow-ring" href="#" aria-current="page"><svg class="twinkle" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#FFE45C" stroke-width="1.6" aria-hidden="true"><path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4M3.5 3.5l2 2M10.5 10.5l2 2M12.5 3.5l-2 2M5.5 10.5l-2 2"/></svg><span class="rainbow-text">Imaginarium</span></a>
+      <p class="side-head">Projects</p>
+      <a class="nav" href="#">All projects</a>
+      <a class="nav nav-project-imx" href="#">Imaginarium</a>
+      <a class="nav" href="#">Website</a>
+      <a class="nav" href="#">Newsletter</a>
+      <div class="health"><i></i>Running · 2 agents free</div>
+    </aside>
+
+    <main>
+      <section class="hero rainbow-ring">
+        <div class="hero-in">
+          <div class="hero-copy">
+            <p class="eyebrow"><svg class="twinkle" width="14" height="14" viewBox="0 0 16 16" fill="#FFE45C" aria-hidden="true"><path d="M8 0l1.8 6.2L16 8l-6.2 1.8L8 16l-1.8-6.2L0 8l6.2-1.8z"/></svg>The Imaginarium</p>
+            <h1>Pick a spark.<br><span class="rainbow-text">Your agents build it.</span></h1>
+            <p class="lede">Ready-made prompts for pictures, websites and small apps that run on your Mac. Copy one to use anywhere, or send it to Ready and a free agent starts on it.</p>
+            <div class="hero-actions">
+              <label class="search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#BAC1D6" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg><span class="sr">Search prompts</span><input type="search" id="search" placeholder="Search: recipe app, poster, birthday…"></label>
+              <button type="button" class="btn-big rainbow-bg" id="surprise"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#0E1020" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3"/><circle cx="5.5" cy="5.5" r=".9" fill="#0E1020"/><circle cx="10.5" cy="10.5" r=".9" fill="#0E1020"/><circle cx="8" cy="8" r=".9" fill="#0E1020"/></svg>Surprise me</button>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="card" style="left:6%;top:18%;width:150px;height:110px;background:linear-gradient(135deg,#FF9A8B,#FF5FA2);transform:rotate(-9deg)"></div>
+            <div class="card" style="left:34%;top:4%;width:150px;height:110px;background:linear-gradient(135deg,#6CC8FF,#7B6CFF);transform:rotate(4deg)"></div>
+            <div class="card" style="left:22%;top:40%;width:170px;height:120px;background:linear-gradient(135deg,#5EF2B0,#2CB5E8);transform:rotate(-2deg)"><div class="foil"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="filters" id="filters" role="group" aria-label="Categories"></div>
+      <div class="grid" id="grid"></div>
+      <p class="foot">Have a prompt that works? <a href="#">Add your own to the Imaginarium</a>.</p>
+    </main>
+  </div>
+</div>
+<div id="overlay"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Sample catalog entries. The real catalog is the versioned JSON file in IM-20 to IM-23. */
+  var CATS = ['All', 'Pictures', 'Websites', 'Apps', 'Games', 'Automations', 'Gifts', 'Learning'];
+  var ITEMS = [
+    { id: 'pet', cat: 'Pictures', title: 'Storybook pet portrait', pitch: 'Your pet as the hero of a watercolor picture book.', time: '~5 min', needsTool: true,
+      art: 'linear-gradient(135deg,#FFB199,#FF6A88 55%,#FF99AC)',
+      fills: [{ k: 'pet', label: 'Your pet', def: 'Biscuit, a corgi' }, { k: 'scene', label: 'The adventure', def: 'sailing a teacup boat across a pond' }],
+      prompt: 'Create a children’s picture-book illustration of {pet} {scene}.\n\nStyle: loose watercolor washes, soft ink outlines, warm morning light, gentle paper texture, lots of white space around the hero. Square, no text in the image.\n\nSave it as storybook-1.png, then make storybook-2.png from a different camera angle.',
+      done: ['Two square PNG images are saved in the project folder', 'The pet and the scene match the description', 'Neither image has text or a watermark'] },
+    { id: 'poster', cat: 'Pictures', title: 'Neon synthwave poster', pitch: 'A retro 80s poster of any place, glowing grid and all.', time: '~5 min', needsTool: true,
+      art: 'linear-gradient(170deg,#2B0A5A,#C4258F 55%,#FFB86B)',
+      fills: [{ k: 'place', label: 'Place', def: 'Phoenix at dusk' }, { k: 'headline', label: 'Headline', def: 'DESERT NIGHTS' }],
+      prompt: 'Create a retro 1980s synthwave poster of {place}.\n\nNeon magenta and cyan, a chrome headline that reads "{headline}", a glowing perspective grid floor, a big striped sunset sun and faint VHS grain. Portrait 2:3, 3000px tall so it prints well.\n\nSave poster.png and a copy without the headline.',
+      done: ['poster.png is 2:3 and at least 3000px tall', 'The headline is spelled exactly as given', 'A second copy without the headline is saved'] },
+    { id: 'portfolio', cat: 'Websites', title: 'Glass portfolio', pitch: 'A one-page portfolio with frosted glass and drifting color.', time: '~25 min',
+      art: 'linear-gradient(135deg,#6CC8FF,#7B6CFF 60%,#C46CFF)',
+      fills: [{ k: 'name', label: 'Your name', def: 'Alex Rivera' }, { k: 'what', label: 'What you do', def: 'product designer' }, { k: 'hue', label: 'Color mood', def: 'sunset pink and violet' }],
+      prompt: 'Build a one-page portfolio site for {name}, a {what}.\n\nLook: frosted-glass cards over slowly drifting {hue} gradient blobs, a big confident headline, generous spacing.\nSections: hero, selected work (6 project cards with placeholder images), about, contact links.\n\nPlain HTML, CSS and a little JavaScript; it opens straight from index.html with no build step. Readable at phone width, every text passes WCAG AA contrast, and animation stops when the visitor prefers reduced motion.',
+      done: ['index.html opens in a browser with no build step', 'All four sections work at 375px wide', 'Animation stops when reduced motion is on'] },
+    { id: 'launch', cat: 'Websites', title: 'Loud launch page', pitch: 'A bold, brutalist landing page for your product or idea.', time: '~30 min',
+      art: 'linear-gradient(135deg,#FFE45C,#FF8A3D 60%,#FF4D4D)',
+      fills: [{ k: 'product', label: 'Product or idea', def: 'a plant-watering reminder' }, { k: 'cta', label: 'Main button', def: 'Join the waitlist' }],
+      prompt: 'Design and build a brutalist landing page for {product}.\n\nThick black borders, oversized type, one shocking accent color, hard drop shadows and a deliberately raw grid. Sections: headline with a "{cta}" button, three feature blocks, an FAQ and a footer.\n\nThe button opens an email form that saves sign-ups to a local JSON file through a tiny local server. Add a README with the one command that runs it.',
+      done: ['The page runs locally with the one command in the README', 'A submitted email lands in the local JSON file', 'The layout holds together at phone width'] },
+    { id: 'rsvp', cat: 'Websites', title: 'Party RSVP site', pitch: 'A festive event page where friends say yes, no or maybe.', time: '~35 min',
+      art: 'linear-gradient(135deg,#FF6FB5,#A98BFF 50%,#6CC8FF)',
+      fills: [{ k: 'event', label: 'Event', def: 'Maya’s 30th birthday' }, { k: 'when', label: 'When and where', def: 'June 14, the rooftop on Pine St' }, { k: 'vibe', label: 'Vibe', def: 'disco glitter' }],
+      prompt: 'Build a festive one-page site for {event}, {when}.\n\nTheme: {vibe}, with a playful animated header and a live countdown. Guests RSVP with their name, yes / no / maybe, plus-ones and a note. Store answers in a local SQLite file and list them on a host-only page at /host.\n\nInclude a README that explains how to run it.',
+      done: ['The countdown shows the right time left', 'A new RSVP shows on /host', 'The README explains how to run it'] },
+    { id: 'todo', cat: 'Apps', title: 'Pocket to-do', pitch: 'A calm to-do app that lives on your Mac. No account, no cloud.', time: '~40 min',
+      art: 'linear-gradient(135deg,#5EF2B0,#2CB5E8)',
+      fills: [{ k: 'look', label: 'Look', def: 'a paper notebook with soft grain' }, { k: 'extras', label: 'Extras', def: 'tags, due dates and a Today view' }],
+      prompt: 'Build a local to-do app styled like {look}.\n\nFeatures: add, edit, complete and delete tasks; {extras}; keyboard shortcuts N (new) and Space (complete). Save everything in a local SQLite file so it survives restarts.\n\nIt runs with one command and opens in the browser. Include tests for creating, completing and filtering tasks.',
+      done: ['Tasks are still there after the app restarts', 'The N and Space shortcuts work', 'Tests pass with the command in the README'] },
+    { id: 'habits', cat: 'Apps', title: 'Habit streaks', pitch: 'Tick off habits and watch a glowing streak map fill in.', time: '~35 min',
+      art: 'linear-gradient(135deg,#6DF2A4,#00C2A8 50%,#2C7BE8)',
+      fills: [{ k: 'habits', label: 'Your habits', def: 'read 20 minutes, walk, no phone after 10pm' }],
+      prompt: 'Build a local habit tracker for: {habits}.\n\nOne tap marks a habit done today. Each habit gets a year-long heatmap with a neon gradient, its current and longest streak, and there is a weekly summary. Data lives in local SQLite and exports to CSV.\n\nRuns with one command.',
+      done: ['Marking a habit done updates its streak', 'The heatmap shows a full year', 'CSV export opens in a spreadsheet'] },
+    { id: 'budget', cat: 'Apps', title: 'Budget jars', pitch: 'Drop in a bank CSV and get a friendly picture of your spending. Offline.', time: '~45 min',
+      art: 'linear-gradient(135deg,#FFD36E,#7EE8A1)',
+      fills: [{ k: 'jars', label: 'Your jars', def: 'rent, food, fun, savings' }, { k: 'currency', label: 'Currency', def: 'USD' }],
+      prompt: 'Build an offline budgeting app.\n\nI import a bank CSV; it guesses each row’s jar ({jars}), lets me fix the guesses and remembers my fixes next time. Show monthly totals per jar in {currency}, a simple trend chart, and which jars went over.\n\nAll data stays on this Mac. The app makes no network calls.',
+      done: ['Importing the sample CSV fills every jar', 'A corrected jar is remembered on the next import', 'The app makes no network requests'] },
+    { id: 'runner', cat: 'Games', title: 'Pet runner', pitch: 'An endless runner game starring your pet.', time: '~30 min',
+      art: 'linear-gradient(135deg,#FFE45C,#FF8A3D 55%,#FF5FA2)',
+      fills: [{ k: 'hero', label: 'Hero', def: 'a corgi in a red scarf' }, { k: 'world', label: 'World', def: 'a candy forest' }],
+      prompt: 'Make an original endless-runner browser game starring {hero} running through {world}.\n\nJump with Space or a tap, collect treats, dodge obstacles; the speed rises slowly. Draw all the art in code, keep a score and a best score saved in the browser, and add a pause button.\n\nOne HTML file.',
+      done: ['The game is one HTML file that opens in a browser', 'The best score is kept after a reload', 'It plays with the keyboard and with touch'] },
+    { id: 'tidy', cat: 'Automations', title: 'Downloads tidy-up', pitch: 'Sorts a messy folder, and shows you the plan before it moves a thing.', time: '~15 min',
+      art: 'linear-gradient(135deg,#A0F06C,#3CC98A 50%,#1E8FA8)',
+      fills: [{ k: 'folder', label: 'Folder', def: '~/Downloads' }, { k: 'rule', label: 'Sort by', def: 'file type, then month' }],
+      prompt: 'Write a script that organizes {folder} into folders by {rule}.\n\nBy default it does a dry run and prints exactly what it would move; it only moves files with --apply. It never deletes anything, skips files changed in the last hour, and writes an undo log so one command puts everything back.',
+      done: ['A dry run moves nothing and lists every planned move', '--apply moves files exactly as listed', 'The undo command restores the original layout'] },
+    { id: 'capsule', cat: 'Gifts', title: 'Birthday time capsule', pitch: 'A heartfelt microsite full of memories for someone you love.', time: '~30 min',
+      art: 'linear-gradient(135deg,#FFC3A0,#FFAFBD 50%,#C9A7FF)',
+      fills: [{ k: 'who', label: 'For', def: 'Grandma Rosa, turning 80' }, { k: 'memories', label: 'Memories', def: 'her garden, Sunday pancakes, the 1972 road trip' }],
+      prompt: 'Create a heartfelt one-page birthday site for {who}.\n\nScrapbook style: taped photo placeholders, handwritten-style headings and gentle confetti on load. One section per memory: {memories}. Add a guestbook that saves notes to a local file and a big closing message.\n\nIt should print cleanly as a keepsake PDF.',
+      done: ['Every memory has its own section', 'A guestbook note is saved and shown', 'Printing to PDF keeps the layout'] },
+    { id: 'flash', cat: 'Learning', title: 'Flashcard coach', pitch: 'Turns any topic into spaced-repetition flashcards.', time: '~30 min',
+      art: 'linear-gradient(135deg,#8EC5FC,#B28CFF 55%,#FF8FD8)',
+      fills: [{ k: 'topic', label: 'Topic', def: 'Spanish phrases for travel' }],
+      prompt: 'Build a local flashcard app for {topic}.\n\nStart with 40 cards, let me add and edit cards, and schedule reviews with a simple spaced-repetition rule (again, hard, good, easy). Show my streak and the cards due today. Data stays in a local file.',
+      done: ['40 starter cards are there on first run', 'Rating a card changes when it comes back', 'The due-today count is right'] }
+  ];
+
+  var GLYPHS = {
+    Pictures: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M3 17l5-5 4 4 3-3 6 6"/>',
+    Websites: '<rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="M2.5 8.5h19M6 12h7M6 15h5"/><rect x="15" y="11.5" width="4" height="5" rx="1"/>',
+    Apps: '<rect x="4" y="3" width="16" height="18" rx="4"/><path d="M8 9l1.5 1.5L12 8M8 14.5l1.5 1.5L12 13.5M14 9.5h3M14 15h3"/>',
+    other: '<path d="M12 2.5l2.2 6.3L20.5 11l-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/><path d="M19 17v4M17 19h4"/>'
+  };
+  var COPY_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
+  var STAR = '<svg width="13" height="13" viewBox="0 0 16 16" fill="#FFE45C" aria-hidden="true"><path d="M8 0l1.8 6.2L16 8l-6.2 1.8L8 16l-1.8-6.2L0 8l6.2-1.8z"/></svg>';
+
+  var state = { cat: 'All', query: '', open: null, fills: {}, edits: {}, editing: false, copied: false, sent: null };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function byId(id) { return ITEMS.filter(function (t) { return t.id === id; })[0] || null; }
+  function filled(item) {
+    var vals = state.fills[item.id] || {};
+    return item.prompt.replace(/\{(\w+)\}/g, function (m, k) {
+      var f = item.fills.filter(function (x) { return x.k === k; })[0];
+      return f ? (vals[k] != null ? vals[k] : f.def) : m;
+    });
+  }
+  function promptFor(item) { return state.edits[item.id] != null ? state.edits[item.id] : filled(item); }
+  function copyText(text) { try { if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {}); } catch (e) {} }
+  var toastTimer;
+  function toast(text) {
+    var el = document.getElementById('toast');
+    el.innerHTML = '<div class="toast">' + esc(text) + '</div>';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.innerHTML = ''; state.copied = false; renderSheet(); }, 1800);
+  }
+
+  function renderFilters() {
+    document.getElementById('filters').innerHTML = CATS.map(function (c) {
+      var on = c === state.cat;
+      return '<button type="button" class="chip' + (on ? ' rainbow-bg' : '') + '" aria-pressed="' + on + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>';
+    }).join('') + '<span class="count">' + shown().length + (shown().length === 1 ? ' prompt' : ' prompts') + '</span>';
+  }
+  function shown() {
+    var q = state.query.trim().toLowerCase();
+    return ITEMS.filter(function (t) {
+      return (state.cat === 'All' || t.cat === state.cat) && (!q || (t.title + ' ' + t.pitch + ' ' + t.cat).toLowerCase().indexOf(q) >= 0);
+    });
+  }
+  function renderGrid() {
+    document.getElementById('grid').innerHTML = shown().map(function (t) {
+      var glyph = GLYPHS[t.cat] || GLYPHS.other;
+      return '<article class="tile">' +
+        '<div class="tile-art" style="background:' + t.art + '">' +
+          '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.95)" stroke-width="1.4" aria-hidden="true">' + glyph + '</svg>' +
+          '<div class="foil"></div><span class="pill pill-cat">' + esc(t.cat) + '</span><span class="pill pill-time">' + esc(t.time) + '</span>' +
+        '</div>' +
+        '<div class="tile-body"><h3>' + esc(t.title) + '</h3><p class="pitch">' + esc(t.pitch) + '</p>' +
+          (t.needsTool ? '<p class="needs">Needs an agent with an image tool</p>' : '') +
+          '<div class="tile-actions"><button type="button" class="try rainbow-bg" data-open="' + t.id + '">Try it</button>' +
+          '<button type="button" class="icon-btn" data-quick="' + t.id + '" aria-label="Copy prompt for ' + esc(t.title) + '">' + COPY_ICON + '</button></div>' +
+        '</div></article>';
+    }).join('');
+  }
+
+  function renderSheet() {
+    var host = document.getElementById('overlay');
+    var cur = byId(state.open);
+    if (!cur) { host.innerHTML = ''; return; }
+    var edited = state.edits[cur.id] != null;
+    var vals = state.fills[cur.id] || {};
+    var body;
+    if (state.sent) {
+      var ideas = state.sent === 'ideas';
+      body = '<div class="sent"><div class="tick rainbow-bg"><svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="#0E1020" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></div>' +
+        '<h2 id="sheet-title">' + (ideas ? 'Saved to Ideas' : 'Sent to Ready') + '</h2>' +
+        '<p>“' + esc(cur.title) + '” is in ' + (ideas ? 'Ideas' : 'Ready') + ' in your Imaginarium project. ' +
+          (ideas ? 'Move it to Ready whenever you want an agent on it.' : 'The next free agent picks it up, and you can follow along from the card.') + '</p>' +
+        '<div class="row"><a href="#" class="rainbow-bg">See it on the board</a><button type="button" class="ghost" data-act="close">Keep browsing</button></div></div>';
+    } else {
+      var promptBlock = state.editing
+        ? '<textarea class="prompt" id="prompt-edit" rows="11" aria-labelledby="prompt-label">' + esc(promptFor(cur)) + '</textarea>'
+        : '<pre class="prompt" aria-labelledby="prompt-label">' + esc(promptFor(cur)) + '</pre>';
+      body = '<div class="sheet-body">' +
+        '<div><p class="sheet-meta">' + esc(cur.time) + ' of agent time</p><h2 id="sheet-title">' + esc(cur.title) + '</h2><p class="pitch">' + esc(cur.pitch) + '</p></div>' +
+        '<div class="cols"><div class="col-l"><h3>Make it yours</h3>' +
+          cur.fills.map(function (f) {
+            return '<label class="field">' + esc(f.label) + '<input type="text" data-fill="' + f.k + '" value="' + esc(vals[f.k] != null ? vals[f.k] : f.def) + '"></label>';
+          }).join('') +
+          '<h3 style="margin-top:8px">Done when</h3><ol class="done">' + cur.done.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') +
+          '<li class="review">A second agent reviews the work</li></ol></div>' +
+        '<div class="col-r"><div class="prompt-head"><h3 id="prompt-label">The prompt</h3>' +
+          (state.editing
+            ? '<button type="button" class="small-btn on" data-act="done-edit">Done editing</button>'
+            : '<button type="button" class="small-btn" data-act="edit"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg>Edit prompt</button>') +
+          '</div>' + promptBlock +
+          (edited ? '<p class="edited-note">You changed the wording, so your answers on the left no longer rewrite it. <button type="button" class="link-btn" data-act="undo">Undo my edits</button></p>' : '') +
+          '<p class="project-line">' + STAR + 'Goes to your <strong>Imaginarium</strong> project</p>' +
+          '<div class="actions"><button type="button" class="btn-copy" data-act="copy">' + COPY_ICON + (state.copied ? 'Copied' : 'Copy prompt') + '</button>' +
+          '<button type="button" class="btn-send rainbow-bg" data-act="ready"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#0E1020" stroke-width="1.8" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4"/></svg>Send to Ready</button></div>' +
+          '<p class="later">Ready means a free agent can start right away. Not now? <button type="button" class="link-btn" data-act="ideas">Save it to Ideas</button> instead.</p>' +
+        '</div></div></div>';
+    }
+    host.innerHTML = '<div class="scrim"><div class="sheet rainbow-ring" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
+      '<div class="sheet-art" style="background:' + cur.art + '"><div class="foil"></div>' +
+      '<button type="button" class="close" data-act="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button></div>' +
+      body + '</div></div>';
+  }
+
+  function render() { renderFilters(); renderGrid(); renderSheet(); }
+  function open(id) { state.open = id; state.sent = null; state.editing = false; state.copied = false; renderSheet(); }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button,[data-cat]');
+    if (!b) return;
+    if (b.dataset.cat) { state.cat = b.dataset.cat; render(); return; }
+    if (b.dataset.open) { open(b.dataset.open); return; }
+    if (b.dataset.quick) { var t = byId(b.dataset.quick); copyText(promptFor(t)); toast('Prompt copied: ' + t.title); return; }
+    var cur = byId(state.open);
+    switch (b.dataset.act) {
+      case 'close': state.open = null; state.sent = null; state.editing = false; renderSheet(); break;
+      case 'edit': if (state.edits[cur.id] == null) state.edits[cur.id] = filled(cur); state.editing = true; renderSheet(); var ta = document.getElementById('prompt-edit'); if (ta) ta.focus(); break;
+      case 'done-edit': state.editing = false; renderSheet(); break;
+      case 'undo': delete state.edits[cur.id]; state.editing = false; renderSheet(); break;
+      case 'copy': copyText(promptFor(cur)); state.copied = true; renderSheet(); toast('Prompt copied'); break;
+      case 'ready': state.sent = 'ready'; state.editing = false; renderSheet(); break;
+      case 'ideas': state.sent = 'ideas'; state.editing = false; renderSheet(); break;
+    }
+  });
+  document.addEventListener('input', function (e) {
+    var cur = byId(state.open);
+    if (e.target.id === 'search') { state.query = e.target.value; renderFilters(); renderGrid(); return; }
+    if (!cur) return;
+    if (e.target.dataset.fill) {
+      state.fills[cur.id] = state.fills[cur.id] || {};
+      state.fills[cur.id][e.target.dataset.fill] = e.target.value;
+      if (state.edits[cur.id] == null) {
+        var pre = document.querySelector('pre.prompt');
+        if (pre) pre.textContent = filled(cur);
+      }
+    } else if (e.target.id === 'prompt-edit') {
+      state.edits[cur.id] = e.target.value;
+    }
+  });
+  document.getElementById('surprise').addEventListener('click', function () {
+    open(ITEMS[Math.floor(Math.random() * ITEMS.length)].id);
+  });
+
+  /* Open a state from the address fragment: #open=todo&edit=1&sent=ready */
+  var params = {};
+  location.hash.replace(/^#/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) params[p[0]] = decodeURIComponent(p[1] || ''); });
+  render();
+  if (params.open && byId(params.open)) {
+    state.open = params.open;
+    if (params.edit) {
+      var it = byId(params.open);
+      state.edits[it.id] = filled(it).replace('styled like a paper notebook with soft grain', 'styled like a pastel bullet journal with washi-tape headers');
+      state.editing = true;
+    }
+    if (params.sent) state.sent = params.sent;
+    renderSheet();
+  }
+})();
+</script>
+</body>
+</html>

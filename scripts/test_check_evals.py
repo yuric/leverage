@@ -245,20 +245,20 @@ class CheckEvalsTests(unittest.TestCase):
         self.assertFails("registry:", "gemini")
 
     def test_runs_past_a_ceiling_fail(self):
-        self.copy.write_runs([self.copy.run_entry("claude", 24)] * 4)
-        self.assertFails("runs: claude", "4 full runs")
+        self.copy.write_runs([self.copy.run_entry("claude", 24)] * 7)
+        self.assertFails("runs: claude", "7 full runs; a model gets 6")
 
     def test_a_run_past_30_tool_runs_fails(self):
         self.copy.write_runs([self.copy.run_entry("claude", 31)])
         self.assertFails("runs: claude", "31 tool runs")
 
-    def test_270_in_all_is_the_ceiling(self):
-        entries = [self.copy.run_entry(provider, 30) for provider in ("claude", "codex", "gemini") for _ in range(3)]
+    def test_540_in_all_is_the_ceiling(self):
+        entries = [self.copy.run_entry(provider, 30) for provider in ("claude", "codex", "gemini") for _ in range(6)]
         self.copy.write_runs(entries)
         code, output = self.copy.check()
         self.assertEqual(code, 0, output)
         self.copy.write_runs(entries + [self.copy.run_entry("grok", 1)])
-        self.assertFails("runs:", "271 tool runs in all")
+        self.assertFails("runs:", "541 tool runs in all; the ceiling is 540")
 
     def test_a_result_with_a_token_shaped_string_fails(self):
         result = self.copy.result("claude")
@@ -278,6 +278,18 @@ class CheckEvalsTests(unittest.TestCase):
         bar["bar"]["minimum_correct"] = 18
         path.write_text(json.dumps(bar, indent=2) + "\n", encoding="utf-8")
         self.assertFails("bar:", "minimum_correct")
+
+    def test_a_doctored_specific_details_limit_fails(self):
+        path = self.copy.suite / "bar.json"
+        bar = self.copy.case(path)
+        for key, value in (("maximum_runs_per_provider", 7), ("maximum_tool_runs", 31), ("maximum_second_tries", 7)):
+            with self.subTest(key=key):
+                self.copy.write_case(path, {**bar, key: value})
+                self.assertFails("bar:", key)
+        for key, value in (("maximum_tool_runs_per_provider", 181), ("maximum_tool_runs_total", 541)):
+            with self.subTest(key=key):
+                self.copy.write_case(path, {**bar, "budget": {**bar.get("budget", {}), key: value}})
+                self.assertFails("bar:", key)
 
     def test_a_set_with_one_recorded_miss_passes_and_prints_the_miss(self):
         wrong = [self.copy.case(path)["id"] for path in self.copy.cases() if self.copy.case(path)["label"] == "failed"]
@@ -300,15 +312,15 @@ class CheckEvalsTests(unittest.TestCase):
         self.assertIn("MISS: gemini was not run", output)
 
     def test_the_budget_counts_both_ledgers_together(self):
-        claude = self.copy.run_entry("claude", 24)
+        claude = self.copy.run_entry("claude", 30)
         general = {**claude, "mode": "general", "role_file_sha256": None}
         general_path = self.copy.suite / "runs-general.json"
-        self.copy.write_runs([claude, claude])
-        self.copy.write_case(general_path, {"runs": [general]})
+        self.copy.write_runs([claude] * 3)
+        self.copy.write_case(general_path, {"runs": [general] * 3})
         code, output = self.copy.check()
         self.assertEqual(code, 0, output)
-        self.copy.write_case(general_path, {"runs": [general, general]})
-        self.assertFails("runs:", "claude: 4 full runs", "96 tool runs")
+        self.copy.write_case(general_path, {"runs": [general] * 4})
+        self.assertFails("runs:", "claude: 7 full runs; a model gets 6", "210 tool runs; a model gets 180")
 
 
 class ApprovalRoot(Root):

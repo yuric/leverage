@@ -14,9 +14,9 @@
   "met_bar": false,
   "scores": null,
   "misses": [
-    "not run: Task text changed. Awaiting a run on the current cases."
+    "not run: App round 1 changed the eval inputs. Awaiting a run on the current cases."
   ],
-  "reason": "Task text changed. Awaiting a run on the current cases.",
+  "reason": "App round 1 changed the eval inputs. Awaiting a run on the current cases.",
   "tool_runs": 0,
   "cases": []
 }

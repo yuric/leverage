@@ -6,9 +6,9 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Main results
 
-- claude: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
-- codex: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
-- gemini: not run (Task text changed. Awaiting a run on the current cases.); it did not meet the bar
+- claude: not run (App round 1 changed the eval inputs. Awaiting a run on the current cases.); it did not meet the bar
+- codex: not run (App round 1 changed the eval inputs. Awaiting a run on the current cases.); it did not meet the bar
+- gemini: not run (App round 1 changed the eval inputs. Awaiting a run on the current cases.); it did not meet the bar
 
 ## Held-out results
 
@@ -18,7 +18,9 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Runs on real tools
 
-91 of 360 tool runs counted.
+151 of 360 tool runs counted.
+
+The table lists Orchestrator runs.
 
 | Date | Provider | Set | Tool runs | Instruction | Role file | Case set |
 | --- | --- | --- | --- | --- | --- | --- |

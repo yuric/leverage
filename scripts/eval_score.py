@@ -71,7 +71,10 @@ def read_cases(suite, held_out=False):
 
 def read_bar(suite):
     data = read_json(Path(suite, "bar.json"))
-    return {**LEGACY_CONFIG, **data} if data.get("suite") == "specific-details" else data
+    limit_keys = LEGACY_CONFIG.keys() - {"kind", "rule"}
+    if data.get("suite") == "specific-details" and limit_keys.isdisjoint(data):
+        return {**LEGACY_CONFIG, **data}
+    return data
 
 
 def set_config(bar, held_out=False):

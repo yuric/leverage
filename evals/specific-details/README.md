@@ -9,8 +9,9 @@ supported model before its milestone is done (PRD, Shipped rules).
 | File | What it holds |
 | --- | --- |
 | `cases/NN-<slug>.json` | One case each: `{id, label, category, why, contract}` |
-| `bar.json` | The bar, the supported models, the categories and the frozen case hash |
+| `bar.json` | The bar, supported models, categories, frozen case hashes and run limits |
 | `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
+| `history/<case-hash>/<mode>/<provider>.json` | Results from earlier cases |
 | `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
 | `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
 
@@ -96,20 +97,21 @@ Without `--account-folder`, Claude Code and Codex then read the Mac user's
 own settings folders (`~/.claude`, and `~/.codex` unless
 `LEVERAGE_EVAL_CODEX_HOME` names another), not a folder Leverage made for a
 seat, so a model, a setting or a memory file set there may apply, and the
-model that ran is not known. The previous runs in the ledger were made that
-way. The current results mark the folded cases and revised instruction as
-`not_run`.
+model that ran is not known. The previous runs in the ledgers were made
+that way. Both modes' earlier results are under `history/` and their runs
+still count toward the shared budget. The current results mark the folded
+cases and revised instruction as `not_run`.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.
 
-Across both modes, a model gets up to three full runs and 90 tool runs.
-The suite gets 270 tool runs in all. The script refuses with exit 3 to
-start a run that could pass a ceiling. When a model misses the bar, a
-change to the instruction or an ambiguous case goes in the appropriate
-ledger's `changes` with the reason. Run every model again after the
-change. When the ceiling is reached, the last results stand for the
-inputs they evaluated.
+The two ledgers share the budget in `bar.json`. A model gets up to six full
+runs and 180 tool runs. The suite gets 540 tool runs in all.
+The script refuses with exit 3 to start a run that could pass a ceiling.
+When a model misses the bar, a change to the instruction or an ambiguous
+case goes in the appropriate ledger's `changes` with the reason. Run every
+model again after the change. When the ceiling is reached, the last
+results stand for the inputs they evaluated.
 
 ## In CI
 

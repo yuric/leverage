@@ -77,9 +77,10 @@ real `--held-out` run once the held-out set is valid for the production input.
 Keep the held-out cases blind during tuning. Starting a held-out run closes
 the main set to further runs.
 
-The ledger keeps the original case hash for each previous run.
+Each ledger keeps the original case hash for every run.
 `superseded_cases_sha256` lists earlier main case hashes accepted in that
-ledger. Those runs still count toward the budget.
+ledger. Those runs still count toward the budget. Their results are under
+`history/<case-hash>/<mode>/`.
 
 Across both modes, the limit per model is three main runs and one held-out
 run, up to 120 tool calls per model and 360 overall. Orchestrator mode uses `runs.json`,

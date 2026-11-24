@@ -55,7 +55,7 @@ ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), and the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)) |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)) |
 | **Next** | Review App round 1 and read the choices in question 16. |
 
 ### In flight
@@ -63,6 +63,25 @@ ends when the build is done or the owner stops it.
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
 | App round 1 | `feat/app-round-1` | | Integrated locally with both rounds of review addressed. The second round covers a builder's submitted work reference and the draft parser's marker and criteria tests. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
+
+### General role and landing prompt on `main`
+
+The other four roles keep their existing work behavior. The new restart
+on a role change applies only to running seats the app manages when
+changing to or from General. The new Gemini review pass-over applies
+only to General seats.
+
+The review fixes make orchestrator recovery test each eligible retry,
+surface an independent reviewer or account wait per task, and give General
+builds, reviews and jobs their instructions in the corresponding material.
+The General eval runs covered app-managed default models. New prompt
+confirms the replacement before displaying paste instructions.
+
+The second review fixes apply the build claim standing test to Ready
+account waits on the board and task page. Both reads preserve the
+builder's login wait when a General seat that reviewed the task cannot
+claim it. The PRD's first-build briefing description specifies the work
+instructions a General seat receives.
 
 ## Milestones
 
@@ -922,6 +941,9 @@ The interface decisions are recorded in the
 - **GA-16.** The prompt-connected agent stops on `401`. Pausing the seat
   leaves the agent polling for work.
 - **GA-17.** New prompt returns the seat's held work and keeps the seat.
+- On 2026-11-24, the owner raised the shared `specific-details` eval ceilings
+  to allow runs in General mode. See
+  [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update).
 
 ## What the Rule checks milestone proves, and how far
 
@@ -1335,6 +1357,32 @@ every rule off and supplied its own MCP settings. It pre-allowed the
 Leverage tools and confirmed the defaults in its prompt.
 The real checks ran on the code at 4dd2872, before the documents step
 and the adversarial review.
+
+### General mode eval runs
+
+On 2026-11-24 the managing agent ran both suites in General mode
+(`scripts/eval_rule.sh <suite> --mode general`), after the owner raised
+the specific-details ceilings to six full runs, 180 tool runs per model and
+540 in all ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update)).
+The prompt was the runner's General job material: no role file, the job
+rules. Each tool ran at its default model on the sign-in it holds on this
+Mac.
+
+| Suite | Provider | Tool | Correct | Wrong passes or approvals | Instructed passes | Leaks | Met the bar |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| specific-details | codex | Codex CLI 0.169.0 | 24 of 24 | 0 | 0 | 0 | Yes |
+| specific-details | gemini | Antigravity | 24 of 24 | 0 | 0 | 0 | Yes |
+| approves-actions | codex | Codex CLI 0.169.0 | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
+| approves-actions | gemini | Antigravity | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
+
+Claude Code was not run because the Claude
+subscription on this Mac reports a past-due payment. Its General result is
+recorded as not run. At the time, `general_tested_providers` listed `codex`
+and `gemini`. App round 1 changed the task text and both suites' case hashes.
+The earlier Orchestrator and General runs are historical and still count
+toward the budgets. Both registry lists are empty pending results on the
+current cases. As with the earlier runs, every model that ran scored every
+case correctly.
 
 ### Credentials runs
 
@@ -2369,12 +2417,14 @@ skeleton's pull request description, as rule AR-004 asks.
       you" appears under Other agent rules because Leverage routes the
       question. **Alternative.** List it under Orchestrator rules because
       the orchestrator answers the questions it receives.
-    - **Eval coverage (UI-8).** The earlier runs used the old task text.
-      Until a passing run covers the current wording and cases, the Agent
-      roster says "Not tested for checking tasks." The specific-details
-      suite has exhausted its earlier run budget. Two held-out approval
-      cases also name a different action from the one at their listed
-      position. The maintainer handles both before rerunning the suites.
+    - **Eval coverage (UI-8).** The Agent roster says "Not tested for
+      checking tasks." for every Orchestrator and General seat until the
+      managing agent records passing results on the current wording and
+      cases in both suites for its mode and provider. The specific-details
+      budget was expanded in [#21](https://github.com/yuric/leverage/pull/21).
+      Two held-out approval
+      cases name a different action from the one at their listed position.
+      The maintainer handles those cases before any held-out approval run.
     - **Notification settings.** The owner can verify which pane opens on
       their Mac and that the banner clears when they return to Leverage
       after turning notifications on.

@@ -867,6 +867,22 @@ struct RosterModelTests {
         }
     }
 
+    @Test("native checkers show the note based on their role's shipped eval coverage")
+    func shippedCheckerCoverage() {
+        let coverage: [(SeatRole, [Provider])] = [
+            (.general, ContractLists.generalTestedProviders),
+            (.orchestrator, ContractLists.orchestratorTestedProviders),
+        ]
+        for (role, tested) in coverage {
+            for provider in Provider.allCases where provider.kind == .login {
+                let seat = Fixtures.seat(
+                    orchestratorID, name: "Checker", role: role, provider: provider, credential: Fixtures.loginID)
+                let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
+                #expect(row.notTestedNote == (tested.contains(provider) ? nil : note), "\(role) on \(provider)")
+            }
+        }
+    }
+
     @Test("a planner's row says Planner, like the roster says every other role")
     func plannerRow() async {
         let row = await orchestratorRow(role: .planner, tested: [])

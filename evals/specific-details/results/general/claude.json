@@ -1,0 +1,22 @@
+{
+  "suite": "specific-details",
+  "provider": "claude",
+  "status": "not_run",
+  "tool": "claude",
+  "tool_version": null,
+  "model": null,
+  "date": "2026-11-24",
+  "mode": "general",
+  "role_file_sha256": null,
+  "instruction_sha256": "e9d4a0aeca1826c5c780d624bf801e05335f05b2ff257814c78209ec6cd55983",
+  "cases_sha256": "f6276557c4e643642806d827a41df1104aa3f9cb462daa9921ae5467cabc3bdd",
+  "canary_word": null,
+  "met_bar": false,
+  "scores": null,
+  "misses": [
+    "not run: App round 1 changed the eval inputs. Awaiting a run on the current cases."
+  ],
+  "reason": "App round 1 changed the eval inputs. Awaiting a run on the current cases.",
+  "tool_runs": 0,
+  "cases": []
+}
