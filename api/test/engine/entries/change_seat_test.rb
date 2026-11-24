@@ -82,6 +82,84 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_equal "reviewer", @builder.reload.role
   end
 
+  test "a running app seat changing to or from General queues the replacement start on its current placement" do
+    next_login = scenario.credential(provider: "codex", model: "made-up-codex-model")
+    scenario.limit_credential(@login, reset_at: 1.hour.from_now)
+    token_hash = @builder.token_hash
+
+    %w[general reviewer].each do |role|
+      outcome, events = change(@builder, role: role)
+
+      assert_completed(outcome)
+      assert_equal %w[seat.changed], events.map(&:type)
+      queued = HelperRequest.where(seat_id: @builder.id, state: "queued")
+      assert_equal 1, queued.size
+      request = queued.sole
+      assert_equal [ "start_seat", next_login.id, role, "codex", "made-up-codex-model" ],
+        [ request.kind, request.credential_id, *request.params.values_at("role", "provider", "model") ]
+      assert_equal({ "helper_request_id" => request.id }, outcome.result)
+      assert_equal [ token_hash, @login.id ], @builder.reload.attributes.values_at("token_hash", "run_credential_id")
+      request.update!(state: "finished", finished_at: scenario.database_now)
+    end
+  end
+
+  test "changing between Builder and General keeps approved action work assigned" do
+    seat = own_seat(role: "builder")
+    task = scenario.finishing_task(builder: seat, holder: false, actions: [ { kind: "send", state: "approved" } ])
+
+    outcome, events = change(seat, role: "general")
+    assert_completed(outcome)
+    refute_includes events.map(&:type), "hold.opened"
+    assert_equal [ "finishing", seat.id ], task.reload.attributes.values_at("state", "builder_seat_id")
+
+    task.update!(holder_seat_id: nil, lease_due_at: nil, lease_time_left_while_paused: nil)
+    outcome, events = change(seat, role: "builder")
+    assert_completed(outcome)
+    refute_includes events.map(&:type), "hold.opened"
+    assert_equal [ "finishing", seat.id ], task.reload.attributes.values_at("state", "builder_seat_id")
+  end
+
+  test "changing away from General opens Unconfirmed action when the new role does not build" do
+    seat = own_seat(role: "general")
+    task = scenario.finishing_task(builder: seat, holder: false, actions: [ { kind: "send", state: "approved" } ])
+
+    outcome, events = change(seat, role: "reviewer")
+
+    assert_completed(outcome)
+    assert_equal %w[seat.changed hold.opened inbox.opened], events.map(&:type)
+    assert_equal "action_unconfirmed", Hold.find_by!(task_id: task.id, closed_at: nil).reason
+  end
+
+  test "changing from Orchestrator to General opens no Unconfirmed action" do
+    seat = own_seat(role: "orchestrator")
+    task = scenario.finishing_task(builder: seat, holder: false, actions: [ { kind: "send", state: "approved" } ])
+
+    outcome, = change(seat, role: "general")
+
+    assert_completed(outcome)
+    refute Hold.exists?(task_id: task.id, reason: "action_unconfirmed")
+  end
+
+  test "changing from Builder to Reviewer still opens Unconfirmed action and queues no helper request" do
+    task = scenario.finishing_task(builder: @builder, holder: false, actions: [ { kind: "send", state: "approved" } ])
+
+    outcome, events = change(@builder, role: "reviewer")
+
+    assert_completed(outcome)
+    assert_equal %w[seat.changed hold.opened inbox.opened], events.map(&:type)
+    assert_equal "action_unconfirmed", Hold.find_by!(task_id: task.id, closed_at: nil).reason
+    assert_equal({ "helper_request_id" => nil }, outcome.result)
+    assert_empty HelperRequest.where(seat_id: @builder.id)
+  end
+
+  test "changing to General while an app seat is stopped queues no start" do
+    @builder.update!(run_state: "stopped")
+    outcome, = change(@builder, role: "general")
+
+    assert_equal({ "helper_request_id" => nil }, assert_completed(outcome).result)
+    assert_empty HelperRequest.where(seat_id: @builder.id)
+  end
+
   test "a change of role is invalid_state while the seat holds a task or a review" do
     working_task(@builder)
     outcome, events = change(@builder, role: "reviewer")
