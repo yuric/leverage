@@ -609,5 +609,17 @@ class DecisionScoreTests(unittest.TestCase):
         self.assertIn("no further main runs", err)
 
 
+class DuplicateKeyTests(unittest.TestCase):
+    """A JSON file with a key twice is refused, as Ruby's parser refuses it."""
+
+    def test_a_duplicate_key_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "bar.json")
+            path.write_text('{"kind": "verdict", "kind": "verdict"}', encoding="utf-8")
+            with self.assertRaises(eval_score.Refused) as raised:
+                eval_score.read_json(path)
+            self.assertIn("kind", str(raised.exception))
+
+
 if __name__ == "__main__":
     unittest.main(argv=[sys.argv[0]] + (["-v"] if "-v" in sys.argv[1:] else []))

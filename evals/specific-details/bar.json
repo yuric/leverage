@@ -1,7 +1,6 @@
 {
   "suite": "specific-details",
   "kind": "verdict",
-  "kind": "verdict",
   "rule": "specific_details",
   "supported_providers": ["claude", "codex", "gemini"],
   "bar": {

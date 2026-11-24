@@ -50,9 +50,20 @@ class Refused(Exception):
 # --- Reading -------------------------------------------------------------------
 
 
+def _no_duplicate_keys(pairs):
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise Refused(f"a JSON object names {key!r} twice")
+        seen[key] = value
+    return seen
+
+
 def read_json(path):
+    """A JSON file, refusing an object that names a key twice (Ruby's parser,
+    which builds the eval inputs, refuses those too)."""
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+        return json.load(handle, object_pairs_hook=_no_duplicate_keys)
 
 
 def write_json(path, value):
