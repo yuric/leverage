@@ -1,7 +1,8 @@
 import LeverageKit
 import SwiftUI
 
-/// The floating left pane: tabs, project filters and the health line.
+/// The floating left pane: tabs, project filters, setup's progress while the
+/// checklist shows, and the health line.
 struct SidePane: View {
     let context: ScreenContext
     @State private var projectListAttempt = 0
@@ -23,10 +24,18 @@ struct SidePane: View {
                     ) {
                         context.navigator.show(entry.place)
                     }
+                    .spotlightAnchor(Self.spotlightTarget(for: entry.place))
                 }
             }
 
             projects
+
+            if SetupProgressPill.shows(context.setup) {
+                SetupProgressPill(doneCount: context.setup.facts.doneCount) {
+                    SetupProgressPill.open(context.navigator)
+                }
+                .padding(.horizontal, 6)
+            }
 
             HealthLineView(model: context.health)
                 .padding(.horizontal, 6)
@@ -59,6 +68,15 @@ struct SidePane: View {
         Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
         Tab(place: .settings, copy: .tabSettings, symbol: "gearshape"),
     ]
+
+    /// The tab the setup spotlight can light, if any.
+    static func spotlightTarget(for place: Navigator.Place) -> SpotlightTarget? {
+        switch place {
+        case .credentials: .credentialsTab
+        case .agents: .agentsTab
+        default: nil
+        }
+    }
 
     /// The count on the Needs you tab; nil when nothing is open.
     static func badge(for count: Int) -> String? { count > 0 ? String(count) : nil }

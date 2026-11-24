@@ -90,6 +90,8 @@ final class ScreenContext {
     let runtime: any AppRuntime
     /// Counts the open Needs you items and announces each new one (HM-29).
     let inbox: InboxWatcher
+    /// First-run setup: the assistant, the checklist, or neither (docs/onboarding/PRD.md).
+    let setup: SetupModel
     private(set) var paneProjects: [Project] = []
     private(set) var projectListFailure: ShellCopy?
 
@@ -105,6 +107,19 @@ final class ScreenContext {
         self.inbox = InboxWatcher(
             owner: owner, notifier: runtime.notifier, cursor: runtime.inboxCursor,
             select: { [navigator] in navigator.show(.needsYou) })
+        self.setup = SetupModel(
+            api: owner, store: runtime.setupProgress, noteRead: { [feed] in feed.noteRead(asOfSeq: $0) })
+    }
+
+    /// Reads where setup stands, then again on every batch of events, until
+    /// the task is cancelled. The shell runs it while the owner is signed in.
+    func watchSetup() async {
+        setup.attach(to: feed)
+        defer { setup.detach() }
+        await setup.load()
+        while !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(3600)) } catch { return }
+        }
     }
 
     /// Asks for permission to notify, then watches the inbox until the task

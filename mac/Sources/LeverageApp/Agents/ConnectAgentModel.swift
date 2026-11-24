@@ -74,13 +74,21 @@ final class ConnectAgentModel {
     @ObservationIgnored private var sent: (request: ConnectSeatRequest, key: IdempotencyKey)?
     @ObservationIgnored private let generalTestedProviders: [Provider]
     @ObservationIgnored private var finished = false
+    /// The login setup opens the form with, once (docs/onboarding/PRD.md).
+    @ObservationIgnored private let preferredLoginID: UUID?
+    /// The name to fill in with the preferred login; its label when nil.
+    @ObservationIgnored private let preferredName: String?
+    @ObservationIgnored private var preferenceApplied = false
 
     init(
         api: any OwnerAPI, copy: @escaping @MainActor (String) -> Void, onConnected: @escaping @MainActor () -> Void,
         testedProviders: [Provider] = ContractLists.orchestratorTestedProviders,
-        generalTestedProviders: [Provider] = ContractLists.generalTestedProviders
+        generalTestedProviders: [Provider] = ContractLists.generalTestedProviders,
+        preferredLoginID: UUID? = nil, preferredName: String? = nil
     ) {
         self.api = api
+        self.preferredLoginID = preferredLoginID
+        self.preferredName = preferredName
         self.copy = copy
         self.onConnected = onConnected
         self.testedProviders = testedProviders
@@ -141,11 +149,22 @@ final class ConnectAgentModel {
         credentialID = logins.first?.id
     }
 
+    /// The first read picks the preferred login, and names the agent after
+    /// it when no name was typed. Later reads leave the owner's choice alone.
+    private func applyPreferredLogin() {
+        guard !preferenceApplied else { return }
+        preferenceApplied = true
+        guard let id = preferredLoginID, let login = logins.first(where: { $0.id == id }) else { return }
+        credentialID = login.id
+        if trimmedName.isEmpty { name = preferredName ?? login.label }
+    }
+
     /// Reads the logins that can be picked.
     func load() async {
         do {
             let list = try await api.credentials()
             allLogins = list.credentials.map(\.credential).filter { $0.kind == .login }.map(LoginChoice.init)
+            applyPreferredLogin()
             keepALoginPicked()
         } catch is CancellationError {
             return

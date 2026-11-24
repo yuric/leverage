@@ -24,6 +24,7 @@ struct RosterView: View {
             await model.keepCurrent()
         }
         .onDisappear { model.detach() }
+        .setupSheetOpen(isConnecting || model.changing != nil || model.newPrompt != nil)
         .sheet(isPresented: changing(model)) {
             if let change = model.changing {
                 ChangeAgentForm(model: change, cancel: { model.cancelChange() })
@@ -75,6 +76,7 @@ struct RosterContent: View {
                 Spacer(minLength: 0)
                 Button(AgentsCopy.connect.text, action: connect)
                     .buttonStyle(PrimaryButtonStyle())
+                    .spotlightAnchor(.connectAgent)
             }
             if model.state == .loaded, model.rows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -92,6 +94,7 @@ struct RosterContent: View {
                 }
             }
         }
+        .setupSheetOpen(model.pendingRemoval != nil)
         .confirmationDialog(
             model.pendingRemoval?.title ?? "", isPresented: removing, titleVisibility: .visible
         ) {

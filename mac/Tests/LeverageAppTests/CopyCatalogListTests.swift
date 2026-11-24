@@ -13,7 +13,7 @@ struct CopyCatalogListTests {
         #expect(names == [
             "ShellCopy", "SignInCopy", "BoardCopy", "AddTaskCopy", "TaskPageCopy", "AgentsCopy",
             "CredentialsCopy", "AddTokenCopy", "NeedsYouCopy", "HandoffCopy", "RulesCopy", "DecidedCopy",
-            "ActivityCopy", "ProjectsCopy", "WorkspaceSettingsCopy",
+            "ActivityCopy", "ProjectsCopy", "WorkspaceSettingsCopy", "SetupAssistantCopy", "SetupChecklistCopy",
         ])
         for catalog in CopyCatalogs.all {
             #expect(!catalog.allTexts.isEmpty)

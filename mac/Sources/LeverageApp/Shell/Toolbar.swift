@@ -23,6 +23,7 @@ struct Toolbar: View {
                 context.navigator.presentAddTask()
             }
             .buttonStyle(PrimaryButtonStyle())
+            .spotlightAnchor(.addTask)
         }
         .frame(minHeight: 52)
         .padding(.leading, 16)

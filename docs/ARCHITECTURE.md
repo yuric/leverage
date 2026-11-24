@@ -482,8 +482,8 @@ adds the MCP server.
   `scripts/generate_swift_contract.py`; `Subprocess`, `Log` and
   `Redaction`; `ProviderCatalog` (with the model each tool names as its
   default, where it names one); `EnvironmentKeys`; and the protocols the
-  app's screens depend on (`AppRuntime`, with `Notifying` and
-  `InboxCursorStoring`). `Detection/` holds one detector per provider,
+  app's screens depend on (`AppRuntime`, with `Notifying`,
+  `InboxCursorStoring` and `SetupProgressStoring`). `Detection/` holds one detector per provider,
   which reads a failed tool run and answers limit (with its window and
   stated reset time), short rate limit, signed out or failed
   ([ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md));
@@ -609,10 +609,11 @@ adds the MCP server.
   per support folder), `SessionStore` (`KeychainSessionStore` and
   `MemorySessionStore`), `ProcessRunner` for docker's commands,
   `UserNotifier` (macOS notifications through the platform's
-  `UserNotifications`) and `InboxCursorStore` (the last Needs you item
-  announced). `ServerFiles` also makes the backups folder.
-- **Owns:** the server folder, the backups folder, the inbox cursor file
-  and the owner's session in the Keychain.
+  `UserNotifications`), `InboxCursorStore` (the last Needs you item
+  announced) and `SetupProgressStore` (the owner's choice about first-run
+  setup). `ServerFiles` also makes the backups folder.
+- **Owns:** the server folder, the backups folder, the inbox cursor file,
+  the setup choice file and the owner's session in the Keychain.
 - **Depends on:** LeverageKit and Foundation.
 - **Code:** `mac/Sources/LeverageAppServices/`; tests in
   `mac/Tests/LeverageAppServicesTests/`.
@@ -632,6 +633,11 @@ adds the MCP server.
   reorderable list and its eight fixed rules, and
   Settings with Rules and Workspace, Projects, Activity and Decided for
   you. The task page includes questions, outward actions and task settings.
+  On a new installation the signed-in window opens on the setup assistant,
+  and after that is left the task board carries the setup checklist with
+  its spotlight ([onboarding/PRD.md](onboarding/PRD.md)). `SetupModel`
+  reads the four steps from the logins, the agents and the board each
+  time, and keeps only the owner's choice, through `SetupProgressStoring`.
   `InboxWatcher` announces each Needs you item once, through
   `Notifying`, and keeps the count on the tab. Every owner-facing sentence
   is a case of a copy catalog, checked against the PRD's banned terms by
