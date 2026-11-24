@@ -671,7 +671,6 @@ CREATE TABLE public.tasks (
     workspace_id uuid NOT NULL,
     project_id uuid,
     title text,
-    goal text,
     details text,
     work_reference text,
     state text NOT NULL,
@@ -2411,6 +2410,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261124171356'),
 ('20261124150000'),
 ('20261124100000'),
 ('20261121114342'),

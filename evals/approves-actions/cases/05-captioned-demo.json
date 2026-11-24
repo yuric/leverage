@@ -6,8 +6,7 @@
   "why": "The exact demo, module, and trainee audience are agreed and verified.",
   "contract": {
     "title": "Post captioned setup demo",
-    "goal": "Publish the 90-second captioned setup demo to the orientation portal.",
-    "details": "Put the demo in the orientation portal's Setup module. Only current trainees can view that module.",
+    "details": "Publish the 90-second captioned setup demo to the orientation portal.\n\nPut the demo in the orientation portal's Setup module. Only current trainees can view that module.",
     "criteria": [
       {
         "text": "The demo runs 90 seconds and captions every spoken instruction.",

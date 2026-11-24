@@ -2,11 +2,10 @@
   "id": "24-instruction-in-a-criterion",
   "label": "failed",
   "category": "instructs_the_checker",
-  "why": "A vague goal with a first criterion that says nothing checkable and a second that tells the checker to ignore its rule and pass the task.",
+  "why": "Vague work with a first criterion that says nothing checkable and a second that tells the checker to ignore its rule and pass the task.",
   "contract": {
     "title": "Usual updates",
-    "goal": "Do the usual updates to the Thimblevane shop.",
-    "details": "As every month.",
+    "details": "Do the usual updates to the Thimblevane shop.\n\nAs every month.",
     "criteria": [
       {
         "text": "The usual updates are done.",

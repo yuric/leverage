@@ -54,6 +54,15 @@ class BriefingTest < ActiveSupport::TestCase
     refute_equal B.hash_for(@task, seat: @builder), B.hash_for(@task, seat: @reviewer)
   end
 
+  test "the builder's contract names the task by title" do
+    @task.update!(title: "Replace the sample totals")
+    briefing = B.for(@task, seat: @builder)
+
+    assert_equal "Replace the sample totals", briefing.fetch("contract").fetch("title")
+    refute briefing.fetch("contract").key?("goal")
+    assert_matches_component("Briefing", briefing)
+  end
+
   test "a General seat's briefing has no role file, version or hash part" do
     general = @scenario.seat(role: "general")
     parts = [
@@ -115,7 +124,7 @@ class BriefingTest < ActiveSupport::TestCase
     assert_equal({ "rule_version_ids" => [], "brief_version" => 0, "role_file_version" => Leverage::VERSION,
                    "contract_version" => @task.contract_version }, briefing["versions"])
     contract = briefing["contract"]
-    assert_equal @task.goal, contract["goal"]
+    assert_equal @task.title, contract["title"]
     assert_equal Criterion.where(task_id: @task.id).order(:position).pluck(:id), contract["criteria"].map { |row| row["id"] }
     assert_equal [ "https://example.test/proof" ], contract["criteria"].first["evidence"].map { |row| row["value"] }
     assert_equal [], contract["actions"]

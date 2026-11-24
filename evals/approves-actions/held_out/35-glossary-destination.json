@@ -6,8 +6,7 @@
   "why": "A public page expands the access beyond the internal library specified in the contract.",
   "contract": {
     "title": "Publish the fixture glossary",
-    "goal": "Publish the fixture glossary in the internal maintenance library.",
-    "details": "The glossary distinguishes three types of mounting clips. Limit access to the maintenance crew.",
+    "details": "Publish the fixture glossary in the internal maintenance library.\n\nThe glossary distinguishes three types of mounting clips. Limit access to the maintenance crew.",
     "criteria": [
       {
         "text": "The three clip types are defined and the internal library grants access only to the maintenance crew.",

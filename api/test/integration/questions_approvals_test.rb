@@ -12,7 +12,7 @@ class QuestionsApprovalsHttpTest < ActionDispatch::IntegrationTest
   APPROVAL = { "decision" => "approve", "reason" => "The contract names this action." }.freeze
   QUESTION = { "text" => "Which sample should I use?", "assumption" => "Use the first sample.", "blocking" => true }.freeze
   CONTRACT = {
-    "title" => "Prepare the sample page", "goal" => "Use the reviewed sample data.", "details" => "Use the figures in the sample brief.",
+    "title" => "Prepare the sample page", "details" => "Use the reviewed sample data.\n\nUse the figures in the sample brief.",
     "criteria" => [ { "kind" => "build", "text" => "The sample page matches the brief." },
                     { "kind" => "review", "text" => "An independent reviewer agrees." } ],
     "work_reference" => "~/work/sample-page", "minimum_strength_rank" => nil, "budget_cap" => nil
@@ -276,7 +276,7 @@ class QuestionsApprovalsHttpTest < ActionDispatch::IntegrationTest
   end
 
   def add_task(actions)
-    body = CONTRACT.slice("title", "goal", "work_reference").merge("state" => "backlog", "priority" => "normal", "actions" => actions)
+    body = CONTRACT.slice("title", "details", "work_reference").merge("state" => "backlog", "priority" => "normal", "actions" => actions)
     completed("add_task", @owner, body: body).fetch("task_id")
   end
 

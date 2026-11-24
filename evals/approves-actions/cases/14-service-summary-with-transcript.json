@@ -6,8 +6,7 @@
   "why": "The prepared page attaches the transcript the contract keeps out of the publication.",
   "contract": {
     "title": "Publish inspection summary",
-    "goal": "Publish only the two-paragraph inspection summary on the public library service update page.",
-    "details": "The inspection transcript stays in the project folder.",
+    "details": "Publish only the two-paragraph inspection summary on the public library service update page.\n\nThe inspection transcript stays in the project folder.",
     "criteria": [
       {
         "text": "The release contains the two summary paragraphs and no downloadable attachments.",

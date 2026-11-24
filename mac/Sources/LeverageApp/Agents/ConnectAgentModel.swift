@@ -20,6 +20,12 @@ final class ConnectAgentModel {
         case done
     }
 
+    enum LoginRead: Equatable {
+        case loading
+        case loaded
+        case failed(String)
+    }
+
     /// One login the owner can pick.
     struct LoginChoice: Identifiable, Equatable, Sendable {
         let id: UUID
@@ -51,7 +57,13 @@ final class ConnectAgentModel {
             keepALoginPicked()
         }
     }
-    var credentialID: UUID?
+    var credentialID: UUID? {
+        didSet {
+            if loginProvider(for: oldValue) != loginProvider(for: credentialID) {
+                modelName = ""
+            }
+        }
+    }
     var name = "" {
         didSet { if name != oldValue { nameLine = nil } }
     }
@@ -62,8 +74,9 @@ final class ConnectAgentModel {
     var effort = ""
 
     private(set) var phase: Phase = .editing
+    private(set) var loginRead: LoginRead = .loading
     private(set) var nameLine: String?
-    private(set) var failure: String?
+    private var connectFailure: String?
     private(set) var prompt: LandingPromptModel?
     private var allLogins: [LoginChoice] = []
 
@@ -119,16 +132,27 @@ final class ConnectAgentModel {
     /// the one chosen for an agent that connects on its own.
     var chosenProvider: Provider? {
         switch mode {
-        case .runOnLogin: logins.first { $0.id == credentialID }?.provider
+        case .runOnLogin: selectedLogin?.provider
         case .connectsOnItsOwn: provider
         }
+    }
+
+    private var selectedLogin: LoginChoice? { logins.first { $0.id == credentialID } }
+
+    private func loginProvider(for id: UUID?) -> Provider? {
+        allLogins.first { $0.id == id }?.provider
     }
 
     /// Effort is asked for only where the tool is given one.
     var offersEffort: Bool { chosenProvider.map(ProviderCatalog.takesEffort) ?? true }
 
-    /// The owner chose to run the agent on a login, and there is none to run it on.
-    var needsLogin: Bool { mode == .runOnLogin && logins.isEmpty }
+    /// The owner chose Native and has yet to add any login.
+    var needsLogin: Bool { mode == .runOnLogin && loginRead == .loaded && allLogins.isEmpty }
+
+    var failure: String? {
+        if mode == .runOnLogin, case .failed(let sentence) = loginRead { return sentence }
+        return connectFailure
+    }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -137,11 +161,11 @@ final class ConnectAgentModel {
     var canConnect: Bool {
         phase == .editing && !finished && !trimmedName.isEmpty
             && AgentStrength(rawValue: strengthRank) != nil
-            && (mode == .connectsOnItsOwn || credentialID != nil)
+            && (mode == .connectsOnItsOwn || (loginRead == .loaded && selectedLogin != nil))
     }
 
     private func clearFormLines() {
-        failure = nil
+        connectFailure = nil
     }
 
     private func keepALoginPicked() {
@@ -161,15 +185,20 @@ final class ConnectAgentModel {
 
     /// Reads the logins that can be picked.
     func load() async {
+        guard !finished, !Task.isCancelled else { return }
+        loginRead = .loading
         do {
             let list = try await api.credentials()
+            guard !finished, !Task.isCancelled else { return }
             allLogins = list.credentials.map(\.credential).filter { $0.kind == .login }.map(LoginChoice.init)
             applyPreferredLogin()
             keepALoginPicked()
+            loginRead = .loaded
         } catch is CancellationError {
             return
         } catch {
-            failure = ShellCopy.sentence(for: error).text
+            guard !finished, !Task.isCancelled else { return }
+            loginRead = .failed(ShellCopy.sentence(for: error).text)
         }
     }
 
@@ -177,18 +206,17 @@ final class ConnectAgentModel {
 
     private func makeRequest() -> ConnectSeatRequest? {
         let typed = trimmedName
-        let modelText = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
         let effortText = offersEffort ? effort.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         switch mode {
         case .runOnLogin:
-            guard let login = logins.first(where: { $0.id == credentialID }) else { return nil }
+            guard let login = selectedLogin else { return nil }
+            let modelText = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
             return ConnectSeatRequest(
                 name: typed, role: role, provider: login.provider, model: modelText, effort: effortText,
                 strengthRank: strengthRank, credentialID: login.id)
         case .connectsOnItsOwn:
             return ConnectSeatRequest(
-                name: typed, role: role, provider: provider, model: modelText, effort: effortText,
-                strengthRank: strengthRank, credentialID: nil)
+                name: typed, role: role, provider: provider, effort: effortText, strengthRank: strengthRank)
         }
     }
 
@@ -197,7 +225,7 @@ final class ConnectAgentModel {
     func connect() async {
         guard canConnect, let request = makeRequest() else { return }
         phase = .connecting
-        failure = nil
+        connectFailure = nil
         nameLine = nil
         let selectedConnection = request.credentialID == nil ? connection : nil
         let key = (sent?.request == request ? sent?.key : nil) ?? IdempotencyKey()
@@ -225,7 +253,7 @@ final class ConnectAgentModel {
             if case LeverageClientError.refused(let refusal) = error, refusal.code == .duplicateName {
                 nameLine = ShellCopy.refusalDuplicateName.text
             } else {
-                failure = ShellCopy.sentence(for: error).text
+                connectFailure = ShellCopy.sentence(for: error).text
             }
         }
     }

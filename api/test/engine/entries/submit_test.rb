@@ -128,7 +128,7 @@ class SubmitTest < ActiveSupport::TestCase
     pass_all
     assert submit.completed?
     review = Review.find_by!(task_id: @task.id, verdict: nil)
-    contract = { "id" => @task.id, "title" => @task.title, "goal" => @task.goal, "details" => nil,
+    contract = { "id" => @task.id, "title" => @task.title, "details" => nil,
                  "criteria" => [ { "text" => "Made-up criterion 1, changed.", "kind" => "build" },
                                  { "text" => "Made-up criterion 2.", "kind" => "review" } ],
                  "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }

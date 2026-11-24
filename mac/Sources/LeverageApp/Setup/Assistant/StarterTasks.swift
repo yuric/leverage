@@ -1,7 +1,7 @@
 /// The three ready-made tasks of the assistant's last screen
 /// (docs/onboarding/setup-assistant.html). The words the owner reads are
 /// cases of `SetupAssistantCopy`; the prompt is what the agents read as the
-/// task's goal, from the gallery mockup with its example values filled in.
+/// task's details, from the gallery mockup with its example values filled in.
 struct StarterTask: Identifiable, Equatable, Sendable {
     enum Kind: String, CaseIterable, Sendable {
         case todo, portfolio, tidy

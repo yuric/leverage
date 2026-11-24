@@ -13,7 +13,7 @@ class JobInputsQuestionTest < ActiveSupport::TestCase
       { kind: "lesson", text: "Keep the sample small." }
     ])
     task = @scenario.task(state: "working", project: project, title: "Publish the sample",
-      goal: "Show the sample in the workspace.", details: "Use the short sample.",
+      details: "Show the sample in the workspace.\n\nUse the short sample.",
       actions: [
         { kind: "publish", description: "Publish the sample to the workspace." },
         { kind: "send", description: "Send the sample link to the owner." }
@@ -29,7 +29,8 @@ class JobInputsQuestionTest < ActiveSupport::TestCase
     assert_equal({ "text" => "Which label should the button use?", "assumption" => "Use Continue.", "blocking" => true },
       material.fetch("question"))
     assert_equal({
-      "title" => "Publish the sample", "goal" => "Show the sample in the workspace.", "details" => "Use the short sample.",
+      "title" => "Publish the sample",
+      "details" => "Show the sample in the workspace.\n\nUse the short sample.",
       "criteria" => [
         { "text" => "Made-up criterion 1.", "kind" => "build", "state" => "open" },
         { "text" => "Made-up criterion 2.", "kind" => "review", "state" => "open" }

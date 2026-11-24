@@ -40,6 +40,9 @@ struct PromptsAndAnswersTests {
         #expect(prompt.contains("LEVERAGE-CANNOT:"))
         #expect(!prompt.contains("LEVERAGE-CRITERION"))
         #expect(prompt.contains("The layout matches the rest of the site."))
+        #expect(prompt.contains("The task's title:\n> Update the pricing page"))
+        #expect(prompt.contains("Details:\n> Use the figures in the price list."))
+        #expect(!prompt.contains("The task's goal:"))
         #expect(prompt.contains("See criterion 1 too."))
         let roleFile = try #require(briefing.roleFile)
         #expect(prompt.contains("Your role:\n> \(roleFile)"))
@@ -64,7 +67,9 @@ struct PromptsAndAnswersTests {
         for prompt in prompts {
             #expect(!prompt.contains("Your role:"))
             #expect(prompt.contains(Prompts.rulesHeading + "\n> - " + rule.name))
-            #expect(prompt.contains(briefing.contract.goal))
+            #expect(prompt.contains("The task's title:\n> Update the pricing page"))
+            #expect(prompt.contains("Details:\n> Use the figures in the price list."))
+            #expect(!prompt.contains("The task's goal:"))
         }
     }
 

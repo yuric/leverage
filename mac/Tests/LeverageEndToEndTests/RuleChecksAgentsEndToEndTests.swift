@@ -154,7 +154,7 @@ struct DraftContractEndToEndTests {
             let addKey = IdempotencyKey()
             let added = try await world.owner.addTask(
                 AddTaskRequest(
-                    title: "Draft \(world.markers[0])", goal: "A page names \(world.markers[1]).",
+                    title: "Draft \(world.markers[0])", details: "A page names \(world.markers[1]).",
                     priority: .normal, workReference: world.work.path, state: .backlog),
                 key: addKey)
             let task = try #require(try added.completedResult()?.taskID)
@@ -185,6 +185,7 @@ struct DraftContractEndToEndTests {
 
             let page = try await world.owner.task(id: task)
             #expect(page.task.workReference == world.work.path, "the work reference the test gave")
+            #expect(page.task.details == "A page names \(world.markers[1]).\n\nWritten by the stand-in planner.")
             #expect(page.task.state == .ready)
             #expect(page.steps.map(\.kind) == [.waitContract, .draft, .check, .waitReady])
 

@@ -8,7 +8,7 @@ class CheckReentryTest < ActiveSupport::TestCase
 
   test "a settled check completes the same pending command under its original key" do
     task = @scenario.task(state: "backlog")
-    params = { "id" => task.id, "goal" => "Made-up goal.",
+    params = { "id" => task.id, "title" => task.title,
                "criteria" => [ { "text" => "Made-up review criterion.", "kind" => "review" } ], "actions" => [] }
     pending = @scenario.pending_transition(task, command: "complete_contract", requester: @scenario.owner, params: params)
     rule = @scenario.rule(hook: "task.before_ready")

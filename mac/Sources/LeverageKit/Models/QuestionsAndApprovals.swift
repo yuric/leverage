@@ -109,6 +109,7 @@ public struct Project: Codable, Equatable, Sendable {
     public let name: String
     public let imaginarium: Bool
     public let goal: String
+    public let latestWorkReference: String?
     public let budget: Decimal?
     public let spent: Decimal
     public let paused: Bool
@@ -121,12 +122,14 @@ public struct Project: Codable, Equatable, Sendable {
     public init(
         id: UUID, name: String, imaginarium: Bool = false, goal: String, budget: Decimal? = nil,
         spent: Decimal = 0, paused: Bool = false, briefVersion: Int, brief: [BriefEntry] = [],
-        pausedBy: ProjectPauseReason? = nil, openTasks: Int = 0, contentDeletedAt: Date? = nil
+        pausedBy: ProjectPauseReason? = nil, openTasks: Int = 0, contentDeletedAt: Date? = nil,
+        latestWorkReference: String? = nil
     ) {
         self.id = id
         self.name = name
         self.imaginarium = imaginarium
         self.goal = goal
+        self.latestWorkReference = latestWorkReference
         self.budget = budget
         self.spent = spent
         self.paused = paused
@@ -139,6 +142,7 @@ public struct Project: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, imaginarium, goal, budget, spent, paused, brief
+        case latestWorkReference = "latest_work_reference"
         case briefVersion = "brief_version"
         case pausedBy = "paused_by"
         case openTasks = "open_tasks"

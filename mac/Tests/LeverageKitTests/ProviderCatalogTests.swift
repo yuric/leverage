@@ -243,6 +243,20 @@ struct ProviderCatalogTests {
         #expect(try entry("gemini").defaultModel == nil)
     }
 
+    @Test("each login provider has a model list with evidence")
+    func models() {
+        for entry in ProviderCatalog.entries {
+            let list = entry.models
+            #expect(list.evidence == .documented, "\(entry.id)")
+            #expect(!list.value.isEmpty, "\(entry.id)")
+            #expect(Set(list.value).count == list.value.count, "\(entry.id)")
+            #expect(list.value.allSatisfy { !$0.isEmpty }, "\(entry.id)")
+            if let model = entry.defaultModel {
+                #expect(list.value.contains(model.value), "\(entry.id)")
+            }
+        }
+    }
+
     @Test("Claude and Antigravity take an effort; Codex and Grok are given none (their drivers pass none)")
     func effort() {
         #expect(ProviderCatalog.takesEffort(.claude))

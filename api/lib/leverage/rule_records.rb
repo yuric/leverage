@@ -45,6 +45,15 @@ module Leverage
       end
     end
 
+    def superseded_shipped_rules(workspace_id)
+      shipped = Rules::Shipped.all.reject { |record| record.superseded_instructions.empty? }
+      installed = Rule.where(workspace_id: workspace_id, key: shipped.map(&:key), removed_at: nil).index_by(&:key)
+      shipped.filter_map do |record|
+        rule = installed[record.key]
+        rule if rule && record.superseded_version?(current_version(rule))
+      end
+    end
+
     # Adds a custom rule from fields (AddRuleRequest's): a model-checked
     # gate that blocks, keyed custom_ and its id (RD-23). Returns the Rule.
     # Raises Transitions::Invalid for fields added_version refuses.

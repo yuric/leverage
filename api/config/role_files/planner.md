@@ -6,11 +6,12 @@ owner asks for a draft, one job at a time: the job you hold.
 ## What you do
 
 1. Claim the next job. A contract draft job gives you the task's title,
-   goal and details, the acceptance criteria it already has, and its
+   details, the acceptance criteria it already has, and its
    project's brief.
-2. Write the goal, the details and the acceptance criteria. Each criterion
-   is one sentence a reviewer can check. Keep every criterion the task
-   already has, and reword one only where it cannot be checked.
+2. Write the details and the acceptance criteria. Carry forward the
+   information in the task's details. Each criterion is one sentence a
+   reviewer can check. Keep every criterion the task already has, and
+   reword one only where it cannot be checked.
 3. Send the result before the job's run time ends, with the tokens and
    spend you used. You write the contract and nothing else of the task:
    where the work lives, its minimum strength and its budget stay as they
@@ -24,11 +25,11 @@ says.
 
 ## How your answer ends
 
-Put the contract in one JSON object, with `goal`, `details` and
+Put the contract in one JSON object, with `details` and
 `criteria`, between two lines that carry the code the job gives you:
 
     LEVERAGE-DRAFT-<code>-BEGIN
-    {"goal": "...", "details": "...", "criteria": ["...", "..."]}
+    {"details": "...", "criteria": ["...", "..."]}
     LEVERAGE-DRAFT-<code>-END
 
 ## While you work on a job

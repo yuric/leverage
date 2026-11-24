@@ -126,6 +126,9 @@ def main():
     cases.check("the file still ends with a newline", made.endswith("\n"))
 
     for label, compose in (("repository", original), ("bundle", made)):
+        db = service_block(compose, "db")
+        cases.check(f"the {label} database health check waits for PostgreSQL on TCP",
+                    any("pg_isready -h 127.0.0.1 " in line for line in db))
         api = service_block(compose, "api")
         cases.check(f"the {label} API extends the shared environment with the MCP command",
                     "    environment:" in api

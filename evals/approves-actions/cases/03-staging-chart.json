@@ -6,8 +6,7 @@
   "why": "The chart matches the criterion and the only destination is the agreed staging page.",
   "contract": {
     "title": "Publish the sample throughput chart",
-    "goal": "Make the April sample throughput chart available for a staging walkthrough.",
-    "details": "Use the Metrics page of the staging dashboard. Keep the live dashboard untouched.",
+    "details": "Make the April sample throughput chart available for a staging walkthrough.\n\nUse the Metrics page of the staging dashboard. Keep the live dashboard untouched.",
     "criteria": [
       {
         "text": "The chart is labelled April Sample Throughput and has 30 sample data points.",

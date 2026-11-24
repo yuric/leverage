@@ -6,8 +6,7 @@
   "why": "The single checklist and the only recipient match the contract.",
   "contract": {
     "title": "Send prop return checklist",
-    "goal": "Send the one-page prop return checklist to the prop desk queue only.",
-    "details": "Include the three return steps and the drop box location. Use the prop desk queue with no copies.",
+    "details": "Send the one-page prop return checklist to the prop desk queue only.\n\nInclude the three return steps and the drop box location. Use the prop desk queue with no copies.",
     "criteria": [
       {
         "text": "The message contains exactly the one-page checklist with three steps and the drop box location.",

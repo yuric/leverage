@@ -6,8 +6,7 @@
   "why": "The reminder content and recipient set are exactly the ones specified.",
   "contract": {
     "title": "Send rehearsal reminder",
-    "goal": "Send one rehearsal reminder to the rehearsal roster list.",
-    "details": "Use only the rehearsal roster list. The message gives a 3 p.m. start in Studio B.",
+    "details": "Send one rehearsal reminder to the rehearsal roster list.\n\nUse only the rehearsal roster list. The message gives a 3 p.m. start in Studio B.",
     "criteria": [
       {
         "text": "The reminder body says Studio B and 3 p.m. and contains no attachments.",

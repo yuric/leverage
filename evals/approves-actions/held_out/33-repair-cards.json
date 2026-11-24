@@ -6,8 +6,7 @@
   "why": "The cards, destination and workshop audience were checked against the contract.",
   "contract": {
     "title": "Publish repair cards",
-    "goal": "Publish the six repair cards in the tool workshop library for workshop trainees.",
-    "details": "Use the Bench Basics entry. Keep access limited to the workshop trainee group.",
+    "details": "Publish the six repair cards in the tool workshop library for workshop trainees.\n\nUse the Bench Basics entry. Keep access limited to the workshop trainee group.",
     "criteria": [
       {
         "text": "The Bench Basics entry contains six cards and is visible only to workshop trainees.",

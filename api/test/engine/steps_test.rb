@@ -260,7 +260,7 @@ class StepTrackerTest < ActiveSupport::TestCase
   test "creating a task in a paused project retains its first step at task.created" do
     @scenario = Scenario.new
     project = @scenario.project(paused: true)
-    params = { "title" => "A made-up task", "goal" => "A made-up goal.", "project_id" => project.id }
+    params = { "title" => "A made-up task", "project_id" => project.id }
     request = Leverage::Transitions::Request.new(command: "add_task", workspace_id: @scenario.workspace_id,
       caller_kind: "owner", caller_id: @scenario.owner.id, key: "k-create-paused", request_hash: "test", params: params)
     outcome = Leverage::Transitions.apply(request)

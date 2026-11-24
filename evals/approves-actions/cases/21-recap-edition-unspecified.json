@@ -6,8 +6,7 @@
   "why": "The destination is clear, but the contract leaves which recap edition to publish unresolved.",
   "contract": {
     "title": "Post the project recap",
-    "goal": "Publish the project recap in the internal project portal's Recaps section.",
-    "details": "Two reviewed editions of the recap satisfy the listed criteria. The contract does not identify the edition to publish.",
+    "details": "Publish the project recap in the internal project portal's Recaps section.\n\nTwo reviewed editions of the recap satisfy the listed criteria. The contract does not identify the edition to publish.",
     "criteria": [
       {
         "text": "The recap names the two completed milestones and lists the date of the next check-in.",

@@ -15,10 +15,10 @@ enum DraftParser {
     /// `build` criterion, the one `review` criterion the Add task form adds,
     /// no actions, and `work_reference`, `minimum_strength_rank` and
     /// `budget_cap` sent back exactly as `material` gave them (RD-37).
+    /// A draft with no replacement text cannot clear the task's details.
     static func parse(_ text: String, nonce: String, material: DraftMaterial) -> CompleteContractRequest? {
         guard let json = between(text, nonce: nonce),
               let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
-              let goal = (object["goal"] as? String).map(trimmed), !goal.isEmpty,
               let sentences = object["criteria"] as? [Any], !sentences.isEmpty
         else { return nil }
         var criteria: [CriterionInput] = []
@@ -29,14 +29,17 @@ enum DraftParser {
         let details: String?
         switch object["details"] {
         case nil, is NSNull: details = nil
-        case let value as String: details = trimmed(value).isEmpty ? nil : trimmed(value)
+        case let value as String:
+            let text = trimmed(value)
+            details = text.isEmpty ? nil : text
         default: return nil
         }
+        if details == nil, let stored = material.details, !trimmed(stored).isEmpty { return nil }
         // The task's own review criterion keeps its words; else the form's.
         let review = material.criteria.first { $0.kind == .review }?.text ?? reviewCriterion
         criteria.append(CriterionInput(text: review, kind: .review))
         return CompleteContractRequest(
-            title: material.title, goal: goal, details: details, criteria: criteria, actions: [],
+            title: material.title, details: details, criteria: criteria, actions: [],
             minimumStrengthRank: material.minimumStrengthRank, budgetCap: material.budgetCap,
             workReference: material.workReference)
     }

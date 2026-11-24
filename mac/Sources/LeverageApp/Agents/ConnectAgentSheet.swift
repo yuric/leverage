@@ -26,7 +26,6 @@ struct ConnectAgentSheet: View {
             },
             addLogin: addLogin
         )
-        .task { await model.load() }
         .onDisappear { model.finish() }
     }
 }
@@ -36,6 +35,7 @@ struct ConnectAgentForm: View {
     @Bindable var model: ConnectAgentModel
     let cancel: () -> Void
     let addLogin: () -> Void
+    @State private var loginReadAttempt = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -56,16 +56,23 @@ struct ConnectAgentForm: View {
                 .padding(.trailing, 6)
             }
             if let line = model.failure, model.phase == .editing || model.phase == .connecting {
-                Text(verbatim: line)
-                    .font(.system(size: Tokens.FontSize.body, weight: .medium))
-                    .foregroundStyle(Tokens.Tone.stop.foreground)
-                    .padding(.top, 8)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(verbatim: line)
+                        .font(.system(size: Tokens.FontSize.body, weight: .medium))
+                        .foregroundStyle(Tokens.Tone.stop.foreground)
+                    if model.mode == .runOnLogin, case .failed = model.loginRead {
+                        Button(ShellCopy.tryAgain.text) { loginReadAttempt += 1 }
+                            .buttonStyle(.link)
+                    }
+                }
+                .padding(.top, 8)
             }
             actions.padding(.top, 14)
         }
         .padding(Tokens.Spacing.sheet)
         .frame(width: 480, height: 640)
         .background(Tokens.Palette.sheet)
+        .task(id: loginReadAttempt) { await model.load() }
     }
 
     // MARK: the form
@@ -79,6 +86,29 @@ struct ConnectAgentForm: View {
             .pickerStyle(.radioGroup)
             .labelsHidden()
 
+            if model.mode == .connectsOnItsOwn {
+                agentFields
+            } else {
+                switch model.loginRead {
+                case .loading:
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(CredentialsCopy.loading.text)
+                case .loaded:
+                    if model.needsLogin {
+                        addLoginPrompt(AgentsCopy.noLogins.text)
+                    } else {
+                        agentFields
+                    }
+                case .failed:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private var agentFields: some View {
+        VStack(alignment: .leading, spacing: 14) {
             FormField(label: AgentsCopy.roleLabel.text) {
                 Picker(AgentsCopy.roleLabel.text, selection: $model.role) {
                     ForEach(ConnectAgentModel.roles, id: \.self) { role in
@@ -91,6 +121,9 @@ struct ConnectAgentForm: View {
 
             if model.mode == .runOnLogin {
                 loginField
+                if let provider = model.chosenProvider {
+                    AgentModelPicker(provider: provider, existingModel: nil, selection: $model.modelName)
+                }
             } else {
                 FormField(label: AgentsCopy.connectionLabel.text) {
                     Picker(AgentsCopy.connectionLabel.text, selection: $model.connection) {
@@ -123,10 +156,6 @@ struct ConnectAgentForm: View {
                     }
                 }
             }
-            FormField(label: AgentsCopy.modelLabel.text, hint: AgentsCopy.modelHint.text) {
-                TextField(AgentsCopy.defaultModel.text, text: $model.modelName)
-                    .textFieldStyle(.roundedBorder)
-            }
             AgentStrengthPicker(selection: $model.strengthRank)
             if model.offersEffort {
                 FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
@@ -145,12 +174,7 @@ struct ConnectAgentForm: View {
     @ViewBuilder
     private var loginField: some View {
         if model.logins.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AgentsCopy.noLogins.text)
-                    .font(.system(size: Tokens.FontSize.body))
-                    .foregroundStyle(Tokens.Palette.text2)
-                Button(AgentsCopy.addLogin.text, action: addLogin)
-            }
+            addLoginPrompt(AgentsCopy.geminiHidden.text)
         } else {
             FormField(
                 label: AgentsCopy.loginLabel.text,
@@ -163,6 +187,15 @@ struct ConnectAgentForm: View {
                 }
                 .labelsHidden()
             }
+        }
+    }
+
+    private func addLoginPrompt(_ sentence: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: sentence)
+                .font(.system(size: Tokens.FontSize.body))
+                .foregroundStyle(Tokens.Palette.text2)
+            Button(AgentsCopy.addLogin.text, action: addLogin)
         }
     }
 

@@ -39,10 +39,10 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
     request = { "helper_request_id" => @helper_request_id }
     [
       { op: "add_task", command: "add_task", path: "/v1/owner/tasks",
-        body: { "title" => "Fix the totals", "goal" => "Totals add up.", "priority" => "normal", "state" => "backlog" },
+        body: { "title" => "Fix the totals", "details" => "Totals add up.", "priority" => "normal", "state" => "backlog" },
         result: { "task_id" => @task_id } },
       { op: "complete_contract", command: "complete_contract", path: "/v1/owner/tasks/#{@task_id}/complete-contract",
-        body: { "title" => "Fix the totals", "goal" => "Totals add up.", "details" => nil,
+        body: { "title" => "Fix the totals", "details" => "Totals add up.",
                 "criteria" => [ { "text" => "The totals add up.", "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ], "actions" => [], "minimum_strength_rank" => nil,
                 "budget_cap" => nil, "work_reference" => "~/work/invoices" },
         ids: { "id" => @task_id }, result: nil },
@@ -258,7 +258,7 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
 
   test "a body the contract refuses is 422 invalid" do
     bad = {
-      "add_task" => { "goal" => "No title." },
+      "add_task" => { "details" => "No title." },
       "complete_contract" => { "title" => "Only a title" },
       "connect_seat" => { "name" => "Made-up agent", "role" => "wizard" },
       "add_credential" => { "name" => "Made-up account" },
@@ -269,6 +269,19 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
       with_stand_in { send_call(call, body: body) }
       assert_transport_error :unprocessable_entity, "invalid"
     end
+  end
+
+  test "add_task refuses a goal and accepts a title-only request" do
+    call = calls.find { |candidate| candidate[:op] == "add_task" }
+    send_call(call, body: { "title" => "Update the sample", "goal" => "Obsolete field" })
+    assert_transport_error :unprocessable_entity, "invalid"
+
+    send_call(call, body: { "title" => "Update the sample" })
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal "completed", response.parsed_body.fetch("outcome")
+    id = response.parsed_body.fetch("result").fetch("task_id")
+    assert_equal "Update the sample", Task.find(id).title
   end
 
   test "a body on a command that takes none is 422 invalid" do

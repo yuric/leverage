@@ -6,8 +6,7 @@
   "why": "The contract explicitly names the public page and the reviewed card meets its schedule and wording criteria.",
   "contract": {
     "title": "Publish winter workshop hours",
-    "goal": "Show visitors the tentative schedule as a public winter hours card.",
-    "details": "Put the card on the workshop site's public Hours page and label the schedule tentative.",
+    "details": "Show visitors the tentative schedule as a public winter hours card.\n\nPut the card on the workshop site's public Hours page and label the schedule tentative.",
     "criteria": [
       {
         "text": "The card displays Tuesday to Thursday, 10 a.m. to 4 p.m., with the word Tentative above the hours.",

@@ -53,7 +53,14 @@
             "description": "A model-checked rule's instruction is content kept on its rule version. An app-checked rule has no instruction.",
             "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]
           },
-          "checker_role": {"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
+          "superseded_instructions": {
+            "description": "Optional. Earlier shipped defaults of the instruction, oldest first. Write the shipped rules reverts a workspace's rule whose current version is one of them and otherwise equals the shipped fields to this default (decisions.md, UI-5).",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "checker_role":{"oneOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]},
           "queue_timeout_seconds": {"description": "Seconds; null means the workspace's check queue timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
           "run_timeout_seconds": {"description": "Seconds; null means the workspace's check run timeout.", "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
           "enabled": {"type": "boolean"},

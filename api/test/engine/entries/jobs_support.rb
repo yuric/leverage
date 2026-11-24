@@ -39,8 +39,8 @@ module JobsSupport
   end
 
   # The request a Complete contract sends (CompleteContractRequest).
-  def contract_body(goal: "Made-up goal.", details: "Made-up details.", criteria: nil)
-    { "title" => "A made-up task", "goal" => goal, "details" => details,
+  def contract_body(title: "A made-up task", details: "Made-up details.", criteria: nil)
+    { "title" => title, "details" => details,
       "criteria" => criteria || [ { "text" => "Made-up build criterion.", "kind" => "build" },
                                   { "text" => "A reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }

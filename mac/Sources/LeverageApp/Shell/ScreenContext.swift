@@ -18,6 +18,8 @@ final class Navigator {
     private(set) var openTaskID: UUID?
     /// Whether the Add task sheet is showing. The shell presents it.
     var isAddTaskPresented = false
+    /// Whether Credentials should show its Add credential sheet.
+    var isAddCredentialPresented = false
     /// The task whose page was opened to change it; its page takes the
     /// request once. Not observed: taking it changes nothing on screen.
     @ObservationIgnored private var editRequest: UUID?
@@ -27,6 +29,7 @@ final class Navigator {
         self.place = place
         openTaskID = nil
         editRequest = nil
+        isAddCredentialPresented = false
     }
 
     /// Opens the Board scoped to this project, or to All projects for nil.
@@ -39,7 +42,7 @@ final class Navigator {
     /// asks the page to open the contract editor once it has read the task
     /// (Needs you's Change the task, HM-24, HM-49).
     func open(task id: UUID, editing: Bool = false) {
-        place = .board
+        show(.board)
         openTaskID = id
         editRequest = editing ? id : nil
     }
@@ -58,6 +61,11 @@ final class Navigator {
     }
 
     func presentAddTask() { isAddTaskPresented = true }
+
+    func presentAddCredential() {
+        show(.credentials)
+        isAddCredentialPresented = true
+    }
 
     /// After Add task saved: the sheet closes and the board shows.
     func finishAddTask() {
@@ -130,12 +138,16 @@ final class ScreenContext {
         await inbox.run()
     }
 
-    /// Reads the pane's project names while the signed-in window is open.
+    /// Reads the pane's projects and Add task's work references while signed in.
     func watchProjects() async {
         let (updates, request) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let subscription = feed.subscribe { events in
             if events.contains(where: {
-                $0.type == .projectCreated || ($0.type == .contentDeleted && $0.taskID == nil)
+                switch $0.type {
+                case .projectCreated, .taskCreated, .taskChanged, .taskContractChanged, .taskSubmitted, .contentDeleted:
+                    true
+                default: false
+                }
             }) {
                 request.yield()
             }

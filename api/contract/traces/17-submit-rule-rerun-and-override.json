@@ -65,7 +65,7 @@
       "operation_id": "add_task",
       "key": "$key:t1_add",
       "path_params": {},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -85,7 +85,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t1_complete",
       "path_params": {"id": "$task:1"},
-      "body": {"title": "Update the pricing page", "goal": "The page shows this year's prices.", "details": "Use the figures in the brief.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Update the pricing page", "details": "The page shows this year's prices.\n\nUse the figures in the brief.", "criteria": [{"text": "The pricing page shows this year's prices.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -693,7 +693,7 @@
       "operation_id": "add_task",
       "key": "$key:t2_add",
       "path_params": {},
-      "body": {"title": "Add the pricing FAQ", "goal": "The pricing page answers the five common questions.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
+      "body": {"title": "Add the pricing FAQ", "details": "The pricing page answers the five common questions.", "project_id": "$project:site", "priority": "normal", "state": "backlog"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -713,7 +713,7 @@
       "operation_id": "complete_contract",
       "key": "$key:t2_complete",
       "path_params": {"id": "$task:2"},
-      "body": {"title": "Add the pricing FAQ", "goal": "The pricing page answers the five common questions.", "details": "Use the questions in the brief.", "criteria": [{"text": "The FAQ on the pricing page answers the five questions in the brief.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
+      "body": {"title": "Add the pricing FAQ", "details": "The pricing page answers the five common questions.\n\nUse the questions in the brief.", "criteria": [{"text": "The FAQ on the pricing page answers the five questions in the brief.", "kind": "build"}, {"text": "An independent reviewer agrees.", "kind": "review"}], "actions": [], "minimum_strength_rank": null, "budget_cap": null, "work_reference": null},
       "expect": {
         "outcome": "completed",
         "refusal": null,

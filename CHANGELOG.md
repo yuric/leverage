@@ -215,6 +215,19 @@ once it makes its first release.
 
 ### Changed
 
+- Add task and Edit contract use details in place of a separate task goal.
+  The upgrade folds existing task goals into their details and updates an
+  untouched "Every task needs specific details" rule to use the new wording.
+- Add task can fill in where the work is from the project's latest usable
+  work reference. Paste link and Choose folder on this Mac are available
+  when no project is selected or the work-reference field is empty.
+- Needs you offers Open System Settings when notifications are off.
+- Native Connect offers Add a login when there are no logins. Native
+  Connect and Change offer the provider's documented models with the
+  tool's default first. Prompt can connect without a login or model choice.
+- Settings groups the list into Orchestrator rules and Other agent rules.
+- The Agent roster marks task checking as untested until the eval suites
+  pass on the updated task contract.
 - The Board tab is named Task board.
 - Pull requests are welcome at any time; opening an issue first is optional.
 - The product is written "Leverage", with a capital L, in the documents and
@@ -222,6 +235,14 @@ once it makes its first release.
 
 ### Fixed
 
+- A planner's empty draft keeps the task's saved details, including goal
+  text folded on upgrade.
+- Add task refreshes project work references after task changes, builder
+  submissions and content deletion. Paste link explains when the
+  clipboard has no supported link or folder path.
+- Native Connect lets the owner retry a failed login read.
+- The server waits for PostgreSQL to accept TCP connections before
+  starting, including when it starts with a new database after a restore.
 - Log verification recognizes rule checks the orchestrator retries before
   the workspace's offline item opens.
 - Saving an unchanged seat leaves reviewer eligibility updates to the

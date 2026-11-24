@@ -3,7 +3,7 @@ module Leverage
   # (DB-42, milestone 5 plan AP-36).
   module ContentDeletion
     TERMINAL_STATES = %w[done cancelled].freeze
-    TASK_COLUMNS = { title: nil, goal: nil, details: nil, work_reference: nil }.freeze
+    TASK_COLUMNS = { title: nil, details: nil, work_reference: nil }.freeze
     RELATED_COLUMNS = {
       Review => %i[handoff_note notes],
       Criterion => %i[text],

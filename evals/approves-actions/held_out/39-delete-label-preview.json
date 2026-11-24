@@ -6,8 +6,7 @@
   "why": "Deleting the single specified preview still requires an owner decision.",
   "contract": {
     "title": "Remove the superseded label preview",
-    "goal": "Delete the one file called sample-label-preview.png in the sample tray.",
-    "details": "Retain every source file and every other preview. The named preview is the only file to remove.",
+    "details": "Delete the one file called sample-label-preview.png in the sample tray.\n\nRetain every source file and every other preview. The named preview is the only file to remove.",
     "criteria": [
       {
         "text": "The deletion preview lists exactly sample-label-preview.png in the sample tray.",

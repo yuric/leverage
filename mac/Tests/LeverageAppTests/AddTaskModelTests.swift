@@ -38,7 +38,7 @@ struct AddTaskModelTests {
     @Test("a new form is empty, with normal priority, and cannot be saved without a title")
     func startsEmpty() {
         let model = AddTaskModel(api: FakeOwnerAPI(), onSaved: {})
-        #expect(model.title.isEmpty && model.goal.isEmpty && model.criteriaText.isEmpty)
+        #expect(model.title.isEmpty && model.details.isEmpty && model.criteriaText.isEmpty)
         #expect(model.priority == .normal)
         #expect(model.state == .editing)
         #expect(!model.canSave)
@@ -78,6 +78,57 @@ struct AddTaskModelTests {
         let all = AddTaskModel(api: scripted(), boardFilter: navigator.boardFilter, onSaved: {})
         #expect(all.projectID == nil)
         #expect(all.projectChoices([]).map(\.name) == ["No project"])
+    }
+
+    @Test("selecting projects fills an empty reference and only replaces text the form supplied")
+    func projectWorkReference() async throws {
+        let owner = scripted()
+        let model = makeModel(owner)
+        let first = Project(
+            id: UUID(), name: "Invoices", goal: "", briefVersion: 0, latestWorkReference: "~/work/invoices")
+        let second = Project(
+            id: UUID(), name: "Reports", goal: "", briefVersion: 0, latestWorkReference: "https://example.invalid/reports")
+        let withoutReference = Project(id: UUID(), name: "Research", goal: "", briefVersion: 0)
+        model.updateProjects([first, second, withoutReference])
+
+        model.workReference = " \n "
+        model.projectID = first.id
+        #expect(model.workReference == "~/work/invoices")
+        model.projectID = second.id
+        #expect(model.workReference == "https://example.invalid/reports")
+        model.projectID = withoutReference.id
+        #expect(model.workReference.isEmpty)
+        model.projectID = first.id
+        model.projectID = nil
+        #expect(model.workReference.isEmpty)
+
+        model.workReference = "~/work/my-copy"
+        model.projectID = first.id
+        #expect(model.workReference == "~/work/my-copy")
+
+        model.workReference = ""
+        model.projectID = second.id
+        model.workReference = "https://example.invalid/reports"
+        model.projectID = first.id
+        #expect(model.workReference == "https://example.invalid/reports")
+        await model.save()
+        #expect((try owner.call(at: 0)).body?["work_reference"] == .string("https://example.invalid/reports"))
+        #expect((try owner.call(at: 1)).body?["work_reference"] == .string("https://example.invalid/reports"))
+    }
+
+    @Test("a preselected project fills the reference when its metadata arrives")
+    func preselectedProjectWorkReference() {
+        let project = Project(
+            id: UUID(), name: "Invoices", goal: "", briefVersion: 0, latestWorkReference: "~/work/invoices")
+        let model = AddTaskModel(api: scripted(), boardFilter: BoardFilter(projectID: project.id), onSaved: {})
+
+        model.updateProjects([])
+        #expect(model.workReference.isEmpty)
+        model.updateProjects([project])
+        #expect(model.workReference == "~/work/invoices")
+        model.workReference = ""
+        model.updateProjects([project])
+        #expect(model.workReference.isEmpty)
     }
 
     @Test("the project goes in Add task and both commands keep the outward actions in form order")
@@ -256,7 +307,6 @@ struct AddTaskModelTests {
         let owner = scripted()
         let saved = Locked(0)
         let model = makeModel(owner, saved: saved)
-        model.goal = "The totals are right."
         model.details = "For the finance team. Do not change the layout."
         model.priority = .high
         model.workReference = "~/work/invoices"
@@ -269,7 +319,7 @@ struct AddTaskModelTests {
         #expect(add.key != nil && complete.key != nil && add.key != complete.key)
         #expect(add.body == .object([
             "title": .string("Fix the totals on the invoice page"),
-            "goal": .string("The totals are right."),
+            "details": .string("For the finance team. Do not change the layout."),
             "priority": .string("high"),
             "work_reference": .string("~/work/invoices"),
             "state": .string("backlog"),
@@ -277,7 +327,6 @@ struct AddTaskModelTests {
         #expect(complete.path == ["id": newTaskID.contractString])
         #expect(complete.body == .object([
             "title": .string("Fix the totals on the invoice page"),
-            "goal": .string("The totals are right."),
             "details": .string("For the finance team. Do not change the layout."),
             "criteria": .array([
                 .object(["text": .string("Totals match the sum of the lines to the cent"), "kind": .string("build")]),
@@ -293,7 +342,7 @@ struct AddTaskModelTests {
         #expect(saved.value == 1)
     }
 
-    @Test("an empty goal is the title, an empty details or work field is null, and blank criteria lines are dropped")
+    @Test("empty details and work fields are null, and blank criteria lines are dropped")
     func defaults() async {
         let owner = scripted()
         let model = AddTaskModel(api: owner, onSaved: {})
@@ -301,7 +350,6 @@ struct AddTaskModelTests {
         model.criteriaText = "\n  First  \n\n   \nSecond\n"
         await model.save()
 
-        #expect(owner.calls[0].body?["goal"] == .string("Fix the totals"))
         #expect(owner.calls[0].body?["title"] == .string("Fix the totals"))
         #expect(owner.calls[0].body?["priority"] == .string("normal"))
         #expect(owner.calls[0].body?["work_reference"] == nil)
@@ -466,8 +514,7 @@ struct AddTaskModelTests {
         let owner = scripted()
         let saved = Locked(0)
         let model = makeModel(owner, saved: saved)
-        model.goal = "Owners get a summary on Monday."
-        model.details = "Plain text, no pictures."
+        model.details = "Owners get a summary on Monday. Plain text, no pictures."
         model.priority = .low
         model.workReference = "~/work/mail"
 
@@ -476,8 +523,7 @@ struct AddTaskModelTests {
         #expect(owner.calls.map(\.operation) == [.addTask])
         #expect((try owner.call(at: 0)).body == .object([
             "title": .string("Fix the totals on the invoice page"),
-            "goal": .string("Owners get a summary on Monday."),
-            "details": .string("Plain text, no pictures."),
+            "details": .string("Owners get a summary on Monday. Plain text, no pictures."),
             "priority": .string("low"),
             "work_reference": .string("~/work/mail"),
             "state": .string("ideas"),
@@ -487,7 +533,7 @@ struct AddTaskModelTests {
         #expect(saved.value == 1)
     }
 
-    @Test("an idea with only a title is added with the title as its goal")
+    @Test("an idea with only a title is added with normal priority")
     func ideaWithOnlyATitle() async {
         let owner = scripted()
         let model = AddTaskModel(api: owner, onSaved: {})
@@ -495,11 +541,11 @@ struct AddTaskModelTests {
         #expect(model.canSaveAsIdea)
         await model.saveAsIdea()
         let body = owner.calls.first?.body
-        #expect(body?["title"] == .string("Try a weekly summary email"))
-        #expect(body?["goal"] == .string("Try a weekly summary email"))
-        #expect(body?["details"] == nil)
-        #expect(body?["work_reference"] == nil)
-        #expect(body?["state"] == .string("ideas"))
+        #expect(body == .object([
+            "title": .string("Try a weekly summary email"),
+            "priority": .string("normal"),
+            "state": .string("ideas"),
+        ]))
     }
 
     @Test("Save as an idea needs a title, and sends nothing without one")
@@ -584,7 +630,7 @@ struct AddTaskModelTests {
     func ideaWords() {
         #expect(AddTaskCopy.saveAsIdea.text == "Save as an idea")
         #expect(AddTaskCopy.save.text == "Save task")
-        #expect(AddTaskCopy.ideaKeepsNoCriteria.text == "An idea keeps the title, the goal and the details. Say what done looks like when you move it to Backlog.")
+        #expect(AddTaskCopy.ideaKeepsNoCriteria.text == "An idea keeps the title and the details. Say what done looks like when you move it to Backlog.")
         for copy in [AddTaskCopy.saveAsIdea, .ideaKeepsNoCriteria] {
             #expect(BannedTerms.found(in: copy.text).isEmpty)
         }
@@ -708,6 +754,7 @@ struct AddTaskModelTests {
         #expect(owner.calls.filter { $0.operation == .listRules }.count == 1)
     }
 }
+
 
 @MainActor
 @Suite("AddTask render")

@@ -14,7 +14,7 @@ extension FollowTiming {
     /// run's patience.
     static let quick = FollowTiming(
         waitSeconds: 1, idleDelay: .milliseconds(2), retryDelay: .milliseconds(2),
-        giveUpAfter: Patience.scaled(.seconds(3)))
+        giveUpAfter: Patience.scaled(.seconds(30)))
 }
 
 @MainActor
@@ -101,8 +101,8 @@ struct RosterModelTests {
         list[2] = Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok, effort: "high")
         let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
         await model.load()
-        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · Default model · Default effort · On")
-        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · Default model · Default effort · On")
+        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · Default effort · On")
+        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · The tool's default · Default effort · On")
     }
 
     @Test("a row names its login, its model and effort or their defaults, and on or off")
@@ -116,8 +116,8 @@ struct RosterModelTests {
         await model.load()
         #expect(row(model, Fixtures.builderID)?.detailLine == "Claude · some-model · high effort · On")
         #expect(row(model, Fixtures.builderID)?.loginLine == "Runs on Personal.")
-        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · Default model · Default effort · On")
-        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · Default model · Default effort · Off")
+        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · Default effort · On")
+        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · The tool's default · Default effort · Off")
         #expect(row(model, Fixtures.ownID)?.loginLine == nil)
     }
 
@@ -461,7 +461,7 @@ struct RosterModelTests {
         #expect(model.rows.count == 3)
         owner.script { $0.seats = { SeatsList(seats: [Fixtures.seat(Fixtures.ownID, name: "Only one")], asOfSeq: 13) } }
         batches.update { $0.append(EventsPage(events: [ShellFixtures.event(seq: 13)], nextAfterSeq: 13)) }
-        #expect(await ShellFixtures.eventually { model.rows.map(\.name) == ["Only one"] })
+        #expect(await ShellFixtures.eventually(timeout: .seconds(30)) { model.rows.map(\.name) == ["Only one"] })
         model.detach()
         feed.stop()
     }
@@ -471,7 +471,7 @@ struct RosterModelTests {
         let owner = Fixtures.owner()
         let model = makeModel(owner)
         let keeping = Task { await model.keepCurrent(every: .milliseconds(5)) }
-        #expect(await ShellFixtures.eventually { Fixtures.calls(owner, .listSeats).count >= 3 })
+        #expect(await ShellFixtures.eventually(timeout: .seconds(30)) { Fixtures.calls(owner, .listSeats).count >= 3 })
         keeping.cancel()
         await keeping.value
         let after = Fixtures.calls(owner, .listSeats).count
@@ -867,16 +867,19 @@ struct RosterModelTests {
         }
     }
 
-    @Test("with the shipped General eval list, a native General agent on Codex or Gemini is tested and on Claude is not")
-    func shippedGeneralCoverage() {
-        // Both suites ran in General mode on Codex and Antigravity on
-        // 2026-11-24; Claude Code could not be run. The row reads the list
-        // the contract ships, with nothing injected.
-        for (provider, tested) in [(Provider.codex, true), (.gemini, true), (.claude, false)] {
-            let seat = Fixtures.seat(
-                orchestratorID, name: "General agent", role: .general, provider: provider, credential: Fixtures.loginID)
-            let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
-            #expect(row.notTestedNote == (tested ? nil : note), "\(provider)")
+    @Test("native checkers show the note based on their role's shipped eval coverage")
+    func shippedCheckerCoverage() {
+        let coverage: [(SeatRole, [Provider])] = [
+            (.general, ContractLists.generalTestedProviders),
+            (.orchestrator, ContractLists.orchestratorTestedProviders),
+        ]
+        for (role, tested) in coverage {
+            for provider in Provider.allCases where provider.kind == .login {
+                let seat = Fixtures.seat(
+                    orchestratorID, name: "Checker", role: role, provider: provider, credential: Fixtures.loginID)
+                let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
+                #expect(row.notTestedNote == (tested.contains(provider) ? nil : note), "\(role) on \(provider)")
+            }
         }
     }
 

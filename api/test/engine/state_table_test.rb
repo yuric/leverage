@@ -248,11 +248,11 @@ class StateTableTest < ActiveSupport::TestCase
   end
 
   def add_task_params(state)
-    { "title" => "A made-up task", "goal" => "A made-up goal.", "state" => state }
+    { "title" => "A made-up task", "state" => state }
   end
 
   def contract_params(task)
-    { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+    { "id" => task.id, "title" => task.title, "details" => nil,
       "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }

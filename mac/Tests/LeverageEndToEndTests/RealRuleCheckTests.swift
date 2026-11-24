@@ -13,8 +13,8 @@ import Testing
 /// Each test creates the owner, which writes the shipped rules with "Every
 /// task needs specific details" on, connects one orchestrator and adds two
 /// tasks whose contracts are the first `specific` case and the first
-/// `vague_goal` case of evals/specific-details. It passes when the first is
-/// Ready and the second is held with contract_incomplete within 5 minutes.
+/// `vague_work` case of evals/specific-details. It passes when the first is
+/// Ready and the second is held with contract_incomplete.
 /// The script reads the results folder (event types and ids, the two tasks'
 /// states) and runs leverage:verify_log and the secret scan.
 enum RealRuleCheck {
@@ -54,8 +54,8 @@ enum RealRuleCheck {
     struct Case {
         let id: String
         let contract: CompleteContractRequest
-        let title: String
-        let goal: String
+
+        var title: String { contract.title }
     }
 
     /// The first case of `category`, by file name.
@@ -68,16 +68,16 @@ enum RealRuleCheck {
             guard let file = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   file["category"] as? String == category,
                   let contract = file["contract"] as? [String: Any],
-                  let title = contract["title"] as? String, let goal = contract["goal"] as? String,
+                  let title = contract["title"] as? String,
                   let criteria = contract["criteria"] as? [[String: Any]] else { continue }
             let inputs = criteria.compactMap { criterion -> CriterionInput? in
                 guard let text = criterion["text"] as? String else { return nil }
                 return CriterionInput(text: text, kind: criterion["kind"] as? String == "review" ? .review : .build)
             }
             let request = CompleteContractRequest(
-                title: title, goal: goal, details: contract["details"] as? String ?? "", criteria: inputs,
+                title: title, details: contract["details"] as? String, criteria: inputs,
                 workReference: contract["work_reference"] as? String)
-            return Case(id: file["id"] as? String ?? name, contract: request, title: title, goal: goal)
+            return Case(id: file["id"] as? String ?? name, contract: request)
         }
         throw EndToEndFailure("evals/specific-details has no \(category) case")
     }
@@ -91,7 +91,7 @@ struct RealRuleCheckTests {
         let folder = try TestFolder("real-rule-check")
         let owner = try await EndToEnd.owner()
         try folder.record(secrets: [EndToEnd.ownerPassword, owner.transport.token ?? ""].filter { !$0.isEmpty })
-        let cases = try (RealRuleCheck.firstCase("specific"), RealRuleCheck.firstCase("vague_goal"))
+        let cases = try (RealRuleCheck.firstCase("specific"), RealRuleCheck.firstCase("vague_work"))
         try folder.record(markers: [cases.0.title, cases.1.title])
         let tool = try RealRuleCheck.tool()
 
@@ -109,10 +109,9 @@ struct RealRuleCheckTests {
             EnvironmentKeys.workRoot: try folder.folder("runner-work").path,
         ]
         if RealRuleCheck.standIns {
-            // The copy the script was given: its scenario fails the vague
-            // goal and passes the rest, and its sign-in is the stand-ins'.
+            // The scenario fails the case with these details and passes the rest.
             let standIns = URL(fileURLWithPath: tool).deletingLastPathComponent().deletingLastPathComponent()
-            try writeScenario(failing: cases.1.goal, in: standIns)
+            try writeScenario(failing: #require(cases.1.contract.details), in: standIns)
             environment[EnvironmentKeys.path] = "/usr/bin:/bin"
             environment[EnvironmentKeys.home] = try folder.folder("home").path
             environment[EnvironmentKeys.toolDir] = standIns.appendingPathComponent("bin").path
@@ -140,7 +139,7 @@ struct RealRuleCheckTests {
         try FileManager.default.createDirectory(at: folder.logs, withIntermediateDirectories: true)
         let runner = try Subprocess.start(SubprocessRequest(
             executable: try EndToEnd.program("LeverageRunner").path, arguments: [], environment: environment,
-            gracePeriod: .seconds(20)))
+            gracePeriod: Patience.scaled(.seconds(30))))
         let follower = try await EventFollower.fromNow(owner: owner)
 
         try await withCleanup {
@@ -160,14 +159,14 @@ struct RealRuleCheckTests {
         let folder = try TestFolder("real-rule-check-app")
         let owner = try await EndToEnd.owner()
         try folder.record(secrets: [EndToEnd.ownerPassword, owner.transport.token ?? ""].filter { !$0.isEmpty })
-        let cases = try (RealRuleCheck.firstCase("specific"), RealRuleCheck.firstCase("vague_goal"))
+        let cases = try (RealRuleCheck.firstCase("specific"), RealRuleCheck.firstCase("vague_work"))
         try folder.record(markers: [cases.0.title, cases.1.title])
 
         var tools: StandInTools?
         if RealRuleCheck.standIns {
             let copy = try StandIns.copy(into: folder.url)
             try copy.signIn("agy")
-            try writeScenario(failing: cases.1.goal, in: copy.root)
+            try writeScenario(failing: #require(cases.1.contract.details), in: copy.root)
             tools = copy
         }
         guard let helperToken = try await owner.issueHelperToken(
@@ -179,7 +178,7 @@ struct RealRuleCheckTests {
         let helper = try RunningHelper(token: helperToken, folder: folder, tools: tools)
 
         try await withCleanup {
-            let gemini = try await owner.addLogin(.gemini, name: "Gemini (real rule check)", deadline: 600)
+            let gemini = try await owner.addLogin(.gemini, name: "Gemini (real rule check)", deadline: Patience.seconds(600))
             let orchestrator = try await owner.connect("Orchestrator", role: .orchestrator, login: gemini)
             try await owner.waitUntilRunning([orchestrator])
             try await checkTwoContracts(owner: owner, follower: follower, cases: cases, folder: folder)
@@ -198,9 +197,8 @@ private func writeScenario(failing text: String, in standIns: URL) throws {
         .write(to: state.appendingPathComponent("scenario.json"))
 }
 
-/// Adds the two tasks, waits at most 5 minutes for the first to be Ready
-/// and the second held with contract_incomplete, and writes the results:
-/// the two tasks' events (types and ids, no payload) and their states.
+/// Adds both tasks, waits for the first to be Ready and the second to be
+/// held with contract_incomplete, and writes their event types, ids and states.
 private func checkTwoContracts(
     owner: OwnerClient, follower: EventFollower, cases: (RealRuleCheck.Case, RealRuleCheck.Case), folder: TestFolder
 ) async throws {
@@ -208,7 +206,7 @@ private func checkTwoContracts(
     for item in [cases.0, cases.1] {
         let added = try await owner.addTask(
             AddTaskRequest(
-                title: item.title, goal: item.goal, priority: .normal, workReference: item.contract.workReference,
+                title: item.title, priority: .normal, workReference: item.contract.workReference,
                 state: .backlog),
             key: IdempotencyKey())
         let task = try #require(try added.completedResult()?.taskID)
@@ -217,14 +215,14 @@ private func checkTwoContracts(
         tasks.append(task)
     }
     let (specific, vague) = (tasks[0], tasks[1])
-    let deadline: Double = 300
+    let deadline = Patience.seconds(300)
     let started = Date()
     _ = try await follower.wait(for: "\(cases.0.id) Ready", deadline: deadline, where: {
         $0.taskID == specific && $0.type == .taskReady
     })
     _ = try await follower.wait(
         for: "\(cases.1.id) held with contract_incomplete",
-        deadline: max(1, deadline - Date().timeIntervalSince(started)),
+        deadline: max(Patience.seconds(30), deadline - Date().timeIntervalSince(started)),
         where: { $0.taskID == vague && $0.type == .holdOpened && $0.string("reason") == "contract_incomplete" })
 
     let results = try RealRuleCheck.results()

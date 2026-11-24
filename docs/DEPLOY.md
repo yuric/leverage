@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
-| **Last updated** | 2026-11-23 |
+| **Last updated** | 2026-11-24 |
 
 This document says how to run and operate Leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -218,14 +218,19 @@ Nothing copies the dumps off the Mac.
 Migrations only go forward from the Core loop milestone on: a release that
 changes the schema adds a migration and never rewrites an earlier one.
 
+The App round 1 migration folds each task's old goal into its details
+before dropping the goal column. For the handling of empty or duplicate
+text, see [UI-1](../api/contract/decisions.md#app-round-1-ui).
+
 Each time the server starts, after the database is prepared,
 `bin/rails leverage:install_shipped_rules` writes the seven shipped rules
-of any workspace that has none, as the app with no key, and prints one
-line per workspace it wrote; a workspace that has its rules is left alone.
-So an installation made before the Rule checks milestone gets its rules
-at its first start after the upgrade, before any command runs. The rules
-are part of every briefing, so an agent that holds a task then is told at
-its next call that its briefing changed, and reads it again.
+of any workspace that has none. On upgrade it also moves an unchanged
+"Every task needs specific details" rule from its previous shipped default
+to the new default. The upgrade preserves the rule's switch setting and
+any owner edits. See [Shipped rules](PRD.md#shipped-rules). The command
+prints one line per workspace it changed. The rules are part of every
+briefing, so an agent whose briefing changed is told at its next call
+and reads it again.
 
 ## Backups and restore
 

@@ -9,6 +9,7 @@ struct RosterView: View {
     @Environment(ScreenContext.self) private var context
     @State private var box = ScreenModelBox<RosterModel>()
     @State private var isConnecting = false
+    @State private var addingLoginAfterConnect = false
 
     var body: some View {
         let model = box.model {
@@ -38,7 +39,12 @@ struct RosterView: View {
                 NewLandingPromptSheet(model: prompt, dismiss: { model.closeNewPrompt() })
             }
         }
-        .sheet(isPresented: $isConnecting) {
+        .sheet(isPresented: $isConnecting, onDismiss: {
+            if addingLoginAfterConnect {
+                addingLoginAfterConnect = false
+                context.navigator.presentAddCredential()
+            }
+        }) {
             ConnectAgentSheet(
                 connected: { Task { await model.load() } },
                 finish: {
@@ -46,8 +52,8 @@ struct RosterView: View {
                     Task { await model.load() }
                 },
                 addLogin: {
+                    addingLoginAfterConnect = true
                     isConnecting = false
-                    context.navigator.show(.credentials)
                 }
             )
             .environment(context)

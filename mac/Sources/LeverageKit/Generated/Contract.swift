@@ -778,7 +778,7 @@ public enum RuleHook: String, Codable, CaseIterable, Sendable {
 /// registry.json `lists` that name values of another list.
 public enum ContractLists {
     /// registry.json `lists.orchestrator_tested_providers`. The login providers whose tool's default model passed the eval suite (RV-5). It refuses nothing: the app says "Not tested for checking tasks." beside every other choice.
-    public static let orchestratorTestedProviders: [Provider] = [.claude, .codex, .gemini]
+    public static let orchestratorTestedProviders: [Provider] = [.codex, .gemini]
     /// registry.json `lists.general_tested_providers`. The login providers whose tool's default model passed both eval suites run as a General seat (GA-11). It refuses nothing: the app says "Not tested for checking tasks." beside a General seat of every other provider.
     public static let generalTestedProviders: [Provider] = [.codex, .gemini]
     /// registry.json `lists.important_event_types`. The event types shown by the Important filter in Activity.

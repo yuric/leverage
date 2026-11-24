@@ -428,7 +428,8 @@ struct SetupAssistantModelTests {
             == [.addTask, .completeContract])
         let add = try #require(Fixtures.calls(rig.owner, .addTask).first?.body)
         #expect(add["title"] == .string("Pocket to-do"))
-        #expect(add["goal"] == .string(StarterTask.todo.prompt))
+        #expect(add["goal"] == nil)
+        #expect(add["details"] == .string(StarterTask.todo.prompt))
         let complete = try #require(Fixtures.calls(rig.owner, .completeContract).first)
         #expect(complete.path["id"] == taskID.contractString)
         #expect(complete.body?["criteria"]?.arrayValue?.compactMap { $0["text"]?.stringValue } == [
@@ -478,7 +479,8 @@ struct SetupAssistantModelTests {
         await rig.model.send()
         let add = try #require(Fixtures.calls(rig.owner, .addTask).first?.body)
         #expect(add["title"] == .string("Fix the totals"))
-        #expect(add["goal"] == .string("Fix the totals"))
+        #expect(add["goal"] == nil)
+        #expect(add["details"] == nil)
         #expect(Fixtures.calls(rig.owner, .completeContract).first?.body?["criteria"]?.arrayValue?.first?["text"]
             == .string("Totals match"))
         #expect(rig.setup.sentTaskTitle == "Fix the totals")

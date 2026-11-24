@@ -5,8 +5,7 @@
   "why": "The form and the kind of change are named, but clearer and good are opinions no reviewer could check.",
   "contract": {
     "title": "Plainer error messages",
-    "goal": "Rewrite the error messages of the Hollowbrook RSVP form in plain language.",
-    "details": "Guests find the current messages confusing.",
+    "details": "Rewrite the error messages of the Hollowbrook RSVP form in plain language.\n\nGuests find the current messages confusing.",
     "criteria": [
       {
         "text": "The messages are clearer.",

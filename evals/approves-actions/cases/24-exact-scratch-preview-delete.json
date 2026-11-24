@@ -6,8 +6,7 @@
   "why": "The deletion matches the contract exactly and still requires the owner.",
   "contract": {
     "title": "Delete one obsolete scratch preview",
-    "goal": "Delete only draft-swatch.png from the design sandbox's scratch preview folder.",
-    "details": "Leave every other file and folder in place.",
+    "details": "Delete only draft-swatch.png from the design sandbox's scratch preview folder.\n\nLeave every other file and folder in place.",
     "criteria": [
       {
         "text": "The deletion preview lists one file, draft-swatch.png, in the scratch preview folder.",

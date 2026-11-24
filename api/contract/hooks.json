@@ -16,8 +16,8 @@
       "failed_gate": "hold_contract_incomplete",
       "policy_row": null,
       "subject_kind": null,
-      "prd_hashed_inputs": "The contract: goal, criteria, details, outward actions",
-      "hashed_inputs": ["goal", "criteria", "details", "actions"],
+      "prd_hashed_inputs": "The contract: title, details, criteria, outward actions",
+      "hashed_inputs": ["title", "details", "criteria", "actions"],
       "moment_name": "when a task is ready to start",
       "custom_allowed": true,
       "also_event_type": false

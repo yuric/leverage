@@ -141,6 +141,29 @@ public struct ProviderEntry: Equatable, Sendable {
     /// sends it as the credential's model. It goes stale when the provider
     /// retires the model.
     public let defaultModel: Evidenced<String>?
+    /// Model IDs documented for the login tool, in picker order.
+    public let models: Evidenced<[String]>
+
+    init(
+        id: String, displayName: String, toolDisplayName: String, toolName: String,
+        accountFolderVariable: Evidenced<String?>, version: Evidenced<[String]>,
+        status: Evidenced<StatusCheck>, signIn: Evidenced<SignIn>, installer: Evidenced<Installer?>,
+        environment: Evidenced<[String]>, defaultModel: Evidenced<String>?,
+        models: Evidenced<[String]> = Evidenced([], .unverified)
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.toolDisplayName = toolDisplayName
+        self.toolName = toolName
+        self.accountFolderVariable = accountFolderVariable
+        self.version = version
+        self.status = status
+        self.signIn = signIn
+        self.installer = installer
+        self.environment = environment
+        self.defaultModel = defaultModel
+        self.models = models
+    }
 }
 
 /// The header that carries a token and the scheme prefix, if required.
@@ -280,7 +303,12 @@ public enum ProviderCatalog {
             environment: Evidenced([EnvironmentKeys.user], .probe),
             // The one key of `modelUsage` in the reply to the inventory's
             // "ready" prompt, run with no --model (inventory-providers.md §6).
-            defaultModel: Evidenced("claude-opus-5-5", .probeFullEnvironment)),
+            defaultModel: Evidenced("claude-opus-5-5", .probeFullEnvironment),
+            // Read 2026-11-24: https://code.claude.com/docs/en/model-config#available-models
+            // Full IDs: https://platform.claude.com/docs/en/models/overview#latest-models
+            models: Evidenced([
+                "claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+            ], .documented)),
         ProviderEntry(
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
@@ -305,7 +333,14 @@ public enum ProviderCatalog {
                 .documented),
             environment: Evidenced([], .probe),
             // No reply Codex gave on this Mac names its default model.
-            defaultModel: nil),
+            defaultModel: nil,
+            // Read 2026-11-24: https://learn.chatgpt.com/docs/models#recommended-models
+            // GPT-6 Sol is listed for CLI sign-in in https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode
+            // Its ID is listed in https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/models-manager/models.json
+            models: Evidenced([
+                "gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol",
+                "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna",
+            ], .documented)),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
             // One sign-in for the Mac: the PRD states it, and `agy --help`
@@ -324,7 +359,16 @@ public enum ProviderCatalog {
                 .documented),
             environment: Evidenced([], .probe),
             // No reply Antigravity gave on this Mac names its default model.
-            defaultModel: nil),
+            defaultModel: nil,
+            // Read 2026-11-24: https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise
+            // Orchestrator variants: https://antigravity.google/docs/cli/headless/#select-a-model-effort-or-agent
+            // Base IDs take the tool's default effort: https://antigravity.google/docs/changelog?tab=cli#v1-3-4
+            models: Evidenced([
+                "gemini-4-neon", "gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen",
+                "gemini-pro-orchestrator-neon", "gemini-pro-orchestrator", "gemini-pro-orchestrator-argon",
+                "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview",
+                "claude-sonnet-5-5", "claude-opus-5-5",
+            ], .documented)),
         ProviderEntry(
             id: "grok", displayName: "Grok", toolDisplayName: "Grok Build", toolName: "grok",
             // How Grok Build keeps an account is not known; it is treated as
@@ -345,7 +389,11 @@ public enum ProviderCatalog {
             environment: Evidenced([], .unverified),
             // `grok models` printed "Default model: grok-4.6", signed out
             // (inventory-providers.md §4 and §5).
-            defaultModel: Evidenced("grok-4.6", .probeFullEnvironment)),
+            defaultModel: Evidenced("grok-4.6", .probeFullEnvironment),
+            // Read 2026-11-24. Grok Build shows the 4.7 CLI model ID: https://x.ai/build
+            // The 4.6 flag example is in xAI's Grok Build model-selection guide:
+            // https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md#selecting-a-model
+            models: Evidenced(["grok-4.7", "grok-4.6"], .documented)),
     ]
 
     public static func entry(for id: String) -> ProviderEntry? {

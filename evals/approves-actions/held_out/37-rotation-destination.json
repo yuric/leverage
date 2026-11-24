@@ -6,8 +6,7 @@
   "why": "The contract and review give no way to confirm the intended recipient group.",
   "contract": {
     "title": "Send rotation note",
-    "goal": "Send the month-end rotation note to the group that needs it.",
-    "details": "Use the one-page note. Both workshop queues receive some rotation notes, and the intended group is still unconfirmed.",
+    "details": "Send the month-end rotation note to the group that needs it.\n\nUse the one-page note. Both workshop queues receive some rotation notes, and the intended group is still unconfirmed.",
     "criteria": [
       {
         "text": "The note lists the four rotations on one page.",

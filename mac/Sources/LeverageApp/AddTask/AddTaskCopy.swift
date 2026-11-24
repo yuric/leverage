@@ -6,7 +6,6 @@ import LeverageKit
 enum AddTaskCopy: OwnerFacingCopy {
     case sheetTitle
     case titleLabel, titlePlaceholder
-    case goalLabel, goalPlaceholder, goalHint
     case criteriaLabel, criteriaPlaceholder, criteriaHint, criteriaHintRuleOn
     case detailsLabel, detailsPlaceholder
     case projectLabel, noProject, actionsLabel
@@ -14,6 +13,7 @@ enum AddTaskCopy: OwnerFacingCopy {
     case actionPublish, actionPay, actionSend, actionDelete
     case priorityLabel, priorityLow, priorityNormal, priorityHigh
     case workLabel, workPlaceholder, workHint
+    case pasteWorkLink, chooseWorkFolder, chooseFolderPrompt, noClipboardReference, workLinkSignInDetails
     case footnote, footnoteProviderRule
     case cancel, save, saving, saveAsIdea, ideaKeepsNoCriteria
     case changeTaskTitle, saveChanges, saveAndSend, editWarning, editWarningNoAgent
@@ -36,9 +36,6 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .sheetTitle: "Add task"
         case .titleLabel: "What should get done?"
         case .titlePlaceholder: "Fix the totals on the invoice page"
-        case .goalLabel: "What is the goal?"
-        case .goalPlaceholder: "The totals match the lines, to the cent"
-        case .goalHint: "Leave this empty to use the title."
         case .criteriaLabel: "How will you know it is done?"
         case .criteriaPlaceholder: "Totals match the sum of the lines to the cent"
         case .criteriaHint: "One thing to check on each line."
@@ -64,6 +61,11 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .workLabel: "Where the work is"
         case .workPlaceholder: "A folder on this Mac, or a link"
         case .workHint: "Optional. Leverage does not open it. Don't put sign-in details here."
+        case .pasteWorkLink: "Paste link"
+        case .chooseWorkFolder: "Choose folder on this Mac"
+        case .chooseFolderPrompt: "Choose"
+        case .noClipboardReference: "The clipboard has no link or folder path."
+        case .workLinkSignInDetails: "That link carries sign-in details. Paste one without them."
         case .footnote: "An agent that did not build it reviews the work before it counts as done."
         case .footnoteProviderRule: "An agent from another provider reviews the work before it counts as done."
         case .cancel: "Cancel"
@@ -71,7 +73,7 @@ enum AddTaskCopy: OwnerFacingCopy {
         case .saving: "Saving…"
         case .saveAsIdea: "Save as an idea"
         case .ideaKeepsNoCriteria:
-            "An idea keeps the title, the goal and the details. Say what done looks like when you move it to Backlog."
+            "An idea keeps the title and the details. Say what done looks like when you move it to Backlog."
         case .changeTaskTitle: "Change the task"
         case .saveChanges: "Save"
         case .saveAndSend: "Save and send to agents"

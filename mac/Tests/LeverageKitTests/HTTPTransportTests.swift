@@ -162,7 +162,7 @@ struct HTTPTransportTests {
             """)])
         do {
             _ = try await transport.command(.addTask, TaskCreatedResult.self,
-                                            body: AddTaskRequest(title: "t", goal: "g"), key: IdempotencyKey())
+                                            body: AddTaskRequest(title: "t"), key: IdempotencyKey())
             Issue.record("no error thrown")
         } catch let error as TransportError {
             #expect(error.code.rawValue == code)

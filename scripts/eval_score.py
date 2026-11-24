@@ -50,9 +50,20 @@ class Refused(Exception):
 # --- Reading -------------------------------------------------------------------
 
 
+def _no_duplicate_keys(pairs):
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise Refused(f"a JSON object names {key!r} twice")
+        seen[key] = value
+    return seen
+
+
 def read_json(path):
+    """A JSON file, refusing an object that names a key twice (Ruby's parser,
+    which builds the eval inputs, refuses those too)."""
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+        return json.load(handle, object_pairs_hook=_no_duplicate_keys)
 
 
 def write_json(path, value):
@@ -312,7 +323,8 @@ def held_out_refusals(suite, runs, bar, providers, wording, mode):
         main = [entry for entry in entries if entry.get("provider") == provider and not entry.get("held_out")]
         if any(wording_hashes(entry) != wording for entry in main):
             changed = True
-        if main and not main[-1].get("reserved") and wording_hashes(main[-1]) == wording:
+        if (main and not main[-1].get("reserved") and wording_hashes(main[-1]) == wording
+                and main[-1].get("cases_sha256") == bar["cases_sha256"]):
             continue
         result_path = results_folder(suite, mode) / f"{provider}.json"
         if provider not in providers and result_path.is_file():
@@ -322,7 +334,7 @@ def held_out_refusals(suite, runs, bar, providers, wording, mode):
                     and result.get("suite") == bar["suite"] and not result.get("held_out")
                     and wording_hashes(result) == wording and result.get("cases_sha256") == bar["cases_sha256"]):
                 continue
-        reasons.append(f"{provider} has no completed main run on the final wording")
+        reasons.append(f"{provider} has no completed main run on the final wording and current cases")
     if not changed:
         reasons.append("the wording has not changed since the first main run")
     if any(wording_hashes(entry) != wording for entry in entries if entry.get("held_out")):

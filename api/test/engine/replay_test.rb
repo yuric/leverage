@@ -193,7 +193,7 @@ class ReplayTest < ActiveSupport::TestCase
 
   test "Add task records and replays contracted action IDs without their content" do
     scenario = Scenario.new
-    params = { "title" => "Sample", "goal" => "Send the update.",
+    params = { "title" => "Sample", "details" => "Send the update.",
                "actions" => [ { "kind" => "send", "description" => "Made-up outward action." } ] }
     outcome = T.apply(T::Request.new(command: "add_task", workspace_id: scenario.workspace_id, caller_kind: "owner",
       caller_id: scenario.owner.id, key: SecureRandom.uuid, request_hash: Digest::SHA256.hexdigest(params.to_json),
@@ -289,7 +289,7 @@ class ReplayTest < ActiveSupport::TestCase
   # Complete contract is the one command of this milestone that sets the
   # rank; its task.contract_changed carries it (null for none).
   def complete_contract(scenario, task, minimum_strength_rank)
-    params = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+    params = { "id" => task.id, "title" => task.title, "details" => nil,
                "criteria" => [ { "text" => "Made-up criterion.", "kind" => "build" },
                                { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
                "actions" => [], "minimum_strength_rank" => minimum_strength_rank, "budget_cap" => nil,
@@ -335,7 +335,7 @@ class ReplayTest < ActiveSupport::TestCase
       "briefing_hash" => Leverage::Briefing.hash_for(task.reload, builder)).completed?
     assert seat_call.call("pass_criterion", "id" => task.id, "cid" => first.id,
       "evidence" => { "kind" => "link", "value" => "https://example.test/work/1" }).completed?
-    edit = { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+    edit = { "id" => task.id, "title" => task.title, "details" => nil,
              "criteria" => [ { "text" => first.text, "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ],
              "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }
     owner_call = lambda do |command, params|

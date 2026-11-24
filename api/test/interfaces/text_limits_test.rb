@@ -23,7 +23,7 @@ class TextLimitsTest < ActionDispatch::IntegrationTest
   def limit(name, property) = schema(name).dig("properties", property, "maxLength")
 
   def contract_body(**overrides)
-    { "title" => "A made-up task", "goal" => "A made-up goal.", "details" => "Made-up details.",
+    { "title" => "A made-up task", "details" => "A made-up goal.\n\nMade-up details.",
       "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                       { "text" => "A reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }.merge(overrides)
@@ -42,7 +42,7 @@ class TextLimitsTest < ActionDispatch::IntegrationTest
   end
 
   test "every task-text field of the requests has a limit, and every list of them a count" do
-    { "CompleteContractRequest" => %w[title goal details work_reference], "AddTaskRequest" => %w[title goal details work_reference],
+    { "CompleteContractRequest" => %w[title details work_reference], "AddTaskRequest" => %w[title details work_reference],
       "SubmitTaskRequest" => %w[handoff_note work_reference], "GiveVerdictRequest" => %w[notes],
       "OverrideCheckRequest" => %w[reason], "AddRuleRequest" => %w[name instruction],
       "SaveRuleRequest" => %w[name instruction], "CriterionInput" => %w[text], "ActionInput" => %w[description] }
@@ -57,10 +57,10 @@ class TextLimitsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "a goal one character over its limit is 422 invalid, and no check is queued" do
+  test "a contract with details one character over the limit is 422 invalid, and no check is queued" do
     task = @scenario.task(state: "backlog", criteria: [])
 
-    complete(task, contract_body("goal" => "g" * (limit("CompleteContractRequest", "goal") + 1)))
+    complete(task, contract_body("details" => "d" * (limit("CompleteContractRequest", "details") + 1)))
 
     assert_refused_before_anything(task)
   end
@@ -76,10 +76,10 @@ class TextLimitsTest < ActionDispatch::IntegrationTest
     assert_refused_before_anything(task)
   end
 
-  test "a goal at its limit is accepted and waits on its check" do
+  test "a contract with details at the limit is accepted and waits on its check" do
     task = @scenario.task(state: "backlog", criteria: [])
 
-    complete(task, contract_body("goal" => "g" * limit("CompleteContractRequest", "goal")))
+    complete(task, contract_body("details" => "d" * limit("CompleteContractRequest", "details")))
 
     assert_response :accepted
     assert_equal 1, RuleCheck.where(workspace_id: @scenario.workspace_id, task_id: task.id).count

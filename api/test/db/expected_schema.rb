@@ -230,7 +230,6 @@ module ExpectedSchema
       columns: OWNED.merge(
         "project_id" => uuid(null: true),
         "title" => text(null: true),
-        "goal" => text(null: true),
         "details" => text(null: true),
         "work_reference" => text(null: true),
         "state" => text,

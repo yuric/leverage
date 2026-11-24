@@ -98,7 +98,6 @@ final class TaskPageModel {
     // MARK: what the page shows
 
     var title: String { isContentDeleted ? TaskPageCopy.deletedTask.text : (page?.task.title ?? "") }
-    var goal: String { page?.task.goal ?? "" }
     var details: String? { nonEmpty(page?.task.details) }
     var workReference: String? { nonEmpty(page?.task.workReference) }
 
@@ -455,7 +454,6 @@ final class TaskPageModel {
         guard page.task.state == .backlog, !draftTouched else { return }
         var filled = ContractDraft()
         filled.title = page.task.title
-        filled.goal = page.task.goal
         filled.details = page.task.details ?? ""
         filled.workReference = page.task.workReference ?? ""
         filled.priority = page.task.priority
@@ -563,7 +561,7 @@ extension TaskPage {
     /// they were read. Complete and Edit accept a whole contract.
     func retainingContractFields(in request: CompleteContractRequest) -> CompleteContractRequest {
         CompleteContractRequest(
-            title: request.title, goal: request.goal, details: request.details, criteria: request.criteria,
+            title: request.title, details: request.details, criteria: request.criteria,
             actions: contractActions, minimumStrengthRank: task.minimumStrengthRank, budgetCap: task.budgetCap,
             workReference: request.workReference)
     }

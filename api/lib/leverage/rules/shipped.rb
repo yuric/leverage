@@ -17,10 +17,16 @@ module Leverage
 
       # One shipped rule. enabled and version are what it ships with.
       Record = Data.define(:key, :name, :hook, :kind, :checker, :scope_kind, :scope_values, :checker_function,
-                           :parameters, :parameter_schema, :instruction, :checker_role, :on_fail, :route,
+                           :parameters, :parameter_schema, :instruction, :superseded_instructions, :checker_role, :on_fail, :route,
                            :queue_timeout_seconds, :run_timeout_seconds, :origin, :enabled, :version) do
         # The columns of a rule_versions row written from it, symbol keys.
         def version_fields = VERSION_COLUMNS.to_h { |column| [ column, public_send(column) ] }
+
+        def superseded_version?(version)
+          fields = VERSION_COLUMNS - [ :instruction ]
+          superseded_instructions.include?(version.instruction) &&
+            version.attributes.symbolize_keys.slice(*fields) == version_fields.slice(*fields)
+        end
       end
 
       module_function
@@ -42,7 +48,8 @@ module Leverage
           checker: rule.fetch("checker"), scope_kind: rule.dig("scope", "kind"), scope_values: rule.dig("scope", "values"),
           checker_function: rule.fetch("checker_function"),
           parameters: schema.transform_values { |parameter| parameter.fetch("default") }.freeze, parameter_schema: schema,
-          instruction: instruction.is_a?(String) ? instruction : nil, checker_role: rule.fetch("checker_role"),
+          instruction: instruction.is_a?(String) ? instruction : nil,
+          superseded_instructions: rule.fetch("superseded_instructions", []).freeze, checker_role: rule.fetch("checker_role"),
           on_fail: rule.fetch("on_fail"), route: rule.fetch("route"),
           queue_timeout_seconds: rule.fetch("queue_timeout_seconds"), run_timeout_seconds: rule.fetch("run_timeout_seconds"),
           origin: rule.fetch("origin"), enabled: rule.fetch("enabled"), version: rule.fetch("version"))

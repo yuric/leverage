@@ -41,7 +41,8 @@
     {"guard": "found_signed_out", "means": "The helper reports the credential signed out.", "prd_lines": [261, 682]},
     {"guard": "question_answered", "means": "The question job's outcome is answered, not passed on.", "prd_lines": [440, 252]},
     {"guard": "project_budget_reached", "means": "With the budget rule on, the project's spent reaches its budget.", "prd_lines": [443]},
-    {"guard": "project_under_budget", "means": "The project's new budget is above what it has spent.", "prd_lines": [197]}
+    {"guard": "project_under_budget", "means": "The project's new budget is above what it has spent.", "prd_lines": [197]},
+    {"guard": "rule_on_superseded_default", "means": "The workspace's rule of a shipped key is at a version whose instruction is one of that shipped rule's superseded_instructions and whose other version fields equal the shipped ones (decisions.md, UI-5).", "prd_lines": [109, 439]}
   ],
   "side_event_exceptions": [
     {"event": "cost.reported", "prd_lines": [510, 514], "why": "A verdict carries tokens and spend that run cost.reported (L510), but L114 does not list cost.reported among the events a row may write beside its own."},
@@ -487,9 +488,9 @@
     {
       "id": "install_shipped_rules",
       "source": "prd",
-      "prd_cells": ["Write the shipped rules", "None", "Unchanged", "The app", "None", "`rule.created`"],
+      "prd_cells": ["Write the shipped rules", "None", "Unchanged", "The app", "None", "`rule.created`, and `rule.reverted` for a rule still at an earlier default"],
       "rows": [
-        {"command": "install_shipped_rules", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["rule.created"], "conditional_events": [], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Writes rule.created for each shipped rule, with actor app and no key (L434). bin/rails leverage:install_shipped_rules applies it, before the server starts, to each workspace that has no rules row and to no other (milestone 4 plan RD-2). It counts as turning the rules on: held tasks' briefings change and No reviewer is eligible is re-evaluated, while a claim or a review in progress is not touched (L379; milestone 4 plan RD-3)."}
+        {"command": "install_shipped_rules", "from": null, "guard": [], "to": null, "refusal": null, "who": ["app"], "hook": null, "builder_lease": null, "events": ["rule.created"], "conditional_events": [{"event": "rule.reverted", "when": "rule_on_superseded_default"}], "side_events": [{"event": "inbox.opened", "when": null, "note": "No reviewer is eligible, re-evaluated for tasks In review with no reviewer (plan SM-42)."}, {"event": "inbox.resolved", "when": null, "note": "No reviewer is eligible closes when a seat may now review (plan SM-42)."}], "holds_opened": [], "holds_closed": [], "note": "Before the server starts, bin/rails leverage:install_shipped_rules runs this command for every workspace. A workspace with no rules gets rule.created for each shipped rule, with actor app and no key (L434, milestone 4 plan RD-2). A first install counts as turning the rules on: held tasks' briefings change and No reviewer is eligible is re-evaluated, while a claim or a review in progress is not touched (L379; milestone 4 plan RD-3). For every workspace that has rules, it writes rule.reverted, with actor app and no key, for each rule whose current version is an earlier shipped default listed in shipped_rules.json superseded_instructions and otherwise equals the shipped fields; the new version holds the shipped fields, and the rule stays on or off as it was. A rule the owner has changed is not touched (UI-5)."}
       ]
     },
     {

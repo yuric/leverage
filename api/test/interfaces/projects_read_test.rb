@@ -43,6 +43,32 @@ class ProjectsReadTest < CommittingTestCase
     assert_equal [ false, nil ], row.values_at("paused", "paused_by")
   end
 
+  test "latest work reference comes from the newest task with a reference and present content" do
+    project = scenario.project
+    other = scenario.project
+    empty = scenario.project
+    at = Time.current - 1.day
+    lower_id, higher_id = Array.new(2) { SecureRandom.uuid }.sort
+    old = scenario.task(project: project, work_reference: "~/old")
+    old.update!(created_at: at - 1.hour)
+    higher = scenario.task(project: project, work_reference: "~/latest", id: higher_id)
+    higher.update!(created_at: at)
+    lower = scenario.task(project: project, work_reference: "~/same-time", id: lower_id)
+    lower.update!(created_at: at)
+    scenario.task(project: project, work_reference: "")
+    scenario.task(project: project, work_reference: nil)
+    deleted = scenario.task(project: project, work_reference: "~/deleted")
+    deleted.update!(content_deleted_at: Time.current)
+    scenario.task(project: other, work_reference: "~/other")
+    scenario.task(project: empty, work_reference: nil)
+    old.touch
+
+    rows = projects.index_by { |row| row.fetch("id") }
+    assert_equal "~/latest", rows.fetch(project.id).fetch("latest_work_reference")
+    assert_equal "~/other", rows.fetch(other.id).fetch("latest_work_reference")
+    assert_nil rows.fetch(empty.id).fetch("latest_work_reference")
+  end
+
   test "imaginarium is true only for the workspace's Imaginarium project (DB-53)" do
     other = scenario.project(name: "Imaginarium")
     outcome = Leverage::Timers.apply_workspace(scenario.workspace, "install_imaginarium_project", at: scenario.database_now)

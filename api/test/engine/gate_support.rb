@@ -103,7 +103,7 @@ module GateSupport
 
   # A Complete contract body for task.
   def contract_params(task, details: "Made-up details.")
-    { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => details,
+    { "id" => task.id, "title" => task.title, "details" => details,
       "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }

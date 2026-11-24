@@ -6,8 +6,7 @@
   "why": "The evidence confirms that the prepared attachment contains the expressly excluded answer key.",
   "contract": {
     "title": "Send facilitator answer-free packet",
-    "goal": "Send facilitator-exercises.pdf to the facilitator list.",
-    "details": "The outgoing packet must contain only exercises. Keep the answer key in the project folder.",
+    "details": "Send facilitator-exercises.pdf to the facilitator list.\n\nThe outgoing packet must contain only exercises. Keep the answer key in the project folder.",
     "criteria": [
       {
         "text": "The six exercises are present and the outgoing attachment contains no answers.",

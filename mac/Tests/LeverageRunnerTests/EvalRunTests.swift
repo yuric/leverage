@@ -60,7 +60,7 @@ struct EvalRunTests {
             let check = JobFixture.checkMaterial()
             let description = EvalRunTests.approvalAction
             let contract = ActionJobContract(
-                title: check.contract.title, goal: check.contract.goal, details: check.contract.details,
+                title: check.contract.title, details: check.contract.details,
                 criteria: check.contract.criteria, actions: [.init(kind: .send, description: description)])
             let material = ApprovalMaterial(
                 roleFile: general ? nil : check.roleFile, jobRules: general ? SeatRole.general.jobRules : [],
@@ -155,7 +155,8 @@ struct EvalRunTests {
         for call in prompts {
             let prompt = try #require(call.argv.dropFirst().first)
             #expect(prompt.hasPrefix("LEVERAGE CHECK\n"))
-            #expect(prompt.contains(JobFixture.goal))
+            #expect(prompt.contains("Title: \(JobFixture.title)"))
+            #expect(prompt.contains("Details: \(JobFixture.details)"))
             #expect(call.argv.suffix(2) == ["--tools", ""])
             #expect(!FileManager.default.fileExists(atPath: call.cwd))
         }

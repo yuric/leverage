@@ -175,7 +175,7 @@ module Leverage
     # The request fields a check's material is built from (JobInputs): the
     # requested contract at ready to start, the handoff note, the review
     # notes.
-    REQUEST_FIELDS = %w[title goal details criteria handoff_note notes].freeze
+    REQUEST_FIELDS = %w[title details criteria handoff_note notes].freeze
 
     # RC-33's rule check input; the hook's inputs from the waiting
     # command's stored request (RE-2), else the earlier attempt's stored
@@ -191,6 +191,7 @@ module Leverage
       inputs = HookInputs.for(hook: check.hook, task: task, params: params,
         seat: (Seat.find(check.subject_id) if check.subject_kind == "seat"),
         review: (Review.find(check.subject_id) if check.subject_kind == "review"))
+      params = TaskText.fold_previous_goal(params, title: params.fetch("title") { task&.title })
       { rule_check_id: check.id, attempt_number: number, rule_version_id: check.rule_version_id, hook: check.hook,
         task_id: task&.id, project_id: task&.project_id, inputs: inputs,
         params: params.to_h.stringify_keys.slice(*REQUEST_FIELDS) }.deep_stringify_keys

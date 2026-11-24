@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LeverageKit
 import Observation
@@ -38,6 +39,7 @@ final class InboxWatcher {
     @ObservationIgnored private var cursor: Int?
     @ObservationIgnored private var announced: Set<UUID> = []
     @ObservationIgnored private var asked = false
+    @ObservationIgnored private var permissionRead = 0
     @ObservationIgnored private var chain: Task<Void, Never>?
     @ObservationIgnored private var subscription: EventFeed.Subscription?
 
@@ -60,10 +62,19 @@ final class InboxWatcher {
     /// Asks for permission once, reads the inbox, then waits for new items
     /// until the task is cancelled. A click on a notification opens the
     /// Needs you tab while it runs.
-    func run() async {
+    func run(activationCenter: NotificationCenter = .default) async {
         let select = select
         notifier.onClick { _ in Task { @MainActor in select() } }
-        defer { notifier.onClick(nil) }
+        let (activations, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let observer = activationCenter.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: nil
+        ) { _ in signal.yield() }
+        defer {
+            activationCenter.removeObserver(observer)
+            signal.finish()
+            notifier.onClick(nil)
+        }
+        async let _: Void = refreshOnActivation(activations)
         await start()
         while !Task.isCancelled {
             let ok = await waitForNewItems()
@@ -105,6 +116,23 @@ final class InboxWatcher {
         }
         await checkStoredCursor()
         await catchUp()
+    }
+
+    private func refreshOnActivation(_ activations: AsyncStream<Void>) async {
+        for await _ in activations {
+            await refreshPermission()
+        }
+    }
+
+    private func refreshPermission() async {
+        // Wait for the first permission request to settle. An inbox read
+        // and an activation can overlap, so only the latest read can apply.
+        guard permission != .unknown else { return }
+        permissionRead += 1
+        let read = permissionRead
+        let granted = await notifier.isPermitted()
+        guard !Task.isCancelled, read == permissionRead else { return }
+        permission = granted ? .given : .notGiven
     }
 
     /// The stored cursor is the position of an `inbox.opened` this watcher
@@ -195,7 +223,7 @@ final class InboxWatcher {
             return false
         }
         openCount = items.count
-        if await notifier.isPermitted() { permission = .given } else if asked { permission = .notGiven }
+        await refreshPermission()
 
         let above = currentCursor()
         let fresh = items.filter { $0.openedSeq > above && !announced.contains($0.id) }

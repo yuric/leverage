@@ -66,7 +66,7 @@ module Leverage
           free_seats(ctx) if active
           written = ContractDiff.write(@task, Array(@params["criteria"]), at: ctx.at)
           actions = Actions.create_for(@task, Array(@params["actions"]))
-          @task.update!(title: @params.fetch("title", @task.title), goal: @params.fetch("goal", @task.goal),
+          @task.update!(title: @params.fetch("title", @task.title),
             details: @params["details"], work_reference: @params["work_reference"].presence,
             minimum_strength_rank: @params["minimum_strength_rank"], budget_cap: @params["budget_cap"],
             contract_version: @task.contract_version + 1, state: "backlog")

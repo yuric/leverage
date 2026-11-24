@@ -332,13 +332,13 @@ module Speed
 
     def add_ready_task(client, n)
       title = "Speed task #{n + 1}"
-      status, body = client.call("add_task", body: { "title" => title, "goal" => "Measure the speed.",
+      status, body = client.call("add_task", body: { "title" => title, "details" => "Measure the speed.",
                                                       "priority" => "normal", "work_reference" => "speed-run", "state" => "backlog" })
       return unless status == 200
 
       id = body.dig("result", "task", "id") || body.dig("result", "task_id") || body.dig("result", "id")
       client.call("complete_contract", ids: { "id" => id },
-        body: { "title" => title, "goal" => "Measure the speed.", "details" => nil,
+        body: { "title" => title, "details" => "Measure the speed.",
                 "criteria" => [ { "text" => "The first part holds.", "kind" => "build" },
                                 { "text" => "The second part holds.", "kind" => "build" },
                                 { "text" => "An independent reviewer agrees.", "kind" => "review" } ],

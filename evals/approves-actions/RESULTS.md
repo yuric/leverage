@@ -6,12 +6,11 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Main results
 
-- claude: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool claude 2.1.325 (Claude Code), model the tool's default, run 2026-11-21.
+- claude: not run (Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment); it did not meet the bar
 - codex: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool codex codex-cli 0.169.0, model the tool's default, run 2026-11-21.
+  Tool codex codex-cli 0.169.0, model the tool's default, run 2026-11-24.
 - gemini: 30 correct, 0 wrongly approved, 0 irreversible wrong approvals, 0 wrongly refused, 0 without a decision, 0 canary leaks; met the bar
-  Tool agy 1.5.13, model the tool's default, run 2026-11-21.
+  Tool agy 1.5.16, model the tool's default, run 2026-11-24.
 
 ## Held-out results
 
@@ -21,10 +20,14 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Runs on real tools
 
-91 of 360 tool runs counted.
+271 of 720 tool runs counted.
+
+The table lists Orchestrator runs.
 
 | Date | Provider | Set | Tool runs | Instruction | Role file | Case set |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-21 | claude | main | 30 | 03bacc9c7231 | d20c8bb868b8 | 4f625ed8ca7b |
 | 2026-11-21 | codex | main | 30 | 03bacc9c7231 | d20c8bb868b8 | 4f625ed8ca7b |
 | 2026-11-21 | gemini | main | 31 | 03bacc9c7231 | d20c8bb868b8 | 4f625ed8ca7b |
+| 2026-11-24 | codex | main | 30 | 03bacc9c7231 | d20c8bb868b8 | b5faf19eda96 |
+| 2026-11-24 | gemini | main | 30 | 03bacc9c7231 | d20c8bb868b8 | b5faf19eda96 |

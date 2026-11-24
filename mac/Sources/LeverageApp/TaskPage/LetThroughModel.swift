@@ -62,7 +62,7 @@ final class LetThroughModel {
     private static func storedContract(of page: TaskPage) -> CompleteContractRequest {
         let task = page.task
         return CompleteContractRequest(
-            title: task.title, goal: task.goal, details: task.details,
+            title: task.title, details: task.details,
             criteria: page.criteria.sorted { $0.position < $1.position }
                 .map { CriterionInput(text: $0.text, kind: $0.kind) },
             actions: page.contractActions, minimumStrengthRank: task.minimumStrengthRank, budgetCap: task.budgetCap,

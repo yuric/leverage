@@ -102,7 +102,7 @@
       "path_params": {},
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
+        "details": "Update the pricing page, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/pricing-page",
         "state": "backlog"
@@ -160,8 +160,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",

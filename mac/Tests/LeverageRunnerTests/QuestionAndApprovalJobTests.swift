@@ -19,7 +19,7 @@ private enum DecisionJobsFixture {
     static func contract(details: String = JobFixture.details) -> ActionJobContract {
         let check = JobFixture.checkMaterial().contract
         return ActionJobContract(
-            title: check.title, goal: check.goal, details: details, criteria: check.criteria,
+            title: check.title, details: details, criteria: check.criteria,
             actions: [.init(kind: .publish, description: publish), .init(kind: .send, description: send)])
     }
 
@@ -53,7 +53,7 @@ struct QuestionAndApprovalPromptTests {
     private let nonce = JobPromptsTests.nonce
 
     private var contractPieces: [String] {
-        [JobFixture.title, JobFixture.goal, JobFixture.details, JobFixture.builtCriterion,
+        [JobFixture.title, JobFixture.details, JobFixture.builtCriterion,
          JobFixture.reviewText, DecisionJobsFixture.publish, DecisionJobsFixture.send]
     }
 

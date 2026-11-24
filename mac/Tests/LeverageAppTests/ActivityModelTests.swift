@@ -108,8 +108,8 @@ struct ActivityModelTests {
             Self.event(4, type: .workspaceSettingsChanged),
         ]
         let server = Server(events: events, tasks: [
-            BoardTask(task: TaskSummary(id: named, title: "Send the report", goal: "", state: .done)),
-            BoardTask(task: TaskSummary(id: deleted, title: "", goal: "", state: .done)),
+            BoardTask(task: TaskSummary(id: named, title: "Send the report", state: .done)),
+            BoardTask(task: TaskSummary(id: deleted, title: "", state: .done)),
         ])
         let model = ActivityModel(api: server.api)
         await model.load()

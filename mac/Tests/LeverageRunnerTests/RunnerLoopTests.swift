@@ -470,7 +470,7 @@ struct RunnerLoopTests {
         let loop = harness.loop(.general, driver: driver, continuing: .task(taskID))
         let briefing = Briefing(
             hash: "hash-0", versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1), roleFile: nil,
-            contract: BriefingContract(contractVersion: 1, goal: "Update the prices.", details: nil, criteria: criteria()))
+            contract: BriefingContract(contractVersion: 1, title: "Update the prices.", details: nil, criteria: criteria()))
         let response = BriefingResponse(briefing: briefing, workReference: workFolder.path)
         harness.api.script {
             $0.taskBriefing = { _ in response }

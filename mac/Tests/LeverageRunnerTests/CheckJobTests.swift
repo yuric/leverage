@@ -111,7 +111,7 @@ struct CheckJobTests {
             roleFile: material.roleFile, instruction: material.instruction, moment: material.moment,
             mayAnswerNotApplicable: material.mayAnswerNotApplicable,
             contract: CheckContract(
-                title: material.contract.title, goal: material.contract.goal, details: long,
+                title: material.contract.title, details: long,
                 criteria: material.contract.criteria),
             quoted: material.quoted)
         let end = try await CheckJob(context: harness.context(driver: driver))

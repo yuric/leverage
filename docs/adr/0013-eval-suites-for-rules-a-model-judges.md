@@ -88,3 +88,10 @@ per model, with 540 tool runs in all. The Orchestrator ledger `runs.json`
 and General ledger `runs-general.json` count toward the same ceilings.
 Each full run remains limited to 30 tool runs, including up to six second
 tries.
+
+On 2026-11-24 the owner also raised the `approves-actions` ceilings to
+allow Codex and Antigravity to rerun the main cases in both modes. The
+two ledgers share six full main runs and 240 tool runs per model, with
+720 tool runs in all. Each main run has up to 36 tool runs, including
+up to six second tries. The held-out limits stay at one run per model
+with up to 12 tool runs, including up to two second tries.

@@ -25,6 +25,13 @@ struct NeedsYouDecidedRenderSmokeTests {
         #expect(drawsSomething(DecidedView().environment(context)))
     }
 
+    @Test("the notification settings button is present only when notifications are off", arguments: [true, false])
+    func notificationSettingsButton(notificationsAreOff: Bool) {
+        let model = NeedsYouModel(api: FakeOwnerAPI(), noteRead: { _ in }, openTask: { _ in })
+        let content = NeedsYouContent(model: model, notificationsAreOff: notificationsAreOff)
+        #expect((content.notificationSettingsButton != nil) == notificationsAreOff)
+    }
+
     @Test("loaded question and decision rows and their confirmations draw")
     func loadedScreens() async throws {
         let taskID = NeedsYouFixtures.taskID

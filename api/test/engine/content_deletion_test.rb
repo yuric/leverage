@@ -293,7 +293,7 @@ class ContentDeletionTest < ActiveSupport::TestCase
     pending = world.pending_transition(task, command: "edit_contract", requester: world.owner,
       params: { title: "Made-up request" })
     {
-      task => %w[title goal details work_reference], review => %w[handoff_note notes],
+      task => %w[title details work_reference], review => %w[handoff_note notes],
       criterion => %w[text], evidence => %w[value], question => %w[text assumption answer], action => %w[description],
       hold => %w[detail], check => %w[reason override_reason], job => %w[input result], pending => %w[params]
     }

@@ -112,7 +112,7 @@
       "path_params": {},
       "body": {
         "title": "Write the release notes",
-        "goal": "Write the release notes, done and checked.",
+        "details": "Write the release notes, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/task-1",
         "state": "backlog"
@@ -170,8 +170,7 @@
       },
       "body": {
         "title": "Write the release notes",
-        "goal": "Write the release notes, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Write the release notes, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "Write the release notes: the work is done.",
@@ -1160,7 +1159,7 @@
       "path_params": {},
       "body": {
         "title": "Check the release checklist",
-        "goal": "Check the release checklist against the brief.",
+        "details": "Check the release checklist against the brief.",
         "priority": "normal",
         "work_reference": "~/work/task-2",
         "state": "backlog"
@@ -1218,8 +1217,7 @@
       },
       "body": {
         "title": "Check the release checklist",
-        "goal": "Check the release checklist against the brief.",
-        "details": "Use the notes in the brief.",
+        "details": "Check the release checklist against the brief.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "Check each link on the release checklist.",

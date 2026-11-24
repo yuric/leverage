@@ -54,16 +54,17 @@ ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-23 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5) and Credentials (milestone 6) |
-| **Next** | Integrate and verify the General role and landing prompt. |
+| **As of** | 2026-11-24 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)) |
+| **Next** | Review App round 1 and read the choices in question 16. |
 
 ### In flight
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| General role and landing prompt | `feat/general-agent` | [#20](https://github.com/yuric/leverage/pull/20) | Merged. The choices made for the owner are in question 15. |
-| General mode eval runs | `evals/general-mode-runs` | None yet | In review: both suites run in General mode, the owner's raised specific-details ceilings, and `general_tested_providers`. |
+| App round 1 | `feat/app-round-1` | | Integrated locally with both rounds of review addressed. The second round covers a builder's submitted work reference and the draft parser's marker and criteria tests. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
+
+### General role and landing prompt on `main`
 
 The other four roles keep their existing work behavior. The new restart
 on a role change applies only to running seats the app manages when
@@ -73,7 +74,7 @@ only to General seats.
 The review fixes make orchestrator recovery test each eligible retry,
 surface an independent reviewer or account wait per task, and give General
 builds, reviews and jobs their instructions in the corresponding material.
-General eval coverage is for app-managed default models. New prompt
+The General eval runs covered app-managed default models. New prompt
 confirms the replacement before displaying paste instructions.
 
 The second review fixes apply the build claim standing test to Ready
@@ -109,6 +110,9 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
+- **Approval eval budget (2026-11-24).** The owner added three main runs
+  per model across Orchestrator and General mode so Codex and Antigravity
+  can repeat both. [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update)
 - **`API_PORT`.** `compose.yaml` publishes the API on `127.0.0.1` at the
   port in `API_PORT`, 3000 by default, because port 3000 on the owner's Mac
   was already taken by another program during the skeleton's checks.
@@ -1374,13 +1378,26 @@ Mac.
 | approves-actions | codex | Codex CLI 0.169.0 | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
 | approves-actions | gemini | Antigravity | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
 
-Claude Code was not run: every run was refused because the Claude
+Claude Code was not run because the Claude
 subscription on this Mac reports a past-due payment. Its General result is
-recorded as not run, so `general_tested_providers` is `codex` and `gemini`,
-and a General seat on a Claude login keeps the note "Not tested for
-checking tasks." until Claude Code's General runs are made. The raised
-ceilings leave room for them. As with the earlier runs, every model scored
-every case, so the suites do not tell the models apart.
+recorded as not run. At the time, `general_tested_providers` listed `codex`
+and `gemini`. App round 1 changed the task text and both suites' case hashes.
+The earlier Orchestrator and General runs are historical and still count
+toward the budgets. Both registry lists are empty pending results on the
+current cases. As with the earlier runs, every model that ran scored every
+case correctly.
+
+### Eval runs after the goal was folded into the details
+
+On 2026-11-24, after App round 1 folded each case's goal into its
+details, the managing agent ran both suites again, in both modes, on Codex
+CLI 0.169.0 and Antigravity (the owner raised the approvals ceilings to six
+runs, 240 tool runs per model and 720 in all for these runs). Specific
+details: 24 of 24 for each, as Orchestrator and as General. Approvals: 30
+of 30 for each, in both modes, with no wrong approval. No instructed pass
+and no leak anywhere. `orchestrator_tested_providers` and
+`general_tested_providers` are `codex` and `gemini`. Claude Code was not
+run (the Claude subscription on this Mac reports a past-due payment).
 
 ### Credentials runs
 
@@ -2400,6 +2417,32 @@ skeleton's pull request description, as rule AR-004 asks.
     - **GA-10** `[owner]`. The PRD keeps "connects on its own". The app
       uses the words "Connected by prompt." **Alternative.** Rename it
       throughout.
+
+16. **The choices made for the owner for App round 1.** The
+    [contract decisions](../api/contract/decisions.md#app-round-1-ui) record
+    the changes to task text and project reads.
+
+    - **Project work reference (UI-6).** Add task fills the empty field from
+      the project's most recent task with a usable work reference. The
+      project has no folder field today. **Alternative.** Add a folder
+      field to each project.
+    - **Project goal (UI-7).** Projects keep their goal. The owner asked to
+      remove the task goal. **Alternative.** Remove the project goal too.
+    - **Question routing.** "Workers ask the orchestrator before they ask
+      you" appears under Other agent rules because Leverage routes the
+      question. **Alternative.** List it under Orchestrator rules because
+      the orchestrator answers the questions it receives.
+    - **Eval coverage (UI-8).** The Agent roster says "Not tested for
+      checking tasks." for every Orchestrator and General seat until the
+      managing agent records passing results on the current wording and
+      cases in both suites for its mode and provider. The specific-details
+      budget was expanded in [#21](https://github.com/yuric/leverage/pull/21).
+      Two held-out approval
+      cases name a different action from the one at their listed position.
+      The maintainer handles those cases before any held-out approval run.
+    - **Notification settings.** The owner can verify which pane opens on
+      their Mac and that the banner clears when they return to Leverage
+      after turning notifications on.
 
 ## Waiting for the owner
 

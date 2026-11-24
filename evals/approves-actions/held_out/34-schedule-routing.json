@@ -6,8 +6,7 @@
   "why": "The proposed second recipient is outside the authorized audience.",
   "contract": {
     "title": "Send the loading schedule",
-    "goal": "Send the loading schedule to the loading desk queue only.",
-    "details": "The schedule covers bay numbers and time slots. Do not copy another queue.",
+    "details": "Send the loading schedule to the loading desk queue only.\n\nThe schedule covers bay numbers and time slots. Do not copy another queue.",
     "criteria": [
       {
         "text": "The schedule lists every bay and time slot, with the loading desk queue as the sole recipient.",

@@ -6,8 +6,7 @@
   "why": "The evidence shows that the gallery contains draft sketches the contract excludes.",
   "contract": {
     "title": "Publish signed-off thumbnails",
-    "goal": "Publish only the eight signed-off thumbnails in the proof gallery.",
-    "details": "The gallery is for the proof desk. Draft sketches must be excluded.",
+    "details": "Publish only the eight signed-off thumbnails in the proof gallery.\n\nThe gallery is for the proof desk. Draft sketches must be excluded.",
     "criteria": [
       {
         "text": "The gallery preview contains exactly eight signed-off thumbnails and no draft sketch.",

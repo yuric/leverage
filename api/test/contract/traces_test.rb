@@ -1325,15 +1325,15 @@ class TracesTest < Minitest::Test
   end
 
   # Trace 07's two checks at task.before_ready hash one request, and carry
-  # the engine's own hash of it: Gating.input_hash of the goal, details,
-  # criteria and actions the request sends (Leverage::HookInputs).
+  # the engine's own hash of it: Gating.input_hash of the title, details,
+  # criteria and actions the request sends (Leverage::HookInputs; UI-4).
   def test_trace_07_carries_the_real_digest_of_its_request
     commands = commands_of("07-pending-gate-check-error-override")
     request = commands.find { |command| command["command"] == "complete_contract" }
     digests = request["expect"]["events"].select { |event| event["type"].start_with?("check.") }
       .map { |event| event["payload"]["input_hash"] }
     body = request["body"]
-    inputs = { "goal" => body["goal"], "details" => body["details"],
+    inputs = { "title" => body["title"], "details" => body["details"],
                "criteria" => body["criteria"].map { |criterion| criterion.slice("text", "kind") },
                "actions" => body["actions"].map { |action| action.slice("kind", "description") } }
     assert_equal 2, digests.size
@@ -1414,7 +1414,7 @@ class TracesTest < Minitest::Test
     private
 
     def contract(body)
-      [ body["goal"], body["details"], Array(body["criteria"]).map { |criterion| criterion.values_at("text", "kind") },
+      [ body["title"], body["details"], Array(body["criteria"]).map { |criterion| criterion.values_at("text", "kind") },
         Array(body["actions"]).map { |action| action.values_at("kind", "description") } ]
     end
   end

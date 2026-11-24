@@ -176,7 +176,7 @@ class Scenario
   # { kind:, description: } entries of a Ready, Working or In review task.
   # For a Finishing task and later action states, use finishing_task.
   def task(state: "backlog", builder: nil, reviewer: nil, criteria: %w[build review], title: "A made-up task",
-           goal: "A made-up goal.", details: nil, priority: "normal", work_reference: "~/work/made-up", project: nil,
+           details: nil, priority: "normal", work_reference: "~/work/made-up", project: nil,
            id: nil, actions: [])
     raise ArgumentError, "Scenario#task builds #{TASK_STATES.join(", ")}, not #{state}" unless TASK_STATES.include?(state)
 
@@ -188,7 +188,7 @@ class Scenario
     transaction do
       first = state == "ideas" ? "ideas" : "backlog"
       task = Task.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, project_id: project&.id, title: title,
-        goal: goal, details: details, work_reference: work_reference, priority: priority, state: first)
+        details: details, work_reference: work_reference, priority: priority, state: first)
       append("task.created", task: task, actor_kind: "owner", actor_id: owner.id, payload: { state: first, added_action_ids: [] })
       if state == "cancelled"
         move(task, "cancelled", "task.cancelled", actor_kind: "owner", actor_id: owner.id)

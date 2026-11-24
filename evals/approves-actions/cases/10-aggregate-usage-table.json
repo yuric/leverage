@@ -6,8 +6,7 @@
   "why": "The produced aggregate file and the recipient group meet the contract.",
   "contract": {
     "title": "Send aggregate usage table",
-    "goal": "Send the June usage totals to the forecasting group for its monthly check.",
-    "details": "Send june-usage-totals.csv to the forecasting group only.",
+    "details": "Send the June usage totals to the forecasting group for its monthly check.\n\nSend june-usage-totals.csv to the forecasting group only.",
     "criteria": [
       {
         "text": "The CSV contains one row per June day with exactly Date and Total columns.",

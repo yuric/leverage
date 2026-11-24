@@ -116,7 +116,7 @@ Part 2 is built, and IM-5 to IM-7 are now in [docs/PRD.md](../PRD.md#the-imagina
 2. A new installation has the Imaginarium project right after setup,    updated one gets it exactly once (IM-5, IM-6).
 3. From the tab, Send to Ready puts a task in Ready in the Imaginarium
    project, with the catalog's checks as its criteria and the text shown,
-   edited or not, as its goal.
+   edited or not, as its details.
 4. Copy prompt puts the text shown on the clipboard and changes nothing on
    the board. Save it to Ideas puts the task in Ideas.
 5. The catalog test passes on all 32 entries.

@@ -15,7 +15,7 @@ class StoredEventsTest < ActiveSupport::TestCase
   # the event is stored directly, as a log written before the rename holds it.
   def old_spelling_task
     ctx = @scenario.context
-    task = Task.create!(workspace_id: @scenario.workspace_id, title: "A made-up task", goal: "A made-up goal.",
+    task = Task.create!(workspace_id: @scenario.workspace_id, title: "A made-up task", details: "A made-up goal.",
       work_reference: "~/work/made-up", priority: "normal", state: "ideas")
     event = Event.create!(workspace_id: @scenario.workspace_id, seq: ctx.workspace.last_seq + 1, at: ctx.at,
       effective_at: ctx.at, type: "task.created", schema_version: 1, actor_kind: "owner", actor_id: @owner.id,
@@ -75,7 +75,7 @@ class StoredEventsTest < ActiveSupport::TestCase
 
   test "replaying a task.created with no state still raises KeyError" do
     ctx = @scenario.context
-    task = Task.create!(workspace_id: @scenario.workspace_id, title: "A made-up task", goal: "A made-up goal.",
+    task = Task.create!(workspace_id: @scenario.workspace_id, title: "A made-up task", details: "A made-up goal.",
       work_reference: "~/work/made-up", priority: "normal", state: "ideas")
     event = Event.create!(workspace_id: @scenario.workspace_id, seq: ctx.workspace.last_seq + 1, at: ctx.at,
       effective_at: ctx.at, type: "task.created", schema_version: 1, actor_kind: "owner", actor_id: @owner.id,

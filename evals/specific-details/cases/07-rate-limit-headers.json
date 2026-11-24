@@ -5,8 +5,7 @@
   "why": "The two headers, the service and the limit to keep are named, and the criteria are two calls whose answers can be read.",
   "contract": {
     "title": "Tell callers how many calls they have left",
-    "goal": "Add the headers X-RateLimit-Limit and X-RateLimit-Remaining to every response of the public forecast API of the Fernhollow weather service.",
-    "details": "Developers who call the API need to slow down before they are refused. The limit stays the existing 600 calls per hour for each caller; do not change it.",
+    "details": "Add the headers X-RateLimit-Limit and X-RateLimit-Remaining to every response of the public forecast API of the Fernhollow weather service.\n\nDevelopers who call the API need to slow down before they are refused. The limit stays the existing 600 calls per hour for each caller; do not change it.",
     "criteria": [
       {
         "text": "A response to GET /v1/forecast carries X-RateLimit-Limit with the value 600 and X-RateLimit-Remaining with the calls left this hour.",

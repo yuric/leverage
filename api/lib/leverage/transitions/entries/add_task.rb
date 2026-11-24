@@ -13,7 +13,7 @@ module Leverage
       # names no project of the workspace, criteria (Complete contract
       # writes them, L108), and a work reference with sign-in details (L533).
       #
-      # Params: title, goal, details, priority, work_reference, state,
+      # Params: title, details, priority, work_reference, state,
       # project_id, actions, and criteria only when empty. Result:
       # task_id.
       class AddTask < Entry
@@ -35,7 +35,7 @@ module Leverage
         def refusals(_ctx) = [ state_refusal(nil, [ GUARDS.fetch(@state) ]) ].compact
 
         def perform(ctx)
-          task = Task.create!(workspace_id: ctx.workspace.id, project_id: @project&.id, title: @params["title"], goal: @params["goal"],
+          task = Task.create!(workspace_id: ctx.workspace.id, project_id: @project&.id, title: @params["title"],
             details: @params["details"], work_reference: @params["work_reference"].presence,
             priority: @params["priority"] || "normal", state: @state)
           definitions = Actions.create_for(task, Array(@params["actions"]))

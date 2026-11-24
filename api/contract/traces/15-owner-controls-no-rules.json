@@ -115,7 +115,7 @@
       "path_params": {},
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
+        "details": "Update the pricing page, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/pricing-page",
         "state": "ideas"
@@ -228,8 +228,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -298,8 +297,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -970,8 +968,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -1074,8 +1071,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -2507,8 +2503,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -2653,8 +2648,7 @@
       },
       "body": {
         "title": "Update the pricing page",
-        "goal": "Update the pricing page, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Update the pricing page, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The copy names this year's prices.",
@@ -3253,7 +3247,7 @@
       "path_params": {},
       "body": {
         "title": "Fix the sign-up form",
-        "goal": "Fix the sign-up form, done and checked.",
+        "details": "Fix the sign-up form, done and checked.",
         "priority": "normal",
         "work_reference": "~/work/sign-up-form",
         "state": "backlog"
@@ -3311,8 +3305,7 @@
       },
       "body": {
         "title": "Fix the sign-up form",
-        "goal": "Fix the sign-up form, done and checked.",
-        "details": "Use the notes in the brief.",
+        "details": "Fix the sign-up form, done and checked.\n\nUse the notes in the brief.",
         "criteria": [
           {
             "text": "The form accepts a new account.",

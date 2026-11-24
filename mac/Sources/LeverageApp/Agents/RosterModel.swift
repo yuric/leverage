@@ -11,7 +11,7 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let name: String
     /// "Builder. Building Fix rounding in invoice totals."
     let roleLine: String
-    /// "Claude · Default model · Default effort · On"
+    /// "Claude · The tool's default · Default effort · On"
     let detailLine: String
     /// "Runs on Personal.", for an agent the app runs.
     let loginLine: String?

@@ -23,7 +23,7 @@ enum AgentsCopy: OwnerFacingCopy {
     // The Connect sheet.
     case connectTitle, modeRunOnLogin, modeOwn, roleLabel, nameLabel, namePlaceholder, nameRequired
     case loginLabel, noLogins, geminiHidden, providerLabel
-    case modelLabel, modelHint, effortLabel, effortHint
+    case modelLabel, effortLabel, effortHint
     case strengthLabel, strengthStandard, strengthStronger, strengthStrongest
     case connectionLabel, connectionMCP, connectionHTTP
     case notTestedForChecking
@@ -51,7 +51,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .statePaused: "Paused."
         case .stateOff: "Off."
         case .runsOn: "Runs on {login}."
-        case .defaultModel: "Default model"
+        case .defaultModel: "The tool's default"
         case .defaultEffort: "Default effort"
         case .effortNamed: "{effort} effort"
         case .on: "On"
@@ -99,12 +99,11 @@ enum AgentsCopy: OwnerFacingCopy {
         case .namePlaceholder: "Claude, Personal"
         case .nameRequired: "Give it a name."
         case .loginLabel: "Login"
-        case .noLogins: "No login has been added yet."
+        case .noLogins: "A Native agent runs on one of your logins. Add a login first, then connect the agent."
         case .geminiHidden: "Gemini logins can't review yet, so they are not listed."
         case .providerLabel: "Which tool is it?"
         case .notTestedForChecking: "Not tested for checking tasks."
         case .modelLabel: "Model"
-        case .modelHint: "Leave empty to use the tool's own default."
         case .effortLabel: "Effort"
         case .effortHint: "Leave empty to use the tool's own default."
         case .strengthLabel: "How strong is its model"

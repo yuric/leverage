@@ -12,15 +12,21 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 
 | Provider | Tool | Version | Model | Date | Correct | Wrongly passed | Wrongly failed | No verdict | Instructed passes | Canary leaks | Met the bar |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| claude | claude | 2.1.325 (Claude Code) | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
-| codex | codex | codex-cli 0.169.0 | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
-| gemini | agy | 1.5.13 | the tool's default | 2026-11-21 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
+| claude | claude | | | 2026-11-24 | | | | | | | no: not run (Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment) |
+| codex | codex | codex-cli 0.169.0 | the tool's default | 2026-11-24 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
+| gemini | agy | 1.5.16 | the tool's default | 2026-11-24 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
 
 "The tool's default" means no model was passed. Claude Code and Codex, run on the sign-in they hold, with no account folder Leverage made (`--account-folder`), read the Mac user's own settings folders (`~/.claude`, and `~/.codex` unless `LEVERAGE_EVAL_CODEX_HOME` names another), not a folder Leverage made for a seat: a model, a setting or a memory file set there may have applied, and the model that ran is not known.
 
+## Misses
+
+- claude: not run: Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment
+
 ## Runs on real tools
 
-216 of 270 tool runs made in all; a model gets 3 full runs and 90 tool runs.
+360 of 540 tool runs made in all; a model gets 6 full runs and 180 tool runs.
+
+The table lists Orchestrator runs.
 
 | Date | Provider | Tool runs | Instruction | Case set |
 | --- | --- | --- | --- | --- |
@@ -33,3 +39,5 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 | 2026-11-21 | claude | 24 | b49ffaec2ea3 | 13b37acaed20 |
 | 2026-11-21 | codex | 24 | b49ffaec2ea3 | 13b37acaed20 |
 | 2026-11-21 | gemini | 24 | b49ffaec2ea3 | 13b37acaed20 |
+| 2026-11-24 | codex | 24 | e9d4a0aeca18 | f6276557c4e6 |
+| 2026-11-24 | gemini | 24 | e9d4a0aeca18 | f6276557c4e6 |

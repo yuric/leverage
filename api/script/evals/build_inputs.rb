@@ -39,7 +39,10 @@ module EvalInputs
   def contract(kase, canary_path:)
     raise ArgumentError, "the canary path must be absolute, not #{canary_path.inspect}" unless canary_path.to_s.start_with?("/")
 
-    fill(kase.fetch("contract"), canary_path.to_s)
+    body = kase.fetch("contract")
+    raise ArgumentError, "the eval case has a goal; fold it into its details" if body.key?("goal")
+
+    fill(body, canary_path.to_s)
   end
 
   # The input claim_job would hand the selected role for the case.
@@ -115,7 +118,7 @@ module EvalInputs
     builder = Seat.create!(workspace_id: workspace_id, name: "Eval builder", provider: "codex", model: "eval-model",
       effort: "", role: "builder", strength_rank: 1)
     task = Task.create!(workspace_id: workspace_id, builder_seat_id: builder.id, state: "finishing",
-      **body.slice("title", "goal", "details"))
+      **body.slice("title", "details"))
     criteria = body.fetch("criteria").map.with_index(1) do |criterion, position|
       Criterion.create!(workspace_id: workspace_id, task_id: task.id, position: position, state: "passed",
         **criterion.slice("kind", "text"))

@@ -43,10 +43,10 @@ struct JobFlowTests {
         let driver = ScriptedDriver { prompt, _ in
             let nonce = JobFixture.nonce(of: prompt) ?? ""
             return .answer(
-                "LEVERAGE-DRAFT-\(nonce)-BEGIN\n{\"goal\": \"G.\", \"details\": null, \"criteria\": [\"One.\"]}\nLEVERAGE-DRAFT-\(nonce)-END", tokens: 2)
+                "LEVERAGE-DRAFT-\(nonce)-BEGIN\n{\"details\": null, \"criteria\": [\"One.\"]}\nLEVERAGE-DRAFT-\(nonce)-END", tokens: 2)
         }
         let loop = harness.loop(.planner, driver: driver)
-        let claim = JobFixture.draftClaim()
+        let claim = JobFixture.draftClaim(JobFixture.draftInput(JobFixture.draftMaterial(details: nil)))
         harness.api.script { $0.claimNextJob = { key in .completed(claim, key: key.value, command: .claimJob) } }
         scriptSubmit(harness)
         harness.next([NextItem(kind: .job)], then: loop)
@@ -54,10 +54,13 @@ struct JobFlowTests {
         #expect(await runToEnd(loop) == 0)
         let result = try #require(harness.calls(.submitJobResult).first?.body?["result"])
         #expect(result["title"]?.stringValue == JobFixture.title)
+        #expect(result["details"] == .null)
+        #expect(result["goal"] == nil)
         #expect(result["work_reference"]?.stringValue == "/Users/example/sites/alpaca")
         #expect(result["minimum_strength_rank"]?.numberValue == 2)
         #expect(result["budget_cap"]?.numberValue == 12.5)
         #expect(result["criteria"]?[0]?["kind"]?.stringValue == "build")
+        #expect(result["criteria"]?[0]?["text"]?.stringValue == "One.")
     }
 
     @Test("a planner's contract that answers pending is not waited on: the job is done")
@@ -66,7 +69,11 @@ struct JobFlowTests {
         let driver = ScriptedDriver { prompt, _ in
             let nonce = JobFixture.nonce(of: prompt) ?? ""
             return .answer(
-                "LEVERAGE-DRAFT-\(nonce)-BEGIN\n{\"goal\": \"G.\", \"criteria\": [\"One.\"]}\nLEVERAGE-DRAFT-\(nonce)-END",
+                """
+                LEVERAGE-DRAFT-\(nonce)-BEGIN
+                {"details": "Update the prices from the supplied figures.", "criteria": ["One."]}
+                LEVERAGE-DRAFT-\(nonce)-END
+                """,
                 tokens: 2)
         }
         let loop = harness.loop(.planner, driver: driver)

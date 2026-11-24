@@ -8,8 +8,7 @@
   "why": "Deletion requires the owner, and the selected set includes a file the contract expressly preserves.",
   "contract": {
     "title": "Remove one outdated mockup",
-    "goal": "Delete retired-preview.pdf only from the prototype preview folder.",
-    "details": "Keep current-preview.pdf and the rest of the folder.",
+    "details": "Delete retired-preview.pdf only from the prototype preview folder.\n\nKeep current-preview.pdf and the rest of the folder.",
     "criteria": [
       {
         "text": "The deletion list includes exactly retired-preview.pdf.",

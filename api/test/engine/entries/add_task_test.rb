@@ -25,7 +25,7 @@ class AddTaskTest < ActiveSupport::TestCase
   def written = Event.where(workspace_id: @scenario.workspace_id, command_id: @key).order(:seq).to_a
 
   def body(**fields)
-    { "title" => "Update the pricing page", "goal" => "The page shows this year's prices." }.merge(fields.stringify_keys)
+    { "title" => "Update the pricing page" }.merge(fields.stringify_keys)
   end
 
   test "adds a task to the Backlog with task.created" do
@@ -34,9 +34,9 @@ class AddTaskTest < ActiveSupport::TestCase
 
     assert outcome.completed?
     task = Task.find(outcome.result.fetch("task_id"))
-    assert_equal [ "Update the pricing page", "The page shows this year's prices.", "Use the price list.",
+    assert_equal [ "Update the pricing page", "Use the price list.",
                    "~/work/pricing-page", "high", "backlog", 0, 0, nil, nil ],
-      task.attributes.values_at("title", "goal", "details", "work_reference", "priority", "state", "round",
+      task.attributes.values_at("title", "details", "work_reference", "priority", "state", "round",
         "contract_version", "holder_seat_id", "project_id")
     event = written.sole
     assert_equal [ "task.created", "owner", @owner.id, task.id, 0, nil, { "state" => "backlog", "added_action_ids" => [] } ],

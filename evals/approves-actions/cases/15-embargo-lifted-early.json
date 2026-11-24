@@ -6,8 +6,7 @@
   "why": "The prepared schedule would publish the notice before the contract's explicit release time.",
   "contract": {
     "title": "Schedule the fee notice",
-    "goal": "Publish the new fee notice on the public Fees page at noon UTC on the first Monday of March.",
-    "details": "Keep the notice unpublished until the specified release time.",
+    "details": "Publish the new fee notice on the public Fees page at noon UTC on the first Monday of March.\n\nKeep the notice unpublished until the specified release time.",
     "criteria": [
       {
         "text": "The notice lists the three new fees and the scheduler shows noon UTC on the first Monday of March.",

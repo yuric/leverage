@@ -192,7 +192,7 @@
       "path_params": {},
       "body": {
         "title": "Pay and send a sample receipt",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -250,8 +250,7 @@
       },
       "body": {
         "title": "Pay and send a sample receipt",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -2567,7 +2566,7 @@
       "path_params": {},
       "body": {
         "title": "Publish a sample and send two notices",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -2625,8 +2624,7 @@
       },
       "body": {
         "title": "Publish a sample and send two notices",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -4467,7 +4465,7 @@
       "path_params": {},
       "body": {
         "title": "Publish a sample revision",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -4525,8 +4523,7 @@
       },
       "body": {
         "title": "Publish a sample revision",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -6652,7 +6649,7 @@
       "path_params": {},
       "body": {
         "title": "Delete the sample draft",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -6710,8 +6707,7 @@
       },
       "body": {
         "title": "Delete the sample draft",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -7867,7 +7863,7 @@
       "path_params": {},
       "body": {
         "title": "Send a sample update",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -7925,8 +7921,7 @@
       },
       "body": {
         "title": "Send a sample update",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",
@@ -8288,7 +8283,7 @@
       "path_params": {},
       "body": {
         "title": "Prepare another sample",
-        "goal": "Prepare the sample deliverable.",
+        "details": "Prepare the sample deliverable.",
         "project_id": null,
         "priority": "normal",
         "state": "backlog"
@@ -8346,8 +8341,7 @@
       },
       "body": {
         "title": "Prepare another sample",
-        "goal": "Prepare the sample deliverable.",
-        "details": "Use the sample work folder.",
+        "details": "Prepare the sample deliverable.\n\nUse the sample work folder.",
         "criteria": [
           {
             "text": "Prepare the sample artifact.",

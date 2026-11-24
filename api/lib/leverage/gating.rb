@@ -1,5 +1,3 @@
-require "digest"
-
 module Leverage
   # The in-process interface between the transition function and rule gating
   # (PRD, Contract milestone; plan §1.2). The transition function calls it
@@ -75,7 +73,7 @@ module Leverage
           raise ArgumentError, "#{hook} hashes #{expected.inspect}, got #{inputs.is_a?(Hash) ? inputs.keys.inspect : inputs.class}"
         end
 
-        Digest::SHA256.hexdigest(CanonicalJson.dump(inputs))
+        CanonicalJson.digest(inputs)
       end
 
       # The rules a seat's briefing on a task holds: every enabled rule whose

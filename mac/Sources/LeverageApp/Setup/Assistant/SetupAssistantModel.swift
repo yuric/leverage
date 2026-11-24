@@ -382,11 +382,11 @@ final class SetupAssistantModel {
         if let starter {
             let task = StarterTask.task(starter)
             form.title = task.title.text
-            form.goal = task.prompt
+            form.details = task.prompt
             form.criteriaText = task.criteriaText
         } else {
             form.title = ownTitle
-            form.goal = ""
+            form.details = ""
             form.criteriaText = ownCriteria
         }
         isSending = true

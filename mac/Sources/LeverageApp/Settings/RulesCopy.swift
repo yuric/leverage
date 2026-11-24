@@ -8,6 +8,7 @@ enum RulesCopy: OwnerFacingCopy {
 
     // The screen.
     case hint, loading, empty, addRule, change, comesWithLeverage, addedByYou
+    case orchestratorRules, otherAgentRules
 
     // The labels of a row.
     case whenItRuns, appliesTo, checkedBy, ifItFails, wordingOf, turnOn, turnOff
@@ -38,6 +39,8 @@ enum RulesCopy: OwnerFacingCopy {
         case .change: "Change"
         case .comesWithLeverage: "Comes with Leverage"
         case .addedByYou: "Added by you"
+        case .orchestratorRules: "Orchestrator rules"
+        case .otherAgentRules: "Other agent rules"
 
         case .whenItRuns: "When it runs"
         case .appliesTo: "Applies to"

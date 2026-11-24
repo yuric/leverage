@@ -288,7 +288,7 @@ module Leverage
     # review.lease_expired is that timer's side event (SM-42), and a
     # command applies no workspace timer.
     def workspace_timer(events)
-      return INSTALL if events.any? { |event| event.type == "rule.created" }
+      return INSTALL if events.any? { |event| event.type == "rule.created" || (event.type == "rule.reverted" && event.actor_kind == "app") }
       return INSTALL_IMAGINARIUM if events.any? { |event| event.type == "project.created" }
       return if events.any? { |event| TIMER_EVENTS.key?(event.type) }
 
@@ -579,15 +579,24 @@ module Leverage
     # hold_contract_incomplete gate reads as (rule 7, RD-10): the gated
     # row's contract change and the hold, staying in its state; and, where
     # the failed gate is failed_review, fail_review's rows (SM-6: a failed
-    # review in full).
+    # review in full). An install can instead write only superseded-default
+    # reverts (UI-5).
     def rows_of(name)
       @rows_of ||= {}
       @rows_of[name] ||= begin
         rows = all_rows.select { |row| row.fetch("command") == name && row.fetch("refusal").nil? }
         failed_review = rows.any? { |row| failed_gates[row.fetch("hook")] == "failed_review" } ? rows_of("fail_review") : []
         failed_action = name == "request_action" ? rows_of("stop_action") : []
-        rows + rows.filter_map { |row| failed_gate_row(row) } + failed_review + failed_action
+        rows + rows.filter_map { |row| alternative_row(row) } + failed_review + failed_action
       end
+    end
+
+    def alternative_row(row)
+      if row.fetch("command") == INSTALL
+        reverted = row.fetch("conditional_events").find { |entry| entry.fetch("when") == "rule_on_superseded_default" }
+        return row.merge("events" => [ reverted.fetch("event") ]) if reverted
+      end
+      failed_gate_row(row)
     end
 
     def failed_gate_row(row)

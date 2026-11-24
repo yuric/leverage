@@ -12,7 +12,7 @@ module Leverage
   # live criterion's state and evidence in order. The shapes are those of
   # the contract's golden vectors (test/contract/gating_test.rb):
   #
-  #   task.before_ready   goal, details, criteria [{text, kind}], actions
+  #   task.before_ready   title, details, criteria [{text, kind}], actions
   #                       [{kind, description}], each list in request order
   #   task.before_claim   contract_version, seat_id
   #   task.before_submit  contract_version, handoff_note, criteria [{id,
@@ -48,7 +48,7 @@ module Leverage
     def for(hook:, task:, params:, seat: nil, review: nil)
       params = (params || {}).to_h.stringify_keys
       case hook
-      when "task.before_ready" then ready(params)
+      when "task.before_ready" then ready(task, params)
       when "task.before_claim" then { "contract_version" => task.contract_version, "seat_id" => required(seat, hook).id }
       when "task.before_submit"
         { "contract_version" => task.contract_version, "criteria" => criteria_states(task),
@@ -65,15 +65,23 @@ module Leverage
       end
     end
 
-    # The contract a Complete contract asks for (PRD L80): its goal,
-    # details, criteria and outward actions. Title, work reference, minimum
-    # strength rank and budget cap are not hashed (L411).
-    def ready(params)
+    # The contract a Complete contract asks for (PRD L80). Work reference,
+    # minimum strength rank and budget cap are outside the hash (L411).
+    def ready(task, params)
+      title = params.fetch("title") { task&.title }
+      params = TaskText.fold_previous_goal(params, title: title)
       criteria = Array(params["criteria"]).map(&:to_h).map(&:stringify_keys)
       actions = Array(params["actions"]).map(&:to_h).map(&:stringify_keys)
-      { "goal" => params["goal"], "details" => params["details"],
+      { "title" => title, "details" => params["details"],
         "criteria" => criteria.map { |criterion| { "text" => criterion["text"], "kind" => criterion["kind"] } },
         "actions" => actions.map { |action| { "kind" => action["kind"], "description" => action["description"] } } }
+    end
+
+    # Only for reentry of an existing Complete contract with its original
+    # request. The frozen checks and log keep their original identity.
+    def previous_ready_digest(params)
+      inputs = ready(nil, params.except("goal")).except("title").merge("goal" => params.fetch("goal"))
+      Gating::CanonicalJson.digest(inputs)
     end
 
     def criteria_states(task)

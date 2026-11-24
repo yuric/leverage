@@ -53,7 +53,7 @@ class TransitionsSeamsTest < ActiveSupport::TestCase
     task = @scenario.task(state: "backlog")
     ctx = @scenario.context
     answer = T.run_as(ctx, "complete_contract", requester: planner, key: "k-planner-result",
-      params: { "id" => task.id, "title" => "Made-up title", "goal" => "Made-up goal.",
+      params: { "id" => task.id, "title" => "Made-up title", "details" => "Made-up details.",
                 "criteria" => [ { "text" => "Made-up.", "kind" => "build" }, { "text" => "Agreed.", "kind" => "review" } ],
                 "actions" => [] })
 

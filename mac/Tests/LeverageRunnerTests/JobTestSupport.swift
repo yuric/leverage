@@ -12,7 +12,6 @@ enum JobFixture {
     /// Task text, each piece with a word of its own, so a test can find
     /// every piece in a prompt.
     static let title = "Refresh the alpaca pricing page"
-    static let goal = "The page shows the alpaca prices of this year."
     static let details = "Take the figures from the llama sheet."
     static let builtCriterion = "The copy names the walrus discount."
     static let reviewText = "An independent reviewer agrees."
@@ -26,7 +25,7 @@ enum JobFixture {
             roleFile: roleFile, instruction: instruction, moment: "before work is submitted",
             mayAnswerNotApplicable: mayAnswerNotApplicable,
             contract: CheckContract(
-                title: title, goal: goal, details: details,
+                title: title, details: details,
                 criteria: [
                     .init(text: builtCriterion, kind: .build, state: .passed),
                     .init(text: reviewText, kind: .review, state: .open),
@@ -44,10 +43,11 @@ enum JobFixture {
 
     static func draftMaterial(
         criteria: [CriterionInput] = [CriterionInput(text: "The walrus discount is named.", kind: .build)],
-        workReference: String? = "/Users/example/sites/alpaca", rank: Int? = 2, budget: Decimal? = 12.5
+        workReference: String? = "/Users/example/sites/alpaca", rank: Int? = 2, budget: Decimal? = 12.5,
+        details: String? = JobFixture.details
     ) -> DraftMaterial {
         DraftMaterial(
-            roleFile: "You are the planner. You write a task's contract.", title: title, goal: goal,
+            roleFile: "You are the planner. You write a task's contract.", title: title,
             details: details, criteria: criteria, workReference: workReference, minimumStrengthRank: rank,
             budgetCap: budget)
     }

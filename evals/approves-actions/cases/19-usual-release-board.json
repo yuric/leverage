@@ -6,8 +6,7 @@
   "why": "The contract authorizes a publication but leaves two plausible destinations indistinguishable.",
   "contract": {
     "title": "Post the training recap",
-    "goal": "Publish the one-page training recap on the usual release board.",
-    "details": "There are two release boards used by different workshop teams. This contract does not identify which team owns the recap.",
+    "details": "Publish the one-page training recap on the usual release board.\n\nThere are two release boards used by different workshop teams. This contract does not identify which team owns the recap.",
     "criteria": [
       {
         "text": "The recap fits one page and lists the three practice stations.",

@@ -69,15 +69,99 @@ struct ConnectAgentModelTests {
 
     @Test("with no login added, the form says so and offers to add one; it cannot be sent")
     func noLogins() async {
-        let model = makeModel(owner(logins: []))
+        let owner = owner(logins: [])
+        let model = makeModel(owner)
+        #expect(!model.needsLogin, "wait until Credentials confirms the list is empty")
         await model.load()
         #expect(model.logins.isEmpty)
         #expect(model.credentialID == nil)
         model.name = "Builder one"
         #expect(!model.canConnect)
         #expect(model.needsLogin)
+        #expect(AgentsCopy.noLogins.text ==
+            "A Native agent runs on one of your logins. Add a login first, then connect the agent.")
+        #expect(AgentsCopy.addLogin.text == "Add a login")
+        await model.connect()
+        #expect(Fixtures.calls(owner, .connectSeat).isEmpty)
         model.mode = .connectsOnItsOwn
         #expect(!model.needsLogin)
+        #expect(model.canConnect)
+        await model.connect()
+        #expect(model.phase == .shown)
+        #expect(body(owner)["credential_id"] == .null)
+    }
+
+    @Test("Connect offers the selected login's models in order and defaults on a provider change")
+    func resetsModelForAnotherProvider() async throws {
+        let sameProviderID = UUID()
+        let sameProvider = Fixtures.credential(sameProviderID, name: "Second Claude", position: 3)
+        let owner = owner(logins: Fixtures.credentials().credentials + [sameProvider])
+        let model = makeModel(owner)
+        await model.load()
+        let claude = try #require(ProviderCatalog.entry(for: "claude"))
+        let menu = AgentModelPicker(
+            provider: .claude, existingModel: nil, selection: .constant(model.modelName))
+        #expect(menu.choices == [""] + claude.models.value)
+        #expect(menu.choices.first == model.modelName)
+        #expect(model.modelName.isEmpty)
+        #expect(AgentsCopy.defaultModel.text == "The tool's default")
+        let modelChoice = try #require(claude.models.value.first)
+        model.modelName = modelChoice
+        model.credentialID = sameProviderID
+        #expect(model.modelName == modelChoice)
+        model.credentialID = Fixtures.secondLoginID
+        #expect(model.modelName.isEmpty)
+        let provider = try #require(model.chosenProvider)
+        let codex = try #require(ProviderCatalog.entry(for: "codex"))
+        let newMenu = AgentModelPicker(
+            provider: provider, existingModel: nil, selection: .constant(model.modelName))
+        #expect(newMenu.choices == [""] + codex.models.value)
+        #expect(newMenu.choices.first == model.modelName)
+        model.name = "Example agent"
+        await model.connect()
+        #expect(body(owner)["provider"] == .string("codex"))
+        #expect(body(owner)["model"] == .null)
+    }
+
+    @Test("Prompt Connect sends no model from the Native form")
+    func promptConnectSendsNoModel() async {
+        let owner = owner()
+        let model = makeModel(owner)
+        await model.load()
+        model.modelName = "claude-made-up"
+        model.mode = .connectsOnItsOwn
+        model.name = "Example agent"
+        await model.connect()
+        #expect(model.phase == .shown)
+        #expect(body(owner)["model"] == .null)
+    }
+
+    @Test("Add credential opens with the Credentials tab and can be dismissed")
+    func opensAddCredential() {
+        let navigator = Navigator()
+        navigator.show(.agents)
+        navigator.presentAddCredential()
+        #expect(navigator.place == .credentials)
+        #expect(navigator.isAddCredentialPresented)
+        navigator.show(.agents)
+        navigator.show(.credentials)
+        #expect(!navigator.isAddCredentialPresented)
+    }
+
+    @Test("a Reviewer with only Gemini logins can still change the role")
+    func noEligibleReviewerLogin() async {
+        let gemini = Fixtures.credential(Fixtures.geminiLoginID, name: "Gemini", provider: .gemini)
+        let model = makeModel(owner(logins: [gemini]))
+        await model.load()
+        model.name = "Example agent"
+        model.role = .reviewer
+        #expect(model.logins.isEmpty)
+        #expect(!model.needsLogin)
+        #expect(model.chosenProvider == nil)
+        #expect(model.geminiHiddenForReviewer)
+        #expect(!model.canConnect)
+        model.role = .general
+        #expect(model.credentialID == gemini.credential.id)
         #expect(model.canConnect)
     }
 
@@ -606,6 +690,40 @@ struct ConnectAgentModelTests {
         await model.load()
         #expect(model.failure == ShellCopy.cannotReach.text)
         #expect(model.logins.isEmpty)
+        #expect(!model.needsLogin)
+        model.mode = .connectsOnItsOwn
+        model.name = "Example agent"
+        #expect(model.failure == nil)
+        #expect(model.canConnect)
+        model.mode = .runOnLogin
+        #expect(model.failure == ShellCopy.cannotReach.text)
+        #expect(!model.canConnect)
+    }
+
+    @Test("retrying a failed Native login read shows loading and restores the form")
+    func retriesCredentials() async {
+        let owner = owner()
+        owner.script { $0.credentials = { throw URLError(.cannotConnectToHost) } }
+        let model = makeModel(owner)
+        model.name = "Example agent"
+        await model.load()
+        #expect(model.loginRead == .failed(ShellCopy.cannotReach.text))
+        #expect(!model.canConnect)
+
+        let observed = Locked<ConnectAgentModel.LoginRead?>(nil)
+        let credentials = Fixtures.credentials()
+        owner.script {
+            $0.credentials = { [weak model] in
+                observed.value = await model?.loginRead
+                return credentials
+            }
+        }
+        await model.load()
+
+        #expect(observed.value == .loading)
+        #expect(model.loginRead == .loaded)
+        #expect(model.failure == nil)
+        #expect(model.canConnect)
     }
 
     // MARK: the preferred login of setup

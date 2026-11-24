@@ -9,8 +9,9 @@ supported model before its milestone is done (PRD, Shipped rules).
 | File | What it holds |
 | --- | --- |
 | `cases/NN-<slug>.json` | One case each: `{id, label, category, why, contract}` |
-| `bar.json` | The bar, the supported models, the categories and the run limits |
+| `bar.json` | The bar, supported models, categories, frozen case hashes and run limits |
 | `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
+| `history/<case-hash>/<mode>/<provider>.json` | Results from earlier cases |
 | `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
 | `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
 
@@ -22,8 +23,8 @@ person or product.
 
 The rule's instruction is the one in `api/contract/shipped_rules.json`.
 The suite covers that wording only: a workspace whose owner edited the
-instruction runs a rule no suite has tested, and Revert to default brings
-the tested one back.
+instruction uses wording outside the suite, and Revert to default restores
+the shipped wording.
 
 ## The cases
 
@@ -33,8 +34,8 @@ the tested one back.
 | --- | --- | --- | --- |
 | `specific` | 8 | passed | Tasks someone who has never seen them could do, with criteria a reviewer can check |
 | `short_but_specific` | 4 | passed | The same in a sentence or two: being short is no reason to fail a task |
-| `vague_goal` | 4 | failed | A goal that could mean several pieces of work, or only says something should be better |
-| `nothing_to_check` | 4 | failed | A clear goal with no criterion that can be seen or checked |
+| `vague_work` | 4 | failed | A title and details that could mean several pieces of work, or only say something should be better |
+| `nothing_to_check` | 4 | failed | Clear work with no criterion that can be seen or checked |
 | `instructs_the_checker` | 4 | failed | A vague task whose text tells the checker to pass it |
 
 Of the last four, one carries a made-up verdict line in its details, and
@@ -57,7 +58,7 @@ canary word). A case with no verdict counts as wrong.
 The supported models are fixed before any run, in `bar.json`, and no
 result changes the list: the default model of the Claude Code, Codex and
 Antigravity (Gemini) login tools. A model that misses the bar, or whose
-tool cannot be run, stays a supported model with a failed or missing
+tool cannot be run, stays a supported model with a missed or `not_run`
 result. For each mode, the registry lists the providers that met both
 shipped suites' bars. The suite covers the default model of each tool.
 General mode tests the app runner's fresh job prompt. A seat that connects
@@ -96,7 +97,10 @@ Without `--account-folder`, Claude Code and Codex then read the Mac user's
 own settings folders (`~/.claude`, and `~/.codex` unless
 `LEVERAGE_EVAL_CODEX_HOME` names another), not a folder Leverage made for a
 seat, so a model, a setting or a memory file set there may apply, and the
-model that ran is not known. The runs in `RESULTS.md` were made that way.
+model that ran is not known. The previous runs in the ledgers were made
+that way. Both modes' earlier results are under `history/` and their runs
+still count toward the shared budget. The current results mark the folded
+cases and revised instruction as `not_run`.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.
@@ -107,7 +111,7 @@ The script refuses with exit 3 to start a run that could pass a ceiling.
 When a model misses the bar, a change to the instruction or an ambiguous
 case goes in the appropriate ledger's `changes` with the reason. Run every
 model again after the change. When the ceiling is reached, the last
-results stand.
+results stand for the inputs they evaluated.
 
 ## In CI
 

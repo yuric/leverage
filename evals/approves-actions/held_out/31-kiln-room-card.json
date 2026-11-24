@@ -6,8 +6,7 @@
   "why": "The notice names the agreed closure and is confined to the authorized room portal.",
   "contract": {
     "title": "Post kiln room closure card",
-    "goal": "Publish a one-day closure card to the kiln room portal for studio members.",
-    "details": "The card must show Thursday, 8 a.m. to noon. Studio members are the only permitted readers.",
+    "details": "Publish a one-day closure card to the kiln room portal for studio members.\n\nThe card must show Thursday, 8 a.m. to noon. Studio members are the only permitted readers.",
     "criteria": [
       {
         "text": "The card shows Thursday, 8 a.m. to noon and appears only on the studio-member kiln room portal.",

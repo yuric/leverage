@@ -1,0 +1,18 @@
+{
+  "description": "How a task's goal is folded into its details (decisions.md, UI-1). The migration that drops tasks.goal applies it to every task row, and the eval suites apply it to every case's contract, so a case reads as a migrated task would. The goal is trimmed of the characters in `trimmed` at both ends. A goal that is then empty, or equal to the title trimmed the same way, adds nothing: the details stay as they were. Otherwise details that are null, or empty once trimmed, become the trimmed goal, and any other details become the trimmed goal, `separator`, then the details unchanged.",
+  "separator": "\n\n",
+  "trimmed": " \t\r\n",
+  "examples": [
+    {"name": "goal and details", "title": "Export the shown orders", "goal": "Add an Export CSV button to the Orders page.", "details": "The staff copy orders by hand.", "details_after": "Add an Export CSV button to the Orders page.\n\nThe staff copy orders by hand."},
+    {"name": "no details", "title": "Fix the typo", "goal": "The About heading reads Our story.", "details": null, "details_after": "The About heading reads Our story."},
+    {"name": "empty details", "title": "Fix the typo", "goal": "The About heading reads Our story.", "details": "", "details_after": "The About heading reads Our story."},
+    {"name": "blank details", "title": "Fix the typo", "goal": "The About heading reads Our story.", "details": " \n", "details_after": "The About heading reads Our story."},
+    {"name": "goal with spaces around it", "title": "Shorten the idle time", "goal": "  Sign out after 15 minutes.\n", "details": "Only on the admin pages.", "details_after": "Sign out after 15 minutes.\n\nOnly on the admin pages."},
+    {"name": "details kept as written", "title": "Shorten the idle time", "goal": "Sign out after 15 minutes.", "details": "  Only on the admin pages.\n", "details_after": "Sign out after 15 minutes.\n\n  Only on the admin pages.\n"},
+    {"name": "goal is the title", "title": "Update the pricing page", "goal": " Update the pricing page ", "details": "Use the figures in the brief.", "details_after": "Use the figures in the brief."},
+    {"name": "goal is the title, no details", "title": "Update the pricing page", "goal": "Update the pricing page", "details": null, "details_after": null},
+    {"name": "empty goal", "title": "Update the pricing page", "goal": "", "details": "Use the figures in the brief.", "details_after": "Use the figures in the brief."},
+    {"name": "no goal", "title": "Update the pricing page", "goal": null, "details": "Use the figures in the brief.", "details_after": "Use the figures in the brief."},
+    {"name": "goal across lines", "title": "Add the FAQ", "goal": "The pricing page answers\nthe five questions.", "details": "Use the brief.", "details_after": "The pricing page answers\nthe five questions.\n\nUse the brief."}
+  ]
+}

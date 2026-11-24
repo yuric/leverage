@@ -25,18 +25,18 @@
 # Against the stand-ins instead (any agent may run this; its plumbing is
 # proven so): leave LEVERAGE_REAL_PROVIDER unset and set LEVERAGE_TOOL_DIR to
 # the absolute bin/ of a copy of mac/Tests/StandIns (beside provider_tool.py).
-# Setting both is refused. The stand-in checker fails the vague case by a
-# word of its goal and passes the other.
+# Setting both is refused. The stand-in checker fails the case with the
+# vague task's details and passes the other.
 #
 # The run, on a compose project of its own (leverage-real-rule-check-<pid>):
 # 1. db, api and sweep on a port Docker picks; the e2e lane built once;
 # 2. the test RealRuleCheckTests: it creates the owner (which writes the
 #    shipped rules), connects one orchestrator, and adds two tasks with
 #    completed contracts, the first `specific` case and the first
-#    `vague_goal` case of evals/specific-details/cases. It passes when the
+#    `vague_work` case of evals/specific-details/cases. It passes when the
 #    first task is Ready and the second is held with contract_incomplete
-#    within 5 minutes: two tool runs. Without --through-app the orchestrator
-#    connects on its own, and the test starts LeverageRunner for it with
+#    within the test's deadline: two tool runs. Without --through-app the
+#    orchestrator connects on its own, and the test starts LeverageRunner with
 #    the tool found here and, on the real path, LEVERAGE_DEV_TOOL_LOGIN=1,
 #    so the tool uses the sign-in it already holds; with --through-app the
 #    real helper starts it on the Gemini login. Nobody signs in here;
@@ -208,7 +208,7 @@ say "building the e2e lane in $scratch"
 
 # 2. The test.
 if [ "$through_app" = 1 ]; then name=testThroughTheApp; else name=testRunnerOnItsOwn; fi
-say "running RealRuleCheckTests/$name (two contracts, 5 minutes at most)"
+say "running RealRuleCheckTests/$name (two contracts)"
 (
   cd mac
   export LEVERAGE_ONLY=e2e

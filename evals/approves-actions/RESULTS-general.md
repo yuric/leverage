@@ -20,7 +20,7 @@ The eval covers the provider tools and models recorded below. See [README.md](RE
 
 ## Runs on real tools
 
-151 of 360 tool runs counted.
+271 of 720 tool runs counted.
 
 The table lists General runs.
 
@@ -28,3 +28,5 @@ The table lists General runs.
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-24 | codex | main | 30 | 03bacc9c7231 |  | 4f625ed8ca7b |
 | 2026-11-24 | gemini | main | 30 | 03bacc9c7231 |  | 4f625ed8ca7b |
+| 2026-11-24 | codex | main | 30 | 03bacc9c7231 |  | b5faf19eda96 |
+| 2026-11-24 | gemini | main | 30 | 03bacc9c7231 |  | b5faf19eda96 |

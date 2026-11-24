@@ -3,17 +3,15 @@ import Foundation
 /// The task contract given to a question or approval job.
 public struct ActionJobContract: Codable, Equatable, Sendable {
     public let title: String
-    public let goal: String
     public let details: String?
     public let criteria: [CheckContract.Criterion]
     public let actions: [ActionInput]
 
     public init(
-        title: String, goal: String, details: String? = nil,
+        title: String, details: String? = nil,
         criteria: [CheckContract.Criterion], actions: [ActionInput] = []
     ) {
         self.title = title
-        self.goal = goal
         self.details = details
         self.criteria = criteria
         self.actions = actions
