@@ -10,7 +10,7 @@ module Leverage
         version = RuleVersion.find_by!(id: check.rule_version_id, workspace_id: task.workspace_id)
         criteria = JobInputs.live_criteria(task)
         contract = {
-          "title" => task.title, "goal" => task.goal, "details" => task.details,
+          "title" => task.title, "details" => task.details,
           "criteria" => criteria.map { |criterion| criterion.attributes.slice("text", "kind", "state") },
           "actions" => Actions.for_task(task).map { |definition| definition.attributes.slice("kind", "description") }
         }

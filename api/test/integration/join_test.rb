@@ -6,7 +6,7 @@ class PromptConnectedAgentsTest < ActionDispatch::IntegrationTest
   include HttpCalls
 
   CONTRACT = {
-    "title" => "Make a sample", "goal" => "Produce one sample.", "details" => "Use made-up numbers.",
+    "title" => "Make a sample", "details" => "Produce one sample.\n\nUse made-up numbers.",
     "criteria" => [ { "kind" => "build", "text" => "Produce the sample." },
                     { "kind" => "review", "text" => "Verify the sample." } ],
     "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil
@@ -85,7 +85,7 @@ class PromptConnectedAgentsTest < ActionDispatch::IntegrationTest
   end
 
   def add_task
-    change("add_task", body: CONTRACT.slice("title", "goal", "details", "actions")).dig("result", "task_id")
+    change("add_task", body: CONTRACT.slice("title", "details", "actions")).dig("result", "task_id")
   end
 
   def ready_task

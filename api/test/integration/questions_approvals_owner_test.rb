@@ -6,7 +6,7 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
   include HttpCalls
 
   CONTRACT = {
-    "title" => "Made-up work", "goal" => "Make one example.", "details" => "Use a made-up example.",
+    "title" => "Made-up work", "details" => "Make one example.\n\nUse a made-up example.",
     "criteria" => [ { "kind" => "build", "text" => "Make the example." },
                     { "kind" => "review", "text" => "Review the example." } ],
     "actions" => [], "budget_cap" => nil, "minimum_strength_rank" => nil, "work_reference" => nil
@@ -106,8 +106,8 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
 
     send_command("cancel_task", ids: path(task))
     send_command("delete_task_content", ids: path(task))
-    assert_equal [ "cancelled", "", "", nil ], read("get_task", ids: path(task)).fetch("task")
-      .values_at("state", "title", "goal", "details")
+    assert_equal [ "cancelled", "", nil ], read("get_task", ids: path(task)).fetch("task")
+      .values_at("state", "title", "details")
     assert_refused "invalid_state", "delete_task_content", ids: path(task)
     send_command("delete_project_content", ids: path(project))
     assert_refused "invalid_state", "delete_project_content", ids: path(project)
@@ -284,7 +284,7 @@ class QuestionsApprovalsOwnerTest < ActionDispatch::IntegrationTest
   def create_task(project: nil, contract: CONTRACT, ready: true, actions: [])
     key = new_key("add-task")
     send_command("add_task", key: key,
-      body: contract.slice("title", "goal", "details").merge("project_id" => project&.id, "actions" => actions))
+      body: contract.slice("title", "details").merge("project_id" => project&.id, "actions" => actions))
     created = Event.find_by!(workspace_id: @scenario.workspace_id, command_id: key, type: "task.created")
     task = Task.find(created.task_id)
     send_command("complete_contract", ids: path(task), body: contract) if ready

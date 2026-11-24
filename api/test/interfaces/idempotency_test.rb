@@ -388,7 +388,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   end
 
   def contract_body
-    { "title" => "A made-up task", "goal" => "A made-up goal.", "details" => "Made-up details.",
+    { "title" => "A made-up task", "details" => "A made-up goal.\n\nMade-up details.",
       "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => "~/work/made-up" }
@@ -486,7 +486,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   end
 
   def add_task
-    owner_call(body: { "title" => "A made-up task", "goal" => "A made-up goal.", "priority" => "normal",
+    owner_call(body: { "title" => "A made-up task", "details" => "A made-up goal.", "priority" => "normal",
                        "work_reference" => "~/work/made-up", "state" => "backlog" })
   end
 
@@ -716,14 +716,14 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
   def rule_scope = { "kind" => "all_tasks", "project_ids" => [], "action_kinds" => [] }
 
   def add_rule
-    owner_call(body: { "name" => "Names the page #{SecureRandom.hex(3)}", "instruction" => "The goal names the page.",
+    owner_call(body: { "name" => "Names the page #{SecureRandom.hex(3)}", "instruction" => "The details name the page.",
                        "hook" => "task.before_submit", "scope" => rule_scope })
   end
 
   def save_rule
     rule = @scenario.rule
     owner_call(ids: { "id" => rule.id },
-      body: { "name" => "Names the page", "instruction" => "The goal names the page it changes.", "parameters" => nil,
+      body: { "name" => "Names the page", "instruction" => "The details name the page it changes.", "parameters" => nil,
               "scope" => rule_scope, "on_fail" => "block", "route" => "builder", "queue_timeout_seconds" => nil,
               "run_timeout_seconds" => nil })
   end

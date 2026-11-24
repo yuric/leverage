@@ -30,7 +30,7 @@ class RuleChecksHttpTest < ActionDispatch::IntegrationTest
   include HttpCalls
   include IntegrationHelpers
 
-  CONTRACT = { "title" => "A made-up task", "goal" => "A made-up goal.", "details" => "Made-up details.",
+  CONTRACT = { "title" => "A made-up task", "details" => "A made-up goal.\n\nMade-up details.",
                "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                                { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
                "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil,
@@ -136,7 +136,7 @@ class RuleChecksHttpTest < ActionDispatch::IntegrationTest
     task.reload
     assert_equal [ "ready", "~/work/the-site", nil, nil ],
       [ task.state, task.work_reference, task.minimum_strength_rank, task.budget_cap ]
-    assert_equal CONTRACT.fetch("goal"), task.goal
+    assert_equal CONTRACT.fetch("details"), task.details
   end
 
   # --- briefing_changed ----------------------------------------------------------

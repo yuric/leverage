@@ -63,11 +63,11 @@ class ContentInLogsTest < ActionDispatch::IntegrationTest
     capture = ActiveSupport::Logger.new(io)
     Rails.logger.broadcast_to(capture)
     begin
-      post "/v1/owner/tasks", params: { title: "Title #{MARKER}", goal: "Goal #{MARKER}" }.to_json,
+      post "/v1/owner/tasks", params: { title: "Title #{MARKER}", details: "Goal #{MARKER}" }.to_json,
         headers: headers.merge("Idempotency-Key" => "key-#{SecureRandom.hex(6)}")
       assert_response :success
       task = response.parsed_body.dig("result", "task_id")
-      contract = { title: "Title #{MARKER}", goal: "Goal #{MARKER}", details: "Details #{MARKER}",
+      contract = { title: "Title #{MARKER}", details: "Goal #{MARKER}\n\nDetails #{MARKER}",
                    criteria: [ { text: "Criterion #{MARKER}", kind: "build" },
                                { text: "An independent reviewer agrees.", kind: "review" } ], actions: [],
                    minimum_strength_rank: nil, budget_cap: nil, work_reference: nil }

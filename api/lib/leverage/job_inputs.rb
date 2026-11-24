@@ -31,7 +31,32 @@ module Leverage
         job.input.to_h.fetch("material", {}).fetch("role_file") { RoleFiles.text(job.seat_role) }
       end
       material = input.fetch("material", {}).merge("role_file" => role_file, "job_rules" => Roles.job_rules(role))
-      input.merge("material" => material)
+      current_task_text(job.kind, input.merge("material" => material))
+    end
+
+    # Old jobs and their cached claims may still carry a task's previous
+    # text shape. Return the folded material without changing the snapshot.
+    def current_task_text(kind, input)
+      material = input["material"]
+      return input unless material
+
+      if kind == "contract_draft"
+        folded = TaskText.fold_previous_goal(material)
+        if folded["role_file"]&.include?('{"goal":')
+          folded = folded.merge("role_file" => RoleFiles.text("planner"))
+        end
+        return input.merge("material" => folded)
+      end
+
+      contract = material["contract"]
+      return input unless contract
+
+      result = input.merge("material" => material.merge("contract" => TaskText.fold_previous_goal(contract)))
+      if input["inputs"]&.key?("goal")
+        fields = input.fetch("inputs").merge("title" => contract.fetch("title"))
+        result["inputs"] = TaskText.fold_previous_goal(fields)
+      end
+      result
     end
 
     # Rule checks and drafts use the same criteria in contract order.

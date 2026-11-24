@@ -25,7 +25,7 @@ class WarnCheckInputTest < ActiveSupport::TestCase
   test "a warn-only rule at ready to start hands the requested contract" do
     rule = model_rule(on_fail: "warn")
     task = scenario.task(state: "backlog", criteria: [])
-    body = contract_body(goal: "Requested made-up goal.", details: "Requested made-up details.")
+    body = contract_body(title: "Requested made-up task", details: "Requested made-up details.")
     assert_completed(owner_command("complete_contract", body.merge("id" => task.id)))
     assert_equal "ready", task.reload.state, "a warn rule never blocks"
     check = RuleCheck.find_by!(task_id: task.id, rule_id: rule.id)
@@ -33,8 +33,8 @@ class WarnCheckInputTest < ActiveSupport::TestCase
     input, job = claimed_input(check)
 
     contract = input.dig("material", "contract")
-    assert_equal [ "A made-up task", "Requested made-up goal.", "Requested made-up details." ],
-      contract.values_at("title", "goal", "details")
+    assert_equal [ "Requested made-up task", "Requested made-up details." ],
+      contract.values_at("title", "details")
     assert_equal [ "Made-up build criterion.", "A reviewer agrees." ], contract.fetch("criteria").map { |c| c["text"] }
     assert_equal job.input.fetch("inputs"), input.fetch("inputs")
     assert_equal check.input_hash, Leverage::Gating.input_hash(hook: "task.before_ready", inputs: input.fetch("inputs"))

@@ -181,7 +181,7 @@ module Leverage
       end
     end
 
-    # The contract part (IF-25): the goal, the details, the criteria in
+    # The contract part (IF-25): the title, the details, the criteria in
     # order with their evidence, and the outward actions.
     def contract(task)
       criteria = Criterion.where(workspace_id: task.workspace_id, task_id: task.id, removed_at: nil).order(:position).to_a
@@ -189,7 +189,7 @@ module Leverage
         .group_by(&:criterion_id)
       {
         "contract_version" => task.contract_version,
-        "goal" => task.goal.to_s,
+        "title" => task.title.to_s,
         "details" => task.details,
         "criteria" => criteria.map { |criterion| criterion_json(criterion, evidence.fetch(criterion.id, [])) },
         "actions" => actions(task)

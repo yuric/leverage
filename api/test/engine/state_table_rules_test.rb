@@ -40,7 +40,12 @@ class StateTableRulesTest < ActiveSupport::TestCase
     assert_nil kase.from, "the rule rows read no task state"
     assert_nil kase.to, "the rule rows change no task state"
     assert_nil kase.hook
-    assert_empty kase.conditional_events
+    expected = if kase.command == "install_shipped_rules"
+      [ { "event" => "rule.reverted", "when" => "rule_on_superseded_default" } ]
+    else
+      []
+    end
+    assert_equal expected, kase.conditional_events
 
     command = prepare(kase)
     before = scenario.workspace.reload.last_seq

@@ -1,3 +1,4 @@
+require "digest"
 require "json"
 
 module Leverage
@@ -8,6 +9,8 @@ module Leverage
     # form; anything else (a Float, a Time, a Symbol, a BigDecimal) raises
     # ArgumentError, so two callers can never hash one value two ways.
     module CanonicalJson
+      def self.digest(value) = Digest::SHA256.hexdigest(dump(value))
+
       def self.dump(value)
         case value
         when Hash then dump_object(value)

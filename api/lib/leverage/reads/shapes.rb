@@ -28,7 +28,7 @@ module Leverage
       end
 
       def task_summary(task)
-        { id: task.id, project_id: task.project_id, title: task.title.to_s, goal: task.goal.to_s, details: task.details,
+        { id: task.id, project_id: task.project_id, title: task.title.to_s, details: task.details,
           state: task.state, round: task.round, holder_seat_id: task.holder_seat_id, builder_seat_id: task.builder_seat_id,
           lease_due_at: time(task.lease_due_at), lease_time_left_while_paused: seconds(task.lease_time_left_while_paused),
           minimum_strength_rank: task.minimum_strength_rank, contract_version: task.contract_version,

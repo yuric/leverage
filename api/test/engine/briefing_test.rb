@@ -124,7 +124,7 @@ class BriefingTest < ActiveSupport::TestCase
     assert_equal({ "rule_version_ids" => [], "brief_version" => 0, "role_file_version" => Leverage::VERSION,
                    "contract_version" => @task.contract_version }, briefing["versions"])
     contract = briefing["contract"]
-    assert_equal @task.goal, contract["goal"]
+    assert_equal @task.title, contract["title"]
     assert_equal Criterion.where(task_id: @task.id).order(:position).pluck(:id), contract["criteria"].map { |row| row["id"] }
     assert_equal [ "https://example.test/proof" ], contract["criteria"].first["evidence"].map { |row| row["value"] }
     assert_equal [], contract["actions"]

@@ -21,9 +21,9 @@ class RuleCallsTest < ActionDispatch::IntegrationTest
 
   def self.example(component) = Leverage::Contract.openapi.dig("components", "schemas", component, "examples", 0)
 
-  ADD = { "name" => "Names the page", "instruction" => "The goal names the page the work changes.", "hook" => "task.before_ready",
+  ADD = { "name" => "Names the page", "instruction" => "The details name the page the work changes.", "hook" => "task.before_ready",
           "scope" => { "kind" => "all_tasks", "project_ids" => [], "action_kinds" => [] } }.freeze
-  SAVE = { "name" => "Names the page", "instruction" => "The goal names the page.", "parameters" => nil,
+  SAVE = { "name" => "Names the page", "instruction" => "The details name the page.", "parameters" => nil,
            "scope" => { "kind" => "all_tasks", "project_ids" => [], "action_kinds" => [] }, "on_fail" => "warn", "route" => nil,
            "queue_timeout_seconds" => 60, "run_timeout_seconds" => 300 }.freeze
 

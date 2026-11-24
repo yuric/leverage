@@ -95,7 +95,7 @@ module Leverage
         # A task row in the contract's TaskSummary shape.
         def self.summary(task)
           {
-            "id" => task.id, "project_id" => task.project_id, "title" => task.title.to_s, "goal" => task.goal.to_s,
+            "id" => task.id, "project_id" => task.project_id, "title" => task.title.to_s,
             "details" => task.details, "state" => task.state, "round" => task.round,
             "holder_seat_id" => task.holder_seat_id, "builder_seat_id" => task.builder_seat_id,
             "lease_due_at" => task.lease_due_at&.utc&.iso8601(6),

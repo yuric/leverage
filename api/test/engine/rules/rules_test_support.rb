@@ -37,8 +37,8 @@ module Leverage
       end
 
       # The params of a Complete contract with criteria of the given kinds.
-      def contract_params(kinds = %w[build review], goal: "A made-up goal.", details: "Made-up details.", actions: [])
-        { "goal" => goal, "details" => details, "actions" => actions,
+      def contract_params(kinds = %w[build review], title: "A made-up task", details: "Made-up details.", actions: [])
+        { "title" => title, "details" => details, "actions" => actions,
           "criteria" => kinds.each_with_index.map { |kind, index| { "text" => "Made-up criterion #{index + 1}.", "kind" => kind } } }
       end
 

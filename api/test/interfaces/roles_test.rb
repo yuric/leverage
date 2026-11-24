@@ -295,7 +295,7 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   def waiting_job
     rule = @scenario.rule(hook: "task.before_ready", route: "owner")
     task = @scenario.task(state: "backlog")
-    params = { "id" => task.id, "title" => task.title, "goal" => "Made-up goal.", "details" => "Made-up details.",
+    params = { "id" => task.id, "title" => task.title, "details" => "Made-up goal.\n\nMade-up details.",
                "criteria" => [ { "text" => "Made-up criterion.", "kind" => "build" },
                                { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
                "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => "~/work/made-up" }

@@ -1,26 +1,30 @@
 module Leverage
   module Transitions
     module Entries
-      # install_shipped_rules (PRD L434 with Q-12; milestone 4 plan RD-1 to
-      # RD-3, S-1): the app writes the seven shipped rules of a workspace
-      # that has none, each with rule.created, as the app with no key. bin/
-      # rails leverage:install_shipped_rules applies it through
-      # Timers.apply_workspace before the server starts. A workspace that
-      # has any rule is refused invalid_state and gets nothing, so a second
-      # start, or two at once, write the rules once. It counts as turning
-      # the rules on (RD-3): briefings change with them, and "No reviewer is
-      # eligible" is re-evaluated after it (ReviewerEligibility.after_command).
+      # Write the shipped rules at startup (UI-5). An empty workspace gets
+      # rule.created for each shipped rule. Otherwise only rules still on
+      # a superseded default get rule.reverted. Both use the app with no
+      # key and take the workspace lock before deciding what to write.
       class InstallShippedRules < Entry
-        def refusals(ctx)
+        def load(ctx)
+          @install = !Rule.exists?(workspace_id: ctx.workspace.id)
+          @superseded = RuleRecords.superseded_shipped_rules(ctx.workspace.id) unless @install
+        end
+
+        def refusals(_ctx)
           causes = [ state_refusal(nil) ]
-          if Rule.exists?(workspace_id: ctx.workspace.id)
+          if !@install && @superseded.empty?
             causes << Refusal.new(code: Contract.state_machine.fetch("unlisted_pair_refusal"))
           end
           causes.compact
         end
 
         def perform(ctx)
-          RuleRecords.install_shipped(ctx)
+          if @install
+            RuleRecords.install_shipped(ctx)
+          else
+            @superseded.each { |rule| RuleRecords.revert(ctx, rule) }
+          end
           @result = nil
         end
       end

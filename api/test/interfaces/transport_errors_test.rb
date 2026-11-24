@@ -53,7 +53,7 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
       .merge(key ? { "Idempotency-Key" => key } : {})
   end
 
-  def add_body = { title: "A made-up task", goal: "A made-up goal." }.to_json
+  def add_body = { title: "A made-up task", details: "A made-up goal." }.to_json
 
   def assert_transport_error(status, code)
     assert_response status
@@ -89,7 +89,7 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
 
   test "a body its schema refuses is 422 invalid and runs nothing" do
     with_test_routes do
-      post "/add", params: { title: "No goal" }.to_json, headers: headers
+      post "/add", params: { title: "A made-up task", goal: "Obsolete field" }.to_json, headers: headers
       assert_transport_error :unprocessable_entity, "invalid"
       post "/add", params: [ 1, 2 ].to_json, headers: headers
       assert_transport_error :unprocessable_entity, "invalid"
@@ -132,7 +132,7 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_equal [ "add_task", @scenario.workspace_id, "owner", @scenario.owner.id, "made-up-key" ],
       [ request.command, request.workspace_id, request.caller_kind, request.caller_id, request.key ]
     assert_equal Leverage::Idempotency.request_hash(method: "POST", path: "/add", body: add_body), request.request_hash
-    assert_equal({ "title" => "A made-up task", "goal" => "A made-up goal." }, request.params)
+    assert_equal({ "title" => "A made-up task", "details" => "A made-up goal." }, request.params)
   end
 
   test "a completed command answers 200 with the outcome body" do

@@ -51,12 +51,14 @@ module Leverage
       # the requested one (RE-2), else the task's.
       def check_contract(hook, task, params)
         if hook == "task.before_ready"
+          title = params.fetch("title", task.title).to_s
+          params = TaskText.fold_previous_goal(params, title: title)
           criteria = Array(params["criteria"]).map { |criterion| criterion.to_h.stringify_keys }
-          { "title" => (params["title"].presence || task.title).to_s, "goal" => params["goal"].to_s,
+          { "title" => title,
             "details" => params["details"],
             "criteria" => criteria.map { |criterion| { "text" => criterion["text"], "kind" => criterion["kind"], "state" => "open" } } }
         else
-          { "title" => task.title.to_s, "goal" => task.goal.to_s, "details" => task.details,
+          { "title" => task.title.to_s, "details" => task.details,
             "criteria" => JobInputs.live_criteria(task).map { |criterion| { "text" => criterion.text.to_s, "kind" => criterion.kind,
                                                                    "state" => criterion.state } } }
         end

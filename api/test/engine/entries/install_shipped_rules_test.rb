@@ -5,8 +5,8 @@ require_relative "../../support/trace_runner"
 # Entries::InstallShippedRules (PRD L434 with Q-12; milestone 4 plan RD-1
 # to RD-3, S-1): the app writes the seven shipped rules of a workspace that
 # has none, as the app with no key, through Timers.apply_workspace (the
-# path the sweep uses for a workspace timer). A workspace that has any rule
-# is refused invalid_state and gets nothing.
+# path the sweep uses for a workspace timer). It also upgrades untouched
+# superseded shipped defaults (UI-5).
 class InstallShippedRulesTest < ActiveSupport::TestCase
   include RuleSupport
 
@@ -37,7 +37,7 @@ class InstallShippedRulesTest < ActiveSupport::TestCase
     assert_nil Command.find_by(workspace_id: scenario.workspace_id, command: "install_shipped_rules"), "no key, no commands row"
   end
 
-  test "a workspace that has any rule is refused invalid_state and gets nothing" do
+  test "a workspace with rules and no superseded default is refused invalid_state and gets nothing" do
     scenario.rule
     counts = [ Rule.count, Event.count ]
 

@@ -196,9 +196,9 @@ class CredentialsTest < ActionDispatch::IntegrationTest
   end
 
   def claim_task(seat_token, login, title)
-    task = complete("add_task", body: { "title" => title, "goal" => "Made-up goal.", "priority" => "normal",
+    task = complete("add_task", body: { "title" => title, "details" => "Made-up goal.", "priority" => "normal",
       "work_reference" => "~/work/made-up", "state" => "backlog" }).fetch("task_id")
-    complete("complete_contract", ids: id_path(task), body: { "title" => title, "goal" => "Made-up goal.", "details" => "Build a sample.",
+    complete("complete_contract", ids: id_path(task), body: { "title" => title, "details" => "Made-up goal.\n\nBuild a sample.",
       "criteria" => [ { "text" => "Build the sample.", "kind" => "build" }, { "text" => "Review it.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => "~/work/made-up" })
     claimed = complete("claim_next_task", token: seat_token)

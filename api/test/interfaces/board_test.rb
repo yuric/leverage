@@ -28,7 +28,7 @@ class BoardReadTest < CommittingTestCase
   def checking_task
     task = scenario.task(state: "backlog")
     [ task, scenario.pending_transition(task, command: "complete_contract", requester: owner,
-      params: { "goal" => "A made-up goal." }) ]
+      params: { "details" => "A made-up goal." }) ]
   end
 
   test "a card is checking while a transition of its task is pending and no hold is open" do

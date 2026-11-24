@@ -4,10 +4,8 @@ require_relative "entries/rule_support"
 # bin/rails leverage:install_shipped_rules (PRD L434 with Q-12; milestone 4
 # plan RD-2, S-1): before the server starts, bin/docker-entrypoint runs it,
 # and it applies install_shipped_rules through Timers.apply_workspace, the
-# path the sweep uses for a workspace timer, to each workspace that has no
-# rules row, and to no other. So an installation upgraded to this milestone
-# never runs a command rule-free, and a start on a workspace that has its
-# rules writes nothing.
+# path the sweep uses for a workspace timer, to each workspace. It adds
+# missing sets and replaces superseded defaults a workspace still uses.
 class InstallShippedRulesTaskTest < ActiveSupport::TestCase
   include RuleSupport
 
@@ -44,9 +42,9 @@ class InstallShippedRulesTaskTest < ActiveSupport::TestCase
     assert_equal before, rule_events(ruled).size, "a workspace with a rule writes none"
     installed = calls.map { |call| call.arguments.first.then { |workspace| workspace.respond_to?(:id) ? workspace.id : workspace } }
     assert_includes installed, bare.workspace_id
-    refute_includes installed, ruled.workspace_id
+    assert_includes installed, ruled.workspace_id
     assert(calls.all? { |call| call.arguments[1].to_s == "install_shipped_rules" && call.keywords.key?(:at) })
-    assert_match(/install_shipped_rules: workspace #{bare.workspace_id}: wrote the 7 shipped rules/, out)
+    assert_match(/install_shipped_rules: workspace #{bare.workspace_id}: wrote shipped defaults/, out)
     refute_match(/#{ruled.workspace_id}/, out)
   end
 
@@ -56,10 +54,11 @@ class InstallShippedRulesTaskTest < ActiveSupport::TestCase
     install
     counts = [ Rule.count, RuleVersion.count, Event.count ]
 
-    _, calls = install
+    out, calls = install
 
     assert_equal counts, [ Rule.count, RuleVersion.count, Event.count ]
-    refute_includes calls.map { |call| call.arguments.first }, bare.workspace_id
+    assert_includes calls.map { |call| call.arguments.first }, bare.workspace_id
+    refute_match(/#{bare.workspace_id}/, out)
   end
 
   test "startup updates a workspace already on a superseded shipped default" do

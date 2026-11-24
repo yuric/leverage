@@ -24,7 +24,7 @@ class OwnerControlsCallsTest < ActionDispatch::IntegrationTest
   end
 
   def contract_body
-    { "title" => "Fix the totals", "goal" => "Totals add up.", "details" => nil,
+    { "title" => "Fix the totals", "details" => "Totals add up.",
       "criteria" => [ { "text" => "The totals add up.", "kind" => "build" }, { "text" => "A reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => "~/work/invoices" }
   end

@@ -121,7 +121,7 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
   def task_params(command, task)
     return { "id" => task.id } unless command == "edit_contract"
 
-    { "id" => task.id, "title" => task.title, "goal" => task.goal, "details" => nil,
+    { "id" => task.id, "title" => task.title, "details" => nil,
       "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }

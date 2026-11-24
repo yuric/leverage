@@ -17,7 +17,7 @@ module Leverage
 
       def contract(task)
         {
-          "title" => task.title.to_s, "goal" => task.goal.to_s, "details" => task.details,
+          "title" => task.title.to_s, "details" => task.details,
           "criteria" => JobInputs.live_criteria(task).map { |criterion| criterion.slice("text", "kind", "state") },
           "actions" => Action.where(workspace_id: task.workspace_id, task_id: task.id).order(:position)
             .map { |action| action.slice("kind", "description") }

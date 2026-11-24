@@ -14,7 +14,7 @@ class JobInputsTest < ActiveSupport::TestCase
 
   setup do
     use_scenario
-    @other = scenario.task(state: "ready", title: "Other task XYZZY-OTHER", goal: "Other goal XYZZY-OTHER.",
+    @other = scenario.task(state: "ready", title: "Other task XYZZY-OTHER",
       details: "Other details XYZZY-OTHER.")
   end
 
@@ -28,8 +28,8 @@ class JobInputsTest < ActiveSupport::TestCase
   test "a check at ready to start hands the requested contract and the frozen version's instruction (RE-2, RD-30)" do
     project = scenario.project
     rule = model_rule(instruction: "Made-up instruction one.")
-    task = scenario.task(state: "backlog", criteria: [], project: project, title: "Stored title", goal: "Stored goal.")
-    body = contract_body(goal: "Requested goal.", details: "Requested details.").merge("title" => "Requested title")
+    task = scenario.task(state: "backlog", criteria: [], project: project, title: "Stored title", details: "Stored details.")
+    body = contract_body(title: "Requested title", details: "Requested details.")
     task, _pending, check = waiting_contract(rule, task: task, body: body)
     frozen = scenario.current_version(rule)
     RuleVersion.create!(frozen.attributes.except("id", "created_at").merge("version" => 2, "instruction" => "Changed later."))
@@ -46,7 +46,7 @@ class JobInputsTest < ActiveSupport::TestCase
     assert_empty material.fetch("job_rules")
     assert_equal [ "Made-up instruction one.", "when a task is ready to start", false ],
       material.values_at("instruction", "moment", "may_answer_not_applicable")
-    assert_equal({ "title" => "Requested title", "goal" => "Requested goal.", "details" => "Requested details.",
+    assert_equal({ "title" => "Requested title", "details" => "Requested details.",
                    "criteria" => [ { "text" => "Made-up build criterion.", "kind" => "build", "state" => "open" },
                                    { "text" => "A reviewer agrees.", "kind" => "review", "state" => "open" } ] },
       material.fetch("contract"))
@@ -65,7 +65,7 @@ class JobInputsTest < ActiveSupport::TestCase
     rule = model_rule(hook: "task.before_submit")
     builder = scenario.seat(role: "builder", credential: scenario.credential)
     task = scenario.task(state: "working", builder: builder, criteria: %w[build build review], title: "Stored title",
-      goal: "Stored goal.", details: "Stored details.")
+      details: "Stored details.")
     first, second = Criterion.where(task_id: task.id, kind: "build").order(:position).to_a
     first.update!(state: "passed")
     Evidence.create!(workspace_id: scenario.workspace_id, criterion_id: second.id, kind: "text", value: "Second proof.",
@@ -81,7 +81,7 @@ class JobInputsTest < ActiveSupport::TestCase
     assert_matches_component("RuleCheckJobInput", input)
     material = input.fetch("material")
     assert_equal "before work is submitted", material.fetch("moment")
-    assert_equal({ "title" => "Stored title", "goal" => "Stored goal.", "details" => "Stored details.",
+    assert_equal({ "title" => "Stored title", "details" => "Stored details.",
                    "criteria" => [ { "text" => "Made-up criterion 1.", "kind" => "build", "state" => "passed" },
                                    { "text" => "Made-up criterion 2.", "kind" => "build", "state" => "open" },
                                    { "text" => "Made-up criterion 3.", "kind" => "review", "state" => "open" } ] },
@@ -129,8 +129,8 @@ class JobInputsTest < ActiveSupport::TestCase
 
   test "a contract draft hands the task's text, the criteria it has and its three stored values (RD-37)" do
     project = scenario.project
-    task = scenario.task(state: "backlog", project: project, criteria: [], title: "Draft me", goal: "Made-up goal.",
-      details: nil, work_reference: "~/work/made-up")
+    task = scenario.task(state: "backlog", project: project, criteria: [], title: "Draft me",
+      details: "Made-up details.", work_reference: "~/work/made-up")
     Criterion.create!(workspace_id: scenario.workspace_id, task_id: task.id, position: 1, kind: "review",
       text: "A reviewer agrees.")
     task.update!(minimum_strength_rank: 2, budget_cap: 12.5)
@@ -141,8 +141,8 @@ class JobInputsTest < ActiveSupport::TestCase
 
     assert_matches_component("ContractDraftJobInput", input)
     assert_equal [ task.id, project.id, 0 ], input.values_at("task_id", "project_id", "brief_version")
-    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [], "title" => "Draft me", "goal" => "Made-up goal.",
-                   "details" => nil, "criteria" => [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
+    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [], "title" => "Draft me",
+                   "details" => "Made-up details.", "criteria" => [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
                    "work_reference" => "~/work/made-up", "minimum_strength_rank" => 2, "budget_cap" => 12.5,
                    "brief" => [] }, input.fetch("material"))
     assert_nothing_of_another_task(input)

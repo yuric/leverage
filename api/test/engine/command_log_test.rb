@@ -34,6 +34,7 @@ class CommandLogTest < ActiveSupport::TestCase
     rule = app_rule("task.before_submit", instruction: INSTRUCTION)
     gating([ rule, { app_result: "failed", reason: REASON } ])
     task = ready_to_submit(@builder)
+    task.update!(details: "Made-up task details.")
     params = submit_params(task, note: "Made-up marker handoff note.")
     outcome = command("submit", @builder, params)
     assert_equal REASON, outcome.refusal.reason
@@ -43,7 +44,7 @@ class CommandLogTest < ActiveSupport::TestCase
     assert_equal [ "submit", "seat:#{@builder.id}", "refused", "blocked_by_rule", rule.id ],
       line.values_at(:command, :caller, :outcome, :refusal, :rule)
     text = line.to_s
-    [ REASON, "marker", INSTRUCTION, "handoff", task.title, task.goal ].each { |content| assert_not_includes text, content }
+    [ REASON, "marker", INSTRUCTION, "handoff", task.title, task.details ].each { |content| assert_not_includes text, content }
   end
 
   test "a completed command and another refusal name no rule; every line has four timings" do

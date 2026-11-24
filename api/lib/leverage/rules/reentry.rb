@@ -53,9 +53,7 @@ module Leverage
         task = Task.find_by!(workspace_id: pending.workspace_id, id: pending.task_id)
         hook = hook_of(pending.command)
         subject = subject_of(hook, pending, task)
-        inputs = HookInputs.for(hook: hook, task: task, params: pending.params || {}, seat: (subject if subject.is_a?(Seat)),
-          review: (subject if subject.is_a?(Review)))
-        input_hash = Gating.input_hash(hook: hook, inputs: inputs)
+        input_hash = pending_digest(pending, task, hook, subject)
         linked = RuleCheck.where(workspace_id: pending.workspace_id, pending_transition_id: pending.id).to_a
         live = Catalog.versions(pending.frozen_rule_version_ids)
           .select { |entry| entry.rule.enabled && entry.rule.removed_at.nil? }
@@ -73,6 +71,15 @@ module Leverage
 
         own = (linked.map(&:id) + rows.filter_map { |_, row| row&.id }).uniq
         decide(task, hook, subject, rows.select { |entry, row| row && EvaluationBuilder.blocking?(entry.version) }, own)
+      end
+
+      def pending_digest(pending, task, hook, subject)
+        params = pending.params || {}
+        return HookInputs.previous_ready_digest(params) if pending.command == "complete_contract" && params.key?("goal")
+
+        inputs = HookInputs.for(hook: hook, task: task, params: params, seat: (subject if subject.is_a?(Seat)),
+          review: (subject if subject.is_a?(Review)))
+        Gating.input_hash(hook: hook, inputs: inputs)
       end
 
       # Gates an outward action again (L138, L384): its gate checks for its
@@ -195,7 +202,7 @@ module Leverage
       end
 
       private_class_method :decide, :hook_of, :subject_of, :held?, :open_hold?, :claim_gate_holds, :action_request,
-        :decision
+        :decision, :pending_digest
     end
   end
 end

@@ -31,7 +31,7 @@ class HookInputsTest < ActiveSupport::TestCase
     action = Action.create!(workspace_id: @scenario.workspace_id, task_id: @task.id, position: 1, kind: "publish",
       description: "Publish the made-up page.")
     {
-      "task.before_ready" => { params: { "goal" => "A goal.", "details" => nil, "criteria" => [ { "text" => "One.", "kind" => "build" } ],
+      "task.before_ready" => { params: { "title" => "A task", "details" => nil, "criteria" => [ { "text" => "One.", "kind" => "build" } ],
                                          "actions" => [] } },
       "task.before_claim" => { params: {}, seat: seat },
       "task.before_submit" => { params: { "handoff_note" => "Done." } },
@@ -83,11 +83,12 @@ class HookInputsTest < ActiveSupport::TestCase
     digests = trace.fetch("commands").flat_map { |command| command.fetch("expect").fetch("events") }
       .map { |event| event.fetch("payload") }.select { |payload| payload["hook"] == "task.before_ready" }
       .map { |payload| payload.fetch("input_hash") }
-    task = @scenario.task(state: "backlog", goal: "A stored goal that is not hashed.")
+    task = @scenario.task(state: "backlog", title: "A stored title", details: "Stored details.")
 
     inputs = HookInputs.for(hook: "task.before_ready", task: task, params: request)
 
-    assert_equal({ "goal" => "The page shows this year's prices.", "details" => "Use the figures in the brief.",
+    assert_equal({ "title" => "Update the pricing page",
+                   "details" => "The page shows this year's prices.\n\nUse the figures in the brief.",
                    "criteria" => [ { "text" => "Criterion build of task 1 holds.", "kind" => "build" },
                                    { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
                    "actions" => [] }, inputs)
@@ -98,11 +99,11 @@ class HookInputsTest < ActiveSupport::TestCase
   test "task.before_ready keeps only text and kind of a criterion, kind and description of an action, in order" do
     task = @scenario.task
     inputs = HookInputs.for(hook: "task.before_ready", task: task, params: {
-      "title" => "Not hashed", "goal" => "G.", "details" => "D.", "work_reference" => "~/not/hashed",
+      "title" => "T.", "details" => "D.", "work_reference" => "~/not/hashed",
       "criteria" => [ { "kind" => "build", "text" => "B." }, { "text" => "R.", "kind" => "review", "extra" => 1 } ],
       "actions" => [ { "kind" => "publish", "description" => "P." } ]
     })
-    assert_equal({ "goal" => "G.", "details" => "D.",
+    assert_equal({ "title" => "T.", "details" => "D.",
                    "criteria" => [ { "text" => "B.", "kind" => "build" }, { "text" => "R.", "kind" => "review" } ],
                    "actions" => [ { "kind" => "publish", "description" => "P." } ] }, inputs)
   end

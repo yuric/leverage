@@ -33,7 +33,7 @@ class EditContractTest < ActiveSupport::TestCase
     criteria = [ { "text" => "A made-up build criterion.", "kind" => "build" },
                  { "text" => "An independent reviewer agrees.", "kind" => "review" } ] if criteria.empty?
     changes.each { |index, text| criteria[index] = criteria[index].merge("text" => text) }
-    { "id" => task.id, "title" => "A made-up edited title", "goal" => "A made-up edited goal.", "details" => "Made-up.",
+    { "id" => task.id, "title" => "A made-up edited title", "details" => "A made-up edited description.",
       "criteria" => criteria, "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil,
       "work_reference" => "~/work/made-up-edited" }.merge(fields.transform_keys(&:to_s))
   end
@@ -54,8 +54,8 @@ class EditContractTest < ActiveSupport::TestCase
                    "reset_criterion_ids" => [], "removed_criterion_ids" => [], "added_action_ids" => [],
                    "removed_action_ids" => [] }, event.payload)
     task.reload
-    assert_equal [ "backlog", "A made-up edited title", "A made-up edited goal.", "Made-up.", "~/work/made-up-edited", 1 ],
-      task.attributes.values_at("state", "title", "goal", "details", "work_reference", "contract_version")
+    assert_equal [ "backlog", "A made-up edited title", "A made-up edited description.", "~/work/made-up-edited", 1 ],
+      task.attributes.values_at("state", "title", "details", "work_reference", "contract_version")
   end
 
   test "in the Backlog with criteria: kept, reset and added by position and kind, and the minimum rank recorded" do

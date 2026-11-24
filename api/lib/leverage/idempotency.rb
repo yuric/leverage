@@ -117,12 +117,49 @@ module Leverage
     end
 
     def outcome_of(row, at: nil)
-      if row.outcome == "completed" && !claim_material_available?(row, at)
-        return Transitions::Outcome.refused(Transitions::Refusal.new(code: "not_eligible"))
+      result = row.result
+      if row.outcome == "completed"
+        return unavailable_claim unless claim_material_available?(row, at)
+
+        result = claim_snapshot(row)
+        return unavailable_claim if row.result && result.nil?
       end
 
       refusal = row.refusal && Transitions::Refusal.new(**row.refusal.symbolize_keys)
-      Transitions::Outcome.new(outcome: row.outcome, result: row.result, refusal: refusal, once: nil)
+      Transitions::Outcome.new(outcome: row.outcome, result: result, refusal: refusal, once: nil)
+    end
+
+    def unavailable_claim = Transitions::Outcome.refused(Transitions::Refusal.new(code: "not_eligible"))
+
+    def claim_snapshot(row)
+      result = row.result
+      return result unless result
+
+      case row.command
+      when "claim_job"
+        result.merge("input" => JobInputs.current_task_text(result.fetch("kind"), result.fetch("input")))
+      when "claim", "claim_review"
+        contract = result.dig("briefing", "contract")
+        return result unless contract&.key?("goal")
+
+        summary = result["task"]
+        # An earlier review receipt did not store a title. A later edit
+        # cannot supply a title for the briefing's earlier contract.
+        title = if summary
+          summary.fetch("title")
+        else
+          Task.where(workspace_id: row.workspace_id, id: result.dig("review", "task_id"),
+            contract_version: contract.fetch("contract_version")).pick(:title)
+        end
+        return unless title
+
+        briefing = result.fetch("briefing").merge("contract" => TaskText.fold_previous_goal(contract.merge("title" => title)))
+        folded = result.merge("briefing" => briefing)
+        folded["task"] = TaskText.fold_previous_goal(summary) if summary
+        folded
+      else
+        result
+      end
     end
 
     def claim_material_available?(row, at)
@@ -146,6 +183,6 @@ module Leverage
       Command.where(workspace_id: workspace_id, caller_kind: "seat", outcome: "completed")
     end
 
-    private_class_method :claim_material_available?, :work_claim_deleted?, :completed_claims
+    private_class_method :unavailable_claim, :claim_snapshot, :claim_material_available?, :work_claim_deleted?, :completed_claims
   end
 end

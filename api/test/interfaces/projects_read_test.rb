@@ -48,11 +48,12 @@ class ProjectsReadTest < CommittingTestCase
     other = scenario.project
     empty = scenario.project
     at = Time.current - 1.day
+    lower_id, higher_id = Array.new(2) { SecureRandom.uuid }.sort
     old = scenario.task(project: project, work_reference: "~/old")
     old.update!(created_at: at - 1.hour)
-    higher = scenario.task(project: project, work_reference: "~/latest", id: "f0000000-0000-4000-8000-000000000001")
+    higher = scenario.task(project: project, work_reference: "~/latest", id: higher_id)
     higher.update!(created_at: at)
-    lower = scenario.task(project: project, work_reference: "~/same-time", id: "10000000-0000-4000-8000-000000000001")
+    lower = scenario.task(project: project, work_reference: "~/same-time", id: lower_id)
     lower.update!(created_at: at)
     scenario.task(project: project, work_reference: "")
     scenario.task(project: project, work_reference: nil)

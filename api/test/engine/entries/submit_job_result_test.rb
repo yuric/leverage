@@ -45,8 +45,8 @@ class SubmitJobResultTest < ActiveSupport::TestCase
   end
 
   def draft_result(**fields)
-    { "title" => "A made-up task", "goal" => "The release notes list every change in 2.4.",
-      "details" => "List each merged change of 2.4, one line each.",
+    { "title" => "A made-up task",
+      "details" => "The release notes list every change in 2.4.\n\nList each merged change, one line each.",
       "criteria" => [ { "text" => "The notes list every merged change.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
       "actions" => [], "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil }.merge(fields)
@@ -128,6 +128,8 @@ class SubmitJobResultTest < ActiveSupport::TestCase
 
     _task, draft = claimed_draft
     assert_raises(T::Invalid) { submit_result(@planner, draft, PASSED) }
+    assert_raises(T::Invalid) { submit_result(@planner, draft, draft_result.except("details")) }
+    assert_equal "claimed", draft.reload.state
   end
 
   # Trace 16's workspace has the shipped rules, so the planner's Complete
@@ -160,12 +162,13 @@ class SubmitJobResultTest < ActiveSupport::TestCase
   test "a planner cannot change where the work is: the task's stored three values are sent, whatever the result says" do
     task, job = claimed_draft(work_reference: nil)
     calls = spy_on(T, :run_as) do
-      assert_completed(submit_result(@planner, job, draft_result("work_reference" => "/etc", "minimum_strength_rank" => 0,
-        "budget_cap" => 9999)))
+      assert_completed(submit_result(@planner, job, draft_result("details" => nil, "work_reference" => "/etc",
+        "minimum_strength_rank" => 0, "budget_cap" => 9999)))
     end
 
     assert_equal [ nil, nil, nil ], calls.sole.keywords[:params].values_at("work_reference", "minimum_strength_rank", "budget_cap")
     assert_nil task.reload.work_reference
+    assert_nil task.details
   end
 
   test "when the planner's Complete contract waits on a model check, the result call itself is the one waiting (RE-6)" do

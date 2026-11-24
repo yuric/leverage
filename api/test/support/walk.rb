@@ -215,7 +215,7 @@ class Walk
   end
 
   def guided_contract(actions)
-    guided("add_task", @owner, "title" => "Made-up coverage task", "goal" => "A made-up goal.", "state" => "backlog")
+    guided("add_task", @owner, "title" => "Made-up coverage task", "state" => "backlog")
     task = tasks.last
     guided("complete_contract", @owner, contract(task).merge("actions" => actions, "budget_cap" => nil))
     task
@@ -307,7 +307,7 @@ class Walk
   def add_task(index)
     return sweep(index) if tasks.size >= MAXIMUM_TASKS
 
-    command(index, :add_task, "add_task", @owner, "title" => "Made-up task #{index}", "goal" => "A made-up goal.",
+    command(index, :add_task, "add_task", @owner, "title" => "Made-up task #{index}",
       "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "imaginarium" : "backlog",
       "project_id" => one([ nil, *projects ])&.id)
   end
@@ -325,7 +325,7 @@ class Walk
     builds = Array.new(1 + @random.rand(2)) do |number|
       { "text" => "Made-up criterion #{number + 1}#{" (changed)" if chance(0.3)}.", "kind" => "build" }
     end
-    { "id" => task.id, "title" => task.title || "Made-up task", "goal" => task.goal || "A made-up goal.",
+    { "id" => task.id, "title" => task.title || "Made-up task",
       "details" => "Made-up details.", "criteria" => builds + [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
       "actions" => action_definitions, "minimum_strength_rank" => nil, "budget_cap" => one(CAP_AMOUNTS),
       "work_reference" => nil }

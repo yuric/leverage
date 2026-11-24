@@ -33,6 +33,7 @@ module Leverage
         def load(ctx)
           @params = ctx.request.params
           @task = Task.find_by(id: @params["id"], workspace_id: ctx.workspace.id) || raise(NotFound, "No such task")
+          @params = TaskText.fold_previous_goal(@params, title: @params.fetch("title", @task.title))
 
           kinds = Array(@params["criteria"]).map { |criterion| criterion["kind"] }
           unless kinds.last == "review" && kinds.count("review") == 1
@@ -87,7 +88,7 @@ module Leverage
         def change_contract(ctx, state:)
           written = ContractDiff.write(@task, Array(@params["criteria"]), at: ctx.at)
           actions = Actions.create_for(@task, Array(@params["actions"]))
-          @task.update!(title: @params.fetch("title", @task.title), goal: @params.fetch("goal", @task.goal),
+          @task.update!(title: @params.fetch("title", @task.title),
             details: @params["details"], work_reference: @params["work_reference"].presence,
             minimum_strength_rank: @params["minimum_strength_rank"], budget_cap: @params["budget_cap"],
             contract_version: @task.contract_version + 1, state: state)

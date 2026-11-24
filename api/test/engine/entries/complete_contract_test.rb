@@ -41,8 +41,8 @@ class CompleteContractTest < ActiveSupport::TestCase
   def written = Event.where(workspace_id: @scenario.workspace_id, command_id: @key).order(:seq).to_a
 
   def body(task = @task, **fields)
-    { "id" => task.id, "title" => "Update the pricing page", "goal" => "The page shows this year's prices.",
-      "details" => "Use the figures in the price list.",
+    { "id" => task.id, "title" => "Update the pricing page",
+      "details" => "The page shows this year's prices.\n\nUse the figures in the price list.",
       "criteria" => [ { "text" => "The copy names this year's prices.", "kind" => "build" },
                       { "text" => "The layout matches the rest of the site.", "kind" => "build" },
                       { "text" => "An independent reviewer agrees.", "kind" => "review" } ],
@@ -57,9 +57,9 @@ class CompleteContractTest < ActiveSupport::TestCase
 
     assert outcome.completed?
     @task.reload
-    assert_equal [ "ready", 1, "The page shows this year's prices.", "Use the figures in the price list.",
+    assert_equal [ "ready", 1, "Update the pricing page", "The page shows this year's prices.\n\nUse the figures in the price list.",
                    "~/work/pricing-page", 2 ],
-      @task.attributes.values_at("state", "contract_version", "goal", "details", "work_reference", "minimum_strength_rank")
+      @task.attributes.values_at("state", "contract_version", "title", "details", "work_reference", "minimum_strength_rank")
     assert_equal BigDecimal("5.5"), @task.budget_cap
     criteria = Criterion.where(task_id: @task.id).order(:position)
     assert_equal [ [ 1, "build", "open" ], [ 2, "build", "open" ], [ 3, "review", "open" ] ],
@@ -88,7 +88,7 @@ class CompleteContractTest < ActiveSupport::TestCase
 
   test "completing the contract preserves an unchanged outward action from Add task" do
     definitions = [ { "kind" => "publish", "description" => "Publish the prices." } ]
-    added = apply({ "title" => @task.title, "goal" => @task.goal, "actions" => definitions }, command: "add_task")
+    added = apply({ "title" => @task.title, "details" => @task.details, "actions" => definitions }, command: "add_task")
     assert added.completed?
     task = Task.find(added.result.fetch("task_id"))
     original_action = Action.where(task_id: task.id).sole

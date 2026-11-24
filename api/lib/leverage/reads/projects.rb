@@ -11,9 +11,10 @@ module Leverage
           briefs = BriefEntry.where(workspace_id: workspace_id, project_id: ids).order(:position).group_by(&:project_id)
           open = Task.where(workspace_id: workspace_id, project_id: ids).where.not(state: %w[done cancelled]).group(:project_id).count
           pauses = pause_actors(workspace_id, projects.select(&:paused).map(&:id))
+          references = latest_work_references(workspace_id, ids)
 
           { projects: projects.map do |project|
-            shape(project, briefs.fetch(project.id, []), open.fetch(project.id, 0), pauses[project.id])
+            shape(project, briefs.fetch(project.id, []), open.fetch(project.id, 0), pauses[project.id], references[project.id])
           end }
         end
       end
@@ -23,12 +24,19 @@ module Leverage
           .pluck(:project_id, :actor_kind).to_h
       end
 
-      def shape(project, brief, open_tasks, pause_actor)
+      def latest_work_references(workspace_id, ids)
+        Task.where(workspace_id: workspace_id, project_id: ids, content_deleted_at: nil)
+          .where.not(work_reference: [ nil, "" ]).order(:project_id, created_at: :desc, id: :desc)
+          .pluck(Arel.sql("DISTINCT ON (project_id) project_id"), :work_reference).to_h
+      end
+
+      def shape(project, brief, open_tasks, pause_actor, latest_work_reference)
         { id: project.id, name: project.name.to_s, goal: project.goal.to_s,
           budget: Shapes.number(project.budget), spent: Shapes.number(project.spent), paused: project.paused,
           brief_version: project.brief_version, brief: brief.map { |entry| brief_entry(entry) },
           paused_by: { "owner" => "owner", "app" => "budget" }[pause_actor],
-          open_tasks: open_tasks, content_deleted_at: Shapes.time(project.content_deleted_at) }
+          open_tasks: open_tasks, content_deleted_at: Shapes.time(project.content_deleted_at),
+          latest_work_reference: latest_work_reference }
       end
 
       def brief_entry(entry)
