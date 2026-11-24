@@ -38,13 +38,15 @@ class ModelsCatalogContractTest < Minitest::Test
     end
   end
 
-  def test_a_probe_or_help_fact_cites_a_file_in_the_repository
-    repository = File.expand_path("../..", CONTRACT_ROOT)
+  # A probe or a help reading is recorded in the repository, so its source
+  # is a path, never an address. The image holds only api/, so that the
+  # path exists is checked by scripts/check_model_catalog.py.
+  def test_a_probe_or_help_fact_cites_a_path_not_an_address
     providers.each do |entry|
       facts = [ entry["native_effort"], entry["default_model"] ].compact + entry["models"]
       facts.reject { |fact| fact["evidence"] == "documented" }.each do |fact|
-        path = fact["source"].split("#").first
-        assert File.exist?(File.join(repository, path)), "#{entry["provider"]}: #{fact["source"]} is not a repository path"
+        refute_match(%r{://}, fact["source"], "#{entry["provider"]}: #{fact["source"]} is not a repository path")
+        refute fact["source"].start_with?("/"), "#{entry["provider"]}: #{fact["source"]} is absolute"
       end
     end
   end

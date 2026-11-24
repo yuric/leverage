@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Check the model catalog, api/contract/models.json (contract decision UX-5).
+
+The catalog lists each login provider's models and the efforts each model
+accepts; the server refuses a model or an effort it does not list, and the
+Mac reads the same list from the generated ModelCatalog.swift. An entry is
+never invented: each says how it is known. This check fails on
+
+  * an evidence level outside the catalog's evidence_levels, or a catalog
+    without them;
+  * an empty source or a missing or malformed date (checked_on);
+  * a help or probe fact whose source is not a path to a file in the
+    repository (a recorded reply, a probe, or a saved --help output);
+  * efforts whose evidence is not documented (a tool's --help lists efforts
+    for the whole tool and never says which model accepts which);
+  * an effort, or a model id, listed twice;
+  * a default model that is not among the provider's models;
+  * a provider that is not a login provider of the registry, a provider
+    listed twice, or a login provider missing;
+  * efforts listed for a provider whose driver passes none (native_effort
+    false): nothing would carry them to the tool.
+
+No automated job reaches a provider: the catalog changes by a pull request
+that edits models.json with the new entry's evidence and date (DEPLOY.md,
+"Updating the model list").
+
+Usage: python3 scripts/check_model_catalog.py [--models PATH] [--registry PATH] [--root PATH]
+Standard library only; exits 0 when the catalog holds, 1 otherwise.
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+RECORDED = ("help", "probe", "probe (full environment)")
+
+
+def fact_problems(where, fact, levels, root):
+    problems = []
+    evidence = fact.get("evidence")
+    if evidence not in levels:
+        problems.append(f"{where}: evidence {evidence!r} is not one of {', '.join(levels)}")
+    source = fact.get("source")
+    if not isinstance(source, str) or not source.strip():
+        problems.append(f"{where}: the source is empty")
+    elif evidence in RECORDED:
+        path = source.split("#", 1)[0]
+        if "://" in source or path.startswith("/") or ".." in Path(path).parts:
+            problems.append(f"{where}: a {evidence} fact must cite a repository path, not {source!r}")
+        elif not (root / path).is_file():
+            problems.append(f"{where}: {path} is not a file in the repository ({evidence} evidence)")
+    if not DATE.match(str(fact.get("checked_on", ""))):
+        problems.append(f"{where}: checked_on is missing or not a date")
+    return problems
+
+
+def check(models, registry, root):
+    problems = []
+    levels = models.get("evidence_levels")
+    if not isinstance(levels, list) or not levels:
+        return ["models.json has no evidence_levels"]
+    logins = [entry["provider"] for entry in registry.get("credential_providers", []) if entry.get("kind") == "login"]
+    seen = []
+    for entry in models.get("providers", []):
+        name = entry.get("provider")
+        if name in seen:
+            problems.append(f"{name}: the provider is listed twice")
+        seen.append(name)
+        if name not in logins:
+            problems.append(f"{name}: not a login provider of the registry ({', '.join(logins)})")
+        native = entry.get("native_effort") or {}
+        problems += fact_problems(f"{name} native_effort", native, levels, root)
+        default = entry.get("default_model")
+        if default is not None:
+            problems += fact_problems(f"{name} default_model", default, levels, root)
+        ids = []
+        for model in entry.get("models", []):
+            model_id = model.get("id")
+            where = f"{name} {model_id}"
+            if model_id in ids:
+                problems.append(f"{where}: the model is listed twice")
+            ids.append(model_id)
+            problems += fact_problems(where, model, levels, root)
+            efforts = model.get("efforts")
+            if efforts is None:
+                continue
+            if efforts.get("evidence") != "documented":
+                problems.append(f"{where}: efforts must be documented, not {efforts.get('evidence')!r}")
+            problems += fact_problems(f"{where} efforts", efforts, levels, root)
+            values = efforts.get("values", [])
+            for value in sorted({v for v in values if values.count(v) > 1}):
+                problems.append(f"{where}: the effort {value!r} is listed twice")
+            if native.get("value") is not True:
+                problems.append(f"{where}: efforts are listed, but native_effort is false, so no driver passes one")
+        if default is not None and default.get("value") not in ids:
+            problems.append(f"{name}: the default model {default.get('value')!r} is not among its models")
+    for name in logins:
+        if name not in seen:
+            problems.append(f"{name}: the login provider is missing from models.json")
+    return problems
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--models", type=Path, default=ROOT / "api" / "contract" / "models.json")
+    parser.add_argument("--registry", type=Path, default=ROOT / "api" / "contract" / "registry.json")
+    parser.add_argument("--root", type=Path, default=ROOT)
+    arguments = parser.parse_args(argv)
+    try:
+        models = json.loads(arguments.models.read_text(encoding="utf-8"))
+        registry = json.loads(arguments.registry.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        print(f"check_model_catalog: {error}", file=sys.stderr)
+        return 1
+    problems = check(models, registry, arguments.root.resolve())
+    for problem in problems:
+        print(problem)
+    if problems:
+        print(f"check_model_catalog: {len(problems)} problem(s) in models.json")
+        return 1
+    print("OK: the model catalog lists only evidenced entries.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
