@@ -15,6 +15,7 @@ struct ServerSupervisorTests {
         probe: RecordingProbe = RecordingProbe(),
         dockerStartTimeout: Duration = .seconds(10),
         healthTimeout: Duration = .seconds(10),
+        mcpProgram: URL? = nil,
         healthy: @escaping @Sendable (URL) async -> Bool
     ) -> ServerSupervisor {
         var configuration = ServerSupervisor.Configuration(
@@ -22,7 +23,7 @@ struct ServerSupervisorTests {
             dockerFolders: [fake.binFolder],
             home: fake.home,
             composeSource: fake.composeSource,
-            imageTag: "0.1.0-made-up")
+            imageTag: "0.1.0-made-up", mcpProgram: mcpProgram)
         configuration.openProgram = fake.openProgram.path
         configuration.dockerStartTimeout = dockerStartTimeout
         configuration.healthTimeout = healthTimeout
@@ -30,6 +31,22 @@ struct ServerSupervisorTests {
         return ServerSupervisor(
             configuration: configuration, runner: runner, isExecutable: probe.probe,
             isPortFree: { _ in true }, healthCheck: healthy, log: Log(component: "test", write: { _ in }))
+    }
+
+    @Test("only compose up gets the bundled MCP command, with spaces preserved")
+    func composeMCPCommand() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        let mcpProgram = fake.root.appendingPathComponent("Applications With Spaces/Leverage.app/Contents/MacOS/LeverageMCP")
+        let server = supervisor(
+            fake, healthTimeout: Patience.scaled(.seconds(30)), mcpProgram: mcpProgram,
+            healthy: { _ in fake.isSet("compose-up") })
+
+        #expect(await server.start() == .running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!))
+        let calls = fake.dockerCalls()
+        #expect(calls.map { $0.arguments.first } == ["info", "image", "compose"])
+        #expect(calls.map { $0.environment["LEVERAGE_MCP_COMMAND"] } == [nil, nil, mcpProgram.path])
     }
 
     @Test("no Docker: dockerMissing, nothing run, and no path outside the given folder looked at")
