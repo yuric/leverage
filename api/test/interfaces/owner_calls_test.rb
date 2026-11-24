@@ -271,6 +271,19 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "add_task refuses a goal and accepts a title-only request" do
+    call = calls.find { |candidate| candidate[:op] == "add_task" }
+    send_call(call, body: { "title" => "Update the sample", "goal" => "Obsolete field" })
+    assert_transport_error :unprocessable_entity, "invalid"
+
+    send_call(call, body: { "title" => "Update the sample" })
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal "completed", response.parsed_body.fetch("outcome")
+    id = response.parsed_body.fetch("result").fetch("task_id")
+    assert_equal "Update the sample", Task.find(id).title
+  end
+
   test "a body on a command that takes none is 422 invalid" do
     call = calls.find { |candidate| candidate[:op] == "cancel_task" }
     with_stand_in { send_call(call, body: { "reason" => "because" }) }

@@ -54,6 +54,15 @@ class BriefingTest < ActiveSupport::TestCase
     refute_equal B.hash_for(@task, seat: @builder), B.hash_for(@task, seat: @reviewer)
   end
 
+  test "the builder's contract names the task by title" do
+    @task.update!(title: "Replace the sample totals")
+    briefing = B.for(@task, seat: @builder)
+
+    assert_equal "Replace the sample totals", briefing.fetch("contract").fetch("title")
+    refute briefing.fetch("contract").key?("goal")
+    assert_matches_component("Briefing", briefing)
+  end
+
   test "a General seat's briefing has no role file, version or hash part" do
     general = @scenario.seat(role: "general")
     parts = [

@@ -60,6 +60,18 @@ class HookInputsTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { HookInputs.for(hook: "task.before_lunch", task: task, params: {}) }
   end
 
+  test "changing only the requested title changes the task.before_ready digest" do
+    task = @scenario.task(title: "Stored title")
+    hook = "task.before_ready"
+    request = { "details" => "Work in the sample folder.", "criteria" => [], "actions" => [] }
+    first = HookInputs.for(hook: hook, task: task, params: request.merge("title" => "Revise the sample"))
+    second = HookInputs.for(hook: hook, task: task, params: request.merge("title" => "Replace the sample"))
+
+    assert_equal "Revise the sample", first["title"]
+    refute_equal Leverage::Gating.input_hash(hook: hook, inputs: first),
+      Leverage::Gating.input_hash(hook: hook, inputs: second)
+  end
+
   # Trace 07's Complete contract: the inputs are the requested contract,
   # not the stored one (rule 1). Its two checks at task.before_ready carry
   # the engine's own hash of those inputs (api/contract/README.md, A

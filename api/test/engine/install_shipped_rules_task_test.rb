@@ -62,6 +62,20 @@ class InstallShippedRulesTaskTest < ActiveSupport::TestCase
     refute_includes calls.map { |call| call.arguments.first }, bare.workspace_id
   end
 
+  test "startup updates a workspace already on a superseded shipped default" do
+    workspace = Scenario.new
+    shipped = Leverage::Contract.shipped_rules.fetch("rules").find { |row| row.fetch("key") == "specific_details" }
+    rule = workspace.rule(key: "specific_details", origin: "shipped", enabled: false,
+      instruction: shipped.fetch("superseded_instructions").first)
+    before = workspace.workspace.reload.last_seq
+
+    install
+
+    version = workspace.current_version(rule)
+    assert_equal [ 2, false, shipped.fetch("instruction") ], [ version.version, rule.enabled, version.instruction ]
+    assert_equal [ "rule.reverted" ], Event.where(workspace_id: workspace.workspace_id).where("seq > ?", before).pluck(:type)
+  end
+
   test "bin/docker-entrypoint runs it after db:prepare and before the server starts, as the owner role (RD-2)" do
     text = File.read(ENTRYPOINT)
     server = text[/^if \$server; then\n(.*?)^fi$/m, 1]
