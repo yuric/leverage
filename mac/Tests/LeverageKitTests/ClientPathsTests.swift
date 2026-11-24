@@ -60,6 +60,9 @@ struct ClientPathsTests {
 
     static let calls: [String: ClientCall] = [
         // Agent
+        "get_join": ClientCall(query: ["connection": "mcp"]) {
+            _ = try await $0.agent.join(connection: .mcp)
+        },
         "get_next": ClientCall(query: ["wait": "30"]) { _ = try await $0.agent.next(wait: 30) },
         "get_command": ClientCall(path: ["key": "key-get_command"]) {
             _ = try await $0.agent.command(key: F.key("get_command"))
@@ -141,9 +144,6 @@ struct ClientPathsTests {
         ) {
             _ = try await $0.owner.helperRequest(id: F.request, wait: 20, changedAfter: F.observed)
         },
-        "get_landing_prompt": ClientCall(path: ["id": F.id(F.seat)]) {
-            _ = try await $0.owner.landingPrompt(seatID: F.seat)
-        },
         "add_task": ClientCall {
             _ = try await $0.owner.addTask(
                 AddTaskRequest(
@@ -172,6 +172,10 @@ struct ClientPathsTests {
                     name: "Made-up builder", role: .builder, provider: .claude, model: nil, effort: nil,
                     strengthRank: nil, credentialID: F.credential),
                 key: F.key("connect_seat"))
+        },
+        "issue_landing_prompt": ClientCall(path: ["id": F.id(F.seat)]) {
+            _ = try await $0.owner.issueLandingPrompt(
+                seatID: F.seat, connection: .mcp, key: F.key("issue_landing_prompt"))
         },
         "start_seat": ClientCall(path: ["id": F.id(F.seat)]) {
             _ = try await $0.owner.startSeat(seatID: F.seat, key: F.key("start_seat"))
@@ -363,10 +367,29 @@ struct ClientPathsTests {
 
     @Test("the clients have one method for each served operation, and no other")
     func coverage() {
-        let milestoneFive = QuestionsAndApprovalsClientTests.calls.map(\.operation).filter { $0 != "get_landing_prompt" }
+        let milestoneFive = QuestionsAndApprovalsClientTests.calls.map(\.operation)
         #expect(Set(milestoneFive) == Set(ContractDocument.questionsAndApprovals))
         #expect(Set(Self.calls.keys).isDisjoint(with: milestoneFive))
         #expect(Set(Self.calls.keys).union(milestoneFive) == Set(ContractDocument.served))
+    }
+
+    @Test("join defaults to HTTP through the agent API")
+    func joinDefaultsToHTTP() async throws {
+        let host = "join-default.test"
+        let example = try #require(ContractDocument.examples(of: "JoinInstructions").first)
+        let session = StubURLProtocol.session(
+            host: host, answer: .init(status: 200, body: try ContractDocument.data(example)))
+        let agent: any AgentAPI = Clients(baseURL: URL(string: "http://\(host)")!, session: session).agent
+
+        let instructions = try await agent.join()
+
+        #expect(instructions.connection == .http)
+        #expect(instructions.role == .general)
+        #expect(instructions.text == example["text"]?.stringValue)
+        let sent = try #require(StubURLProtocol.requests(host: host).first)
+        #expect(sent.method == "GET")
+        #expect(sent.url?.path == "/v1/join")
+        #expect(sent.url?.query == nil)
     }
 
     @Test("agent and helper polls give the server its requested wait and a timeout margin",
@@ -471,6 +494,9 @@ struct ClientPathsTests {
             #expect(sent.header("Content-Type") == "application/json")
             let json = try JSONDecoder().decode(JSONValue.self, from: bodyData)
             Self.expect(json, fits: schema, at: schemaName)
+            if operation == "issue_landing_prompt" {
+                #expect(json == .object(["connection": .string("mcp")]))
+            }
             if operation == "reorder_credentials" {
                 #expect(json["order"]?.arrayValue == [.string(F.id(F.credential)), .string(F.id(F.seat))])
             }

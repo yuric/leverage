@@ -155,7 +155,7 @@ struct RuleChecksModelTests {
         #expect(material.contract.criteria.map(\.kind) == [.build, .review])
         #expect(material.contract.criteria.map(\.state) == [.open, .open])
         #expect(material.quoted == [QuotedText(label: .handoffNote, text: "Made-up note.")])
-        #expect(material.roleFile.hasPrefix("You are the orchestrator."))
+        #expect((material.roleFile as String?)?.hasPrefix("You are the orchestrator.") == true)
     }
 
     @Test("a contract-draft claim reads the task's text, its criteria and the three stored values")

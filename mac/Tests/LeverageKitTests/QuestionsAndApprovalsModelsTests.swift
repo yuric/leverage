@@ -7,7 +7,7 @@ struct QuestionsAndApprovalsModelsTests {
           arguments: [
             "Action", "ActionInput", "AnsweredQuestion", "ApprovalJobInput", "ApprovalJobResult",
             "ApprovalMaterial", "AskQuestionCompleted", "AskQuestionResult", "BoardTask", "BriefEntry",
-            "Briefing", "ChangeWorkspaceSettingsCompleted", "Decision", "DecisionsList", "LandingPrompt",
+            "Briefing", "ChangeWorkspaceSettingsCompleted", "Decision", "DecisionsList",
             "NextItem", "Project", "ProjectsList", "Question", "QuestionJobInput", "QuestionJobResult",
             "QuestionMaterial", "TaskPage", "WorkspaceSettings",
           ])
@@ -73,14 +73,6 @@ struct QuestionsAndApprovalsModelsTests {
         }
     }
 
-    @Test("an older HTTP landing prompt supplies the default connection")
-    func olderLandingPrompt() throws {
-        var prompt = try #require(ContractDocument.examples(of: "LandingPrompt").first?.objectValue)
-        prompt.removeValue(forKey: "connection")
-        let result = try LeverageJSON.decoder().decode(LandingPrompt.self, from: ContractDocument.data(.object(prompt)))
-        #expect(result.connection == .http)
-    }
-
     @Test("mutations send null when clearing a project, budget, or task cap")
     func clearAmountsAndProject() throws {
         #expect(try Self.encoded(ChangeTaskProjectRequest(projectID: nil)) == .object(["project_id": .null]))
@@ -123,7 +115,6 @@ struct QuestionsAndApprovalsModelsTests {
         "ChangeWorkspaceSettingsCompleted": roundTrip(CommandOutcome<WorkspaceSettings>.self),
         "Decision": roundTrip(Decision.self),
         "DecisionsList": roundTrip(DecisionsList.self),
-        "LandingPrompt": roundTrip(LandingPrompt.self),
         "NextItem": roundTrip(NextItem.self),
         "Project": roundTrip(Project.self),
         "ProjectsList": roundTrip(ProjectsList.self),
