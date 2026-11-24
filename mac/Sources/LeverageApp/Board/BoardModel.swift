@@ -84,7 +84,7 @@ enum CardWording {
         let line: String
         var chip: CardChip?
         switch state {
-        case .imaginarium:
+        case .ideas:
             line = BoardCopy.lineNotStarted.text
         case .backlog where task.checking:
             line = BoardCopy.lineCheckingDetails.text

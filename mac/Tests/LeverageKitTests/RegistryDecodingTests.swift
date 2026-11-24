@@ -159,7 +159,7 @@ struct RegistryDecodingTests {
     func taskStates() throws {
         let registry = try Self.decode()
         #expect(registry.lists["task_states"] == [
-            "imaginarium", "backlog", "ready", "working", "in_review", "finishing", "done", "cancelled",
+            "ideas", "backlog", "ready", "working", "in_review", "finishing", "done", "cancelled",
         ])
     }
 
