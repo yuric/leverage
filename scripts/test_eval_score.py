@@ -209,6 +209,8 @@ class RunsFileTests(unittest.TestCase):
             reserved = json.loads(runs.read_text(encoding="utf-8"))["runs"]
             self.assertEqual(reserved, [{"provider": "codex", "date": "2026-11-20", "tool_runs": 30,
                                          "instruction_sha256": "a" * 64, "cases_sha256": "b" * 64,
+                                         "mode": "orchestrator",
+                                         "role_file_sha256": eval_score.role_file_sha256(eval_score.ROLE_FILE),
                                          "reserved": True}])
             code, _, err = run("runs-settle", "--runs", runs, "--provider", "codex", "--tool-runs", "26")
             self.assertEqual(code, 0, err)
@@ -227,13 +229,50 @@ class RunsFileTests(unittest.TestCase):
 
 
 class ResultTests(unittest.TestCase):
-    def record(self, folder, verdicts="passing.jsonl", provider="claude"):
+    def record(self, folder, verdicts="passing.jsonl", provider="claude", extra=()):
         out = Path(folder) / "results" / f"{provider}.json"
         code, stdout, err = run("record", "--suite", SUITE, "--shipped", SHIPPED, "--provider", provider,
                                 "--verdicts", VERDICTS / verdicts, "--canary", CANARY, "--date", "2026-11-20",
-                                "--out", out)
+                                "--out", out, *extra)
         self.assertEqual(code, 0, err)
         return json.loads(out.read_text(encoding="utf-8")), stdout
+
+    def test_general_result_records_an_explicit_null_role_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result, _ = self.record(folder, extra=("--mode", "general"))
+        self.assertEqual(result["mode"], "general")
+        self.assertIsNone(result["role_file_sha256"])
+
+    def test_general_result_refuses_a_role_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "result.json"
+            code, _, err = run("not-run", "--suite", SUITE, "--provider", "claude",
+                               "--reason", "signed out", "--date", "2026-11-20", "--out", out,
+                               "--mode", "general", "--role-file", SHIPPED)
+            self.assertEqual(code, 2, err)
+            self.assertIn("general mode does not take --role-file", err)
+            self.assertFalse(out.exists())
+
+    def test_general_run_settles_the_reservation_for_its_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            runs = Path(folder) / "runs.json"
+            general_runs = runs.with_name("runs-general.json")
+            for path, mode in ((runs, "orchestrator"), (general_runs, "general")):
+                code, _, err = run("runs-add", "--suite", SUITE, "--runs", path, "--provider", "claude",
+                                   "--date", "2026-11-20", "--mode", mode)
+                self.assertEqual(code, 0, err)
+            code, _, err = run("runs-settle", "--suite", SUITE, "--runs", runs, "--provider", "claude",
+                               "--tool-runs", "24", "--mode", "general")
+            self.assertEqual(code, 2, err)
+            code, _, err = run("runs-settle", "--suite", SUITE, "--runs", general_runs, "--provider", "claude",
+                               "--tool-runs", "24", "--mode", "general")
+            self.assertEqual(code, 0, err)
+            general, = json.loads(general_runs.read_text(encoding="utf-8"))["runs"]
+            orchestrator, = json.loads(runs.read_text(encoding="utf-8"))["runs"]
+        self.assertEqual(general["mode"], "general")
+        self.assertIsNone(general["role_file_sha256"])
+        self.assertEqual((general["tool_runs"], general["reserved"]), (24, False))
+        self.assertTrue(orchestrator["reserved"])
 
     def test_a_result_records_the_run_and_its_scores(self):
         with tempfile.TemporaryDirectory() as folder:
