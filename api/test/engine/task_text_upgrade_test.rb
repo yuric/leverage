@@ -66,6 +66,26 @@ class TaskTextUpgradeTest < ActiveSupport::TestCase
     assert_equal cached, row.reload.result
   end
 
+  test "a stored review claim uses the task title only while the same contract is current" do
+    reviewer = scenario.seat(role: "reviewer", provider: "codex")
+    task = scenario.task(state: "in_review", title: "Original title", details: "Original details.")
+    request = seat_request(reviewer, "claim_review")
+    assert_completed(T.apply(request))
+    row = Command.find_by!(caller_id: reviewer.id, key: request.key)
+    cached = row.result
+    contract = cached.fetch("briefing").fetch("contract")
+    cached.fetch("briefing")["contract"] = contract.except("title").merge("goal" => "Original title")
+    row.update!(result: cached)
+
+    replayed = T.apply(request).result.fetch("briefing").fetch("contract")
+    assert_equal [ "Original title", "Original details." ], replayed.values_at("title", "details")
+    refute replayed.key?("goal")
+
+    edit = contract_body(title: "Renamed task").merge("id" => task.id)
+    assert_completed(owner_command("edit_contract", edit))
+    assert_refused("not_eligible", T.apply(request))
+  end
+
   test "a draft queued before the upgrade gives a dedicated planner the current result instruction" do
     planner = scenario.planner
     task = scenario.task
