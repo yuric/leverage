@@ -13,10 +13,10 @@
       "subject_kinds": [null],
       "cause_kinds": [],
       "prd_class": "Waiting",
-      "prd_open_while": "The task is in Imaginarium.",
+      "prd_open_while": "The task is in Ideas.",
       "prd_subject": "None",
       "opened_by": [
-        {"event": "task.created", "when": "the task is added to Imaginarium", "source": "derived"},
+        {"event": "task.created", "when": "the task is added to Ideas", "source": "derived"},
         {"event": "hold.closed", "when": "the last open hold lifts and the task's state calls for this step (L277)", "source": "derived"}
       ],
       "closed_by": [

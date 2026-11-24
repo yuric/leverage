@@ -303,12 +303,12 @@ class Walk
 
   # --- the owner -----------------------------------------------------------
 
-  # A task in the Backlog, or now and then an idea in the Imaginarium.
+  # A task in the Backlog, or now and then an idea in Ideas.
   def add_task(index)
     return sweep(index) if tasks.size >= MAXIMUM_TASKS
 
     command(index, :add_task, "add_task", @owner, "title" => "Made-up task #{index}", "goal" => "A made-up goal.",
-      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "imaginarium" : "backlog",
+      "priority" => one(%w[low normal high]), "work_reference" => nil, "state" => chance(0.2) ? "ideas" : "backlog",
       "project_id" => one([ nil, *projects ])&.id)
   end
 
@@ -909,7 +909,7 @@ class Walk
   # --- the owner's controls (milestone 3) -------------------------------------
 
   def promote(index)
-    task = one(tasks.select { |candidate| candidate.state == "imaginarium" }) || one(tasks)
+    task = one(tasks.select { |candidate| candidate.state == "ideas" }) || one(tasks)
     return add_task(index) unless task
 
     command(index, :promote, "promote", @owner, "id" => task.id)

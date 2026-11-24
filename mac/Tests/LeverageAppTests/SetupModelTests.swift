@@ -113,7 +113,7 @@ struct SetupModelTests {
 
     @Test("a task counts as sent once it has left Ideas and Backlog, and as done once it is Done")
     func taskSteps() {
-        for state in [TaskState.imaginarium, .backlog, .cancelled] {
+        for state in [TaskState.ideas, .backlog, .cancelled] {
             let waiting = facts(tasks: [SetupFixtures.task("An idea", state)])
             #expect(!waiting.isDone(.firstTask), "\(state)")
             #expect(!waiting.isEmpty)
@@ -130,7 +130,7 @@ struct SetupModelTests {
 
     @Test("the sent task is the first the board lists that has left Ideas and Backlog")
     func sentTask() {
-        #expect(facts(tasks: [SetupFixtures.task("An idea", .imaginarium)]).sentTask == nil)
+        #expect(facts(tasks: [SetupFixtures.task("An idea", .ideas)]).sentTask == nil)
         let tasks = [
             SetupFixtures.task("An idea", .backlog), SetupFixtures.task("Pocket to-do", .working),
             SetupFixtures.task("Later", .ready),

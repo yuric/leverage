@@ -234,7 +234,7 @@ def main():
     # value kept as the raw value where the two differ.
     for line in [
         "public enum TaskState: String, Codable, CaseIterable, Sendable {",
-        "    case imaginarium\n",
+        "    case ideas\n",
         '    case inReview = "in_review"',
         '    case taskClaimed = "task.claimed"',
         '    case claimNextTask = "claim_next_task"',
@@ -353,8 +353,10 @@ def main():
     ]:
         cases.check(f"writes {line.strip()!r}", line in swift, line)
     cases.check("a list of providers is no enum", "enum OrchestratorTestedProvider" not in swift)
+    general_tested = "[" + ", ".join("." + name for name in registry["lists"]["general_tested_providers"]) + "]"
     cases.check("the providers tested as a General seat are written, as a list (GA-11)",
-                "generalTestedProviders: [Provider] = []" in swift and "enum GeneralTestedProvider" not in swift)
+                f"generalTestedProviders: [Provider] = {general_tested}" in swift
+                and "enum GeneralTestedProvider" not in swift)
     cases.check("the landing prompt is no longer a read", "getLandingPrompt" not in swift)
 
     doctored = copy.deepcopy(registry)
@@ -366,6 +368,12 @@ def main():
     # The list's committed values are the managing agent's eval results, so
     # what an empty list gives is asked of a doctored registry, not of the
     # committed one.
+    doctored = copy.deepcopy(registry)
+    doctored["lists"]["general_tested_providers"] = []
+    code, out, new_swift = run(doctored, openapi)
+    cases.check("an empty General-tested list is written as an empty list",
+                code == 0 and "generalTestedProviders: [Provider] = []" in (new_swift or ""), out)
+
     doctored = copy.deepcopy(registry)
     doctored["lists"]["orchestrator_tested_providers"] = []
     code, out, new_swift = run(doctored, openapi)

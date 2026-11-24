@@ -62,7 +62,7 @@ class ResumeTest < ActiveSupport::TestCase
   end
 
   test "resumes from every state that has a row, and the state does not change" do
-    %w[imaginarium backlog ready working in_review].each do |state|
+    %w[ideas backlog ready working in_review].each do |state|
       task = scenario.task(state: state)
       owner_run("hold", "id" => task.id)
       outcome, events = owner_run("resume", "id" => task.id)

@@ -14,7 +14,7 @@ struct BoardLaneTests {
 
     @Test("a task with no hold is in the lane of its state")
     func byState() {
-        #expect(lane(.imaginarium) == .imaginarium)
+        #expect(lane(.ideas) == .ideas)
         #expect(lane(.backlog) == .backlog)
         #expect(lane(.ready) == .ready)
         #expect(lane(.working) == .inProgress)
@@ -27,13 +27,13 @@ struct BoardLaneTests {
     @Test("every state has a lane, and the board draws six of them, Blocked just before Ready")
     func sixLanes() {
         for state in TaskState.allCases { _ = lane(state) }
-        #expect(BoardLane.standard == [.imaginarium, .backlog, .blocked, .ready, .inProgress, .done])
+        #expect(BoardLane.standard == [.ideas, .backlog, .blocked, .ready, .inProgress, .done])
         #expect(BoardLane.standard.count == 6)
     }
 
     @Test("a task with an open hold that waits on the owner is in Blocked, whatever its state")
     func blockedWhateverTheState() {
-        for state in [TaskState.imaginarium, .backlog, .ready, .working, .inReview, .finishing] {
+        for state in [TaskState.ideas, .backlog, .ready, .working, .inReview, .finishing] {
             #expect(lane(state, holds: [.roundsExceeded]) == .blocked, "\(state)")
         }
     }
@@ -70,9 +70,9 @@ struct BoardLaneTests {
 
     @Test("an idea is in the Ideas lane, and Move to Backlog puts it in Backlog")
     func ideasLane() {
-        #expect(lane(.imaginarium) == .imaginarium)
+        #expect(lane(.ideas) == .ideas)
         #expect(lane(.backlog) == .backlog)
-        #expect(BoardLane.standard.first == .imaginarium)
+        #expect(BoardLane.standard.first == .ideas)
     }
 
     @Test("the holds that block are the registry's in_blocked ones, read from the contract file")
@@ -96,7 +96,7 @@ struct BoardLaneTests {
 
     @Test("each lane has the heading the mockup gives it")
     func headings() {
-        #expect(BoardLane.imaginarium.heading.text == "Ideas")
+        #expect(BoardLane.ideas.heading.text == "Ideas")
         #expect(BoardLane.backlog.heading.text == "Backlog")
         #expect(BoardLane.blocked.heading.text == "Blocked")
         #expect(BoardLane.ready.heading.text == "Ready")

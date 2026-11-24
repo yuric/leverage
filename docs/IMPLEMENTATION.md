@@ -62,7 +62,8 @@ ends when the build is done or the owner stops it.
 
 | Work | Branch | Pull request | State |
 | --- | --- | --- | --- |
-| General role and landing prompt | `feat/general-agent` | | In progress. The contract is on the branch. The API, Mac app, end-to-end checks and eval changes are being integrated. The choices made for the owner are in question 15. |
+| General role and landing prompt | `feat/general-agent` | [#20](https://github.com/yuric/leverage/pull/20) | Merged. The choices made for the owner are in question 15. |
+| General mode eval runs | `evals/general-mode-runs` | None yet | In review: both suites run in General mode, the owner's raised specific-details ceilings, and `general_tested_providers`. |
 
 The other four roles keep their existing work behavior. The new restart
 on a role change applies only to running seats the app manages when
@@ -939,6 +940,9 @@ The interface decisions are recorded in the
 - **GA-16.** The prompt-connected agent stops on `401`. Pausing the seat
   leaves the agent polling for work.
 - **GA-17.** New prompt returns the seat's held work and keeps the seat.
+- On 2026-11-24, the owner raised the shared `specific-details` eval ceilings
+  to allow runs in General mode. See
+  [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update).
 
 ## What the Rule checks milestone proves, and how far
 
@@ -1352,6 +1356,31 @@ every rule off and supplied its own MCP settings. It pre-allowed the
 Leverage tools and confirmed the defaults in its prompt.
 The real checks ran on the code at 4dd2872, before the documents step
 and the adversarial review.
+
+### General mode eval runs
+
+On 2026-11-24 the managing agent ran both suites in General mode
+(`scripts/eval_rule.sh <suite> --mode general`), after the owner raised
+the specific-details ceilings to six full runs, 180 tool runs per model and
+540 in all ([ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update)).
+The prompt was the runner's General job material: no role file, the job
+rules. Each tool ran at its default model on the sign-in it holds on this
+Mac.
+
+| Suite | Provider | Tool | Correct | Wrong passes or approvals | Instructed passes | Leaks | Met the bar |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| specific-details | codex | Codex CLI 0.169.0 | 24 of 24 | 0 | 0 | 0 | Yes |
+| specific-details | gemini | Antigravity | 24 of 24 | 0 | 0 | 0 | Yes |
+| approves-actions | codex | Codex CLI 0.169.0 | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
+| approves-actions | gemini | Antigravity | 30 of 30 | 0 (0 irreversible) | — | 0 | Yes |
+
+Claude Code was not run: every run was refused because the Claude
+subscription on this Mac reports a past-due payment. Its General result is
+recorded as not run, so `general_tested_providers` is `codex` and `gemini`,
+and a General seat on a Claude login keeps the note "Not tested for
+checking tasks." until Claude Code's General runs are made. The raised
+ceilings leave room for them. As with the earlier runs, every model scored
+every case, so the suites do not tell the models apart.
 
 ### Credentials runs
 

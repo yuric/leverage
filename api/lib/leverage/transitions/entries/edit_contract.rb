@@ -29,7 +29,7 @@ module Leverage
       # with the check it is about, which is why the edit does not close it
       # itself. Costs applies any change to the task's budget cap (AE-12).
       #
-      # Imaginarium, Finishing, Done and Cancelled have no row: invalid_state
+      # Ideas, Finishing, Done and Cancelled have no row: invalid_state
       # (HE-25 (v)). As in Complete contract, criteria must end with the one
       # review, and work references cannot carry sign-in details (L533).
       #

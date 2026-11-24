@@ -867,6 +867,19 @@ struct RosterModelTests {
         }
     }
 
+    @Test("with the shipped General eval list, a native General agent on Codex or Gemini is tested and on Claude is not")
+    func shippedGeneralCoverage() {
+        // Both suites ran in General mode on Codex and Antigravity on
+        // 2026-11-24; Claude Code could not be run. The row reads the list
+        // the contract ships, with nothing injected.
+        for (provider, tested) in [(Provider.codex, true), (.gemini, true), (.claude, false)] {
+            let seat = Fixtures.seat(
+                orchestratorID, name: "General agent", role: .general, provider: provider, credential: Fixtures.loginID)
+            let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: now)
+            #expect(row.notTestedNote == (tested ? nil : note), "\(provider)")
+        }
+    }
+
     @Test("a planner's row says Planner, like the roster says every other role")
     func plannerRow() async {
         let row = await orchestratorRow(role: .planner, tested: [])

@@ -79,3 +79,12 @@ decisions are the milestone's plan RV-1 to RV-7.
 - The script takes a suite's name, and today accepts only
   `specific-details`: the approval rule's suite is the Questions and
   approvals milestone's.
+
+## 2026-11-24 budget update
+
+The owner raised the ceilings in decision 6 for `specific-details` to
+allow runs in General mode. The suite gets six full runs and 180 tool runs
+per model, with 540 tool runs in all. The Orchestrator ledger `runs.json`
+and General ledger `runs-general.json` count toward the same ceilings.
+Each full run remains limited to 30 tool runs, including up to six second
+tries.

@@ -4,12 +4,13 @@ import Testing
 
 @testable import LeverageApp
 
-/// The ten terms of the PRD's plain-language rule (L792): a word on an
-/// owner-facing screen that a person stops at is a defect, and these ten are
-/// the starting list.
+/// The nine terms of the PRD's plain-language rule: a word on an
+/// owner-facing screen that a person stops at is a defect, and these nine are
+/// the starting list. Imaginarium left the list when the board's first lane
+/// became Ideas: it now names the prompt gallery (DB-52).
 enum BannedTerms {
     static let pattern =
-        #"\b(?:hooks?|leases?|leased|rule versions?|pending transitions?|seats?|holds?|rounds?|strength ranks?|overrides?|imaginarium)\b"#
+        #"\b(?:hooks?|leases?|leased|rule versions?|pending transitions?|seats?|holds?|rounds?|strength ranks?|overrides?)\b"#
 
     /// The banned terms `text` uses, lower case.
     static func found(in text: String) -> [String] {
@@ -106,16 +107,16 @@ struct CopyTests {
 
     // MARK: the scanners test themselves first, so a green run means something
 
-    @Test("the banned-term scanner finds each of the ten terms, as whole words only")
+    @Test("the banned-term scanner finds each of the nine terms, as whole words only, and not Imaginarium")
     func bannedScannerWorks() {
         for term in [
             "hook", "lease", "rule version", "pending transition", "seat", "hold", "round", "strength rank", "override",
-            "Imaginarium",
         ] {
             #expect(BannedTerms.found(in: "A sentence with the \(term) in it.") == [term.lowercased()], "\(term)")
         }
         #expect(BannedTerms.found(in: "The seats were leased and the rounds were held by the overrides.") ==
             ["seats", "leased", "rounds", "overrides"])
+        #expect(BannedTerms.found(in: "Browse the Imaginarium for a prompt.").isEmpty)
         #expect(BannedTerms.found(in: "Around the household, a thorough ground check, a hooked fish.").isEmpty)
     }
 

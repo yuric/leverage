@@ -643,7 +643,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     owner_call(ids: { "id" => @scenario.credential(state: "signed_out").id })
   end
 
-  def promote_task = owner_call(ids: { "id" => @scenario.task(state: "imaginarium").id })
+  def promote_task = owner_call(ids: { "id" => @scenario.task(state: "ideas").id })
 
   def edit_contract = owner_call(ids: { "id" => @scenario.task(state: "backlog").id }, body: contract_body)
 

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "task.created v1",
-  "description": "Add task. The task lands in Imaginarium or Backlog.",
+  "description": "Add task. The task lands in Ideas or Backlog.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "state": {
       "description": "The state the task was created in.",
-      "enum": ["imaginarium", "backlog"]
+      "enum": ["ideas", "backlog"]
     },
     "added_action_ids": {
       "description": "IDs of the contracted outward actions added with the task, in contract order.",
@@ -19,6 +19,6 @@
   "required": ["state", "added_action_ids"],
   "examples": [
     {"state": "backlog", "added_action_ids": ["a6d4f1b8-2c97-4e3d-8b50-1f7e9c2a6d35"]},
-    {"state": "imaginarium", "added_action_ids": []}
+    {"state": "ideas", "added_action_ids": []}
   ]
 }

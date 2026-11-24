@@ -68,7 +68,7 @@ class TaskPageReadTest < CommittingTestCase
   end
 
   test "an idea's time is a step of its own, listed first, and counted in the lifetime" do
-    task = scenario.task(state: "imaginarium")
+    task = scenario.task(state: "ideas")
 
     json = page(task)
 

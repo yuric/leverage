@@ -49,13 +49,14 @@ class GeneralRoleRevisionContractTest < Minitest::Test
     (list - logins).map { |name| "#{name} is not a login provider" } + duplicates(list).map { |name| "#{name} twice" }
   end
 
-  # GA-11: the list a General seat's providers are read from. No suite has
-  # been run as a General seat, so it is empty; the check that holds a
-  # non-empty list to the login providers is shown to refuse a bad one.
+  # GA-11: the list a General seat's providers are read from. Both suites
+  # were run as a General seat on 2026-11-24, and Codex and Gemini met both
+  # bars (scripts/check_evals.py holds the list to the recorded results);
+  # the check that holds the list to the login providers refuses a bad one.
   def test_the_registry_lists_the_providers_tested_as_a_general_seat
     lists = registry.fetch("lists")
     assert lists.key?("general_tested_providers"), "no lists.general_tested_providers"
-    assert_equal [], lists["general_tested_providers"], "no eval suite has been run as a General seat"
+    assert_equal %w[codex gemini], lists["general_tested_providers"], "the providers whose General runs met both bars"
     assert_empty tested_list_problems(lists["general_tested_providers"])
     refute_empty tested_list_problems(%w[claude claude]), "a provider named twice is refused"
     refute_empty tested_list_problems(%w[claude_api]), "a provider that is not a login is refused"
