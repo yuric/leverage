@@ -188,13 +188,15 @@ class RolePresenceTest < ActiveSupport::TestCase
     task = @scenario.task(state: "in_review", builder: general)
 
     check = @scenario.rule_check(task, rule: @scenario.rule)
+    queued = Event.find_by!(type: "check.queued", subject_id: check.id)
+    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
+    job = Job.find(attempt.job_id)
+    job.update_columns(queued_at: queued.effective_at)
     @now = @scenario.database_now
     refute online?, "the seat built this task"
-    queued = Event.find_by!(type: "check.queued", subject_id: check.id)
     assert_instant queued.effective_at, P.offline_since(@scenario.workspace, "orchestrator", @now)
 
-    attempt = RuleCheckAttempt.find_by!(rule_check_id: check.id)
-    Job.find(attempt.job_id).update!(state: "timed_out")
+    job.update!(state: "timed_out")
     check.update!(result: "error")
     @scenario.hold(task, reason: "check_error", item: false).update!(rule_check_id: check.id)
     @now = @scenario.database_now

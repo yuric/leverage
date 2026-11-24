@@ -276,6 +276,24 @@ class QuestionsTest < ActiveSupport::TestCase
     end
   end
 
+  test "a General seat barred from the only errored waiting check does not get a question" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    general = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    draft = scenario.task
+    scenario.job(kind: "contract_draft", task: draft, state: "finished", seat: general)
+    rule = Rule.find_by!(workspace_id: scenario.workspace_id, key: "specific_details")
+    check = scenario.rule_check(draft, rule: rule)
+    job_of(check).update!(state: "timed_out")
+    check.update!(result: "error")
+    scenario.hold(draft, reason: "check_error", item: false).update!(rule_check_id: check.id)
+    acknowledge
+
+    question = Question.find(assert_completed(ask(blocking: true)).result.fetch("question_id"))
+    assert_equal "passed_on", question.outcome
+    refute Job.exists?(target_id: question.id)
+  end
+
   test "an enabled paused Orchestrator still routes questions to a job" do
     @orchestrator.update!(paused: true)
     scenario.with_shipped_rules
@@ -285,4 +303,21 @@ class QuestionsTest < ActiveSupport::TestCase
     assert Job.exists?(target_id: question.id, kind: "question", state: "queued")
   end
 
+  test "two General builders asking blocking questions send both to the owner" do
+    @orchestrator.update!(enabled: false)
+    scenario.with_shipped_rules
+    @builder.update!(role: "general")
+    builders = [ @builder, scenario.seat(role: "general", provider: "codex") ]
+    tasks = [ @task, scenario.task(state: "working", builder: builders.last) ]
+    builders.each { |seat| seat.update!(last_polled_at: scenario.database_now) }
+
+    tasks.zip(builders).each do |task, seat|
+      hash = Leverage::Briefing.hash_for(task, seat: seat)
+      assert_completed(seat_command(seat, "acknowledge_briefing", { "id" => task.id, "briefing_hash" => hash }))
+      question = Question.find(assert_completed(ask(task, seat: seat, blocking: true)).result.fetch("question_id"))
+      assert_equal "passed_on", question.outcome
+      assert InboxItem.exists?(about_id: task.id, kind: "question_passed_on", state: "open")
+      refute Job.exists?(target_id: question.id)
+    end
+  end
 end

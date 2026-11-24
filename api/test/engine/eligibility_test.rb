@@ -443,5 +443,4 @@ class EligibilityTest < ActiveSupport::TestCase
       assert_nil E.next_review(general)
     end
   end
-
 end

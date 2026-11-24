@@ -62,7 +62,8 @@ class JobQueueTest < ActiveSupport::TestCase
     assert_equal [ "contract_draft", task.id, project.id, "task", task.id, "planner", "queued", 1, nil, nil ],
       job.attributes.values_at("kind", "task_id", "project_id", "target_kind", "target_id", "seat_role", "state",
         "attempt_number", "claimed_by_seat_id", "claimed_at")
-    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 0 }, job.input)
+    assert_equal({ "task_id" => task.id, "project_id" => project.id, "brief_version" => 0 }, job.input.except("material"))
+    assert_equal({ "role_file" => Leverage::RoleFiles.text("planner"), "job_rules" => [] }, job.input["material"])
     queued = written.sole
     assert_equal [ "job.queued", "job", job.id, task.id, "owner", scenario.owner.id, key, { "kind" => "contract_draft" } ],
       [ queued.type, queued.subject_kind, queued.subject_id, queued.task_id, queued.actor_kind, queued.actor_id,
@@ -262,11 +263,10 @@ class JobQueueTest < ActiveSupport::TestCase
     assert_equal %w[withdrawn withdrawn], [ queued.reload.state, claimed.reload.state ]
     assert_nil J.next_for(@orchestrator)
   end
-  test "General claims and completes each job with only the General role's job rules" do
-    seat = scenario.seat(role: "general", provider: "codex")
-    task = scenario.task(state: "backlog")
-    [ "rule_check", "approval", "question", "contract_draft" ].each do |kind|
-      current = kind == "approval" ? scenario.finishing_task(actions: [ { state: "requested" } ]) : task
+  %w[rule_check approval question contract_draft].each do |kind|
+    test "General claims and completes a #{kind} with only the General role's job rules" do
+      seat = scenario.seat(role: "general", provider: "codex")
+      current = kind == "approval" ? scenario.finishing_task(actions: [ { state: "requested" } ]) : scenario.task
       job, result = general_job(kind, current)
       offered = assert_completed(claim_job(seat)).result
       assert_equal [ job.id, kind ], offered.values_at("job_id", "kind")
@@ -280,7 +280,7 @@ class JobQueueTest < ActiveSupport::TestCase
 
   test "General cannot work on a job for a task it built, which another orchestrator can take" do
     general = scenario.seat(role: "general", provider: "codex")
-    task = scenario.task(state: "working", builder: general)
+    task = scenario.task(state: "in_review", builder: general)
     question, = general_job("question", task)
     other, = general_job("question", scenario.task)
 
@@ -295,6 +295,8 @@ class JobQueueTest < ActiveSupport::TestCase
     own, = general_job("rule_check", task)
     assert_nil J.next_for(general)
     assert_equal own, J.next_for(@orchestrator)
+    other, = general_job("rule_check", scenario.task)
+    assert_equal other, J.next_for(general)
   end
 
   %i[task review provisional].each do |work|
@@ -324,14 +326,15 @@ class JobQueueTest < ActiveSupport::TestCase
       action = Action.find_by!(task_id: task.id, state: "requested")
       rule = model_rule(hook: "action.requested")
       check = scenario.rule_check(task, rule: rule, subject: action, attempts: 0)
-      attempt = Leverage::RuleChecks.queue_attempt(scenario.context, check, kind: kind)
+      request = T::Request.new(command: "request_action", workspace_id: task.workspace_id, caller_kind: nil,
+        caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
+      attempt = Leverage::RuleChecks.queue_attempt(scenario.context(request: request), check, kind: kind)
       [ Job.find(attempt.job_id), { "decision" => "pass_to_owner", "reason" => "The made-up action needs a change." } ]
     when "question"
       question = scenario.question(task, asking_seat: task.builder_seat_id ? Seat.find(task.builder_seat_id) : scenario.seat)
-      [ scenario.job(kind: kind, task: task, target: question), { "outcome" => "pass_on" } ]
+      [ scenario.job(kind: kind, task: task, target: question), { "outcome" => "passed_on", "answer" => nil, "basis" => nil } ]
     when "contract_draft"
       [ draft_job(task), contract_body ]
     end
   end
-
 end

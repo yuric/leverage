@@ -139,7 +139,13 @@ class StateTableTimersTest < ActiveSupport::TestCase
 
   def side_events(kase) = kase.row.fetch("side_events").map { |side| side.fetch("event") }
 
+  def busy_general
+    general = scenario.seat(role: "general", last_polled_at: scenario.database_now)
+    scenario.task(state: "working", builder: general)
+  end
+
   StateTableCases.define(self, NEW_COMMANDS) do |kase|
+    busy_general
     if kase.command == "orchestrator_offline"
       orchestrator_polled(600)
       _task, check, = pending_check
@@ -169,6 +175,7 @@ class StateTableTimersTest < ActiveSupport::TestCase
   QUESTION_TIMERS = %w[question_job_queue_timeout question_job_run_timeout].freeze
 
   StateTableCases.define(self, QUESTION_TIMERS) do |kase|
+    busy_general
     run = kase.command == "question_job_run_timeout"
     second = kase.guard.include?("second_miss")
     ended = kase.guard.include?("question_task_ended")

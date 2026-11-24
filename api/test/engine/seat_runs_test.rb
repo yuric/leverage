@@ -258,6 +258,7 @@ class SeatRunsTest < ActiveSupport::TestCase
     assert_equal %w[hold.opened inbox.opened], context.events.map(&:type)
     assert_equal "action_unconfirmed", Hold.find_by!(task_id: task.id, closed_at: nil).reason
     assert_equal [ "finishing", seat.id, nil ], task.reload.attributes.values_at("state", "builder_seat_id", "lease_due_at")
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
   end
 
   test "a new prompt for an idle seat emits no work event" do
@@ -325,7 +326,10 @@ class SeatRunsTest < ActiveSupport::TestCase
 
   test "a new prompt times out a held check's first attempt at once and queues the second" do
     seat, job, _task, check = held_prompt_check(attempts: 1)
-    context = ctx
+    request = Leverage::Transitions::Request.new(command: "issue_landing_prompt", workspace_id: @scenario.workspace_id,
+      caller_kind: "owner", caller_id: @scenario.owner.id, key: "made-up-new-prompt", request_hash: "made-up",
+      params: { "id" => seat.id })
+    context = @scenario.context(request: request)
     assert_operator Leverage::Timers.job_due_at(job, :run), :>, context.at
 
     Leverage::SeatRuns.release_for_new_prompt(context, seat)
@@ -432,8 +436,14 @@ class SeatRunsTest < ActiveSupport::TestCase
     seat = @scenario.seat(role: "general")
     rule = @scenario.rule(key: "specific_details", origin: "shipped")
     task = @scenario.task(state: "backlog")
-    pending = @scenario.pending_transition(task, command: "complete_contract", requester: @scenario.owner, params: { "id" => task.id })
-    check = @scenario.rule_check(task, rule: rule, attempts: attempts, started: true, checker: seat, pending: pending)
+    params = { "id" => task.id, "criteria" => [ { "kind" => "review", "text" => "Review the made-up result." } ] }
+    pending = @scenario.pending_transition(task, command: "complete_contract", requester: @scenario.owner,
+      params: params, frozen_rule_version_ids: [ @scenario.current_version(rule).id ])
+    hook = "task.before_ready"
+    inputs = Leverage::HookInputs.for(hook: hook, task: task, params: params)
+    input_hash = Leverage::Gating.input_hash(hook: hook, inputs: inputs)
+    check = @scenario.rule_check(task, rule: rule, attempts: attempts, started: true, checker: seat, pending: pending,
+      input_hash: input_hash)
     [ seat, Job.find_by!(target_id: check.id, state: "claimed"), task, check ]
   end
 

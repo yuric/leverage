@@ -619,5 +619,4 @@ class CandidatesTest < ActiveSupport::TestCase
     assert_equal gemini, C.first_available(general, task, @now)
     assert_equal gemini, C.first_available(reviewer, review, @now)
   end
-
 end

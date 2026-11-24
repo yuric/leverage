@@ -267,6 +267,9 @@ class OrchestratorOfflineTest < ActiveSupport::TestCase
   end
 
   test "on return through a General seat, an errored check it cannot claim gets an owner item while a claimable one is queued" do
+    app_rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count")
+    decided = scenario.rule_check(scenario.task, rule: app_rule, result: "passed")
+    RuleCheckAttempt.find_by!(rule_check_id: decided.id).update_columns(queued_at: scenario.database_now - 600)
     claimable, claimable_hold = errored_check
     barred, barred_hold = errored_check
     general = scenario.seat(role: "general")

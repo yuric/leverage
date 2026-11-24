@@ -65,4 +65,29 @@ class JobsAnyKindTest < ActiveSupport::TestCase
     assert_equal [ "approval", "queued" ], [ retry_job.kind, retry_job.state ]
     assert Leverage::Timers.second_miss?(retry_job)
   end
+
+  test "a second approval miss reaches the owner while the General seat builds" do
+    general = @scenario.seat(role: "general", last_polled_at: @scenario.database_now)
+    @scenario.task(state: "working", builder: general)
+    task = @scenario.finishing_task(actions: [ { state: "requested" } ])
+    action = Action.find_by!(task_id: task.id, state: "requested")
+    rule = @scenario.rule(hook: "action.requested", queue_timeout_seconds: 71)
+    check = @scenario.rule_check(task, rule: rule, subject: action, attempts: 0)
+    request = Leverage::Transitions::Request.new(command: "request_action", workspace_id: task.workspace_id,
+      caller_kind: nil, caller_id: nil, key: nil, request_hash: nil, params: { "action_id" => action.id })
+    attempt = Leverage::RuleChecks.queue_attempt(@scenario.context(request: request), check, kind: "approval")
+
+    2.times do
+      ago = @scenario.database_now - 72
+      attempt.update_columns(queued_at: ago)
+      Job.where(id: attempt.job_id).update_all(queued_at: ago)
+      outcome = Leverage::Sweep.timer(task.workspace_id, "check_queue_timeout", "job_id" => attempt.job_id)
+      assert outcome.completed?
+      attempt = RuleCheckAttempt.where(rule_check_id: check.id).order(:attempt_number).last
+    end
+
+    assert_equal "error", check.reload.result
+    assert Hold.exists?(task_id: task.id, rule_check_id: check.id, reason: "owner_approval", closed_at: nil)
+    refute Job.exists?(target_id: check.id, state: "queued")
+  end
 end
