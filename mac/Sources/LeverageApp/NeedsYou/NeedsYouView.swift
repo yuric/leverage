@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The Needs you tab (HM-21): one row for each open item, with its buttons.
@@ -30,8 +31,11 @@ struct NeedsYouContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if notificationsAreOff {
-                note(NeedsYouCopy.notificationsOff.text, tone: Tokens.Tone.wait.foreground)
+            if let button = notificationSettingsButton {
+                VStack(alignment: .leading, spacing: 8) {
+                    note(NeedsYouCopy.notificationsOff.text, tone: Tokens.Tone.wait.foreground)
+                    button
+                }
             }
             switch model.state {
             case .loading: note(NeedsYouCopy.loading.text)
@@ -56,6 +60,29 @@ struct NeedsYouContent: View {
                     .interactiveDismissDisabled(model.isBusy(row.id))
             }
         }
+    }
+
+    var notificationSettingsButton: Button<Text>? {
+        guard notificationsAreOff else { return nil }
+        return Button(NeedsYouCopy.openSystemSettings.text) { Self.openNotificationSettings() }
+    }
+
+    static func openNotificationSettings(
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        openURL: (URL) -> Bool = { NSWorkspace.shared.open($0) },
+        settingsAppURL: () -> URL? = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences")
+        }
+    ) {
+        var pane = URLComponents()
+        pane.scheme = "x-apple.systempreferences"
+        pane.path = "com.apple.Notifications-Settings.extension"
+        if let bundleIdentifier {
+            pane.queryItems = [URLQueryItem(name: "id", value: bundleIdentifier)]
+        }
+        if let url = pane.url, openURL(url) { return }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications"), openURL(url) { return }
+        if let url = settingsAppURL() { _ = openURL(url) }
     }
 
     @ViewBuilder

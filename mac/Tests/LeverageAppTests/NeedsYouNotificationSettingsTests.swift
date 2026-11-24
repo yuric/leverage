@@ -80,14 +80,3 @@ struct NeedsYouNotificationSettingsTests {
         await run.value
     }
 }
-
-// Test-only stand-ins let the new calls exercise the old behavior in the red run.
-private extension NeedsYouContent {
-    static func openNotificationSettings(
-        bundleIdentifier: String?, openURL: (URL) -> Bool, settingsAppURL: () -> URL?, beforeChange: Void = ()
-    ) {}
-}
-
-private extension InboxWatcher {
-    func run(activationCenter: NotificationCenter, beforeChange: Void = ()) async { await run() }
-}

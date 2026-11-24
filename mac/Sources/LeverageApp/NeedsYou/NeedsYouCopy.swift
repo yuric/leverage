@@ -39,7 +39,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
     case detailsUnavailable
 
     // Notifications.
-    case notificationsOff, settledBeforeYouSaw
+    case notificationsOff, openSystemSettings, settledBeforeYouSaw
     case kindSignedOut, kindLimit, kindSentBack, kindOther
     case kindQuestion, kindApproval, kindStopped, kindUnconfirmed, kindAccess, kindBudget
     // Names used when a read could not say.
@@ -163,6 +163,7 @@ enum NeedsYouCopy: OwnerFacingCopy {
 
         case .notificationsOff:
             "Notifications are off for Leverage. Turn them on in System Settings to be told when something needs you."
+        case .openSystemSettings: "Open System Settings"
         case .settledBeforeYouSaw: "This was settled before you saw it."
         case .kindSignedOut: "Account signed out"
         case .kindLimit: "Limit with no reset time"
