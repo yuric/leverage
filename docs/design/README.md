@@ -59,9 +59,8 @@ account.` and `You moved <name> in the handoff order.` The app uses
   data. They are not requirements.
 - The behavior in the mockup is a sketch. For example, adding a credential
   resumes a blocked task at once; the real rules are in the PRD.
-- The labels are owner-facing wording. The first lane is labelled Ideas
-  where the PRD says Imaginarium, and the Kanban and Agent roster screens are
-  labelled Board and Agents. The PRD's terms are unchanged.
+- The labels are owner-facing wording. The Kanban and Agent roster screens
+  are labelled Board and Agents. The PRD's terms are unchanged.
 - The Mac app is to be native, written in Swift with SwiftUI. What carries
   into it is the design tokens at the top of the file (colors, glass,
   corners, type sizes) and the layout. The HTML, the CSS class names (`lv-`
