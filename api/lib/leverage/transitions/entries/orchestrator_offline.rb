@@ -23,14 +23,11 @@ module Leverage
       #   online again            resolves the item (inbox.resolved, no
       #                           choice), effective when the role came back
       #                           (its poll, or its account's reset), and
-      #                           in the same run every errored check held
-      #                           with check_error gets a new attempt
-      #                           (RuleChecks.queue_attempt) but an
-      #                           errored task.before_claim check, whose hold
-      #                           only closes (RC-37, L392). A check still
-      #                           queued keeps its job and its timers
-      #                           (RD-19). The hold of a check queued again
-      #                           closes when its result arrives (L403).
+      #                           retries checks a counting seat can take
+      #                           (GA-6), or closes their holds for an
+      #                           errored task.before_claim check (RC-37).
+      #                           Other errors go to the owner. Checks
+      #                           still queued keep their jobs and timers.
       #
       # While online with no item open, an errored check that has no task
       # item of its own is one that erred while the orchestrator was
@@ -45,47 +42,69 @@ module Leverage
         ROLE = "orchestrator".freeze
         ITEM = "orchestrator_offline".freeze
         CLAIM_HOOK = "task.before_claim".freeze
-        CHECK_ERROR = "check_error".freeze
 
         def refusals(_ctx) = [ state_refusal(nil) ].compact
 
         def perform(ctx)
           item = InboxItem.find_by(workspace_id: ctx.workspace.id, kind: ITEM, state: "open")
-          if RolePresence.online?(ctx.workspace, ROLE, ctx.at)
-            back(ctx, item)
-          elsif item.nil?
-            open(ctx)
+          waiting = RolePresence.waiting_checks(ctx.workspace)
+          online = RolePresence.online_seats(ctx.workspace, ROLE, ctx.at, waiting: waiting)
+          if online.any?
+            back(ctx, item, waiting, online)
+          elsif item.nil? && !waiting.empty?
+            open(ctx, waiting)
           end
           @result = nil
         end
 
         private
 
-        def open(ctx)
-          since = waiting_since(ctx.workspace.id)
-          return unless since
-
-          effective = [ RolePresence.offline_since(ctx.workspace, ROLE, ctx.at), since ].max
+        def open(ctx, waiting)
+          effective = [ RolePresence.offline_since(ctx.workspace, ROLE, ctx.at, waiting: waiting), waiting.since ].max
           cause = RolePresence.cause_credential(ctx.workspace, ROLE, ctx.at)
           Timers.as_timer(ctx, command, effective) do |timer_ctx|
             inbox = InboxItem.create!(workspace_id: ctx.workspace.id, kind: ITEM, about_kind: "workspace", about_id: ctx.workspace.id,
               credential_id: cause&.id, choices: [], opened_at: ctx.at,
-              facts: { role: ROLE, waiting_checks: waiting_count(ctx.workspace.id), credential_id: cause&.id })
+              facts: { role: ROLE, waiting_checks: waiting.count, credential_id: cause&.id })
             timer_ctx.emit("inbox.opened", subject: inbox, payload: { kind: ITEM })
           end
         end
 
-        def back(ctx, item)
-          returning = errored_held(ctx.workspace.id).select { |_hold, _check, has_item| item || !has_item }
+        def back(ctx, item, waiting, online)
+          returning = waiting.errored.select { |entry| item || !InboxItem.exists?(hold_id: entry.hold.id, state: "open") }
           return if item.nil? && returning.empty?
 
-          came_back = [ RolePresence.online_since(ctx.workspace, ROLE, ctx.at), item && opened_at(item) ].compact.max
+          came_back = [ RolePresence.online_since(ctx.workspace, ROLE, ctx.at, waiting: waiting), item && opened_at(item) ].compact.max
+          retry_ids = retryable_ids(online, returning, ctx.at)
           Timers.as_timer(ctx, command, came_back) { |timer_ctx| resolve(timer_ctx, item) } if item
-          returning.each do |hold, check, _has_item|
-            task = Task.find(hold.task_id)
+          returning.each do |entry|
+            task = Task.find(entry.hold.task_id)
             Timers.as_timer(ctx, command, Timers.effective_at(task, came_back)) do |timer_ctx|
-              check.hook == CLAIM_HOOK ? close(timer_ctx, hold, task) : run_again(timer_ctx, check)
+              recover_check(timer_ctx, entry, task, retry_ids.include?(entry.check.id))
             end
+          end
+        end
+
+        def retryable_ids(online, returning, at)
+          return [] if returning.empty?
+          return returning.map { |entry| entry.check.id } if online.any? { |seat| seat.role == ROLE }
+
+          attempts = returning.map { |entry| entry.next_attempt(at) }
+          online.filter_map do |seat|
+            job = Jobs.next_for(seat, at: at, additional: attempts)
+            job.target_id if job&.new_record?
+          end
+        end
+
+        def recover_check(ctx, entry, task, retryable)
+          check = entry.check
+          if !retryable
+            cause = Event.find_by(workspace_id: entry.hold.workspace_id, type: "hold.opened", subject_id: entry.hold.id)
+            Holds.open_item(ctx, entry.hold, task: task, facts: { rule_id: check.rule_id, rule_check_id: check.id }, cause_id: cause&.id)
+          elsif check.hook == CLAIM_HOOK
+            close(ctx, entry.hold, task)
+          else
+            run_again(ctx, check)
           end
         end
 
@@ -106,39 +125,6 @@ module Leverage
         # again writes it.
         def run_again(ctx, check)
           Gate.requeue_check(ctx, check, seat_role: ROLE)
-        end
-
-        # The open check_error holds whose check ended in error, oldest
-        # first, each as [hold, check, whether its task item is open]. A
-        # hold's check is the one it names (holds.rule_check_id), else its
-        # rule's latest check on the task.
-        def errored_held(workspace_id)
-          ::Hold.where(workspace_id: workspace_id, reason: CHECK_ERROR, closed_at: nil).order(:opened_at, :id).filter_map do |hold|
-            check = hold.rule_check_id && RuleCheck.find_by(id: hold.rule_check_id, workspace_id: workspace_id)
-            check ||= RuleCheck.where(workspace_id: workspace_id, task_id: hold.task_id, rule_id: hold.rule_id)
-              .order(:updated_at, :id).last
-            next unless check&.result == "error" && !Gate.approval_check?(check)
-
-            [ hold, check, InboxItem.where(hold_id: hold.id, state: "open").exists? ]
-          end
-        end
-
-        def queued_checks(workspace_id) = Job.where(workspace_id: workspace_id, kind: %w[rule_check approval], state: "queued")
-
-        # RD-18: rule checks queued and not claimed, plus those held with
-        # check_error.
-        def waiting_count(workspace_id)
-          queued_checks(workspace_id).distinct.count(:target_id) + errored_held(workspace_id).size
-        end
-
-        # When the oldest waiting check began to wait: its job's queued time,
-        # or its check_error hold's effective time. nil when none waits.
-        def waiting_since(workspace_id)
-          held = errored_held(workspace_id).map do |hold, _check, _has_item|
-            Event.where(workspace_id: workspace_id, type: "hold.opened", subject_kind: "hold", subject_id: hold.id)
-              .pick(:effective_at) || hold.opened_at
-          end
-          [ queued_checks(workspace_id).minimum(:queued_at), *held ].compact.min
         end
 
         def opened_at(item)

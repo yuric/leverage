@@ -9,7 +9,7 @@ module Leverage
         {
           "task_id" => task.id, "project_id" => task.project_id, "brief_version" => project&.brief_version || 0,
           "material" => {
-            "role_file" => RoleFiles.text("planner"), "title" => task.title.to_s, "goal" => task.goal.to_s,
+            "title" => task.title.to_s, "goal" => task.goal.to_s,
             "details" => task.details,
             "criteria" => JobInputs.live_criteria(task).map { |criterion| { "text" => criterion.text.to_s, "kind" => criterion.kind } },
             "work_reference" => task.work_reference, "minimum_strength_rank" => task.minimum_strength_rank,

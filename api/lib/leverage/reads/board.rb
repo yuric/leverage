@@ -68,7 +68,7 @@ module Leverage
       # Whether the workspace has a reviewer seat that is not removed: the
       # board and the task page say so when it has none (SC-11).
       def reviewer_seat?(workspace_id)
-        Seat.where(workspace_id: workspace_id, role: "reviewer", removed_at: nil).exists?
+        Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("reviewer"), removed_at: nil).exists?
       end
 
       # The Needs you items as the contract has them, each with the seq of its

@@ -27,17 +27,54 @@ module Leverage
     # first available candidate (HD-4).
     #
     # kind - :task or :review.
-    def may_claim?(seat, kind, at: Time.current)
+    def may_claim?(seat, kind, at: Time.current, task: nil)
       return false unless seat && seat.enabled && !seat.paused && seat.removed_at.nil?
-      return false unless seat.role == (kind == :review ? "reviewer" : "builder")
-      return false unless idle_for_claim?(seat)
+      return false unless Roles.acts_as?(seat.role, kind == :review ? "reviewer" : "builder")
+      return claim_standing?(seat, task) && momentary?(seat, task, at: at) if task
+      return false unless idle_for_claim?(seat, at: at)
 
       placed_for?(seat, nil, at)
     end
 
     # Whether the seat is idle enough to take a new claim.
-    def idle_for_claim?(seat)
-      !holds_anything?(seat) && Finishing.waiting_for(seat).empty?
+    def idle_for_claim?(seat, at: Time.current)
+      !holds_anything?(seat, at: at) && Finishing.waiting_for(seat).empty?
+    end
+
+    # Escalation reads standing even when the seat is paused or has work.
+    def standing?(seat, task, rank:)
+      builder_at_rank?(seat, rank) && !reviewed?(seat, task)
+    end
+
+    # A claim also needs the seat and the task to be free now. The gating
+    # filter includes projects that reached their budget while the rule is on.
+    def momentary?(seat, task, at:, excluded_task_ids: nil)
+      return false if seat.paused || !idle_for_claim?(seat, at: at)
+      return false if task.holder_seat_id || on_hold?(task) || PendingTransitions.of(task)
+      return false if task.project_id && Project.exists?(id: task.project_id, paused: true)
+      excluded_task_ids ||= Gating.claimable_filter(seat_id: seat.id, kind: :task).excluded_task_ids
+      return false if excluded_task_ids.include?(task.id)
+
+      placed_for?(seat, task, at)
+    end
+
+    def claim_standing?(seat, task)
+      rank = task.minimum_strength_rank
+      return false unless builder_at_rank?(seat, rank)
+      return true unless seat.role == "general" && reviewed?(seat, task)
+
+      Seat.where(workspace_id: task.workspace_id, role: Roles.roles_acting_as("builder"), enabled: true,
+        removed_at: nil, paused: false).where.not(id: seat.id).none? { |other| standing?(other, task, rank: rank) }
+    end
+
+    def builder_at_rank?(seat, rank)
+      seat&.enabled && seat.removed_at.nil? && Roles.acts_as?(seat.role, "builder") &&
+        (!rank || seat.strength_rank >= rank)
+    end
+
+    def reviewed?(seat, task)
+      Event.exists?(workspace_id: task.workspace_id, task_id: task.id, type: "review.started",
+        actor_kind: "seat", actor_id: seat.id)
     end
 
     # The Ready task the seat would claim now, or nil: by priority high,
@@ -62,7 +99,9 @@ module Leverage
       tasks = scope.order(PRIORITY_ORDER, :created_at, :id).to_a
       overridden = overridden_claim_task_ids(seat, tasks)
       first, rest = tasks.partition { |task| overridden.include?(task.id) }
-      (first + rest).find { |task| placed_for?(seat, task, at) }
+      (first + rest).find do |task|
+        claim_standing?(seat, task) && momentary?(seat, task, at: at, excluded_task_ids: excluded)
+      end
     end
 
     # The open review the seat would claim now, or nil: the oldest
@@ -95,6 +134,8 @@ module Leverage
 
       excluded = Gating.claimable_filter(seat_id: seat.id, kind: :review).excluded_review_ids
       provider = review_provider(seat)
+      return [ nil, [] ] if gemini_review?(seat, provider)
+
       skipped = []
       open_reviews(seat).each do |review|
         if excluded.include?(review.id) || !Gating.provider_allowed?(task_id: review.task_id, provider: provider)
@@ -119,12 +160,12 @@ module Leverage
     # provider. The rule's answer is Gating's (provider_allowed?, HE-41),
     # always yes while the rule is off.
     def may_review?(seat, review, at: Time.current)
-      return false unless seat && seat.role == "reviewer" && seat.enabled && !seat.paused && seat.removed_at.nil?
+      return false unless seat && Roles.acts_as?(seat.role, "reviewer") && seat.enabled && !seat.paused && seat.removed_at.nil?
       return false if built_by(seat).where(task_id: review.task_id).exists?
       return Gating.provider_allowed?(task_id: review.task_id, provider: seat.provider) unless seat.credential_id
 
       account = Candidates.first_available(seat, nil, at)
-      !account.nil? && Gating.provider_allowed?(task_id: review.task_id, provider: account.provider) &&
+      !account.nil? && !gemini_review?(seat, account.provider) && Gating.provider_allowed?(task_id: review.task_id, provider: account.provider) &&
         Candidates.first_available(seat, review, at)&.id == account.id
     end
 
@@ -138,7 +179,7 @@ module Leverage
     # the leases in their way (Timers.apply_claimable).
     def builder_free?(seat, task = nil, at: Time.current)
       return false unless seat&.enabled && !seat.paused && seat.removed_at.nil?
-      return false if holds_anything?(seat)
+      return false if holds_anything?(seat, at: at)
 
       seat.credential_id.nil? || !Candidates.first_available(seat, task, at).nil?
     end
@@ -151,7 +192,7 @@ module Leverage
     def task_refusals(task, seat, role: "builder")
       codes = []
       codes << lost_task_refusal(task, seat) unless task.holder_seat_id == seat.id
-      codes << "forbidden" unless seat.role == role
+      codes << "forbidden" unless Roles.acts_as?(seat.role, role)
       codes
     end
 
@@ -160,7 +201,7 @@ module Leverage
     def review_refusals(review, seat)
       codes = []
       codes << lost_review_refusal(review, seat) unless review.reviewer_seat_id == seat.id && review.verdict.nil?
-      codes << "forbidden" unless seat.role == "reviewer"
+      codes << "forbidden" unless Roles.acts_as?(seat.role, "reviewer")
       codes
     end
 
@@ -183,9 +224,17 @@ module Leverage
       "not_holder"
     end
 
-    def holds_anything?(seat)
-      Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id).exists? ||
-        Review.where(workspace_id: seat.workspace_id, reviewer_seat_id: seat.id, verdict: nil).exists?
+    def holds_anything?(seat, at: Time.current)
+      tasks = Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id)
+      reviews = Review.where(workspace_id: seat.workspace_id, reviewer_seat_id: seat.id, verdict: nil)
+      return tasks.exists? || reviews.exists? unless seat.role == "general"
+
+      live = "lease_due_at IS NULL OR lease_due_at > ?"
+      tasks.where(live, at).exists? || reviews.where(live, at).exists? || Jobs.held(seat, at).present?
+    end
+
+    def gemini_review?(seat, provider)
+      seat.role == "general" && seat.credential_id.present? && provider == "gemini"
     end
 
     # HD-4: a seat that connects on its own always; a seat the app runs
@@ -284,7 +333,7 @@ module Leverage
       false
     end
 
-    private_class_method :lost_task_refusal, :lost_review_refusal, :holds_anything?, :open_reviews,
+    private_class_method :lost_task_refusal, :lost_review_refusal, :open_reviews, :builder_at_rank?, :reviewed?, :gemini_review?,
       :review_provider, :overridden_claim_task_ids, :claim_hash, :open_hold_task_ids, :built_by, :held_when_cancelled?,
       :reviewed_when_cancelled?
   end

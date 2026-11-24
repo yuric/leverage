@@ -44,7 +44,7 @@ module Leverage
     # state_machine.json): the one list of commands after which it runs.
     REEVALUATED_BY = %w[
       submit release_review review_lease_expiry report_limit report_signed_out
-      connect_seat change_seat pause_seat resume_seat remove_seat report_run_stopped report_request_result
+      connect_seat issue_landing_prompt change_seat pause_seat resume_seat remove_seat report_run_stopped report_request_result
       install_shipped_rules enable_rule disable_rule save_rule revert_rule remove_rule reviewer_eligibility
     ].freeze
 
@@ -132,7 +132,7 @@ module Leverage
     end
 
     def reviewers(workspace_id)
-      Seat.where(workspace_id: workspace_id, role: "reviewer", enabled: true, paused: false, removed_at: nil)
+      Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("reviewer"), enabled: true, paused: false, removed_at: nil)
         .order(:created_at, :id).to_a
     end
 

@@ -138,7 +138,7 @@ module Leverage
     end
 
     def builder(task)
-      Seat.find_by(workspace_id: task.workspace_id, id: task.builder_seat_id, role: "builder") if task.builder_seat_id
+      Seat.find_by(workspace_id: task.workspace_id, id: task.builder_seat_id, role: Roles.roles_acting_as("builder")) if task.builder_seat_id
     end
 
     def builder_task(action) = Task.find_by!(id: action.task_id, workspace_id: action.workspace_id)

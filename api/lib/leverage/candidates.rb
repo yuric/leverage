@@ -142,8 +142,8 @@ module Leverage
     # always counts as having one. Callers ask after their own rows are
     # written, so a seat that has just let the task go holds nothing.
     def wait_cause(task, at)
-      seats = Seat.where(workspace_id: task.workspace_id, role: "builder", enabled: true, paused: false, removed_at: nil)
-        .order(:created_at, :id).select { |seat| eligible_but_for_accounts?(seat, task) }
+      seats = Seat.where(workspace_id: task.workspace_id, role: Roles.roles_acting_as("builder"), enabled: true, paused: false, removed_at: nil)
+        .order(:created_at, :id).select { |seat| eligible_but_for_accounts?(seat, task, at) }
       return nil if seats.empty?
       return nil if seats.any? { |seat| seat.credential_id.nil? || first_available(seat, task, at) }
       return nil if seats.any? { |seat| any_signed_out?(seat, task) }
@@ -169,6 +169,8 @@ module Leverage
       return false if minimum && rank && rank < minimum && !same_group?(seat, credential)
       return true unless work.is_a?(Review)
 
+      return false if seat.role == "general" && credential.provider == "gemini"
+
       Gating.provider_allowed?(task_id: task.id, provider: credential.provider)
     end
 
@@ -182,9 +184,9 @@ module Leverage
     # L545): enabled, not paused, not removed (the query above), holding
     # nothing with no approved action waiting, strong enough for the task,
     # the task's project running, and not filtered out of the claim by gating.
-    def eligible_but_for_accounts?(seat, task)
-      return false unless Eligibility.idle_for_claim?(seat)
-      return false if task.minimum_strength_rank && task.minimum_strength_rank > seat.strength_rank
+    def eligible_but_for_accounts?(seat, task, at)
+      return false unless Eligibility.idle_for_claim?(seat, at: at)
+      return false unless Eligibility.claim_standing?(seat, task)
       return false if task.project_id && Project.where(id: task.project_id, paused: true).exists?
 
       !Gating.claimable_filter(seat_id: seat.id, kind: :task).excluded_task_ids.include?(task.id)

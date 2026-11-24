@@ -180,7 +180,8 @@ module Leverage
           cause_id = ctx.events.reverse.find { |event| event.type == "check.finished" && event.subject_id == check_id }&.id
         end
         facts = CHECK_ITEMS.include?(planned.reason) && check_id ? { rule_id: planned.rule_id, rule_check_id: check_id } : {}
-        item = planned.reason != "check_error" || RolePresence.online?(ctx.workspace, "orchestrator", ctx.at)
+        error = RuleCheck.find_by(workspace_id: ctx.workspace.id, id: check_id) if planned.reason == "check_error" && check_id
+        item = planned.reason != "check_error" || RolePresence.online?(ctx.workspace, "orchestrator", ctx.at, pending_error: error)
         hold = Holds.open(ctx, task: task, reason: planned.reason, rule_id: planned.rule_id, cause_id: cause_id,
           facts: facts, actor_kind: actor_kind, actor_id: actor_id, item: item, action_id: action_id,
           **supported(rule_check_id: check_id, **RuleChecks.event_fields(as).except(:actor_kind, :actor_id)))

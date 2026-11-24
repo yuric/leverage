@@ -88,7 +88,8 @@ module Leverage
         def still_eligible?(ctx)
           @seat.reload
           @seat.enabled && !@seat.paused && @seat.removed_at.nil? &&
-            Finishing.waiting_for(@seat).empty? && Eligibility.placed_for?(@seat, @task, ctx.at)
+            Finishing.waiting_for(@seat).empty? && Eligibility.placed_for?(@seat, @task, ctx.at) &&
+            (@seat.role != "general" || Eligibility.claim_standing?(@seat, @task))
         end
 
         # A task row in the contract's TaskSummary shape.

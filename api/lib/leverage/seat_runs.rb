@@ -5,7 +5,7 @@ module Leverage
   # token. What a started, stopped or removed run changes, a review the
   # seat held, a Working task it held, and the start_seat requests. Called
   # inside a command's transaction by connect_seat, start_seat,
-  # issue_seat_token, issue_helper_token, report_run_started,
+  # issue_seat_token, issue_landing_prompt, issue_helper_token, report_run_started,
   # report_run_stopped, remove_seat, the seat_run_placement timer, and the
   # handoff (Handoff, the reports, a closing hold, a fresh lease) through
   # ensure_run_on and ended_by_interruption; every event goes through
@@ -199,11 +199,23 @@ module Leverage
       seat.update!(token_hash: nil, wanted_running: false)
       release_working_task(ctx, seat, reason: "seat_removed", cause: cause)
       hold_finishing_tasks(ctx, seat, cause: cause)
-      held_reviews(ctx, seat).each do |review|
-        cancel_pending(ctx, Task.find(review.task_id))
-        release_review(ctx, review)
-      end
+      release_held_reviews(ctx, seat)
       seat.credential_id && queue(ctx, "stop_seat", seat: seat)
+    end
+
+    # New prompt gives the seat to another agent (GA-17). Release its
+    # held work, leaving any action still waiting for this builder alone.
+    # The entry has already replaced the token hash.
+    def release_for_new_prompt(ctx, seat)
+      release_working_task(ctx, seat, reason: "new_prompt")
+      hold_finishing_tasks(ctx, seat, cause: nil, include_waiting: false)
+      release_held_reviews(ctx, seat)
+
+      Job.where(workspace_id: seat.workspace_id, claimed_by_seat_id: seat.id, state: "claimed")
+        .order(:claimed_at, :id).each do |job|
+        timer = Timers.job_timer_for(job)
+        Transitions::Table.entry_for(timer).new.miss_now(ctx, job)
+      end
     end
 
     # A seat's run has stopped, or is treated as stopped (IN-30): run state
@@ -228,6 +240,10 @@ module Leverage
     def run_stopped(ctx, seat, reason: nil, **actor)
       seat.update!(run_state: "stopped", token_hash: nil, run_credential_id: nil,
         run_stop_reason: reason || seat.run_stop_reason)
+      release_held_reviews(ctx, seat, **actor)
+    end
+
+    def release_held_reviews(ctx, seat, **actor)
       held_reviews(ctx, seat).map do |review|
         cancel_pending(ctx, Task.find(review.task_id))
         release_review(ctx, review, **actor)
@@ -243,7 +259,7 @@ module Leverage
     end
 
     # Releases the Working task a seat holds to Ready (L148), with reason
-    # seat_removed or seat_disabled: no holder, no builder and no lease, as
+    # seat_removed, seat_disabled or new_prompt: no holder, no builder and no lease, as
     # every return to Ready (Release, the builder lease's expiry; the PRD's
     # replay list clears the builder there). The seat-bound holds of the
     # task then close (SM-15, milestone 3 plan §2.1 rule 7) through
@@ -277,14 +293,14 @@ module Leverage
       released
     end
 
-    # Include tasks under a hold so lifting that hold cannot leave an
-    # approved action waiting for a seat that is gone (L147, AP-19).
-    # Finishing opens a hold only when approved work remains.
-    def hold_finishing_tasks(ctx, seat, cause:)
+    # Include work still waiting for this builder when the seat can no
+    # longer build (L147, AP-19). A new prompt leaves those actions waiting
+    # for the same seat. Finishing opens a hold only for open approvals.
+    def hold_finishing_tasks(ctx, seat, cause:, include_waiting: true)
       finishing = Task.where(workspace_id: seat.workspace_id, state: "finishing")
       held = finishing.where(holder_seat_id: seat.id)
-      assigned = finishing.where(holder_seat_id: nil, builder_seat_id: seat.id)
-      held.or(assigned).order(:created_at, :id).each do |task|
+      tasks = include_waiting ? held.or(finishing.where(holder_seat_id: nil, builder_seat_id: seat.id)) : held
+      tasks.order(:created_at, :id).each do |task|
         Finishing.lose_builder(ctx, task, cause: cause)
       end
     end

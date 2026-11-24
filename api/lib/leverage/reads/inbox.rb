@@ -74,7 +74,7 @@ module Leverage
 
       def offerable_tasks(workspace_id, items)
         ids = items.filter_map { |item, _seq| item.about_id if item.kind == "unconfirmed_action" }
-        builders = Seat.where(workspace_id: workspace_id, role: "builder", enabled: true, removed_at: nil).select(:id)
+        builders = Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("builder"), enabled: true, removed_at: nil).select(:id)
         Task.where(workspace_id: workspace_id, id: ids, builder_seat_id: builders).pluck(:id).to_set
       end
 
