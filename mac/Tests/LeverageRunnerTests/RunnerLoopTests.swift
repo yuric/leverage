@@ -436,6 +436,30 @@ struct RunnerLoopTests {
         #expect(release.body == nil)
     }
 
+    @Test("stopping General on Gemini while it releases a review still gives the review back")
+    func generalGeminiStopDuringRelease() async throws {
+        let harness = try Harness()
+        let reviewID = UUID()
+        let loop = harness.loop(
+            .general, driver: ScriptedDriver.agreeable(), interruption: .init(provider: .gemini, hasCredential: true),
+            continuing: .review(reviewID))
+        let attempts = Counter()
+        harness.api.script {
+            $0.releaseReview = { _, _ in
+                if attempts.increment() == 1 { try await Task.sleep(for: Patience.scaled(.seconds(60))) }
+                return Fixture.done(.releaseReview)
+            }
+        }
+        let run = Task { await runToEnd(loop) }
+        #expect(await eventually { attempts.value == 1 })
+        loop.stop()
+
+        #expect(await run.value == 0)
+        let releases = harness.calls(.releaseReview)
+        #expect(releases.map(\.id) == [reviewID.contractString, reviewID.contractString])
+        #expect(releases.allSatisfy { $0.body == nil })
+    }
+
     @Test("a General run leaves the work folder's files and folders alone")
     func generalWritesNoRoleOrSkillFiles() async throws {
         let harness = try Harness()
