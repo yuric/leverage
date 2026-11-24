@@ -755,10 +755,6 @@ struct AddTaskModelTests {
     }
 }
 
-// Compile the acceptance tests on the old Add task model. It ignores project metadata.
-extension AddTaskModel {
-    fileprivate func updateProjects(_ projects: [Project]) {}
-}
 
 @MainActor
 @Suite("AddTask render")

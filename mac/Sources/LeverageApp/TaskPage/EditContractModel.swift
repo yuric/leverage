@@ -36,6 +36,7 @@ final class EditContractModel {
     }
 
     let taskID: UUID
+    var projectID: UUID? { page.task.projectID }
     /// What Save does, said first from a state where an agent may be at work (HM-49).
     let warning: AddTaskCopy?
 
@@ -64,7 +65,6 @@ final class EditContractModel {
 
         var filled = ContractDraft()
         filled.title = page.task.title
-        filled.goal = page.task.goal
         filled.details = page.task.details ?? ""
         filled.workReference = page.task.workReference ?? ""
         filled.priority = page.task.priority

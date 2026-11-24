@@ -72,10 +72,6 @@ struct EditContractFields: View {
                 TextField(AddTaskCopy.titlePlaceholder.text, text: $model.draft.title)
                     .textFieldStyle(.roundedBorder)
             }
-            FormField(label: AddTaskCopy.goalLabel.text, hint: AddTaskCopy.goalHint.text) {
-                TextField(AddTaskCopy.goalPlaceholder.text, text: $model.draft.goal)
-                    .textFieldStyle(.roundedBorder)
-            }
             FormField(label: AddTaskCopy.criteriaLabel.text, hint: AddTaskCopy.criteriaHint.text) {
                 PlaceholderEditor(text: $model.draft.criteriaText, placeholder: AddTaskCopy.criteriaPlaceholder.text)
             }
@@ -83,10 +79,7 @@ struct EditContractFields: View {
                 PlaceholderEditor(
                     text: $model.draft.details, placeholder: AddTaskCopy.detailsPlaceholder.text, minHeight: 48)
             }
-            FormField(label: AddTaskCopy.workLabel.text, hint: AddTaskCopy.workHint.text) {
-                TextField(AddTaskCopy.workPlaceholder.text, text: $model.draft.workReference)
-                    .textFieldStyle(.roundedBorder)
-            }
+            WorkReferenceField(reference: $model.draft.workReference, projectID: model.projectID)
         }
     }
 }

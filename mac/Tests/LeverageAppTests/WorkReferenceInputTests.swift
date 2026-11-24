@@ -52,7 +52,7 @@ struct WorkReferenceInputTests {
     func unsupportedPaste(text: String?) {
         var input = WorkReferenceInput(pasteboard: Clipboard(text: text), folderPicker: FolderPicker(path: nil))
         #expect(input.pasteLink() == nil)
-        #expect(input.pasteProblem?.text == "The clipboard holds no link or folder path.")
+        #expect(input.pasteProblem?.text == "The clipboard has no link or folder path.")
         input.referenceChanged()
         #expect(input.pasteProblem == nil)
     }
@@ -64,6 +64,8 @@ struct WorkReferenceInputTests {
         "git:made-up@example.invalid:reports",
         "file:///tmp/example?token=made-up",
         "git@example.invalid:reports?session=made-up",
+        "/tmp/reports (https://sample:made-up@example.invalid/reports)",
+        "~/reports https://example.invalid/reports?token=made-up",
     ] + ["ACCESS_TOKEN", "%73ecret", "password", "pwd", "api-key", "apikey",
          "key", "authorization", "signature", "sig", "credential", "session_id"].map {
         "https://example.invalid/reports?view=weekly&\($0)=made-up"
@@ -90,27 +92,6 @@ struct WorkReferenceInputTests {
         let reference = "~/work/reports"
         #expect((cancelled.pasteLink() ?? reference) == reference)
         #expect((cancelled.chooseFolder() ?? reference) == reference)
-        #expect(cancelled.pasteProblem?.text == "The clipboard holds no link or folder path.")
+        #expect(cancelled.pasteProblem?.text == "The clipboard has no link or folder path.")
     }
-}
-
-// Compile the acceptance tests before the form has work-reference shortcuts.
-@MainActor
-private protocol WorkReferencePasteboard {
-    func readString() -> String?
-}
-
-@MainActor
-private protocol WorkReferenceFolderPicker {
-    func chooseFolder() -> String?
-}
-
-@MainActor
-private struct WorkReferenceInput {
-    var pasteProblem: AddTaskCopy? { nil }
-    init(pasteboard: any WorkReferencePasteboard, folderPicker: any WorkReferenceFolderPicker) {}
-    static func showsButtons(projectID: UUID?, reference: String) -> Bool { false }
-    mutating func pasteLink() -> String? { nil }
-    mutating func referenceChanged() {}
-    func chooseFolder() -> String? { nil }
 }

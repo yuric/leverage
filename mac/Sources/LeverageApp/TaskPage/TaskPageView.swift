@@ -256,9 +256,6 @@ struct TaskPageBody: View {
 
     private var contract: some View {
         VStack(alignment: .leading, spacing: 18) {
-            section(.sectionGoal) {
-                Text(verbatim: model.goal).font(.system(size: Tokens.FontSize.body))
-            }
             if let details = model.details {
                 section(.sectionDetails) {
                     Text(verbatim: details).font(.system(size: Tokens.FontSize.body))
@@ -283,10 +280,6 @@ struct TaskPageBody: View {
                 TextField(AddTaskCopy.titlePlaceholder.text, text: $model.draft.title)
                     .textFieldStyle(.roundedBorder)
             }
-            FormField(label: AddTaskCopy.goalLabel.text, hint: AddTaskCopy.goalHint.text) {
-                TextField(AddTaskCopy.goalPlaceholder.text, text: $model.draft.goal)
-                    .textFieldStyle(.roundedBorder)
-            }
             FormField(label: AddTaskCopy.criteriaLabel.text, hint: AddTaskCopy.criteriaHint.text) {
                 PlaceholderEditor(text: $model.draft.criteriaText, placeholder: AddTaskCopy.criteriaPlaceholder.text)
             }
@@ -294,10 +287,7 @@ struct TaskPageBody: View {
                 PlaceholderEditor(
                     text: $model.draft.details, placeholder: AddTaskCopy.detailsPlaceholder.text, minHeight: 48)
             }
-            FormField(label: AddTaskCopy.workLabel.text, hint: AddTaskCopy.workHint.text) {
-                TextField(AddTaskCopy.workPlaceholder.text, text: $model.draft.workReference)
-                    .textFieldStyle(.roundedBorder)
-            }
+            WorkReferenceField(reference: $model.draft.workReference, projectID: model.page?.task.projectID)
             if let line = model.draftLine {
                 Text(verbatim: line)
                     .font(.system(size: Tokens.FontSize.small))

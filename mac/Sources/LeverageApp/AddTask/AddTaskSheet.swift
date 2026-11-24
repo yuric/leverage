@@ -152,10 +152,6 @@ struct AddTaskFields: View {
                         .textFieldStyle(.roundedBorder)
                         .focused($titleFocused)
                 }
-                FormField(label: AddTaskCopy.goalLabel.text, hint: AddTaskCopy.goalHint.text) {
-                    TextField(AddTaskCopy.goalPlaceholder.text, text: $model.goal)
-                        .textFieldStyle(.roundedBorder)
-                }
                 FormField(label: AddTaskCopy.criteriaLabel.text, hint: model.criteriaHint.text) {
                     PlaceholderEditor(text: $model.criteriaText, placeholder: AddTaskCopy.criteriaPlaceholder.text)
                 }
@@ -201,11 +197,9 @@ struct AddTaskFields: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
-                FormField(label: AddTaskCopy.workLabel.text, hint: AddTaskCopy.workHint.text) {
-                    TextField(AddTaskCopy.workPlaceholder.text, text: $model.workReference)
-                        .textFieldStyle(.roundedBorder)
-                }
+                WorkReferenceField(reference: $model.workReference, projectID: model.projectID)
         }
+        .onChange(of: projects, initial: true) { _, projects in model.updateProjects(projects) }
         .onAppear { titleFocused = true }
     }
 }

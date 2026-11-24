@@ -10,7 +10,7 @@ enum TaskPageCopy: OwnerFacingCopy {
     case loading, noTask
 
     // The sections.
-    case sectionGoal, sectionDetails, sectionCriteria, sectionWork, sectionLog
+    case sectionDetails, sectionCriteria, sectionWork, sectionLog
     case workNotGiven, emptyLog, noEvidence
     case sectionQuestions, sectionActions, askedBy, answeredBy, approvedBy, you, leverage
     case publish, pay, send, delete
@@ -101,7 +101,6 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .loading: "Loading the task…"
         case .noTask: "That is no longer there."
 
-        case .sectionGoal: "The goal"
         case .sectionDetails: "Details"
         case .sectionCriteria: "How you will know it is done"
         case .sectionWork: "Where the work is"

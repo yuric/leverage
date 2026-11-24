@@ -7,8 +7,6 @@ import Observation
 /// Add task sheet and by the form on a Backlog task's page (MA-16).
 struct ContractDraft: Equatable, Sendable {
     var title = ""
-    /// Empty means "use the title": the server requires a goal.
-    var goal = ""
     var details = ""
     /// One criterion on each line.
     var criteriaText = ""
@@ -21,10 +19,8 @@ struct ContractDraft: Equatable, Sendable {
 
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private var effectiveGoal: String {
-        let trimmed = goal.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? trimmedTitle : trimmed
-    }
+    /// Preserve the original formatting, including in details folded on upgrade.
+    private var detailsInput: String? { Self.nonEmpty(details) == nil ? nil : details }
 
     private static func nonEmpty(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -44,21 +40,12 @@ struct ContractDraft: Equatable, Sendable {
         actions.map { ActionInput(kind: $0.kind, description: $0.description) }
     }
 
-    /// Add task: into Backlog, with no criteria (they go with Complete contract).
-    func addRequest(projectID: UUID?) -> AddTaskRequest {
+    /// Add task: keep the details even if Complete contract has yet to run.
+    /// Criteria go with Complete contract.
+    func addRequest(projectID: UUID?, state: TaskState = .backlog) -> AddTaskRequest {
         AddTaskRequest(
-            title: trimmedTitle, goal: effectiveGoal, actions: actions.isEmpty ? nil : actionInputs,
-            projectID: projectID, priority: priority, workReference: Self.nonEmpty(workReference), state: .backlog)
-    }
-
-    /// Save as an idea: Add task alone, into the Imaginarium. It keeps the
-    /// details too and leaves the criteria out, which are the contract's and
-    /// go with Complete contract after Move to Backlog (HM-48).
-    func ideaRequest(projectID: UUID?) -> AddTaskRequest {
-        AddTaskRequest(
-            title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details),
-            actions: actions.isEmpty ? nil : actionInputs, projectID: projectID, priority: priority,
-            workReference: Self.nonEmpty(workReference), state: .imaginarium)
+            title: trimmedTitle, details: detailsInput, actions: actions.isEmpty ? nil : actionInputs,
+            projectID: projectID, priority: priority, workReference: Self.nonEmpty(workReference), state: state)
     }
 
     /// Whether the owner typed criteria, which an idea does not keep.
@@ -69,7 +56,7 @@ struct ContractDraft: Equatable, Sendable {
     /// Complete contract: every field, the form's values sent again.
     func completeRequest() -> CompleteContractRequest {
         CompleteContractRequest(
-            title: trimmedTitle, goal: effectiveGoal, details: Self.nonEmpty(details), criteria: criteria,
+            title: trimmedTitle, details: detailsInput, criteria: criteria,
             actions: actionInputs, workReference: Self.nonEmpty(workReference))
     }
 }
@@ -105,7 +92,7 @@ final class AddTaskModel {
 
     private(set) var state: State = .editing
 
-    var draft = ContractDraft() {
+    private var draft = ContractDraft() {
         didSet {
             guard draft != oldValue else { return }
             addKey = nil
@@ -117,10 +104,6 @@ final class AddTaskModel {
     var title: String {
         get { draft.title }
         set { draft.title = newValue }
-    }
-    var goal: String {
-        get { draft.goal }
-        set { draft.goal = newValue }
     }
     var details: String {
         get { draft.details }
@@ -136,7 +119,10 @@ final class AddTaskModel {
     }
     var workReference: String {
         get { draft.workReference }
-        set { draft.workReference = newValue }
+        set {
+            workReferenceSource = .owner
+            draft.workReference = newValue
+        }
     }
 
     @ObservationIgnored private let api: any OwnerAPI
@@ -155,6 +141,13 @@ final class AddTaskModel {
     private(set) var providerRuleOn = false
 
     private var selectedProjectID: UUID?
+    @ObservationIgnored private var projects: [Project] = []
+
+    private enum WorkReferenceSource {
+        case empty, project, owner
+    }
+
+    @ObservationIgnored private var workReferenceSource: WorkReferenceSource = .empty
 
     var projectID: UUID? {
         get { selectedProjectID }
@@ -163,6 +156,9 @@ final class AddTaskModel {
             selectedProjectID = newValue
             addKey = nil
             ideaKey = nil
+            if workReferenceSource == .project || workReference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                fillProjectWorkReference()
+            }
         }
     }
 
@@ -179,6 +175,22 @@ final class AddTaskModel {
 
     /// After Add task creates the Backlog task, a retry only completes its contract.
     var canChooseProject: Bool { !isBusy && state != .saved && createdTaskID == nil }
+
+    /// A project selected on the board can be known before its metadata arrives.
+    func updateProjects(_ projects: [Project]) {
+        self.projects = projects
+        if canChooseProject, selectedProjectID != nil, workReferenceSource == .empty {
+            fillProjectWorkReference()
+        }
+    }
+
+    private func fillProjectWorkReference() {
+        let project = projects.first { $0.id == selectedProjectID && $0.contentDeletedAt == nil }
+        let reference = project?.latestWorkReference ?? ""
+        let isEmpty = reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        draft.workReference = isEmpty ? "" : reference
+        workReferenceSource = isEmpty ? .empty : .project
+    }
 
     func projectChoices(_ projects: [Project]) -> [AddTaskProjectChoice] {
         var choices = [AddTaskProjectChoice(id: nil, name: AddTaskCopy.noProject.text)]
@@ -251,7 +263,7 @@ final class AddTaskModel {
         do {
             let key = ideaKey ?? IdempotencyKey()
             ideaKey = key
-            let outcome = try await api.addTask(draft.ideaRequest(projectID: projectID), key: key)
+            let outcome = try await api.addTask(draft.addRequest(projectID: projectID, state: .imaginarium), key: key)
             guard try outcome.completedResult() != nil else { throw LeverageClientError.invalidBody }
             state = .saved
             onSaved()
