@@ -5,6 +5,8 @@ import SwiftUI
 struct TaskCard: View {
     let card: BoardCard
     let open: (UUID) -> Void
+    /// Setup lights the card of the first finished task; absent outside the shell.
+    @Environment(ScreenContext.self) private var context: ScreenContext?
 
     var body: some View {
         Button {
@@ -46,5 +48,6 @@ struct TaskCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .spotlightAnchor(context?.setup.facts.doneTask?.id == card.id ? .doneTask : nil)
     }
 }

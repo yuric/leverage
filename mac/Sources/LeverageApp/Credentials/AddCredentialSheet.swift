@@ -19,7 +19,8 @@ struct AddCredentialSheet: View {
             cancel: {
                 model.cancel()
                 finish()
-            }
+            },
+            providerHint: SetupChecklistHelp.addCredentialHint(context.setup)
         )
         .task { await model.load() }
         .onDisappear { model.cancel() }
@@ -30,6 +31,8 @@ struct AddCredentialSheet: View {
 struct AddCredentialForm: View {
     @Bindable var model: AddCredentialModel
     let cancel: () -> Void
+    /// Setup's line above the providers, asking for a different provider; nil without setup.
+    var providerHint: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -53,6 +56,17 @@ struct AddCredentialForm: View {
     private var pickStep: some View {
         VStack(alignment: .leading, spacing: 8) {
             label(CredentialsCopy.stepPick.text)
+            if let providerHint {
+                Text(verbatim: providerHint)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Tone.info.foreground)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        Tokens.Tone.info.background,
+                        in: RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous))
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     label(AddTokenCopy.loginProviders.text)

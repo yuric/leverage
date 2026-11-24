@@ -55,7 +55,8 @@ final class SetupModel {
         let credentialID: UUID?
     }
 
-    /// A finished task, for the last step's spotlight.
+    /// A task by its id and title: the finished one for the last step's
+    /// spotlight, and the sent one for the checklist's third and fourth steps.
     struct DoneTask: Equatable, Sendable {
         let id: UUID
         let title: String
@@ -72,6 +73,8 @@ final class SetupModel {
         var hasAnyTask = false
         /// The first finished task the board lists.
         var doneTask: DoneTask?
+        /// The first task the board lists that was sent to agents, done or not.
+        var sentTask: DoneTask?
 
         /// The review rule ships on, so setup asks for two providers.
         static let providersNeeded = 2
@@ -118,6 +121,7 @@ final class SetupModel {
             hasAnyTask = !tasks.isEmpty
             hasSentTask = tasks.contains { Self.sentStates.contains($0.state) }
             doneTask = tasks.first { $0.state == .done }.map { DoneTask(id: $0.id, title: $0.title) }
+            sentTask = tasks.first { Self.sentStates.contains($0.state) }.map { DoneTask(id: $0.id, title: $0.title) }
         }
 
         private static let sentStates: Set<TaskState> = [.ready, .working, .inReview, .finishing, .done]

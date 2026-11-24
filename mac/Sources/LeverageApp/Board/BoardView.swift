@@ -16,8 +16,9 @@ final class ScreenModelBox<Model> {
     }
 }
 
-/// The board: the screen of the Board tab (MA-1). Built with no arguments;
-/// the shell puts its `ScreenContext` in the environment.
+/// The board: the screen of the Board tab (MA-1), with setup's checklist or
+/// line above it while one applies. Built with no arguments; the shell puts
+/// its `ScreenContext` in the environment.
 struct BoardView: View {
     @Environment(ScreenContext.self) private var context
     @State private var box = ScreenModelBox<BoardModel>()
@@ -26,14 +27,20 @@ struct BoardView: View {
         let model = box.model {
             BoardModel(api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) })
         }
-        BoardContent(
-            model: model, navigator: context.navigator, projects: context.paneProjects,
-            open: { context.navigator.open(task: $0) })
-            .task {
-                model.attach(to: context.feed)
-                await model.load()
+        VStack(alignment: .leading, spacing: 12) {
+            // Setup's line or checklist, only while one applies.
+            if SetupBoardHeader.showsChecklist(context.setup) || context.setup.sentTaskTitle != nil {
+                SetupBoardHeader(setup: context.setup, cards: model.cards)
             }
-            .onDisappear { model.detach() }
+            BoardContent(
+                model: model, navigator: context.navigator, projects: context.paneProjects,
+                open: { context.navigator.open(task: $0) })
+        }
+        .task {
+            model.attach(to: context.feed)
+            await model.load()
+        }
+        .onDisappear { model.detach() }
     }
 }
 

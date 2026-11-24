@@ -21,6 +21,15 @@ struct SidePaneTests {
         #expect(SidePane.tabs.allSatisfy { !$0.symbol.isEmpty })
     }
 
+    @Test("the setup spotlight can light the Credentials and Agents tabs, and no other")
+    func spotlightTabs() {
+        #expect(SidePane.spotlightTarget(for: .credentials) == .credentialsTab)
+        #expect(SidePane.spotlightTarget(for: .agents) == .agentsTab)
+        for tab in SidePane.tabs where tab.place != .credentials && tab.place != .agents {
+            #expect(SidePane.spotlightTarget(for: tab.place) == nil, "\(tab.place)")
+        }
+    }
+
     @Test("showing Settings leaves a task's page and shows Settings")
     func showsSettings() {
         let navigator = Navigator()

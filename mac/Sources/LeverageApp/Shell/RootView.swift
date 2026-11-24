@@ -30,7 +30,7 @@ struct RootView: View {
 /// The signed-in window. On a new installation it is the setup assistant,
 /// with no side pane (docs/onboarding/PRD.md). Otherwise it is the app: the
 /// floating side pane, the toolbar, and the screen the owner is on, with
-/// the Add task sheet over it.
+/// the Add task sheet over it, and the setup spotlight while the checklist shows.
 struct AppShell: View {
     let context: ScreenContext
 
@@ -66,6 +66,10 @@ struct AppShell: View {
             }
         }
         .padding(Tokens.Spacing.window)
+        .overlayPreferenceValue(SpotlightAnchorKey.self) { anchors in
+            SpotlightLayer(setup: context.setup, navigator: context.navigator, anchors: anchors)
+        }
+        .setupSheetOpen(navigator.isAddTaskPresented)
         .sheet(isPresented: $navigator.isAddTaskPresented) {
             AddTaskSheet().environment(context)
         }
