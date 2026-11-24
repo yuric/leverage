@@ -16,7 +16,7 @@ struct TaskPageQuestionsApprovalsTests {
         events: [EventRecord] = [], started: Bool = false
     ) -> TaskPage {
         TaskPage(
-            task: TaskSummary(id: taskID, title: "Prepare the preview", goal: "Check the changes", state: state),
+            task: TaskSummary(id: taskID, title: "Prepare the preview", details: "Check the changes", state: state),
             actions: actions, questions: questions, events: events,
             names: [LogName(kind: .seat, id: agentID, name: "Example agent")],
             reviewerSeatExists: true, asOfSeq: 10, anyActionStarted: started)
@@ -112,7 +112,7 @@ struct TaskPageQuestionsApprovalsTests {
     @Test("Sending the Backlog contract again keeps the stored actions, spending limit, and strength")
     func resendContract() async {
         let task = TaskSummary(
-            id: taskID, title: "Prepare the preview", goal: "Check the changes", state: .backlog,
+            id: taskID, title: "Prepare the preview", details: "Check the changes", state: .backlog,
             minimumStrengthRank: 2, budgetCap: 15)
         let action = OutwardAction(
             id: UUID(), taskID: taskID, kind: .send, description: "Example draft", state: .contracted)
@@ -121,9 +121,15 @@ struct TaskPageQuestionsApprovalsTests {
         owner.script { $0.completeContract = { _, _, key in TaskScreenFixtures.plain(.completeContract, key: key) } }
         await model.sendToAgents()
         let body = owner.calls.first(where: { $0.operation == .completeContract })?.body
-        #expect(body?["actions"]?.arrayValue?.first?["description"] == .string("Example draft"))
-        #expect(body?["minimum_strength_rank"] == .number(2))
-        #expect(body?["budget_cap"] == .number(15))
+        #expect(body == .object([
+            "title": .string("Prepare the preview"),
+            "details": .string("Check the changes"),
+            "criteria": .array([.object(["text": .string(AddTaskCopy.reviewCriterion.text), "kind": .string("review")])]),
+            "actions": .array([.object(["kind": .string("send"), "description": .string("Example draft")])]),
+            "minimum_strength_rank": .number(2),
+            "budget_cap": .number(15),
+            "work_reference": .null,
+        ]))
     }
 }
 
@@ -131,7 +137,7 @@ struct TaskPageQuestionsApprovalsTests {
 @Suite("Task settings")
 struct TaskSettingsModelTests {
     private let task = TaskSummary(
-        id: UUID(), projectID: UUID(), title: "Prepare the preview", goal: "Check the changes", state: .working,
+        id: UUID(), projectID: UUID(), title: "Prepare the preview", details: "Check the changes", state: .working,
         budgetCap: 12.5, priority: .normal)
 
     private func configuredOwner() -> FakeOwnerAPI {

@@ -12,11 +12,11 @@ enum TaskScreenFixtures {
 
     static func summary(
         _ state: TaskState = .ready, id: UUID = UUID(), title: String = "Fix the totals on the invoice page",
-        goal: String = "The totals are right.", details: String? = nil, holder: UUID? = nil, builder: UUID? = nil,
+        details: String? = nil, holder: UUID? = nil, builder: UUID? = nil,
         round: Int = 0, workReference: String? = nil, priority: Priority = .normal
     ) -> TaskSummary {
         TaskSummary(
-            id: id, title: title, goal: goal, details: details, state: state, round: round, holderSeatID: holder,
+            id: id, title: title, details: details, state: state, round: round, holderSeatID: holder,
             builderSeatID: builder, workReference: workReference, priority: priority)
     }
 

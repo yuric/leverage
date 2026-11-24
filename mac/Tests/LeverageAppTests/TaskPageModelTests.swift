@@ -144,14 +144,13 @@ struct TaskPageModelTests {
         #expect(model.criteria[1].evidence.isEmpty)
     }
 
-    @Test("the goal, details, priority and where the work is come from the task")
+    @Test("the details, priority and where the work is come from the task")
     func contract() async {
         let task = Fixtures.summary(
-            .working, id: taskID, goal: "The totals are right.", details: "For finance.",
+            .working, id: taskID, details: "The totals are right.\n\nFor finance.",
             workReference: "~/work/invoices", priority: .high)
         let (model, _, _) = await loaded(Fixtures.page(task))
-        #expect(model.goal == "The totals are right.")
-        #expect(model.details == "For finance.")
+        #expect(model.details == "The totals are right.\n\nFor finance.")
         #expect(model.workReference == "~/work/invoices")
         #expect(model.priorityText == "High")
         let (bare, _, _) = await loaded(Fixtures.page(Fixtures.summary(.working, id: taskID)))
@@ -174,7 +173,9 @@ struct TaskPageModelTests {
 
     private func backlogPage(title: String = "Fix the totals") -> TaskPage {
         Fixtures.page(
-            Fixtures.summary(.backlog, id: taskID, title: title, goal: "The totals are right.", details: "For finance.", workReference: "~/work/invoices"),
+            Fixtures.summary(
+                .backlog, id: taskID, title: title, details: "The totals are right.\n\nFor finance.",
+                workReference: "~/work/invoices"),
             criteria: [Fixtures.criterion("Totals match the lines", taskID: taskID)], names: names)
     }
 
@@ -183,8 +184,7 @@ struct TaskPageModelTests {
         let (model, _, _) = await loaded(backlogPage())
         #expect(model.showsContractForm)
         #expect(model.draft.title == "Fix the totals")
-        #expect(model.draft.goal == "The totals are right.")
-        #expect(model.draft.details == "For finance.")
+        #expect(model.draft.details == "The totals are right.\n\nFor finance.")
         #expect(model.draft.workReference == "~/work/invoices")
         #expect(model.draft.criteriaText == "Totals match the lines")
         #expect(model.canSend)
@@ -204,14 +204,19 @@ struct TaskPageModelTests {
         #expect(owner.calls.map(\.operation) == [.getTask, .completeContract, .getTask])
         let call = owner.calls[1]
         #expect(call.path == ["id": taskID.contractString])
-        #expect(call.body?["title"] == .string("Fix the totals, all of them"))
-        #expect(call.body?["goal"] == .string("The totals are right."))
-        #expect(call.body?["details"] == .string("For finance."))
-        #expect(call.body?["work_reference"] == .string("~/work/invoices"))
-        #expect(call.body?["actions"] == .array([]))
-        #expect(call.body?["criteria"]?.arrayValue?.compactMap { $0["text"]?.stringValue } == [
-            "One", "Two", AddTaskCopy.reviewCriterion.text,
-        ])
+        #expect(call.body == .object([
+            "title": .string("Fix the totals, all of them"),
+            "details": .string("The totals are right.\n\nFor finance."),
+            "criteria": .array([
+                .object(["text": .string("One"), "kind": .string("build")]),
+                .object(["text": .string("Two"), "kind": .string("build")]),
+                .object(["text": .string(AddTaskCopy.reviewCriterion.text), "kind": .string("review")]),
+            ]),
+            "actions": .array([]),
+            "minimum_strength_rank": .null,
+            "budget_cap": .null,
+            "work_reference": .string("~/work/invoices"),
+        ]))
         #expect(!model.showsContractForm)
         #expect(model.actionFailure == nil)
     }
@@ -794,7 +799,7 @@ struct TaskPageModelTests {
 
     private func storedContractPage(checks: [RuleCheckRow], state: TaskState = .backlog) -> TaskPage {
         let task = TaskSummary(
-            id: taskID, title: "Fix the totals", goal: "The totals are right.", details: "For finance.", state: state,
+            id: taskID, title: "Fix the totals", details: "The totals are right.\n\nFor finance.", state: state,
             minimumStrengthRank: 2, budgetCap: 25, workReference: "~/work/invoices")
         return Fixtures.checkedPage(
             task,
@@ -845,20 +850,21 @@ struct TaskPageModelTests {
         #expect(override.body == .object(["reason": .string("The details are in the ticket.")]))
         let complete = sent[2]
         #expect(complete.path == ["id": taskID.contractString])
-        #expect(complete.body?["title"] == .string("Fix the totals"))
-        #expect(complete.body?["goal"] == .string("The totals are right."))
-        #expect(complete.body?["details"] == .string("For finance."))
-        #expect(complete.body?["work_reference"] == .string("~/work/invoices"))
-        #expect(complete.body?["minimum_strength_rank"] == .number(2))
-        #expect(complete.body?["budget_cap"] != .null)
-        #expect(complete.body?["actions"] == .array([]))
-        #expect(complete.body?["criteria"]?.arrayValue?.compactMap { $0["text"]?.stringValue } == [
-            "Totals match the lines", "An independent reviewer agrees.",
-        ])
-        #expect(complete.body?["criteria"]?.arrayValue?.compactMap { $0["kind"]?.stringValue } == ["build", "review"])
+        #expect(complete.body == .object([
+            "title": .string("Fix the totals"),
+            "details": .string("The totals are right.\n\nFor finance."),
+            "criteria": .array([
+                .object(["text": .string("Totals match the lines"), "kind": .string("build")]),
+                .object(["text": .string("An independent reviewer agrees."), "kind": .string("review")]),
+            ]),
+            "actions": .array([]),
+            "minimum_strength_rank": .number(2),
+            "budget_cap": .number(25),
+            "work_reference": .string("~/work/invoices"),
+        ]))
         #expect(override.key != complete.key)
-        #expect(await ShellFixtures.eventually { model.letThrough == nil })
-        #expect(await ShellFixtures.eventually { owner.calls.filter { $0.operation == .getTask }.count == 2 })
+        #expect(await ShellFixtures.eventually(timeout: .seconds(30)) { model.letThrough == nil })
+        #expect(await ShellFixtures.eventually(timeout: .seconds(30)) { owner.calls.filter { $0.operation == .getTask }.count == 2 })
     }
 
     @Test("a check at another moment, an errored one, or one on a task that is no longer in Backlog is let through with Override check alone")
@@ -1231,7 +1237,7 @@ struct TaskPageRenderTests {
         }
         let events = [Fixtures.event(.taskCreated, seq: 1, taskID: id, actorKind: .owner)]
         let working = Fixtures.page(
-            Fixtures.summary(.working, id: id, details: "For finance.", workReference: "~/work"),
+            Fixtures.summary(.working, id: id, details: "The totals are right.\n\nFor finance.", workReference: "~/work"),
             criteria: [Fixtures.criterion("Totals match", taskID: id, evidence: [
                 CriterionEvidence(id: UUID(), criterionID: UUID(), kind: .note, value: "Checked"),
             ])], holds: [Fixtures.hold(.roundsExceeded, taskID: id)], events: events)
@@ -1269,7 +1275,7 @@ struct TaskPageRenderTests {
                 subjectID: Fixtures.personalID, payload: ["window": .string("weekly")]),
         ]
         let page = Fixtures.page(
-            Fixtures.summary(.working, id: id, details: "For finance."),
+            Fixtures.summary(.working, id: id, details: "The totals are right.\n\nFor finance."),
             criteria: [Fixtures.criterion("Totals match", taskID: id)], holds: [hold], events: events,
             names: [LogName(kind: .credential, id: Fixtures.personalID, name: "Personal")])
         let owner = FakeOwnerAPI()

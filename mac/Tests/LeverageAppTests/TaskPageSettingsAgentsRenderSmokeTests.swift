@@ -12,7 +12,7 @@ struct TaskPageSettingsAgentsRenderSmokeTests {
     @Test("The task page, its questions and actions, and its settings draw")
     func taskPage() async throws {
         let task = TaskSummary(
-            id: UUID(), title: "Prepare the preview", goal: "Check the changes", state: .finishing, budgetCap: 10)
+            id: UUID(), title: "Prepare the preview", details: "Check the changes", state: .finishing, budgetCap: 10)
         let question = Question(
             id: UUID(), taskID: task.id, askingSeatID: AgentFixtures.builderID, text: "Which preview?",
             assumption: "", blocking: false, outcome: .answered, answer: "The second one",

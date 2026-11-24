@@ -20,7 +20,7 @@ struct EditContractModelTests {
     private func page(_ state: TaskState = .working) -> TaskPage {
         Fixtures.page(
             Fixtures.summary(
-                state, id: taskID, title: "Fix the totals", goal: "The totals are right.", details: "For finance.",
+                state, id: taskID, title: "Fix the totals", details: "The totals are right.\n\n  For finance.\n",
                 workReference: "~/work/invoices", priority: .high),
             criteria: [
                 Fixtures.criterion("Totals match the lines", taskID: taskID, state: .passed, id: firstID),
@@ -49,12 +49,11 @@ struct EditContractModelTests {
 
     // MARK: filled in
 
-    @Test("the editor starts with the task's own title, goal, details, work and criteria in order")
+    @Test("the editor starts with the task's own title, details, work and criteria in order")
     func filledIn() {
         let model = make(owner())
         #expect(model.draft.title == "Fix the totals")
-        #expect(model.draft.goal == "The totals are right.")
-        #expect(model.draft.details == "For finance.")
+        #expect(model.draft.details == "The totals are right.\n\n  For finance.\n")
         #expect(model.draft.workReference == "~/work/invoices")
         #expect(model.draft.criteriaText == "Totals match the lines\nThe page still loads")
         #expect(model.state == .editing)
@@ -97,8 +96,7 @@ struct EditContractModelTests {
         #expect(call.key != nil)
         #expect(call.body == .object([
             "title": .string("Fix the totals, all of them"),
-            "goal": .string("The totals are right."),
-            "details": .string("For finance."),
+            "details": .string("The totals are right.\n\n  For finance.\n"),
             "criteria": .array([
                 .object(["text": .string("Totals match the lines"), "kind": .string("build")]),
                 .object(["text": .string("The page still loads"), "kind": .string("build")]),
