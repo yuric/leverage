@@ -22,9 +22,10 @@ struct RunnerLoopTests {
 
     func builder(
         _ harness: Harness, driver: any ToolDriver = ScriptedDriver.agreeable(), timing: RunnerTiming = .fast(),
+        role: SeatRole = .builder,
         pass: @escaping @Sendable (UUID) -> PlainOutcome = { _ in Fixture.done(.passCriterion) }
     ) -> RunnerLoop {
-        let loop = harness.loop(.builder, driver: driver, timing: timing)
+        let loop = harness.loop(role, driver: driver, timing: timing)
         let claim = Fixture.claim(taskID, criteria: criteria(), workReference: harness.existingWork.path)
         harness.api.script {
             $0.claimNextTask = { _ in .completed(claim, key: "k", command: .claim) }
@@ -346,6 +347,120 @@ struct RunnerLoopTests {
 
         #expect(await runToEnd(loop) == 0)
         #expect(harness.operations == [.getNext, .getNext, .getNext, .getNext])
+    }
+
+    @Test("General finishes a job, a review and a task in one loop")
+    func generalDoesEachKindInTurn() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver { prompt, purpose in
+            switch purpose {
+            case .check:
+                let nonce = JobFixture.nonce(of: prompt) ?? ""
+                return .answer("LEVERAGE-VERDICT-\(nonce): PASSED\nLEVERAGE-REASON-\(nonce): It names the page.", tokens: 7)
+            case .review:
+                return .answer("LEVERAGE-CRITERION 1: PASS", tokens: 3)
+            case .build:
+                return .answer("LEVERAGE-EVIDENCE: proof.txt in the work folder", tokens: 5)
+            }
+        }
+        let loop = builder(harness, driver: driver, role: .general)
+        let job = JobFixture.checkClaim()
+        let reviewedTaskID = UUID()
+        let review = Fixture.reviewClaim(
+            UUID(), taskID: reviewedTaskID,
+            criteria: [Fixture.criterion(reviewedTaskID, 1, "The page names the discount.", state: .passed)],
+            workReference: harness.existingWork.path)
+        harness.api.script {
+            $0.claimNextJob = { key in .completed(job, key: key.value, command: .claimJob) }
+            $0.submitJobResult = { _, _, _ in Fixture.done(.submitJobResult) }
+            $0.claimNextReview = { key in .completed(review, key: key.value, command: .claimReview) }
+            $0.acknowledgeReviewBriefing = { _, _, _ in Fixture.done(.acknowledgeReviewBriefing) }
+            $0.giveVerdict = { _, _, _ in Fixture.done(.passReview) }
+        }
+        harness.next([NextItem(kind: .job), NextItem(kind: .review), NextItem(kind: .task)], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(harness.operations == [
+            .getNext, .claimNextJob, .submitJobResult,
+            .getNext, .claimNextReview, .acknowledgeReviewBriefing, .giveVerdict,
+            .getNext, .claimNextTask, .acknowledgeTaskBriefing, .startCriterion, .reportCost, .passCriterion,
+            .startCriterion, .reportCost, .passCriterion, .submitTask, .getNext,
+        ])
+        #expect(driver.runs.map(\.purpose) == [.check, .review, .build, .build])
+        #expect(harness.calls(.giveVerdict).first?.body?["verdict"]?.stringValue == "passed")
+    }
+
+    @Test("General on Gemini passes over a review offer and still asks for jobs and tasks")
+    func generalGeminiPassesOverReview() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver.agreeable()
+        let loop = harness.loop(.general, driver: driver, interruption: .init(provider: .gemini, hasCredential: true))
+        harness.api.script {
+            $0.claimNextJob = { key in .completed(nil, key: key.value, command: .claimJob) }
+            $0.claimNextTask = { key in
+                .refused(Refusal(code: .notEligible, ruleID: nil, reason: nil), key: key.value, command: .claim)
+            }
+        }
+        harness.next([NextItem(kind: .review), NextItem(kind: .job), NextItem(kind: .task)], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(harness.operations == [.getNext, .getNext, .claimNextJob, .getNext, .claimNextTask, .getNext])
+        #expect(driver.runs.isEmpty)
+    }
+
+    @Test("General on Gemini releases a held review with no body", arguments: [false, true])
+    func generalGeminiReleasesReview(atStartup: Bool) async throws {
+        let harness = try Harness()
+        let reviewID = UUID()
+        let driver = ScriptedDriver.agreeable()
+        let loop = harness.loop(
+            .general, driver: driver, interruption: .init(provider: .gemini, hasCredential: true),
+            continuing: atStartup ? .review(reviewID) : nil)
+        let claim = Fixture.reviewClaim(
+            reviewID, taskID: taskID, criteria: Array(criteria(first: .passed).prefix(1)),
+            workReference: harness.existingWork.path)
+        let briefing = BriefingResponse(briefing: claim.briefing, workReference: claim.workReference)
+        harness.api.script {
+            $0.reviewBriefing = { _ in briefing }
+            $0.giveVerdict = { _, _, _ in Fixture.done(.passReview) }
+            $0.releaseReview = { _, _ in Fixture.done(.releaseReview) }
+        }
+        let changed = NextItem(kind: .briefingChanged, id: taskID.contractString, reviewID: reviewID)
+        harness.next(atStartup ? [] : [changed], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(harness.operations == (atStartup ? [.releaseReview, .getNext] : [.getNext, .releaseReview, .getNext]))
+        #expect(driver.runs.isEmpty)
+        let release = try #require(harness.calls(.releaseReview).first)
+        #expect(release.id == reviewID.contractString)
+        #expect(release.body == nil)
+    }
+
+    @Test("a General run leaves the work folder's files and folders alone")
+    func generalWritesNoRoleOrSkillFiles() async throws {
+        let harness = try Harness()
+        let workFolder = harness.existingWork
+        let existingFile = workFolder.appendingPathComponent("draft.txt")
+        try Data("Work in progress.".utf8).write(to: existingFile)
+        let driver = ScriptedDriver.agreeable()
+        let loop = harness.loop(.general, driver: driver, continuing: .task(taskID))
+        let briefing = Briefing(
+            hash: "hash-0", versions: BriefingVersions(roleFileVersion: nil, contractVersion: 1), roleFile: nil,
+            contract: BriefingContract(contractVersion: 1, goal: "Update the prices.", details: nil, criteria: criteria()))
+        let response = BriefingResponse(briefing: briefing, workReference: workFolder.path)
+        harness.api.script {
+            $0.taskBriefing = { _ in response }
+            $0.startCriterion = { _, _, _ in Fixture.done(.startCriterion) }
+            $0.passCriterion = { _, _, _, _ in Fixture.done(.passCriterion) }
+            $0.submitTask = { _, _, _ in Fixture.done(.submit) }
+        }
+        harness.next([], then: loop)
+
+        #expect(await runToEnd(loop) == 0)
+        #expect(driver.runs.map(\.folder) == [workFolder, workFolder])
+        #expect(harness.calls(.submitTask).count == 1)
+        #expect(try FileManager.default.subpathsOfDirectory(atPath: workFolder.path) == ["draft.txt"])
+        #expect(try Data(contentsOf: existingFile) == Data("Work in progress.".utf8))
     }
 
     // Milestone 4: a `command` item names a command of this seat whose
