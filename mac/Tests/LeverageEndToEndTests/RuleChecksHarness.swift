@@ -90,28 +90,27 @@ struct RuleChecksWorld {
     func addTask(
         title: String, details: String? = nil, criteria: [String] = ["criterion-1.txt exists."]
     ) async throws -> AddedTask {
-        let goal = "The end-to-end run reaches Done."
         let addKey = IdempotencyKey()
         let added = try await owner.addTask(
-            AddTaskRequest(title: title, goal: goal, priority: .normal, workReference: work.path, state: .backlog),
+            AddTaskRequest(title: title, priority: .normal, workReference: work.path, state: .backlog),
             key: addKey)
         guard let task = try added.completedResult()?.taskID else {
             throw EndToEndFailure("add_task answered no task")
         }
         let contract = try await completeContract(
-            task, title: title, goal: goal, details: details ?? "The run's details name \(markers[0]).",
+            task, title: title, details: details ?? "The run's details name \(markers[0]).",
             criteria: criteria)
         return AddedTask(task: task, addKey: addKey, contractKey: contract.key, contract: contract.outcome)
     }
 
     /// Complete contract on `task` with a new key.
     func completeContract(
-        _ task: UUID, title: String, goal: String = "The end-to-end run reaches Done.", details: String,
+        _ task: UUID, title: String, details: String,
         criteria: [String] = ["criterion-1.txt exists."]
     ) async throws -> (key: IdempotencyKey, outcome: PlainOutcome) {
         let key = IdempotencyKey()
         let request = CompleteContractRequest(
-            title: title, goal: goal, details: details,
+            title: title, details: details,
             criteria: criteria.map { CriterionInput(text: $0) }
                 + [CriterionInput(text: "An independent reviewer agrees.", kind: .review)],
             workReference: work.path)

@@ -91,11 +91,10 @@ final class QuestionsApprovalsWorld {
         title: String, projectID: UUID? = nil, actions: [ActionInput] = [],
         criteria: [String] = ["criterion-1.txt exists."]
     ) async throws -> AddedTask {
-        let goal = "The end-to-end run reaches Done."
         let addKey = IdempotencyKey()
         let added = try await owner.addTask(
             AddTaskRequest(
-                title: title, goal: goal, actions: actions, projectID: projectID, priority: .normal,
+                title: title, actions: actions, projectID: projectID, priority: .normal,
                 workReference: work.path, state: .backlog),
             key: addKey)
         guard let task = try added.completedResult()?.taskID else { throw EndToEndFailure("Add task returned no task") }
@@ -103,7 +102,7 @@ final class QuestionsApprovalsWorld {
         let result = try await owner.completeContract(
             taskID: task,
             CompleteContractRequest(
-                title: title, goal: goal, details: "The fixture mentions \(marker("details")).",
+                title: title, details: "The fixture mentions \(marker("details")).",
                 criteria: criteria.map { CriterionInput(text: $0) }
                     + [CriterionInput(text: "An independent reviewer agrees.", kind: .review)],
                 actions: actions, workReference: work.path),

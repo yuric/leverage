@@ -167,7 +167,6 @@ final class RunningHelper: Sendable {
             environment[EnvironmentKeys.tokenStore] = "memory"
             if let providerAPIBase {
                 environment[EnvironmentKeys.providerAPIBase] = providerAPIBase.absoluteString
-                environment[EnvironmentKeys.readTimeoutSeconds] = "2"
             }
         } else {
             environment[EnvironmentKeys.path] = inherited[EnvironmentKeys.path] ?? "/usr/bin:/bin"
@@ -419,17 +418,16 @@ extension OwnerClient {
     /// and the two commands' keys.
     func addReadyTask(title: String, criteria: [String], folder: URL) async throws
         -> (task: UUID, addKey: IdempotencyKey, contractKey: IdempotencyKey) {
-        let goal = "The end-to-end run reaches Done."
         let addKey = IdempotencyKey()
         let added = try await addTask(
-            AddTaskRequest(title: title, goal: goal, priority: .normal, workReference: folder.path, state: .backlog),
+            AddTaskRequest(title: title, priority: .normal, workReference: folder.path, state: .backlog),
             key: addKey)
         guard let task = try added.completedResult()?.taskID else {
             throw EndToEndFailure("add_task answered no task")
         }
         let contractKey = IdempotencyKey()
         let contract = CompleteContractRequest(
-            title: title, goal: goal, details: "Made by the end-to-end run.",
+            title: title, details: "Made by the end-to-end run.",
             criteria: criteria.map { CriterionInput(text: $0) }
                 + [CriterionInput(text: "An independent reviewer agrees.", kind: .review)],
             workReference: folder.path)

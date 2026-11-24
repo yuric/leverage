@@ -384,9 +384,9 @@ class Check:
             raise Failed("the API did not return safe MCP join instructions")
         work = self.folder / "work"
         work.mkdir()
-        task = owner.command("tasks", {"title": TITLE, "goal": CRITERION, "state": "backlog"})["task_id"]
+        task = owner.command("tasks", {"title": TITLE, "details": CRITERION, "state": "backlog"})["task_id"]
         owner.command(f"tasks/{task}/complete-contract", {
-            "title": TITLE, "goal": CRITERION, "details": None, "work_reference": str(work),
+            "title": TITLE, "details": CRITERION, "work_reference": str(work),
             "criteria": [
                 {"text": CRITERION, "kind": "build"},
                 {"text": "An independent reviewer agrees.", "kind": "review"},

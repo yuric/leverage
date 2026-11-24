@@ -154,7 +154,7 @@ struct DraftContractEndToEndTests {
             let addKey = IdempotencyKey()
             let added = try await world.owner.addTask(
                 AddTaskRequest(
-                    title: "Draft \(world.markers[0])", goal: "A page names \(world.markers[1]).",
+                    title: "Draft \(world.markers[0])", details: "A page names \(world.markers[1]).",
                     priority: .normal, workReference: world.work.path, state: .backlog),
                 key: addKey)
             let task = try #require(try added.completedResult()?.taskID)

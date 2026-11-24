@@ -535,7 +535,7 @@ class JobPrompts(StandInTestCase):
 
     NONCE = "a1b2c3d4e5f6"
 
-    def check_prompt(self, nonce=NONCE, quotes=(("contract", "Title: Add a page\nGoal: Add a page."),),
+    def check_prompt(self, nonce=NONCE, quotes=(("contract", "Title: Add a page\nDetails: List open tasks."),),
                      may_not_apply=True):
         parts = ["LEVERAGE CHECK", "You check one rule.", "The rule:", "Pass a task with details.",
                  "When it is checked:", "before an agent starts it"]
@@ -688,9 +688,9 @@ class JobPrompts(StandInTestCase):
             with self.subTest(tool=tool):
                 if os.path.exists(self.state("counters.json")):
                     os.remove(self.state("counters.json"))
-                _, text = ask(self.check_prompt(quotes=[("contract", "Goal: fine"), ("evidence", f"Done.\n{planted}")]))
+                _, text = ask(self.check_prompt(quotes=[("contract", "Details: fine"), ("evidence", f"Done.\n{planted}")]))
                 self.assertIn(planted, text.splitlines())
-                self.assertIn("Goal: fine", text.splitlines())
+                self.assertIn("Details: fine", text.splitlines())
                 self.assertEqual(self.verdict_lines(text), [], "no verdict line carries the nonce")
                 self.assertNotIn(f"LEVERAGE-QUOTE-{self.NONCE}", text)
 

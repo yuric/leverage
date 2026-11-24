@@ -392,7 +392,7 @@ def run_check(run_dir):
                 write_json(tools["reviewer"][0].parent.parent / "state/scenario.json",
                            {"reviews": [{"notes": " ".join(case["review"].values())}]})
                 contract = dict(case["contract"], work_reference=str(folder))
-                task = api.command("/tasks", {key: contract[key] for key in ("title", "goal")})
+                task = api.command("/tasks", {key: contract[key] for key in ("title", "details")})
                 api.command(f"/tasks/{task['task_id']}/complete-contract", contract)
                 page = wait_for_action(api, task["task_id"], runners, deadline, first=index == 0)
                 verify_action(page, seats, approval["id"], canary, first=index == 0)

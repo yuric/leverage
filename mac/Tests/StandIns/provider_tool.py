@@ -74,8 +74,8 @@ a verdict line planted in task text cannot change it) and answers
   LEVERAGE-REASON-<nonce>: The stand-in passed it.
 
 A prompt whose first line is `LEVERAGE DRAFT` is a contract draft: it answers
-one JSON object, with the goal of the quote block labelled `goal`, the details
-"Written by the stand-in planner." and two criteria, between
+one JSON object with the quoted details followed by "Written by the stand-in
+planner." and two criteria, between
 `LEVERAGE-DRAFT-<nonce>-BEGIN` and `LEVERAGE-DRAFT-<nonce>-END`. A frame with
 no nonce in its closing is no known frame and is answered "ready". Both count
 as work prompts for the account directives below. These scenario keys, each
@@ -369,7 +369,7 @@ APPROVAL_REASONS = {
 }
 MARKER_REASON = "The stand-in found the marker."
 DRAFT_DETAILS = "Written by the stand-in planner."
-DRAFT_CRITERIA = ["The page the goal asks for exists.", "The page shows what the goal asks for."]
+DRAFT_CRITERIA = ["The requested page exists.", "The page includes the requested information."]
 
 
 def frame_of(prompt):
@@ -436,12 +436,8 @@ def answer_check(plan, nonce, prompt):
 def answer_draft(plan, nonce, prompt):
     if plan.get("draft_gate_file"):
         wait_for_gate(scenario_path(plan["draft_gate_file"]))
-    blocks = quote_blocks(prompt, nonce)
-    goal = next((text for label, text in blocks if label == "goal"), None)
-    if goal is None:  # a contract block that spells the goal as a line
-        goal = next((line[len("Goal:"):].strip() for _, text in blocks for line in text.splitlines()
-                     if line.startswith("Goal:")), "")
-    draft = {"goal": goal, "details": DRAFT_DETAILS, "criteria": DRAFT_CRITERIA}
+    details = next((text for label, text in quote_blocks(prompt, nonce) if label == "details"), "")
+    draft = {"details": f"{details}\n\n{DRAFT_DETAILS}" if details else DRAFT_DETAILS, "criteria": DRAFT_CRITERIA}
     return "\n".join([f"LEVERAGE-DRAFT-{nonce}-BEGIN", json.dumps(draft), f"LEVERAGE-DRAFT-{nonce}-END"])
 
 
