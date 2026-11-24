@@ -114,6 +114,8 @@ final class SetupAssistantModel {
     /// even when the read after it failed.
     @ObservationIgnored private var connectedHere: Set<UUID> = []
     /// The Connect sent for a login and its key, kept until the server answered.
+    /// The copy number of the name each login's agent is tried with; 1 is the login's own name.
+    @ObservationIgnored private var nameCopies: [UUID: Int] = [:]
     @ObservationIgnored private var sentAgents: [UUID: (request: ConnectSeatRequest, key: IdempotencyKey)] = [:]
     /// The Add task form behind the first task; it keeps its keys between tries.
     @ObservationIgnored private var taskForm: AddTaskModel?
@@ -299,40 +301,51 @@ final class SetupAssistantModel {
 
     /// Start agents: one General agent for each login switched on that no
     /// agent runs on, named after the login. Connecting an agent the app runs
-    /// also starts it. The first failure stops the run; what was connected
-    /// stays connected, and the next press sends only the rest.
+    /// also starts it. When the name is taken, the next free "{login} 2",
+    /// "{login} 3" is used, since this screen has no name field. The first
+    /// other failure stops the run; what was connected stays connected, and
+    /// the next press sends only the rest.
     func startAgents() async {
         guard canStartAgents else { return }
         isStartingAgents = true
         agentFailure = nil
-        for row in onRows where !row.isConnected {
+        rows: for row in onRows where !row.isConnected {
             let login = row.login
-            let request = ConnectSeatRequest(
-                name: login.label, role: .general, provider: login.provider, model: "", effort: "",
-                strengthRank: AgentStrength.standard.rawValue, credentialID: login.id)
-            let kept = sentAgents[login.id]
-            let key = (kept?.request == request ? kept?.key : nil) ?? IdempotencyKey()
-            sentAgents[login.id] = (request, key)
-            do {
-                let outcome = try await api.connectSeat(request, key: key)
-                guard try outcome.completedResult() != nil else { throw LeverageClientError.invalidBody }
-                sentAgents[login.id] = nil
-                connectedHere.insert(login.id)
-            } catch is CancellationError {
-                break
-            } catch {
-                if CommandKey.wasAnswered(error) { sentAgents[login.id] = nil }
-                if case LeverageClientError.refused(let refusal) = error, refusal.code == .duplicateName {
-                    agentFailure = ShellCopy.refusalDuplicateName.text
-                } else {
+            while true {
+                let copy = nameCopies[login.id] ?? 1
+                let name = copy == 1 ? login.label : "\(login.label) \(copy)"
+                let request = ConnectSeatRequest(
+                    name: name, role: .general, provider: login.provider, model: "", effort: "",
+                    strengthRank: AgentStrength.standard.rawValue, credentialID: login.id)
+                let kept = sentAgents[login.id]
+                let key = (kept?.request == request ? kept?.key : nil) ?? IdempotencyKey()
+                sentAgents[login.id] = (request, key)
+                do {
+                    let outcome = try await api.connectSeat(request, key: key)
+                    guard try outcome.completedResult() != nil else { throw LeverageClientError.invalidBody }
+                    sentAgents[login.id] = nil
+                    connectedHere.insert(login.id)
+                    continue rows
+                } catch is CancellationError {
+                    break rows
+                } catch {
+                    if CommandKey.wasAnswered(error) { sentAgents[login.id] = nil }
+                    if case LeverageClientError.refused(let refusal) = error, refusal.code == .duplicateName,
+                       copy < Self.nameCopiesTried {
+                        nameCopies[login.id] = copy + 1
+                        continue
+                    }
                     agentFailure = ShellCopy.sentence(for: error).text
+                    break rows
                 }
-                break
             }
         }
         await setup.load()
         isStartingAgents = false
     }
+
+    /// How many names Start agents tries for one login before it says the name is taken.
+    static let nameCopiesTried = 9
 
     // MARK: the first task
 

@@ -58,7 +58,8 @@ struct StarterTask: Identifiable, Equatable, Sendable {
         kind: .portfolio, category: .categoryWebsites, time: .portfolioTime, title: .portfolioTitle,
         pitch: .portfolioPitch, doneWhen: [.portfolioDone1, .portfolioDone2, .portfolioDone3],
         prompt: """
-            Build a one-page portfolio site for Alex Rivera, a product designer.
+            Build a one-page portfolio site for me. Use placeholder text for my name, my role and my work, so I \
+            can fill them in later.
 
             Look: frosted-glass cards over slowly drifting sunset pink and violet gradient blobs, a big confident \
             headline, generous spacing.

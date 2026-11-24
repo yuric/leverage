@@ -328,13 +328,35 @@ struct SetupAssistantModelTests {
         #expect(codexKeys[2] != codexKeys[1])
     }
 
-    @Test("a name already used shows the duplicate-name sentence")
-    func duplicateName() async {
+    @Test("a name already used is tried again as the next copy, under a new key")
+    func duplicateNameTriesTheNextCopy() async {
+        let rig = await AssistantRig.twoLogins()
+        let refusal = Refusal(code: .duplicateName, ruleID: nil, reason: nil)
+        let taken: Set<String> = ["Claude, Personal", "Claude, Personal 2"]
+        rig.owner.script {
+            $0.connectSeat = { body, key in
+                taken.contains(body.name)
+                    ? .refused(refusal, key: key.value, command: .connectSeat)
+                    : .completed(SeatConnected(seatID: UUID()), key: key.value, command: .connectSeat)
+            }
+        }
+        await rig.model.startAgents()
+        #expect(rig.model.agentFailure == nil)
+        #expect(rig.model.agentsStarted)
+        let calls = Fixtures.calls(rig.owner, .connectSeat)
+        #expect(calls.compactMap { $0.body?["name"]?.stringValue }
+            == ["Claude, Personal", "Claude, Personal 2", "Claude, Personal 3", "Codex, Team"])
+        #expect(Set(calls.compactMap(\.key)).count == 4)
+    }
+
+    @Test("a name taken in every copy tried says so and stops")
+    func duplicateNameEveryCopy() async {
         let rig = await AssistantRig.twoLogins()
         let refusal = Refusal(code: .duplicateName, ruleID: nil, reason: nil)
         rig.owner.script { $0.connectSeat = { _, key in .refused(refusal, key: key.value, command: .connectSeat) } }
         await rig.model.startAgents()
         #expect(rig.model.agentFailure == ShellCopy.refusalDuplicateName.text)
+        #expect(Fixtures.calls(rig.owner, .connectSeat).count == SetupAssistantModel.nameCopiesTried)
         #expect(!rig.model.agentsStarted)
         #expect(!rig.model.isStartingAgents)
     }
