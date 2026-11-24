@@ -790,24 +790,32 @@ agent is connected. Its decisions are GA-1 to GA-11 in
 - The guards `builder_seat_enabled` and `builder_seat_unavailable` read a
   role that builds, `builder` or `general` (GA-8).
 
-After the design was challenged twice, the contract holds these
+After the design was challenged three times, the contract holds these
 (decisions GA-1 to GA-11 as revised):
 
-- Escalation counts a seat by the standing part of the claim test, busy
-  or not: enabled, not paused, acts as builder, the rank, and no
-  `review.started` by it on the task. Claims add the momentary part; the
-  guard `escalates` says so, and the Eligibility module holds both parts
-  (GA-1).
-- Presence: one sentence, the same in `needs_you.json` (Orchestrator
-  offline's `closes`) and in the `orchestrator_offline` row, says when a
-  General seat counts for the orchestrator: while it polls and holds an
-  orchestrator job, or holds nothing and could claim a waiting one, or
-  holds nothing while none waits. Question, approval and contract-draft
-  jobs end as before; only errored rule checks are queued again by
-  `orchestrator_offline` (GA-6).
-- `change_seat`: a change of role of a running seat the app runs queues
-  only `start_seat`, which the helper hands over (HD-2); Unconfirmed
-  action opens on a change to a role that does not build (GA-8).
+- Escalation counts a seat by the standing part of the claim test,
+  paused or not and busy or not, as on `main`: enabled, not removed, acts
+  as builder, the rank, and no `review.started` by it on the task. Claims
+  add "not paused" and the momentary part; the guard `escalates` says so,
+  and the Eligibility module holds both parts (GA-1). The review bar is
+  lifted for a task that no other seat could build, and escalation does
+  not lift it (GA-5).
+- Presence: two sentences, the same in `needs_you.json` (Orchestrator
+  offline's `closes`) and in the `orchestrator_offline` row, say what
+  waits (a queued rule_check or approval job, or a check held with
+  `check_error`) and when a General seat counts for the orchestrator:
+  while it polls and holds an orchestrator job, or holds nothing and
+  could claim a waiting check (`Jobs.next_for`), or holds nothing while
+  none waits. Question, approval and contract-draft jobs end as before;
+  `orchestrator_offline` queues an errored rule check again only when a
+  seat that counts could claim it, and otherwise leaves it in its error
+  as the owner's item (GA-6). A question goes to a job only when a seat
+  that acts as orchestrator could claim it now (GA-1).
+- `change_seat`: a change of role of a running seat the app runs, to or
+  from General, queues only `start_seat`, which the helper hands over
+  (HD-2); other role changes queue nothing, as before. Unconfirmed action
+  opens on a change to a role that does not build (GA-8). Only a General
+  seat's review work passes over Gemini logins (GA-9).
 - `roles.json` gains `job_rules` on every row: four sentences for
   `general`, empty for the roles with a role file. The four job materials
   gain `job_rules`, set when a General seat claims the job, where its
@@ -842,7 +850,10 @@ from the server. Its decisions are GA-12 to GA-17 in
   (GA-13). It releases the work the seat holds, as `remove_seat` does but
   with the seat kept: the registry gains the app's release reason
   `new_prompt` for a Working task, a review is released and a job misses
-  its run time at once; the row lists the events (GA-17).
+  its run time at once; the row lists the events, among them the run
+  timer's (`job.requeued` and `check.queued` after a first miss) and the
+  holds of a last miss (`check_error`, `owner_approval`,
+  `owner_question`) (GA-17).
 - `connect_seat` returns no token: `SeatConnected` is the seat's id, and
   `SeatConnectedRepeated` is gone. The four one-time responses are
   `SeatTokenPickup`, `LandingPromptIssued`, `HelperTokenIssued` and

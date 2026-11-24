@@ -868,10 +868,11 @@ Added after the six milestones, for the owner's two requests of
 2026-11-23: a role that does everything, the Connect sheet's first choice,
 that "doesn't get any files"; and one short landing prompt, with the token
 in it, from which the agent reads the rest of its instructions from the
-server. Two challenges of the design found twelve and then thirteen
-defects; the entries below are revised after both. The second revision
-keeps one aim: a General seat never makes work that is bound for the
-owner wait longer than today, and never stalls silently. PRD places are
+server. Three challenges of the design found twelve, thirteen and then
+ten defects; the entries below are revised after all three. The
+revisions keep one aim: a General seat never makes work that is bound
+for the owner wait longer than today, and never stalls silently; and
+nothing changes for a workspace with no General seat. PRD places are
 named by their section, not by line. Each `[owner]` item is listed under
 "Questions for the owner" in `docs/IMPLEMENTATION.md` with its
 alternative. `[owner-later]` marks a choice made so that the work can go
@@ -886,18 +887,25 @@ on, which the owner may reverse later; it is listed there too.
   names the seats of a role, General seats are among them, except where
   only a seat that could take the work may count:
   - escalation (the guard `escalates`) counts a seat by the standing part
-    of the claim test, busy or not: enabled, not paused, not removed,
-    acts as builder, at or above the rank, and no `review.started` by it
-    on the task (GA-5). The momentary part (holds nothing, no approved
-    action waits for it, an available candidate, the project running and
-    under budget, the task unheld and not pending) is for claims only, so
-    a busy stronger seat still lets a task escalate, as today, and a task
-    never escalates to a rank that only a seat barred by GA-5 meets (PRD
-    Rework and escalation);
-  - question routing counts only an enabled seat, not removed, that acts
-    as orchestrator and has never held the task (`task.claimed`); with
-    none, the question goes to the owner at once (PRD Questions). Paused
-    seats count, as today;
+    of the claim test, paused or not and busy or not: enabled, not
+    removed, acts as builder, at or above the rank, and no
+    `review.started` by it on the task (GA-5). As on `main`, a paused
+    stronger seat still lets a task escalate, because pausing is
+    temporary. Claims also read "not paused" and the momentary part
+    (holds nothing, no approved action waits for it, an available
+    candidate, the project running and under budget, the task unheld and
+    not pending), so a busy stronger seat still lets a task escalate, as
+    today, and a task never escalates to a rank that only a seat barred
+    by GA-5 meets (PRD Rework and escalation);
+  - question routing sends a question to a job only when a seat acting as
+    orchestrator counts as present and could claim it (Jobs.next_for)
+    now: an Orchestrator seat as on main (enabled and not removed,
+    paused or not); a General seat while it has polled in the last 90
+    seconds, holds nothing and `Jobs.next_for` would give it that job,
+    which is never the case for a seat that held the task
+    (`task.claimed`). Otherwise the question goes to the owner at once,
+    so a question never waits two queue timeouts for a busy General seat
+    (PRD Questions);
   - presence counts a General seat only as GA-6 says.
 - **GA-2** `[owner]` What Leverage gives a General seat: no role file, no
   skill file and no other Markdown file (PRD Briefing). Its briefing's
@@ -929,13 +937,19 @@ on, which the owner may reverse later; it is listed there too.
     passed" (`task.before_done`) whose check no free seat may take (in a
     workspace of two General seats, the builder is barred by RC-49 and
     the reviewer still holds the review while its pass is pending) ends
-    in error after its two misses, as any check no seat takes does: the
-    task is held with `check_error` and "Check could not run" opens while
-    the orchestrator counts as online, or "Orchestrator offline" while it
-    does not. Adding an Orchestrator seat, or a third General seat, lets
-    it run. Alternative: let a seat whose only holding is a review with a
-    pending pass claim that task's check jobs, with the runner and the
-    join text taught to do so.
+    in error after its two misses, as any check no seat takes does. No
+    General seat counts for the orchestrator then (GA-6), so "Orchestrator
+    offline, 1 check waiting" opens once, with its notification, and the
+    task is held with `check_error`. The check is queued again only when
+    a seat that counts as present could claim it (Jobs.next_for);
+    otherwise it stays in its error, which is the owner's item: the
+    workspace item while it is open, and "Check could not run" once the
+    orchestrator counts again. It is never queued again for a seat that
+    may not take it, so no loop of new attempts and notifications forms.
+    Adding an Orchestrator seat, or a third General seat, lets it run.
+    Alternative: let a seat whose only holding is a review with a pending
+    pass claim that task's check jobs, with the runner and the join text
+    taught to do so.
 - **GA-4** `[owner]` A General seat is offered a job first, then a review,
   then a task: `next_kinds` puts `job` before `review` (PRD Agent
   interface). Other roles see at most one of the three, so nothing
@@ -946,8 +960,16 @@ on, which the owner may reverse later; it is listed there too.
     has a `review.started`, so that it stays free to review that task
     again; a seat that finished a `contract_draft` job of a task is not
     given that task's rule-check jobs at `task.before_ready` (PRD Who may
-    check). Both read the log. Alternatives: let it build what it
-    reviewed, and let it check its own draft.
+    check). Both read the log. The review bar is lifted for a task when
+    no other seat passes the standing part of the claim test for it
+    while not paused (enabled, not removed, acts as builder, at or above
+    the task's rank, no `review.started` on it), so a Ready task never waits
+    with no item only because the one seat that could build it reviewed
+    it, for example after its builder was removed, disabled or paused.
+    If no seat may then review it, "No reviewer is eligible" opens (plan
+    SM-42). Escalation does not lift it: the guard `escalates` reads the
+    bar as it is (GA-1). Alternatives: let it build what it reviewed, and
+    let it check its own draft.
   - `[owner-later]` No provider bar beyond the provider rule's own: a task
     given back (a release, a stop, a quit app, a lease expiry) may be
     built by another General seat, also one of another provider group.
@@ -961,17 +983,27 @@ on, which the owner may reverse later; it is listed there too.
     group could still review it, with a Needs you item when that bar is
     all that keeps a Ready task unclaimed.
 - **GA-6** `[owner-later]` Presence (PRD How a transition is gated). A
-  General seat counts for the orchestrator's presence while it has polled
-  in the last 90 seconds and holds an orchestrator job, or holds nothing
-  and could claim a waiting orchestrator job of a task it never held, or
-  holds nothing while no orchestrator job waits (GA-6). A General seat
-  that holds a task or a review does not count, whether or not it polls
-  while it works. Nothing else changes: question, approval and
-  contract-draft jobs miss, are queued once more and end exactly as on
-  `main` (a question and an approval reach the owner after their last
-  miss, and a missed draft ends with its task in Backlog); only an
-  errored rule check is queued again when the orchestrator is back, as
-  today; no payload gains a field. `SystemHealth.orchestrator` is
+  check waits for the orchestrator while its rule_check or approval job
+  is queued or while it is held with check_error. A General seat counts
+  for the orchestrator's presence while it has polled in the last 90
+  seconds and holds an orchestrator job, or holds nothing and, for a
+  waiting check, could claim it (Jobs.next_for), as a new attempt when
+  the check is held with check_error, or holds nothing while no check
+  waits (GA-6). "Waiting" is the set the `orchestrator_offline` timer
+  counts, so a seat barred from an errored check never counts again only
+  because no job is queued. A General seat that holds a task or a review
+  does not count, whether or not it polls while it works. When the
+  orchestrator is back, `orchestrator_offline` queues an errored check
+  again only when a seat that counts as present could claim it
+  (Jobs.next_for), an Orchestrator seat that counts once it is free, as
+  before; otherwise the check stays in its error, which is the owner's
+  item, and a check that erred while the orchestrator was offline gets
+  its "Check could not run" item then. Nothing else changes: question,
+  approval and contract-draft jobs miss, are queued once more and end
+  exactly as on `main` (a question and an approval reach the owner after
+  their last miss, and a missed draft ends with its task in Backlog);
+  only an errored rule check is queued again when the orchestrator is
+  back, as today; no payload gains a field. `SystemHealth.orchestrator` is
   `not_set_up` while no enabled orchestrator or General seat exists. The
   planner's presence is read nowhere, and a General seat is not counted
   for it.
@@ -1020,16 +1052,20 @@ on, which the owner may reverse later; it is listed there too.
   seat: the helper hands the running run over to the new one (HD-2: the
   new token first, which ends the old run's, then the old run is stopped
   and its end is not reported, HD-10), and the new run starts in the new
-  role, which the runner reads only at start. No `stop_seat` is queued,
-  because a stop and a start that run at once can end the new run. The
-  Change sheet gains no role picker.
+  role, which the runner reads only at start. This restart happens only
+  when its old or its new role is General; a change between two other
+  roles queues nothing, as on `main`. No `stop_seat` is queued, because
+  a stop and a start that run at once can end the new run. The Change
+  sheet gains no role picker.
 - **GA-9** `[reading]` A General seat may run on a Gemini login: there it
   builds and does jobs, and it does no review, because the runner's
   read-only review mode does not work on Gemini (CL-8). The runner
   accepts General on Gemini and refuses only review work there; the
-  server offers no review to a run on a Gemini login (`next_review`,
-  `may_review?`), and Candidates passes over Gemini logins for review
-  work. The Connect sheet shows Gemini logins for General; only the
+  server offers no review to a General seat's run on a Gemini login
+  (`next_review`, `may_review?`), and Candidates passes over Gemini
+  logins for a General seat's review work. Nothing changes for the other
+  roles: a Reviewer seat's candidates and review claims are as on
+  `main`. The Connect sheet shows Gemini logins for General; only the
   Reviewer role still hides them.
 - **GA-10** `[owner]` The Connect sheet's words: General first and picked,
   then Builder, Reviewer, Planner and Orchestrator; the two ways "Native:
@@ -1126,7 +1162,9 @@ on, which the owner may reverse later; it is listed there too.
   `action_unconfirmed` for approved or started actions still open; a
   review is released (`review.released`); a job misses its run time at
   once, as its run timer would make it miss, with that timer's events
-  and outcome. An approved action that waits for the seat keeps waiting:
+  and outcome: after a first miss `job.requeued` (and `check.queued` for
+  a check), after a second the kind's last-miss hold (`check_error`,
+  `owner_approval` or `owner_question`), which the row lists. An approved action that waits for the seat keeps waiting:
   the new agent is offered it as kind `action`. A repeat of the key
   releases nothing more. Alternative: refuse New prompt while the seat
   holds work, or let the work lapse at its lease's end.
