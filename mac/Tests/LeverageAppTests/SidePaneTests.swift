@@ -59,14 +59,15 @@ struct SidePaneTests {
     }
 
     @Test("task changes refresh the project work reference for the next Add task", arguments: [
-        EventType.taskCreated, .taskChanged, .taskContractChanged, .contentDeleted,
+        EventType.taskCreated, .taskChanged, .taskContractChanged, .taskSubmitted, .contentDeleted,
     ])
     func refreshesWorkReference(eventType: EventType) async throws {
         let rig = ShellRig()
         let owner = rig.owner
         let projectID = UUID()
+        let actor: ActorKind = eventType == .taskSubmitted ? .seat : .owner
         let event = EventRecord(
-            id: UUID(), workspaceID: UUID(), seq: 3, at: Date(), type: eventType, actorKind: .owner, taskID: UUID())
+            id: UUID(), workspaceID: UUID(), seq: 3, at: Date(), type: eventType, actorKind: actor, taskID: UUID())
         let latest = Locked<String?>("~/work/first")
         let deliver = Locked(false)
         owner.script {

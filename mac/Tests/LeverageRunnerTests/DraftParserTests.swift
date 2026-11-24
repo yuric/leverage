@@ -80,7 +80,7 @@ struct DraftParserTests {
     @Test("a draft with no JSON is no draft", arguments: [
         "I could not write a contract.",
         "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\nLEVERAGE-DRAFT-00aa11bb22cc-END",
-        "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\n{\"criteria\": [\"One.\"]}",
+        "LEVERAGE-DRAFT-00aa11bb22cc-BEGIN\n{\"details\": \"D.\", \"criteria\": [\"One.\"]}",
     ])
     func noJSON(text: String) {
         #expect(parse(text) == nil)
@@ -89,18 +89,18 @@ struct DraftParserTests {
     @Test("a draft with bad JSON is no draft", arguments: [
         "{details: D}",
         "[\"One.\"]",
-        "{\"details\": null, \"criteria\": \"One.\"}",
+        "{\"details\": \"D.\", \"criteria\": \"One.\"}",
         "{\"details\": 3, \"criteria\": [\"One.\"]}",
-        "{\"details\": null, \"criteria\": [\"One.\", 2]}",
+        "{\"details\": \"D.\", \"criteria\": [\"One.\", 2]}",
     ])
     func badJSON(json: String) {
         #expect(parse(answer(json)) == nil)
     }
 
     @Test("a draft with no criteria or a blank criterion is no draft", arguments: [
-        "{\"details\": null, \"criteria\": []}",
+        "{\"details\": \"D.\", \"criteria\": []}",
         "{\"details\": \"Work in the pricing page.\"}",
-        "{\"details\": null, \"criteria\": [\"  \"]}",
+        "{\"details\": \"D.\", \"criteria\": [\"  \"]}",
     ])
     func noCriteria(json: String) {
         #expect(parse(answer(json)) == nil)
