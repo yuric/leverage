@@ -130,7 +130,10 @@ struct UsageReadTests {
         let entry = try #require(ProviderCatalog.entry(for: "claude"))
         let version = try #require(await ToolLocator(settings: rig.settings, timings: fastTimings).locate(entry)).version
         var timings = fastTimings
-        timings.readLimit = .seconds(2)
+        // The limit has to outlast the hung reader's start on a loaded Mac,
+        // or the read times out before there is a child to end. What the
+        // test checks is the end of the child, not the limit's length.
+        timings.readLimit = Patience.scaled(.seconds(10))
         let child = Locked<ReadProcess?>(nil)
         let read = UsageRead(
             api: rig.api, settings: rig.settings, timings: timings, http: ProviderHTTP(), vault: MemoryTokenVault(),
@@ -141,7 +144,7 @@ struct UsageReadTests {
         #expect(result.checks == [HelperCheckResult(check: .readingTaken, passed: false, failure: .timedOut)])
         let started = try #require(child.value)
         #expect(!isAlive(started.process.processID))
-        #expect(await eventually(within: 5) { !isAlive(started.descendant) })
+        #expect(await eventually { !isAlive(started.descendant) })
         #expect((await started.process.wait()).endedBy == .stop)
     }
 

@@ -16,11 +16,11 @@ struct PendingTokensTests {
         let (task, completed) = beginTake(from: pending, expecting: token)
         defer { task.cancel() }
 
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(5)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(5)) })
         clock.advance(by: .seconds(4))
         await pending.insert(token, credentialID: credentialID)
 
-        #expect(await eventually(within: 2) { completed.value == true })
+        #expect(await eventually { completed.value == true })
     }
 
     @Test("an add cannot take a token arriving after five seconds even before its timeout wakes")
@@ -30,13 +30,13 @@ struct PendingTokensTests {
         let (task, completed) = beginTake(from: pending, expecting: nil)
         defer { task.cancel() }
 
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(5)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(5)) })
         clock.canWake.value = false
         clock.advance(by: .seconds(5) + .milliseconds(1))
         await pending.insert(token, credentialID: credentialID)
         clock.canWake.value = true
 
-        #expect(await eventually(within: 2) { completed.value == true })
+        #expect(await eventually { completed.value == true })
     }
 
     @Test("two adds can take a pending token only once")
@@ -57,9 +57,9 @@ struct PendingTokensTests {
         }
         defer { tasks.forEach { $0.cancel() } }
 
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(5)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(5)) })
         clock.advance(by: .seconds(5))
-        try #require(await eventually(within: 2) { completed.value == tasks.count })
+        try #require(await eventually { completed.value == tasks.count })
         #expect(received.value == 1)
     }
 
@@ -69,16 +69,16 @@ struct PendingTokensTests {
         let pending = clock.pendingTokens()
         await pending.insert(token, credentialID: credentialID)
 
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(60)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(60)) })
         clock.canWake.value = false
         clock.advance(by: .seconds(60))
         let (task, completed) = beginTake(from: pending, expecting: nil)
         defer { task.cancel() }
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(65)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(65)) })
         clock.advance(by: .seconds(5))
         clock.canWake.value = true
 
-        #expect(await eventually(within: 2) { completed.value == true })
+        #expect(await eventually { completed.value == true })
     }
 
     @Test("discarding a credential wakes its waiting add without a token")
@@ -88,10 +88,10 @@ struct PendingTokensTests {
         let (task, completed) = beginTake(from: pending, expecting: nil)
         defer { task.cancel() }
 
-        try #require(await eventually(within: 2) { clock.scheduled(after: .seconds(5)) })
+        try #require(await eventually { clock.scheduled(after: .seconds(5)) })
         await pending.discard(credentialID: credentialID)
 
-        #expect(await eventually(within: 2) { completed.value == true })
+        #expect(await eventually { completed.value == true })
     }
 
     private func beginTake(

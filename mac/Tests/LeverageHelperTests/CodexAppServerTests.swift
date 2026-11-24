@@ -157,7 +157,7 @@ struct CodexAppServerTests {
         try #require(pids.count == 2)
         try #require(pids.allSatisfy { $0 > 1 })
         #expect(!isAlive(pids[0]))
-        #expect(await eventually(within: 5) { !isAlive(pids[1]) })
+        #expect(await eventually { !isAlive(pids[1]) })
     }
 
     private func messages(_ rig: HelperRig) throws -> [JSONValue] {

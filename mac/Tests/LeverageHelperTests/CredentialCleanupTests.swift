@@ -194,7 +194,7 @@ struct CredentialCleanupTests {
         try #require(started)
         let pid = try #require(Int32(String(contentsOf: ready, encoding: .utf8)))
         #expect(!isAlive(pid), "forget waits for the sign-in child to be reaped")
-        #expect(await eventually(within: 5) { !isAlive(pid) })
+        #expect(await eventually { !isAlive(pid) })
         #expect(try String(contentsOf: finished, encoding: .utf8) == "present")
         #expect(rig.folders.existing(for: credential) == nil)
     }
@@ -227,7 +227,7 @@ struct CredentialCleanupTests {
         defer { started.process.stop() }
         await runtime.cleanup.forget(credential)
         #expect(!isAlive(started.process.processID))
-        #expect(await eventually(within: 5) { !isAlive(started.descendant) })
+        #expect(await eventually { !isAlive(started.descendant) })
         #expect(rig.calls(.reportRequestResult).isEmpty)
 
         let toolCalls = try rig.tools.calls().count

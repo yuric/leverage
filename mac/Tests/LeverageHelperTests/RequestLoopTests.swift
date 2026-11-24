@@ -119,7 +119,7 @@ struct RequestLoopTests {
         #expect(HelperTimings.standard.pauseAfterError <= .seconds(2))
 
         let running = Task { await loop.run() }
-        #expect(await eventually(within: 4) { results(rig.api) == [request.id.contractString] })
+        #expect(await eventually { results(rig.api) == [request.id.contractString] })
         running.cancel()
         _ = await running.value
         let times = asks.value
