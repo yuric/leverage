@@ -10,9 +10,9 @@ supported model before its milestone is done (PRD, Shipped rules).
 | --- | --- |
 | `cases/NN-<slug>.json` | One case each: `{id, label, category, why, contract}` |
 | `bar.json` | The bar, the supported models and the categories |
-| `results/<provider>.json` | The run that counts for each supported model, written by `scripts/eval_rule.sh` |
-| `runs.json` | Every run made on real tools: its date, its tool runs, the hashes it ran against, and the changes made between runs |
-| `RESULTS.md` | Written by `scripts/eval_score.py report` from the two above |
+| `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
+| `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
+| `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
 
 A case's `label` is the known right answer, `passed` or `failed`. Its
 `why` is one sentence for the reader and is never given to a model; nor
@@ -58,16 +58,18 @@ The supported models are fixed before any run, in `bar.json`, and no
 result changes the list: the default model of the Claude Code, Codex and
 Antigravity (Gemini) login tools. A model that misses the bar, or whose
 tool cannot be run, stays a supported model with a failed or missing
-result. The registry list `orchestrator_tested_providers` holds exactly
-the providers whose results met both shipped suites' bars. The suite runs each tool's default
-model: a model the owner chooses for an orchestrator is not covered by it.
+result. For each mode, the registry lists the providers that met both
+shipped suites' bars. The suite covers the default model of each tool.
 
 ## How a case is run
 
 Through the production path, outside the server.
 `api/script/evals/build_inputs.rb` builds each case's job input with
-`JobInputs`, from rows it writes and then rolls back, so the input is what
-`claim_job` hands an orchestrator for a task with that contract.
+`JobInputs`, from rows it writes and then rolls back. The default mode
+uses the material an Orchestrator seat claims. Add `--mode general` to
+use the material a General seat claims, with the contract's General job
+rules and a null role file. The result records `mode: "general"` and
+`role_file_sha256: null`.
 `LeverageRunner eval` gives each input to the tool with `CheckJob`'s
 prompt, check mode and parser. One run per case; a case with no verdict
 is run once more, as a check's second attempt would be, and then counts
@@ -77,7 +79,7 @@ tries, each limited to 120 seconds.
 ```bash
 # Against the stand-ins (any agent, any time):
 LEVERAGE_EVAL=specific-details LEVERAGE_TOOL_DIR=<a copy of mac/Tests/StandIns>/bin \
-  scripts/eval_rule.sh specific-details --out <folder>
+  scripts/eval_rule.sh specific-details --mode general --out <folder>
 
 # On the real tools already signed in on this Mac (the maintainer, or the
 # managing agent of a delegated run, only):
@@ -97,21 +99,19 @@ model that ran is not known. The runs in `RESULTS.md` were made that way.
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.
 
-A model gets at most three full runs: 90 tool runs for a model, 270 in
-all. The script refuses with exit 3 to start a run that could pass either
-number. When a model misses the bar, the instruction or a case that turned
-out to be ambiguous is changed, with the reason recorded in `runs.json`'s
-`changes` (and so in `RESULTS.md`), and every model is run again, because
-they share the instruction. When the ceiling is reached, the last results
-stand.
+Across both modes, a model gets up to three full runs and 90 tool runs.
+The suite gets 270 tool runs in all. The script refuses with exit 3 to
+start a run that could pass a ceiling. When a model misses the bar, a
+change to the instruction or an ambiguous case goes in the appropriate
+ledger's `changes` with the reason. Run every model again after the
+change. When the ceiling is reached, the last results stand.
 
 ## In CI
 
 CI never calls a provider. `scripts/check_evals.py` checks the cases'
-shape and counts, that every supported model has a result recorded against
-today's instruction, orchestrator role file and case set, that each result's "met the bar" is what
-scoring it again gives, that the registry list equals the providers whose
-results met both suites' bars, that `runs.json` is within the ceilings, and that no
-case or result holds anything shaped like an email address or a token. So
-a change to the instruction, the role file or a case fails CI until the suite is run
-again. A recorded miss does not fail it: it is printed.
+shape and counts, the required Orchestrator results and any General
+results, the two registry lists, and the suite's budget. It rescans cases
+and results for email or token shapes and scores each recorded run again.
+When an instruction or case changes, the recorded results need a rerun.
+A role file change also requires rerunning Orchestrator results. The check
+prints any recorded miss.

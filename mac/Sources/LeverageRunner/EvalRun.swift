@@ -7,7 +7,8 @@ private extension EnvironmentKeys {
 }
 
 /// `LeverageRunner eval --inputs <file> --provider <name> --out <file>
-/// [--account-folder <dir>] [--resolve-only]`: the eval suite's harness
+/// [--mode <orchestrator|general>] [--account-folder <dir>] [--resolve-only]`:
+/// the eval suite's harness
 /// (RV-3, RV-6, AV-3, AV-6). No seat or server.
 ///
 /// Each case's input, which `api/script/evals/build_inputs.rb` built with
@@ -16,6 +17,8 @@ private extension EnvironmentKeys {
 /// selected set's retry and tool-run ceilings. One line of JSON per case
 /// gives the verdict or decision (or `none`), reason, tokens, seconds,
 /// tool runs, tool version and model.
+/// General mode requires every case to carry the General job rules and
+/// have no role file. Orchestrator is the default mode.
 ///
 /// It refuses to start (exit 2) unless `LEVERAGE_EVAL` names the suite and
 /// exactly one of these holds: `LEVERAGE_TOOL_DIR` is set (a run against
@@ -76,7 +79,7 @@ enum EvalRun {
         var cases: [Inputs.Case]?
         if !options.resolveOnly {
             do {
-                cases = try Inputs.read(options.inputs, suite: path.suite)
+                cases = try Inputs.read(options.inputs, suite: path.suite, mode: options.mode)
             } catch let refusal as Refusal {
                 write("eval: refused: \(refusal.reason)")
                 return exitCode
@@ -265,6 +268,11 @@ enum EvalRun {
         var resultKey: Line.CodingKeys { self == .approvesActions ? .decision : .verdict }
     }
 
+    enum Mode: String {
+        case orchestrator
+        case general
+    }
+
     private struct Limits {
         let toolRuns: Int
         let secondTries: Int
@@ -293,6 +301,7 @@ enum EvalRun {
         var out = ""
         var accountFolder: String?
         var resolveOnly = false
+        let mode: Mode
 
         init(arguments: [String]) throws {
             var values: [String: String] = [:]
@@ -302,7 +311,7 @@ enum EvalRun {
                 switch flag {
                 case "--resolve-only":
                     resolveOnly = true
-                case "--inputs", "--provider", "--out", "--account-folder":
+                case "--inputs", "--provider", "--out", "--account-folder", "--mode":
                     guard let value = rest.popFirst(), !value.isEmpty, !value.hasPrefix("--") else {
                         throw Refusal(reason: "\(flag) needs a value")
                     }
@@ -316,7 +325,11 @@ enum EvalRun {
                   ProviderShapes.shape(for: provider) != nil else {
                 throw Refusal(reason: "\(name) is not a login this runner drives")
             }
+            guard let mode = Mode(rawValue: values["--mode"] ?? Mode.orchestrator.rawValue) else {
+                throw Refusal(reason: "--mode must be orchestrator or general")
+            }
             self.provider = provider
+            self.mode = mode
             self.resolveOnly = resolveOnly
             if resolveOnly { return }
             guard let inputs = values["--inputs"] else { throw Refusal(reason: "--inputs is missing") }
@@ -385,6 +398,18 @@ enum EvalRun {
         enum Payload {
             case ruleCheck(RuleCheckJobInput)
             case approval(ApprovalJobInput, JSONValue)
+
+            var hasGeneralMaterial: Bool {
+                let roleFile: String?
+                let jobRules: [String]
+                switch self {
+                case .ruleCheck(let check):
+                    (roleFile, jobRules) = (check.material.roleFile, check.material.jobRules)
+                case .approval(let approval, _):
+                    (roleFile, jobRules) = (approval.material.roleFile, approval.material.jobRules)
+                }
+                return roleFile == nil && jobRules == SeatRole.general.jobRules
+            }
         }
 
         struct Case {
@@ -409,7 +434,7 @@ enum EvalRun {
             let input: Input
         }
 
-        static func read(_ path: String, suite: Suite) throws -> [Case] {
+        static func read(_ path: String, suite: Suite, mode: Mode) throws -> [Case] {
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
             let decoder = JSONDecoder()
             let name = try decoder.decode(Header.self, from: data).suite
@@ -433,6 +458,9 @@ enum EvalRun {
             guard !cases.isEmpty else { throw Invalid(reason: "it holds no case") }
             guard Set(cases.map(\.id)).count == cases.count else {
                 throw Invalid(reason: "two cases share an id")
+            }
+            if mode == .general, let mismatch = cases.first(where: { !$0.input.hasGeneralMaterial }) {
+                throw Refusal(reason: "case \(mismatch.id) does not contain General job material")
             }
             return cases
         }

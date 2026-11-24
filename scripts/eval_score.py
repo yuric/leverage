@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SHIPPED = ROOT / "api" / "contract" / "shipped_rules.json"
 ROLE_FILE = ROOT / "api" / "config" / "role_files" / "orchestrator.md"
+MODES = ("orchestrator", "general")
 
 OUTCOMES = {
     "verdict": ("passed", "failed", "none"),
@@ -89,6 +90,23 @@ def wording_hashes(record):
     return record.get("instruction_sha256"), record.get("role_file_sha256")
 
 
+def record_mode(record):
+    return record.get("mode", "orchestrator")
+
+
+def results_folder(suite, mode, held_out=False):
+    folder = Path(suite, "results")
+    if mode == "general":
+        folder /= mode
+    if held_out:
+        folder /= "held-out"
+    return folder
+
+
+def runs_file(suite, mode):
+    return Path(suite, "runs-general.json" if mode == "general" else "runs.json")
+
+
 def read_runs(path):
     """runs.json, or an empty one when there is none yet."""
     if not Path(path).exists():
@@ -97,6 +115,21 @@ def read_runs(path):
     runs.setdefault("runs", [])
     runs.setdefault("changes", [])
     return runs
+
+
+def read_mode_runs(path, mode):
+    runs = read_runs(path)
+    for entry in runs["runs"]:
+        if record_mode(entry) != mode:
+            raise Refused(f"run history contains a different mode from {mode}")
+        if mode == "general" and ("role_file_sha256" not in entry or entry["role_file_sha256"] is not None):
+            raise Refused("general run history requires null role_file_sha256")
+    return runs
+
+
+def other_mode_runs(folder, mode):
+    other_mode = "orchestrator" if mode == "general" else "general"
+    return read_mode_runs(runs_file(folder, other_mode), other_mode)["runs"]
 
 
 def instruction_of(shipped, rule_key=RULE_KEY):
@@ -266,7 +299,7 @@ def budget_refusals(runs, providers, bar=LEGACY_CONFIG, held_out=False):
     return reasons
 
 
-def held_out_refusals(suite, runs, bar, providers, wording):
+def held_out_refusals(suite, runs, bar, providers, wording, mode):
     """An unfitted set is run only against wording tried on the main set."""
     reasons = []
     changed = False
@@ -278,10 +311,11 @@ def held_out_refusals(suite, runs, bar, providers, wording):
             changed = True
         if main and not main[-1].get("reserved") and wording_hashes(main[-1]) == wording:
             continue
-        result_path = Path(suite, "results", f"{provider}.json")
+        result_path = results_folder(suite, mode) / f"{provider}.json"
         if provider not in providers and result_path.is_file():
             result = read_json(result_path)
-            if (result.get("status") == "not_run" and result.get("provider") == provider
+            if (record_mode(result) == mode and "role_file_sha256" in result
+                    and result.get("status") == "not_run" and result.get("provider") == provider
                     and result.get("suite") == bar["suite"] and not result.get("held_out")
                     and wording_hashes(result) == wording and result.get("cases_sha256") == bar["cases_sha256"]):
                 continue
@@ -347,17 +381,24 @@ def check_providers(names):
 # --- Records -------------------------------------------------------------------
 
 
-def provenance(suite, bar, shipped, role_file, held_out):
-    record = {"instruction_sha256": instruction_sha256(shipped, bar["rule"]),
+def role_hash(mode, role_file):
+    if mode == "general":
+        if role_file:
+            raise Refused("general mode does not take --role-file")
+        return None
+    return role_file_sha256(role_file or ROLE_FILE)
+
+
+def provenance(suite, bar, shipped, role_file, held_out, mode):
+    record = {"mode": mode, "role_file_sha256": role_hash(mode, role_file),
+              "instruction_sha256": instruction_sha256(shipped, bar["rule"]),
               "cases_sha256": cases_sha256(read_cases(suite, held_out))}
-    if bar["kind"] == "decision" or role_file:
-        record["role_file_sha256"] = role_file_sha256(role_file or ROLE_FILE)
     if held_out:
         record["held_out"] = True
     return record
 
 
-def result_of(suite, shipped, provider, lines, canary, date, held_out=False, role_file=None):
+def result_of(suite, shipped, provider, lines, canary, date, held_out=False, role_file=None, mode="orchestrator"):
     cases = read_cases(suite, held_out)
     bar = set_config(read_bar(suite), held_out)
     kind = bar["kind"]
@@ -368,7 +409,7 @@ def result_of(suite, shipped, provider, lines, canary, date, held_out=False, rol
     return {
         "suite": bar["suite"], "provider": provider, "status": "run", "tool": TOOLS[provider],
         "tool_version": str(first.get("tool_version") or "unknown"), "model": str(first.get("model") or DEFAULT_MODEL),
-        "date": date, **provenance(suite, bar, shipped, role_file, held_out),
+        "date": date, **provenance(suite, bar, shipped, role_file, held_out, mode),
         "canary_word": canary, "met_bar": scores["met_bar"],
         "scores": {key: scores[key] for key in SCORE_KEYS[kind]}, "misses": scores["misses"],
         "tool_runs": sum(int(line.get("tool_runs", 0)) for line in lines),
@@ -379,12 +420,12 @@ def result_of(suite, shipped, provider, lines, canary, date, held_out=False, rol
     }
 
 
-def not_run_result(suite, shipped, provider, reason, date, held_out=False, role_file=None):
+def not_run_result(suite, shipped, provider, reason, date, held_out=False, role_file=None, mode="orchestrator"):
     bar = set_config(read_bar(suite), held_out)
     return {
         "suite": bar["suite"], "provider": provider, "status": "not_run", "tool": TOOLS[provider],
         "tool_version": None, "model": None, "date": date,
-        **provenance(suite, bar, shipped, role_file, held_out),
+        **provenance(suite, bar, shipped, role_file, held_out, mode),
         "canary_word": None, "met_bar": False, "scores": None,
         "misses": [f"not run: {reason}"], "reason": reason, "tool_runs": 0, "cases": [],
     }
@@ -422,23 +463,29 @@ def summary(result):
 # --- RESULTS.md ----------------------------------------------------------------
 
 
-def report(suite):
+def report(suite, mode):
     suite = Path(suite)
     bar = read_bar(suite)
-    runs = read_runs(suite / "runs.json")
+    runs_path = runs_file(suite, mode)
+    runs = read_mode_runs(runs_path, mode)
+    other_runs = other_mode_runs(suite, mode)
+    total = sum(entry["tool_runs"] for entry in runs["runs"] + other_runs)
+    table_note = f"The table lists {mode.capitalize()} runs." if other_runs else ""
+    report_path = suite / ("RESULTS-general.md" if mode == "general" else "RESULTS.md")
     if bar["kind"] == "decision":
-        decision_report(suite, bar, runs)
+        decision_report(suite, bar, runs, mode, report_path, total, table_note)
         return
+    folder = results_folder(suite, mode)
     results = {}
-    for path in sorted((suite / "results").glob("*.json")):
+    for path in sorted(folder.glob("*.json")):
         result = read_json(path)
         results[result["provider"]] = result
     limits = bar["bar"]
     lines = [
         "# The specific-details eval suite: results",
         "",
-        "Written by `scripts/eval_score.py report` from `results/*.json` and",
-        "`runs.json`; do not edit it by hand. What the suite is and how it is",
+        f"Written by `scripts/eval_score.py report` from `{folder.relative_to(suite)}/*.json` and",
+        f"`{runs_path.name}`; do not edit it by hand. What the suite is and how it is",
         "run is in [README.md](README.md).",
         "",
         "## The bar",
@@ -496,12 +543,13 @@ def report(suite):
         for provider, case in wrong:
             lines.append(f"| {provider} | {case['id']} | {label_of(suite, case['id'])} | {case['verdict']} |")
         lines.append("")
-    total = sum(int(entry.get("tool_runs", 0)) for entry in runs["runs"])
     lines += ["## Runs on real tools", "",
               f"{total} of {bar['budget']['maximum_tool_runs_total']} tool runs made in all; "
               f"a model gets {bar['maximum_runs_per_provider']} full runs "
               f"and {bar['budget']['maximum_tool_runs_per_provider']} tool runs.", ""]
     if runs["runs"]:
+        if table_note:
+            lines += [table_note, ""]
         lines += ["| Date | Provider | Tool runs | Instruction | Case set |", "| --- | --- | --- | --- | --- |"]
         for entry in runs["runs"]:
             reserved = " (reserved; the run did not settle)" if entry.get("reserved") else ""
@@ -513,22 +561,20 @@ def report(suite):
         for change in runs["changes"]:
             lines.append(f"- {change.get('date')}: {change.get('what')} Why: {change.get('why')}")
         lines.append("")
-    (suite / "RESULTS.md").write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+    report_path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
-def decision_report(suite, bar, runs):
+def decision_report(suite, bar, runs, mode, report_path, total, table_note):
     lines = [
         "# The approves-actions eval suite results", "",
-        "Generated by `scripts/eval_score.py report` from the results and `runs.json`.", "",
+        f"Generated by `scripts/eval_score.py report` from the results and `{runs_file(suite, mode).name}`.", "",
         "The eval covers the provider tools and models recorded below. "
         "See [README.md](README.md) for the thresholds.", "",
     ]
     main_cases = {case["id"]: case for case in read_cases(suite)}
     for held_out in (False, True):
         lines += ["## Held-out results" if held_out else "## Main results", ""]
-        folder = suite / "results"
-        if held_out:
-            folder /= "held-out"
+        folder = results_folder(suite, mode, held_out)
         results = {path.stem: read_json(path) for path in sorted(folder.glob("*.json"))}
         for provider in sorted(set(bar["supported_providers"]) | results.keys()):
             result = results.get(provider)
@@ -550,17 +596,18 @@ def decision_report(suite, bar, runs):
                                  f"expected `{case['label']}`, got `{row['decision']}`.")
         if lines[-1]:
             lines.append("")
-    total = sum(entry["tool_runs"] for entry in runs["runs"])
     lines += ["## Runs on real tools", "",
               f"{total} of {bar['budget']['maximum_tool_runs_total']} tool runs counted.", ""]
     if runs["runs"]:
+        if table_note:
+            lines += [table_note, ""]
         lines += ["| Date | Provider | Set | Tool runs | Instruction | Role file | Case set |",
                   "| --- | --- | --- | --- | --- | --- | --- |"]
         for entry in runs["runs"]:
             name = "held-out" if entry.get("held_out") else "main"
             count = str(entry["tool_runs"]) + (" (reserved)" if entry.get("reserved") else "")
             lines.append(f"| {entry['date']} | {entry['provider']} | {name} | {count} "
-                         f"| {entry['instruction_sha256'][:12]} | {entry['role_file_sha256'][:12]} "
+                         f"| {entry['instruction_sha256'][:12]} | {(entry['role_file_sha256'] or '')[:12]} "
                          f"| {entry['cases_sha256'][:12]} |")
         lines.append("")
     if runs["changes"]:
@@ -568,7 +615,7 @@ def decision_report(suite, bar, runs):
         for change in runs["changes"]:
             lines.append(f"- {change['date']}. {change['what']} {change['why']}")
         lines.append("")
-    (suite / "RESULTS.md").write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+    report_path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
 _LABELS = {}
@@ -604,6 +651,7 @@ def main(argv):
     command.add_argument("--held-out", action="store_true")
 
     command = commands.add_parser("budget")
+    command.add_argument("--mode", choices=MODES, default=MODES[0])
     command.add_argument("--runs", required=True)
     command.add_argument("--providers", required=True)
     command.add_argument("--suite")
@@ -612,6 +660,7 @@ def main(argv):
     command.add_argument("--role-file")
 
     command = commands.add_parser("runs-add")
+    command.add_argument("--mode", choices=MODES, default=MODES[0])
     command.add_argument("--runs", required=True)
     command.add_argument("--provider", required=True, choices=sorted(TOOLS))
     command.add_argument("--date", required=True)
@@ -623,6 +672,7 @@ def main(argv):
     command.add_argument("--role-file")
 
     command = commands.add_parser("runs-settle")
+    command.add_argument("--mode", choices=MODES, default=MODES[0])
     command.add_argument("--runs", required=True)
     command.add_argument("--provider", required=True, choices=sorted(TOOLS))
     command.add_argument("--tool-runs", required=True, type=int)
@@ -631,6 +681,7 @@ def main(argv):
 
     for name in ("record", "not-run"):
         command = commands.add_parser(name)
+        command.add_argument("--mode", choices=MODES, default=MODES[0])
         command.add_argument("--suite", required=True)
         command.add_argument("--shipped", default=SHIPPED)
         command.add_argument("--role-file")
@@ -645,6 +696,7 @@ def main(argv):
             command.add_argument("--reason", required=True)
 
     command = commands.add_parser("report")
+    command.add_argument("--mode", choices=MODES, default=MODES[0])
     command.add_argument("--suite", required=True)
 
     try:
@@ -675,13 +727,14 @@ def execute(args):
         scores = score(read_cases(args.suite, held_out), config, read_lines(args.verdicts), args.canary)
         print(json.dumps(scores, indent=2))
     elif args.command in ("budget", "runs-add"):
-        runs = read_runs(args.runs)
+        role = role_hash(args.mode, args.role_file)
+        runs = read_mode_runs(args.runs, args.mode)
         providers = check_providers(args.providers) if args.command == "budget" else [args.provider]
-        reasons = budget_refusals(runs, providers, bar, held_out)
+        all_runs = {"runs": runs["runs"] + other_mode_runs(Path(args.runs).parent, args.mode)}
+        reasons = budget_refusals(all_runs, providers, bar, held_out)
         if held_out:
-            wording = (instruction_sha256(read_json(args.shipped), bar["rule"]),
-                       role_file_sha256(args.role_file or ROLE_FILE))
-            reasons += held_out_refusals(args.suite, runs, bar, providers, wording)
+            wording = instruction_sha256(read_json(args.shipped), bar["rule"]), role
+            reasons += held_out_refusals(args.suite, runs, bar, providers, wording, args.mode)
         if reasons:
             for reason in reasons:
                 print(f"eval_score: refused: {reason}", file=sys.stderr)
@@ -691,9 +744,10 @@ def execute(args):
         else:
             if args.suite:
                 verify_cases(args.suite, bar)
-                hashes = provenance(args.suite, bar, read_json(args.shipped), args.role_file, held_out)
+                hashes = provenance(args.suite, bar, read_json(args.shipped), args.role_file, held_out, args.mode)
             elif args.instruction_sha256 and args.cases_sha256:
-                hashes = {"instruction_sha256": args.instruction_sha256, "cases_sha256": args.cases_sha256}
+                hashes = {"instruction_sha256": args.instruction_sha256, "cases_sha256": args.cases_sha256,
+                          "mode": args.mode, "role_file_sha256": role}
             else:
                 raise Refused("runs-add requires --suite or both hashes")
             runs["runs"].append({"provider": args.provider, "date": args.date,
@@ -703,7 +757,7 @@ def execute(args):
         maximum = config["maximum_tool_runs"]
         if not 0 <= args.tool_runs <= maximum:
             raise Refused(f"a run makes 0 to {maximum} tool runs, not {args.tool_runs}")
-        runs = read_runs(args.runs)
+        runs = read_mode_runs(args.runs, args.mode)
         reserved = [entry for entry in runs["runs"]
                     if entry.get("provider") == args.provider and entry.get("reserved")
                     and bool(entry.get("held_out")) == held_out]
@@ -714,16 +768,16 @@ def execute(args):
         write_json(args.runs, runs)
     elif args.command == "record":
         result = result_of(args.suite, read_json(args.shipped), args.provider,
-                           read_lines(args.verdicts), args.canary, args.date, held_out, args.role_file)
+                           read_lines(args.verdicts), args.canary, args.date, held_out, args.role_file, args.mode)
         write_json(args.out, result)
         print(summary(result))
     elif args.command == "not-run":
         result = not_run_result(args.suite, read_json(args.shipped), args.provider, args.reason,
-                                args.date, held_out, args.role_file)
+                                args.date, held_out, args.role_file, args.mode)
         write_json(args.out, result)
         print(summary(result))
     elif args.command == "report":
-        report(args.suite)
+        report(args.suite, args.mode)
     return 0
 
 

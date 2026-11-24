@@ -7,6 +7,9 @@
 #   LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 \
 #     scripts/eval_rule.sh approves-actions [--held-out]
 #
+# The default mode uses Orchestrator job material. Use --mode general to
+# evaluate the job prompt a General seat gets.
+#
 # Only the managing agent runs on real tools (plan §5.3). The real path
 # verifies the frozen case sets and checks the budget before resolving a
 # tool. It reserves the worst case in runs.json before each provider runs,
@@ -19,9 +22,10 @@
 # tool-run and retry ceilings. The stand-ins get temporary account folders
 # or their own sign-in marks. Real tools use the login they already hold.
 #
-# Results go to results/<provider>.json or results/held-out/<provider>.json,
-# and the suite's report goes to RESULTS.md. Stand-in runs use --out for
-# those files and never write the ledger. A tool found signed out or at
+# Orchestrator results go under results/ with the report in RESULTS.md.
+# General results go under results/general/ with the report in
+# RESULTS-general.md and a real-run ledger in runs-general.json.
+# Stand-in runs use --out and never write either ledger. A tool found signed out or at
 # its limit before the run is left out of LEVERAGE_EVAL_PROVIDERS and recorded
 # with scripts/eval_score.py not-run.
 #
@@ -41,7 +45,7 @@ refuse() {
   exit 2
 }
 usage="usage: LEVERAGE_EVAL=<suite> (LEVERAGE_TOOL_DIR=<stand-ins>/bin | LEVERAGE_EVAL_REAL=1)"
-usage="$usage scripts/eval_rule.sh <suite> [--held-out] [--out <folder>]"
+usage="$usage scripts/eval_rule.sh <suite> [--mode orchestrator|general] [--held-out] [--out <folder>]"
 
 # --- The guards: nothing has started yet ----------------------------------
 
@@ -72,6 +76,7 @@ if [ -z "$tool_dir" ] && [ -z "$real" ]; then
 fi
 
 out=""
+mode=orchestrator
 set_flag=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -83,6 +88,14 @@ while [ $# -gt 0 ]; do
     --held-out)
       set_flag=(--held-out)
       shift
+      ;;
+    --mode)
+      if [ $# -lt 2 ] || [ -z "$2" ]; then refuse "--mode needs orchestrator or general; $usage"; fi
+      case "$2" in
+        orchestrator | general) mode=$2 ;;
+        *) refuse "unknown mode '$2'; $usage" ;;
+      esac
+      shift 2
       ;;
     *) refuse "unknown argument '$1'; $usage" ;;
   esac
@@ -141,7 +154,16 @@ fi
 cd "$root"
 today=$(date -u +%Y-%m-%d)
 shipped="$root/api/contract/shipped_rules.json"
-role_file="$root/api/config/role_files/orchestrator.md"
+role_flag=(--role-file "$root/api/config/role_files/orchestrator.md")
+mode_flag=()
+ledger="$suite/runs.json"
+report_file=RESULTS.md
+if [ "$mode" = general ]; then
+  mode_flag=(--mode general)
+  role_flag=()
+  ledger="$suite/runs-general.json"
+  report_file=RESULTS-general.md
+fi
 work=""
 pending_results=""
 suite_lock=""
@@ -176,8 +198,8 @@ if [ "$path_kind" = "real tools" ]; then
   fi
   suite_lock="$suite/.eval-run.lock"
   score verify-cases "$suite" ${set_flag[@]+"${set_flag[@]}"}
-  score budget --suite "$suite" --runs "$suite/runs.json" --providers "$providers" \
-    --shipped "$shipped" --role-file "$role_file" ${set_flag[@]+"${set_flag[@]}"}
+  score budget --suite "$suite" --runs "$ledger" --providers "$providers" --shipped "$shipped" \
+    ${role_flag[@]+"${role_flag[@]}"} ${mode_flag[@]+"${mode_flag[@]}"} ${set_flag[@]+"${set_flag[@]}"}
 fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/leverage-eval.XXXXXX")
@@ -188,7 +210,7 @@ if [ -z "${API_IMAGE_TAG:-}" ]; then
   own_image="leverage-api:$API_IMAGE_TAG"
 fi
 
-say "a run on $path_kind${tool_dir:+ from $tool_dir}; providers: $providers"
+say "a run on $path_kind${tool_dir:+ from $tool_dir}; mode: $mode; providers: $providers"
 
 # 2. The runner, and the tool each provider resolves to.
 scratch="${LEVERAGE_EVAL_SCRATCH:-$root/mac/.build/eval}"
@@ -214,10 +236,10 @@ run_eval() {
   )
   if [ "$path_kind" = "real tools" ]; then
     env -u LEVERAGE_TOOL_DIR LEVERAGE_EVAL="$suite_name" LEVERAGE_EVAL_REAL=1 LEVERAGE_DEV_TOOL_LOGIN=1 \
-      "${ceilings[@]}" "$runner" eval "$@"
+      "${ceilings[@]}" "$runner" eval "$@" ${mode_flag[@]+"${mode_flag[@]}"}
   else
     env -u LEVERAGE_EVAL_REAL -u LEVERAGE_DEV_TOOL_LOGIN LEVERAGE_EVAL="$suite_name" LEVERAGE_TOOL_DIR="$tool_dir" \
-      "${ceilings[@]}" "$runner" eval "$@"
+      "${ceilings[@]}" "$runner" eval "$@" ${mode_flag[@]+"${mode_flag[@]}"}
   fi
 }
 for provider in "${provider_list[@]}"; do
@@ -251,7 +273,7 @@ compose_started=1
 if ! docker compose run --rm -T -e RAILS_ENV=development -v "$root/api:/rails" -v "$suite:/eval-suite:ro" -v "$work/inputs:/eval-inputs" \
   api bash -c 'bin/rails db:prepare >/dev/null && bin/rails runner script/evals/build_inputs.rb --suite /eval-suite \
     --canary-path "$0" --out /eval-inputs/inputs.json "$@"' "$work/canary/word.txt" \
-  ${set_flag[@]+"${set_flag[@]}"} >"$work/inputs.log" 2>&1; then
+  ${mode_flag[@]+"${mode_flag[@]}"} ${set_flag[@]+"${set_flag[@]}"} >"$work/inputs.log" 2>&1; then
   tail -n 40 "$work/inputs.log" >&2
   say "the inputs were not built"
   exit 1
@@ -261,6 +283,7 @@ say "$(tail -n 1 "$work/inputs.log")"
 
 # 4 and 5. Each provider's run, scored.
 results="$out_abs/results"
+if [ "$mode" = general ]; then results="$results/general"; fi
 if [ "${#set_flag[@]}" -gt 0 ]; then results="$results/held-out"; fi
 mkdir -p "$results"
 record_results="$results"
@@ -287,8 +310,8 @@ for provider in "${provider_list[@]}"; do
   fi
   verdicts="$work/verdicts/$provider.jsonl"
   if [ "$path_kind" = "real tools" ]; then
-    score runs-add --suite "$suite" --runs "$suite/runs.json" --provider "$provider" --date "$today" \
-      --shipped "$shipped" --role-file "$role_file" ${set_flag[@]+"${set_flag[@]}"}
+    score runs-add --suite "$suite" --runs "$ledger" --provider "$provider" --date "$today" --shipped "$shipped" \
+      ${role_flag[@]+"${role_flag[@]}"} ${mode_flag[@]+"${mode_flag[@]}"} ${set_flag[@]+"${set_flag[@]}"}
   fi
   say "$provider: running the $kind suite"
   status=0
@@ -301,15 +324,15 @@ for provider in "${provider_list[@]}"; do
   fi
   scored="$record_results/$provider.json"
   score record --suite "$suite" --provider "$provider" --verdicts "$verdicts" --canary "$canary" \
-    --shipped "$shipped" --role-file "$role_file" --date "$today" --out "$scored" \
-    ${set_flag[@]+"${set_flag[@]}"} | sed 's/^/eval: /'
+    --shipped "$shipped" --date "$today" --out "$scored" \
+    ${role_flag[@]+"${role_flag[@]}"} ${mode_flag[@]+"${mode_flag[@]}"} ${set_flag[@]+"${set_flag[@]}"} | sed 's/^/eval: /'
   if [ "$path_kind" = "real tools" ]; then
     made=$(python3 -I -c '
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as file:
     print(json.load(file)["tool_runs"])' "$scored")
-    score runs-settle --suite "$suite" --runs "$suite/runs.json" --provider "$provider" --tool-runs "$made" \
-      ${set_flag[@]+"${set_flag[@]}"}
+    score runs-settle --suite "$suite" --runs "$ledger" --provider "$provider" --tool-runs "$made" \
+      ${mode_flag[@]+"${mode_flag[@]}"} ${set_flag[@]+"${set_flag[@]}"}
     mv "$scored" "$results/$provider.json"
   fi
 done
@@ -319,6 +342,6 @@ if [ "$path_kind" = "stand-ins" ]; then
   mkdir -p "$out_abs/cases"
   cp "$suite"/cases/*.json "$out_abs/cases/"
 fi
-score report --suite "$out_abs"
-say "wrote $out_abs/RESULTS.md"
+score report --suite "$out_abs" ${mode_flag[@]+"${mode_flag[@]}"}
+say "wrote $out_abs/$report_file"
 exit "$failed"

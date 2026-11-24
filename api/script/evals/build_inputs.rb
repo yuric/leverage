@@ -3,13 +3,13 @@
 # rows in a transaction it rolls back. A specific-details case builds a
 # Backlog task with a waiting Complete contract. An approves-actions case
 # builds a Finishing task with the passing review and the action at the
-# named position. Both use the shipped instruction and orchestrator role
-# file. No event is written.
+# named position. Both use the shipped instruction and the selected role's
+# job material (GA-11). No event is written.
 #
 # Only task material reaches JobInputs. {{CANARY_PATH}} in the contract
 # or review becomes the path where scripts/eval_rule.sh wrote its word.
 #
-#   bin/rails runner script/evals/build_inputs.rb --suite DIR --canary-path PATH --out FILE [--held-out]
+#   bin/rails runner script/evals/build_inputs.rb --suite DIR --canary-path PATH --out FILE [--held-out] [--mode MODE]
 #
 # FILE gets {"suite", "instruction_sha256", "cases": [{"id", "input"}]}, the
 # cases in file order. scripts/eval_rule.sh runs it in a container that
@@ -24,6 +24,8 @@ module EvalInputs
   CANARY = "{{CANARY_PATH}}".freeze
   RULE_KEYS = { "verdict" => "specific_details", "decision" => "orchestrator_approves_actions" }.freeze
   SPECIFIC_DETAILS = "specific-details".freeze
+  DEFAULT_MODE = "orchestrator".freeze
+  MODES = [ DEFAULT_MODE, "general" ].freeze
 
   module_function
 
@@ -40,9 +42,12 @@ module EvalInputs
     fill(kase.fetch("contract"), canary_path.to_s)
   end
 
-  # The input claim_job would hand an orchestrator for the case.
-  def input_for(kase, canary_path:, kind: (kase.key?("action") ? "decision" : "verdict"),
+  # The input claim_job would hand the selected role for the case.
+  def input_for(kase, canary_path:, mode: DEFAULT_MODE, kind: (kase.key?("action") ? "decision" : "verdict"),
                 shipped: Leverage::Rules::Shipped.find(RULE_KEYS.fetch(kind)))
+    raise ArgumentError, "unknown eval mode #{mode.inspect}" unless MODES.include?(mode)
+
+    seat = Seat.new(role: mode) if mode == "general"
     body = contract(kase, canary_path: canary_path)
     input = nil
     ActiveRecord::Base.transaction(requires_new: true) do
@@ -51,14 +56,14 @@ module EvalInputs
       when "verdict" then waiting_job(body, version)
       when "decision" then approval_job(kase, body, version, canary_path: canary_path.to_s)
       end
-      input = Leverage::JobInputs.for(job)
+      input = Leverage::JobInputs.for(job, seat: seat)
       raise ActiveRecord::Rollback
     end
     input
   end
 
   # Every case's input, in file order.
-  def suite(folder, canary_path:, held_out: false)
+  def suite(folder, canary_path:, held_out: false, mode: DEFAULT_MODE)
     bar_path = Pathname(folder).join("bar.json")
     bar = bar_path.file? ? JSON.parse(bar_path.read) : {}
     kind = bar.fetch("kind", "verdict")
@@ -66,7 +71,8 @@ module EvalInputs
     raise ArgumentError, "#{shipped.key} has no instruction in shipped_rules.json" if shipped.instruction.nil?
 
     cases = read_cases(folder, held_out: held_out).map do |kase|
-      { "id" => kase.fetch("id"), "input" => input_for(kase, canary_path: canary_path, kind: kind, shipped: shipped) }
+      input = input_for(kase, canary_path: canary_path, mode: mode, kind: kind, shipped: shipped)
+      { "id" => kase.fetch("id"), "input" => input }
     end
     { "suite" => bar.fetch("suite", SPECIFIC_DETAILS), "instruction_sha256" => Digest::SHA256.hexdigest(shipped.instruction),
       "cases" => cases }
@@ -140,18 +146,20 @@ module EvalInputs
   end
 
   def main(argv)
-    options = {}
+    options = { mode: DEFAULT_MODE }
     OptionParser.new do |parser|
-      parser.banner = "usage: bin/rails runner script/evals/build_inputs.rb --suite DIR --canary-path PATH --out FILE [--held-out]"
+      parser.banner = "usage: bin/rails runner script/evals/build_inputs.rb --suite DIR --canary-path PATH --out FILE " \
+        "[--held-out] [--mode orchestrator|general]"
       parser.on("--suite DIR") { |value| options[:suite] = value }
       parser.on("--canary-path PATH") { |value| options[:canary_path] = value }
       parser.on("--out FILE") { |value| options[:out] = value }
       parser.on("--held-out") { options[:held_out] = true }
+      parser.on("--mode MODE", MODES) { |value| options[:mode] = value }
     end.parse!(argv)
     missing = %i[suite canary_path out].reject { |key| options[key] }
     abort("build_inputs: missing --#{missing.first.to_s.tr("_", "-")}") if missing.any?
 
-    built = suite(options[:suite], canary_path: options[:canary_path], held_out: options[:held_out])
+    built = suite(options[:suite], canary_path: options[:canary_path], held_out: options[:held_out], mode: options[:mode])
     abort("build_inputs: no case in #{options[:suite]}") if built.fetch("cases").empty?
     File.write(options[:out], JSON.pretty_generate(built) + "\n")
     $stdout.puts "build_inputs: #{built.fetch("cases").size} inputs written"
