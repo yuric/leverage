@@ -203,9 +203,11 @@ module Leverage
         end
 
         def ready(task)
-          seats = @builders.select { |seat| task.minimum_strength_rank.nil? || seat.strength_rank >= task.minimum_strength_rank }
-          key = [ task.minimum_strength_rank, @causes[task.id] ]
-          @memo.fetch(key) { @memo[key] = account(seats, task, limit: @causes[task.id] == "credential_limit") }
+          seats = @builders.select { |seat| Eligibility.claim_standing?(seat, task) }
+          cause = @causes[task.id]
+          # A General seat's review history can change who counts at the same rank.
+          key = [ task.minimum_strength_rank, cause, seats.map(&:id) ]
+          @memo.fetch(key) { @memo[key] = account(seats, task, limit: cause == "credential_limit") }
         end
 
         def in_review(task)

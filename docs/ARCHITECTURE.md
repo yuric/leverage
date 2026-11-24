@@ -428,7 +428,9 @@ adds the MCP server.
   In a workspace with a General seat, the board and task page share the
   independent reviewer reading for each unassigned review, including
   when the provider rule is off. Their account waits include General
-  builders and eligible General reviewers.
+  seats. Ready account waits use `Eligibility.claim_standing?`, the
+  same standing test the engine uses to determine the Ready step's
+  account wait cause.
   Four timers time out a check's or a draft's job in the queue and in its
   run, and two workspace timers, `orchestrator_offline` and
   `reviewer_eligibility`, run on every sweep. The 120 seconds within which

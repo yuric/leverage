@@ -75,6 +75,12 @@ builds, reviews and jobs their instructions in the corresponding material.
 General eval coverage is for app-managed default models. New prompt
 confirms the replacement before displaying paste instructions.
 
+The second review fixes apply the build claim standing test to Ready
+account waits on the board and task page. Both reads preserve the
+builder's login wait when a General seat that reviewed the task cannot
+claim it. The PRD's first-build briefing description specifies the work
+instructions a General seat receives.
+
 ## Milestones
 
 The milestones and their content are defined in the PRD under "Build order

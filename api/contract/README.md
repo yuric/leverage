@@ -834,7 +834,9 @@ After the design was challenged three times, the contract holds these
   on its own or names a model remains outside the eval coverage.
 - `BoardTask.reviewer_seat_exists` is an optional task-level reading for
   unassigned reviews in a workspace with a General seat. The task page
-  shares that reading. Account waits include eligible General seats.
+  shares that reading. Ready account waits use the build claim standing
+  test for each task (GA-5, HE-16). In review account waits include
+  eligible General reviewers (HE-15).
 
 ## What the join call added
 
