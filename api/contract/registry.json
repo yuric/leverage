@@ -112,6 +112,7 @@
     {"code": "blocked_by_rule", "precedence": 11, "claims_only": false, "owner_only": false},
     {"code": "credential_in_use", "precedence": 12, "claims_only": false, "owner_only": true},
     {"code": "duplicate_name", "precedence": 13, "claims_only": false, "owner_only": true},
+    {"code": "add_task_limit", "precedence": 14, "claims_only": false, "owner_only": false},
     {"code": "not_eligible", "precedence": null, "claims_only": true, "owner_only": false}
   ],
   "check_results": ["passed", "failed", "not_applicable", "applied", "error", "withdrawn"],
@@ -121,7 +122,8 @@
     {"reason": "stopping", "chosen_by": "seat"},
     {"reason": "seat_disabled", "chosen_by": "app"},
     {"reason": "seat_removed", "chosen_by": "app"},
-    {"reason": "new_prompt", "chosen_by": "app"}
+    {"reason": "new_prompt", "chosen_by": "app", "note": "Written only before app round 2, by a new landing prompt for a seat that held work; kept so that older logs still read (UX-1)."},
+    {"reason": "deliver_turned_off", "chosen_by": "app"}
   ],
   "next_kinds": [
     "command", "briefing_changed", "resume", "answer", "action", "rework", "job", "review", "task",
@@ -135,7 +137,8 @@
     "question_passed_on", "approval", "stopped_action", "unconfirmed_action", "past_round_limit",
     "refused_for_every_agent", "check_past_rerun_limit", "check_could_not_run", "access_request",
     "task_budget_reached", "project_budget_reached", "account_signed_out",
-    "limit_with_no_reset_time", "no_reviewer_eligible", "orchestrator_offline"
+    "limit_with_no_reset_time", "no_reviewer_eligible", "orchestrator_offline",
+    "agent_task_incomplete", "agent_tasks_at_limit"
   ],
   "hooks": [
     "task.before_ready", "task.before_claim", "task.before_submit", "task.before_done",
@@ -195,6 +198,8 @@
     {"operation_id": "give_verdict", "method": "POST", "path": "/v1/reviews/{id}/verdict", "caller": "reviewer", "commands": ["pass_review", "fail_review"], "tag": "agent"},
     {"operation_id": "claim_next_job", "method": "POST", "path": "/v1/jobs/claim-next", "caller": "job_claimer", "commands": ["claim_job"], "tag": "agent"},
     {"operation_id": "submit_job_result", "method": "POST", "path": "/v1/jobs/{id}/result", "caller": "job_holder", "commands": ["submit_job_result", "complete_contract", "approve_action", "stop_action"], "tag": "agent"},
+    {"operation_id": "create_task", "method": "POST", "path": "/v1/tasks", "caller": "creator", "commands": ["add_task", "complete_contract"], "tag": "agent"},
+    {"operation_id": "report_model", "method": "POST", "path": "/v1/seat/model", "caller": "any", "commands": ["change_seat"], "tag": "agent"},
     {"operation_id": "get_health", "method": "GET", "path": "/v1/health", "caller": "public", "commands": ["read"], "tag": "infrastructure"},
     {"operation_id": "get_setup_state", "method": "GET", "path": "/v1/owner/setup", "caller": "public", "commands": ["read"], "tag": "owner"},
     {"operation_id": "create_owner", "method": "POST", "path": "/v1/owner/setup", "caller": "public", "commands": ["create_owner"], "tag": "owner"},
@@ -304,7 +309,8 @@
     "add_checks_passed", "verify_passed", "found_signed_out", "question_answered",
     "project_budget_reached", "project_under_budget", "builder_seat_enabled",
     "seat_disabled_by_change", "disables_seat_holding_working_task", "target_project_paused",
-    "source_project_paused", "rerun_queues", "rerun_of_claim_check", "rule_on_superseded_default"
+    "source_project_paused", "rerun_queues", "rerun_of_claim_check", "rule_on_superseded_default",
+    "seat_has_landed", "seat_has_not_landed", "turns_deliver_off_holding_working_task"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",
@@ -355,11 +361,12 @@
     "job_states": ["queued", "claimed", "finished", "timed_out", "withdrawn"],
     "seat_roles": ["builder", "reviewer", "planner", "orchestrator", "general"],
     "seat_run_states": ["stopped", "running"],
+    "seat_permissions": ["work", "deliver", "create"],
     "actor_kinds": ["owner", "seat", "app"],
     "caller_kinds": ["seat", "owner", "helper"],
     "operation_callers": [
-      "any", "builder", "holder", "reviewer", "job_claimer", "job_holder", "owner", "helper",
-      "public"
+      "any", "builder", "holder", "reviewer", "job_claimer", "job_holder", "creator", "owner",
+      "helper", "public"
     ],
     "operation_tags": ["agent", "owner", "helper", "infrastructure"],
     "event_subject_kinds": [
@@ -393,7 +400,7 @@
       "answer", "approve", "stop", "waive", "return_for_rework", "cancel", "override_once",
       "offer_again", "mark_done", "allow_another_round", "edit_contract", "turn_rule_off",
       "run_again", "mark_access_granted", "raise_cap", "change_budget", "resume_project",
-      "sign_in_again", "connect_seat"
+      "sign_in_again", "connect_seat", "complete_contract", "draft_contract"
     ],
     "helper_request_kinds": [
       "start_seat", "stop_seat", "run_add_checks", "verify", "install_tool", "open_sign_in",

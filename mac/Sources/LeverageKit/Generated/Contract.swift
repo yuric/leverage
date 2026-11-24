@@ -253,6 +253,7 @@ public enum RefusalCode: String, Codable, CaseIterable, Sendable {
     case blockedByRule = "blocked_by_rule"
     case credentialInUse = "credential_in_use"
     case duplicateName = "duplicate_name"
+    case addTaskLimit = "add_task_limit"
     case notEligible = "not_eligible"
 }
 
@@ -274,6 +275,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
     case seatDisabled = "seat_disabled"
     case seatRemoved = "seat_removed"
     case newPrompt = "new_prompt"
+    case deliverTurnedOff = "deliver_turned_off"
 
     /// Whether a seat may send it with a release (`chosen_by: seat`).
     public var isChosenBySeat: Bool {
@@ -284,6 +286,7 @@ public enum ReleaseReason: String, Codable, CaseIterable, Sendable {
         case .seatDisabled: return false
         case .seatRemoved: return false
         case .newPrompt: return false
+        case .deliverTurnedOff: return false
         }
     }
 }
@@ -338,6 +341,8 @@ public enum NeedsYouItem: String, Codable, CaseIterable, Sendable {
     case limitWithNoResetTime = "limit_with_no_reset_time"
     case noReviewerEligible = "no_reviewer_eligible"
     case orchestratorOffline = "orchestrator_offline"
+    case agentTaskIncomplete = "agent_task_incomplete"
+    case agentTasksAtLimit = "agent_tasks_at_limit"
 }
 
 /// registry.json `credential_providers`.
@@ -536,6 +541,8 @@ public enum InboxChoice: String, Codable, CaseIterable, Sendable {
     case resumeProject = "resume_project"
     case signInAgain = "sign_in_again"
     case connectSeat = "connect_seat"
+    case completeContract = "complete_contract"
+    case draftContract = "draft_contract"
 }
 
 /// registry.json `lists.inbox_states`.
@@ -575,6 +582,7 @@ public enum OperationCaller: String, Codable, CaseIterable, Sendable {
     case reviewer
     case jobClaimer = "job_claimer"
     case jobHolder = "job_holder"
+    case creator
     case owner
     case helper
     case `public`
@@ -673,6 +681,13 @@ public enum RuleScopeKind: String, Codable, CaseIterable, Sendable {
     case namedProjects = "named_projects"
     case actionKinds = "action_kinds"
     case checkerDecides = "checker_decides"
+}
+
+/// registry.json `lists.seat_permissions`.
+public enum SeatPermission: String, Codable, CaseIterable, Sendable {
+    case work
+    case deliver
+    case create
 }
 
 /// registry.json `lists.seat_roles`.
@@ -818,6 +833,8 @@ public enum ContractOperation: String, CaseIterable, Sendable {
     case giveVerdict = "give_verdict"
     case claimNextJob = "claim_next_job"
     case submitJobResult = "submit_job_result"
+    case createTask = "create_task"
+    case reportModel = "report_model"
     case getHealth = "get_health"
     case getSetupState = "get_setup_state"
     case createOwner = "create_owner"
@@ -930,6 +947,8 @@ public enum ContractOperation: String, CaseIterable, Sendable {
         case .giveVerdict: return (.post, "/v1/reviews/{id}/verdict", .reviewer, .agent)
         case .claimNextJob: return (.post, "/v1/jobs/claim-next", .jobClaimer, .agent)
         case .submitJobResult: return (.post, "/v1/jobs/{id}/result", .jobHolder, .agent)
+        case .createTask: return (.post, "/v1/tasks", .creator, .agent)
+        case .reportModel: return (.post, "/v1/seat/model", .any, .agent)
         case .getHealth: return (.get, "/v1/health", .`public`, .infrastructure)
         case .getSetupState: return (.get, "/v1/owner/setup", .`public`, .owner)
         case .createOwner: return (.post, "/v1/owner/setup", .`public`, .owner)

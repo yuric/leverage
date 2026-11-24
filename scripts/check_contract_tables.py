@@ -103,14 +103,15 @@ SEAT_CALLERS = {
     "Reviewer": "reviewer",
     "Orchestrator, planner": "job_claimer",
     "Job holder": "job_holder",
+    "Creator": "creator",
 }
 
 
 # The Who may ask cell: the callers it names, as state_machine.json's who
 # values. A qualifier says how a caller asks and names no other caller.
 WHO_QUALIFIERS = (" acting as the app", " in the command that frees the builder", " through its approval job",
-                  " holding the review")
-WHO_ROLES = ("owner", "planner", "builder", "holder", "reviewer", "orchestrator", "helper", "app")
+                  " holding the review", " in the call that adds the task")
+WHO_ROLES = ("owner", "planner", "builder", "holder", "reviewer", "orchestrator", "helper", "app", "creator")
 WHO_FILLER = ("or", "the", "seat")
 
 # The Choices cell of the Needs you table: each phrase that offers a choice,
@@ -135,6 +136,8 @@ CHOICE_PHRASES = (
     (r"\bresume the project\b", "resume_project"),
     (r"\bsign in again\b", "sign_in_again"),
     (r"\bconnect an agent\b", "connect_seat"),
+    (r"\bcomplete the contract\b", "complete_contract"),
+    (r"\bask a planner to draft it\b", "draft_contract"),
 )
 
 # The "A hold blocks" bullet under Holds: each word it lists, as commands.

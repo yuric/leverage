@@ -261,7 +261,7 @@ def doctored_prd_cases(prd):
          change_row(prd, "| `POST /v1/tasks` |", "| Creator |", "| Builder |"),
          ["agent calls", "POST /v1/tasks", "seat differs"]),
         ("the creator dropped from Add task",
-         change_row(prd, "| Add task |", "Owner or creator seat", "Owner"),
+         change_row(prd, "| Add task | None |", "Owner or creator seat", "Owner"),
          ["lifecycle", "Add task", "creator"]),
 
         # Commands a hold blocks.

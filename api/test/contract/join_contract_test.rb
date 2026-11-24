@@ -68,12 +68,14 @@ class JoinContractTest < Minitest::Test
   def test_the_join_instructions_are_text_for_a_role_and_a_connection
     shape = schemas.fetch("JoinInstructions")
     assert_equal false, shape["additionalProperties"]
-    assert_equal %w[connection role text], shape.fetch("required").sort
-    assert_equal %w[connection role text], shape.fetch("properties").keys.sort
+    # App round 2 adds the seat's permissions and, for a seat that connects
+    # on its own, its provider's model catalog (UX-9, UX-10).
+    assert_equal %w[connection models permissions role text], shape.fetch("required").sort
+    assert_equal %w[connection models permissions role text], shape.fetch("properties").keys.sort
     assert_equal Leverage::Contract.list("seat_roles"), shape.dig("properties", "role", "enum")
     assert_equal %w[http mcp], shape.dig("properties", "connection", "enum")
     assert_includes shape.fetch("description"), "never"
-    assert_equal %w[text role connection].sort, ColumnsTest::NOT_COLUMNS.fetch("JoinInstructions").sort
+    assert_equal %w[text role connection permissions models].sort, ColumnsTest::NOT_COLUMNS.fetch("JoinInstructions").sort
   end
 
   # GA-13: the read became a command that issues the token and the prompt.

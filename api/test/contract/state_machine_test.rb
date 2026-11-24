@@ -310,7 +310,8 @@ class StateMachineTest < Minitest::Test
     end
   end
 
-  # L146, L148: only a change that disables the seat takes its task away.
+  # L146, L148: only a change that disables the seat, or (app round 2,
+  # UX-11a) turns its Deliver tasks off, takes its task away.
   # A change of the seat's credential may also close its credential hold
   # and resume the task (milestone 3 plan HE-10, HE-27): those side events,
   # and the SM-42 re-evaluation, are the only others.
@@ -324,7 +325,10 @@ class StateMachineTest < Minitest::Test
       next if %w[hold.opened inbox.opened].include?(entry["event"]) &&
         entry["note"].include?("changes from a role that builds to a role that does not build")
 
-      assert_equal "seat_disabled_by_change", entry["when"], "change_seat writes #{entry["event"]} on any change"
+      # UX-11a: turning Deliver tasks off gives back the Working task as
+      # disabling does, with what that release writes.
+      assert_includes %w[seat_disabled_by_change turns_deliver_off_holding_working_task], entry["when"],
+        "change_seat writes #{entry["event"]} on any change"
     end
   end
 

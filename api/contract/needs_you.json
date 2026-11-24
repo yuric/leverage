@@ -195,6 +195,26 @@
       "choices": [],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"role": {"type": "string", "enum": ["orchestrator", "planner"], "description": "The role that is offline. planner is never written: no item opens for an offline planner (DB-31; milestone 4 plan RD-20)."}, "waiting_checks": {"type": "integer", "minimum": 0, "description": "Rule check and approval jobs queued and not claimed, plus checks held with check_error, counted by the read each time: the count now, not the count when the item opened (milestone 4 plan RD-18)."}, "credential_id": {"type": ["string", "null"], "format": "uuid"}}, "required": ["role", "waiting_checks", "credential_id"]},
       "closes": "On its own when a seat with the role polls again (L201, L402), and not before. A check waits for the orchestrator while its rule_check or approval job is queued or while it is held with check_error. A General seat counts for the orchestrator's presence while it has polled in the last 90 seconds and holds an orchestrator job, or holds nothing and, for a waiting check, could claim it (Jobs.next_for), as a new attempt when the check is held with check_error, or holds nothing while no check waits (GA-6). It opens only while at least one rule_check or approval job is queued or one check is held with check_error (L401; milestone 4 plan RD-16)."
+    },
+    {
+      "item": "agent_task_incomplete",
+      "prd_item": "A task an agent added needs its contract",
+      "about": "task",
+      "hold_reason": null,
+      "prd_choices": "Complete the contract, ask a planner to draft it, or cancel. It closes when the task's contract changes, or when the task is cancelled.",
+      "choices": [{"choice": "complete_contract", "operation_id": "complete_contract", "when": null}, {"choice": "draft_contract", "operation_id": "draft_contract", "when": null}, {"choice": "cancel", "operation_id": "cancel_task", "when": null}],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {"seat_id": {"type": "string", "format": "uuid", "description": "The seat that added the task (its task.created actor)."}}, "required": ["seat_id"]},
+      "closes": "With the contract_incomplete hold it was opened beside: on the next task.contract_changed (the owner's Complete contract or Edit contract, or a planner's draft), or when the task is cancelled. The app opens it when a contract_incomplete hold opens on a task whose task.created actor is a seat (UX-16); the owner's own Add task shows the failure on its form and opens none."
+    },
+    {
+      "item": "agent_tasks_at_limit",
+      "prd_item": "Agents have added 50 open tasks",
+      "about": "workspace",
+      "hold_reason": null,
+      "prd_choices": "None. It closes on its own when fewer than 50 tasks that agents added are open.",
+      "choices": [],
+      "facts": {"type": "object", "additionalProperties": false, "properties": {}, "required": []},
+      "closes": "On its own when fewer than 50 open tasks (not Done and not Cancelled) were added by a seat, checked by the sweep and after every task.done and task.cancelled. It opens when an agent's Add task is refused with add_task_limit because 50 are open, if it is not open already (UX-14)."
     }
   ]
 }

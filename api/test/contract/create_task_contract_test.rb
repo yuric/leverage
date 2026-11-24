@@ -110,7 +110,7 @@ class CreateTaskContractTest < Minitest::Test
     assert_equal false, shape["additionalProperties"]
     assert_equal %w[effort model], shape.fetch("required").sort
     assert validator("ReportModelRequest").valid?({ "model" => nil, "effort" => nil })
-    refute validator("ReportModelRequest").valid?({ "model" => "" , "effort" => nil }), "an empty name is null"
+    refute validator("ReportModelRequest").valid?({ "model" => "", "effort" => nil }), "an empty name is null"
     refute validator("ReportModelRequest").valid?({ "model" => "made-up" }), "both keys are required"
     rows("change_seat").each { |row| assert_equal %w[owner self], row["who"] }
   end
@@ -131,6 +131,6 @@ class CreateTaskContractTest < Minitest::Test
     events = commands.flat_map { |command| command.dig("expect", "events") || [] }
     created = events.select { |event| event["type"] == "task.created" }
     assert(created.all? { |event| event["actor_kind"] == "seat" }, "the seat adds every task")
-    assert(events.any? { |event| event["type"] == "inbox.opened" && event.dig("payload", "item") == "agent_task_incomplete" })
+    assert(events.any? { |event| event["type"] == "inbox.opened" && event.dig("payload", "kind") == "agent_task_incomplete" })
   end
 end
