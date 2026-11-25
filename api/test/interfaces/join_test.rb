@@ -121,8 +121,9 @@ class JoinTest < ActionDispatch::IntegrationTest
       assert_includes text, "You may not take new tasks, reviews or jobs; finish what you hold and keep polling."
       assert_includes text, "You may deliver tasks."
       refute_includes text, "`create_task`"
-      assert_empty listed & %w[claim_next_task submit_task claim_next_review claim_next_job create_task]
-      assert_empty %w[give_verdict submit_job_result start_action report_action_done] - listed
+      assert_includes text, "Submit completed work with `submit_task`."
+      assert_empty listed & %w[claim_next_task claim_next_review claim_next_job create_task]
+      assert_empty %w[submit_task give_verdict submit_job_result start_action report_action_done] - listed
     end
 
     test "#{connection} join for a Native seat has no report operation or model catalog" do

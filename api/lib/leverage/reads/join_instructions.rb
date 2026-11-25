@@ -53,7 +53,10 @@ module Leverage
       def allowed_operations(seat)
         Roles::DEFINITIONS.fetch(seat.role).fetch("operations").select do |operation|
           case operation
-          when "claim_next_task", "submit_task" then Permissions.builds?(seat)
+          when "claim_next_task" then Permissions.builds?(seat)
+          # Submit reads Deliver alone, as the server does: with Work off
+          # the seat still hands in the task it holds (UX-11a).
+          when "submit_task" then seat.may_deliver
           when "claim_next_review", "claim_next_job" then Permissions.works?(seat)
           when "create_task" then Permissions.creates?(seat)
           when "report_model" then seat.credential_id.nil?
