@@ -236,6 +236,21 @@ class SubmitJobResultTest < ActiveSupport::TestCase
     assert_equal [ late.id, late.id ], written.first(2).map(&:subject_id)
   end
 
+  test "a result from a seat turned off is forbidden and writes nothing; a paused seat's is accepted" do
+    seat = scenario.orchestrator
+    _task, _pending, check, job = claimed_check(seat: seat)
+    assert_completed(owner_command("change_seat", { "id" => seat.id, "enabled" => false }))
+
+    written = events_written { assert_refused("forbidden", submit_result(seat, job, PASSED)) }
+    assert_empty written
+    assert_equal [ "claimed", seat.id, nil ], [ *job.reload.attributes.values_at("state", "claimed_by_seat_id"), check.reload.result ]
+
+    assert_completed(owner_command("change_seat", { "id" => seat.id, "enabled" => true }))
+    assert_completed(owner_command("pause_seat", { "id" => seat.id }))
+    assert_completed(submit_result(seat, job, PASSED))
+    assert_equal [ "finished", "passed" ], [ job.reload.state, check.reload.result ]
+  end
+
   test "a cancelled task's job is task_cancelled; another seat's is not_holder; a job of another workspace is 404" do
     task, _pending, _check, job = claimed_check
     job.update!(state: "withdrawn")

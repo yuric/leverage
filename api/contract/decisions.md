@@ -1464,6 +1464,14 @@ task. PRD places are named by their section.
   lone General seat's own draft. Alternatives: let the adding seat check
   its own task; or bar it only from the check of the Complete contract it
   sent itself, so that it may check a contract the owner completes later.
+- **UX-13b** `[reading]` A seat the owner has turned off (`enabled`
+  false) is refused `forbidden` when it sends the result of a job it
+  holds: turning it off already releases its Working task and stops
+  showing it the job (`Jobs.next_for`), and a seat that connects on its
+  own keeps its token and its process. The job is left to its run
+  timeout, as before. A paused seat's result is accepted: a pause stops
+  new claims only. Alternatives: accept the result until the run
+  timeout; or withdraw and requeue the job when its seat is turned off.
 - **UX-14** `[reading]` One new refusal, `add_task_limit` (agent calls,
   precedence 14, after `duplicate_name`; its `reason` names the limit):
   20 tasks added per seat in any rolling hour; no task from a task a seat

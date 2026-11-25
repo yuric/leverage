@@ -23,7 +23,9 @@ module Leverage
       # Refused, and nothing is written (RD-41), in precedence order:
       # task_cancelled for the job of a task cancelled while the seat held
       # the job; not_holder from a seat that did not claim the job;
-      # forbidden from a seat of a role that does not claim its kind;
+      # forbidden from a seat of a role that does not claim its kind, or
+      # from a seat the owner has turned off (a paused seat finishes the
+      # job it holds; the refused job is left to its run timeout);
       # invalid_state for a job that is not claimed (timed out, withdrawn or
       # finished), whose run time has passed (L399: a result after its
       # timeout is discarded), or a draft whose task has left Backlog.
@@ -61,7 +63,7 @@ module Leverage
           held = @job.claimed_by_seat_id == @seat.id
           codes << "task_cancelled" if held && @task&.state == "cancelled"
           codes << "not_holder" unless held
-          codes << "forbidden" unless Jobs.role_matches?(@job, @seat)
+          codes << "forbidden" unless @seat.enabled && Jobs.role_matches?(@job, @seat)
           if @task&.content_deleted_at || @job.state != "claimed" || Jobs.due?(@job, :run, ctx.at)
             codes << Refusal.new(code: "invalid_state")
           end

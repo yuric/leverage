@@ -1678,7 +1678,7 @@
       "post": {
         "operationId": "submit_job_result",
         "summary": "Returns the result in the fixed shape for the job's kind, with the tokens and spend it used.",
-        "description": "Each accepted result also writes `cost.reported` with the job as subject. A contract draft's result is the Complete contract command. A result after the job's timeout is discarded. It is refused with invalid_state, and writes nothing, after the job's timeout or for a withdrawn job; with task_cancelled for a cancelled task's job; with not_holder from a seat that does not hold the job (milestone 4 plan RD-41).",
+        "description": "Each accepted result also writes `cost.reported` with the job as subject. A contract draft's result is the Complete contract command. A result after the job's timeout is discarded. It is refused with invalid_state, and writes nothing, after the job's timeout or for a withdrawn job; with task_cancelled for a cancelled task's job; with not_holder from a seat that does not hold the job (milestone 4 plan RD-41); with forbidden from a seat the owner has turned off, whose job is left to its run timeout (a paused seat's result is accepted).",
         "tags": [
           "agent"
         ],
