@@ -21,7 +21,11 @@ and handles orchestrator jobs. A seat that connects on its own gets one
 landing prompt and reads its instructions from `GET /v1/join`, then works
 over HTTP or the bundled MCP server. General briefings carry build or
 review instructions as text, and the join instructions bound each job to
-its own material. Credentials lists both kinds of
+its own material. Prompt agents report their model and effort to the
+roster. Remove ends the token. Connect and Change have Work on tasks,
+Deliver tasks and Create tasks. A Prompt agent with Create tasks can add
+a task with criteria, and the task log and Activity name the creating
+seat. Credentials lists both kinds of
 credential, with token Add, Refresh, Verify all,
 Rename and Remove. Confirmed local credential cleanup resumes when the
 helper starts. The Handoff tab supports reordering. Codex CLI 0.169.0 is
@@ -35,7 +39,8 @@ submission refreshes the project reference for the next Add task. Drafts
 with empty details preserve saved task text. Needs you can open
 notification settings. Native Connect guides the owner to Add credential
 if there are no logins and offers Try again if the login read fails.
-Native Connect and Change use the provider's documented model choices.
+Native Connect and Change use the shared catalog for model and supported
+effort choices.
 Settings groups rules by checker.
 
 The full workflows use stand-in tools. Developer checks also ran a
@@ -81,7 +86,8 @@ research, and the following code and checks.
   the API's port in automated runs) and `.env.example`;
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
-  with stand-in tools, including a prompt-connected agent), `e2e_handoff.sh`
+  with stand-in tools, including the Prompt connection, model report, task
+  creation and Deliver cases), `e2e_handoff.sh`
   (six runs interrupted by a limit or a sign-out, with stand-in tools),
   `e2e_rule_checks.sh` (eight runs with the rules on, including two General
   agents taking a task from the form to Done),
@@ -225,6 +231,8 @@ python3 scripts/check_contract_tables.py             # PRD tables vs the contrac
 python3 scripts/test_check_contract_tables.py        # self-test of that check
 python3 -I scripts/generate_swift_contract.py --check  # Swift copy of the contract is current
 python3 -I scripts/test_generate_swift_contract.py   # self-test of the generator
+python3 -I scripts/check_model_catalog.py            # model catalog and its use agree
+python3 -I scripts/test_check_model_catalog.py       # self-test of the catalog check
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail

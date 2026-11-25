@@ -11,16 +11,15 @@ struct RosterRow: Identifiable, Equatable, Sendable {
     let name: String
     /// "Builder. Building Fix rounding in invoice totals."
     let roleLine: String
-    /// "Claude · The tool's default · Default effort · On"
+    /// Provider, model, effort when shown, and whether the agent is on.
     let detailLine: String
+    let permissionsLine: String
     /// "Runs on Personal.", for an agent the app runs.
     let loginLine: String?
     let lastPolledLine: String
     let runChip: CardChip?
     let canStart: Bool
     let canStop: Bool
-    /// An agent connected by prompt can be issued a replacement.
-    let canIssueNewPrompt: Bool
     let canPause: Bool
     let canResume: Bool
     let canChange: Bool
@@ -56,14 +55,18 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         }
         roleLine = AgentsCopy.roleLine.filled(["role": AgentsCopy.role(seat.role).text, "state": state])
 
-        let model = seat.model.flatMap { $0.isEmpty ? nil : $0 } ?? AgentsCopy.defaultModel.text
-        // A tool that is given no effort runs on its own default, whatever
-        // effort the agent was given.
-        let given = ProviderCatalog.takesEffort(seat.provider) ? seat.effort : nil
-        let effort = given.flatMap { $0.isEmpty ? nil : AgentsCopy.effortNamed.filled(["effort": $0]) }
-            ?? AgentsCopy.defaultEffort.text
+        let unselectedModel = runsOnApp ? AgentsCopy.defaultModel : .notReported
+        let model = seat.model.flatMap { $0.isEmpty ? nil : $0 } ?? unselectedModel.text
+        let nativeEffort = ModelCatalog.entry(for: seat.provider)?.nativeEffort.value == true
+        let reportedEffort = seat.effort.flatMap { $0.isEmpty ? nil : AgentsCopy.effortNamed.filled(["effort": $0]) }
+        let effort = runsOnApp ? (nativeEffort ? reportedEffort ?? AgentsCopy.defaultEffort.text : nil) : reportedEffort
         let onOff = (seat.paused ? AgentsCopy.pausedWord : seat.enabled ? .on : .off).text
-        detailLine = [ProviderNames.name(seat.provider), model, effort, onOff].joined(separator: " · ")
+        detailLine = [ProviderNames.name(seat.provider), model, effort, onOff].compactMap { $0 }.joined(separator: " · ")
+        let permissions: [(Bool, AgentsCopy)] = [
+            (seat.permissions.work, .mayWork), (seat.permissions.deliver, .mayDeliver), (seat.permissions.create, .mayCreate),
+        ]
+        let allowed = permissions.filter { $0.0 }.map { $0.1.text.lowercased() }.joined(separator: ", ")
+        permissionsLine = AgentsCopy.mayList.filled(["permissions": allowed.isEmpty ? AgentsCopy.mayNothing.text : allowed])
         loginLine = runsOnApp ? loginName.map { AgentsCopy.runsOn.filled(["login": $0]) } : nil
 
         if let polled = seat.lastPolledAt {
@@ -82,7 +85,6 @@ struct RosterRow: Identifiable, Equatable, Sendable {
         }
         canStart = runsOnApp && working && seat.runState != .running
         canStop = runsOnApp && seat.runState == .running
-        canIssueNewPrompt = !runsOnApp
         canPause = working
         canResume = seat.paused
         canChange = true
@@ -110,8 +112,7 @@ struct PendingRemoval: Equatable, Sendable {
 }
 
 /// The Agents screen: one row per agent from `list_seats`, with Start and
-/// Stop for an agent the app runs, New prompt for one connected by prompt,
-/// and Remove behind a confirmation.
+/// Stop for an agent the app runs, and Remove behind a confirmation.
 ///
 /// It reads again when the events tail delivers a batch, and every 10 seconds,
 /// because when an agent last asked for work and whether it runs are not
@@ -134,8 +135,6 @@ final class RosterModel {
     private(set) var state: State = .loading
     private(set) var rows: [RosterRow] = []
     private(set) var pendingRemoval: PendingRemoval?
-    /// The replacement prompt sheet, while the owner has one open.
-    private(set) var newPrompt: LandingPromptModel?
     private(set) var busy: Set<UUID> = []
     private(set) var working: [UUID: AgentsCopy] = [:]
     /// The Change sheet, while the owner has one open.
@@ -144,24 +143,23 @@ final class RosterModel {
 
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let noteRead: @MainActor (Int) -> Void
-    @ObservationIgnored private let copy: @MainActor (String) -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timing: FollowTiming
     @ObservationIgnored private let testedProviders: [Provider]
     @ObservationIgnored private var seats: [UUID: Seat] = [:]
     @ObservationIgnored private var logins: [ConnectAgentModel.LoginChoice] = []
+    @ObservationIgnored private var workingTaskHolders: Set<UUID> = []
     @ObservationIgnored private var keys: [Action: IdempotencyKey] = [:]
     @ObservationIgnored private var subscription: EventFeed.Subscription?
     @ObservationIgnored private var generation = 0
 
     init(
         api: any OwnerAPI, noteRead: @escaping @MainActor (Int) -> Void,
-        copy: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
+        now: @escaping () -> Date = Date.init,
         timing: FollowTiming = .normal, testedProviders: [Provider] = ContractLists.orchestratorTestedProviders
     ) {
         self.api = api
         self.noteRead = noteRead
-        self.copy = copy
         self.now = now
         self.timing = timing
         self.testedProviders = testedProviders
@@ -185,11 +183,15 @@ final class RosterModel {
             var loginNames: [UUID: String] = [:]
             var accounts: [Credential] = []
             var doing: [UUID: String] = [:]
+            var loginChoices: [ConnectAgentModel.LoginChoice] = []
+            var workingTaskHolders: Set<UUID> = []
             do {
                 let list = try await api.credentials()
                 loginNames = Dictionary(
                     list.credentials.map { ($0.credential.id, $0.credential.name) }, uniquingKeysWith: { first, _ in first })
                 accounts = list.credentials.map(\.credential)
+                loginChoices = list.credentials.filter { $0.credential.kind == .login }
+                    .sorted { $0.credential.position < $1.credential.position }.map(ConnectAgentModel.LoginChoice.init)
                 position = min(position, list.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
                 throw error
@@ -199,7 +201,9 @@ final class RosterModel {
             do {
                 let board = try await api.board()
                 for entry in board.tasks where entry.task.state == .working || entry.task.state == .finishing {
-                    if let holder = entry.task.holderSeatID, doing[holder] == nil { doing[holder] = entry.task.title }
+                    guard let holder = entry.task.holderSeatID else { continue }
+                    if doing[holder] == nil { doing[holder] = entry.task.title }
+                    if entry.task.state == .working { workingTaskHolders.insert(holder) }
                 }
                 position = min(position, board.asOfSeq)
             } catch let error as TransportError where error.code == .unauthenticated {
@@ -211,8 +215,8 @@ final class RosterModel {
             let at = now()
             let present = seats.seats.filter { $0.removedAt == nil }
             self.seats = Dictionary(present.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            logins = accounts.filter { $0.kind == .login }.sorted { $0.position < $1.position }
-                .map(ConnectAgentModel.LoginChoice.init)
+            logins = loginChoices
+            self.workingTaskHolders = workingTaskHolders
             rows = present.map { seat in
                 // The row says it only for an agent that is on and running.
                 let waiting = AgentWait.account(for: seat, in: accounts, at: at).map(ProviderNames.account)
@@ -273,7 +277,7 @@ final class RosterModel {
     func beginChange(_ id: UUID) {
         guard let seat = seats[id], rows.contains(where: { $0.id == id }) else { return }
         changing = ChangeAgentModel(
-            api: api, seat: seat, logins: logins,
+            api: api, seat: seat, logins: logins, holdsTask: workingTaskHolders.contains(id),
             onChanged: { [weak self] in
                 self?.changing = nil
                 await self?.load()
@@ -351,15 +355,5 @@ final class RosterModel {
             if CommandKey.wasAnswered(error) { keys[action] = nil }
             failures[id] = ShellCopy.sentence(for: error).text
         }
-    }
-
-    func prepareNewPrompt(_ id: UUID, connection: LandingPromptConnection) {
-        guard newPrompt == nil, let seat = seats[id], seat.credentialID == nil, !busy.contains(id) else { return }
-        newPrompt = LandingPromptModel(api: api, copy: copy, seatID: id, connection: connection)
-    }
-
-    func closeNewPrompt() {
-        newPrompt?.close()
-        newPrompt = nil
     }
 }

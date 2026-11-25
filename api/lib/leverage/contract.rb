@@ -50,6 +50,7 @@ module Leverage
       def timers = load("timers.json")
       def needs_you = load("needs_you.json")
       def readers = load("readers.json")
+      def models = load("models.json")
       def openapi = load("openapi.json")
 
       # A meta-schema under meta/, by name: meta_schema("registry").

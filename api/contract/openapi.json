@@ -1758,6 +1758,157 @@
         }
       }
     },
+    "/v1/tasks": {
+      "post": {
+        "operationId": "create_task",
+        "summary": "Adds a task to the Backlog and completes its contract, as the Add task form does.",
+        "description": "For a seat whose permissions include Create tasks (caller `creator`; otherwise `forbidden`). Runs Add task, then Complete contract with the seat as caller, so `task.created`, `task.contract_changed` and `task.ready` name the seat as actor and `task.before_ready` runs unchanged (UX-11). Answers AgentTaskCreated with `ready` or `backlog` once the check answers; a model check answers 202 pending, and `GET /v1/commands/{key}` then answers the same result. A refusal in the first answer means nothing was created. After a 202 the task already exists. A later `task_cancelled` means the owner ended it, while `invalid_state` can mean the owner edited its contract. Leave the existing task with the owner after either refusal. Refused `add_task_limit` at 20 tasks added by the seat in a rolling hour, when the seat's origin task was itself added by a seat, or at 50 open tasks agents added in the workspace (UX-14). 422 `invalid` for a project the seat may not name (UX-11c).",
+        "tags": [
+          "agent"
+        ],
+        "x-leverage-caller": "creator",
+        "x-leverage-command": [
+          "add_task",
+          "complete_contract"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "seatBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The command completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentTaskCreatedCompleted"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "description": "The command was refused; the body names the cause.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusedOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/seat/model": {
+      "post": {
+        "operationId": "report_model",
+        "summary": "Reports the model and effort the agent runs on.",
+        "description": "For a seat that connects on its own (a seat the app runs is refused `forbidden`). Runs change_seat as the seat, which may change only its own model and effort: `seat.changed` is written with the seat as actor, and only when a value changes (UX-9). Each value must be one the model catalog lists for the seat's provider (the join instructions give the list), or null; 422 `invalid` otherwise. Allowed at any time, so an agent that switches model reports again. Not needed before claiming.",
+        "tags": [
+          "agent"
+        ],
+        "x-leverage-caller": "any",
+        "x-leverage-command": [
+          "change_seat"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportModelRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "seatBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The command completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportedModelCompleted"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The command met a model-checked gate and waits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "description": "The command was refused; the body names the cause.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusedOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "operationId": "get_health",
@@ -5809,7 +5960,7 @@
       "post": {
         "operationId": "issue_landing_prompt",
         "summary": "Issues the landing prompt of a seat that connects on its own, with a new token.",
-        "description": "In one transaction the server issues a new token for the seat, stores only its hash in `seats.token_hash`, which ends the token before it (an agent still using that one gets 401 and stops), and returns the short prompt with the new token in it, in this response only (GA-13). The prompt names the address this request came in on; the app's is `http://127.0.0.1:<port>`, so only an agent on the owner's Mac can land. The Connect sheet calls it right after connect_seat, and the roster's New prompt calls it again. The old agent stops at its next call and the new one is not told of the old one's work, so the command releases the work the seat holds at once: a Working task goes to Ready with reason `new_prompt`, a Finishing task's lease ends as when the seat is removed, a review is released, and a job misses its run time as its run timer would make it miss (GA-17). A repeat with the same key answers the outcome without the token or the text and releases nothing more; the app asks again with a new key, which issues another token.",
+        "description": "In one transaction the server issues a new token for a seat that connects on its own and has not landed, stores only its hash in `seats.token_hash`, which ends the token before it, and returns the short prompt with the new token in it, in this response only (GA-13). The prompt names the address this request came in on; the app's is `http://127.0.0.1:<port>`, so only an agent on the owner's Mac can land. The Connect sheet calls it right after connect_seat, and asks again with a new key when the first answer was lost. A seat that has not landed holds nothing, so the command gives back nothing. Once the seat has landed (it has polled, or holds a task, a review or a job) it is refused `invalid_state`: to give an agent a new prompt, the owner removes it, which ends its token and gives back its work, and connecting a new one gives the new prompt (UX-2). A repeat with the same key answers the outcome without the token or the text.",
         "tags": [
           "owner"
         ],
@@ -5885,7 +6036,7 @@
             }
           },
           "409": {
-            "description": "The command was refused; the body names the cause: `invalid_state` for a seat the app runs, which the helper gives its token (issue_seat_token).",
+            "description": "The command was refused; the body names the cause: `invalid_state` for a seat the app runs, which the helper gives its token (issue_seat_token), and for a seat that has landed (UX-2).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7636,7 +7787,7 @@
       "Refusal": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Why a command was refused. `code` is a registry refusal; `rule_id` and `reason` are set for `blocked_by_rule`.",
+        "description": "Why a command was refused. `code` is a registry refusal; `rule_id` and `reason` are set for `blocked_by_rule`. `reason` is also set for `add_task_limit`: which of the agent's Add task limits was met (UX-14).",
         "properties": {
           "code": {
             "type": "string",
@@ -7654,6 +7805,7 @@
               "blocked_by_rule",
               "credential_in_use",
               "duplicate_name",
+              "add_task_limit",
               "not_eligible"
             ]
           },
@@ -11857,7 +12009,7 @@
       "Seat": {
         "type": "object",
         "additionalProperties": false,
-        "description": "`credential_id` is set for a seat the app runs and null for a seat that connects on its own. The token hash is never returned.",
+        "description": "`credential_id` is set for a seat the app runs and null for a seat that connects on its own. The token hash is never returned. `model` and `effort` are `\"\"` for the tool's default on a seat the app runs, picked from the model catalog (models.json); on a seat that connects on its own they are what it reported with report_model, `\"\"` until it reports (UX-7, UX-9).",
         "properties": {
           "id": {
             "type": "string",
@@ -11973,6 +12125,9 @@
               null
             ],
             "description": "Why the seat's last run ended, as the helper reported it or as a limit or sign-out report recorded it; null when no run has ended (milestone 3 plan HD-3, HD-10)."
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SeatPermissions"
           }
         },
         "required": [
@@ -11991,15 +12146,16 @@
           "removed_at",
           "wanted_running",
           "run_credential_id",
-          "run_stop_reason"
+          "run_stop_reason",
+          "permissions"
         ],
         "examples": [
           {
             "id": "00000000-0000-4000-8000-000000000143",
             "name": "example",
             "provider": "claude",
-            "model": "example",
-            "effort": "example",
+            "model": "claude-opus-5-5",
+            "effort": "high",
             "role": "builder",
             "strength_rank": 1,
             "credential_id": "00000000-0000-4000-8000-000000000144",
@@ -12010,14 +12166,19 @@
             "removed_at": "2026-01-01T00:00:00Z",
             "wanted_running": false,
             "run_credential_id": "00000000-0000-4000-8000-000000000144",
-            "run_stop_reason": null
+            "run_stop_reason": null,
+            "permissions": {
+              "work": true,
+              "deliver": true,
+              "create": true
+            }
           }
         ]
       },
       "ConnectSeatRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "`credential_id` set connects a seat the app runs (it picks its credential and starts it); null connects a seat that connects on its own, whose token comes with its landing prompt (issue_landing_prompt, GA-13).",
+        "description": "`credential_id` set connects a seat the app runs (it picks its credential and starts it); null connects a seat that connects on its own, whose token comes with its landing prompt (issue_landing_prompt, GA-13). `model` and `effort` are checked against the model catalog for the credential's provider (`\"\"` or null is the tool's default; with it the effort is the tool's default too), and must be empty for a seat that connects on its own, whose provider must be a login provider: 422 `invalid` otherwise (UX-7, UX-8). `permissions` omitted is all on (UX-10).",
         "properties": {
           "name": {
             "type": "string",
@@ -12077,6 +12238,9 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SeatPermissions"
           }
         },
         "required": [
@@ -12086,7 +12250,8 @@
         "examples": [
           {
             "name": "example",
-            "role": "builder"
+            "role": "builder",
+            "provider": "claude"
           }
         ]
       },
@@ -12137,12 +12302,16 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SeatPermissions"
           }
         },
         "required": [],
         "examples": [
           {}
-        ]
+        ],
+        "description": "Every field is optional; a field equal to the stored value is no change. `permissions` is the whole set; turning `deliver` off gives back the Working task the seat holds (release reason `deliver_turned_off`, UX-11a). `model` and `effort` are checked against the model catalog only when the request sets one of them or a credential of another provider, and a seat that connects on its own takes neither from the owner: 422 `invalid` otherwise (UX-7, UX-8)."
       },
       "IssueHelperTokenRequest": {
         "type": "object",
@@ -12916,7 +13085,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. Model, effort and strength rank are what handoff uses; whether the Mac app fills them from a provider default or the owner chooses them is the PRD's open decision \"How a credential's model is set\", and either way they arrive here.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. A login may name a model in the catalog, or let the server use the catalog default. Effort is empty for every new credential, and model is empty for API tokens (UX-7). Strength rank is what Handoff uses.",
         "properties": {
           "credential_id": {
             "type": "string",
@@ -13009,8 +13178,8 @@
             "provider": "claude_api",
             "name": "example",
             "masked_label": "••••••••",
-            "model": "claude-model-1",
-            "effort": "high",
+            "model": null,
+            "effort": null,
             "strength_rank": 2
           }
         ]
@@ -13803,7 +13972,9 @@
               "account_signed_out",
               "limit_with_no_reset_time",
               "no_reviewer_eligible",
-              "orchestrator_offline"
+              "orchestrator_offline",
+              "agent_task_incomplete",
+              "agent_tasks_at_limit"
             ]
           },
           "about_kind": {
@@ -13855,7 +14026,9 @@
                 "change_budget",
                 "resume_project",
                 "sign_in_again",
-                "connect_seat"
+                "connect_seat",
+                "complete_contract",
+                "draft_contract"
               ]
             }
           },
@@ -15434,7 +15607,12 @@
                 "removed_at": "2026-01-01T00:00:00Z",
                 "wanted_running": false,
                 "run_credential_id": "00000000-0000-4000-8000-000000000231",
-                "run_stop_reason": null
+                "run_stop_reason": null,
+                "permissions": {
+                  "work": true,
+                  "deliver": true,
+                  "create": true
+                }
               }
             ],
             "as_of_seq": 12
@@ -17675,7 +17853,7 @@
       "JoinInstructions": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The agent's whole instructions for its role and connection (GA-12, GA-14), as Markdown in `text`: what to read first (its briefing, before any work on a task or a review); the work loop (long-poll `GET /v1/next?wait=30`, act on the answer, claim, work, heartbeat while it holds a task or a review, submit, and ask again at once, never stopping on its own); what each next kind means; how a stop arrives (a 401: the seat was removed, or a new prompt ended its token) and that it then stops at once and tells its user; what it may not do, and how it says what it cannot do (release the work, ask a question, fail a review with notes, or pass a job's question to the owner); and every call (HTTP) or the MCP settings and every tool (MCP) its role may make. A General seat's text names no role file and carries the short safety rules a checker needs (GA-2). The text never holds the token: the agent has it from its landing prompt.",
+        "description": "The agent's whole instructions for its role and connection (GA-12, GA-14), as Markdown in `text`: what to read first (its briefing, before any work on a task or a review); the work loop (long-poll `GET /v1/next?wait=30`, act on the answer, claim, work, heartbeat while it holds a task or a review, submit, and ask again at once, never stopping on its own); what each next kind means; how a stop arrives (a 401: the seat was removed) and that it then stops at once and tells its user; what it may not do, and how it says what it cannot do (release the work, ask a question, fail a review with notes, or pass a job's question to the owner); and every call (HTTP) or the MCP settings and every tool (MCP) its role may make. A General seat's text names no role file and carries the short safety rules a checker needs (GA-2). The text never holds the token: the agent has it from its landing prompt. `permissions` is what the seat may do now (UX-10); the text says the same and lists only the calls the seat may make. `models` is the model catalog's entries for the seat's provider, for a seat that connects on its own to report its model with report_model; null for a seat the app runs.",
         "properties": {
           "text": {
             "type": "string",
@@ -17697,18 +17875,362 @@
               "http",
               "mcp"
             ]
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SeatPermissions"
+          },
+          "models": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CatalogModel"
+            }
           }
         },
         "required": [
           "text",
           "role",
-          "connection"
+          "connection",
+          "permissions",
+          "models"
         ],
         "examples": [
           {
             "text": "You are connected to Leverage as a general agent. Ask GET /v1/next?wait=30 again as soon as it answers. Never stop this loop on your own.",
             "role": "general",
-            "connection": "http"
+            "connection": "http",
+            "permissions": {
+              "work": true,
+              "deliver": true,
+              "create": true
+            },
+            "models": [
+              {
+                "id": "claude-opus-5-5",
+                "efforts": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "SeatPermissions": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "What a seat may do (contract decisions UX-10, UX-11a): `work` claims tasks, reviews and jobs its role allows (new work only; held work goes on); `deliver` submits a task for review, and a seat is offered and leased a task only with both `work` and `deliver`; `create` adds a task with create_task. All three are on for a new seat unless the owner turns one off. Action leases read neither `work` nor `deliver`.",
+        "properties": {
+          "work": {
+            "type": "boolean"
+          },
+          "deliver": {
+            "type": "boolean"
+          },
+          "create": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "work",
+          "deliver",
+          "create"
+        ],
+        "examples": [
+          {
+            "work": true,
+            "deliver": true,
+            "create": true
+          }
+        ]
+      },
+      "CreateTaskRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "An agent's Add task (UX-11): the task goes to the Backlog and its contract is completed in the same call, as the Add task form does, so `task.before_ready` runs. No outward actions, state, minimum strength or budget cap: those stay the owner's (UX-11b). While the seat holds a task, a review or a job, the task goes into that work's project: an omitted or null `project_id` takes it and any other is refused 422 `invalid`; a seat that holds nothing may name any project of the workspace, or none (UX-11c). The criteria end with exactly one review criterion, as Complete contract requires.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "details": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 24002
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CriterionInput"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "default": "normal"
+          },
+          "work_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "title",
+          "criteria"
+        ],
+        "examples": [
+          {
+            "title": "example",
+            "details": "example",
+            "criteria": [
+              {
+                "text": "example",
+                "kind": "build"
+              },
+              {
+                "text": "example",
+                "kind": "review"
+              }
+            ],
+            "project_id": null,
+            "priority": "normal",
+            "work_reference": null
+          }
+        ]
+      },
+      "AgentTaskCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The task an agent added and where it stands once its check has answered (UX-11): `ready` when `task.before_ready` passed, `backlog` when it failed (the task keeps its `contract_incomplete` hold and the owner is told, UX-16). Written when the call completes at once, and by the settled check when the call answered 202 pending.",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "backlog"
+            ]
+          }
+        },
+        "required": [
+          "task_id",
+          "state"
+        ],
+        "examples": [
+          {
+            "task_id": "00000000-0000-4000-8000-000000000301",
+            "state": "ready"
+          },
+          {
+            "task_id": "00000000-0000-4000-8000-000000000302",
+            "state": "backlog"
+          }
+        ]
+      },
+      "AgentTaskCreatedCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the call completed; `result` is AgentTaskCreated. `command` is `add_task`, the first of the two commands the call runs.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "$ref": "#/components/schemas/AgentTaskCreated"
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "add_task",
+            "outcome": "completed",
+            "result": {
+              "task_id": "00000000-0000-4000-8000-000000000301",
+              "state": "ready"
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "ReportModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The model and effort a seat that connects on its own runs on (UX-9), each exactly as the model catalog names it for the seat's provider, or null when the agent cannot tell (a null model needs a null effort). An unlisted value is refused 422 `invalid` with a sentence listing what is accepted, and nothing is stored.",
+        "properties": {
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "effort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "model",
+          "effort"
+        ],
+        "examples": [
+          {
+            "model": "claude-opus-5-5",
+            "effort": "high"
+          },
+          {
+            "model": null,
+            "effort": null
+          }
+        ]
+      },
+      "ReportedModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The seat's model and effort as stored; `\"\"` where the agent reported null.",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "effort": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "effort"
+        ],
+        "examples": [
+          {
+            "model": "claude-opus-5-5",
+            "effort": "high"
+          }
+        ]
+      },
+      "ReportedModelCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "200: the report completed; `result` is ReportedModel. `command` is `change_seat`.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "$ref": "#/components/schemas/CommandName"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "completed"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ReportedModel"
+          },
+          "refusal": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "key",
+          "command",
+          "outcome",
+          "result",
+          "refusal"
+        ],
+        "examples": [
+          {
+            "key": "example",
+            "command": "change_seat",
+            "outcome": "completed",
+            "result": {
+              "model": "claude-opus-5-5",
+              "effort": "high"
+            },
+            "refusal": null
+          }
+        ]
+      },
+      "CatalogModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One model of the model catalog as the join instructions give it (UX-9): its exact name and the efforts it accepts (empty when none is documented).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "efforts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "id",
+          "efforts"
+        ],
+        "examples": [
+          {
+            "id": "claude-opus-5-5",
+            "efforts": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
           }
         ]
       }

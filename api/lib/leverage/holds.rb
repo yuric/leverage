@@ -70,6 +70,7 @@ module Leverage
       opened = ctx.emit("hold.opened", task: task, round: round, subject: hold, cause_id: cause_id, actor_kind: actor_kind,
         actor_id: actor_id, payload: { reason: reason, rule_id: rule_id, credential_id: credential_id,
                                        rule_check_id: (rule_check_id if NAMES_CHECK.include?(reason)) })
+      AgentTasks.contract_incomplete(ctx, task, hold, opened) if reason == "contract_incomplete"
       if item
         open_item(ctx, hold, task: task, facts: facts, cause_id: opened.id, actor_kind: actor_kind, actor_id: actor_id,
           round: round)

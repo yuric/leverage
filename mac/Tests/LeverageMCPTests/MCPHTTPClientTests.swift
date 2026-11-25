@@ -11,7 +11,9 @@ struct MCPHTTPClientTests {
     @Test func getJoinRequestsMCPInstructions() async throws {
         let host = "mcp-join-fixture.invalid"
         let session = StubURLProtocol.session(host: host, answer: .init(status: 200, json: """
-            {"text":"Fixture instructions","role":"general","connection":"mcp","unused":"fixture metadata"}
+            {"text":"Fixture instructions","role":"general","connection":"mcp",
+             "permissions":{"work":true,"deliver":false,"create":true},
+             "models":[{"id":"claude-opus-5-5","efforts":["high"]}],"unused":"fixture metadata"}
             """))
         defer { session.invalidateAndCancel() }
         let transport = HTTPTransport(
@@ -22,6 +24,8 @@ struct MCPHTTPClientTests {
         #expect(answer.status == 200)
         #expect(answer.body == .object([
             "text": .string("Fixture instructions"), "role": .string("general"), "connection": .string("mcp"),
+            "permissions": .object(["work": .bool(true), "deliver": .bool(false), "create": .bool(true)]),
+            "models": .array([.object(["id": .string("claude-opus-5-5"), "efforts": .array([.string("high")])])]),
         ]))
         let requests = StubURLProtocol.requests(host: host)
         try #require(requests.count == 1)

@@ -15,7 +15,7 @@ class CallerInterfacesTest < ActionDispatch::IntegrationTest
   # The interface each registry caller belongs to. The agent callers are
   # the seat roles' (roles.json); public needs no token.
   INTERFACES = {
-    "any" => :seat, "builder" => :seat, "holder" => :seat, "reviewer" => :seat, "job_claimer" => :seat,
+    "any" => :seat, "builder" => :seat, "holder" => :seat, "reviewer" => :seat, "job_claimer" => :seat, "creator" => :seat,
     "job_holder" => :seat, "owner" => :owner, "helper" => :helper, "public" => :public
   }.freeze
 

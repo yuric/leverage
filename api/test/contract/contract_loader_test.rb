@@ -27,7 +27,7 @@ class ContractLoaderTest < Minitest::Test
 
   def test_named_readers_return_the_parsed_files
     assert_equal Leverage::Contract.load("registry.json"), Leverage::Contract.registry
-    %i[state_machine steps hooks shipped_rules jobs roles timers needs_you readers openapi].each do |reader|
+    %i[state_machine steps hooks shipped_rules jobs roles timers needs_you readers models openapi].each do |reader|
       assert_respond_to Leverage::Contract, reader
     end
     assert_equal Leverage::Contract.load("meta/registry.schema.json"), Leverage::Contract.meta_schema("registry")

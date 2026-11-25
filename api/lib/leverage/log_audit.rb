@@ -102,7 +102,8 @@ module Leverage
       question_job_queue_timeout question_job_run_timeout
     ].freeze
     # The workspace timers and the one-time write, by what their events name.
-    ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility" }.freeze
+    ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility",
+                    "agent_tasks_at_limit" => "reviewer_eligibility" }.freeze
     INSTALL = "install_shipped_rules".freeze
     INSTALL_IMAGINARIUM = "install_imaginarium_project".freeze
     # The withdrawals a timer that ends a waiting command writes before its
@@ -227,12 +228,25 @@ module Leverage
 
         return findings + [ "#{label}: #{row&.command || pending.command} #{verb} but wrote #{own.uniq.join(", ")}" ]
       end
+      if (row.nil? || row.command == "issue_landing_prompt") && historical_prompt_release?(group.events, states, receipt: row)
+        advance(group.events, states)
+        return findings
+      end
+
       names = row ? [ row.command ] : candidates(group.events.first.type)
       findings + named(label, names, group.events, states)
     end
 
     def named(label, names, events, states)
       problems = names.map { |name| match(name, events, states) }
+      created = events.first
+      if names.include?("add_task") && created.type == "task.created" && created.actor_kind == "seat" && created.payload["state"] == "backlog"
+        contract = events.index { |event| event.type == "task.contract_changed" }
+        if contract && events.all? { |event| event.task_id == created.task_id }
+          problems << match("add_task", events.take(contract), states) +
+            match("complete_contract", events.drop(contract), states.merge(created.task_id => "backlog"))
+        end
+      end
       if names.include?("submit_job_result") && events.any? { |event| event.type == "job.finished" }
         action = events.find { |event| ACTION_RESULTS.key?(event.type) }
         if action
@@ -479,6 +493,61 @@ module Leverage
         problems << "led #{task} from #{state.inspect} to #{observed.inspect}, which no matched row allows"
       end
       problems
+    end
+
+    # Before UX-2, New prompt released the seat's work (GA-17). Only the
+    # releases, cancelled checks, holds and inbox changes carried its key.
+    # A held job's immediate timeout wrote under its own keyless timer.
+    # Side events alone go through the ordinary audit. After key retention
+    # only a task release with the old reason can identify the command.
+    def historical_prompt_release?(events, states, receipt:)
+      releases = events.select { |event| %w[task.released review.released].include?(event.type) }
+      return false if releases.empty?
+      return false if receipt.nil? && releases.none? { |event| event.type == "task.released" && event.payload["reason"] == "new_prompt" }
+
+      events.all? do |event|
+        state = states[event.task_id]
+        case event.type
+        when "task.released" then state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt"
+        when "review.released" then state == "in_review" && event.actor_kind == "owner"
+        when "check.finished" then prompt_withdrawal?(event, state, releases, receipt)
+        when "job.withdrawn"
+          events.any? do |check|
+            check.type == "check.finished" && check.task_id == event.task_id && check.seq < event.seq &&
+              Steps.queued_for(check)&.payload&.fetch("job_id", nil) == event.subject_id
+          end
+        when "hold.opened" then state == "finishing" && event.payload["reason"] == "action_unconfirmed"
+        when "hold.closed"
+          reason = event.payload["reason"]
+          cause = "task.released" if Holds::SEAT_BOUND.include?(reason)
+          cause = "check.finished" if %w[check_error rerun_limit].include?(reason)
+          events.any? { |other| other.type == cause && other.task_id == event.task_id && other.seq < event.seq }
+        when "inbox.opened" then %w[unconfirmed_action no_reviewer_eligible].include?(event.payload["kind"])
+        when "inbox.resolved"
+          opened = task_history_before(event).find_by(type: "inbox.opened", subject_id: event.subject_id)
+          kind = opened&.payload&.fetch("kind", nil)
+          kind == "no_reviewer_eligible" || (%w[check_could_not_run check_past_rerun_limit limit_with_no_reset_time account_signed_out].include?(kind) &&
+            events.any? { |other| other.type == "hold.closed" && other.task_id == event.task_id && other.seq < event.seq })
+        else false
+        end
+      end
+    end
+
+    def prompt_withdrawal?(event, state, releases, receipt)
+      return false unless event.subject_kind == "rule_check" && event.payload["result"] == "withdrawn"
+
+      pending_id = Steps.queued_for(event)&.payload&.fetch("pending_transition_id", nil)
+      pending = PendingTransition.find_by(id: pending_id, task_id: event.task_id, workspace_id: event.workspace_id, state: "cancelled")
+      return false unless pending&.requester_kind == "seat"
+      return false if receipt && pending.requester_id != receipt.result&.fetch("seat_id", nil)
+      return true if state == "ready" && pending.command == "claim" && claim_withdrawal?(event) &&
+        event.payload.values_at("subject_kind", "subject_id") == [ "seat", pending.requester_id ]
+
+      releases.any? do |release|
+        release.task_id == event.task_id && release.seq > event.seq &&
+          ((release.type == "task.released" && pending.command == "submit" && event.payload["hook"] == "task.before_submit") ||
+           (release.type == "review.released" && pending.command == "pass_review" && event.payload["hook"] == "task.before_done"))
+      end
     end
 
     # An override can approve a stopped action or reenter an errored
@@ -735,6 +804,7 @@ module Leverage
     def gate_findings(group, row, pending, audit, label)
       command = pending&.command || row&.command
       other = RUN_AS[command]
+      other = "complete_contract" if command == "add_task" && row&.caller_kind == "seat"
       command = other if other && group.events.any? { |event| event.type == GATED.fetch(other).first }
       move, hook = GATED[command]
       return [] unless move
@@ -817,7 +887,7 @@ module Leverage
 
       problems = []
       first = steps.first
-      unless first.opening_event_id == created.id && first.opened_at == created.effective_at
+      unless first.opened_at == created.effective_at && (first.opening_event_id == created.id || creator_opening?(created, first))
         problems << "the first step (#{first.kind}) does not open at task.created"
       end
       commands = command_of(steps)
@@ -835,6 +905,14 @@ module Leverage
       lifetime = (ended ? ended.effective_at : now) - created.effective_at
       problems << "the steps sum to #{total} s, the task lived #{lifetime} s" if (total - lifetime).abs > 1e-6
       problems
+    end
+
+    def creator_opening?(created, step)
+      return false unless created.actor_kind == "seat" && created.command_id && created.payload["state"] == "backlog"
+
+      opener = Event.find_by(id: step.opening_event_id, task_id: created.task_id, command_id: created.command_id,
+        at: created.at, effective_at: created.effective_at)
+      opener && opener.seq > created.seq && Steps.opens?(step.kind, opener.type)
     end
 
     def ending_problems(steps, open, ended)

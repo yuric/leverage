@@ -136,20 +136,19 @@ public struct ProviderEntry: Equatable, Sendable {
     /// The variables the tool gets besides `ProviderCatalog.baseEnvironment`
     /// and its account folder variable, each without a secret (CL-10).
     public let environment: Evidenced<[String]>
-    /// The model the tool itself named as its default on this Mac, with how
-    /// that is known; nil where it names none (plan HE-5). Add credential
-    /// sends it as the credential's model. It goes stale when the provider
-    /// retires the model.
-    public let defaultModel: Evidenced<String>?
-    /// Model IDs documented for the login tool, in picker order.
-    public let models: Evidenced<[String]>
+    /// The login tool's model settings from the shared catalog.
+    private var modelSettings: ProviderModels? {
+        Provider(rawValue: id).flatMap(ModelCatalog.entry(for:))
+    }
+
+    public var defaultModel: CatalogFact<String>? { modelSettings?.defaultModel }
+    public var models: [CatalogModel] { modelSettings?.models ?? [] }
 
     init(
         id: String, displayName: String, toolDisplayName: String, toolName: String,
         accountFolderVariable: Evidenced<String?>, version: Evidenced<[String]>,
         status: Evidenced<StatusCheck>, signIn: Evidenced<SignIn>, installer: Evidenced<Installer?>,
-        environment: Evidenced<[String]>, defaultModel: Evidenced<String>?,
-        models: Evidenced<[String]> = Evidenced([], .unverified)
+        environment: Evidenced<[String]>
     ) {
         self.id = id
         self.displayName = displayName
@@ -161,8 +160,6 @@ public struct ProviderEntry: Equatable, Sendable {
         self.signIn = signIn
         self.installer = installer
         self.environment = environment
-        self.defaultModel = defaultModel
-        self.models = models
     }
 }
 
@@ -300,15 +297,7 @@ public enum ProviderCatalog {
                 .documented),
             // Without USER, `claude auth status` answers signed out on this
             // Mac: the tool finds its login by the user's name.
-            environment: Evidenced([EnvironmentKeys.user], .probe),
-            // The one key of `modelUsage` in the reply to the inventory's
-            // "ready" prompt, run with no --model (inventory-providers.md §6).
-            defaultModel: Evidenced("claude-opus-5-5", .probeFullEnvironment),
-            // Read 2026-11-24: https://code.claude.com/docs/en/model-config#available-models
-            // Full IDs: https://platform.claude.com/docs/en/models/overview#latest-models
-            models: Evidenced([
-                "claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
-            ], .documented)),
+            environment: Evidenced([EnvironmentKeys.user], .probe)),
         ProviderEntry(
             id: "codex", displayName: "Codex", toolDisplayName: "Codex", toolName: "codex",
             accountFolderVariable: Evidenced("CODEX_HOME", .probe),
@@ -331,16 +320,7 @@ public enum ProviderCatalog {
                     kind: .script(shell: "/bin/sh"), url: URL(string: "https://chatgpt.com/codex/install.sh")!,
                     allowedHosts: ["chatgpt.com"]),
                 .documented),
-            environment: Evidenced([], .probe),
-            // No reply Codex gave on this Mac names its default model.
-            defaultModel: nil,
-            // Read 2026-11-24: https://learn.chatgpt.com/docs/models#recommended-models
-            // GPT-6 Sol is listed for CLI sign-in in https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode
-            // Its ID is listed in https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/models-manager/models.json
-            models: Evidenced([
-                "gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol",
-                "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna",
-            ], .documented)),
+            environment: Evidenced([], .probe)),
         ProviderEntry(
             id: "gemini", displayName: "Gemini", toolDisplayName: "Antigravity", toolName: "agy",
             // One sign-in for the Mac: the PRD states it, and `agy --help`
@@ -357,18 +337,7 @@ public enum ProviderCatalog {
                     url: URL(string: "https://antigravity.google/cli/install.sh")!,
                     allowedHosts: ["antigravity.google"]),
                 .documented),
-            environment: Evidenced([], .probe),
-            // No reply Antigravity gave on this Mac names its default model.
-            defaultModel: nil,
-            // Read 2026-11-24: https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise
-            // Orchestrator variants: https://antigravity.google/docs/cli/headless/#select-a-model-effort-or-agent
-            // Base IDs take the tool's default effort: https://antigravity.google/docs/changelog?tab=cli#v1-3-4
-            models: Evidenced([
-                "gemini-4-neon", "gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen",
-                "gemini-pro-orchestrator-neon", "gemini-pro-orchestrator", "gemini-pro-orchestrator-argon",
-                "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview",
-                "claude-sonnet-5-5", "claude-opus-5-5",
-            ], .documented)),
+            environment: Evidenced([], .probe)),
         ProviderEntry(
             id: "grok", displayName: "Grok", toolDisplayName: "Grok Build", toolName: "grok",
             // How Grok Build keeps an account is not known; it is treated as
@@ -386,28 +355,11 @@ public enum ProviderCatalog {
             // The vendor's pages answered 403 and 404 again on 2026-11-19.
             installer: Evidenced(nil, .unverified),
             // Grok is not signed in on this Mac, so no prompt has run.
-            environment: Evidenced([], .unverified),
-            // `grok models` printed "Default model: grok-4.6", signed out
-            // (inventory-providers.md §4 and §5).
-            defaultModel: Evidenced("grok-4.6", .probeFullEnvironment),
-            // Read 2026-11-24. Grok Build shows the 4.7 CLI model ID: https://x.ai/build
-            // The 4.6 flag example is in xAI's Grok Build model-selection guide:
-            // https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md#selecting-a-model
-            models: Evidenced(["grok-4.7", "grok-4.6"], .documented)),
+            environment: Evidenced([], .unverified)),
     ]
 
     public static func entry(for id: String) -> ProviderEntry? {
         entries.first { $0.id == id }
-    }
-
-    /// Whether a seat's effort is passed to the provider's tool. Claude's
-    /// and Antigravity's drivers pass `--effort`; Codex's effort is a
-    /// configuration key that was never verified, and Grok's flag is known
-    /// from `--help` only, so their drivers pass none and the app neither
-    /// asks for one nor shows one (DriverTests holds the drivers to this).
-    /// An API key has no tool, and so no driver, in this milestone.
-    public static func takesEffort(_ provider: Provider) -> Bool {
-        provider == .claude || provider == .gemini
     }
 
     /// Where a provider's tool is looked for, in order (PV-3): only

@@ -21,7 +21,11 @@ module Leverage
         GUARDS = { "ideas" => "adds_to_ideas", "backlog" => "adds_to_backlog" }.freeze
 
         def load(ctx)
-          @params = ctx.request.params
+          load_task(ctx, ctx.request.params)
+        end
+
+        def load_task(ctx, params)
+          @params = params
           @state = @params.fetch("state", "backlog")
           raise Invalid, "A task is added to Ideas or the Backlog." unless GUARDS.key?(@state)
           @project = @params["project_id"] && Project.find_by(id: @params["project_id"], workspace_id: ctx.workspace.id)
@@ -31,6 +35,8 @@ module Leverage
           problem = LinkRules.work_reference_problem(@params["work_reference"])
           raise Invalid, problem if problem
         end
+
+        private :load_task
 
         def refusals(_ctx) = [ state_refusal(nil, [ GUARDS.fetch(@state) ]) ].compact
 

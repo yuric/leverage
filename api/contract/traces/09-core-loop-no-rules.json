@@ -22,7 +22,7 @@
       {"id": "$credential:codex_login", "kind": "login", "provider": "codex", "name": "Codex", "state": "active", "limited_until": null, "position": 2, "model": null, "effort": null, "strength_rank": null}
     ],
     "seats": [
-      {"id": "$seat:builder", "name": "Builder", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 1, "credential_id": "$credential:claude_login", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:builder", "name": "Builder", "provider": "claude", "model": "claude-opus-5-5", "effort": "high", "role": "builder", "strength_rank": 1, "credential_id": "$credential:claude_login", "enabled": true, "paused": false, "last_polled_at": null},
       {"id": "$seat:reviewer", "name": "Reviewer", "provider": "codex", "model": "", "effort": "", "role": "reviewer", "strength_rank": 1, "credential_id": "$credential:codex_login", "enabled": true, "paused": false, "last_polled_at": null}
     ],
     "projects": [],
@@ -84,7 +84,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:4", "type": "task.claimed", "schema_version": 1, "at": "@t:20", "effective_at": "@t:20", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_20", "payload": {"seat_id": "$seat:builder", "credential_id": "$credential:claude_login", "model": "claude-model-1"}}
+          {"ref": "@event:4", "type": "task.claimed", "schema_version": 1, "at": "@t:20", "effective_at": "@t:20", "actor_kind": "seat", "actor_id": "$seat:builder", "project_id": null, "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:t1_claim_20", "payload": {"seat_id": "$seat:builder", "credential_id": "$credential:claude_login", "model": "claude-opus-5-5"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:builder", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:4"}
@@ -92,7 +92,7 @@
         "steps_closed": [
           {"task_id": "$task:1", "kind": "wait_ready", "closing_event_id": "@event:4"}
         ],
-        "result_fields": {"credential_id": "$credential:claude_login", "model": "claude-model-1"}
+        "result_fields": {"credential_id": "$credential:claude_login", "model": "claude-opus-5-5"}
       }
     },
     {

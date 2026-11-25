@@ -18,7 +18,7 @@
     "credentials": [
       {"id": "$credential:claude_a", "kind": "login", "provider": "claude", "name": "Claude A", "state": "active", "limited_until": null, "position": 1, "model": null, "effort": null, "strength_rank": null},
       {"id": "$credential:claude_b", "kind": "login", "provider": "claude", "name": "Claude B", "state": "active", "limited_until": null, "position": 2, "model": null, "effort": null, "strength_rank": null},
-      {"id": "$credential:codex_r", "kind": "login", "provider": "codex", "name": "Codex R", "state": "active", "limited_until": null, "position": 3, "model": "codex-model-1", "effort": null, "strength_rank": null}
+      {"id": "$credential:codex_r", "kind": "login", "provider": "codex", "name": "Codex R", "state": "active", "limited_until": null, "position": 3, "model": "gpt-6.2-astra", "effort": null, "strength_rank": null}
     ],
     "seats": [
       {"id": "$seat:builder", "name": "Builder", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_a", "enabled": true, "paused": false, "last_polled_at": null},
@@ -201,7 +201,7 @@
       "operation_id": "connect_seat",
       "key": "$key:connect_codex_reviewer",
       "path_params": {},
-      "body": {"name": "Codex reviewer", "role": "reviewer", "provider": "codex", "model": "codex-model-1", "effort": "high", "strength_rank": 2, "credential_id": "$credential:codex_r"},
+      "body": {"name": "Codex reviewer", "role": "reviewer", "provider": "codex", "model": "gpt-6.2-astra", "effort": null, "strength_rank": 2, "credential_id": "$credential:codex_r"},
       "expect": {
         "outcome": "completed",
         "refusal": null,
@@ -225,7 +225,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:14", "type": "review.started", "schema_version": 1, "at": "@t:410", "effective_at": "@t:410", "actor_kind": "seat", "actor_id": "$seat:codex_reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:t1_review_claim_410", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
+          {"ref": "@event:14", "type": "review.started", "schema_version": 1, "at": "@t:410", "effective_at": "@t:410", "actor_kind": "seat", "actor_id": "$seat:codex_reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:t1_review_claim_410", "payload": {"credential_id": "$credential:codex_r", "model": "gpt-6.2-astra"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:codex_reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:14"}
@@ -352,7 +352,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:23", "type": "review.started", "schema_version": 1, "at": "@t:820", "effective_at": "@t:820", "actor_kind": "seat", "actor_id": "$seat:codex_reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:t1_review_claim_820", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
+          {"ref": "@event:23", "type": "review.started", "schema_version": 1, "at": "@t:820", "effective_at": "@t:820", "actor_kind": "seat", "actor_id": "$seat:codex_reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:t1_review_claim_820", "payload": {"credential_id": "$credential:codex_r", "model": "gpt-6.2-astra"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 1, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:codex_reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:23"}

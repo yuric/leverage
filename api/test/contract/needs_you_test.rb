@@ -81,4 +81,24 @@ class NeedsYouTest < Minitest::Test
     assert_equal %w[action_ids approved_by_id approved_by_kind builder_announced_start],
       item("unconfirmed_action")["facts"]["properties"].keys.sort
   end
+
+  # UX-16: an agent's task whose check fails tells the owner, who completes
+  # the contract, asks a planner to draft it, or cancels.
+  def test_an_agent_task_that_needs_its_contract
+    entry = item("agent_task_incomplete")
+    refute_nil entry, "no item agent_task_incomplete"
+    assert_equal [ "task", nil ], entry.values_at("about", "hold_reason")
+    assert_equal %w[complete_contract draft_contract cancel_task], entry["choices"].map { |choice| choice["operation_id"] }
+    assert_equal %w[seat_id], entry.dig("facts", "required")
+    refute_nil entry["closes"]
+  end
+
+  # UX-14: the workspace cap on open tasks agents added; no choice, it
+  # closes on its own.
+  def test_agents_at_the_task_limit
+    entry = item("agent_tasks_at_limit")
+    refute_nil entry, "no item agent_tasks_at_limit"
+    assert_equal [ "workspace", nil, [] ], entry.values_at("about", "hold_reason", "choices")
+    assert_includes entry["closes"], "fewer than 50"
+  end
 end

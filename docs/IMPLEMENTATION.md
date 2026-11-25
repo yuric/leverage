@@ -56,8 +56,8 @@ the run. The run ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-24 |
 | **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)) |
-| **Running locally** | Leverage is running on the owner's Mac at `300db09`. The event-log audit passed for 1 workspace and 10 events. |
-| **Next** | Implement App round 2 and Imaginarium Part 3, both approved by the owner. The Round 2 contract and data model were verified locally at `4d7c479`. |
+| **Local deployment record** | The owner’s Mac was verified at `300db09` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. |
+| **Next** | Verify the App round 2 and Imaginarium gallery deployments on the owner's Mac. |
 
 ### Recent merges
 
@@ -69,7 +69,9 @@ the run. The run ends when the build is done or the owner stops it.
 
 ### In flight
 
-App round 2 and Imaginarium Part 3 have no implementation pull requests yet.
+- App round 2. Server and Mac implementation in [#35](https://github.com/yuric/leverage/pull/35).
+  The contract and data model were first verified at `4d7c479`.
+- Imaginarium Part 3. The gallery is being verified on the Round 2 base.
 
 ### General role and landing prompt on `main`
 
@@ -950,10 +952,27 @@ The interface decisions are recorded in the
 - **GA-15.** The MCP join instructions supply the client settings.
 - **GA-16.** The prompt-connected agent stops on `401`. Pausing the seat
   leaves the agent polling for work.
-- **GA-17.** New prompt returns the seat's held work and keeps the seat.
+- **GA-17.** The General role milestone originally added New prompt.
+  App round 2 replaced it with the existing Remove and Connect flow.
 - On 2026-11-24, the owner raised the shared `specific-details` eval ceilings
   to allow runs in General mode. See
   [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update).
+
+### App round 2
+
+The [App round 2 contract](../api/contract/decisions.md#app-round-2-ux)
+records the changes. The owner approved these choices for the round.
+
+- Turning off Deliver tasks gives back the Working task. With Work on
+  tasks still on, the agent can take reviews and jobs its role allows.
+- Both Native and Prompt seats show Create tasks, and the server
+  enforces it. Task creation is available to Prompt agents in this
+  round. The Native runner does not expose the call to provider tools.
+- The owner's Add task form keeps its "What goes out at the end" field
+  for outward actions that go through approval.
+
+Native Codex and Grok have no effort drop-down in this round. UX-15
+records the documentation checked for each tool in the contract.
 
 ## What the Rule checks milestone proves, and how far
 

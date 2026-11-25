@@ -30,6 +30,8 @@ module Leverage
           @id, @kind, @provider, @name = params.values_at("credential_id", "kind", "provider", "name")
           raise Invalid, "The provider does not offer this credential kind" unless provider_matches_kind?
 
+          validate_model(*params.values_at("model", "effort").map(&:to_s))
+
           expected_label = @kind == "api_token" ? "••••••••" : nil
           raise Invalid, "The masked label does not match the credential kind" unless params["masked_label"] == expected_label
           @name = Credential.trim_name(@name)
@@ -60,6 +62,18 @@ module Leverage
         end
 
         private
+
+        def validate_model(model, effort)
+          if @kind == "api_token"
+            raise Invalid, "An API token takes no model or effort" unless model.empty? && effort.empty?
+            return
+          end
+
+          raise Invalid, "A login uses the tool's default for effort" unless effort.empty?
+
+          problem = ModelCatalog.problem(provider: @provider, model: model, effort: effort, native: true)
+          raise Invalid, problem if problem
+        end
 
         def provider_matches_kind?
           Contract.registry.fetch("credential_providers")

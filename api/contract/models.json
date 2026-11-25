@@ -1,0 +1,59 @@
+{
+  "evidence_levels": ["probe", "probe (full environment)", "help", "documented"],
+  "providers": [
+    {
+      "provider": "claude",
+      "native_effort": {"value": true, "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#adjust-effort-level", "checked_on": "2026-11-24"},
+      "default_model": {"value": "claude-opus-5-5", "evidence": "probe (full environment)", "source": "docs/ARCHITECTURE.md", "checked_on": "2026-11-19"},
+      "models": [
+        {"id": "claude-fable-5-2", "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#available-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": {"values": ["low", "medium", "high", "xhigh", "max"], "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#adjust-effort-level", "checked_on": "2026-11-24"}},
+        {"id": "claude-opus-5-5", "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#available-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": {"values": ["low", "medium", "high", "xhigh", "max"], "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#adjust-effort-level", "checked_on": "2026-11-24"}},
+        {"id": "claude-sonnet-5-5", "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#available-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": {"values": ["low", "medium", "high", "xhigh", "max"], "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#adjust-effort-level", "checked_on": "2026-11-24"}},
+        {"id": "claude-haiku-5-5", "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#available-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": {"values": ["low", "medium", "high", "xhigh", "max"], "evidence": "documented", "source": "https://code.claude.com/docs/en/model-config#adjust-effort-level", "checked_on": "2026-11-24"}}
+      ]
+    },
+    {
+      "provider": "codex",
+      "native_effort": {"value": false, "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24"},
+      "default_model": null,
+      "models": [
+        {"id": "gpt-6.2-astra", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6.2-sol", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6-astra", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6.1-sol", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6.1-terra", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6-sol", "evidence": "documented", "source": "https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/models-manager/models.json", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gpt-6-luna", "evidence": "documented", "source": "https://learn.chatgpt.com/docs/models#recommended-models", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null}
+      ]
+    },
+    {
+      "provider": "gemini",
+      "native_effort": {"value": true, "evidence": "documented", "source": "https://antigravity.google/docs/cli/headless/#select-a-model-effort-or-agent", "checked_on": "2026-11-24"},
+      "default_model": null,
+      "models": [
+        {"id": "gemini-4-neon", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-4-carbon", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-4-argon", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-4-hydrogen", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-pro-orchestrator-neon", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-pro-orchestrator", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-pro-orchestrator-argon", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-3.8-flash", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-3.7-flash", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-3.6-flash", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "gemini-3.1-pro-preview", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "claude-sonnet-5-5", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "claude-opus-5-5", "evidence": "documented", "source": "https://antigravity.google/docs/enterprise#supported-models-in-gemini-enterprise", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null}
+      ]
+    },
+    {
+      "provider": "grok",
+      "native_effort": {"value": false, "evidence": "documented", "source": "https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md#selecting-a-model", "checked_on": "2026-11-24"},
+      "default_model": {"value": "grok-4.6", "evidence": "probe (full environment)", "source": "mac/Tests/StandIns/replies/grok/status-signed-out.json", "checked_on": "2026-11-19"},
+      "models": [
+        {"id": "grok-4.7", "evidence": "documented", "source": "https://x.ai/build", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null},
+        {"id": "grok-4.6", "evidence": "documented", "source": "https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md#selecting-a-model", "checked_on": "2026-11-24", "min_tool_version": null, "efforts": null}
+      ]
+    }
+  ]
+}

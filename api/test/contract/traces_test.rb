@@ -28,6 +28,7 @@ class TracesTest < Minitest::Test
     18-claim-gate-done-gate-and-ends 19-provider-rule-offline-and-jobs
     20-questions-and-access 21-money-projects-escalation
     22-finishing-edges 23-owner-housekeeping 24-reading-ends-a-limit-wait
+    25-agent-adds-task
   ].freeze
   # The traces whose workspace has no rule at all: in the core loop the
   # workspace is created with none (milestone 2 plan, EN-4, Q-12), and no
@@ -207,7 +208,11 @@ class TracesTest < Minitest::Test
       fail_state(index, "#{command["command"]} is not allowed from #{@state[target]}") if rows.empty?
       odd = command["expect"]["events"].reject { |event| written_while_pending?(event, rows) }.map { |event| event["type"] }
       fail_state(index, "a pending command writes only rule check and job events, and what its rows allow beside them, not #{odd}") unless odd.empty?
-      @pending[command["key"]] = { task: target, names: command_names(command), from: @state[target], index: index }
+      # A call that adds the task and then waits (create_task, UX-11) waits
+      # from the state its task.created put the task in.
+      from = observe(@state[target], command["expect"]["events"].select { |event| event["task_id"] == target })
+      @state[target] = from
+      @pending[command["key"]] = { task: target, names: command_names(command), from: from, index: index }
     end
 
     # What a command that answers pending may write: its checks and jobs;
@@ -323,7 +328,13 @@ class TracesTest < Minitest::Test
       types = events.map { |event| event["type"] }
       fresh = events.any? { |event| event["payload"][LEASE_FIELD] }
       observed = observe(state, events)
-      groups = state_rows(names, state).reject { |row| row["refusal"] }.group_by { |row| [ row["command"], row["from"] ] }
+      # A call that adds a task and then completes its contract in one
+      # command (create_task, UX-11): the second command's rows read the
+      # state the task was created in.
+      created = events.find { |event| event["type"] == "task.created" }&.dig("payload", "state")
+      candidates = state_rows(names, state)
+      candidates |= state_rows(names, created) if state.nil? && created
+      groups = candidates.reject { |row| row["refusal"] }.group_by { |row| [ row["command"], row["from"] ] }
       kept = groups.values.flat_map { |rows| pick(rows, types + taskless, fresh, state, observed) }
       allowed = kept.flat_map { |row| row["events"] + (row["conditional_events"] + row["side_events"]).map { |entry| entry["event"] } }.to_set
       stray = types.reject { |type| allowed.include?(type) || @side_types.include?(type) }
@@ -1230,6 +1241,27 @@ class TracesTest < Minitest::Test
   # check's check.finished, then cost.reported. An approval job is the
   # attempt of the approval policy's check (jobs.json), so its result keeps
   # the order of every other check job's, as traces 03 and 04 have it.
+  # App round 2 (UX-11, UX-16): a seat adds both tasks; the first reaches
+  # Ready when its model check passes, with the seat as actor and key of
+  # the completion; the second fails the app gate at once and opens the
+  # item, which closes with the hold.
+  def test_trace_25_adds_tasks_as_a_seat_through_the_owners_path
+    trace = Leverage::Contract.trace("25-agent-adds-task")
+    creates = trace["commands"].select { |command| command["operation_id"] == "create_task" }
+    assert_equal %w[pending completed], creates.map { |command| command.dig("expect", "outcome") }
+    events = all_events(trace)
+    task_events = events.select { |event| %w[task.created task.contract_changed task.ready].include?(event["type"]) }
+    assert(task_events.all? { |event| event.values_at("actor_kind", "actor_id") == [ "seat", "$seat:agent" ] })
+    ready = events.find { |event| event["type"] == "task.ready" }
+    assert_equal "$key:agent_add_1", ready["command_id"]
+    opened = events.find { |event| event["type"] == "inbox.opened" }
+    assert_equal [ "agent_task_incomplete", "app" ], [ opened.dig("payload", "kind"), opened["actor_kind"] ]
+    resolved = events.find { |event| event["type"] == "inbox.resolved" }
+    assert_equal opened["subject_id"], resolved["subject_id"]
+    assert_empty walk("25-agent-adds-task").state_failures
+    assert_empty walk("25-agent-adds-task").step_failures
+  end
+
   def test_a_check_jobs_result_writes_its_check_before_its_cost
     seen = 0
     NAMES.each do |name|

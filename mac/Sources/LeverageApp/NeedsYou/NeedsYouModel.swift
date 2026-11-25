@@ -371,7 +371,12 @@ final class NeedsYouModel {
         switch action {
         case .signInAgain: await signInAgain(row)
         case .allowAnotherTry: await allowAnotherTry(row)
-        case .changeTask: if let task = row.taskID { openTask(task) }
+        case .changeTask, .completeContract: if let task = row.taskID { openTask(task) }
+        case .draftContract:
+            guard let task = row.taskID else { return }
+            await command(on: rowID, name: CommandName.draftContract.rawValue) { key in
+                try await self.api.draftContract(taskID: task, key: key).acceptedWhilePending()
+            }
         case .cancelTask: confirmingCancel = rowID
         case .letThroughOnce:
             guard row.checkID != nil else { return }

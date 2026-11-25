@@ -29,7 +29,7 @@ enum TaskPageCopy: OwnerFacingCopy {
 
     // The log's sentences.
     case anAgent, aPartOfTheTask
-    case logCreated, logContractChanged, logReady, logClaimed, logBriefingRead
+    case logCreated, logCreatedByAgent, logContractChanged, logReady, logClaimed, logBriefingRead
     case logCriterionStarted, logCriterionPassed, logCriterionReopened
     case logEvidenceLink, logEvidenceNote, logSubmitted
     case logReviewStarted, logReviewReleased, logReviewLeaseExpired, logReviewPassed
@@ -95,6 +95,8 @@ enum TaskPageCopy: OwnerFacingCopy {
     case logInboxEveryAgentTurnedAway, logInboxCheckedTooManyTimes, logInboxCheckCouldNotRun
     case logInboxNoReviewer, logInboxOrchestratorOffline
     case logChoseLetThrough, logChoseRunAgain, logChoseTurnRuleOff
+
+    case logReleasedDeliverOff, logChoseCompleteContract, logChoseDraftContract
 
     var text: String {
         switch self {
@@ -163,6 +165,11 @@ enum TaskPageCopy: OwnerFacingCopy {
         case .anAgent: "An agent"
         case .aPartOfTheTask: "a part of the task"
         case .logCreated: "You added the task."
+        case .logCreatedByAgent: "{agent} added the task."
+        case .logReleasedDeliverOff:
+            "{agent} was not allowed to hand tasks in any more, so the task went back to Ready."
+        case .logChoseCompleteContract: "You completed the contract."
+        case .logChoseDraftContract: "You asked a planner to draft the contract."
         case .logContractChanged: "The details were saved."
         case .logReady: "The task is ready for an agent to pick up."
         case .logClaimed: "{agent} took the task."

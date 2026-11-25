@@ -5,7 +5,7 @@ import LeverageKit
 /// API tokens as well.
 enum ProviderNames {
     /// The four providers a login can be added for, in the order the mockup lists them.
-    static let logins: [Provider] = [.claude, .codex, .gemini, .grok]
+    static let logins: [Provider] = ModelCatalog.providers.map(\.provider)
 
     /// "Claude", "Codex", "Gemini", "Grok".
     static func name(_ provider: Provider) -> String {

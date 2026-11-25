@@ -7,7 +7,7 @@
   "properties": {
     "reason": {
       "description": "The release reason, from the registry's release_reasons.",
-      "enum": ["unable_to_continue", "not_suited_to_this_seat", "stopping", "seat_disabled", "seat_removed", "new_prompt"]
+      "enum": ["unable_to_continue", "not_suited_to_this_seat", "stopping", "seat_disabled", "seat_removed", "new_prompt", "deliver_turned_off"]
     },
     "wait_cause": {
       "description": "Why the wait_ready step this event opens is waiting: credential_limit when no seat is eligible only because no candidate is available and none is signed out, else null. Null when the event opens no wait_ready step. Fixed when the step opens (PRD, Rules for steps, rule 8).",

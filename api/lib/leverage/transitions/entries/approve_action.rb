@@ -40,7 +40,7 @@ module Leverage
         def approval_guards(at)
           return [ "approvals_pending" ] unless Actions.approvals_complete?(@task, except: @action)
 
-          [ "approvals_complete", Finishing.builder_free?(@task, at: at) ? "builder_free" : "builder_busy" ]
+          [ "approvals_complete", Finishing.builder_free?(@task, lease: :action, at: at) ? "builder_free" : "builder_busy" ]
         end
       end
     end

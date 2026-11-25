@@ -22,7 +22,7 @@ module Leverage
   # - Within one command a task's open step changes at most once (steps.json,
   #   derived rule): a step opened earlier in the same command is changed in
   #   place, so a failed review at the round limit closes review and opens
-  #   wait_owner, with no wait_builder row between them. A task created
+  #   wait_owner, with no wait_builder row between them. An owner task created
   #   on hold keeps its first step at task.created, even when that step has
   #   zero length. A command's events share their at and effective_at; a
   #   timer's do too.
@@ -426,7 +426,7 @@ module Leverage
     def move(open, wanted, event, again: false)
       return if open.nil? && wanted.nil?
       return if late_close(open, wanted, event)
-      return if open && wanted && same?(open, wanted) && !(again && !coalescible?(open, event))
+      return if open && wanted && same?(open, wanted) && !(again && !coalescible?(open, event, include_creation: false))
 
       if open && wanted && coalescible?(open, event)
         open.update!(row(wanted, event).merge(round: [ open.round, wanted.round ].max))
@@ -485,15 +485,18 @@ module Leverage
     end
 
     # A step may be changed in place within the command that opened it.
-    # The first step always keeps task.created. For other steps, use the
-    # same at (the command's clock under the lock) and effective_at. A
+    # The owner's Add task keeps its initial step. A creator seat also runs
+    # Complete contract under that key, so its first step can change in place.
+    # For other steps, use the same at (the clock under the lock) and effective_at. A
     # pending transition completed inside another command writes under its
     # requester's key (RE-3), and an inline timer has its own effective time.
-    def coalescible?(open, event)
+    def coalescible?(open, event, include_creation: true)
       return false unless open.opened_at == event.effective_at
 
-      opener = Event.where(id: open.opening_event_id).where.not(type: "task.created").pick(:at, :effective_at)
-      opener == [ event.at, event.effective_at ]
+      opener = Event.where(id: open.opening_event_id, at: event.at, effective_at: event.effective_at)
+      return opener.where.not(type: "task.created").exists? unless include_creation
+
+      opener.where("type <> 'task.created' OR (actor_kind = 'seat' AND command_id = ?)", event.command_id).exists?
     end
 
     def work_of(open, event)

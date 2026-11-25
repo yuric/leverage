@@ -33,8 +33,12 @@ class ColumnsTest < Minitest::Test
     # hold or the stopped action's approval job.
     "InboxItem" => %w[opened_seq detail],
     # Text made from the seat's role, the connection, the contract and a
-    # template (GA-12, GA-14). A read with no table behind it.
-    "JoinInstructions" => %w[text role connection],
+    # template (GA-12, GA-14), the seat's permissions and its provider's
+    # model catalog entries (UX-9, UX-10). A read with no table behind it.
+    "JoinInstructions" => %w[text role connection permissions models],
+    # The three permission columns (may_work, may_deliver, may_create) as
+    # one SeatPermissions object (UX-10).
+    "Seat" => %w[permissions],
     # The short prompt with the token in it, and the connection it names
     # (GA-13). Nothing of it is stored.
     "LandingPromptIssued" => %w[text connection],

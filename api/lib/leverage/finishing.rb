@@ -40,7 +40,7 @@ module Leverage
       candidates = waiting_tasks(Task.where(workspace_id: ctx.workspace.id))
       grants = 0
       candidates.each do |task|
-        next unless builder_free?(task, at: ctx.at)
+        next unless builder_free?(task, lease: :action, at: ctx.at)
 
         entry = Transitions::Entries::GrantActionLease.new
         release = ctx.events.reverse.find do |event|
@@ -58,8 +58,13 @@ module Leverage
       end
     end
 
-    def builder_free?(task, at: Time.current)
-      Eligibility.builder_free?(builder(task), task, at: at)
+    def builder_free?(task, lease: :action, at: Time.current)
+      seat = builder(task)
+      case lease
+      when :task then Eligibility.rework_free?(seat, task, at: at)
+      when :action then Eligibility.builder_free?(seat, task, at: at)
+      else raise ArgumentError, "Unknown lease kind #{lease.inspect}"
+      end
     end
 
     def builder_holds_task?(task)

@@ -4,7 +4,7 @@ This file records each choice the contract makes where the PRD leaves a
 gap, under the IDs the contract files cite (`plan DB-31`, `"decision":
 "SM-24"`): `DB-` data, `SM-` state machine, `RC-` rules and checks, `IF-`
 interfaces, `TM-` timers, `P-` PRD changes, `GA-` the General role,
-`UI-` app round 1.
+`UI-` app round 1, `UX-` app round 2.
 
 It is the decisions section of the Contract milestone's build plan, kept
 as it was written, with three notes on reading it now:
@@ -1311,6 +1311,170 @@ except the one read UI-6 adds.
   results were run against the earlier instruction and cases, so they no
   longer count; only the maintainer runs the suites on real tools
   (AGENTS.md), and the rerun waits for the maintainer.
+
+## App round 2 (UX)
+
+Added for the owner's three follow-ups of 2026-11-24, after app round 1:
+remove New prompt; pick a model and an effort from lists the server also
+checks; and three permissions per seat, with an agent call that adds a
+task. PRD places are named by their section.
+
+- **UX-1** `[shape]` What Connect's one prompt needs stays: the command
+  `issue_landing_prompt`, its operation, request and answers, the landing
+  prompt read and its template. The release reason `new_prompt` stays in
+  the registry, with a note that only builds before app round 2 wrote it,
+  and in `task.released` v1, so that older logs still read. The app's New
+  prompt and what only it used go (the server's release on a new prompt
+  among them).
+- **UX-2** `[reading]` The landing prompt is issued only until the seat
+  lands: once it has polled (`seats.last_polled_at` is set) or holds a
+  task, a review or a job, `issue_landing_prompt` is refused
+  `invalid_state` (guard family `seat_landing`: `seat_has_landed`,
+  `seat_has_not_landed`). Before landing the seat holds nothing, so the
+  command releases nothing and its row loses the release events. The app
+  may still ask again with a new key while the first answer was lost. A
+  new prompt is a new seat: the owner removes the agent and connects
+  another. Alternative: issue the token inside `connect_seat`'s answer;
+  a lost answer would then make the app connect a second seat.
+- **UX-3** `[shape]` Removed with New prompt: the roster's menu item and
+  its sheet, the release on a new prompt (`SeatRuns`), and the join text's
+  "or made a new prompt for it". The PRD's Clients, Release and Security
+  text says "removing the seat ends its token".
+- **UX-4** `[shape]` The model catalog is `models.json` (shape
+  `meta/models.schema.json`): one entry per login provider, each with
+  `native_effort` (whether the reference runner's driver passes an effort
+  to the tool), `default_model` (the model its tool names as its default,
+  or null) and `models`, each model with its exact id, its evidence,
+  source and date, `min_tool_version` (only where a source states one)
+  and `efforts` (null when not known; otherwise the documented list, empty
+  when the model takes none). Evidence levels are `probe`, `probe (full
+  environment)`, `help` and `documented`; nothing unverified or stated
+  only in the PRD enters it. Round 1's lists in the Mac's
+  `ProviderCatalog` map one entry per id, with their page and date; a
+  `probe` or `help` fact cites a file in the repository. Per-model efforts
+  come only from documentation that names the model: Claude Code's page
+  names the four Claude models' efforts; Antigravity's says only
+  "depending on the model", so its models carry none. The generator also
+  writes `ModelCatalog.swift`, so the app and the server read one list.
+- **UX-5** `[shape]` The catalog changes by a pull request that edits
+  `models.json` with the entry's evidence and date and regenerates the
+  Swift copy. `scripts/check_model_catalog.py` fails on an unlisted
+  evidence level, an empty source, a missing date, a `help` or `probe`
+  fact whose source is not a file in the repository, efforts not
+  documented, an id or an effort listed twice, a default not among the
+  models, a provider that is not a login provider, or a missing provider.
+  Prompt seats use the documented per-model efforts regardless of
+  `native_effort`, which describes the reference runner's driver.
+  No automated job reaches a provider.
+- **UX-6** `[reading]` "The tool's default" is the empty string, the first
+  choice of both lists and the one picked by default. With it as the
+  model, the effort is only the tool's default: the catalog's default
+  model is one probe on one account, so efforts are never offered on its
+  strength. Alternative: offer the default model's efforts.
+- **UX-6b** `[reading]` A model whose `min_tool_version` is newer than the
+  login's last reading's tool version is shown disabled with the version
+  it needs. The server checks the catalog only; the tool version is the
+  Mac's. Alternative: hide it, or offer it and let the run fail.
+- **UX-7** `[reading]` A model or an effort is checked against the catalog
+  on every path that stores one: Connect for a seat the app runs, Change
+  (only when the request sets the model, the effort or a credential of
+  another provider), Add credential (a login's model; a login's effort and
+  an API token's model and effort must be empty) and the agent's report
+  (UX-9). An unlisted value is refused 422 `invalid`, with a sentence
+  naming what is accepted; no new refusal code, since the app sends only
+  listed values. Values stored before the catalog stay on seats the app
+  runs and on logins; a seat that connects on its own has its typed model
+  and effort cleared by the migration (UX-10). Alternative: a new refusal,
+  or clearing every unlisted value.
+- **UX-8** `[reading]` A seat that connects on its own takes no model and
+  no effort from the owner, at Connect or Change (422 `invalid`), and its
+  provider must be a login provider. Alternative: catalog entries for API
+  providers.
+- **UX-9** `[shape]` The agent call `report_model` (`POST /v1/seat/model`,
+  caller `any`, body `ReportModelRequest`) runs `change_seat` as the seat:
+  no new command and no new event. `change_seat`'s who is `owner` and
+  `self`, the seat itself, which may change only its own model and effort;
+  a seat the app runs is refused `forbidden`. `seat.changed` is written
+  with the seat as actor, only when a value changes. Values are checked as
+  in UX-7 against the seat's provider; `null` means "cannot tell" and
+  stores `""` (a null model needs a null effort). Not a claim
+  precondition; an agent that switches model reports again. The answer is
+  `ReportedModel`. `JoinInstructions` gains `models` (the provider's ids
+  and efforts, `CatalogModel`) for a seat that connects on its own.
+  Alternative: report on `GET /v1/join` (a read that writes), or refuse
+  claims until reported.
+- **UX-10** `[shape]` `seats.may_work`, `may_deliver` and `may_create`,
+  `boolean NOT NULL DEFAULT true`. The migration `AddPermissionsToSeats`
+  turns all three on for every existing seat and clears `model` and
+  `effort` of seats with no credential; its `down` drops the three
+  columns. Seats are outside the replay, so no event carries them. The
+  registry list `seat_permissions` is `work`, `deliver`, `create`; the
+  interface's `SeatPermissions` holds the three, `Seat.permissions` is
+  required, `ConnectSeatRequest.permissions` is optional (all on when
+  omitted) and `ChangeSeatRequest.permissions` is the whole set.
+  `JoinInstructions.permissions` tells the agent. `Leverage::Permissions`
+  holds the three predicates. Alternative: one text array column.
+- **UX-11** `[shape]` The agent call `create_task` (`POST /v1/tasks`,
+  caller `creator`, a seat whose permissions include Create tasks) runs
+  `add_task` and then `complete_contract` with the seat as caller and one
+  key, as the owner's form runs the two: the task enters the Backlog,
+  `task.before_ready` runs unchanged, and `task.created`,
+  `task.contract_changed` and `task.ready` name the seat as actor. The
+  answer is `AgentTaskCreated`, the task and `ready` or `backlog`, also
+  after a 202: the settled check writes it over the commands row. Every
+  role lists the call (the MCP server lists tools by role); the server
+  refuses `forbidden` when Create is off. A task the call creates and
+  moves at once opens only the step it ends in (trace 25), since a task's
+  open step changes at most once in a command.
+- **UX-11a** `[reading]` Work on tasks gates new work only: review and job
+  claims are refused `not_eligible` and `GET /v1/next` offers neither;
+  held work goes on. Deliver tasks gates `submit` (`forbidden`), and a
+  seat is counted, offered and leased as a task's builder only with Work
+  and Deliver both on. Action leases read neither permission. Turning
+  Deliver off first cancels a provisional Ready claim or pending Working
+  submit with `invalid_state`. It then releases the Working task with the
+  app's new release reason `deliver_turned_off` (conditional event under the guard
+  `turns_deliver_off_holding_working_task`), as disabling does; `task.released`
+  v1's enum gains it in place (no build has been released, DB-48's
+  reasoning). Alternative: Work off releases held work, as disabling does.
+- **UX-11b** `[reading]` The agent's call takes no outward actions, state,
+  minimum strength or budget cap. Alternative: allow actions (the
+  approval rule would then approve what the adding agent wrote).
+- **UX-11c** `[reading]` While the seat holds a task, a review or a job,
+  the new task goes into that work's project; any other project is 422
+  `invalid`. A seat that holds nothing may name any project or none.
+  Alternative: always the project of the seat's latest work, or any.
+- **UX-12** Withdrawn: refusing `create_task` while the seat holds a job
+  protected nothing, since the seat could call right after submitting.
+  UX-14 and the owner's checks bound it instead.
+- **UX-13** `[reading]` After a failed check only the owner or a planner
+  completes the contract. `add_task`'s who is `owner` for Ideas and
+  `owner` and `creator` for Backlog;
+  `complete_contract`'s is `owner`, `planner` and `creator`, the creator
+  only in the call that adds the task. Alternative: let the adding seat
+  retry its own Backlog task.
+- **UX-14** `[reading]` One new refusal, `add_task_limit` (agent calls,
+  precedence 14, after `duplicate_name`; its `reason` names the limit):
+  20 tasks added per seat in any rolling hour; no task from a task a seat
+  added (the seat's origin task, its held work's task or else its latest
+  claim's, read from the log); and 50 open tasks agents added per
+  workspace, at which the Needs you item `agent_tasks_at_limit` opens
+  (about the workspace, no choices; it closes on its own below 50).
+  Alternative: only the rate, or a 429 transport answer.
+- **UX-15** `[reading]` A seat the app runs gets an effort list only where
+  the provider's documentation shows how its tool takes one and the driver
+  passes it: Claude Code and Antigravity document `--effort`; Codex's
+  models page names an effort only in the interactive `/model` picker, and
+  Grok Build's model guide names only a configuration key with no values,
+  so `native_effort` is false for both and their drivers stay as they are.
+  Alternative: hide effort for them unconditionally.
+- **UX-16** `[reading]` A task a seat added whose check fails opens the
+  Needs you item `agent_task_incomplete` (about the task, no hold reason,
+  facts `seat_id`), beside its `contract_incomplete` hold, opened by the
+  app; it closes with that hold. Its choices are `complete_contract`,
+  `draft_contract` and `cancel` (two new `inbox_choices`).
+  `inbox.opened` and `inbox.resolved` v1 gain the new values in place.
+  Alternative: only the Backlog card and the task page show it.
 
 ## Coverage index
 
