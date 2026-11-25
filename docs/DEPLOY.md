@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
-| **Last updated** | 2026-11-24 |
+| **Last updated** | 2026-11-25 |
 
 This document says how to run and operate Leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -70,6 +70,16 @@ far it has been opened only by `scripts/smoke_app.sh`, with a Finder-like
 environment.
 
 ## The first run
+
+Before you add a login, read what the providers' terms say. A login runs
+the provider's own tool under your account. A provider may not allow its
+tool to be driven by another app, or work to move between two logins of
+one provider, and may suspend an account. Google's documents say neither is
+supported on consumer plans. The providers' documents were read by AI
+agents on 2026-11-18, and not all of them in full, so read your provider's
+terms yourself before relying on that reading
+([provider terms check](research/provider-terms/README.md),
+[PRD Risks](PRD.md#risks)). An API token is the alternative to a login.
 
 1. Open `Leverage.app`. It starts Docker Desktop if needed, writes its
    server folder and starts the containers; the first start takes a few

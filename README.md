@@ -7,6 +7,12 @@ a login expires; so far that has been shown only with stand-in tools, not
 on a real provider
 ([how far it is proven](docs/IMPLEMENTATION.md#what-the-handoff-milestone-proves-and-how-far)).
 
+Before you connect a provider login, read what each provider's terms say
+about driving its tool from another app and moving work between accounts:
+some may not allow it and may suspend an account
+([provider terms check](docs/research/provider-terms/README.md),
+[PRD Risks](docs/PRD.md#risks)).
+
 > **Status: in development.** See
 > [Implementation progress](docs/IMPLEMENTATION.md) for the milestones
 > and what each check proved.
@@ -35,6 +41,7 @@ deployment, and implementation follow from them.
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Expected behavior in project spaces. |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes, release by release. |
 | [docs/research/](docs/research/open-source-practices/README.md) | Research behind the project's repository practices: advice versus what young popular repositories do. |
+| [docs/research/provider-terms/](docs/research/provider-terms/README.md) | What each provider's published terms say about driving its tool from another app and moving work between accounts, read on 2026-11-18. |
 | [docs/research/prd-review/](docs/research/prd-review/README.md) | The adversarial review of the PRD: 89 findings for the owner to accept or reject. |
 
 ## Preview the marketing page locally
