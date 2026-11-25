@@ -10,6 +10,8 @@ once it makes its first release.
 
 ### Added
 
+- An offline subscription preview exercises plan selection, checkout,
+  billing changes and payment recovery with sample data.
 - The sidebar account row shows the owner's sign-in email and opens a
   menu with Settings and Sign out.
 
