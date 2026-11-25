@@ -1006,9 +1006,11 @@ managing agent's Codex session; times are UTC, and 2026-11-25 before
   question 17.
 - The owner's Add task form keeps its "What goes out at the end" field,
   with that exact label, for outward actions that go through approval,
-  and the outward-action approval behavior is unchanged. Asked to keep,
-  rename or remove the field, the owner approved keeping it as it is at
-  01:51 UTC on 2026-11-25: "All good. Approved. All three. Continue".
+  and the outward-action approval behavior is unchanged. The managing
+  agent offered keeping, renaming or removing the field and closed with
+  "Want me to start Settings with that “Same as this Mac” default, keep
+  the approval field as is, and fix the flaky test?". The owner answered
+  at 01:51 UTC on 2026-11-25: "All good. Approved. All three. Continue".
 
 The other choices made for the owner in this round are question 17.
 Native Codex and Grok have no effort drop-down in this round. UX-15
@@ -1017,13 +1019,14 @@ records the documentation checked for each tool in the contract.
 ### Subscription step 1
 
 FR-005, FR-006 and FR-025 cover the Rules tab, the appearance controls
-under Leverage > Settings (⌘ ,), and the Login label. The owner chose
-Same as this Mac as the default: asked to approve starting this step
-with Light and Dark only or with Same as this Mac as the default, he
-answered "All good. Approved. All three. Continue" in the managing
-agent's Codex session at 01:51 UTC on 2026-11-25 (2026-11-24 on his Mac).
-This step uses the existing local app
-and its macOS preferences. The account menu and billing follow the
+under Leverage > Settings (⌘ ,), and the Login label. The owner approved
+Same as this Mac as the default. The managing agent offered Light and
+Dark only, or Same as this Mac as the default, and closed with "Want me
+to start Settings with that “Same as this Mac” default, keep the approval
+field as is, and fix the flaky test?". He answered "All good. Approved.
+All three. Continue" in the managing agent's Codex session at 01:51 UTC
+on 2026-11-25 (2026-11-24 on his Mac). This step uses the existing local
+app and its macOS preferences. The account menu and billing follow the
 [remaining subscription steps](PRD.md#build-order-for-subscription).
 
 ### Subscription step 2

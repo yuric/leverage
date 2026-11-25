@@ -1,10 +1,12 @@
 # The Imaginarium
 
 Status: Built in [#36](https://github.com/yuric/leverage/pull/36). The
-maintainer approved starting Part 3, the gallery tab, on 24 November 2026:
-asked by the managing agent "Imaginarium Part 3, start or hold?", he
-answered "1", the start choice (the managing agent's Codex session,
-00:22 UTC on 25 November). The wording of FR-030 to FR-041 in the main PRD
+maintainer approved starting Part 3, the gallery tab, on 24 November 2026.
+The managing agent asked "Which paused Leverage items should I start? You
+can answer in one reply: (1) Imaginarium Part 3, start or hold? (2)
+Payments step 1, start or hold?", with the approval field as item 3 and a
+test fix as item 4, and he answered "1", picking the first item (the
+managing agent's Codex session, 00:22 UTC on 25 November). The wording of FR-030 to FR-041 in the main PRD
 and the build's answers to the [open questions](#open-questions) are the
 managing agent's and wait for the maintainer (question 18 in
 [IMPLEMENTATION.md](../IMPLEMENTATION.md#questions-for-the-owner)).
