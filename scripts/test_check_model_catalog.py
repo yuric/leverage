@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Self-test for check_model_catalog.py.
 
-Runs check_model_catalog.py on the real catalog, which must pass, then on
-doctored copies written to a temporary folder. Each copy must fail and name
-the provider, the model and what is wrong. Each case is a way the catalog
-could carry an invented or unprovable entry (contract decision UX-5).
+Runs check_model_catalog.py on the real catalog and on doctored copies
+written to a temporary folder. The checker must accept documented efforts
+regardless of native driver support and reject invalid entries with a
+diagnostic (contract decision UX-5).
 
 Usage: python3 scripts/test_check_model_catalog.py [-v]
 Standard library only; exits 0 when every case behaves as expected.
@@ -111,10 +111,6 @@ def cases(models):
     def provider_missing(m):
         m["providers"] = [entry for entry in m["providers"] if entry["provider"] != "gemini"]
 
-    def efforts_without_native(m):
-        first_model(m, "codex")["efforts"] = {"values": ["low"], "evidence": "documented",
-                                             "source": "https://example.com/made-up", "checked_on": "2026-11-24"}
-
     def duplicate_effort(m):
         entry = first_model(m, "claude")
         entry["efforts"]["values"] = ["low", "low"]
@@ -131,7 +127,6 @@ def cases(models):
         ("a provider that is not a login provider", api_provider, ["openai_api", "login"]),
         ("a provider listed twice", provider_twice, ["gemini", "twice"]),
         ("a login provider missing", provider_missing, ["gemini", "missing"]),
-        ("efforts for a provider whose driver takes none", efforts_without_native, ["codex", "native_effort"]),
         ("an effort listed twice", duplicate_effort, ["claude", "low", "twice"]),
     ]
 
@@ -140,6 +135,16 @@ def main():
     models = load(MODELS)
     code, output = run(models)
     expect("the real catalog passes", code, output, 0, ["OK"])
+
+    prompt_efforts = copy.deepcopy(models)
+    provider(prompt_efforts, "codex")["native_effort"]["value"] = False
+    first_model(prompt_efforts, "codex")["efforts"] = {
+        "values": ["low"], "evidence": "documented",
+        "source": "https://example.com/made-up", "checked_on": "2026-11-24",
+    }
+    code, output = run(prompt_efforts)
+    expect("documented efforts for a provider whose driver takes none", code, output, 0, ["OK"])
+
     for name, change, needles in cases(models):
         doctored = copy.deepcopy(models)
         change(doctored)

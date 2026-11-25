@@ -76,13 +76,6 @@ class ModelsCatalogContractTest < Minitest::Test
     end
   end
 
-  # UX-15: an effort is offered only for a provider whose driver passes one.
-  def test_a_provider_whose_driver_takes_no_effort_lists_none
-    providers.reject { |entry| entry["native_effort"]["value"] }.each do |entry|
-      entry["models"].each { |model| assert_nil model["efforts"], "#{entry["provider"]} #{model["id"]}" }
-    end
-  end
-
   def test_the_readme_lists_the_file_and_round_two
     readme = File.read(File.join(CONTRACT_ROOT, "README.md"))
     assert readme.include?("| `models.json` |"), "README lists models.json"

@@ -84,7 +84,8 @@ class CreateTaskContractTest < Minitest::Test
 
   # UX-13: the creator adds and completes, only in the call that adds.
   def test_the_creator_asks_for_add_task_and_complete_contract
-    rows("add_task").each { |row| assert_equal %w[owner creator], row["who"] }
+    assert_equal [ [ "backlog", %w[owner creator] ], [ "ideas", %w[owner] ] ],
+      rows("add_task").map { |row| row.values_at("to", "who") }.sort
     rows("complete_contract").each { |row| assert_equal %w[owner planner creator], row["who"] }
     group = sm.fetch("groups").find { |entry| entry["id"] == "complete_contract" }
     assert_includes group["rows"].first["note"], "creator: only in the call that adds the task (create_task)"

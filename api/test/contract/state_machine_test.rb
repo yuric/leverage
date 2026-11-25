@@ -315,21 +315,30 @@ class StateMachineTest < Minitest::Test
   # A change of the seat's credential may also close its credential hold
   # and resume the task (milestone 3 plan HE-10, HE-27): those side events,
   # and the SM-42 re-evaluation, are the only others.
-  def test_a_seat_change_releases_and_withdraws_only_when_it_disables_the_seat
+  def test_a_seat_change_releases_and_withdraws_only_when_it_disables_the_seat_or_turns_deliver_off
     row = rows.find { |candidate| candidate["command"] == "change_seat" }
-    released = row["conditional_events"].find { |entry| entry["event"] == "task.released" }
-    assert_equal "disables_seat_holding_working_task", released["when"]
-    row["side_events"].each do |entry|
-      next if entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")
-      next if %w[hold.closed credential.switched inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")
-      next if %w[hold.opened inbox.opened].include?(entry["event"]) &&
-        entry["note"].include?("changes from a role that builds to a role that does not build")
+    assert_equal %w[seat.changed], row.fetch("events")
+    assert_equal [
+      %w[task.released disables_seat_holding_working_task],
+      %w[task.released turns_deliver_off_holding_working_task]
+    ], row.fetch("conditional_events").map { |entry| entry.values_at("event", "when") }.sort
 
-      # UX-11a: turning Deliver tasks off gives back the Working task as
-      # disabling does, with what that release writes.
-      assert_includes %w[seat_disabled_by_change turns_deliver_off_holding_working_task], entry["when"],
-        "change_seat writes #{entry["event"]} on any change"
+    guarded = row.fetch("side_events").reject do |entry|
+      if entry["when"].nil?
+        (entry["event"].start_with?("inbox.") && entry["note"].to_s.include?("SM-42")) ||
+          (%w[hold.closed inbox.resolved].include?(entry["event"]) && entry["note"].to_s.include?("HE-27")) ||
+          (%w[hold.opened inbox.opened].include?(entry["event"]) &&
+            entry["note"].include?("changes from a role that builds to a role that does not build"))
+      else
+        entry["event"] == "credential.switched" && entry["when"] == "credential_differs" && entry["note"].to_s.include?("HE-27")
+      end
     end
+
+    assert_equal({
+      "seat_disabled_by_change" => %w[check.finished hold.closed hold.opened inbox.opened inbox.resolved job.withdrawn],
+      "turns_deliver_off_holding_working_task" => %w[hold.closed],
+      "turns_deliver_off_with_pending_transition" => %w[check.finished hold.closed inbox.resolved job.withdrawn]
+    }, guarded.group_by { |entry| entry["when"] }.transform_values { |entries| entries.map { |entry| entry["event"] }.sort })
   end
 
   def test_a_waive_closes_the_errored_gate_of_its_action

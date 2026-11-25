@@ -1354,9 +1354,10 @@ task. PRD places are named by their section.
   evidence level, an empty source, a missing date, a `help` or `probe`
   fact whose source is not a file in the repository, efforts not
   documented, an id or an effort listed twice, a default not among the
-  models, a provider that is not a login provider, a missing provider,
-  and efforts on a provider whose driver passes none. No automated job
-  reaches a provider.
+  models, a provider that is not a login provider, or a missing provider.
+  Prompt seats use the documented per-model efforts regardless of
+  `native_effort`, which describes the reference runner's driver.
+  No automated job reaches a provider.
 - **UX-6** `[reading]` "The tool's default" is the empty string, the first
   choice of both lists and the one picked by default. With it as the
   model, the effort is only the tool's default: the catalog's default
@@ -1422,8 +1423,9 @@ task. PRD places are named by their section.
   held work goes on. Deliver tasks gates `submit` (`forbidden`), and a
   seat is counted, offered and leased as a task's builder only with Work
   and Deliver both on. Action leases read neither permission. Turning
-  Deliver off releases the Working task with the app's new release reason
-  `deliver_turned_off` (conditional event under the guard
+  Deliver off first cancels a provisional Ready claim or pending Working
+  submit with `invalid_state`. It then releases the Working task with the
+  app's new release reason `deliver_turned_off` (conditional event under the guard
   `turns_deliver_off_holding_working_task`), as disabling does; `task.released`
   v1's enum gains it in place (no build has been released, DB-48's
   reasoning). Alternative: Work off releases held work, as disabling does.
@@ -1438,7 +1440,8 @@ task. PRD places are named by their section.
   protected nothing, since the seat could call right after submitting.
   UX-14 and the owner's checks bound it instead.
 - **UX-13** `[reading]` After a failed check only the owner or a planner
-  completes the contract. `add_task`'s who is `owner` and `creator`;
+  completes the contract. `add_task`'s who is `owner` for Ideas and
+  `owner` and `creator` for Backlog;
   `complete_contract`'s is `owner`, `planner` and `creator`, the creator
   only in the call that adds the task. Alternative: let the adding seat
   retry its own Backlog task.

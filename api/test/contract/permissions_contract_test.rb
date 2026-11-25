@@ -57,6 +57,21 @@ class PermissionsContractTest < Minitest::Test
       %w[task.released turns_deliver_off_holding_working_task]
   end
 
+  def test_deliver_off_cancels_pending_claims_and_submissions
+    change = rows("change_seat").find { |row| row["who"].include?("owner") }
+    guards = %w[turns_deliver_off_holding_working_task turns_deliver_off_with_pending_transition]
+    working, pending = guards
+    assert_includes registry["guards"], pending
+    side_events = change.fetch("side_events").select { |entry| guards.include?(entry["when"]) }
+    assert_equal %w[check.finished hold.closed inbox.resolved job.withdrawn],
+      side_events.select { |entry| entry["when"] == pending }.map { |entry| entry["event"] }.sort
+    assert_equal [ "hold.closed" ],
+      side_events.select { |entry| entry["when"] == working }.map { |entry| entry["event"] }
+    assert_includes side_events.find { |entry| entry["when"] == working }.fetch("note"), "Seat-bound holds"
+    conditional_events = change.fetch("conditional_events").select { |entry| guards.include?(entry["when"]) }
+    assert_equal [ [ "task.released", working ] ], conditional_events.map { |entry| entry.values_at("event", "when") }
+  end
+
   # UX-1: new_prompt stays readable in old logs, and is written no more.
   def test_new_prompt_stays_in_the_registry_with_its_note
     reason = registry["release_reasons"].find { |entry| entry["reason"] == "new_prompt" }

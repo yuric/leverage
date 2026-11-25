@@ -16,9 +16,7 @@ never invented: each says how it is known. This check fails on
   * an effort, or a model id, listed twice;
   * a default model that is not among the provider's models;
   * a provider that is not a login provider of the registry, a provider
-    listed twice, or a login provider missing;
-  * efforts listed for a provider whose driver passes none (native_effort
-    false): nothing would carry them to the tool.
+    listed twice, or a login provider missing.
 
 No automated job reaches a provider: the catalog changes by a pull request
 that edits models.json with the new entry's evidence and date (DEPLOY.md,
@@ -94,8 +92,6 @@ def check(models, registry, root):
             values = efforts.get("values", [])
             for value in sorted({v for v in values if values.count(v) > 1}):
                 problems.append(f"{where}: the effort {value!r} is listed twice")
-            if native.get("value") is not True:
-                problems.append(f"{where}: efforts are listed, but native_effort is false, so no driver passes one")
         if default is not None and default.get("value") not in ids:
             problems.append(f"{name}: the default model {default.get('value')!r} is not among its models")
     for name in logins:

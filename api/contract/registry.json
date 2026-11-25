@@ -310,7 +310,8 @@
     "project_budget_reached", "project_under_budget", "builder_seat_enabled",
     "seat_disabled_by_change", "disables_seat_holding_working_task", "target_project_paused",
     "source_project_paused", "rerun_queues", "rerun_of_claim_check", "rule_on_superseded_default",
-    "seat_has_landed", "seat_has_not_landed", "turns_deliver_off_holding_working_task"
+    "seat_has_landed", "seat_has_not_landed", "turns_deliver_off_holding_working_task",
+    "turns_deliver_off_with_pending_transition"
   ],
   "due_time_sources": [
     "tasks.lease_due_at", "reviews.lease_due_at", "rule_check_attempts.queued_at",

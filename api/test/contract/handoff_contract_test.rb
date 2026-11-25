@@ -128,9 +128,7 @@ class HandoffContractTest < Minitest::Test
   def test_change_seat_may_close_a_credential_hold_when_it_changes_the_seats_credential
     row = rows.find { |candidate| candidate["command"] == "change_seat" }
     assert side_events(row, "credential.switched").any? { |entry| entry["when"] == "credential_differs" }
-    closing = side_events(row, "hold.closed").reject do |entry|
-      %w[seat_disabled_by_change turns_deliver_off_holding_working_task].include?(entry["when"])
-    end
+    closing = side_events(row, "hold.closed").select { |entry| entry.fetch("when").nil? }
     assert_equal 1, closing.size, "one hold.closed for the change of credential"
     assert_includes closing.first["note"], "HE-27"
     assert side_events(row, "inbox.resolved").any? { |entry| entry["note"].to_s.include?("HE-27") }
