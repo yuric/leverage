@@ -22,6 +22,33 @@ struct HTTPTransportTests {
          "result":{"lease_due_at":"2026-01-01T01:00:00Z"},"refusal":null}
         """)
 
+    // The API's answers carry a validator and no `no-store`, and a session
+    // with a URL cache writes each of them to ~/Library/Caches together
+    // with the request's bearer token. No client may use such a session.
+    @Test("the session the API clients share keeps nothing: no cache, no cookies, no stored credentials")
+    func uncachedSession() {
+        let configuration = HTTPTransport.uncachedSession.configuration
+        #expect(configuration.urlCache == nil)
+        #expect(configuration.requestCachePolicy == .reloadIgnoringLocalCacheData)
+        #expect(configuration.httpCookieStorage == nil)
+        #expect(configuration.httpShouldSetCookies == false)
+        #expect(configuration.urlCredentialStorage == nil)
+        #expect(HTTPTransport.uncachedSession !== URLSession.shared)
+    }
+
+    @Test("every client built with no session of its own uses the session that keeps nothing")
+    func defaultSession() {
+        let url = URL(string: "http://127.0.0.1:3000")!
+        let kept = HTTPTransport.uncachedSession
+        #expect(HTTPTransport(baseURL: url).session === kept)
+        #expect(HTTPTransport(baseURL: url, token: Self.token).withToken(nil).session === kept)
+        #expect(OwnerClient(baseURL: url, sessionToken: nil).transport.session === kept)
+        #expect(OwnerClient(baseURL: url, sessionToken: nil).signedIn(sessionToken: "made-up").transport.session === kept)
+        #expect(AgentClient(baseURL: url, seatToken: Self.token).transport.session === kept)
+        #expect(HelperClient(baseURL: url, helperToken: "lvh_made-up-helper-token").transport.session === kept)
+        #expect(LeverageClient(baseURL: url).transport.session === kept)
+    }
+
     @Test("a command sends its key, the bearer token and JSON")
     func commandHeaders() async throws {
         let transport = transport("headers.test", answers: [Self.completedHeartbeat])

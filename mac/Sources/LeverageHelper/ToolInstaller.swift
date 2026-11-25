@@ -155,12 +155,14 @@ struct ToolInstaller: Sendable {
 }
 
 /// The real download: HTTPS only, and the answer must be a 200 from an
-/// address the installer permits, also after a redirect.
+/// address the installer permits, also after a redirect. It uses the
+/// session that keeps nothing, as the API's clients do, so that no program
+/// of Leverage's has a URL cache on disk.
 struct HTTPSDownload: Sendable {
     let installer: Installer
     let session: URLSession
 
-    init(installer: Installer, session: URLSession = .shared) {
+    init(installer: Installer, session: URLSession = HTTPTransport.uncachedSession) {
         self.installer = installer
         self.session = session
     }

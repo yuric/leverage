@@ -145,6 +145,9 @@ enum HelperMain {
             log.error("provider API override refused; the helper does not start")
             return HelperExitCode.configuration
         }
+        // Before any call: what an earlier version's URL cache kept of this
+        // program's calls, the helper's token included.
+        LeftoverURLCache.remove()
         let api = HelperClient(baseURL: configuration.settings.apiBaseURL, helperToken: configuration.helperToken)
         var timings = HelperTimings.standard
         timings.readLimit = configuration.readTimeout

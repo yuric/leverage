@@ -36,12 +36,35 @@ public struct HTTPTransport: Sendable {
     /// What a long poll's timeout adds to the seconds the server may hold it.
     public static let longPollMargin: TimeInterval = 15
 
+    /// The session every API client uses unless a test gives another: it
+    /// keeps nothing. `URLSession.shared` has a URL cache on disk, under
+    /// `~/Library/Caches`, and the API's answers carry a validator and no
+    /// `no-store`, so with it every exchange was written there in plain
+    /// form: the answer's text, and the request with its bearer token (the
+    /// owner's session, the helper's token, a seat's token). This session
+    /// has no cache, reads none, and keeps no cookies and no credentials.
+    public static let uncachedSession = URLSession(configuration: uncachedConfiguration())
+
+    /// The configuration of `uncachedSession`, new each time.
+    public static func uncachedConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        return configuration
+    }
+
     public let baseURL: URL
     public let token: String?
     public let retry: RetryPolicy
-    private let session: URLSession
+    let session: URLSession
 
-    public init(baseURL: URL, token: String? = nil, session: URLSession = .shared, retry: RetryPolicy = .standard) {
+    public init(
+        baseURL: URL, token: String? = nil, session: URLSession = HTTPTransport.uncachedSession,
+        retry: RetryPolicy = .standard
+    ) {
         self.baseURL = baseURL
         self.token = token
         self.session = session

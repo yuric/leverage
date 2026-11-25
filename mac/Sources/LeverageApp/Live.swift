@@ -82,6 +82,9 @@ enum Live {
     /// any window opens (PK-8).
     @MainActor
     static func runtime() -> any AppRuntime {
+        // Before any call: what an earlier version's URL cache kept of the
+        // app's calls, the owner's session included.
+        LeftoverURLCache.remove()
         do {
             return try make(settings: .bundled(), environment: ProcessInfo.processInfo.environment)
         } catch LiveError.heldByAnotherCopy(let processID) {

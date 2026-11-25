@@ -206,6 +206,18 @@ folder under your home folder, are not refused.
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
+| What the API answered | Nowhere on the Mac: the app, the helper, the runner and the MCP server call the API with no URL cache and no cookies |
+
+Versions before this one kept a URL cache: each answer of the API and
+its request, with the bearer token, in plain files in
+`~/Library/Caches/local.leverage.app` and, for programs run outside the
+app, `~/Library/Caches/LeverageHelper`, `LeverageRunner` and
+`LeverageMCP`. Each program now removes its own `Cache.db`,
+`Cache.db-shm`, `Cache.db-wal` and `fsCachedData` there when it starts.
+After moving from such a version, sign out and in again once, which ends
+the owner session those files held, and remove and connect again any
+agent that connected on its own, whose token does not change by itself.
+You may delete the four folders.
 
 After sign-in, the row under the system health line shows the sign-in
 email. Open that row to reach Settings or Sign out. The Leverage menu

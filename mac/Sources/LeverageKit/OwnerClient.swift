@@ -12,7 +12,7 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         self.transport = transport
     }
 
-    public init(baseURL: URL, sessionToken: String?, session: URLSession = .shared) {
+    public init(baseURL: URL, sessionToken: String?, session: URLSession = HTTPTransport.uncachedSession) {
         transport = HTTPTransport(baseURL: baseURL, token: sessionToken, session: session)
     }
 

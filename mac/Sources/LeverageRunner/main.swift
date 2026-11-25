@@ -30,6 +30,9 @@ case .unknown(let other):
 }
 
 let log = Log(component: "runner")
+// Before any call: what an earlier version's URL cache kept of this
+// program's calls, a seat's token included.
+LeftoverURLCache.remove()
 let configuration: RunnerConfiguration
 do {
     configuration = try RunnerConfiguration(environment: environment)
