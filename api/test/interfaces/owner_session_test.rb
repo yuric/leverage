@@ -166,6 +166,17 @@ class OwnerSessionTest < ActionDispatch::IntegrationTest
     assert_equal counts, [ Command.count, Session.count ]
   end
 
+  test "a revoked session cannot read the owner identity" do
+    create_owner
+    token = result.fetch("session_token")
+    sign_out(token)
+    assert_response :ok
+
+    get "/v1/owner/session", headers: { "Authorization" => "Bearer #{token}" }
+    assert_transport_error(:unauthorized, "unauthenticated")
+    refute_includes response.body, EMAIL
+  end
+
   test "sign-out needs the owner's session and a key" do
     scenario = Scenario.new
     sign_out(nil)

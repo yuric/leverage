@@ -64,8 +64,8 @@ class RoutesTest < ActiveSupport::TestCase
   test "the served operations match their milestones, each a registry operation" do
     refute RouteTable.const_defined?(:PENDING, false)
     assert_equal operations.keys.sort, RouteTable::ROUTES.keys.sort
-    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6 + JOIN_OPERATIONS.keys + ROUND_2_OPERATIONS.keys).sort,
-      RouteTable::ROUTES.keys.sort
+    expected = MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6 + JOIN_OPERATIONS.keys + ROUND_2_OPERATIONS.keys
+    assert_equal (expected + %w[get_owner_identity]).sort, RouteTable::ROUTES.keys.sort
     RouteTable::ROUTES.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes.each do |route|
       operation = operations.fetch(route.operation_id)

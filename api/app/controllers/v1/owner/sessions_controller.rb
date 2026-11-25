@@ -9,6 +9,11 @@ module V1
 
       skip_before_action :authenticate_owner!, only: :create
 
+      def show
+        no_store
+        render json: Leverage::Reads::OwnerSessionIdentity.call(current_caller)
+      end
+
       # POST /v1/owner/session. The password is checked here, before the
       # pipeline: a wrong password or an unknown address is 401 and stores
       # no commands row, also for a key used before. authenticate_by spends

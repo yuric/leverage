@@ -203,6 +203,7 @@
     {"operation_id": "get_health", "method": "GET", "path": "/v1/health", "caller": "public", "commands": ["read"], "tag": "infrastructure"},
     {"operation_id": "get_setup_state", "method": "GET", "path": "/v1/owner/setup", "caller": "public", "commands": ["read"], "tag": "owner"},
     {"operation_id": "create_owner", "method": "POST", "path": "/v1/owner/setup", "caller": "public", "commands": ["create_owner"], "tag": "owner"},
+    {"operation_id": "get_owner_identity", "method": "GET", "path": "/v1/owner/session", "caller": "owner", "commands": ["read"], "tag": "owner"},
     {"operation_id": "sign_in_owner", "method": "POST", "path": "/v1/owner/session", "caller": "owner", "commands": ["sign_in"], "tag": "owner"},
     {"operation_id": "sign_out_owner", "method": "POST", "path": "/v1/owner/session/sign-out", "caller": "owner", "commands": ["sign_out"], "tag": "owner"},
     {"operation_id": "get_owner_command", "method": "GET", "path": "/v1/owner/commands/{key}", "caller": "owner", "commands": ["read"], "tag": "owner"},

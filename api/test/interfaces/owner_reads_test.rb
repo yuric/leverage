@@ -40,7 +40,7 @@ class OwnerReadsTest < CommittingTestCase
   # --- authentication -----------------------------------------------------------------------------------------------
 
   READS = %w[
-    /v1/owner/board /v1/owner/seats /v1/owner/credentials /v1/owner/health /v1/owner/events
+    /v1/owner/session /v1/owner/board /v1/owner/seats /v1/owner/credentials /v1/owner/health /v1/owner/events
     /v1/owner/tasks/00000000-0000-4000-8000-000000000001 /v1/owner/helper-requests/00000000-0000-4000-8000-000000000002
   ].freeze
 
@@ -61,6 +61,21 @@ class OwnerReadsTest < CommittingTestCase
     before = [ Command.count, Event.count, last_seq ]
     %w[/v1/owner/board /v1/owner/seats /v1/owner/credentials /v1/owner/health /v1/owner/events].each { |path| assert_read(path) }
     assert_equal before, [ Command.count, Event.count, last_seq ]
+  end
+
+  test "an existing session reads only its own account email and log position" do
+    other = Scenario.new
+    scenario.task(state: "ready")
+    [ other, scenario ].each do |account|
+      token = account.owner_token
+      assert_no_difference [ "Command.count", "Event.count" ] do
+        owner_get("/v1/owner/session", token: token)
+      end
+      assert_response :ok
+      assert_equal({ "email_address" => account.owner.email_address, "as_of_seq" => account.workspace.reload.last_seq }, response.parsed_body)
+      assert_equal "no-store", response.headers.fetch("Cache-Control")
+      assert_response_matches_contract
+    end
   end
 
   # --- get_board ----------------------------------------------------------------------------------------------------

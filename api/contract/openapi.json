@@ -2040,6 +2040,45 @@
       }
     },
     "/v1/owner/session": {
+      "get": {
+        "operationId": "get_owner_identity",
+        "summary": "Reads the signed-in owner's account email.",
+        "tags": [
+          "owner"
+        ],
+        "x-leverage-caller": "owner",
+        "x-leverage-command": [
+          "read"
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account email and the workspace log position at the time of the read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerSessionIdentity"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          }
+        }
+      },
       "post": {
         "operationId": "sign_in_owner",
         "summary": "Signs the owner in and returns a bearer session.",
@@ -16908,6 +16947,29 @@
               "repeated": true
             },
             "refusal": null
+          }
+        ]
+      },
+      "OwnerSessionIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "email_address": {
+            "type": "string"
+          },
+          "as_of_seq": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "email_address",
+          "as_of_seq"
+        ],
+        "examples": [
+          {
+            "email_address": "owner@example.test",
+            "as_of_seq": 12
           }
         ]
       },
