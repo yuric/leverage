@@ -8,9 +8,14 @@ never invented: each says how it is known. This check fails on
 
   * an evidence level outside the catalog's evidence_levels, or a catalog
     without them;
-  * an empty source or a missing or malformed date (checked_on);
+  * an empty source, or a missing date (checked_on) or one that is not a
+    calendar date in the form YYYY-MM-DD;
+  * a documented fact whose source is not a page address (https://);
   * a help or probe fact whose source is not a path to a file in the
-    repository (a recorded reply, a probe, or a saved --help output);
+    repository (a recorded reply, a probe, or a saved --help output), or a
+    model id or default model whose cited file does not name it as a whole
+    id (the file may name it anywhere: what the file says about it is for
+    the reviewer of the pull request to read);
   * efforts whose evidence is not documented (a tool's --help lists efforts
     for the whole tool and never says which model accepts which);
   * an effort, or a model id, listed twice;
@@ -27,6 +32,7 @@ Standard library only; exits 0 when the catalog holds, 1 otherwise.
 """
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -37,7 +43,8 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RECORDED = ("help", "probe", "probe (full environment)")
 
 
-def fact_problems(where, fact, levels, root):
+def fact_problems(where, fact, levels, root, value=None):
+    """Problems with one fact; value is the model id or default it evidences."""
     problems = []
     evidence = fact.get("evidence")
     if evidence not in levels:
@@ -45,15 +52,40 @@ def fact_problems(where, fact, levels, root):
     source = fact.get("source")
     if not isinstance(source, str) or not source.strip():
         problems.append(f"{where}: the source is empty")
+    elif evidence == "documented" and not source.startswith("https://"):
+        problems.append(f"{where}: a documented fact must cite a page address (https://), not {source!r}")
     elif evidence in RECORDED:
         path = source.split("#", 1)[0]
         if "://" in source or path.startswith("/") or ".." in Path(path).parts:
             problems.append(f"{where}: a {evidence} fact must cite a repository path, not {source!r}")
         elif not (root / path).is_file():
             problems.append(f"{where}: {path} is not a file in the repository ({evidence} evidence)")
-    if not DATE.match(str(fact.get("checked_on", ""))):
+        elif isinstance(value, str) and not names(
+                (root / path).read_text(encoding="utf-8", errors="replace"), value):
+            problems.append(f"{where}: {path} does not name {value!r} ({evidence} evidence)")
+    if not is_date(fact.get("checked_on")):
         problems.append(f"{where}: checked_on is missing or not a date")
     return problems
+
+
+def names(text, value):
+    """Whether text holds value as a whole id, not as part of a longer one.
+
+    grok-4 is not named by a file that holds only grok-4.6 or grok-4-fast.
+    A full stop that ends a sentence after the id does not count as part of
+    it. Where in the file the id stands is not checked.
+    """
+    return re.search(rf"(?<![\w-]){re.escape(value)}(?![\w-]|\.\w)", text) is not None
+
+
+def is_date(value):
+    if not isinstance(value, str) or not DATE.match(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def check(models, registry, root):
@@ -74,7 +106,7 @@ def check(models, registry, root):
         problems += fact_problems(f"{name} native_effort", native, levels, root)
         default = entry.get("default_model")
         if default is not None:
-            problems += fact_problems(f"{name} default_model", default, levels, root)
+            problems += fact_problems(f"{name} default_model", default, levels, root, default.get("value"))
         ids = []
         for model in entry.get("models", []):
             model_id = model.get("id")
@@ -82,7 +114,7 @@ def check(models, registry, root):
             if model_id in ids:
                 problems.append(f"{where}: the model is listed twice")
             ids.append(model_id)
-            problems += fact_problems(where, model, levels, root)
+            problems += fact_problems(where, model, levels, root, model_id)
             efforts = model.get("efforts")
             if efforts is None:
                 continue

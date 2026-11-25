@@ -26,11 +26,17 @@ Reset preview returns to the plan list and clears the session.
 
 Dates and plan-change timings are preview examples. Plan inclusions and
 support details are marked pending. The preview keeps all state in memory.
+Two sample choices are not decisions. Cancelling while a payment is due
+shows the failed renewal date, which has already passed, as the end date;
+when such a subscription ends is the owner's open decision. After a change
+scheduled for renewal becomes the plan whose payment is due, Change plan
+still marks the earlier plan as "Your plan".
 The [billing handoff](billing-handoff.md) covers the Stripe setup, service
 boundary, owner decisions and sandbox acceptance checks.
 
 Run the mock model tests from the repository root with
-`node --test docs/subscription/preview/mock-billing.test.cjs`.
+`node --test docs/subscription/preview/mock-billing.test.cjs`. CI runs the
+same command on every pull request.
 
 ## The mockups
 

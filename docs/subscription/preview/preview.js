@@ -61,6 +61,7 @@ function subscriptionPage(snapshot) {
   const due = snapshot.paymentDue;
   const scheduled = planFor(snapshot, snapshot.scheduledPlanId);
   const active = snapshot.status === 'active';
+  const manageable = active || snapshot.status === 'payment_due';
   const receipts = snapshot.receipts.map(receipt => `<div class="panel-row">
     <div class="paid-receipt"><time datetime="${escapeText(receipt.paidOn)}">${date(receipt.paidOn)}</time>
     <strong>${price(receipt.amountCents)}</strong><span>${planFor(snapshot, receipt.planId).name}</span><span class="badge">Paid</span></div>
@@ -74,11 +75,11 @@ function subscriptionPage(snapshot) {
         : `<p class="detail">Next payment ${price((scheduled ?? plan).amountCents)} on ${date(snapshot.nextPaymentOn)}.</p>`}
       ${scheduled ? `<p class="detail">Changing to ${scheduled.name} at renewal.</p>` : ''}
       <p class="detail">Plan and subscriber support details pending.</p></div>
-      ${active ? button('change', 'Change plan') : ''}</div></section>
+      ${manageable ? button('change', 'Change plan') : ''}</div></section>
     <section class="panel"><div class="panel-row"><div><h3>Payment method</h3>
       <p class="detail">${paymentSummary(snapshot.paymentMethod)}</p></div>${button('update', 'Update')}</div></section>
     <section class="panel"><h3>Receipts</h3>${receipts}</section>
-    ${active ? '<div>' + button('cancel-subscription', 'Cancel subscription', 'danger') + '</div>' : ''}
+    ${manageable ? '<div>' + button('cancel-subscription', 'Cancel subscription', 'danger') + '</div>' : ''}
     ${active || due ? `<div class="preview-actions">
       ${active ? button('fail', 'Simulate failed renewal') : button('recover', 'Simulate successful retry')}
       <span>Preview controls · dates are illustrative</span></div>` : ''}
@@ -185,11 +186,12 @@ function resetPreview() {
 }
 
 function changeConfirmation(snapshot, plan) {
+  const renewal = snapshot.paymentDue ? 'At renewal' : 'At renewal · ' + date(snapshot.nextPaymentOn);
   showDialog('pick-change', 'Change to ' + plan.name,
     `<p>New monthly price ${price(plan.amountCents)}. Try either timing. Live billing and proration rules are pending.</p>
     <fieldset><legend>When to apply this example</legend>
     <label class="choice"><input type="radio" name="timing" value="immediate" checked> Immediately</label>
-    <label class="choice"><input type="radio" name="timing" value="renewal"> At renewal · ${date(snapshot.nextPaymentOn)}</label></fieldset>`,
+    <label class="choice"><input type="radio" name="timing" value="renewal"> ${renewal}</label></fieldset>`,
     button('dismiss', 'Cancel') + button('apply-change', 'Apply in preview', 'primary', plan.id));
 }
 

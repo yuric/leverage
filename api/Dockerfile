@@ -9,10 +9,11 @@
 # .env; docs/DEPLOY.md says how. Do not run it with `-p 3000:3000`, which
 # would publish it on every interface.
 
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version. The digest
-# pins the image behind the tag (docs/adr/0002); change both together.
-ARG RUBY_VERSION=4.0.10
-FROM docker.io/library/ruby:$RUBY_VERSION-slim@sha256:a4b3e62bfe56bd267a3aeacc1b89aea96be919faa0c7d77c6346e2ac14f6c175 AS base
+# The tag names the Ruby version in .ruby-version, and the digest pins the
+# image behind the tag (docs/adr/0002); change all three together. The tag
+# is written out, not taken from an ARG, because Dependabot reads only a
+# literal tag (scripts/test_e2e_core_loop.py checks both).
+FROM docker.io/library/ruby:4.0.10-slim@sha256:a4b3e62bfe56bd267a3aeacc1b89aea96be919faa0c7d77c6346e2ac14f6c175 AS base
 
 # Rails app lives here
 WORKDIR /rails

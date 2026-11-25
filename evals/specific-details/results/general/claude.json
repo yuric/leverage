@@ -8,15 +8,16 @@
   "date": "2026-11-24",
   "mode": "general",
   "role_file_sha256": null,
+  "job_rules_sha256": "7a35c2a9e2664a18d7fa6a2a2eabf3ba67b91717a8cbcda5affc849d16264648",
   "instruction_sha256": "e9d4a0aeca1826c5c780d624bf801e05335f05b2ff257814c78209ec6cd55983",
   "cases_sha256": "f6276557c4e643642806d827a41df1104aa3f9cb462daa9921ae5467cabc3bdd",
   "canary_word": null,
   "met_bar": false,
   "scores": null,
   "misses": [
-    "not run: Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment"
+    "not run: Claude Code refused every run on this Mac"
   ],
-  "reason": "Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment",
+  "reason": "Claude Code refused every run on this Mac",
   "tool_runs": 0,
   "cases": []
 }

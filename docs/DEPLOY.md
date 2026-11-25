@@ -378,7 +378,9 @@ How the backup and the restore are built is
 - **Where.** For the app, `<support folder>/backups`, which the app makes
   with mode 0700 and names in `LEVERAGE_BACKUP_DIR` in its server folder's
   `.env`. For a server started from the repository, the folder in
-  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored).
+  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored). A
+  dump (`*.dump`, `*.dump.partial`) is git-ignored by its name wherever
+  in the checkout it is written.
 - **How many.** The newest `BACKUP_KEEP` (14) dumps that `backup_runs`
   names are kept; older ones are deleted with their row. A file in the
   folder that no `backup_runs` row names is never deleted, so a dump
@@ -456,7 +458,9 @@ volume removed, the restore into the new, empty cluster, and the same
 count, highest position and checksum of the events afterwards. It then
 removes the volume again, starts every service on the empty cluster as
 the app does, checks that the backup made no dump of it, and restores the
-same dump again.
+same dump again. It runs on a project of its own and removes it; its
+`--from-project` option, for the end-to-end runs, takes only a project
+whose name starts with `leverage-e2e-`, never the owner's or the app's.
 
 For the app, quit `Leverage.app` first so that it does not start the
 services again, and run the same three lines with the app's own files:
@@ -494,7 +498,8 @@ database read their settings from a `.env` file at the root, which
 [compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it
 with the script, which copies `.env.example` and gives the two database
 passwords and `SECRET_KEY_BASE` random values of its own (mode 0600; it
-never writes over a `.env` that is there):
+never writes over a `.env` that is there). The end-to-end scripts run it
+too when there is no `.env`:
 
 ```bash
 python3 -I scripts/make_env.py
@@ -802,3 +807,23 @@ that moves either digest or the gems in `api/Gemfile.lock`. Dependabot
 changes neither the digest recorded in ADR 0002 nor `api/.ruby-version`;
 whoever takes such a pull request changes them in it. No such pull request
 has been opened yet, so that Dependabot can read these files is unverified.
+
+### Updating the model list
+
+The model catalog is `api/contract/models.json`. The server refuses a model
+or an effort it does not list, and the Mac reads the same list from the
+generated `mac/Sources/LeverageKit/Generated/ModelCatalog.swift`. No
+automated job reaches a provider, so the list changes only by a pull
+request ([UX-4 and UX-5](../api/contract/decisions.md#app-round-2-ux)):
+
+1. Edit `models.json`. Give each new or changed fact its `evidence` (one of
+   the catalog's `evidence_levels`), its `source` and the date it was
+   checked (`checked_on`, YYYY-MM-DD). A `documented` fact cites the
+   vendor's page by its `https://` address. A `help` or `probe` fact cites a
+   file in the repository that names the model or default it evidences.
+   Per-model `efforts` are always `documented`.
+2. Run `python3 scripts/generate_swift_contract.py` and commit the
+   regenerated `ModelCatalog.swift`.
+3. Run `python3 -I scripts/check_model_catalog.py`,
+   `python3 -I scripts/test_check_model_catalog.py` and
+   `python3 -I scripts/generate_swift_contract.py --check`.

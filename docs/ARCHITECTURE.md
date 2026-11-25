@@ -93,7 +93,10 @@ A product source file is a source file outside `docs/`, `scripts/`,
      approve their own pull request. The maintainer reads them before
      merging.
 
-Dependabot pull requests are exempt from the "Architecture rules" section,
+Dependabot proposes updates for the actions, the API's gems and its two
+pinned container images ([.github/dependabot.yml](../.github/dependabot.yml)).
+The two image entries are unverified until Dependabot's first run on them.
+Its pull requests are exempt from the "Architecture rules" section,
 because Dependabot cannot fill it in. The checks on what the change adds still
 run on them, and with no answers there is no `N/A` to soften one. A bot's
 description is upstream release notes, so the IDs in it are not resolved.
@@ -290,7 +293,8 @@ must satisfy; where a practice is also a rule, the rule is the authority.
   stand-in in automated tests; nothing in CI calls a provider.
 - **No secret in the repository, a log, an event, a fixture or a
   screenshot.** Tests use made-up values. Records name a credential by its
-  id.
+  id. No tracked file names a real user's home folder
+  (`scripts/check_home_paths.py`).
 - **An adversarial review before merge in a delegated run.** In a run
   delegated under [CONTRIBUTING.md](../CONTRIBUTING.md#ai-assisted-contributions),
   a reviewer who did not write the change tries to break it, and its

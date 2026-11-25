@@ -79,7 +79,9 @@ research, and the following code and checks.
   specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
   30 main cases, a 10-case held-out set, and the run record. Earlier results
-  for both suites predate the task text change. Current runs are pending;
+  for both suites predate the task text change. On the current cases Codex
+  and Antigravity met both bars in both modes, and Claude Code is recorded
+  not run;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
@@ -96,17 +98,19 @@ research, and the following code and checks.
   `e2e_credentials.sh` (three stand-in cases with replay and secret scans),
   `capture_reader_reply.py` (a maintainer-only developer check),
   `restore_drill.sh` (a backup restored into an emptied cluster),
-  `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
+  `speed_run.sh`, `secret_scan.py`, `make_env.py` (makes `.env` with
+  values of its own), `check_home_paths.py`, `generate_swift_contract.py`,
   `app_compose.py`, and the maintainer's runs on real tools,
   `eval_rule.sh` (both suites, scored by `eval_score.py`),
   `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
-  migrations-from-zero check, the import check, the reply-file check, the
-  capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  migrations-from-zero check, the import check, the home folder check, the
+  reply-file check, the capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
   `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
-  scripts), and the marketing page and deployment tests, on every pull request;
+  scripts), the marketing page and deployment tests, and the subscription
+  preview's mock model tests, on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract;
 - `.github/workflows/deploy-marketing.yml`: publishes the checked marketing
@@ -219,7 +223,7 @@ These run on every pull request and must pass. Run them locally before you
 report work as done:
 
 ```bash
-npx --yes markdownlint-cli2 "**/*.md"                      # Markdown lint
+npx --yes markdownlint-cli2@0.24.2 "**/*.md"               # Markdown lint, CI's version
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules
@@ -240,6 +244,8 @@ python3 -I scripts/test_make_env.py                  # the .env generator, and t
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
 python3 -I scripts/test_capture_reader_reply.py      # capture guard and scrub self-test
 python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
+python3 -I scripts/check_home_paths.py               # no tracked file names a home folder
+python3 -I scripts/test_check_home_paths.py          # self-test of that check
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
@@ -252,6 +258,7 @@ bash scripts/test_eval_rule.sh                       # the eval script's refusal
 bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
 bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
 bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
+node --test docs/subscription/preview/mock-billing.test.cjs  # the subscription preview's mock model
 ```
 
 After changing anything under `api/contract/registry.json` or the
@@ -289,7 +296,8 @@ itself: every Ruby and Rails command runs in the `api` container. Run them
 from the repository root unless a line says otherwise.
 
 Once, to configure (it makes `.env` from `.env.example`, with random
-secrets of its own, and never writes over one that is there):
+secrets of its own, and never writes over one that is there; the
+end-to-end scripts run it too when there is no `.env`):
 
 ```bash
 python3 -I scripts/make_env.py

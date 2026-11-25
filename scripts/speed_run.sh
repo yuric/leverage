@@ -22,9 +22,12 @@
 # submit, review claim and verdict passes the gate with the app-run rules only.
 #
 # Needs Docker and a .env (made by scripts/make_env.py when there is none).
-# COMPOSE_PROJECT_NAME and API_IMAGE_TAG may be set; the defaults are a
-# project of this run's own and the tag "speed". The exit code is not
-# changed by a figure above the target: nothing is tuned to pass.
+# The project is always this run's own: its name ends in the run's pid
+# (leverage-speed-<pid>, or <COMPOSE_PROJECT_NAME>-<pid> when that is set),
+# so the volumes it removes are never those of a stack already up under an
+# exported name. API_IMAGE_TAG may be set; the default is the tag "speed".
+# The exit code is not changed by a figure above the target: nothing is
+# tuned to pass.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -56,22 +59,17 @@ if [ $((seats % 2)) -ne 0 ] || [ "$seats" -lt 2 ]; then
   exit 64
 fi
 
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-leverage-speed-$$}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-leverage-speed}-$$"
 export API_IMAGE_TAG="${API_IMAGE_TAG:-speed}"
 U() { docker compose -f compose.yaml -f compose.test.yaml "$@"; }
 
-made_env=false
-if [ ! -f .env ]; then
-  python3 -I scripts/make_env.py >/dev/null
-  made_env=true
-fi
+if [ ! -f .env ]; then python3 -I scripts/make_env.py >/dev/null; fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/leverage-speed.XXXXXX")"
 cleanup() {
   status=$?
   U down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
-  if $made_env; then rm -f .env; fi
   exit $status
 }
 trap cleanup EXIT
