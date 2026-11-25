@@ -64,9 +64,11 @@ module Leverage
     end
 
     # The job seat would get from claim-next at at: the one it holds, else
-    # the oldest it may claim, or nil. Reads only.
+    # the oldest it may claim, or nil. Reads only. Work on tasks gates the
+    # new claim only: the job the seat holds goes on (UX-11a), so a run
+    # moved to another credential still gets it again (RD-40).
     def next_for(seat, at: Time.current, additional: [])
-      return nil unless active?(seat)
+      return nil unless active?(seat, new_claim: false)
 
       job = held(seat, at)
       if job
@@ -74,7 +76,7 @@ module Leverage
 
         return (job if seat.credential_id.nil? || Candidates.first_available(seat, nil, at))
       end
-      return nil unless ready_to_claim?(seat, at)
+      return nil unless Permissions.works?(seat) && ready_to_claim?(seat, at)
 
       queued = claimable(seat, at)
       proposed = additional.select { |item| claimable_proposal?(item, seat, at) }.min_by(&:queued_at)

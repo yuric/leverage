@@ -29,6 +29,20 @@ class PermissionsTest < ActiveSupport::TestCase
     refute Leverage::RolePresence.online?(@scenario.workspace, "orchestrator", Time.current)
   end
 
+  test "Work off leaves the seat the job it holds and offers it no other" do
+    held = @scenario.job(kind: "contract_draft", task: @scenario.task, state: "claimed", seat: @seat)
+    @scenario.job(kind: "contract_draft", task: @scenario.task)
+    @seat.update!(may_work: false)
+
+    assert_equal held, Leverage::Jobs.next_for(@seat)
+    assert_equal "job", offer
+
+    held.update_columns(state: "finished", finished_at: Time.current)
+    assert_nil Leverage::Jobs.next_for(@seat)
+    assert_equal "none", offer
+    assert_equal "not_eligible", command("claim_job", @seat).refusal.code
+  end
+
   test "a waiting review opens No reviewer is eligible when the last reviewer cannot work" do
     @scenario.rule(key: "different_provider_review", origin: "shipped")
     task = @scenario.task(state: "in_review")

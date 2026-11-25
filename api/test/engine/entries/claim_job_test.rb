@@ -77,6 +77,25 @@ class ClaimJobTest < ActiveSupport::TestCase
     assert_equal job_of(check).id, again.result.fetch("job_id")
   end
 
+  test "a seat with Work on tasks off gets the job it holds again, and no new job once it ends" do
+    _task, _pending, check = waiting_contract(model_rule)
+    first = nil
+    starting_attempts { first = assert_completed(claim_job(@orchestrator)) }
+    _other_task, _other_pending, other = waiting_contract(model_rule)
+    @orchestrator.update!(may_work: false)
+
+    again = nil
+    written = events_written { starting_attempts { again = assert_completed(claim_job(@orchestrator)) } }
+
+    assert_empty written
+    assert_equal first.result, again.result
+    assert_equal job_of(check).id, again.result.fetch("job_id")
+
+    assert_completed(submit_result(@orchestrator, job_of(check), { "result" => "passed", "reason" => "A made-up reason." }))
+    assert_refused "not_eligible", claim_job(@orchestrator)
+    assert_equal "queued", job_of(other).state
+  end
+
   test "the oldest job is claimed first" do
     _t1, _p1, older = waiting_contract(model_rule)
     _t2, _p2, newer = waiting_contract(model_rule)
