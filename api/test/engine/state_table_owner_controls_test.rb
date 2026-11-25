@@ -16,7 +16,10 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
 
   # The conditional events of each row and the entry test that proves each
   # (test/engine/entries/change_seat_test.rb).
-  CONDITIONAL = { "change_seat" => { "task.released" => "disables_seat_holding_working_task" } }.freeze
+  CONDITIONAL = { "change_seat" => [
+    %w[task.released disables_seat_holding_working_task],
+    %w[task.released turns_deliver_off_holding_working_task]
+  ] }.freeze
 
   def self.group = Leverage::Transitions::Table::OWNER_CONTROLS
 
@@ -31,8 +34,8 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
 
   test "every conditional event of the group is named here and proven by its entry's test" do
     StateTableCases.for(COMMANDS).each do |kase|
-      named = kase.conditional_events.to_h { |conditional| [ conditional.fetch("event"), conditional.fetch("when") ] }
-      assert_equal CONDITIONAL.fetch(kase.command, {}), named, kase.command
+      named = kase.conditional_events.map { |conditional| conditional.values_at("event", "when") }
+      assert_equal CONDITIONAL.fetch(kase.command, []), named, kase.command
     end
   end
 
@@ -69,7 +72,8 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
   end
 
   StateTableCases.define(self, COMMANDS) do |kase|
-    assert_equal [ "owner" ], kase.who unless kase.invalid_state?
+    callers = kase.command == "change_seat" ? %w[owner self] : %w[owner]
+    assert_equal callers, kase.who unless kase.invalid_state?
     assert_nil kase.hook
 
     params, task = prepare(kase)
