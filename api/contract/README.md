@@ -920,7 +920,7 @@ other things, that a task have no goal. Its decisions are UI-1 to UI-8 in
 
 The owner's three follow-ups of 2026-11-24, after round 1: New prompt
 goes, the model and the effort are picked from lists the server checks,
-and every seat has three permissions. Its decisions are UX-1 to UX-16 in
+and every seat has three permissions. Its decisions are UX-1 to UX-17 in
 [`decisions.md`](decisions.md#app-round-2-ux).
 
 - `models.json` (shape `meta/models.schema.json`) is the model catalog,
@@ -930,7 +930,8 @@ and every seat has three permissions. Its decisions are UX-1 to UX-16 in
 - `issue_landing_prompt` is issued only before the seat lands: its row
   splits on the guard family `seat_landing` and the landed row is refused
   `invalid_state`; it releases nothing. The release reason `new_prompt`
-  stays readable with a note (UX-1 to UX-3).
+  stays readable with a note (UX-1 to UX-3). The log audit still reads a
+  New prompt logged before that, for the seat's own work only (UX-17).
 - The registry gains the list `seat_permissions`, the operation caller
   `creator`, the operations `create_task` (`POST /v1/tasks`, running
   `add_task` and `complete_contract`) and `report_model`

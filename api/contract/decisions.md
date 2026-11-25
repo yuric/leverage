@@ -1576,6 +1576,23 @@ task. PRD places are named by their section.
   null, and Cancel with `cancel`.
   Alternative: only the Backlog card and the task page show it; or null
   for a planner's draft, which leaves `draft_contract` never written.
+- **UX-17** `[reading]` The log is append-only, so an
+  `issue_landing_prompt` logged before UX-2 wrote GA-17's releases under
+  its key: `task.released` with the reason `new_prompt`, `review.released`,
+  and the withdrawn checks and jobs, the holds and the Needs you items of
+  the commands the seat had waiting. The log audit behind
+  `leverage:verify_log` reads such a group as that old command, with its
+  commands row or without it (a restored backup keeps the row past
+  `command_key_retention`), and only for that seat's own work: the one
+  task it built, the reviews it had started, its own waiting commands and
+  the Finishing tasks it built. A group with no release is not read this
+  way: its holds and Needs you items go through the ordinary audit as the
+  command's side events, whoever built the task. Neither the receipt nor the events say
+  which build wrote them, so the reading has no end date: the audit cannot
+  tell that old command from an `issue_landing_prompt` that released a
+  landed seat's work now, so that the command releases nothing now is held
+  by its own tests. Alternative: end the reading at a date, which needs a
+  marker of the first build with UX-2 that the log does not carry.
 
 ## Imaginarium gallery
 
