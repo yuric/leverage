@@ -49,6 +49,29 @@ struct ImaginariumCatalogTests {
         }
     }
 
+    @Test("the server can record each shipped entry in the event log")
+    func eventVocabularyIncludesLaunchCatalog() throws {
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: repository.appending(path: "api/contract/registry.json"))
+        struct Registry: Decodable {
+            let lists: [String: [String]]
+        }
+        let registry = try JSONDecoder().decode(Registry.self, from: data)
+        let known = try #require(registry.lists["imaginarium_entries"])
+        let active = Set(try Catalog.launch().entries.map(\.id))
+        #expect(active.isSubset(of: Set(known)))
+    }
+
+    @Test("search and categories can be used together")
+    func filteredEntries() throws {
+        let launch = try Catalog.launch()
+        let photo = try #require(launch.entries.first { $0.id == "photo-renamer" })
+        #expect(launch.filteredEntries(category: photo.category, search: "  PHOTO RENAME ").map(\.id) == [photo.id])
+        #expect(launch.filteredEntries(category: "websites", search: "photo renamer").isEmpty)
+        #expect(launch.filteredEntries(category: nil, search: "  ").count == 32)
+    }
+
     @Test("every shipped picture prompt says it needs an image tool, and no entry needs anything else")
     func launchNeeds() throws {
         let launch = try Catalog.launch()
@@ -107,5 +130,6 @@ struct ImaginariumCatalogTests {
             prompt: "Styled like {look}, with {extra}; {look} again.")
         #expect(entry.filledPrompt() == "Styled like paper, with tags; paper again.")
         #expect(entry.filledPrompt(["look": "a bullet journal"]) == "Styled like a bullet journal, with tags; a bullet journal again.")
+        #expect(entry.filledPrompt(["look": "{extra}"]) == "Styled like {extra}, with tags; {extra} again.")
     }
 }

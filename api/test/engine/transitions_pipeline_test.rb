@@ -11,7 +11,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   class TwoEvents < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
+      ctx.emit("task.created", task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] })
       ctx.emit("task.promoted", task: task, payload: {})
       @result = { "task_id" => task.id }
     end
@@ -21,7 +21,7 @@ class TransitionsPipelineTest < ActiveSupport::TestCase
   class BadPayload < Leverage::Transitions::Entry
     def perform(ctx)
       task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-      ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
+      ctx.emit("task.created", task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] })
       ctx.emit("task.promoted", task: task, payload: { made_up: true })
     end
   end

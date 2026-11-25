@@ -24,6 +24,9 @@ struct TaskCard: View {
                 if let chip = card.chip {
                     Chip(text: chip.text, tone: chip.tone)
                 }
+                if card.fromImaginarium {
+                    Chip(text: ShellCopy.tabImaginarium.text, tone: .info)
+                }
                 if let note = card.note {
                     Text(verbatim: note)
                         .font(.system(size: Tokens.FontSize.small))

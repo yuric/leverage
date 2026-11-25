@@ -38,7 +38,7 @@ class DbRoleTest < ActiveSupport::TestCase
     entry = Class.new(Leverage::Transitions::Entry) do
       def perform(ctx)
         task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-        ctx.emit("task.created", task: task, payload: { state: "backlog", added_action_ids: [] })
+        ctx.emit("task.created", task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] })
         @result = {}
       end
     end

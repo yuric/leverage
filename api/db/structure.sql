@@ -692,7 +692,10 @@ CREATE TABLE public.tasks (
     resume_pending_since timestamp with time zone,
     content_deleted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    imaginarium_entry_id character varying(128),
+    imaginarium_catalog_version integer,
+    CONSTRAINT tasks_imaginarium_source CHECK ((((imaginarium_entry_id IS NULL) AND (imaginarium_catalog_version IS NULL)) OR ((imaginarium_entry_id IS NOT NULL) AND (imaginarium_catalog_version IS NOT NULL) AND (imaginarium_catalog_version > 0))))
 );
 
 
@@ -2413,6 +2416,7 @@ ALTER TABLE ONLY public.rules
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261125000100'),
 ('20261124231440'),
 ('20261124171356'),
 ('20261124150000'),

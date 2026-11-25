@@ -169,6 +169,7 @@ struct BoardCard: Identifiable, Equatable, Sendable {
     let statusLine: String
     let chip: CardChip?
     let note: String?
+    let fromImaginarium: Bool
 
     init(
         task: BoardTask, seatNames: [UUID: String], reviewerSeatExists: Bool, accounts: [UUID: CardAccount] = [:],
@@ -184,6 +185,7 @@ struct BoardCard: Identifiable, Equatable, Sendable {
         statusLine = content.statusLine
         chip = content.chip
         note = content.note
+        fromImaginarium = task.task.imaginariumEntryID != nil
     }
 }
 

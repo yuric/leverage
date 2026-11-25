@@ -28,12 +28,17 @@ module Leverage
       end
 
       def task_summary(task)
-        { id: task.id, project_id: task.project_id, title: task.title.to_s, details: task.details,
+        row = { id: task.id, project_id: task.project_id, title: task.title.to_s, details: task.details,
           state: task.state, round: task.round, holder_seat_id: task.holder_seat_id, builder_seat_id: task.builder_seat_id,
           lease_due_at: time(task.lease_due_at), lease_time_left_while_paused: seconds(task.lease_time_left_while_paused),
           minimum_strength_rank: task.minimum_strength_rank, contract_version: task.contract_version,
           budget_cap: number(task.budget_cap), spent: number(task.spent), work_reference: task.work_reference,
           priority: task.priority }
+        if task.imaginarium_entry_id
+          row[:imaginarium_entry_id] = task.imaginarium_entry_id
+          row[:imaginarium_catalog_version] = task.imaginarium_catalog_version
+        end
+        row
       end
 
       def criterion(criterion, evidence)

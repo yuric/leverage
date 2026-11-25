@@ -20,7 +20,8 @@ struct SidePane: View {
                 ForEach(Self.tabs, id: \.place) { entry in
                     row(
                         entry.copy.text, symbol: entry.symbol, selected: context.navigator.place == entry.place,
-                        badge: entry.place == .needsYou ? Self.badge(for: context.inbox.openCount) : nil
+                        badge: entry.place == .needsYou ? Self.badge(for: context.inbox.openCount) : nil,
+                        rainbowOutline: entry.place == .imaginarium
                     ) {
                         context.navigator.show(entry.place)
                     }
@@ -66,6 +67,7 @@ struct SidePane: View {
         Tab(place: .agents, copy: .tabAgents, symbol: "person.2"),
         Tab(place: .credentials, copy: .tabCredentials, symbol: "key"),
         Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
+        Tab(place: .imaginarium, copy: .tabImaginarium, symbol: "sparkles"),
         Tab(place: .settings, copy: .tabSettings, symbol: "gearshape"),
     ]
 
@@ -134,6 +136,7 @@ struct SidePane: View {
 
     private func row(
         _ title: String, symbol: String, selected: Bool, badge: String? = nil, tint: LinearGradient? = nil,
+        rainbowOutline: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -164,6 +167,12 @@ struct SidePane: View {
                 } else if let tint {
                     RoundedRectangle(cornerRadius: Tokens.Radius.control, style: .continuous)
                         .fill(tint)
+                }
+            }
+            .overlay {
+                if rainbowOutline {
+                    RoundedRectangle(cornerRadius: Tokens.Radius.control)
+                        .strokeBorder(Tokens.Palette.imaginariumOutline, lineWidth: 1.5)
                 }
             }
             .contentShape(Rectangle())

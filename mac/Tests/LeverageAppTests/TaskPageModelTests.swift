@@ -370,6 +370,22 @@ struct TaskPageModelTests {
         #expect(model.actionFailure == nil)
     }
 
+    @Test("sending a promoted gallery idea keeps its stored review wording")
+    func promotedIdeaKeepsItsReview() async throws {
+        let (model, owner, shared) = await loaded(page(.ideas))
+        let reviewText = "A second agent reviews the work"
+        shared.value = Fixtures.page(
+            Fixtures.summary(.backlog, id: taskID, title: "Gallery idea"),
+            criteria: [Fixtures.criterion("Opens on the Mac", taskID: taskID),
+                       Fixtures.criterion(reviewText, taskID: taskID, position: 2, kind: .review)])
+        await model.moveToBacklog()
+        await model.sendToAgents()
+        let call = try #require(owner.calls.first { $0.operation == .completeContract })
+        let criteria = model.draft.criteria
+        #expect(criteria.last?.text == reviewText)
+        #expect(call.body?["criteria"] == FakeCall.json(criteria))
+    }
+
     @Test("Move to Backlog that failed is sent again with the same key, and a refusal is a plain line")
     func moveToBacklogRetry() async {
         let (model, owner, _) = await loaded(page(.ideas))

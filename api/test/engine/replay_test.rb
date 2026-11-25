@@ -148,10 +148,11 @@ class ReplayTest < ActiveSupport::TestCase
   test "a task column changed without an event is found" do
     runner = run_trace("09-core-loop-no-rules")
     task = Task.find_by!(workspace_id: runner.workspace_id)
-    task.update_columns(round: 7, builder_seat_id: nil)
+    task.update_columns(round: 7, builder_seat_id: nil, imaginarium_entry_id: "pocket-to-do", imaginarium_catalog_version: 1)
     found = log_diff(runner)
     assert(found.any? { |line| line.include?("tasks #{task.id} round") }, found.inspect)
     assert(found.any? { |line| line.include?("tasks #{task.id} builder_seat_id") }, found.inspect)
+    assert(found.any? { |line| line.include?("tasks #{task.id} imaginarium_entry_id") }, found.inspect)
   end
 
   test "a criterion's state and a review's verdict changed without an event are found" do

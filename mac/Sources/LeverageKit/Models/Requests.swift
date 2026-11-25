@@ -48,8 +48,23 @@ public struct ActionInput: Codable, Equatable, Sendable {
     }
 }
 
-/// `AddTaskRequest`. Add task sends title, priority, work reference
-/// and the target state; the contract goes in Complete contract (IN-20).
+/// The gallery entry and version used to create an Imaginarium task.
+public struct ImaginariumSource: Encodable, Equatable, Sendable {
+    public let entryID: String
+    public let catalogVersion: Int
+
+    public init(entryID: String, catalogVersion: Int) {
+        self.entryID = entryID
+        self.catalogVersion = catalogVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case entryID = "entry_id"
+        case catalogVersion = "catalog_version"
+    }
+}
+
+/// `AddTaskRequest`. An Imaginarium idea carries its ready-made criteria.
 public struct AddTaskRequest: Encodable, Equatable, Sendable {
     public let title: String
     public let details: String?
@@ -59,11 +74,12 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
     public let priority: Priority?
     public let workReference: String?
     public let state: TaskState?
+    public let imaginarium: ImaginariumSource?
 
     public init(
         title: String, details: String? = nil, criteria: [CriterionInput]? = nil,
         actions: [ActionInput]? = nil, projectID: UUID? = nil, priority: Priority? = nil,
-        workReference: String? = nil, state: TaskState? = nil
+        workReference: String? = nil, state: TaskState? = nil, imaginarium: ImaginariumSource? = nil
     ) {
         self.title = title
         self.details = details
@@ -73,10 +89,11 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
         self.priority = priority
         self.workReference = workReference
         self.state = state
+        self.imaginarium = imaginarium
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, details, criteria, actions, priority, state
+        case title, details, criteria, actions, priority, state, imaginarium
         case projectID = "project_id"
         case workReference = "work_reference"
     }
@@ -91,6 +108,7 @@ public struct AddTaskRequest: Encodable, Equatable, Sendable {
         try container.encodeIfPresent(priority, forKey: .priority)
         try container.encodeIfPresent(workReference, forKey: .workReference)
         try container.encodeIfPresent(state, forKey: .state)
+        try container.encodeIfPresent(imaginarium, forKey: .imaginarium)
     }
 }
 

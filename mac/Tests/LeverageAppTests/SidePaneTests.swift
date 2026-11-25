@@ -12,10 +12,11 @@ struct SidePaneTests {
     @Test("the pane lists the tabs in order, with Settings last")
     func tabsInOrder() {
         #expect(SidePane.tabs.map(\.place) == [
-            .board, .needsYou, .decided, .activity, .agents, .credentials, .handoff, .settings,
+            .board, .needsYou, .decided, .activity, .agents, .credentials, .handoff, .imaginarium, .settings,
         ])
         #expect(SidePane.tabs.map(\.copy.text) == [
-            "Task board", "Needs you", "Decided for you", "Activity", "Agents", "Credentials", "Handoff", "Settings",
+            "Task board", "Needs you", "Decided for you", "Activity", "Agents", "Credentials", "Handoff",
+            "Imaginarium", "Settings",
         ])
         #expect(Set(SidePane.tabs.map(\.symbol)).count == SidePane.tabs.count)
         #expect(SidePane.tabs.allSatisfy { !$0.symbol.isEmpty })

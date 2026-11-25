@@ -146,6 +146,13 @@
       "minProperties": 1,
       "propertyNames": {"$ref": "#/$defs/name"},
       "properties": {
+        "imaginarium_entries": {
+          "description": "Catalog entries that may be recorded in the event log, including any historical entries.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 128, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}
+        },
         "important_event_types": {
           "description": "The registered event types shown by the Activity filter (milestone 5 plan AP-34).",
           "type": "array",

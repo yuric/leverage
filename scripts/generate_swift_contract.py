@@ -261,7 +261,9 @@ def registry_enums(registry):
         raise Problem(
             "registry.json: no Swift reading of " + ", ".join(unknown)
             + "; add it to NAMED_LISTS or SERVER_ONLY in scripts/generate_swift_contract.py")
-    references = {entry[0] for entry in LIST_REFERENCES}
+    # The gallery has its own compiled catalog. Its event vocabulary in the
+    # registry can include retired entries for old logs.
+    references = {entry[0] for entry in LIST_REFERENCES} | {"imaginarium_entries"}
     missing = sorted(set(lists) - set(LIST_NAMES) - references)
     if missing:
         raise Problem(

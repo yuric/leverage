@@ -1476,6 +1476,22 @@ task. PRD places are named by their section.
   `inbox.opened` and `inbox.resolved` v1 gain the new values in place.
   Alternative: only the Backlog card and the task page show it.
 
+## Imaginarium gallery
+
+- **Gallery source (FR-030, FR-041).** The existing owner `add_task`
+  operation accepts the catalog entry id and version. The workspace's
+  recorded project determines where the task goes. The two source columns
+  are written together. `task.created` v2 records the entry id from the
+  closed catalog vocabulary and the ids of any criteria saved with an
+  idea. Ordinary task creation uses v1. Replay accepts both, and rebuilds
+  the entry id and the idea criteria's state. The catalog version and
+  prompt text live on the task.
+- **Gallery ideas (FR-039).** Add task into Ideas writes the supplied build
+  checks and the final independent review using `ContractDiff`. Completing
+  the contract after promotion reads those criteria through the existing
+  task page. Send to Ready adds in Backlog and submits the separate
+  Complete contract command through the normal rule checks (FR-038).
+
 ## Coverage index
 
 Every gap ID, with the decision that settles it.

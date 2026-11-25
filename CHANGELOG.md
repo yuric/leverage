@@ -10,10 +10,13 @@ once it makes its first release.
 
 ### Added
 
-- Every workspace has an Imaginarium project, where tasks from the coming
-  prompt gallery will go. A new installation gets it at setup, and an
+- Every workspace has an Imaginarium project for gallery tasks. A new
+  installation gets it at setup, and an
   existing one gets it once when the updated app starts its server. The
   side pane lists it first among the projects, on a faint rainbow tint.
+- The Imaginarium tab offers 32 prompts that can be personalized, edited,
+  copied, sent to Ready or saved to Ideas with their acceptance criteria.
+  Tasks made from the gallery carry an Imaginarium badge.
 - A new installation opens the setup assistant: a welcome, two logins
   from two providers, a General agent for each login, and a first task
   from three built-in starter tasks or one the owner writes. Leaving it

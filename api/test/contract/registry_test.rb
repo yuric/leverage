@@ -144,8 +144,12 @@ class RegistryTest < Minitest::Test
       registry["operations"].map { |entry| entry["operation_id"] } +
       registry["job_kinds"].map { |entry| entry["kind"] } +
       registry["credential_providers"].flat_map { |entry| [ entry["provider"], entry["provider_group"] ] } +
-      registry["lists"].keys + registry["lists"].except("important_event_types").values.flatten
+      registry["lists"].keys + registry["lists"].except("important_event_types", "imaginarium_entries").values.flatten
     snake.each { |value| assert_match SNAKE_CASE, value }
+
+    registry["lists"].fetch("imaginarium_entries").each do |entry|
+      assert_match(/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/, entry)
+    end
 
     dotted = registry["event_types"].map { |entry| entry["type"] } + registry["hooks"] +
       registry["due_time_sources"] + registry["lists"].fetch("important_event_types", [])
