@@ -188,6 +188,34 @@ class OwnerSessionTest < ActionDispatch::IntegrationTest
     assert result.fetch("session_token")
   end
 
+  # PostgreSQL text and bcrypt cannot take a NUL, and JSON can carry one
+  # (the escape \u0000): the body is refused before either sees it.
+  test "a NUL character in the email address or the password is 422 invalid, at sign-in and at setup" do
+    create_owner
+    commands = Command.count
+
+    [ { email: "ow\u0000ner@example.test" }, { password: "made-up-\u0000password" },
+      { email: "nobody\u0000@example.test", password: "\u0000" } ].each do |fields|
+      sign_in(**fields)
+      assert_transport_error(:unprocessable_entity, "invalid")
+      create_owner(key: "setup-#{SecureRandom.hex(4)}", **fields)
+      assert_transport_error(:unprocessable_entity, "invalid")
+    end
+    assert_equal commands, Command.count
+
+    sign_in
+    assert_response :ok
+  end
+
+  test "a NUL character in setup's body is 422 invalid before any owner exists, and makes none" do
+    create_owner(email: "ow\u0000ner@example.test")
+    assert_transport_error(:unprocessable_entity, "invalid")
+    create_owner(password: "made-up-\u0000password")
+    assert_transport_error(:unprocessable_entity, "invalid")
+
+    assert_equal [ 0, 0 ], [ User.count, Workspace.count ]
+  end
+
   test "two sign-ins that differ only in the password store the same request hash, which leaves the password out" do
     create_owner
     sign_in(key: "sign-in-a")

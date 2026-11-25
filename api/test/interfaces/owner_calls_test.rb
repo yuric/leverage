@@ -375,6 +375,19 @@ class OwnerCallsTest < ActionDispatch::IntegrationTest
     assert_no_match(/seat_token|text/, response.body)
   end
 
+  test "get_owner_command is 404 for a key no command can have, a NUL among them, without asking the database" do
+    queries = []
+    counter = ->(*, payload) { queries << payload[:sql] if payload[:sql].include?("\"commands\"") }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      [ "%00", "stored%00", "key%20with%20space", "x" * 129 ].each do |key|
+        get "/v1/owner/commands/#{key}", headers: headers
+        assert_response :not_found
+        assert_equal "not_found", response.parsed_body.dig("error", "code")
+      end
+    end
+    assert_empty queries
+  end
+
   test "get_owner_command is 404 for an unknown key, another caller's key and another workspace's key" do
     get "/v1/owner/commands/never-sent", headers: headers
     assert_response :not_found

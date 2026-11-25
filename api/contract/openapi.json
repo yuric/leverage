@@ -7701,7 +7701,7 @@
         }
       },
       "Unprocessable": {
-        "description": "422 `key_reused` (the same key with a different body) or `invalid` (a body that fails its schema, including a link or work reference carrying sign-in details).",
+        "description": "422 `key_reused` (the same key with a different body) or `invalid` (a body that fails its schema, including a link or work reference carrying sign-in details, or that holds a NUL character in any key or text).",
         "content": {
           "application/json": {
             "schema": {

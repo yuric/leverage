@@ -1070,7 +1070,11 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   250 ms. A look that does not wait (`wait=0`) ends none. A request
   body over 4 MiB is answered `400` from its stated length, before it is
   read, for any method and path (`BodySizeLimit`); the contract's length
-  limits bound the text fields inside that.
+  limits bound the text fields inside that. A body with a NUL character
+  in any key or text is `422 invalid` (`RequestSchema`): JSON can carry
+  one, and PostgreSQL text and bcrypt cannot take it. The key in the path
+  of the two command outcome reads is looked up only when it has the form
+  of an idempotency key.
 - **Task text reaches a checker only as material**
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
   check, draft, question or approval prompt every piece of task text, the contract

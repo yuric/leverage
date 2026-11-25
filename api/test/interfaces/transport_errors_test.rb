@@ -97,6 +97,39 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_empty @stand_in.requests
   end
 
+  # A NUL character (JSON's \u0000) fits every string schema, and
+  # PostgreSQL text cannot hold one: without this check the command would
+  # fail inside its transaction and answer 500, which a runner sends again
+  # for ever.
+  test "a NUL character anywhere in a body is 422 invalid and runs nothing" do
+    bodies = [
+      { title: "A made-up\u0000 task", details: "A made-up goal." },
+      { title: "A made-up task", details: "A made-up goal.", criteria: [ { text: "Made-up\u0000 criterion.", kind: "build" } ] },
+      { title: "A made-up task", details: "A made-up goal.", actions: [ { kind: "send", description: "\u0000" } ] }
+    ]
+    with_test_routes do
+      bodies.each do |body|
+        post "/add", params: body.to_json, headers: headers(key: "key-#{SecureRandom.hex(6)}")
+        assert_transport_error :unprocessable_entity, "invalid"
+        assert_equal "Text cannot contain a NUL character", response.parsed_body.dig("error", "message")
+      end
+    end
+    assert_empty @stand_in.requests
+  end
+
+  test "RequestSchema refuses a NUL in a nested value or in a key, and not the six characters that spell its escape" do
+    schema = Leverage::Http::RequestSchema
+    nested = { title: "A made-up task", details: "A made-up goal.", criteria: [ { text: "a\u0000b", kind: "build" } ] }.to_json
+
+    error = assert_raises(schema::Invalid) { schema.body!("add_task", nested) }
+    assert_equal "Text cannot contain a NUL character", error.message
+    assert schema.nul?({ "a" => [ { "b\u0000" => 1 } ] }), "a key"
+    assert schema.nul?([ 1, nil, [ "\u0000" ] ]), "a value in a list"
+    refute schema.nul?({ "a" => [ 1, 2.5, true, nil, "text", { "b" => "more text" } ] })
+    spelled = schema.body!("add_task", { title: "A made-up \\u0000 task", details: "A made-up goal." }.to_json)
+    assert_equal "A made-up \\u0000 task", spelled.fetch("title")
+  end
+
   test "a missing session is 401 unauthenticated and runs nothing" do
     with_test_routes do
       post "/add", params: add_body, headers: headers(token: Leverage::Tokens.issue(:owner))
