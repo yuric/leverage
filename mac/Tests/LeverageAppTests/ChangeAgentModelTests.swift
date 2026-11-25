@@ -430,3 +430,48 @@ extension ChangeAgentModelTests {
         #expect(unreported.reportedSettings == "Not reported yet")
     }
 }
+
+extension ChangeAgentModelTests {
+    @Test("A stale Native effort can be cleared without changing the model or permissions")
+    func clearsUnavailableEffort() async {
+        let owner = owner()
+        let permissions = SeatPermissions(work: false, create: false)
+        let seat = Seat(id: UUID(), name: "Gemini", provider: .gemini, model: "gemini-4-neon", effort: "high",
+                        role: .builder, credentialID: Fixtures.geminiLoginID, permissions: permissions)
+        let model = makeModel(owner, seat: seat)
+        let form = ChangeAgentForm(model: model, cancel: {})
+        #expect(model.effortChoices.isEmpty)
+        #expect(model.unavailableEffort == "high (not offered now)")
+        #expect(form.clearEffortButton != nil)
+        #expect(model.request == nil)
+
+        model.clearUnavailableEffort()
+
+        #expect(model.unavailableEffort == "The tool's default")
+        #expect(form.clearEffortButton == nil)
+        #expect(model.modelName == "gemini-4-neon")
+        #expect(model.permissions == permissions)
+        #expect(Fixtures.calls(owner, .changeSeat).isEmpty)
+        await model.save()
+        #expect(body(owner) == ["effort": .null])
+    }
+
+    @Test("Clearing has no action on a Prompt agent, a Native driver without effort or an unlisted model")
+    func cannotClearUnavailableEffort() {
+        let grokLogin = ConnectAgentModel.LoginChoice(id: UUID(), provider: .grok, label: "Grok, Work")
+        let seats = [
+            Fixtures.seat(Fixtures.ownID, name: "Prompt", provider: .gemini, model: "gemini-4-neon", effort: "high"),
+            appSeat(provider: .codex, credential: Fixtures.secondLoginID, model: "gpt-6.2-astra"),
+            appSeat(provider: .grok, credential: grokLogin.id, model: "grok-4.7"),
+            appSeat(model: "older-model"),
+        ]
+        for seat in seats {
+            let model = makeModel(owner(), seat: seat, logins: [claudeLogin, codexLogin, grokLogin])
+            let form = ChangeAgentForm(model: model, cancel: {})
+            #expect(form.clearEffortButton == nil)
+            #expect(!model.offersEffort)
+            model.clearUnavailableEffort()
+            #expect(model.request == nil)
+        }
+    }
+}
