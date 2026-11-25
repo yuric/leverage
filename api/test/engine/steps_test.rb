@@ -81,7 +81,8 @@ class StepTrackerTest < ActiveSupport::TestCase
   # under the bound @event:n id the trace names it by.
   def append_expected(ctx, event)
     cause = event.fetch("cause_id")
-    Leverage::EventLog.append(ctx, type: event.fetch("type"), payload: event.fetch("payload"),
+    Leverage::EventLog.append(ctx, type: event.fetch("type"), schema_version: event.fetch("schema_version"),
+      payload: event.fetch("payload"),
       task_id: event.fetch("task_id"), project_id: event.fetch("project_id"), round: event.fetch("round"),
       subject_kind: event.fetch("subject_kind"), subject_id: event.fetch("subject_id"),
       cause_id: cause && @bound_to_real.fetch(cause), actor_kind: event.fetch("actor_kind"),

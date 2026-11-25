@@ -160,9 +160,10 @@ module Leverage
       task = projection[:tasks][event.task_id]
       case event.type
       when "task.created"
-        projection[:tasks][event.task_id] = { "state" => StoredEvents.task_state(payload.fetch("state")), "round" => 0,
-          "holder_seat_id" => nil, "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0,
-          "imaginarium_entry_id" => payload["imaginarium_entry"] }
+        task = { "state" => StoredEvents.task_state(payload.fetch("state")), "round" => 0,
+          "holder_seat_id" => nil, "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0 }
+        task["imaginarium_entry_id"] = payload["imaginarium_entry"] if payload.key?("imaginarium_entry")
+        projection[:tasks][event.task_id] = task
         payload.fetch("added_criterion_ids", []).each { |id| projection[:criteria][id] = { "state" => "open" } }
         return
       when /\Arule\./ then return rule(projection, event, payload)
@@ -390,7 +391,7 @@ module Leverage
       return [ "#{table} #{id}: the table has a row the log does not make" ] if from_log.nil?
       return [ "#{table} #{id}: the log makes a row the table does not have" ] if from_table.nil?
 
-      from_log.keys.excluding(*INTERNAL).filter_map do |column|
+      (from_log.keys | from_table.keys).excluding(*INTERNAL).filter_map do |column|
         next if from_log[column] == from_table[column]
 
         "#{table} #{id} #{column}: the log says #{from_log[column].inspect}, the table says #{from_table[column].inspect}"
