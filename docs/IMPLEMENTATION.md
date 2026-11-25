@@ -28,8 +28,11 @@ person can pick it up after an interruption.
 
 The owner delegated this build to one managing agent on 2026-11-19, under
 the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md). Claude Code
-(Claude Fable 5.2) started as the managing agent, and Codex now manages
-the run. The run ends when the build is done or the owner stops it.
+(Claude Fable 5.2) started as the managing agent. The owner told Codex
+"Yes, take over and continue" on 2026-11-24 on his Mac (00:11 UTC on
+2026-11-25), and Codex has managed the run since Claude Code's handoff
+record of about 00:25 UTC; pull requests 34 to 44 were merged under it.
+The run ends when the build is done or the owner stops it.
 
 - The managing agent plans each milestone, gives the work to other agents,
   reviews what they return, merges, and keeps this file current. Agents it
@@ -54,9 +57,9 @@ the run. The run ends when the build is done or the owner stops it.
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, and Subscription steps 1 and 2 |
-| **Local deployment record** | The owner's Mac was verified at `a2c63b6` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. Earlier verified deployments include `2573be4` and `300db09`. |
+| **As of** | 2026-11-25 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, Subscription steps 1 and 2, and the offline subscription preview with its billing handoff |
+| **Local deployment record** | The owner's Mac was verified at `a2c63b6` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. Earlier verified deployments include `2573be4` and `300db09`. Pull requests 41 to 44 are on `main` and are not recorded as verified on the owner's Mac. |
 | **Next** | Settle the [subscription decisions](PRD.md#open-decisions) before building the billing service. |
 
 ### Recent merges
@@ -64,6 +67,7 @@ the run. The run ends when the build is done or the owner stops it.
 - App round 1. See the [contract decisions](../api/contract/decisions.md#app-round-1-ui)
   and question 16. [#29](https://github.com/yuric/leverage/pull/29)
 - The 32-prompt Imaginarium catalog. [#30](https://github.com/yuric/leverage/pull/30)
+- The checked deploy of the Age of Lever marketing page. [#31](https://github.com/yuric/leverage/pull/31)
 - The event-log audit fix for sign-ups recorded before DB-53. [#32](https://github.com/yuric/leverage/pull/32)
 - The marketing demo order puts Handoff before Imaginarium. [#33](https://github.com/yuric/leverage/pull/33)
 - Implementation status and managing-agent handoff. [#34](https://github.com/yuric/leverage/pull/34)
@@ -74,10 +78,14 @@ the run. The run ends when the build is done or the owner stops it.
 - Approval field decision and deployment record. [#39](https://github.com/yuric/leverage/pull/39)
 - Subscription step 1: Rules, appearance settings and Login copy. [#40](https://github.com/yuric/leverage/pull/40)
 - Subscription step 2: account row and menu. [#41](https://github.com/yuric/leverage/pull/41)
+- What Leverage does, in the README and contributing guide. [#42](https://github.com/yuric/leverage/pull/42)
+- Offline subscription preview and billing handoff, documents only. [#43](https://github.com/yuric/leverage/pull/43)
+- The event-log audit fix for a credential switch after an action override. [#44](https://github.com/yuric/leverage/pull/44)
 
 ### In flight
 
-None.
+- The fixes from the 2026-11-25 review of pull requests 34 to 44, made by
+  Claude Code agents on branches cut from `036087a`. No pull request yet.
 
 ### General role and landing prompt on `main`
 
@@ -2627,6 +2635,9 @@ run is also listed here until the owner has read it.
 | A restore from inside the app, and a copy of the backups off the Mac | Neither is built. A restore is the maintainer's terminal command ([DEPLOY.md](DEPLOY.md#restoring)) |
 | Pull request 15 | The Rule checks milestone is merged. Its AI-assistance boxes remain for the owner. |
 | Questions and approvals pull request ([#16](https://github.com/yuric/leverage/pull/16)) | Both AI-assistance boxes await the owner's review. |
+| Pull requests 17 to 33 | Merged before Claude Code handed the run to Codex (the Credentials milestone, the General role, the Imaginarium project and catalog, onboarding, the subscription proposal, App round 1, the marketing page and test and audit fixes). Both AI-assistance boxes are unticked on each, as GitHub showed on 2026-11-25 |
+| Pull requests 34 to 36 and 38 to 44 | Merged while Codex managed the run. Both AI-assistance boxes are unticked on each, as GitHub showed on 2026-11-25. Each description records its review only in Codex's own words. The first review of all eleven by an agent other than Codex ran on 2026-11-25 (see [In flight](#in-flight)) |
+| Pull request 37 | Dependabot's update of the Markdown lint action, merged in the run. It has no AI-assistance section |
 | [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md), [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) and [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) | The owner reads the MCP, Finishing and overturn records. |
 | The owner's MCP run | Connect an agent through MCP from Agents and let the agent finish one task. |
 | The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
