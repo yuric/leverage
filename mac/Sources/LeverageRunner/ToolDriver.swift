@@ -27,7 +27,7 @@ enum ToolFailure: Error, Equatable, Sendable, CustomStringConvertible {
     case signaled(Int32)
     case timedOut
     /// The output says the run failed (`is_error`, a status that is not
-    /// `SUCCESS`, an `error` line, the signed-out text).
+    /// `SUCCESS`, a failed turn, the signed-out text).
     case reportedError
     case unreadableOutput
 

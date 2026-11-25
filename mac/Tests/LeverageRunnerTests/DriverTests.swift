@@ -338,6 +338,43 @@ struct DriverTests {
     }
 }
 
+// What each provider's shape makes of a tool's output: untrusted text of a
+// run that exited 0.
+@Suite("Reading a tool's output")
+struct OutputReadingTests {
+    static let reconnected = Data("""
+        {"type":"thread.started","thread_id":"made-up-thread"}
+        {"type":"turn.started"}
+        {"type":"error","message":"Reconnecting... 1/5 (unexpected status 429 Too Many Requests)"}
+        {"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+        """.utf8)
+
+    @Test("a Codex run that reconnected and then completed is an answer")
+    func codexReconnected() throws {
+        let answer = try CodexDriver().read(standardOutput: Self.reconnected, outputFile: Data("ready".utf8))
+        #expect(answer == ToolAnswer(text: "ready", tokens: 2))
+    }
+
+    @Test("a Codex run with a failed turn is a reported error")
+    func codexTurnFailed() {
+        let output = Data("""
+            {"type":"turn.started"}
+            {"type":"error","message":"made-up failure"}
+            {"type":"turn.failed","error":{"message":"made-up failure"}}
+            """.utf8)
+        #expect(throws: ToolFailure.reportedError) {
+            _ = try CodexDriver().read(standardOutput: output, outputFile: Data("ready".utf8))
+        }
+    }
+
+    @Test("a Codex run with no output file is unreadable")
+    func codexNoOutputFile() {
+        #expect(throws: ToolFailure.unreadableOutput) {
+            _ = try CodexDriver().read(standardOutput: Self.reconnected, outputFile: nil)
+        }
+    }
+}
+
 @Suite("Probe", .timeLimit(.minutes(Patience.minutes(1))))
 struct ProbeTests {
     @Test("the probe runs the test prompt once and exits 0 when the tool answers ready")
