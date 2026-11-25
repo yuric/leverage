@@ -1586,6 +1586,20 @@ is not deletable) and DB-56 (the shape of `task.created`).
   well. Send to Ready adds in Backlog and submits the separate Complete
   contract command through the normal rule checks (FR-038).
 
+## Account menu
+
+- **Owner identity read (FR-001).** `[shape]` The account row shows the
+  owner's sign-in email, and after a relaunch the app holds only the
+  session token. The contract answers with a read on the session's own
+  path, `GET /v1/owner/session` (`get_owner_identity`), returning
+  `OwnerSessionIdentity` (`email_address`, `as_of_seq`) with
+  `Cache-Control: no-store`, rather than keeping the email on the Mac.
+  The read is final, not `x-provisional`: it has two fields and its only
+  reader is the account row. The id a service issues (FR-022) belongs to
+  the subscription service of FR-024 and is not part of this read.
+  Alternative: store the email in the app at sign-in; or mark the read
+  provisional until the subscription work settles the row.
+
 ## Coverage index
 
 Every gap ID, with the decision that settles it.

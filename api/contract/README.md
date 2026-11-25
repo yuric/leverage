@@ -983,3 +983,17 @@ entries under [Imaginarium gallery](decisions.md#imaginarium-gallery).
   and the step tracker reads the idea's criteria from it.
 - `delete_content` is refused `invalid_state` for the workspace's
   Imaginarium project: the `content_deletability` guards name it (DB-55).
+
+## What the account menu added
+
+The sidebar account row of FR-001 shows the owner's sign-in email, which
+the app does not keep after a relaunch. Its decision is the one entry
+under [Account menu](decisions.md#account-menu).
+
+- The registry and `openapi.json` gain the owner read
+  `get_owner_identity` (`GET /v1/owner/session`, caller `owner`, command
+  `read`, tag `owner`, security `ownerSession`). It returns
+  `OwnerSessionIdentity`, the signed-in owner's `email_address` and the
+  log position `as_of_seq`, with `Cache-Control: no-store`. It is final,
+  like `get_workspace_settings`, not `x-provisional`.
+- It adds no command, event, state table row or Needs you item.
