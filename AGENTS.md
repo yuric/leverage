@@ -105,7 +105,8 @@ research, and the following code and checks.
   `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
-  scripts), and the marketing page and deployment tests, on every pull request;
+  scripts), the marketing page and deployment tests, and the subscription
+  preview's mock model tests, on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract;
 - `.github/workflows/deploy-marketing.yml`: publishes the checked marketing
@@ -250,6 +251,7 @@ bash scripts/test_eval_rule.sh                       # the eval script's refusal
 bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
 bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
 bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
+node --test docs/subscription/preview/mock-billing.test.cjs  # the subscription preview's mock model
 ```
 
 After changing anything under `api/contract/registry.json` or the

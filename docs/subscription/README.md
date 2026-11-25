@@ -30,7 +30,8 @@ The [billing handoff](billing-handoff.md) covers the Stripe setup, service
 boundary, owner decisions and sandbox acceptance checks.
 
 Run the mock model tests from the repository root with
-`node --test docs/subscription/preview/mock-billing.test.cjs`.
+`node --test docs/subscription/preview/mock-billing.test.cjs`. CI runs the
+same command on every pull request.
 
 ## The mockups
 
