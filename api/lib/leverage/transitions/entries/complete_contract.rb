@@ -81,8 +81,19 @@ module Leverage
 
         def close_incomplete(ctx)
           Holds.open_holds(@task).select { |hold| hold.reason == "contract_incomplete" }.each do |hold|
-            Holds.close(ctx, hold: hold, task: @task)
+            Holds.close(ctx, hold: hold, task: @task, choice: choice_for(ctx, hold))
           end
+        end
+
+        # The owner's choice this completion carries out, where the hold's
+        # open item offers it, else nil (HE-29, UX-16): complete_contract
+        # when the owner sends the command, draft_contract when a planner's
+        # draft does, since only the owner's Draft contract queues that job
+        # (as a sign-in request's result resolves with sign_in_again). Only
+        # a task an agent added has an item on this hold.
+        def choice_for(ctx, hold)
+          choice = { "owner" => "complete_contract", "seat" => "draft_contract" }[ctx.actor.first]
+          choice if choice && InboxItem.where(hold_id: hold.id, state: "open").all? { |item| item.choices.include?(choice) }
         end
 
         def change_contract(ctx, state:)

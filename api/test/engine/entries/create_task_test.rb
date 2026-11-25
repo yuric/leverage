@@ -42,9 +42,43 @@ class CreateTaskTest < ActiveSupport::TestCase
     item = open_items(task).sole
     assert_equal [ "agent_task_incomplete", { "seat_id" => @seat.id } ], [ item.kind, item.facts ]
     assert_completed(owner_command("disable_rule", { "id" => rule.id }))
-    assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id)))
+    events = events_written { assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id))) }
     assert_equal "resolved", item.reload.state
     assert_equal "ready", task.reload.state
+    resolved = events.select { |event| event.type == "inbox.resolved" }.sole
+    assert_equal [ item.id, "owner", { "choice" => "complete_contract" } ],
+      [ resolved.subject_id, resolved.actor_kind, resolved.payload ]
+  end
+
+  test "a planner's draft the owner asked for resolves the item with the owner's choice" do
+    rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 4 })
+    task = Task.find(assert_completed(seat_command(@seat, "add_task", @body)).result.fetch("task_id"))
+    item = open_items(task).sole
+    planner = scenario.planner
+    assert_completed(owner_command("draft_contract", { "id" => task.id }))
+    assert_equal "open", item.reload.state
+    assert_completed(owner_command("disable_rule", { "id" => rule.id }))
+    job = Job.find(assert_completed(claim_job(planner)).result.fetch("job_id"))
+    events = events_written { assert_completed(submit_result(planner, job, contract_body)) }
+
+    assert_equal "ready", task.reload.state
+    resolved = events.select { |event| event.type == "inbox.resolved" }.sole
+    assert_equal [ item.id, "seat", planner.id, { "choice" => "draft_contract" } ],
+      [ resolved.subject_id, resolved.actor_kind, resolved.actor_id, resolved.payload ]
+  end
+
+  test "an owner's own task that failed its check has no item, and its completion writes no choice" do
+    rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 4 })
+    task = scenario.task(state: "backlog", criteria: [])
+    assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id)))
+    assert_equal [ "contract_incomplete" ], open_holds(task).map(&:reason)
+    assert_empty open_items(task)
+    assert_completed(owner_command("disable_rule", { "id" => rule.id }))
+    events = events_written { assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id))) }
+    assert_includes events.map(&:type), "hold.closed"
+    assert_empty events.select { |event| event.type == "inbox.resolved" }
   end
 
   test "the idle creator may choose a project, but a holder whose work has none cannot" do

@@ -1474,7 +1474,14 @@ task. PRD places are named by their section.
   app; it closes with that hold. Its choices are `complete_contract`,
   `draft_contract` and `cancel` (two new `inbox_choices`).
   `inbox.opened` and `inbox.resolved` v1 gain the new values in place.
-  Alternative: only the Backlog card and the task page show it.
+  `inbox.resolved` carries `complete_contract` when the owner's Complete
+  contract closes the hold, and `draft_contract` when a planner's draft
+  does: only the owner's Draft contract queues that job, so the draft
+  carries out the owner's choice, as a sign-in request's result resolves
+  with `sign_in_again` (HE-29). The owner's Edit contract resolves it with
+  null, and Cancel with `cancel`.
+  Alternative: only the Backlog card and the task page show it; or null
+  for a planner's draft, which leaves `draft_contract` never written.
 
 ## Imaginarium gallery
 
