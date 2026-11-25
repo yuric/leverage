@@ -649,3 +649,23 @@ ids, numbers and true or false; every other text, task text among it, is
 `<support folder>/logs/`. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.
+
+### Updating the model list
+
+The model catalog is `api/contract/models.json`. The server refuses a model
+or an effort it does not list, and the Mac reads the same list from the
+generated `mac/Sources/LeverageKit/Generated/ModelCatalog.swift`. No
+automated job reaches a provider, so the list changes only by a pull
+request ([UX-4 and UX-5](../api/contract/decisions.md#app-round-2-ux)):
+
+1. Edit `models.json`. Give each new or changed fact its `evidence` (one of
+   the catalog's `evidence_levels`), its `source` and the date it was
+   checked (`checked_on`, YYYY-MM-DD). A `documented` fact cites the
+   vendor's page by its `https://` address. A `help` or `probe` fact cites a
+   file in the repository that names the model or default it evidences.
+   Per-model `efforts` are always `documented`.
+2. Run `python3 scripts/generate_swift_contract.py` and commit the
+   regenerated `ModelCatalog.swift`.
+3. Run `python3 -I scripts/check_model_catalog.py`,
+   `python3 -I scripts/test_check_model_catalog.py` and
+   `python3 -I scripts/generate_swift_contract.py --check`.
