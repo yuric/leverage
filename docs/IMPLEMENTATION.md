@@ -66,7 +66,7 @@ the run. The run ends when the build is done or the owner stops it.
 - The 32-prompt Imaginarium catalog. [#30](https://github.com/yuric/leverage/pull/30)
 - The event-log audit fix for sign-ups recorded before DB-53. [#32](https://github.com/yuric/leverage/pull/32)
 - The marketing demo order puts Handoff before Imaginarium. [#33](https://github.com/yuric/leverage/pull/33)
-- Handoff status. [#34](https://github.com/yuric/leverage/pull/34)
+- Implementation status and managing-agent handoff. [#34](https://github.com/yuric/leverage/pull/34)
 - App round 2. [#35](https://github.com/yuric/leverage/pull/35)
 - Imaginarium gallery. [#36](https://github.com/yuric/leverage/pull/36)
 - Markdown lint workflow update. [#37](https://github.com/yuric/leverage/pull/37)
