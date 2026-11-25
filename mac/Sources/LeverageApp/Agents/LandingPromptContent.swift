@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The same one-time prompt and Copy control in Connect and New prompt.
+/// The one-time prompt and Copy control in Connect.
 struct LandingPromptContent: View {
     let model: LandingPromptModel
 
@@ -39,42 +39,5 @@ struct LandingPromptContent: View {
                 Button(AgentsCopy.landingRetry.text) { Task { await model.issue() } }
             }
         }
-    }
-}
-
-struct NewLandingPromptSheet: View {
-    let model: LandingPromptModel
-    let dismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(AgentsCopy.newPrompt.text)
-                .font(.system(size: 20, weight: .semibold))
-            if model.state == .none {
-                Text(AgentsCopy.newPromptConfirmation.text)
-                    .foregroundStyle(Tokens.Palette.text2)
-            } else {
-                LandingPromptContent(model: model)
-            }
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
-                if model.state == .none {
-                    Button(AgentsCopy.cancel.text, action: dismiss)
-                        .keyboardShortcut(.cancelAction)
-                    Button(AgentsCopy.newPrompt.text) { Task { await model.issue() } }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .keyboardShortcut(.defaultAction)
-                } else {
-                    Button(AgentsCopy.done.text, action: dismiss)
-                        .buttonStyle(PrimaryButtonStyle())
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(model.state == .loading)
-                }
-            }
-        }
-        .padding(Tokens.Spacing.sheet)
-        .frame(width: 480)
-        .background(Tokens.Palette.sheet)
-        .interactiveDismissDisabled(model.state == .loading)
     }
 }

@@ -162,6 +162,29 @@ struct ActivityModelTests {
         #expect(model.entries.map(\.text) == ["You moved Current name in the handoff order.", "You renamed Current name."])
     }
 
+    @Test("Activity names the creating agent and says when a task goes back after Deliver is turned off")
+    func agentTaskEvents() async {
+        let task = UUID()
+        let builder = AgentFixtures.seat(AgentFixtures.builderID, name: "Builder One")
+        let events = [
+            TaskScreenFixtures.event(.taskCreated, seq: 1, taskID: task, actorKind: .owner),
+            TaskScreenFixtures.event(.taskCreated, seq: 2, taskID: task, actor: builder.id),
+            TaskScreenFixtures.event(.taskClaimed, seq: 3, taskID: task, actor: builder.id),
+            TaskScreenFixtures.event(.taskReleased, seq: 4, taskID: task, actorKind: .owner,
+                                     payload: ["reason": .string("deliver_turned_off"), "wait_cause": .null]),
+        ]
+        let server = Server(events: events)
+        server.api.script { $0.seats = { SeatsList(seats: [builder], asOfSeq: 4) } }
+        let model = ActivityModel(api: server.api)
+        model.filter = .everything
+        await model.load()
+        let prefix = ActivityCopy.taskPrefix.filled(["title": ActivityCopy.aTask.text])
+        #expect(model.entries.map(\.text) == [
+            "Builder One was not allowed to hand tasks in any more, so the task went back to Ready.",
+            "Builder One took the task.", "Builder One added the task.", "You added the task.",
+        ].map { "\(prefix) \($0)" })
+    }
+
     private nonisolated static func event(
         _ seq: Int, taskID: UUID? = nil, type: EventType = .taskCreated, subjectID: UUID? = nil
     ) -> EventRecord {

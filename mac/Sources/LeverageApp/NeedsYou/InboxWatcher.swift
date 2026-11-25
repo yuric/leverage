@@ -245,10 +245,12 @@ final class InboxWatcher {
         for event in settled {
             guard let id = event.subjectID else { continue }
             let kind = event.payload["kind"]?.stringValue.flatMap(NeedsYouItem.init(rawValue:))
+            let settled = NeedsYouCopy.settledBeforeYouSaw.text
+            let body = kind == .agentTasksAtLimit ? settled : "\(names.taskTitle(event.taskID)). \(settled)"
             pending.append(
                 Announcement(
                     seq: event.seq, id: id, title: NeedsYouWords.settledHeading(kind: kind),
-                    body: "\(names.taskTitle(event.taskID)). \(NeedsYouCopy.settledBeforeYouSaw.text)"))
+                    body: body))
         }
         for one in pending.sorted(by: { $0.seq < $1.seq }) {
             guard !announced.contains(one.id) else { continue }

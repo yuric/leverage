@@ -118,7 +118,7 @@ struct NeedsYouNames: Sendable {
 /// One button of an item, with the command it sends.
 struct NeedsYouButton: Identifiable, Equatable, Sendable {
     enum Action: Hashable, Sendable {
-        case signInAgain, allowAnotherTry, changeTask, cancelTask
+        case signInAgain, allowAnotherTry, changeTask, cancelTask, completeContract, draftContract
         case letThroughOnce, runAgain, turnRuleOff, connectAgent
         case keepAssumption, answerDifferently, approve, stop, returnForRework, offerAgain
         case markDone(UUID), waive(UUID)
@@ -139,7 +139,7 @@ enum NeedsYouWords {
         case .refusedForEveryAgent, .checkPastRerunLimit, .checkCouldNotRun, .noReviewerEligible,
             .orchestratorOffline: true
         case .questionPassedOn, .approval, .stoppedAction, .unconfirmedAction, .accessRequest,
-            .taskBudgetReached, .projectBudgetReached: true
+            .taskBudgetReached, .projectBudgetReached, .agentTaskIncomplete, .agentTasksAtLimit: true
         }
     }
 
@@ -191,6 +191,8 @@ enum NeedsYouWords {
         case .checkCouldNotRun: return NeedsYouCopy.couldNotRunHeading.text
         case .noReviewerEligible: return NeedsYouCopy.noReviewerHeading.text
         case .orchestratorOffline: return NeedsYouCopy.offlineHeading.text
+        case .agentTaskIncomplete: return NeedsYouCopy.agentTaskIncompleteHeading.text
+        case .agentTasksAtLimit: return NeedsYouCopy.agentTasksAtLimitHeading.text
         case .questionPassedOn:
             let page = names.page(for: item)
             let agent = agentName(question(in: item, page: page)?.askingSeatID, page: page, names: names)
@@ -233,6 +235,8 @@ enum NeedsYouWords {
             let copy = names.canReadUsage(for: credential) ? NeedsYouCopy.limitBodyAutomatic : NeedsYouCopy.limitBody
             return copy.filled(["task": task, "account": account, "provider": provider])
         case .pastRoundLimit: return NeedsYouCopy.sentBackBody.text
+        case .agentTaskIncomplete: return NeedsYouCopy.agentTaskIncompleteBody.filled(["task": task])
+        case .agentTasksAtLimit: return NeedsYouCopy.agentTasksAtLimitBody.text
         case .refusedForEveryAgent: return NeedsYouCopy.refusedBody.filled(["task": task])
         case .checkPastRerunLimit: return NeedsYouCopy.rerunBody.filled(["task": task])
         case .checkCouldNotRun: return NeedsYouCopy.couldNotRunBody.filled(["task": task])
@@ -299,7 +303,11 @@ enum NeedsYouWords {
                 return NeedsYouButton(action: .allowAnotherTry, label: NeedsYouCopy.letItTryOnceMore.text)
             case .editContract where [.pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit].contains(kind):
                 return NeedsYouButton(action: .changeTask, label: NeedsYouCopy.changeTask.text)
-            case .cancel where [.pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit].contains(kind):
+            case .completeContract where kind == .agentTaskIncomplete:
+                return button(.completeContract, .completeContract)
+            case .draftContract where kind == .agentTaskIncomplete:
+                return button(.draftContract, .draftContract)
+            case .cancel where [.pastRoundLimit, .refusedForEveryAgent, .checkPastRerunLimit, .agentTaskIncomplete].contains(kind):
                 return NeedsYouButton(action: .cancelTask, label: NeedsYouCopy.cancelTask.text)
             case .overrideOnce where [.refusedForEveryAgent, .checkPastRerunLimit, .checkCouldNotRun].contains(kind):
                 return NeedsYouButton(action: .letThroughOnce, label: NeedsYouCopy.letThroughOnce.text)
@@ -482,6 +490,8 @@ enum NeedsYouWords {
         case .checkCouldNotRun: NeedsYouCopy.couldNotRunHeading.text
         case .noReviewerEligible: NeedsYouCopy.noReviewerHeading.text
         case .orchestratorOffline: NeedsYouCopy.offlineHeading.text
+        case .agentTaskIncomplete: NeedsYouCopy.agentTaskIncompleteHeading.text
+        case .agentTasksAtLimit: NeedsYouCopy.agentTasksAtLimitHeading.text
         case .questionPassedOn: NeedsYouCopy.kindQuestion.text
         case .approval: NeedsYouCopy.kindApproval.text
         case .stoppedAction: NeedsYouCopy.kindStopped.text

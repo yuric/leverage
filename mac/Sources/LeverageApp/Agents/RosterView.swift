@@ -14,8 +14,7 @@ struct RosterView: View {
     var body: some View {
         let model = box.model {
             RosterModel(
-                api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) },
-                copy: Pasteboard.copy)
+                api: context.owner, noteRead: { [feed = context.feed] in feed.noteRead(asOfSeq: $0) })
         }
         RosterContent(
             model: model, connect: { isConnecting = true }, openCredentials: { context.navigator.show(.credentials) }
@@ -25,18 +24,10 @@ struct RosterView: View {
             await model.keepCurrent()
         }
         .onDisappear { model.detach() }
-        .setupSheetOpen(isConnecting || model.changing != nil || model.newPrompt != nil)
+        .setupSheetOpen(isConnecting || model.changing != nil)
         .sheet(isPresented: changing(model)) {
             if let change = model.changing {
                 ChangeAgentForm(model: change, cancel: { model.cancelChange() })
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { model.newPrompt != nil },
-            set: { if !$0 { model.closeNewPrompt() } }
-        )) {
-            if let prompt = model.newPrompt {
-                NewLandingPromptSheet(model: prompt, dismiss: { model.closeNewPrompt() })
             }
         }
         .sheet(isPresented: $isConnecting, onDismiss: {
@@ -155,6 +146,9 @@ struct RosterRowView: View {
                 Text(verbatim: row.detailLine)
                     .font(.system(size: Tokens.FontSize.small))
                     .foregroundStyle(Tokens.Palette.text2)
+                Text(verbatim: row.permissionsLine)
+                    .font(.system(size: Tokens.FontSize.small))
+                    .foregroundStyle(Tokens.Palette.text2)
                 if let login = row.loginLine {
                     Text(verbatim: login)
                         .font(.system(size: Tokens.FontSize.small))
@@ -209,32 +203,33 @@ struct RosterRowView: View {
             }
         } else {
             HStack(spacing: 8) {
-                if row.canStart {
-                    Button(AgentsCopy.start.text) { Task { await model.start(row.id) } }
+                ForEach(Self.menuItems(for: row), id: \.self) { item in
+                    Button(item.text) { perform(item) }
                 }
-                if row.canStop {
-                    Button(AgentsCopy.stop.text) { Task { await model.stop(row.id) } }
-                }
-                if row.canPause {
-                    Button(AgentsCopy.pause.text) { Task { await model.pause(row.id) } }
-                }
-                if row.canResume {
-                    Button(AgentsCopy.resume.text) { Task { await model.resume(row.id) } }
-                }
-                if row.canChange {
-                    Button(AgentsCopy.change.text) { model.beginChange(row.id) }
-                }
-                if row.canIssueNewPrompt {
-                    Menu(AgentsCopy.newPrompt.text) {
-                        ForEach(LandingPromptConnection.allCases, id: \.self) { connection in
-                            Button(AgentsCopy.connection(connection).text) {
-                                model.prepareNewPrompt(row.id, connection: connection)
-                            }
-                        }
-                    }
-                }
-                Button(AgentsCopy.remove.text) { model.askToRemove(row.id) }
             }
+        }
+    }
+
+    static func menuItems(for row: RosterRow) -> [AgentsCopy] {
+        var items: [AgentsCopy] = []
+        if row.canStart { items.append(.start) }
+        if row.canStop { items.append(.stop) }
+        if row.canPause { items.append(.pause) }
+        if row.canResume { items.append(.resume) }
+        if row.canChange { items.append(.change) }
+        items.append(.remove)
+        return items
+    }
+
+    private func perform(_ item: AgentsCopy) {
+        switch item {
+        case .start: Task { await model.start(row.id) }
+        case .stop: Task { await model.stop(row.id) }
+        case .pause: Task { await model.pause(row.id) }
+        case .resume: Task { await model.resume(row.id) }
+        case .change: model.beginChange(row.id)
+        case .remove: model.askToRemove(row.id)
+        default: break
         }
     }
 }

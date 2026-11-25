@@ -237,8 +237,10 @@ struct ProviderCatalogTests {
         // inventory's "ready" prompt, run with no --model; Grok's is the
         // "Default model" line of `grok models`. Both ran on this Mac on
         // 2026-11-19 with the agent's whole environment (plan HE-5, §0 fact 30).
-        #expect(try entry("claude").defaultModel == Evidenced("claude-opus-5-5", .probeFullEnvironment))
-        #expect(try entry("grok").defaultModel == Evidenced("grok-4.6", .probeFullEnvironment))
+        let claude = try entry("claude").defaultModel
+        let grok = try entry("grok").defaultModel
+        #expect(claude?.value == "claude-opus-5-5" && claude?.evidence == .probeFullEnvironment)
+        #expect(grok?.value == "grok-4.6" && grok?.evidence == .probeFullEnvironment)
         #expect(try entry("codex").defaultModel == nil)
         #expect(try entry("gemini").defaultModel == nil)
     }
@@ -247,21 +249,22 @@ struct ProviderCatalogTests {
     func models() {
         for entry in ProviderCatalog.entries {
             let list = entry.models
-            #expect(list.evidence == .documented, "\(entry.id)")
-            #expect(!list.value.isEmpty, "\(entry.id)")
-            #expect(Set(list.value).count == list.value.count, "\(entry.id)")
-            #expect(list.value.allSatisfy { !$0.isEmpty }, "\(entry.id)")
+            let ids = list.map(\.id)
+            #expect(list.allSatisfy { $0.evidence == .documented || $0.id == entry.defaultModel?.value }, "\(entry.id)")
+            #expect(!ids.isEmpty, "\(entry.id)")
+            #expect(Set(ids).count == ids.count, "\(entry.id)")
+            #expect(ids.allSatisfy { !$0.isEmpty }, "\(entry.id)")
             if let model = entry.defaultModel {
-                #expect(list.value.contains(model.value), "\(entry.id)")
+                #expect(ids.contains(model.value), "\(entry.id)")
             }
         }
     }
 
     @Test("Claude and Antigravity take an effort; Codex and Grok are given none (their drivers pass none)")
     func effort() {
-        #expect(ProviderCatalog.takesEffort(.claude))
-        #expect(ProviderCatalog.takesEffort(.gemini))
-        #expect(!ProviderCatalog.takesEffort(.codex))
-        #expect(!ProviderCatalog.takesEffort(.grok))
+        #expect(ModelCatalog.entry(for: .claude)?.nativeEffort.value == true)
+        #expect(ModelCatalog.entry(for: .gemini)?.nativeEffort.value == true)
+        #expect(ModelCatalog.entry(for: .codex)?.nativeEffort.value == false)
+        #expect(ModelCatalog.entry(for: .grok)?.nativeEffort.value == false)
     }
 }

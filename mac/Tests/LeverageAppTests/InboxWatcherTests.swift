@@ -62,6 +62,19 @@ struct InboxWatcherTests {
         #expect(rig.watcher.openCount == 3)
     }
 
+    @Test("Both agent task items announce their Needs you headings and bodies")
+    func announcesAgentTaskItems() async {
+        let rig = makeRig(open: [
+            Fixtures.item(.agentTaskIncomplete, seq: 6),
+            Fixtures.item(.agentTasksAtLimit, seq: 7, task: nil, about: .workspace),
+        ], stored: 5)
+        await rig.watcher.start()
+        #expect(rig.notifier.posted.value.map(\.title) ==
+                ["A task an agent added needs its contract", "Agents have added 50 open tasks"])
+        #expect(rig.notifier.posted.value.first?.body.contains(Fixtures.taskTitle) == true)
+        #expect(rig.cursor.stored.value == 7)
+    }
+
     // Review: the cursor is kept in the support folder, the log in the
     // database. After a restore or a lost volume the log's positions start
     // lower than the stored cursor, and every new item would sit below it.
@@ -264,6 +277,15 @@ struct InboxWatcherTests {
         #expect(note?.title == "Sent back too many times")
         #expect(note?.body == "Fix the totals on the invoice page. This was settled before you saw it.")
         #expect(rig.cursor.stored.value == 9)
+    }
+
+    @Test("A workspace task limit settled before the read is announced without inventing a task")
+    func settledAgentTaskLimit() async {
+        let rig = makeRig(stored: 5)
+        let event = Fixtures.opened(seq: 9, item: UUID(), kind: .agentTasksAtLimit, task: nil)
+        await rig.watcher.handle(events: [event])
+        #expect(rig.notifier.posted.value.first?.title == "Agents have added 50 open tasks")
+        #expect(rig.notifier.posted.value.first?.body == "This was settled before you saw it.")
     }
 
     @Test("an opened event whose item the read does return is announced once, as the item")

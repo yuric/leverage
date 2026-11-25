@@ -20,6 +20,18 @@ public struct AgentClient: AgentAPI {
         return try await transport.read(.getJoin, query: query)
     }
 
+    public func reportModel(
+        _ request: ReportModelRequest, key: IdempotencyKey
+    ) async throws -> CommandOutcome<ReportedModel> {
+        try await transport.command(.reportModel, body: request, key: key)
+    }
+
+    public func createTask(
+        _ request: CreateTaskRequest, key: IdempotencyKey
+    ) async throws -> CommandOutcome<AgentTaskCreated> {
+        try await transport.command(.createTask, body: request, key: key)
+    }
+
     public func next(wait: Int?) async throws -> NextItem {
         // Send the IF-14 default so the transport adds its timeout margin.
         try await transport.read(.getNext, waitSeconds: wait ?? 30)

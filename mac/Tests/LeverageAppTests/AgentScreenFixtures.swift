@@ -49,12 +49,15 @@ enum AgentFixtures {
 
     static func credential(
         _ id: UUID, name: String, provider: Provider = .claude, state: CredentialState = .active,
-        limitedUntil: Date? = nil, lastVerifiedAt: Date? = nil, position: Int = 1
+        limitedUntil: Date? = nil, lastVerifiedAt: Date? = nil, position: Int = 1, toolVersion: String? = nil
     ) -> CredentialWithReading {
         CredentialWithReading(
             credential: Credential(
                 id: id, provider: provider, name: name, state: state, limitedUntil: limitedUntil, position: position,
-                lastVerifiedAt: lastVerifiedAt))
+                lastVerifiedAt: lastVerifiedAt),
+            reading: toolVersion.map {
+                CredentialReading(credentialID: id, observedAt: Date(), state: .ok, toolVersion: $0, figures: [], resets: nil)
+            })
     }
 
     static func credentials(asOfSeq: Int = 11) -> CredentialsList {

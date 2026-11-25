@@ -105,10 +105,10 @@ struct ChangeAgentModelTests {
         let model = makeModel(owner, seat: appSeat(model: existing))
         let provider = try #require(model.modelProvider)
         let entry = try #require(ProviderCatalog.entry(for: provider.rawValue))
-        let menu = AgentModelPicker(
-            provider: provider, existingModel: model.existingModel, selection: .constant(model.modelName))
-        #expect(menu.choices == ["", existing] + entry.models.value)
+        #expect(model.modelChoices.map(\.value) == ["", existing] + entry.models.map(\.id))
+        #expect(model.modelChoices.first { $0.value == existing }?.label == "\(existing) (not offered now)")
         #expect(model.modelName == existing)
+        #expect(model.unavailableEffort == "high (not offered now)")
         model.name = "Renamed agent"
         await model.save()
         #expect(body(owner) == ["name": .string("Renamed agent")])
@@ -118,14 +118,12 @@ struct ChangeAgentModelTests {
     func changesToDefaultModel() async throws {
         let owner = owner()
         let claude = try #require(ProviderCatalog.entry(for: "claude"))
-        let existing = try #require(claude.models.value.first)
+        let existing = try #require(claude.models.first?.id)
         let model = makeModel(owner, seat: appSeat(model: existing))
-        let menu = AgentModelPicker(
-            provider: .claude, existingModel: model.existingModel, selection: .constant(model.modelName))
-        #expect(menu.choices == [""] + claude.models.value)
-        model.modelName = try #require(menu.choices.first)
+        #expect(model.modelChoices.map(\.value) == [""] + claude.models.map(\.id))
+        model.modelName = try #require(model.modelChoices.first?.value)
         await model.save()
-        #expect(body(owner) == ["model": .null])
+        #expect(body(owner) == ["model": .null, "effort": .null])
     }
 
     @Test("changing a Prompt seat sends no model, including when the seat has an older model")
@@ -150,7 +148,8 @@ struct ChangeAgentModelTests {
     @Test("the sheet offers the login only for an agent the app runs, and effort only where the tool takes one")
     func offers() {
         #expect(makeModel(owner()).offersLogin)
-        #expect(makeModel(owner()).offersEffort)
+        #expect(!makeModel(owner()).offersEffort, "the stored model is unlisted")
+        #expect(makeModel(owner(), seat: appSeat(model: "claude-opus-5-5")).offersEffort)
         let own = Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok)
         let connects = makeModel(owner(), seat: own)
         #expect(!connects.offersLogin)
@@ -191,36 +190,34 @@ struct ChangeAgentModelTests {
         #expect(done.value == 1)
     }
 
-    @Test("a new model and effort are sent as text, and an emptied one as null")
+    @Test("a selected model is sent as named, and a cleared effort as null")
     func modelAndEffort() async {
         let owner = owner()
         let model = makeModel(owner)
-        model.modelName = " other-model "
+        model.modelName = "claude-opus-5-5"
         model.effort = ""
         await model.save()
-        #expect(body(owner) == ["model": .string("other-model"), "effort": .null])
+        #expect(body(owner) == ["model": .string("claude-opus-5-5"), "effort": .null])
     }
 
     @Test("a model set where there was none is sent as text; an effort left as it was is not sent")
     func modelWhereNoneWas() async {
         let owner = owner()
         let model = makeModel(owner, seat: appSeat(model: nil, effort: "high"))
-        model.modelName = "chosen"
+        model.modelName = "claude-opus-5-5"
         await model.save()
-        #expect(body(owner) == ["model": .string("chosen")])
+        #expect(body(owner) == ["model": .string("claude-opus-5-5")])
     }
 
     @Test("a new login is sent as its id; the agent's other fields stay out of the body")
     func newLogin() async {
         let owner = owner()
-        let model = makeModel(owner)
-        model.credentialID = Fixtures.secondLoginID
-        model.modelName = "claude-made-up"
-        model.effort = "high"
-        await model.save()
+        let other = ConnectAgentModel.LoginChoice(id: UUID(), provider: .claude, label: "Other Claude")
+        let sameProvider = makeModel(owner, logins: [claudeLogin, other])
+        sameProvider.credentialID = other.id
+        await sameProvider.save()
         let sent = body(owner)
-        #expect(sent?["credential_id"] == .string(Fixtures.secondLoginID.contractString))
-        #expect(sent?.keys.contains("name") == false)
+        #expect(sent == ["credential_id": .string(other.id.contractString)])
     }
 
     @Test("moving to a login of another provider empties the model and effort, which belonged to the old tool")
@@ -230,14 +227,13 @@ struct ChangeAgentModelTests {
         model.credentialID = Fixtures.secondLoginID
         #expect(model.modelName.isEmpty && model.effort.isEmpty)
         #expect(model.modelProvider == .codex)
-        #expect(model.existingModel == nil)
+        #expect(!model.modelChoices.contains { $0.value == "claude-made-up" })
         #expect(!model.offersEffort)
         await model.save()
         let sent = body(owner)
         #expect(sent?["credential_id"] == .string(Fixtures.secondLoginID.contractString))
         #expect(sent?["model"] == .null)
-        // Codex takes no effort, so none is sent.
-        #expect(sent?.keys.contains("effort") == false)
+        #expect(sent?["effort"] == .null)
     }
 
     @Test("turning an agent off sends enabled false and says what happens; turning it on says it does not start")
@@ -403,5 +399,34 @@ struct ChangeAgentModelTests {
         #expect(Fixtures.draws(ChangeAgentForm(model: runs, cancel: {}).environment(\.colorScheme, .dark), width: 460, height: 560))
         let own = makeModel(owner(), seat: Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok))
         #expect(Fixtures.draws(ChangeAgentForm(model: own, cancel: {}), width: 460, height: 560))
+    }
+}
+
+extension ChangeAgentModelTests {
+    @Test("Change keeps stored permissions and sends all three with the Deliver-off note")
+    func changesPermissions() async {
+        let owner = owner()
+        let seat = Seat(id: UUID(), name: "Builder One", provider: .claude, role: .builder,
+                        credentialID: Fixtures.loginID, permissions: SeatPermissions(work: false))
+        let model = ChangeAgentModel(api: owner, seat: seat, logins: [claudeLogin], holdsTask: true, onChanged: {})
+        #expect(model.permissions == SeatPermissions(work: false))
+        #expect(model.deliverNote == nil)
+        model.permissions.deliver = false
+        #expect(model.deliverNote == "It gives back the task it is working on.")
+        await model.save()
+        #expect(body(owner) == ["permissions": .object(["work": .bool(false), "deliver": .bool(false), "create": .bool(true)])])
+    }
+
+    @Test("Prompt Change shows reports read-only, including an effort for a tool Native does not set")
+    func promptReport() {
+        let seat = Fixtures.seat(Fixtures.ownID, name: "Example agent", provider: .codex, model: "gpt-example", effort: "high")
+        let model = makeModel(owner(), seat: seat)
+        #expect(model.modelChoices.isEmpty)
+        #expect(model.effortChoices.isEmpty)
+        #expect(model.reportedSettings == "Reported by the agent: gpt-example · high")
+        model.effort = "low"
+        #expect(model.request == nil)
+        let unreported = makeModel(owner(), seat: Fixtures.seat(Fixtures.ownID, name: "Example agent"))
+        #expect(unreported.reportedSettings == "Not reported yet")
     }
 }

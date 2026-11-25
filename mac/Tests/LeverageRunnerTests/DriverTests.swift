@@ -173,7 +173,7 @@ struct DriverTests {
         _ = try await setup.driver(test, effort: "made-up-effort")
             .run(prompt: Self.buildPrompt, in: setup.work, purpose: .build)
         let provider = try #require(Provider(rawValue: test.provider))
-        #expect(try setup.lastCall().argv.contains("made-up-effort") == ProviderCatalog.takesEffort(provider))
+        #expect(try setup.lastCall().argv.contains("made-up-effort") == (ModelCatalog.entry(for: provider)?.nativeEffort.value == true))
     }
 
     @Test("the tool's environment: the allow-list, the account variable, no Leverage token", arguments: cases)
@@ -293,7 +293,7 @@ struct DriverTests {
         let provider = try #require(Provider(rawValue: test.provider))
         let modelFlag = ["claude": "--model", "agy": "--model"][test.tool] ?? "-m"
         var extra = [modelFlag, "model-x"]
-        if ProviderCatalog.takesEffort(provider) { extra += ["--effort", "high"] }
+        if (ModelCatalog.entry(for: provider)?.nativeEffort.value == true) { extra += ["--effort", "high"] }
         #expect(Array(argv.dropFirst(base.count)) == extra)
         #expect(!argv.contains { Self.forbidden.contains($0) })
         // The probe's answering check never takes the seat's model.

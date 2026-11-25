@@ -55,16 +55,18 @@ struct ChangeAgentForm: View {
                     .labelsHidden()
                 }
             }
-            if let provider = model.modelProvider {
-                AgentModelPicker(provider: provider, existingModel: model.existingModel, selection: $model.modelName)
+            if !model.modelChoices.isEmpty {
+                AgentModelPicker(label: AgentsCopy.modelLabel.text, choices: model.modelChoices, selection: $model.modelName)
+            }
+            if model.offersEffort {
+                AgentModelPicker(label: AgentsCopy.effortLabel.text, choices: model.effortChoices, selection: $model.effort)
+            } else if let effort = model.unavailableEffort {
+                FormField(label: AgentsCopy.effortLabel.text) { Text(verbatim: effort) }
+            }
+            if let report = model.reportedSettings {
+                FormField(label: AgentsCopy.modelLabel.text) { Text(verbatim: report) }
             }
             AgentStrengthPicker(selection: $model.strengthRank)
-            if model.offersEffort {
-                FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
-                    TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
-                        .textFieldStyle(.roundedBorder)
-                }
-            }
             FormField(label: AgentsCopy.changeEnabledLabel.text, hint: model.enabledNote) {
                 Toggle(AgentsCopy.changeEnabledLabel.text, isOn: $model.enabled)
                     .labelsHidden()
@@ -73,6 +75,7 @@ struct ChangeAgentForm: View {
             Text(AgentsCopy.changeNote.text)
                 .font(.system(size: Tokens.FontSize.small))
                 .foregroundStyle(Tokens.Palette.text2)
+            AgentPermissionsFields(permissions: $model.permissions, deliverNote: model.deliverNote)
         }
     }
 
