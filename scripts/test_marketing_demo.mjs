@@ -3,11 +3,34 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { mountWorkflow } from '../marketing-page/workflow.mjs'
 
+const page = readFileSync(new URL('../marketing-page/index.html', import.meta.url), 'utf8')
+
+function block(pattern) {
+  const match = page.match(pattern)
+  assert.ok(match, `the page has no block matching ${pattern}`)
+  return match[0]
+}
+
 test('the Handoff section appears before the Imaginarium', () => {
-  const page = readFileSync(new URL('../marketing-page/index.html', import.meta.url), 'utf8')
   const demoSections = [...page.matchAll(/<section\b[^>]*\sid="(handoffs|imaginarium)"/g)]
     .map(([, id]) => id)
   assert.deepEqual(demoSections, ['handoffs', 'imaginarium'])
+})
+
+test('the Handoff section says how far handoff is proven and labels its diagram', () => {
+  const section = block(/<section\b[^>]*\sid="handoffs"[\s\S]*?<\/section>/)
+  assert.match(section, /href="https:\/\/github\.com\/yuric\/leverage\/blob\/main\/docs\/IMPLEMENTATION\.md#what-the-handoff-milestone-proves-and-how-far"/)
+  assert.match(section, /stand-in tools/)
+  assert.match(block(/<div class="handoff-header">[\s\S]*?<\/button>/), /class="demo-label">Illustration</)
+})
+
+test('the footer says Leverage is not affiliated with any provider the page names', () => {
+  const footer = block(/<footer class="site-footer">[\s\S]*?<\/footer>/)
+  assert.match(footer, /not affiliated with or endorsed by/)
+  const providers = [...block(/<ul aria-label="Example agent providers">[\s\S]*?<\/ul>/)
+    .matchAll(/<\/span>\s*([^<]+?)\s*<\/li>/g)].map(([, name]) => name)
+  assert.ok(providers.length > 0)
+  providers.forEach((name) => assert.match(footer, new RegExp(`\\b${name}\\b`)))
 })
 
 const fields = ['title', 'brief', 'check', 'delivery']

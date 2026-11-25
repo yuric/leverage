@@ -6,9 +6,10 @@ the cases' shape and counts, that every supported model of bar.json has a
 result recorded against today's instruction and case set, that each
 result's "met the bar" is what scoring it again gives, that the registry
 list orchestrator_tested_providers equals the providers whose result met
-the bar, that runs.json is within the ceilings of RV-6, and that no case or
-result holds anything shaped like an email address or a token. A recorded
-miss does not fail it: it is printed.
+the bar, that each recorded run is the latest settled run of its ledger,
+that runs.json is within the ceilings of RV-6, and that no case or
+result holds anything shaped like an email address, a token or a path into
+a home folder. A recorded miss does not fail it: it is printed.
 
 Each case copies the repository's suite, shipped rules and registry into a
 temporary folder, records a result for each supported model there with
@@ -56,16 +57,16 @@ class Root:
             shutil.copy(path, self.suite / "cases" / path.name)
         shutil.copy(ROOT / SUITE / "bar.json", self.suite / "bar.json")
         (self.root / "api" / "contract").mkdir(parents=True)
-        for name in ("shipped_rules.json", "registry.json"):
+        for name in ("shipped_rules.json", "registry.json", "roles.json"):
             shutil.copy(ROOT / "api" / "contract" / name, self.root / "api" / "contract" / name)
         # Retain the original shipped catalog for the milestone 4 fixture.
         shipped = self.root / "api" / "contract" / "shipped_rules.json"
         catalog = self.case(shipped)
         catalog["rules"] = [rule for rule in catalog["rules"] if rule["key"] != "orchestrator_approves_actions"]
         self.write_case(shipped, catalog)
-        self.write_runs([self.run_entry(provider, 24) for provider in self.supported()])
         for provider in self.supported():
             self.record(provider)
+        self.write_runs([self.run_entry(provider) for provider in self.supported()])
         self.set_tested(self.supported())
         self.set_tested([], mode="general")
 
@@ -84,15 +85,17 @@ class Root:
         path.write_text(json.dumps(case, indent=2) + "\n", encoding="utf-8")
 
     def verdicts(self, wrong=()):
-        """One line per case: the label, except for the ids in wrong."""
+        """One line per case: the label, except for the ids in wrong. The
+        first six cases take a second try, so a run makes 30 tool runs."""
         lines = []
-        for path in self.cases():
+        for number, path in enumerate(self.cases()):
             case = self.case(path)
             verdict = case["label"]
             if case["id"] in wrong:
                 verdict = "failed" if verdict == "passed" else "passed"
             lines.append({"case": case["id"], "verdict": verdict, "reason": "The made-up checker says so.",
-                          "tokens": 150, "seconds": 3.0, "tool_runs": 1, "tool_version": "9.9.9 (made up)",
+                          "tokens": 150, "seconds": 3.0, "tool_runs": 2 if number < 6 else 1,
+                          "tool_version": "9.9.9 (made up)",
                           "model": "the tool's default"})
         return lines
 
@@ -114,9 +117,32 @@ class Root:
     def write_result(self, provider, result):
         self.result_path(provider).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
-    def run_entry(self, provider, tool_runs):
-        return {"provider": provider, "date": "2026-11-20", "tool_runs": tool_runs,
-                "instruction_sha256": "0" * 64, "cases_sha256": "1" * 64, "reserved": False}
+    def run_entry(self, provider, tool_runs=30):
+        """A settled ledger entry for the run behind provider's result."""
+        result = self.result(provider)
+        return {"provider": provider, "date": result["date"], "tool_runs": tool_runs,
+                **{key: result[key] for key in ("mode", "role_file_sha256", "instruction_sha256", "cases_sha256")},
+                "reserved": False}
+
+    def general(self, record):
+        """record in General mode: no role file, the General job rules."""
+        return {**record, "mode": "general", "role_file_sha256": None, "job_rules_sha256": self.job_rules_hash()}
+
+    def job_rules_hash(self):
+        roles = json.loads((self.root / "api" / "contract" / "roles.json").read_text(encoding="utf-8"))
+        rules, = [role["job_rules"] for role in roles["roles"] if role["role"] == "general"]
+        return hashlib.sha256("\n".join(rules).encode("utf-8")).hexdigest()
+
+    def set_job_rules(self, rules):
+        path = self.root / "api" / "contract" / "roles.json"
+        roles = json.loads(path.read_text(encoding="utf-8"))
+        for role in roles["roles"]:
+            if role["role"] == "general":
+                role["job_rules"] = rules
+        path.write_text(json.dumps(roles, indent=2) + "\n", encoding="utf-8")
+
+    def runs(self):
+        return json.loads((self.suite / "runs.json").read_text(encoding="utf-8"))["runs"]
 
     def write_runs(self, runs):
         (self.suite / "runs.json").write_text(json.dumps({"runs": runs, "changes": []}, indent=2) + "\n",
@@ -257,7 +283,7 @@ class CheckEvalsTests(unittest.TestCase):
         self.copy.write_runs(entries)
         code, output = self.copy.check()
         self.assertEqual(code, 0, output)
-        self.copy.write_runs(entries + [self.copy.run_entry("grok", 1)])
+        self.copy.write_runs(entries + [{**self.copy.run_entry("claude", 1), "provider": "grok"}])
         self.assertFails("runs:", "541 tool runs in all; the ceiling is 540")
 
     def test_a_result_with_a_token_shaped_string_fails(self):
@@ -265,6 +291,21 @@ class CheckEvalsTests(unittest.TestCase):
         result["cases"][5]["reason"] = "It printed lvs_aaaaaaaaaaaaaaaaaaaaaaaa somewhere."
         self.copy.write_result("claude", result)
         self.assertFails("results: claude", "token")
+
+    def test_a_result_with_a_path_into_a_home_folder_fails(self):
+        result = self.copy.result("claude")
+        result["cases"][5]["reason"] = "It read " + "/Us" + "ers/someone/.config/tool first."
+        self.copy.write_result("claude", result)
+        self.assertFails("results: claude", "home folder")
+
+    def test_a_result_with_a_provider_key_or_token_the_reply_check_knows_fails(self):
+        for value in ("AI" + "za" + "a" * 30, "ya" + "29." + "b" * 20, "x" + "ai-" + "c" * 20,
+                      "github" + "_pat_" + "d" * 30):
+            with self.subTest(shape=value[:6]):
+                result = self.copy.result("gemini")
+                result["tool_version"] = f"gemini 1.0 ({value})"
+                self.copy.write_result("gemini", result)
+                self.assertFails("results: gemini", "token" if value.startswith(("ya", "github")) else "key")
 
     def test_a_result_with_an_email_address_fails(self):
         result = self.copy.result("codex")
@@ -311,16 +352,55 @@ class CheckEvalsTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("MISS: gemini was not run", output)
 
+    def test_a_not_run_reason_about_the_owners_account_standing_fails(self):
+        for reason in ("the made-up account reports a payment past due", "billing is overdue",
+                       "an unpaid invoice"):
+            with self.subTest(reason=reason):
+                code, output = python(SCORER, "not-run", "--suite", self.copy.suite,
+                                      "--shipped", self.copy.root / "api" / "contract" / "shipped_rules.json",
+                                      "--provider", "gemini", "--reason", reason, "--date", "2026-11-20",
+                                      "--out", self.copy.result_path("gemini"))
+                self.assertEqual(code, 0, output)
+                self.copy.set_tested(["claude", "codex"])
+                output = self.assertFails("results: gemini", "account or billing state")
+                self.assertNotIn(reason, output)
+
     def test_the_budget_counts_both_ledgers_together(self):
         claude = self.copy.run_entry("claude", 30)
-        general = {**claude, "mode": "general", "role_file_sha256": None}
+        general = self.copy.general(claude)
         general_path = self.copy.suite / "runs-general.json"
-        self.copy.write_runs([claude] * 3)
+        self.copy.write_runs([claude] * 3 + [self.copy.run_entry("codex"), self.copy.run_entry("gemini")])
         self.copy.write_case(general_path, {"runs": [general] * 3})
         code, output = self.copy.check()
         self.assertEqual(code, 0, output)
         self.copy.write_case(general_path, {"runs": [general] * 4})
         self.assertFails("runs:", "claude: 7 full runs; a model gets 6", "210 tool runs; a model gets 180")
+
+    def test_a_result_must_match_the_latest_settled_run(self):
+        result = self.copy.result("codex")
+        self.copy.write_result("codex", {**result, "date": "2026-11-21"})
+        self.assertFails("results: codex", "latest settled run")
+
+    def test_a_result_with_no_run_in_the_ledger_fails(self):
+        self.copy.write_runs([self.copy.run_entry("claude"), self.copy.run_entry("codex")])
+        self.assertFails("results: gemini", "latest settled run")
+
+    def test_a_result_whose_tool_runs_are_not_its_cases_fails(self):
+        result = self.copy.result("claude")
+        result["cases"][0]["tool_runs"] = 1
+        self.copy.write_result("claude", result)
+        self.assertFails("results: claude", "tool_runs must be the sum")
+
+    def test_a_ledger_entry_against_an_unknown_case_set_fails(self):
+        entries = [self.copy.run_entry(provider) for provider in self.copy.supported()]
+        self.copy.write_runs([{**entries[0], "cases_sha256": "1" * 64}, *entries])
+        self.assertFails("runs: claude", "invalid wording or case set hashes")
+
+    def test_a_ledger_entry_with_no_reserved_value_fails(self):
+        entries = [self.copy.run_entry(provider) for provider in self.copy.supported()]
+        del entries[0]["reserved"]
+        self.copy.write_runs(entries)
+        self.assertFails("runs: claude", "reserved")
 
 
 class ApprovalRoot(Root):
@@ -364,6 +444,7 @@ class ApprovalRoot(Root):
             result = self.result(provider)
             result["role_file_sha256"] = self.sha256(text)
             self.write_result(provider, result)
+        self.write_runs([{**entry, "role_file_sha256": self.sha256(text)} for entry in self.runs()])
 
     def set_approval_instruction(self, text):
         path = self.root / "api" / "contract" / "shipped_rules.json"
@@ -487,7 +568,7 @@ class ApprovalCheckTests(unittest.TestCase):
         self.assertPasses("OK")
 
     def write_general_result(self, path, **changes):
-        result = {**self.copy.case(path), "mode": "general", "role_file_sha256": None, **changes}
+        result = {**self.copy.general(self.copy.case(path)), **changes}
         general_path = path.parent / "general" / path.name
         general_path.parent.mkdir(exist_ok=True)
         self.copy.write_case(general_path, result)
@@ -497,6 +578,9 @@ class ApprovalCheckTests(unittest.TestCase):
         self.copy.set_tested(["claude"], mode="general")
         self.assertFails("registry:", "general_tested_providers", "claude")
         self.write_general_result(self.copy.result_path("claude"))
+        self.assertFails("results:", "general: claude", "latest settled run")
+        self.copy.write_case(self.copy.suite / "runs-general.json", {"runs": [
+            self.copy.general(self.copy.run_entry("claude"))], "changes": []})
         self.assertFails("registry:", "general_tested_providers", "claude")
         approval_path = self.copy.approval_result_path("claude")
         self.write_general_result(approval_path)
@@ -504,7 +588,7 @@ class ApprovalCheckTests(unittest.TestCase):
         history = self.copy.case(history_path)
         claude_run = next(run for run in history["runs"] if run["provider"] == "claude")
         general_history = history_path.with_name("runs-general.json")
-        history["runs"] = [{**claude_run, "mode": "general", "role_file_sha256": None}]
+        history["runs"] = [self.copy.general(claude_run)]
         self.copy.write_case(general_history, history)
         self.assertPasses("OK")
         del history["runs"][0]["role_file_sha256"]
@@ -522,6 +606,46 @@ class ApprovalCheckTests(unittest.TestCase):
                 del result[key]
                 self.copy.write_case(general_path, result)
                 self.assertFails("results:", "claude", key)
+
+    def general_claude(self):
+        """A passing General result of claude in both suites, with its ledgers."""
+        self.write_general_result(self.copy.result_path("claude"))
+        self.copy.write_case(self.copy.suite / "runs-general.json", {"runs": [
+            self.copy.general(self.copy.run_entry("claude"))], "changes": []})
+        self.write_general_result(self.copy.approval_result_path("claude"))
+        history = self.copy.case(self.copy.approvals / "runs.json")
+        claude_run = next(run for run in history["runs"] if run["provider"] == "claude")
+        self.copy.write_case(self.copy.approvals / "runs-general.json",
+                             {"runs": [self.copy.general(claude_run)], "changes": []})
+        self.copy.set_tested(["claude"], mode="general")
+        self.assertPasses("OK")
+
+    def test_a_general_result_recorded_against_other_job_rules_fails(self):
+        self.general_claude()
+        self.copy.set_job_rules(["A made-up job rule no model was run on."])
+        self.assertFails("results: general: claude", "job rules")
+
+    def test_a_general_result_must_record_its_job_rules(self):
+        self.general_claude()
+        for path in (self.copy.result_path("claude"), self.copy.approval_result_path("claude")):
+            general_path = path.parent / "general" / path.name
+            result = self.copy.case(general_path)
+            del result["job_rules_sha256"]
+            self.copy.write_case(general_path, result)
+        self.assertFails("results: general: claude", "job_rules_sha256")
+
+    def test_a_general_ledger_entry_must_record_its_job_rules(self):
+        self.general_claude()
+        path = self.copy.suite / "runs-general.json"
+        ledger = self.copy.case(path)
+        del ledger["runs"][0]["job_rules_sha256"]
+        self.copy.write_case(path, ledger)
+        self.assertFails("runs: claude", "job_rules_sha256")
+
+    def test_an_orchestrator_result_cannot_record_job_rules(self):
+        result = self.copy.result("claude")
+        self.copy.write_result("claude", {**result, "job_rules_sha256": self.copy.job_rules_hash()})
+        self.assertFails("results: claude", "job_rules_sha256")
 
     def test_an_orchestrator_result_cannot_claim_general_mode(self):
         result = self.copy.result("claude")
@@ -543,6 +667,7 @@ class ApprovalCheckTests(unittest.TestCase):
         result = self.copy.result("grok")
         result["role_file_sha256"] = self.copy.sha256(self.copy.role)
         self.copy.write_result("grok", result)
+        self.copy.write_runs([*self.copy.runs(), self.copy.run_entry("grok")])
         self.copy.record_approvals(providers=["grok"])
         self.assertFails("registry:", "grok")
         self.copy.set_tested([*self.copy.supported(), "grok"])
@@ -614,6 +739,13 @@ class ApprovalCheckTests(unittest.TestCase):
         case["review"]["evidence"] = "A made-up email for fixture.user@example.test."
         self.copy.write_case(path, case)
         self.assertFails("cases:", case["id"], "email address")
+
+    def test_an_approval_case_with_a_path_into_a_home_folder_fails(self):
+        path = self.copy.approval_cases()[0]
+        case = self.copy.case(path)
+        case["review"]["evidence"] = "The notes are in " + "/ho" + "me/someone/notes.txt."
+        self.copy.write_case(path, case)
+        self.assertFails("cases:", case["id"], "home folder")
 
     def test_an_approval_case_set_must_match_the_frozen_hash(self):
         for held in (False, True):

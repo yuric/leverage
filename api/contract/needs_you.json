@@ -204,7 +204,7 @@
       "prd_choices": "Complete the contract, ask a planner to draft it, or cancel. It closes when the task's contract changes, or when the task is cancelled.",
       "choices": [{"choice": "complete_contract", "operation_id": "complete_contract", "when": null}, {"choice": "draft_contract", "operation_id": "draft_contract", "when": null}, {"choice": "cancel", "operation_id": "cancel_task", "when": null}],
       "facts": {"type": "object", "additionalProperties": false, "properties": {"seat_id": {"type": "string", "format": "uuid", "description": "The seat that added the task (its task.created actor)."}}, "required": ["seat_id"]},
-      "closes": "With the contract_incomplete hold it was opened beside: on the next task.contract_changed (the owner's Complete contract or Edit contract, or a planner's draft), or when the task is cancelled. The app opens it when a contract_incomplete hold opens on a task whose task.created actor is a seat (UX-16); the owner's own Add task shows the failure on its form and opens none."
+      "closes": "With the contract_incomplete hold it was opened beside: on the next task.contract_changed (the owner's Complete contract or Edit contract, or a planner's draft), or when the task is cancelled. inbox.resolved carries complete_contract for the owner's Complete contract, draft_contract for a planner's draft (only the owner's Draft contract queues one), cancel for Cancel, and null for Edit contract (HE-29). The app opens it when a contract_incomplete hold opens on a task whose task.created actor is a seat (UX-16); the owner's own Add task shows the failure on its form and opens none."
     },
     {
       "item": "agent_tasks_at_limit",

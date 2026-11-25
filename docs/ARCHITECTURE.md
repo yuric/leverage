@@ -93,7 +93,10 @@ A product source file is a source file outside `docs/`, `scripts/`,
      approve their own pull request. The maintainer reads them before
      merging.
 
-Dependabot pull requests are exempt from the "Architecture rules" section,
+Dependabot proposes updates for the actions, the API's gems and its two
+pinned container images ([.github/dependabot.yml](../.github/dependabot.yml)).
+The two image entries are unverified until Dependabot's first run on them.
+Its pull requests are exempt from the "Architecture rules" section,
 because Dependabot cannot fill it in. The checks on what the change adds still
 run on them, and with no answers there is no `N/A` to soften one. A bot's
 description is upstream release notes, so the IDs in it are not resolved.
@@ -290,7 +293,8 @@ must satisfy; where a practice is also a rule, the rule is the authority.
   stand-in in automated tests; nothing in CI calls a provider.
 - **No secret in the repository, a log, an event, a fixture or a
   screenshot.** Tests use made-up values. Records name a credential by its
-  id.
+  id. No tracked file names a real user's home folder
+  (`scripts/check_home_paths.py`).
 - **An adversarial review before merge in a delegated run.** In a run
   delegated under [CONTRIBUTING.md](../CONTRIBUTING.md#ai-assisted-contributions),
   a reviewer who did not write the change tries to break it, and its
@@ -459,6 +463,9 @@ adds the MCP server.
   `reads/inbox.rb`, `reads/recovery_times.rb`, `reads/rules.rb`,
   `reads/rule_timing.rb` and `reads/task_timeline.rb`), `Leverage::Replay`
   and `Leverage::LogAudit` (run by `bin/rails leverage:verify_log`;
+  `Leverage::StepRepair` rebuilds from the log the steps a migration or a
+  restore finds stored before the step tracker read `task.created`'s
+  criteria;
   `bin/rails leverage:recovery_times` prints every recovery time and
   `bin/rails leverage:rule_timing` each rule's runs and times), and
   milestone 1's `Leverage::Contract` and `Leverage::Gating`.
@@ -513,6 +520,13 @@ adds the MCP server.
   [Providers' tools](#providers-tools)). `LeverageRunner probe` runs one
   test prompt, for the helper's `test_prompt` check. On a stop signal it
   ends the tool's process group, gives back what it holds and exits 0.
+  A failed tool run, a work reference that names no folder on this Mac
+  and a tool that answers that it cannot do the work each give the work
+  back; the runner then waits a second before it asks again, because the
+  server offers released work straight back to the seat. Three failed
+  tool runs in a row, or three flows in a row that end by giving their
+  work back, end the runner with code 4, which the helper reports as a
+  run stopped with `error`.
   After a failed tool run of a seat with a credential, `Interruption` asks
   the provider's detector and, when that settles nothing, `SignInStatus`;
   it retries a short rate limit after 5, 15 and 45 seconds. On a limit or
@@ -542,7 +556,9 @@ adds the MCP server.
   [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)
 - **Owns:** nothing stored. It makes `<work root>/<task id>/` when a task
   names no folder, and `<work root>/jobs/<random id>/` for each tool run
-  of a job, removed after the run.
+  of a job, removed after the run. It runs no tool in a folder that
+  `WorkFolder.mayRunTool` refuses (see
+  [Trust boundaries](#trust-boundaries)).
 - **Depends on:** LeverageKit.
 - **Code:** `mac/Sources/LeverageRunner/`; tests in
   `mac/Tests/LeverageRunnerTests/`.
@@ -718,10 +734,10 @@ the first change that needs one chooses it and adds it here.
 
 | Concern | API (`api/`) | Mac side (`mac/`) |
 |---|---|---|
-| Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `JsonBodiesOnly` (`api/lib/middleware/`) answers a body not sent as JSON in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
-| Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code, four timings (the lock wait, the event and step writes, the whole transition and the time in `Transitions::Gate`) and the rule a `blocked_by_rule` refusal names (`Leverage::CommandLog`); never a header, a body or a rule's reason. A logged parameter keeps its key, and its value only when the value is an id, a number or true or false: every other text, task text and a rule's words among it, is `[FILTERED]`, and so is anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; each is replaced once it passes 5 MB. |
+| Errors | `ApplicationController` answers every error with the contract's transport error body, `{"error":{"code","message"}}`, and one of five codes: `400 malformed`, `401 unauthenticated`, `404 not_found`, `422 invalid` or `key_reused`; errors raised before a controller runs go through `ApplicationController.exceptions_app`, and `BodySizeLimit` and `JsonBodiesOnly` (`api/lib/middleware/`) answer a body over 4 MiB and a body not sent as JSON `400 malformed` in the same shape. A 5xx answer hides the message, which is logged. A command that is refused is not an error: it answers `409` with the outcome body. | `LeverageClientError` in LeverageKit for what the clients raise (a transport error with its code, a refusal, an unexpected status or body); a network failure passes through as the `URLError` that `URLSession` threw. |
+| Logging | `Rails.logger`; in production to standard output, tagged with the request ID. Each command adds one line, `leverage.command`, with the command, the caller, the key, the outcome, the refusal code, four timings (the lock wait, the event and step writes, the whole transition and the time in `Transitions::Gate`) and the rule a `blocked_by_rule` refusal names (`Leverage::CommandLog`); never a header, a body or a rule's reason. A logged parameter keeps its key, and its value only when the value is an id, a number or true or false: every other text, task text and a rule's words among it, is `[FILTERED]`, and so is anything shaped like a token. | `Log` in LeverageKit: one line per message to standard error, `<UTC time> <component> <level>: <message>`, after `Redaction` removes tokens (keeping their prefix), bearer values and email addresses. The app sends the helper's output to `<support folder>/logs/helper.log`, and the helper each run's to `logs/seat-<id>.log`; the app's server and helper supervisors also keep their lines in `logs/app.log`; each is replaced once it passes 5 MB. |
 | Configuration | Environment variables, set from `.env` through `compose.yaml` and read under `api/config/`; the backup's are `BACKUP_DIR`, `BACKUP_KEEP` and `BACKUP_EVERY_HOURS`, and the host folder is `LEVERAGE_BACKUP_DIR`. | The process environment, every name in `EnvironmentKeys` in LeverageKit (`LEVERAGE_API_URL` and the rest, among them the run's `LEVERAGE_CREDENTIAL_ID`, `LEVERAGE_CONTINUE_TASK_ID` and `LEVERAGE_CONTINUE_REVIEW_ID`, the app's `LEVERAGE_NOTIFICATIONS`, and `LEVERAGE_EVAL` and `LEVERAGE_EVAL_REAL`, read only by `LeverageRunner eval` and `scripts/eval_rule.sh`; [DEPLOY.md](DEPLOY.md) lists them). The helper also reads `LEVERAGE_TOKEN_STORE`, `LEVERAGE_PROVIDER_API_BASE` and `LEVERAGE_READ_TIMEOUT_SECONDS`. The bundle's image tag is the `Info.plist` key `LeverageAPIImageTag`. |
-| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | `KeychainSessionStore` keeps the owner's session. The bundled helper uses `KeychainTokenVault` for one item per verified API token. Development and smoke helpers use the memory vault. External MCP client settings may contain a self-connected seat's token. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) |
+| Persistence | Active Record on PostgreSQL; the record of each backup is the `backup_runs` table. | `KeychainSessionStore` keeps the owner's session. API calls keep nothing on disk: `HTTPTransport.uncachedSession` has no URL cache and no cookies. The bundled helper uses `KeychainTokenVault` for one item per verified API token. Development and smoke helpers use the memory vault. External MCP client settings may contain a self-connected seat's token. The app keeps the appearance choice in macOS preferences through SwiftUI's `@AppStorage` (key `appAppearance`); nothing else is kept there. [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md) |
 | Notifications | None. | `Notifying` in LeverageKit's `AppRuntime`; the real one is `UserNotifier` in LeverageAppServices, on the platform's `UserNotifications`, made only by `UserNotifier.make(bundleURL:environment:)` and only for a `.app` bundle with `LEVERAGE_NOTIFICATIONS` not `off`; everywhere else, tests included, the form that posts nothing. `InboxWatcher` in LeverageApp is its one caller. |
 | Backups | `Leverage::Backup` (`api/lib/leverage/backup.rb`), run by `api/bin/backup` in the `backup` service and by `api/bin/restore` ([ADR 0010](adr/0010-daily-backup-and-restore.md)). | None: the app only makes the folder (`ServerFiles`). |
 | How a run ends for a reason | `report_limit` and `report_signed_out` (`report_job_limit` and `report_job_signed_out` for a job's run) through the transition function; `Leverage::Handoff` decides what follows. | The provider's detector and `SignInStatus` in LeverageKit, asked by the runner's `Interruption`; exit code 5 with one `RunEndReport` line on standard output; the helper's `InterruptionReporter` sends the report ([ADR 0008](adr/0008-how-a-run-moves-to-another-account.md)). |
@@ -776,7 +792,10 @@ and `USER` for Claude.
   - A task's state changes only in a transaction that writes an event for
     that task in its workspace: two deferred constraint triggers on
     `tasks` check at commit for an `events` row whose `xact_id` (set by
-    default to `pg_current_xact_id()`) is the transaction's own.
+    default to `pg_current_xact_id()`) is the transaction's own. A
+    transaction id means nothing outside its cluster, so `bin/restore`
+    sets `xact_id` to 0, which no transaction has, on every event it
+    restores.
   - `rule_checks (rule_id, rule_version_id)` and `rules (id,
     current_version)` are composite foreign keys, so a check's version and
     a rule's current version belong to that rule.
@@ -784,8 +803,10 @@ and `USER` for Claude.
     `reviews.reviewer_seat_id` counts only reviews with no verdict.
   - The `leverage_app` role (`NOLOGIN`, kept by the `db:grants` task after
     every task that builds or changes the schema) has `SELECT, INSERT` on
-    `events` and `rule_versions`, `SELECT` only on `backup_runs`, `SELECT,
-    INSERT, UPDATE, DELETE` on every other table, and no `TRUNCATE`.
+    `events` and `rule_versions`, `SELECT` only on `backup_runs` and on
+    Rails' own `schema_migrations` and `ar_internal_metadata` (which only
+    the owner role's migrations write), `SELECT, INSERT, UPDATE, DELETE`
+    on every other table, and no `TRUNCATE`.
     Migrations, tests, the backup, the restore and other commands use the
     database's owner role. Runs of `db:grants` go one at a time across the
     cluster, under an advisory lock taken in the `postgres` database, since
@@ -829,13 +850,20 @@ and `USER` for Claude.
   login's own settings folder, made new by Add and removed after a failed
   Add or confirmed Remove), `tools/<provider>/` (a tool Leverage unpacked),
   `work/<task id>/` (a task's folder when it names none), `logs/`
-  (`helper.log` and one `seat-<id>.log` per run), `backups/` (the daily
+  (`app.log`, `helper.log` and one `seat-<id>.log` per run), `backups/` (the daily
   dumps, folder 0700), `inbox-cursor` (mode 0600: one number, the `seq` of
   the last Needs you item the app announced, so that each is announced
   once across restarts) and `app.lock`. A provider's own sign-in lives in
   that folder or, for a provider with one sign-in for the Mac, where the
   tool keeps it. The bundled helper keeps API tokens in the Keychain as
   described in [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md).
+  A support folder other than the standard one gets a compose project
+  (`leverage-app-<suffix>`, unless `LEVERAGE_COMPOSE_PROJECT` names one)
+  and a Keychain account for the session (`owner-session-<suffix>`) of its
+  own, the suffix drawn from the folder's path, so that it never replaces
+  the owner's containers or signs the owner out.
+  The appearance choice is not in the support folder: it is in the app's
+  macOS preferences, key `appAppearance`.
 - **Reply files.** `mac/Tests/StandIns/replies/` holds 61 test replies.
   Run and status fixtures follow
   [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md).
@@ -944,15 +972,22 @@ task reached Done with a stand-in reviewer.
 A job's run also passes the seat's model and effort when the seat sets
 them (`--model` and `--effort` for Claude and Antigravity, `-m` for Codex
 and Grok), at the `help` level: every check that has run so far ran with
-no model set, so these flags have never run in check mode. A prompt over
-512 KiB is not started, because a tool gets its prompt as one argument and
-the Mac starts no program whose arguments pass 1 MiB. The runner then
-starts no tool, logs the reason and sends no result, so a check ends in
-`error` after its two run timeouts, and a draft is dropped after its
-second. The server's length limits on task text make that rare, not
-impossible: they count characters, not bytes, and not the evidence rows a
-task gathers, so a large enough task, with many evidence rows or text in
-multibyte characters, still makes its checks end in `error`.
+no model set, so these flags have never run in check mode.
+
+No tool run of any kind is started with a prompt over 512 KiB, because a
+tool gets its prompt as one argument and the Mac starts no program whose
+arguments pass 1 MiB. The runner then starts no tool and logs the reason
+with both sizes. For a job it sends no result, so a check ends in `error`
+after its two run timeouts, and a draft is dropped after its second. For
+a build, a review or an outward action it counts a failed tool run and
+gives the work back, and three in a row end the runner with code 4. The
+server's length limits on task text, and on the text of a question, its
+assumption, an answer and a project's brief, make that rare, not
+impossible: they count characters, not bytes, and not the evidence rows,
+the answered questions and the review notes a task gathers, so a large
+enough task, with many evidence rows or text in multibyte characters,
+still makes its checks end in `error` and cannot be built or reviewed by
+a runner.
 
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.
@@ -1013,9 +1048,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
 - **Network.** `compose.yaml` publishes the API on `127.0.0.1` only, and
   every Mac-side program calls it over plain HTTP. Nothing else on the
   network can reach it. In production the API answers only a request
-  addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
-  (`config.hosts`), so a web page in the owner's browser that rebinds its
-  own name to the loopback address is refused `403`. Before the server leaves the Mac the transport
+  addressed to `127.0.0.1`, `localhost` or `[::1]` (`config.hosts`), so a
+  web page in the owner's browser that rebinds its own name to the
+  loopback address is refused `403`. No name that the network's resolver
+  answers is on the list, the compose service name `api` included; the
+  speed run's driver reaches the API by that name and sends a loopback
+  `Host`. Before the server leaves the Mac the transport
   must become HTTPS ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md));
   `Configuration` already accepts an `https` address.
 - **Callers and their tokens.** Three callers reach the server, each with
@@ -1024,7 +1062,14 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   `x-leverage-caller` on each operation and `roles.json` say which caller
   may run it, and a token of another kind answers `401`.
   - The owner's session is made by sign-in or setup, kept in the owner's
-    login Keychain, and ended by sign-out. It has no expiry.
+    login Keychain, and ended by sign-out. It has no expiry. Wrong
+    passwords are counted in the server process
+    (`Leverage::Http::SignInThrottle`): after ten inside a minute no
+    password is compared, at sign-in or at setup, until a minute has
+    passed since the oldest, and sign-in answers `401` with a message
+    that says to wait. A program on the Mac can keep sign-in refused that
+    way; a session that is already open is not affected. A restart of
+    the server clears the count.
   - The helper's token is made by the app's `issue_helper_token` each time
     the app starts the helper, lives only in the helper's environment, and
     ends when the next one is issued.
@@ -1033,12 +1078,25 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
     the next pickup, when the run is reported stopped, and when the seat is
     removed. A seat that connects on its own receives its token only in
     the landing prompt issued by Connect. Remove ends the token, and the
-    Prompt agent stops on `401`. An MCP client starts `LeverageMCP` using
+    Prompt agent stops on `401`. Over HTTP the prompt and the join
+    instructions tell that agent to keep the token in one file, in a
+    folder only its account can read, and to send the header from the
+    file: a program's arguments can be read by every account on the Mac,
+    so the token is never to be on a command line. Whether the agent
+    does so is the agent's to keep. An MCP client starts `LeverageMCP` using
     the seat token from the client's settings as `LEVERAGE_SEAT_TOKEN` in
     the child environment. The MCP server uses the token for API
     authentication and never logs it. The settings
     that start the child may hold the token. The app and runner do not
     store it there. [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
+  - None of the three is written to disk by a call. Every API client on
+    the Mac (the app's, the helper's, the runner's and the MCP server's)
+    sends its calls through one session, `HTTPTransport.uncachedSession`,
+    which has no URL cache, no cookies and no stored credentials. A
+    session with a cache would keep each answer, and its request with the
+    bearer token, in plain files under `~/Library/Caches`, as versions
+    before this one did; each program removes those files of its own when
+    it starts (`LeftoverURLCache`).
 - **The setup call.** `POST /v1/owner/setup` needs no token and creates the
   one owner. It answers `404` once an owner exists; until then any program
   on the Mac that can reach the loopback address could call it.
@@ -1047,11 +1105,29 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   is untrusted. Of a tool's output the runner reads only its marker lines,
   and quoted material in a prompt has its marker words neutralised. A link
   in evidence or a work reference is shown as plain text and never
-  fetched. An event payload holds only ids, numbers, digests and values
+  fetched. A work reference chooses the folder a build's tool may change,
+  and a seat may write it, so the runner uses no reference that names the
+  Mac's root, the home folder or a folder above it, Leverage's support
+  folder or anything in it other than a task's own folder under the work
+  root, or `~/Library` outside `CloudStorage` and `Mobile Documents`. It
+  compares folders by what they are on disk, so a link to one of them is
+  refused too. The folder's path is never part of a prompt. An event
+  payload holds only ids, numbers, digests and values
   from closed lists, never free text; the one exception is `model`, a
   model name of at most 128 characters from a fixed character set with no
   `@`. An installer's address must be HTTPS on a host its catalog entry
-  lists, also after a redirect.
+  lists, also after a redirect. A waiting poll holds a thread of the
+  server's pool, so a seat and the helper each have one waiting poll at
+  a time (`Leverage::LongPoll`'s key): a newer `GET /v1/next` or
+  `GET /v1/helper/next` ends the older, which answers nothing within
+  250 ms. A look that does not wait (`wait=0`) ends none. A request
+  body over 4 MiB is answered `400` from its stated length, before it is
+  read, for any method and path (`BodySizeLimit`); the contract's length
+  limits bound the text fields inside that. A body with a NUL character
+  in any key or text is `422 invalid` (`RequestSchema`): JSON can carry
+  one, and PostgreSQL text and bcrypt cannot take it. The key in the path
+  of the two command outcome reads is looked up only when it has the form
+  of an idempotency key.
 - **Task text reaches a checker only as material**
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
   check, draft, question or approval prompt every piece of task text, the contract

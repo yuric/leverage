@@ -11,7 +11,9 @@ require_relative "../support/walk"
 # answers drawn verdicts or none, a planner, and a step for each row of
 # rule 11's table; milestone 5 plan AT-3: questions, approvals, projects,
 # budgets and the choices in Needs you; milestone 6 plan CT-2: credentials
-# and readings); SEED and WALKS override.
+# and readings; app round 2, PRD Permissions: the owner's changes of
+# permissions, a seat's Add task and a seat's reported model); SEED and
+# WALKS override.
 # A failure prints the seed and the walk. The same walks also check the
 # replay (test 1) and the log
 # audit (L894, with RT-4's gate line), which a random sequence reaches in
@@ -50,8 +52,8 @@ class StepPartitionTest < ActiveSupport::TestCase
       next problems.map { |problem| "task #{task.id}: #{problem}" } if steps.empty?
 
       first = steps.first
-      problems << "the first step does not open at task.created" unless first.opening_event_id == created.id &&
-        first.opened_at == created.effective_at
+      problems << "the first step does not open at task.created" unless first.opened_at == created.effective_at &&
+        (first.opening_event_id == created.id || creator_opening?(created, first, events))
       # One command's events share at (the workspace lock): a waiting
       # command's own events written inside it carry another key (RE-3).
       commands = Event.where(task_id: task.id).pluck(:id, :at).to_h
@@ -84,10 +86,21 @@ class StepPartitionTest < ActiveSupport::TestCase
     end
   end
 
+  # A creator seat's one call runs Add task and then Complete contract under
+  # one key (PRD Lifecycle, Permissions), so the first step of the task it
+  # adds may have been changed in place by a later event of that call: an
+  # event of the task after task.created, with its key and both its times.
+  def creator_opening?(created, step, events)
+    opener = events.find { |event| event.id == step.opening_event_id }
+    created.actor_kind == "seat" && created.command_id && created.payload["state"] == "backlog" && opener &&
+      opener.seq > created.seq && [ opener.command_id, opener.at, opener.effective_at ] ==
+        [ created.command_id, created.at, created.effective_at ]
+  end
+
   WALKS.times do |number|
     seed = SEED + number
     test "walk #{number} (seed #{seed}): each task's steps touch end to end and sum to its lifetime" do
-      walk = Walk.new(seed: seed, steps: STEPS, credentials: true).run
+      walk = Walk.new(seed: seed, steps: STEPS, credentials: true, agents: true).run
       now = database_now
       assert_empty walk.credential_step_problems, walk.credential_step_problems.join("\n") + "\n#{walk}"
       assert_empty partition_problems(walk.workspace_id, now), walk.to_s
@@ -222,6 +235,59 @@ class StepPartitionTest < ActiveSupport::TestCase
       outcomes.empty?
     end
     assert_empty missing, "the walks never reached these outcomes"
+  end
+
+  # App round 2 (PRD Permissions): what the walks must reach with the
+  # owner changing permissions, seats adding tasks and seats reporting their
+  # models. Fixed seeds, as COVERAGE_SEEDS.
+  AGENT_SEEDS = [ 10_005, 10_008, 10_011, 10_048 ].freeze
+  AGENT_OUTCOMES = [
+    "change_permissions completed", "report_model completed", "report_model refused forbidden",
+    "agent_add_task completed", "agent_add_task pending", "agent_add_task refused forbidden",
+    "agent_add_task refused add_task_limit",
+    "a seat's task is Ready within its call", "a seat's task stays in Backlog with agent_task_incomplete",
+    "a seat's task reaches Done", "Deliver off releases a Working task", "Deliver off ends a pending submit",
+    "Deliver off ends a provisional claim"
+  ].freeze
+
+  test "the walks complete app round 2's commands: permissions, a seat's Add task and its reported model" do
+    missing = Set.new(AGENT_OUTCOMES)
+    AGENT_SEEDS.each do |seed|
+      walk = Walk.new(seed: seed, steps: STEPS, agents: true).run
+      assert_empty partition_problems(walk.workspace_id, database_now), walk.to_s
+      assert_empty Leverage::Replay.diff(walk.workspace_id), walk.to_s
+      assert_empty Leverage::LogAudit.call(walk.workspace_id), walk.to_s
+      missing.subtract(agent_outcomes(walk))
+    end
+    assert_empty missing, "the walks never reached these outcomes"
+  end
+
+  def agent_outcomes(walk)
+    events = Event.where(workspace_id: walk.workspace_id).order(:seq).to_a
+    by_command = events.select(&:command_id).group_by(&:command_id)
+    reached = walk.log.select { |step| Walk::AGENT_ACTIONS.key?(step.action) }.map { |step| "#{step.action} #{step.answer}" }
+    events.select { |event| event.type == "task.created" && event.actor_kind == "seat" }.each do |created|
+      call = by_command.fetch(created.command_id).select { |event| event.task_id == created.task_id }
+      reached << "a seat's task is Ready within its call" if call.any? { |event| event.type == "task.ready" }
+      incomplete = call.any? { |event| event.type == "inbox.opened" && event.payload["kind"] == "agent_task_incomplete" }
+      reached << "a seat's task stays in Backlog with agent_task_incomplete" if incomplete && call.none? { |event| event.type == "task.ready" }
+      reached << "a seat's task reaches Done" if events.any? { |event| event.type == "task.done" && event.task_id == created.task_id }
+    end
+    reached + deliver_off_outcomes(walk, by_command)
+  end
+
+  # What the owner's commands that turned Deliver tasks off wrote. A
+  # command's row keeps the hash of its request, which names the walk's step.
+  def deliver_off_outcomes(walk, by_command)
+    hashes = walk.log.select { |step| step.action == :change_permissions && step.params.dig("permissions", "deliver") == false }
+      .to_set { |step| Digest::SHA256.hexdigest(JSON.generate(step.params)) }
+    Command.where(workspace_id: walk.workspace_id, command: "change_seat", request_hash: hashes.to_a).flat_map do |command|
+      wrote = by_command.fetch(command.key, [])
+      released = wrote.any? { |event| event.type == "task.released" && event.payload["reason"] == "deliver_turned_off" }
+      withdrew = wrote.any? { |event| event.type == "check.finished" && event.payload["result"] == "withdrawn" }
+      [ ("Deliver off releases a Working task" if released), ("Deliver off ends a pending submit" if released && withdrew),
+        ("Deliver off ends a provisional claim" if withdrew && !released) ].compact
+    end
   end
 
   # The commands that withdrew a check of a waiting command (rule 11):

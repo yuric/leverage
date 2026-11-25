@@ -39,9 +39,9 @@ public enum LeverageClientError: Error, Equatable, Sendable {
 /// The infrastructure client: the public health check.
 public struct LeverageClient: Sendable {
     public let baseURL: URL
-    private let transport: HTTPTransport
+    let transport: HTTPTransport
 
-    public init(baseURL: URL, session: URLSession = .shared) {
+    public init(baseURL: URL, session: URLSession = HTTPTransport.uncachedSession) {
         self.baseURL = baseURL
         transport = HTTPTransport(baseURL: baseURL, session: session)
     }

@@ -23,6 +23,7 @@ Usage: python3 -I scripts/test_eval_score.py [-v]
 Standard library only; exits 0 when every case behaves as expected.
 """
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -290,6 +291,23 @@ class ResultTests(unittest.TestCase):
             result, _ = self.record(folder, extra=("--mode", "general"))
         self.assertEqual(result["mode"], "general")
         self.assertIsNone(result["role_file_sha256"])
+
+    def test_general_records_carry_the_general_job_rules_hash_and_orchestrator_ones_do_not(self):
+        roles = json.loads((HERE.parent / "api" / "contract" / "roles.json").read_text(encoding="utf-8"))
+        rules, = [role["job_rules"] for role in roles["roles"] if role["role"] == "general"]
+        expected = hashlib.sha256("\n".join(rules).encode("utf-8")).hexdigest()
+        with tempfile.TemporaryDirectory() as folder:
+            general, _ = self.record(folder, extra=("--mode", "general"))
+            orchestrator, _ = self.record(folder, provider="codex")
+            runs = Path(folder) / "runs-general.json"
+            code, _, err = run("runs-add", "--suite", SUITE, "--runs", runs, "--provider", "claude",
+                               "--date", "2026-11-20", "--mode", "general")
+            self.assertEqual(code, 0, err)
+            entry, = json.loads(runs.read_text(encoding="utf-8"))["runs"]
+        self.assertEqual(general["job_rules_sha256"], expected)
+        self.assertEqual(entry["job_rules_sha256"], expected)
+        self.assertNotIn("job_rules_sha256", orchestrator)
+        self.assertEqual(eval_score.wording_hashes(general)[2], expected)
 
     def test_general_result_refuses_a_role_file(self):
         with tempfile.TemporaryDirectory() as folder:

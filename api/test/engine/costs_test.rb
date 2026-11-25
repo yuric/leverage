@@ -40,6 +40,38 @@ class CostsTest < ActiveSupport::TestCase
     end
   end
 
+  test "one report above the per-report maximum is invalid and writes nothing" do
+    assert_empty events_written {
+      assert_raises(T::Invalid) { seat_command(@builder, "report_cost", cost_params.merge("spend" => 100_000.000001)) }
+    }
+    assert_equal [ 0, 0 ], [ @task.reload.spent, @project.reload.spent ]
+
+    planner = scenario.planner
+    job = scenario.job(kind: "contract_draft", task: scenario.task(state: "backlog", project: @project), state: "claimed",
+      seat: planner)
+    draft = { "title" => "A made-up task", "details" => "Made-up details.", "criteria" => [], "actions" => [] }
+    assert_empty events_written {
+      assert_raises(T::Invalid) { submit_result(planner, job, draft, spend: 100_000.000001) }
+    }
+  end
+
+  test "one report of the per-report maximum leaves room for the project's later verdicts and reports" do
+    assert_completed(seat_command(@builder, "report_cost", cost_params.merge("spend" => 100_000)))
+    assert_equal [ 100_000, 100_000 ], [ @task.reload.spent, @project.reload.spent ]
+
+    reviewer = own_seat(role: "reviewer")
+    task = scenario.task(state: "in_review", project: @project)
+    review = scenario.review(task, reviewer: reviewer)
+    hash = Leverage::Briefing.hash_for(task, seat: reviewer, review: review)
+    assert_completed(seat_command(reviewer, "acknowledge_review_briefing", { "id" => review.id, "briefing_hash" => hash }))
+    assert_completed(seat_command(reviewer, "pass_review", { "id" => review.id, "verdict" => "passed",
+      "notes" => "Sample review.", "failed_criteria" => [], "tokens" => 0, "spend" => 1 }))
+    assert_equal "done", task.reload.state
+
+    assert_completed(seat_command(@builder, "report_cost", cost_params))
+    assert_equal [ 100_001, 100_002 ], [ @task.reload.spent, @project.reload.spent ]
+  end
+
   test "a check can finish when its cost puts the waiting verdict over the project spending limit" do
     reviewer = own_seat(role: "reviewer")
     orchestrator = scenario.orchestrator

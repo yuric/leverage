@@ -189,7 +189,8 @@ class Scenario
       first = state == "ideas" ? "ideas" : "backlog"
       task = Task.create!(id: id || SecureRandom.uuid, workspace_id: workspace_id, project_id: project&.id, title: title,
         details: details, work_reference: work_reference, priority: priority, state: first)
-      append("task.created", task: task, schema_version: 1, actor_kind: "owner", actor_id: owner.id, payload: { state: first, added_action_ids: [] })
+      append("task.created", task: task, actor_kind: "owner", actor_id: owner.id,
+        payload: { state: first, added_action_ids: [], imaginarium_entry: nil, added_criterion_ids: [] })
       if state == "cancelled"
         move(task, "cancelled", "task.cancelled", actor_kind: "owner", actor_id: owner.id)
       elsif reach >= TASK_STATES.index("ready")
@@ -340,11 +341,11 @@ class Scenario
   # Appends one event through EventLog, at the database clock unless at:
   # is given. The actor is the app unless named. Returns the Event.
   def append(type, task: nil, subject: nil, payload: {}, actor_kind: "app", actor_id: nil, cause_id: nil,
-             project_id: nil, round: nil, at: nil, effective_at: nil, schema_version: nil)
+             project_id: nil, round: nil, at: nil, effective_at: nil)
     transaction do
       ctx = context(at: at)
       fields = { subject: subject, payload: payload, actor_kind: actor_kind, actor_id: actor_id, cause_id: cause_id,
-                 command_id: nil, schema_version: schema_version }
+                 command_id: nil }
       fields[:task] = task if task
       fields[:project_id] = project_id if project_id
       fields[:round] = round if round

@@ -97,22 +97,15 @@ struct CheckJob: Sendable {
 /// never the task's work folder (RD-33), under the job's time limit; a limit
 /// or a sign-out names the job (RD-40).
 enum JobToolRun {
-    /// The most bytes of prompt a tool run is started with. A tool gets the
-    /// prompt as one argument, and the Mac refuses to start a program whose
-    /// arguments and environment pass `ARG_MAX` (1 MiB): a prompt over this
-    /// limit would fail to start every time (milestone 4 review, finding 9).
-    /// The server's limits on task text make such a prompt rare, not
-    /// impossible: they count characters, not bytes, and not the evidence
-    /// rows a task gathers. Over it, no tool starts and no result is sent:
-    /// a check ends in `error` after its two run timeouts.
-    static let promptByteLimit = 512 * 1024
+    /// The most bytes of prompt a tool run is started with: every run's
+    /// limit (`ProcessToolDriver.promptByteLimit`). A job asks before it
+    /// makes its folder or spends its second run: over the limit no tool
+    /// starts and no result is sent, so a check ends in `error` after its
+    /// two run timeouts.
+    static let promptByteLimit = ProcessToolDriver.promptByteLimit
 
     /// Why the prompt is not run, or nil when it fits.
-    static func tooLong(_ prompt: String) -> String? {
-        let bytes = prompt.utf8.count
-        guard bytes > promptByteLimit else { return nil }
-        return "the prompt is \(bytes) bytes, over the \(promptByteLimit) a tool's argument may hold"
-    }
+    static func tooLong(_ prompt: String) -> String? { ProcessToolDriver.tooLong(prompt) }
 
     static func run(_ prompt: String, job: UUID, timeLimit: Int, context: FlowContext) async throws
         -> Interruption.Result {

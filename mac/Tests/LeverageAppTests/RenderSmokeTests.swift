@@ -57,7 +57,7 @@ struct RenderSmokeTests {
 
     @Test("the start-up screens draw, one for each state the server can be in")
     func startupScreens() async {
-        for state in [ServerState.dockerMissing, .dockerStarting, .dockerNotStarting, .imageMissing, .failed(reason: "made up")] {
+        for state in [ServerState.dockerMissing, .dockerStarting, .dockerNotStarting, .imageMissing, .failed(reason: "made up"), .notStarted, .databasePasswordsMissing] {
             let rig = ShellRig()
             rig.runtime.fakeServer.afterStart.value = state
             let model = rig.makeModel()
@@ -105,6 +105,10 @@ struct RenderSmokeTests {
         }
         context.navigator.open(task: UUID())
         #expect(drawsSomething(render(Toolbar(context: context), height: 80)))
+        // The account row drawn selected while Settings is open (FR-002).
+        #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: true, signOut: {}))))
+        #expect(drawsSomething(render(
+            SidePane(context: context, settingsAreOpen: true, signOut: {}).environment(\.colorScheme, .dark))))
     }
 
     @Test("each screen of the content area draws inside the shell's context, built with no arguments")
@@ -146,6 +150,19 @@ struct RenderSmokeTests {
         #expect(SidePane.badge(for: 0) == nil)
         #expect(SidePane.badge(for: 3) == "3")
         #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: false, signOut: {}))))
+    }
+
+    @Test("a Make it yours field shows its label above it, also while it holds a value")
+    func imaginariumFillLabel() {
+        // The fields open holding their default, so a label drawn only as the
+        // placeholder never shows: two labels must draw two different pictures.
+        func picture(_ label: String) -> Data? {
+            let fill = ImaginariumFillField(label: label, value: .constant("A made-up value"))
+            return render(fill, width: 230, height: 60)?.tiffRepresentation
+        }
+        let short = picture("Name")
+        #expect(short != nil)
+        #expect(short != picture("Who the story is for"))
     }
 
     @Test("the design tokens carry the mockup's numbers")

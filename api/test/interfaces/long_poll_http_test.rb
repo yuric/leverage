@@ -147,4 +147,81 @@ class LongPollHttpTest < CommittingTestCase
     assert_equal "picked_up", response.parsed_body.dig("request", "state")
     assert_response_matches_contract
   end
+
+  # One waiting poll for each seat and for the helper (LongPoll's key): a
+  # waiting call holds a thread of the server's pool, so a caller that
+  # opened many would hold them all. The second request is made from the
+  # first one's sleep, on a session of its own, and its own sleeps move a
+  # clock the two share, so nothing here waits. Returns how often each
+  # looked and the second request's session.
+  def second_poll_during_first(first_path, first_token, second_path, second_token)
+    looks = []
+    now = 0.0
+    second = nil
+    test = self
+    original = Leverage::LongPoll.method(:wait)
+    Leverage::LongPoll.define_singleton_method(:wait) do |requested, **options, &look|
+      index = looks.size
+      looks << 0
+      sleeper = lambda do |interval|
+        if index.zero? && second.nil?
+          second = test.open_session
+          second.get second_path, headers: { "Authorization" => "Bearer #{second_token}" }
+        end
+        now += interval
+      end
+      original.call(requested, **options, clock: -> { now }, sleeper: sleeper) do
+        looks[index] += 1
+        look.call
+      end
+    end
+    call(first_path, first_token)
+    [ looks, second ]
+  ensure
+    Leverage::LongPoll.define_singleton_method(:wait, original)
+  end
+
+  test "a seat's second waiting poll ends its first, which answers none without looking again" do
+    token = scenario.token_for(@builder)
+    looks, second = second_poll_during_first("/v1/next?wait=30", token, "/v1/next?wait=20", token)
+
+    assert_equal 200, second.response.status
+    assert_equal "none", second.response.parsed_body.fetch("kind")
+    assert_operator looks[1], :>, 20, "the second poll waits out its own time"
+    assert_response :ok
+    assert_equal({ "kind" => "none", "id" => nil, "review_id" => nil }, response.parsed_body)
+    assert_response_matches_contract
+    assert_equal 1, looks[0], "the first poll ends when it wakes"
+    refute Leverage::LongPoll.waiting?("seat:#{@builder.id}")
+  end
+
+  test "another seat's waiting poll, and a seat's own look that does not wait, leave a waiting poll alone" do
+    token = scenario.token_for(@builder)
+    other = scenario.token_for(scenario.seat(role: "reviewer"))
+
+    looks, = second_poll_during_first("/v1/next?wait=30", token, "/v1/next?wait=20", other)
+    assert_response :ok
+    assert_operator looks[0], :>, 20, "the first poll goes on looking until its own time is up"
+
+    looks, second = second_poll_during_first("/v1/next?wait=30", token, "/v1/next?wait=0", token)
+    assert_equal 200, second.response.status
+    assert_equal [ 1 ], looks.drop(1)
+    assert_operator looks[0], :>, 20
+  end
+
+  test "the helper's second waiting poll ends its first; a seat's poll does not" do
+    token = scenario.helper_token
+    looks, second = second_poll_during_first("/v1/helper/next?wait=30", token, "/v1/helper/next?wait=20", token)
+
+    assert_equal 200, second.response.status
+    assert_nil second.response.parsed_body.fetch("request")
+    assert_response :ok
+    assert_equal({ "request" => nil }, response.parsed_body)
+    assert_response_matches_contract
+    assert_equal 1, looks[0]
+
+    looks, = second_poll_during_first("/v1/helper/next?wait=30", token, "/v1/next?wait=20", scenario.token_for(@builder))
+    assert_response :ok
+    assert_operator looks[0], :>, 20
+  end
 end

@@ -230,7 +230,7 @@
           {
             "ref": "@event:1",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:0",
             "effective_at": "@t:0",
             "actor_kind": "owner",
@@ -244,7 +244,9 @@
             "command_id": "$key:t1_add",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],
@@ -562,7 +564,7 @@
           {
             "ref": "@event:7",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:30",
             "effective_at": "@t:30",
             "actor_kind": "owner",
@@ -576,7 +578,9 @@
             "command_id": "$key:t2_add",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],
@@ -894,7 +898,7 @@
           {
             "ref": "@event:13",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:50",
             "effective_at": "@t:50",
             "actor_kind": "owner",
@@ -908,7 +912,9 @@
             "command_id": "$key:t3_add",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],

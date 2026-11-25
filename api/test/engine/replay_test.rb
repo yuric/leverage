@@ -140,7 +140,7 @@ class ReplayTest < ActiveSupport::TestCase
     task = Task.find_by!(workspace_id: runner.workspace_id)
     row = projection.fetch(:tasks).fetch(task.id)
     assert_equal({ "state" => "cancelled", "round" => 4, "holder_seat_id" => nil, "builder_seat_id" => nil,
-                   "minimum_strength_rank" => nil, "contract_version" => 1 }, row)
+                   "minimum_strength_rank" => nil, "contract_version" => 1, "imaginarium_entry_id" => nil }, row)
     assert_empty projection.fetch(:holds), "Cancel closed the second rounds_exceeded hold"
     assert_equal [ "failed" ] * 4, projection.fetch(:reviews).values.map { |review| review.fetch("verdict") }
   end
@@ -202,7 +202,7 @@ class ReplayTest < ActiveSupport::TestCase
     assert outcome.completed?
     task_id = outcome.result.fetch("task_id")
     action = Action.find_by!(task_id: task_id)
-    assert_equal({ "state" => "backlog", "added_action_ids" => [ action.id ] },
+    assert_equal({ "state" => "backlog", "added_action_ids" => [ action.id ], "imaginarium_entry" => nil, "added_criterion_ids" => [] },
       Event.find_by!(task_id: task_id, type: "task.created").payload)
     assert_empty Leverage::Replay.diff(scenario.workspace_id)
     action.update_columns(state: "requested")

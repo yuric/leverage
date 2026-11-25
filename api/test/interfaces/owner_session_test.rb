@@ -126,6 +126,99 @@ class OwnerSessionTest < ActionDispatch::IntegrationTest
     assert_transport_error(:unauthorized, "unauthenticated")
   end
 
+  # PRD, Security: wrong passwords are counted (Leverage::Http::SignInThrottle).
+  test "after ten wrong passwords the right one is refused 401 for a minute, and opens no session" do
+    create_owner
+    10.times do
+      sign_in(password: "made-up-wrong-password")
+      assert_transport_error(:unauthorized, "unauthenticated")
+      assert_equal "The email address or the password is not right", response.parsed_body.dig("error", "message")
+    end
+    counts = [ Session.count, Command.count ]
+
+    sign_in
+    assert_transport_error(:unauthorized, "unauthenticated")
+    assert_equal "Too many wrong sign-ins. Wait a minute and try again", response.parsed_body.dig("error", "message")
+    assert_equal counts, [ Session.count, Command.count ]
+
+    travel 61.seconds
+    sign_in
+    assert_response :ok
+    assert Leverage::Tokens.find(result.fetch("session_token"), kind: :owner)
+  end
+
+  test "a session that is already open keeps working while sign-in is refused" do
+    create_owner
+    token = result.fetch("session_token")
+    10.times { sign_in(password: "made-up-wrong-password") }
+    sign_in
+    assert_transport_error(:unauthorized, "unauthenticated")
+
+    get "/v1/owner/session", headers: { "Authorization" => "Bearer #{token}" }
+    assert_response :ok
+  end
+
+  # Setup compares the password too, to recognise a repeat by the owner.
+  # Once an owner exists its wrong passwords are counted with sign-in's,
+  # and while sign-in is refused it compares nothing: every key is 404.
+  test "wrong passwords sent to setup count, and setup compares none while sign-in is refused" do
+    create_owner
+    10.times do |index|
+      create_owner(key: "setup-wrong-#{index}", password: "made-up-wrong-password")
+      assert_transport_error(:not_found, "not_found")
+    end
+
+    sign_in
+    assert_transport_error(:unauthorized, "unauthenticated")
+    create_owner
+    assert_transport_error(:not_found, "not_found")
+
+    travel 61.seconds
+    create_owner
+    assert_response :ok
+    assert_equal true, result.fetch("repeated")
+  end
+
+  test "wrong sign-ins before any owner exists do not stop the owner from being created" do
+    11.times { sign_in(password: "made-up-wrong-password") }
+    assert_transport_error(:unauthorized, "unauthenticated")
+
+    create_owner
+    assert_response :ok
+    assert result.fetch("session_token")
+  end
+
+  # PostgreSQL text and bcrypt cannot take a NUL, and JSON can carry one
+  # (the escape \u0000): the body is refused before either sees it.
+  test "a NUL character in the email address or the password is 422 invalid, at sign-in and at setup" do
+    create_owner
+    commands = Command.count
+
+    [ { email: "ow\u0000ner@example.test" }, { password: "made-up-\u0000password" },
+      { email: "nobody\u0000@example.test", password: "\u0000" } ].each do |fields|
+      sign_in(**fields)
+      assert_transport_error(:unprocessable_entity, "invalid")
+      create_owner(key: "setup-#{SecureRandom.hex(4)}", **fields)
+      assert_transport_error(:unprocessable_entity, "invalid")
+    end
+    assert_equal commands, Command.count
+
+    sign_in
+    assert_response :ok
+  end
+
+  test "a NUL character in setup's body is 422 invalid before any owner exists, and makes none" do
+    # Committed tests of other files may have left workspaces behind.
+    workspaces = Workspace.count
+
+    create_owner(email: "ow\u0000ner@example.test")
+    assert_transport_error(:unprocessable_entity, "invalid")
+    create_owner(password: "made-up-\u0000password")
+    assert_transport_error(:unprocessable_entity, "invalid")
+
+    assert_equal [ 0, workspaces ], [ User.count, Workspace.count ]
+  end
+
   test "two sign-ins that differ only in the password store the same request hash, which leaves the password out" do
     create_owner
     sign_in(key: "sign-in-a")

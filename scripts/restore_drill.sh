@@ -11,6 +11,11 @@
 #   scripts/restore_drill.sh --from-project <name>
 #       uses a compose project that is up and holds a log, and the backup
 #       folder it was started with, which LEVERAGE_BACKUP_DIR must name.
+#       The drill removes that project and its database volume, also on
+#       failure, so it takes only an end-to-end run's own project, whose
+#       name starts with leverage-e2e- (scripts/e2e_handoff.sh), and refuses
+#       any other name, such as the owner's `leverage` or the app's
+#       `leverage-app`, before any docker call.
 #
 # Then: stops api, sweep and backup and reads three figures of the events
 # (count, highest seq, an MD5 over every id in seq order); makes one
@@ -38,7 +43,7 @@ for file in compose.yaml compose.test.yaml; do
 done
 
 usage() {
-  echo "Usage: scripts/restore_drill.sh [--from-project <name>]" >&2
+  echo "Usage: scripts/restore_drill.sh [--from-project <leverage-e2e-... test project>]" >&2
 }
 
 from_project=""
@@ -50,6 +55,11 @@ case "$#" in
       exit 2
     fi
     from_project=$2
+    if ! [[ "$from_project" =~ ^leverage-e2e-[a-z0-9][a-z0-9-]*$ ]]; then
+      echo "restore_drill: --from-project removes the project and its database volume, also on failure;" \
+        "it only takes an end-to-end run's project, whose name starts with leverage-e2e-" >&2
+      exit 2
+    fi
     ;;
   *)
     usage
@@ -83,6 +93,7 @@ fail() {
 
 cleanup() {
   local status=$?
+  step "removing project $project and its volumes"
   C down --volumes --remove-orphans >/dev/null 2>&1 || true
   if $own_folder && [ -d "$folder" ]; then
     # The dumps may belong to uid 1000: remove them as that user first.

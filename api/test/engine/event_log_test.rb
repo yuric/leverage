@@ -17,9 +17,12 @@ class EventLogTest < ActiveSupport::TestCase
     Leverage::EventLog.append(@ctx, type: type, **fields)
   end
 
+  # A task.created payload for a task that is not from the gallery.
+  def created(state = "backlog") = { state: state, added_action_ids: [], imaginarium_entry: nil, added_criterion_ids: [] }
+
   def with_task
     task = Task.create!(workspace_id: @scenario.workspace_id, state: "backlog")
-    [ task, append(task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] }) ]
+    [ task, append(task: task, payload: created) ]
   end
 
   test "seq comes from the workspace's counter, which each append moves on" do
@@ -35,12 +38,23 @@ class EventLogTest < ActiveSupport::TestCase
 
   test "an event takes the context's at, the newest schema version, and the task's round and project" do
     task = Task.create!(workspace_id: @scenario.workspace_id, state: "backlog")
-    payload = { "state" => "backlog", "added_action_ids" => [], "imaginarium_entry" => "pocket-to-do", "added_criterion_ids" => [] }
-    event = append(task: task, payload: payload)
+    event = append(task: task, payload: created)
 
     assert_equal [ @ctx.at, @ctx.at, 2, 0, nil, task.id ],
       [ event.at, event.effective_at, event.schema_version, event.round, event.project_id, event.task_id ]
-    assert_equal payload, event.reload.payload
+    assert_equal created.stringify_keys, event.reload.payload
+  end
+
+  # The contract's versioning rule: the server writes the newest version of
+  # a payload. No caller can name another, so a type never has two live
+  # shapes; a test of the readers of an older version stores its row itself.
+  test "no caller chooses a payload version" do
+    assert_not_includes Leverage::EventLog.method(:append).parameters.map(&:last), :schema_version
+    task, = with_task
+    older = { state: "backlog", added_action_ids: [] }
+    assert_empty Leverage::Contract.validate_payload("task.created", 1, older.stringify_keys), "the shape of version 1"
+    assert_raises(ArgumentError) { append(task: task, schema_version: 1, payload: older) }
+    assert_raises(Leverage::EventLog::InvalidEvent) { append(task: task, payload: older) }
   end
 
   test "a timer's event carries its due time as effective_at" do
@@ -55,7 +69,7 @@ class EventLogTest < ActiveSupport::TestCase
     task, = with_task
     count = Event.count
     error = assert_raises(Leverage::EventLog::InvalidEvent) do
-      append("task.created", task: task, schema_version: 1, payload: { state: "made_up_state", added_action_ids: [] })
+      append("task.created", task: task, payload: created("made_up_state"))
     end
     assert_match(/task\.created/, error.message)
     assert_equal count, Event.count

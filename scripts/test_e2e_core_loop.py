@@ -11,7 +11,12 @@ would, so what the script does around the run is checked in a second:
   shared `leverage-api:local`, and removes that image when it is done, but
   leaves an image whose tag it was given;
 - its secret scan covers the stand-in tools' record of each call, which
-  holds the environment each tool was started with.
+  holds the environment each tool was started with;
+- a .env it makes holds values of its own, where the example leaves the
+  secrets empty (scripts/make_env.py), and a .env that is there is kept.
+
+Every case runs a copy of scripts/ and the files the scripts read in a
+temporary folder, so nothing is written into the checkout.
 
 It also checks that no step of .github/workflows/ci.yml is skipped because
 the script it runs is missing: a renamed or deleted script must fail CI,
@@ -23,6 +28,9 @@ value is made up.
 """
 
 import os
+import re
+import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -30,7 +38,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-SCRIPT = HERE / "e2e_core_loop.sh"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 SECRET = "made-up-e2e-secret-value"
@@ -79,12 +86,25 @@ exit 0
 FAKE_CURL = "#!/bin/sh\nexit 0\n"
 
 
+def copy_repository(target):
+    """Copies what the scripts under test read into `target`, which then
+    stands for the repository root: scripts/, the compose files, the
+    example configuration and an empty mac/ for their `cd mac`."""
+    shutil.copytree(HERE, target / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    for name in (".env.example", "compose.yaml", "compose.test.yaml"):
+        shutil.copy2(ROOT / name, target / name)
+    (target / "mac").mkdir()
+    return target
+
+
 class Run:
-    """A scratch folder with the stand-in programs and the script's TMPDIR."""
+    """A scratch folder with a copy of the repository, the stand-in programs
+    and the script's TMPDIR."""
 
     def __init__(self):
         self._folder = tempfile.TemporaryDirectory()
         self.root = Path(self._folder.name)
+        self.repo = copy_repository(self.root / "repo")
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.tmp = self.root / "tmp"
@@ -98,7 +118,7 @@ class Run:
     def close(self):
         self._folder.cleanup()
 
-    def run(self, call_value="nothing secret here", *, script=SCRIPT, **extra):
+    def run(self, call_value="nothing secret here", *, script="e2e_core_loop.sh", arguments=(), **extra):
         environment = {
             "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.root),
@@ -109,7 +129,8 @@ class Run:
             **extra,
         }
         result = subprocess.run(
-            ["bash", str(script)], cwd=ROOT, env=environment, capture_output=True, text=True,
+            ["bash", str(self.repo / "scripts" / script), *arguments], cwd=self.repo, env=environment,
+            capture_output=True, text=True,
             check=False, timeout=120)
         return result.returncode, result.stdout + result.stderr
 
@@ -205,7 +226,7 @@ class CredentialsScriptTests(unittest.TestCase):
 
     def run_credentials(self, **extra):
         return self.run_.run(
-            script=HERE / "e2e_credentials.sh", LEVERAGE_E2E_ONLY="AddAndReadEndToEndTests",
+            script="e2e_credentials.sh", LEVERAGE_E2E_ONLY="AddAndReadEndToEndTests",
             API_IMAGE_TAG="made-up-tag", FAKE_REPLY_LINE=COPIED_REPLY_LINE, **extra)
 
     def test_the_helper_log_is_required_and_the_failed_run_is_removed(self):
@@ -222,6 +243,24 @@ class CredentialsScriptTests(unittest.TestCase):
         self.assertIn("helper.log", output)
         self.assertIn("usage-test-only.json", output)
         self.assertNotIn(COPIED_REPLY_LINE, output)
+
+
+class SpeedRunTests(unittest.TestCase):
+    """Review: speed_run.sh took an exported COMPOSE_PROJECT_NAME as its
+    project, and its cleanup removes the project's volumes, so a developer's
+    stack under that name lost its database."""
+
+    def test_an_exported_project_name_is_never_the_project_it_removes(self):
+        run = Run()
+        self.addCleanup(run.close)
+        code, output = run.run(script="speed_run.sh", arguments=("--smoke",),
+                               COMPOSE_PROJECT_NAME="made-up-dev-stack", FAKE_UP_FAILS="1")
+        self.assertNotEqual(code, 0, output)
+        calls = run.docker_calls()
+        self.assertTrue(any("down --volumes" in arguments for _tag, _project, arguments in calls), calls)
+        for _tag, project, _arguments in calls:
+            self.assertNotEqual(project, "made-up-dev-stack", calls)
+            self.assertRegex(project, r"-[0-9]+$", "the project is this run's own, with its pid")
 
 
 # A docker that notes the mode of the backup folder it is handed, then
@@ -250,7 +289,7 @@ class BackupFolderTests(unittest.TestCase):
             "PATH": f"{run.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(run.root),
             "TMPDIR": str(run.tmp), "FAKE_MODE": str(mode), "API_IMAGE_TAG": "made-up-tag",
         }
-        subprocess.run(["bash", str(HERE / script)], cwd=ROOT, env=environment, capture_output=True, text=True,
+        subprocess.run(["bash", str(run.repo / "scripts" / script)], cwd=run.repo, env=environment, capture_output=True, text=True,
                        check=False, timeout=120)
         self.assertTrue(mode.exists(), f"{script} handed docker no backup folder")
         return mode.read_text(encoding="utf-8").strip()
@@ -262,10 +301,184 @@ class BackupFolderTests(unittest.TestCase):
         self.assertEqual(self.mode_of_backup_folder("e2e_handoff.sh"), "0o1777")
 
 
+SECRET_KEYS = ("POSTGRES_PASSWORD", "LEVERAGE_API_DB_PASSWORD", "SECRET_KEY_BASE")
+
+
+def env_values(path):
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+class EnvFileTests(unittest.TestCase):
+    """Review: a script that made .env copied .env.example, so a later
+    `docker compose up` ran with passwords and a Rails secret published in
+    the repository. The example now leaves them empty, and a .env a script
+    makes holds values of its own. scripts/test_make_env.py holds what
+    make_env.py writes when it is told both files; these cases hold what
+    it does when it is told neither, as every script calls it, and what
+    the scripts do around it."""
+
+    def assert_secrets_of_its_own(self, made):
+        values = env_values(made)
+        for key in SECRET_KEYS:
+            self.assertRegex(values.get(key, ""), r"^[0-9a-f]{32,}$", f"{key} is not left empty")
+        self.assertEqual(len({values[key] for key in SECRET_KEYS}), 3, "each secret has a value of its own")
+        self.assertEqual(stat.S_IMODE(made.stat().st_mode), 0o600)
+
+    def test_with_no_argument_it_makes_the_env_of_its_own_tree(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        repo = copy_repository(Path(folder.name) / "repo")
+        elsewhere = Path(folder.name) / "elsewhere"
+        elsewhere.mkdir()
+        result = subprocess.run(
+            ["python3", "-I", str(repo / "scripts" / "make_env.py")], cwd=elsewhere,
+            capture_output=True, text=True, check=False, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_secrets_of_its_own(repo / ".env")
+        self.assertEqual(env_values(repo / ".env")["POSTGRES_USER"], "leverage", "values that are no secret are kept")
+        self.assertEqual(list(elsewhere.iterdir()), [], "nothing is written where it was called from")
+        self.assertEqual(sorted(path.name for path in repo.glob(".env*")), [".env", ".env.example"],
+                         "no temporary file is left")
+        self.assertFalse((ROOT / ".env").exists() and (ROOT / ".env").samefile(repo / ".env"))
+
+    def test_a_script_makes_env_with_the_helper_in_its_own_tree(self):
+        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh", "speed_run.sh"):
+            with self.subTest(script=script):
+                run = Run()
+                self.addCleanup(run.close)
+                run.run(script=script, FAKE_UP_FAILS="1", API_IMAGE_TAG="made-up-tag")
+                made = run.repo / ".env"
+                self.assertTrue(made.exists(), "the script made .env in the copy it ran from")
+                self.assert_secrets_of_its_own(made)
+
+    def test_a_script_leaves_an_existing_env_as_it_is_and_goes_on(self):
+        """make_env.py exits 1 on a .env that is there, so a script that
+        called it without looking first would stop before its run."""
+        existing = "POSTGRES_PASSWORD=the-owners-own-value\n"
+        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh", "speed_run.sh"):
+            with self.subTest(script=script):
+                run = Run()
+                self.addCleanup(run.close)
+                (run.repo / ".env").write_text(existing, encoding="utf-8")
+                _code, output = run.run(script=script, FAKE_UP_FAILS="1", API_IMAGE_TAG="made-up-tag")
+                self.assertEqual((run.repo / ".env").read_text(encoding="utf-8"), existing)
+                self.assertNotIn("make_env:", output)
+                self.assertTrue(run.docker_calls(), "the script went on to its first docker call")
+
+
+# A docker for the drill: every query answers 1, and the first `stop`
+# fails, so a drill that was not refused ends at its first step.
+FAKE_DOCKER_DRILL = """#!/bin/sh
+printf '%s|%s|%s\\n' "${API_IMAGE_TAG:-}" "${COMPOSE_PROJECT_NAME:-}" "$*" >>"$FAKE_LOG"
+case "$*" in
+  *" exec "*) echo 1 ;;
+  *" stop "*) exit 1 ;;
+esac
+exit 0
+"""
+
+
+class RestoreDrillProjectTests(unittest.TestCase):
+    """Review: --from-project removes the named project and its database
+    volume, also on failure, and took any name, the owner's `leverage` and
+    the app's `leverage-app` included. It now takes only the end-to-end
+    runs' own projects, and refuses before any docker call."""
+
+    def drill(self, name):
+        run = Run()
+        self.addCleanup(run.close)
+        (run.bin / "docker").write_text(FAKE_DOCKER_DRILL, encoding="utf-8")
+        backups = run.root / "backups"
+        backups.mkdir()
+        code, output = run.run(script="restore_drill.sh", arguments=("--from-project", name),
+                               LEVERAGE_BACKUP_DIR=str(backups), API_IMAGE_TAG="made-up-tag")
+        return code, output, run.docker_calls()
+
+    def test_the_owners_and_the_apps_projects_are_refused_before_docker(self):
+        for name in ("leverage", "leverage-app", "made-up-dev-stack", "leverage-e2e"):
+            with self.subTest(name=name):
+                code, output, calls = self.drill(name)
+                self.assertEqual(code, 2, output)
+                self.assertIn("removes the project and its database volume", output)
+                self.assertEqual(calls, [], "no docker call, so no `down --volumes`")
+
+    def test_an_end_to_end_runs_project_is_taken(self):
+        code, output, calls = self.drill("leverage-e2e-handoff-1-6")
+        self.assertNotEqual(code, 2, output)
+        self.assertTrue(calls, output)
+        self.assertTrue(all("-p leverage-e2e-handoff-1-6" in arguments for _tag, _project, arguments in calls
+                            if arguments.startswith("compose")), calls)
+
+
 class ContinuousIntegrationTests(unittest.TestCase):
     def test_no_step_is_skipped_because_its_script_is_missing(self):
         guards = CI.read_text(encoding="utf-8").count("hashFiles(")
         self.assertEqual(guards, 0, f"{guards} steps of ci.yml are skipped when their script is missing")
+
+    def test_the_documented_npx_commands_name_one_exact_version(self):
+        """Review: the local Markdown lint ran whatever markdownlint-cli2
+        npm served that day, not the version CI's pinned action bundles."""
+        commands = {}
+        for name in ("AGENTS.md", "CONTRIBUTING.md"):
+            for package in re.findall(r"npx (?:--yes )?(\S+)", (ROOT / name).read_text(encoding="utf-8")):
+                commands.setdefault(package.split("@")[0], set()).add(package)
+        self.assertIn("markdownlint-cli2", commands)
+        for base, spelled in commands.items():
+            with self.subTest(package=base):
+                self.assertEqual(len(spelled), 1, f"the documents name different versions: {spelled}")
+                self.assertRegex(spelled.pop(), r"^[\w.-]+@\d+\.\d+\.\d+$", "an exact version")
+
+    def test_dependabot_watches_every_pinned_manifest(self):
+        """Review: only the actions had an updater, so the locked gems and
+        the digest-pinned Ruby and PostgreSQL images went stale silently."""
+        text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        entries = set(re.findall(
+            r'package-ecosystem:\s*"([^"]+)"\s*\n\s*directory:\s*"([^"]+)"', text))
+        manifests = {
+            ("github-actions", "/"): ".github/workflows",
+            ("bundler", "/api"): "api/Gemfile.lock",
+            ("docker", "/api"): "api/Dockerfile",
+            ("docker-compose", "/"): "compose.yaml",
+        }
+        for entry, manifest in manifests.items():
+            with self.subTest(manifest=manifest):
+                self.assertTrue((ROOT / manifest).exists(), manifest)
+                self.assertIn(entry, entries, f"no Dependabot entry for {manifest}")
+        self.assertEqual(text.count('prefix: "chore(deps)"'), len(entries),
+                         "every entry gives its pull requests the Conventional Commits title")
+
+    def test_dependabot_can_read_and_name_each_pinned_image(self):
+        """Review: the Ruby image's tag came from an ARG, which Dependabot
+        does not resolve, so the entry for api/Dockerfile found no image;
+        and its ignore rule named `ruby`, while Dependabot names an image by
+        its whole path with only the docker.io registry removed."""
+        text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        ignored = {}
+        for block in re.split(r"(?m)^  - (?=package-ecosystem:)", text)[1:]:
+            ecosystem = re.match(r'package-ecosystem:\s*"([^"]+)"', block).group(1)
+            ignored[ecosystem] = set(re.findall(r'dependency-name:\s*"([^"]+)"', block))
+        image = r"(?P<image>[a-z0-9./_-]+):(?P<tag>\w[\w.-]*)@sha256:[0-9a-f]{64}"
+        froms = re.findall(r"(?m)^FROM\s+(\S+)", (ROOT / "api" / "Dockerfile").read_text(encoding="utf-8"))
+        external = [ref for ref in froms if ref != "base"]
+        self.assertEqual(len(external), 1, f"one image from a registry, the others build on it: {froms}")
+        ruby = re.fullmatch(image, external[0])
+        self.assertIsNotNone(ruby, f"{external[0]}: a literal tag and a digest, no ARG, or Dependabot finds no image")
+        version = (ROOT / "api" / ".ruby-version").read_text(encoding="utf-8").strip().removeprefix("ruby-")
+        self.assertEqual(ruby["tag"], f"{version}-slim", "the image's tag and api/.ruby-version name one version")
+        compose = re.findall(r"(?m)^\s+image:\s*(\S+)", (ROOT / "compose.yaml").read_text(encoding="utf-8"))
+        pinned = [re.fullmatch(image, ref) for ref in compose if "@" in ref]
+        self.assertEqual(len(pinned), 1, f"one digest-pinned image in compose.yaml: {compose}")
+        self.assertIsNotNone(pinned[0], "a literal tag and a digest")
+        for ecosystem, found in (("docker", ruby), ("docker-compose", pinned[0])):
+            with self.subTest(ecosystem=ecosystem):
+                name = found["image"].removeprefix("docker.io/")
+                self.assertEqual(ignored[ecosystem], {name},
+                                 "the ignore rule names the image as Dependabot does")
 
 
 if __name__ == "__main__":

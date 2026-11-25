@@ -32,9 +32,6 @@ struct ClaudeDriver: ProviderShape {
         guard let result = ProviderShapes.object(standardOutput) else { throw ToolFailure.unreadableOutput }
         if ProviderShapes.flag(result["is_error"]) != false { throw ToolFailure.reportedError }
         guard let text = result["result"] as? String else { throw ToolFailure.unreadableOutput }
-        let usage = result["usage"] as? [String: Any]
-        return ToolAnswer(
-            text: text,
-            tokens: ProviderShapes.count(usage?["input_tokens"]) + ProviderShapes.count(usage?["output_tokens"]))
+        return ToolAnswer(text: text, tokens: ProviderShapes.tokens(result["usage"]))
     }
 }

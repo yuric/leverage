@@ -3,7 +3,13 @@ module Leverage
   # to the updated amounts. Jobs count against the project only (AP-10).
   module Costs
     HOOK = "cost.reported".freeze
+    # The most a task's or a project's total holds (spent is numeric(14,6)).
     MAX_SPEND = BigDecimal("99999999.999999")
+    # The most one report may carry: far below the total's ceiling, so that
+    # one report, which is self-reported and cannot be taken back, never
+    # uses up the room every later verdict and job result of the project
+    # needs.
+    MAX_REPORT_SPEND = BigDecimal("100000")
     MAX_TOKENS = (1 << 63) - 1
 
     # Gate uses the recorded event as its subject. The row's pre-transition
@@ -43,7 +49,8 @@ module Leverage
     end
 
     def report_amount(tokens, spend)
-      if tokens.is_a?(Integer) && tokens.between?(0, MAX_TOKENS) && spend.is_a?(Numeric) && spend.between?(0, MAX_SPEND)
+      if tokens.is_a?(Integer) && tokens.between?(0, MAX_TOKENS) && spend.is_a?(Numeric) &&
+          spend.between?(0, MAX_REPORT_SPEND)
         return BigDecimal(spend.to_s).round(6)
       end
 

@@ -16,6 +16,9 @@ public enum ServerState: Equatable, Sendable {
     case dockerNotStarting
     /// The API image is not in this Mac's Docker.
     case imageMissing
+    /// The database is still in Docker, but the support folder lost the
+    /// passwords it was made with; nothing was written or started.
+    case databasePasswordsMissing
     /// `docker compose up` ran; waiting for the health check.
     case starting
     /// The API answers its health check at this address.

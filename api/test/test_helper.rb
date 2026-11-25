@@ -31,6 +31,10 @@ module ActiveSupport
     # and it runs in the same process.
     setup { Leverage::Gating.implementation = Leverage::Rules::Engine.new }
 
+    # The count of wrong passwords is the process's (SignInThrottle), and
+    # tests of several files send wrong passwords in one process.
+    setup { Leverage::Http::SignInThrottle.reset! }
+
     # Fires the deferred state trigger (C7) before the test's transaction is
     # rolled back, so a test that changes tasks.state without an event for
     # that task fails here instead of passing because nothing commits.

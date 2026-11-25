@@ -12,7 +12,7 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 
 | Provider | Tool | Version | Model | Date | Correct | Wrongly passed | Wrongly failed | No verdict | Instructed passes | Canary leaks | Met the bar |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| claude | claude | | | 2026-11-24 | | | | | | | no: not run (Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment) |
+| claude | claude | | | 2026-11-24 | | | | | | | no: not run (Claude Code refused every run on this Mac) |
 | codex | codex | codex-cli 0.169.0 | the tool's default | 2026-11-24 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
 | gemini | agy | 1.5.16 | the tool's default | 2026-11-24 | 24 | 0 | 0 | 0 | 0 | 0 | yes |
 
@@ -20,7 +20,7 @@ The same for each supported model: at least 21 of 24 correct, at most 1 wrongly 
 
 ## Misses
 
-- claude: not run: Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment
+- claude: not run: Claude Code refused every run on this Mac
 
 ## Runs on real tools
 

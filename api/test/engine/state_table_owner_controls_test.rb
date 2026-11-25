@@ -50,6 +50,8 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
     in_review = scenario.task(state: "in_review")
     scenario.review(in_review, reviewer: reviewer)
     released = scenario.task(state: "working", builder: other)
+    third = scenario.seat(role: "builder", credential: scenario.credential)
+    given_back = scenario.task(state: "working", builder: third)
     after = scenario.workspace.reload.last_seq
 
     owner_run("promote", "id" => idea.id)
@@ -64,9 +66,12 @@ class StateTableOwnerControlsTest < ActiveSupport::TestCase
     ]))
     owner_run("edit_contract", task_params("edit_contract", in_review))
     owner_run("change_seat", "id" => other.id, "enabled" => false, "name" => "Made-up off")
+    _, events = owner_run("change_seat", "id" => third.id, "permissions" => { "work" => true, "deliver" => false, "create" => true })
 
     assert_equal "passed", first.reload.state
     assert_equal "ready", released.reload.state
+    assert_equal [ "ready", nil ], given_back.reload.attributes.values_at("state", "holder_seat_id")
+    assert_equal [ "task.released", "deliver_turned_off" ], events.second.then { |event| [ event.type, event.payload.fetch("reason") ] }
     assert_equal [], Leverage::Replay.diff(scenario.workspace_id)
     assert_equal [], Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
   end

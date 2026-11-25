@@ -32,7 +32,7 @@ struct FinishingFlow: Sendable {
         }
         let approved = actions.filter { $0.state == .approved }.sorted { $0.position < $1.position }
         guard !approved.isEmpty else { return .end(.finished) }
-        guard let folder = WorkFolder.reviewer(reference: response.workReference, home: context.home) else {
+        guard let folder = WorkFolder.reviewer(reference: response.workReference, places: context.places) else {
             return .end(try await context.releaseBuilderTask(taskID))
         }
 

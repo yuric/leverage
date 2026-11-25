@@ -5,7 +5,9 @@
 # task that builds or changes the schema, and by test/test_helper.rb on each
 # parallel test worker's database. The append-only triggers hold whatever
 # the role. On backup_runs, which the owner role's backup writes, the role
-# may only read (milestone 3 plan HB-4).
+# may only read (milestone 3 plan HB-4), and likewise on Rails' own
+# schema_migrations and ar_internal_metadata, which only the owner role's
+# migrations write.
 #
 # The rights are computed from information_schema, so a table added by a
 # later migration needs no grant of its own. Running the task twice changes
@@ -43,8 +45,12 @@ module DbGrants
   def api_role = "leverage_api"
   def append_only = %w[events rule_versions]
   # Tables the application's role may only read: the owner role's backup
-  # writes backup_runs (milestone 3 plan HB-4).
-  def read_only = %w[backup_runs]
+  # writes backup_runs (milestone 3 plan HB-4), and the owner role's
+  # migrations write Rails' two bookkeeping tables. db:prepare at each
+  # server start reads schema_migrations to decide which migrations to
+  # run, so a role that could delete or add a version there could stop
+  # the next start or make a migration be skipped.
+  def read_only = %w[backup_runs schema_migrations ar_internal_metadata]
 
   # The advisory lock that serializes every run, in the maintenance
   # database: "lvpw" in ASCII.

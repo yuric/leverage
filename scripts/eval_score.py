@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SHIPPED = ROOT / "api" / "contract" / "shipped_rules.json"
 ROLE_FILE = ROOT / "api" / "config" / "role_files" / "orchestrator.md"
+ROLES = ROOT / "api" / "contract" / "roles.json"
 MODES = ("orchestrator", "general")
 
 OUTCOMES = {
@@ -100,8 +101,20 @@ def role_file_sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def job_rules_sha256(roles=ROLES):
+    """The SHA-256 of the General role's job rules, joined by newlines as
+    the runner's job prompt joins them where an Orchestrator prompt has its
+    role file (JobPrompts.jobInstructions)."""
+    general = [role for role in read_json(roles).get("roles", []) if role.get("role") == "general"]
+    if len(general) != 1 or not isinstance(general[0].get("job_rules"), list):
+        raise Refused(f"{roles} has no General job rules")
+    return hashlib.sha256("\n".join(general[0]["job_rules"]).encode("utf-8")).hexdigest()
+
+
 def wording_hashes(record):
-    return record.get("instruction_sha256"), record.get("role_file_sha256")
+    """The wording a record was made with: the instruction, the role file
+    (Orchestrator mode) and the job rules (General mode)."""
+    return record.get("instruction_sha256"), record.get("role_file_sha256"), record.get("job_rules_sha256")
 
 
 def record_mode(record):
@@ -404,8 +417,17 @@ def role_hash(mode, role_file):
     return role_file_sha256(role_file or ROLE_FILE)
 
 
+def mode_hashes(mode, role_file):
+    """What stands in a mode's prompt beside the rule: the role file in
+    Orchestrator mode, the General job rules in General mode."""
+    hashes = {"mode": mode, "role_file_sha256": role_hash(mode, role_file)}
+    if mode == "general":
+        hashes["job_rules_sha256"] = job_rules_sha256()
+    return hashes
+
+
 def provenance(suite, bar, shipped, role_file, held_out, mode):
-    record = {"mode": mode, "role_file_sha256": role_hash(mode, role_file),
+    record = {**mode_hashes(mode, role_file),
               "instruction_sha256": instruction_sha256(shipped, bar["rule"]),
               "cases_sha256": cases_sha256(read_cases(suite, held_out))}
     if held_out:
@@ -748,7 +770,8 @@ def execute(args):
         all_runs = {"runs": runs["runs"] + other_mode_runs(Path(args.runs).parent, args.mode)}
         reasons = budget_refusals(all_runs, providers, bar, held_out)
         if held_out:
-            wording = instruction_sha256(read_json(args.shipped), bar["rule"]), role
+            wording = (instruction_sha256(read_json(args.shipped), bar["rule"]), role,
+                       mode_hashes(args.mode, args.role_file).get("job_rules_sha256"))
             reasons += held_out_refusals(args.suite, runs, bar, providers, wording, args.mode)
         if reasons:
             for reason in reasons:
@@ -762,7 +785,7 @@ def execute(args):
                 hashes = provenance(args.suite, bar, read_json(args.shipped), args.role_file, held_out, args.mode)
             elif args.instruction_sha256 and args.cases_sha256:
                 hashes = {"instruction_sha256": args.instruction_sha256, "cases_sha256": args.cases_sha256,
-                          "mode": args.mode, "role_file_sha256": role}
+                          **mode_hashes(args.mode, args.role_file)}
             else:
                 raise Refused("runs-add requires --suite or both hashes")
             runs["runs"].append({"provider": args.provider, "date": args.date,

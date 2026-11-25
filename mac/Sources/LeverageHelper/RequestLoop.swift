@@ -23,16 +23,23 @@ struct RequestLoop: Sendable {
     let log: Log
     let handle: Handle
     let running: RunningRequests
+    /// Told of a result the server did not take: refused, still unsent when
+    /// the helper stopped, or given up on. What the request saved on this
+    /// Mac can then be undone.
+    let onUnaccepted: Unaccepted
+
+    typealias Unaccepted = @Sendable (HelperRequest, HelperRequestResult) async -> Void
 
     init(
         api: any HelperAPI, timings: HelperTimings, log: Log, running: RunningRequests = RunningRequests(),
-        handle: @escaping Handle
+        onUnaccepted: @escaping Unaccepted = { _, _ in }, handle: @escaping Handle
     ) {
         self.api = api
         self.timings = timings
         self.log = log
         self.handle = handle
         self.running = running
+        self.onUnaccepted = onUnaccepted
     }
 
     /// Runs until `401` or until the calling task is cancelled; the
@@ -62,8 +69,11 @@ struct RequestLoop: Sendable {
             running.start(request) {
                 guard !Task.isCancelled else { return }
                 log.info("doing \(request.kind.rawValue) request \(request.id.contractString)")
-                guard let result = await handle(request), !Task.isCancelled else { return }
-                await report(result, of: request)
+                guard let result = await handle(request) else { return }
+                guard !Task.isCancelled, await report(result, of: request) else {
+                    await onUnaccepted(request, result)
+                    return
+                }
             }
         }
         return .cancelled
@@ -76,27 +86,30 @@ struct RequestLoop: Sendable {
     /// while the network or the server fails (a lost result would leave the
     /// request picked up and unfinished), pausing at most 2 seconds between
     /// sends (CL-31), until it is accepted, refused, the helper stops, or
-    /// `reportAttempts` sends have failed.
-    private func report(_ result: HelperRequestResult, of request: HelperRequest) async {
+    /// `reportAttempts` sends have failed. True when the server took it.
+    /// A send the network failed may still have reached the server, so
+    /// false means "not known to be taken".
+    private func report(_ result: HelperRequestResult, of request: HelperRequest) async -> Bool {
         let key = IdempotencyKey()
         var pause = timings.pauseAfterError
         for attempt in 1...Self.reportAttempts {
             do {
                 _ = try await api.reportRequestResult(requestID: request.id, result, key: key)
-                return
+                return true
             } catch {
                 if !Self.isWorthSendingAgain(error) {
                     log.warning("the result of request \(request.id.contractString) was not accepted")
-                    return
+                    return false
                 }
                 if Task.isCancelled || attempt == Self.reportAttempts {
                     log.warning("the result of request \(request.id.contractString) could not be sent")
-                    return
+                    return false
                 }
                 try? await Task.sleep(for: pause)
                 pause = min(pause * 2, .seconds(2))
             }
         }
+        return false
     }
 
     /// A failure the same send may get past: the network, or the server

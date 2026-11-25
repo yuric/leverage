@@ -148,10 +148,14 @@ struct ImaginariumTrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScreenContext.self) private var context
     @State private var model: ImaginariumTryModel
-    @State private var copied = false
 
     init(entry: ImaginariumCatalog.Entry, catalogVersion: Int, api: any OwnerAPI) {
-        _model = State(wrappedValue: ImaginariumTryModel(entry: entry, catalogVersion: catalogVersion, api: api))
+        self.init(model: ImaginariumTryModel(entry: entry, catalogVersion: catalogVersion, api: api))
+    }
+
+    /// The sheet on a model already in hand; the tests draw it in each state.
+    init(model: ImaginariumTryModel) {
+        _model = State(wrappedValue: model)
     }
 
     private var project: Project? {
@@ -186,7 +190,6 @@ struct ImaginariumTrySheet: View {
         .frame(width: 720, height: 570)
         .background(Tokens.Palette.sheet)
         .task(id: model.isChecking) { await model.watchStatus() }
-        .onChange(of: model.prompt) { _, _ in copied = false }
     }
 
     private var form: some View {
@@ -207,8 +210,7 @@ struct ImaginariumTrySheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(ImaginariumCopy.makeItYours.text).font(.headline)
                     ForEach(model.entry.fills, id: \.key) { fill in
-                        TextField(fill.label, text: fillValue(fill))
-                            .textFieldStyle(.roundedBorder)
+                        ImaginariumFillField(label: fill.label, value: fillValue(fill))
                     }
                     Text(ImaginariumCopy.doneWhen.text).font(.headline)
                     ForEach(Array(model.criteria.enumerated()), id: \.offset) { _, criterion in
@@ -283,9 +285,8 @@ struct ImaginariumTrySheet: View {
                     .foregroundStyle(Tokens.Tone.wait.foreground)
             }
             HStack {
-                Button(copied ? ImaginariumCopy.copied.text : ImaginariumCopy.copyPrompt.text) {
-                    Pasteboard.copy(model.prompt)
-                    copied = true
+                Button(model.copied ? ImaginariumCopy.copied.text : ImaginariumCopy.copyPrompt.text) {
+                    model.copyPrompt()
                 }
                 if let project, model.canEdit {
                     Button(ImaginariumCopy.sendToReady.text) { Task { await model.submit(.ready, projectID: project.id) } }
@@ -329,8 +330,7 @@ struct ImaginariumTrySheet: View {
             }
             HStack {
                 Button(ImaginariumCopy.seeOnBoard.text) {
-                    context.navigator.boardFilter.agentID = nil
-                    context.navigator.selectProject(model.savedProjectID)
+                    context.navigator.showProjectAlone(model.savedProjectID)
                     dismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())
@@ -340,6 +340,21 @@ struct ImaginariumTrySheet: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(26)
+    }
+}
+
+/// One Make it yours fill-in of the Try it sheet, its label above it: the
+/// field opens holding its default, so a placeholder would never show.
+struct ImaginariumFillField: View {
+    let label: String
+    @Binding var value: String
+
+    var body: some View {
+        FormField(label: label) {
+            TextField(label, text: $value)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+        }
     }
 }
 

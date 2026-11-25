@@ -55,7 +55,17 @@ class JoinTest < ActionDispatch::IntegrationTest
           assert_includes text, ADDRESS
           assert_includes text, "Ask `GET /v1/next?wait=30` again as soon as it answers."
           assert_includes text, "Leverage counts you offline 90 seconds after your last `GET /v1/next`."
-          assert_includes text, "Do not print it, write it into a file or send it to anything but this server."
+          # The token never reaches a command's arguments, which every
+          # account on a Mac can read (ps): the one call shown sends the
+          # header from a file in a folder only the agent's account reads.
+          assert_includes text, "Do not print it or send it to anything but this server."
+          assert_includes text, "Never put it on a command line"
+          assert_includes text, %(mktemp -d "${TMPDIR:-/tmp}/leverage-seat.XXXXXX")
+          assert_includes text, "with your file-writing tool, not a shell command, write a file named `header` in that folder"
+          assert_includes text, %(\n    curl -sS -H @FOLDER/header "#{ADDRESS}/v1/join"\n)
+          assert_includes text, "When a call answers 401, delete that folder."
+          refute_match(/-H\s+["']?Authorization/, text)
+          refute_match(/\$\{?LEVERAGE_SEAT_TOKEN|environment variable LEVERAGE_SEAT_TOKEN/, text)
           allowed = allowed.select { |id| Leverage::Http::RouteTable.serves?(id) }
           expected = allowed.map do |id|
             [ id, *HttpCalls.operation(id).values_at("method", "path") ]
@@ -121,8 +131,34 @@ class JoinTest < ActionDispatch::IntegrationTest
       assert_includes text, "You may not take new tasks, reviews or jobs; finish what you hold and keep polling."
       assert_includes text, "You may deliver tasks."
       refute_includes text, "`create_task`"
-      assert_empty listed & %w[claim_next_task submit_task claim_next_review claim_next_job create_task]
-      assert_empty %w[give_verdict submit_job_result start_action report_action_done] - listed
+      assert_includes text, "Submit completed work with `submit_task`."
+      assert_empty listed & %w[claim_next_task claim_next_review claim_next_job create_task]
+      assert_empty %w[submit_task give_verdict submit_job_result start_action report_action_done] - listed
+    end
+
+    test "#{connection} join for a seat turned off leaves out create_task and says why" do
+      seat = @scenario.seat(role: "general", provider: "claude")
+      join(seat, connection: connection)
+      assert_includes listed_operations(response.parsed_body.fetch("text"), connection), "create_task"
+      refute_includes response.parsed_body.fetch("text"), "The owner has turned this agent off"
+
+      seat.update!(enabled: false)
+      join(seat, connection: connection)
+      assert_response :ok
+      assert_response_matches_contract
+      body = response.parsed_body
+      assert_equal({ "work" => true, "deliver" => true, "create" => true }, body.fetch("permissions"))
+      text = body.fetch("text")
+      refute_includes text, "`create_task`"
+      assert_includes text, "The owner has turned this agent off: you are offered no new work, you may not add tasks, " \
+        "and a job result you send is refused `forbidden`. Keep polling."
+      assert_includes listed_operations(text, connection), "submit_job_result"
+
+      seat.update!(enabled: true, paused: true)
+      join(seat, connection: connection)
+      text = response.parsed_body.fetch("text")
+      assert_includes listed_operations(text, connection), "create_task"
+      assert_includes text, "You may create tasks with `create_task`."
     end
 
     test "#{connection} join for a Native seat has no report operation or model catalog" do
@@ -194,7 +230,10 @@ class JoinTest < ActionDispatch::IntegrationTest
       seat.update!(state)
       join(seat)
       assert_response :ok
-      assert_equal instructions, response.parsed_body
+      # A seat turned off reads its own text (no create_task, and why);
+      # everything else is the same.
+      assert_equal instructions.except("text"), response.parsed_body.except("text")
+      assert_equal instructions, response.parsed_body if seat.enabled
       assert_equal before, [ seat.reload.last_polled_at, Event.count, Command.count ]
     end
   end

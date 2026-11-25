@@ -112,6 +112,7 @@ function createMockBilling() {
       graceUntil: graceUntil.toISOString().slice(0, 10),
       planId: plan.id,
     };
+    state.scheduledPlanId = null;
     state.status = 'payment_due';
     return getSnapshot();
   }
@@ -127,18 +128,26 @@ function createMockBilling() {
     const { planId, failedOn } = state.paymentDue;
     startPaidPeriod(getPlan(planId), failedOn);
     state.paymentDue = null;
-    state.scheduledPlanId = null;
     return getSnapshot();
   }
 
+  function isManageable() {
+    return state.status === 'active' || state.status === 'payment_due';
+  }
+
   function changePlan(planId, timing) {
-    if (state.status !== 'active') throw new Error('An active subscription is required to change plans.');
-    getPlan(planId);
+    if (!isManageable()) throw new Error('A subscription is required to change plans.');
+    const plan = getPlan(planId);
     if (timing === 'immediate') {
       state.planId = planId;
       state.scheduledPlanId = null;
+      if (state.paymentDue) {
+        state.paymentDue.planId = plan.id;
+        state.paymentDue.amountCents = plan.amountCents;
+      }
     } else if (timing === 'renewal') {
-      state.scheduledPlanId = planId === state.planId ? null : planId;
+      const current = state.paymentDue?.planId ?? state.planId;
+      state.scheduledPlanId = planId === current ? null : planId;
     } else {
       throw new Error('Choose when the plan change takes effect.');
     }
@@ -147,11 +156,12 @@ function createMockBilling() {
 
   function cancelSubscription() {
     if (state.status === 'cancel_at_period_end') return getSnapshot();
-    if (state.status !== 'active') throw new Error('An active subscription is required to cancel.');
+    if (!isManageable()) throw new Error('A subscription is required to cancel.');
     state.status = 'cancel_at_period_end';
     state.cancelOn = state.periodEnd;
     state.nextPaymentOn = null;
     state.scheduledPlanId = null;
+    state.paymentDue = null;
     return getSnapshot();
   }
 

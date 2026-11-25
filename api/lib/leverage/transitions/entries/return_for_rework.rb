@@ -17,11 +17,11 @@ module Leverage
           end
         end
 
-        def refusals(_ctx)
+        def refusals(ctx)
           guards = if Actions.any_started?(@task)
             [ "action_started" ]
           else
-            [ "no_action_started", builder_availability ]
+            [ "no_action_started", builder_availability(ctx.at) ]
           end
           [ state_refusal(@task.state, guards) ].compact
         end
@@ -59,9 +59,9 @@ module Leverage
           active.where(id: named).or(active.where(kind: "review")).order(:position).to_a
         end
 
-        def builder_availability
+        def builder_availability(at)
           return "builder_holds_task" if @builder && Permissions.builds?(@builder) && Finishing.builder_holds_task?(@task)
-          return "builder_free" if Finishing.builder_free?(@task, lease: :task)
+          return "builder_free" if Finishing.builder_free?(@task, lease: :task, at: at)
 
           "builder_busy"
         end

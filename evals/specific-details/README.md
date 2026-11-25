@@ -12,7 +12,7 @@ supported model before its milestone is done (PRD, Shipped rules).
 | `bar.json` | The bar, supported models, categories, frozen case hashes and run limits |
 | `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
 | `history/<case-hash>/<mode>/<provider>.json` | Results from earlier cases |
-| `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
+| `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls and hashes, and in `changes` the reason for a change made after a miss (CI does not read `changes`) |
 | `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
 
 A case's `label` is the known right answer, `passed` or `failed`. Its
@@ -71,8 +71,8 @@ Through the production path, outside the server.
 `JobInputs`, from rows it writes and then rolls back. The default mode
 uses the material an Orchestrator seat claims. Add `--mode general` to
 use the material a General seat claims, with the contract's General job
-rules and a null role file. The result records `mode: "general"` and
-`role_file_sha256: null`.
+rules and a null role file. The result records `mode: "general"`,
+`role_file_sha256: null` and the job rules' `job_rules_sha256`.
 `LeverageRunner eval` gives each input to the tool with `CheckJob`'s
 prompt, check mode and parser. One run per case; a case with no verdict
 is run once more, as a check's second attempt would be, and then counts
@@ -99,8 +99,9 @@ own settings folders (`~/.claude`, and `~/.codex` unless
 seat, so a model, a setting or a memory file set there may apply, and the
 model that ran is not known. The previous runs in the ledgers were made
 that way. Both modes' earlier results are under `history/` and their runs
-still count toward the shared budget. The current results mark the folded
-cases and revised instruction as `not_run`.
+still count toward the shared budget. On 2026-11-24 Codex and Antigravity
+were run on the folded cases and revised instruction in both modes and met
+the bar; Claude Code is recorded `not_run` in both.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.
@@ -117,8 +118,18 @@ results stand for the inputs they evaluated.
 
 CI never calls a provider. `scripts/check_evals.py` checks the cases'
 shape and counts, the required Orchestrator results and any General
-results, the two registry lists, and the suite's budget. It rescans cases
-and results for email or token shapes and scores each recorded run again.
+results, that each recorded run matches its ledger's latest settled run
+(date, tool runs and hashes) and that every ledger entry holds an
+instruction hash and the current or a superseded case set, the two
+registry lists, and the suite's budget. It rescans cases
+and results for email or token shapes, refuses a not-run reason that names
+account or billing state (say what the tool did, not why an account
+refused), and scores each recorded run again.
 When an instruction or case changes, the recorded results need a rerun.
-A role file change also requires rerunning Orchestrator results. The check
-prints any recorded miss.
+A role file change also requires rerunning Orchestrator results, and a
+change to the General role's `job_rules` in `api/contract/roles.json`
+requires rerunning General results: each General result and ledger entry
+records them as `job_rules_sha256`. The check does not see a change to the
+check prompt's frame in `JobPrompts.swift`, to the verdict parser or to a
+tool's check-mode flags; after one, the maintainer runs the suite again by
+hand. The check prints any recorded miss.

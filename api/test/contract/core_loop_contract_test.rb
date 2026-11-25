@@ -154,6 +154,15 @@ class CoreLoopContractTest < Minitest::Test
     assert_includes description, "The row is inserted when this command runs"
   end
 
+  # The server stores the model the request carries: it never reads the
+  # catalog's default_model, which the Mac app fills in at Add.
+  def test_add_credential_does_not_say_the_server_fills_in_the_catalog_default
+    description = schemas.fetch("AddCredentialRequest").fetch("description")
+    refute_includes description, "let the server use the catalog default"
+    assert_includes description, "null for the tool's own default"
+    assert_includes description, "the server stores what the request carries and fills in nothing"
+  end
+
   def test_the_readme_says_public_covers_setup
     readme = File.read(File.join(CONTRACT_ROOT, "README.md"))
     row = readme.lines.find { |line| line.start_with?("| `public` |") }

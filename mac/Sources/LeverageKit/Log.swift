@@ -2,7 +2,8 @@ import Foundation
 
 /// The Mac side's logging mechanism (plan CL-29): one line per message on
 /// standard error, after `Redaction`. The app sends the helper's standard
-/// error to a file, and the helper each run's; nothing else writes logs.
+/// error to a file, and the helper each run's; the app's services also keep
+/// their own lines in `logs/app.log` (LeverageAppServices' `AppLogFile`).
 ///
 ///     2026-11-19T10:00:00Z helper info: started the run of seat 0b4e…
 public struct Log: Sendable {

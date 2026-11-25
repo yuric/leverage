@@ -41,7 +41,18 @@ notification settings. Native Connect guides the owner to Add credential
 if there are no logins and offers Try again if the login read fails.
 Native Connect and Change use the shared catalog for model and supported
 effort choices.
-Settings groups rules by checker.
+The Rules tab groups rules by checker and holds the workspace settings.
+The Settings window, opened from the Leverage menu (⌘ ,) or the account
+menu, sets the appearance: Same as this Mac, Light or Dark. An account
+row at the foot of the side pane shows the signed-in owner's email and
+opens a menu with Settings and Sign out; its Subscription entry is
+disabled, and no subscription service is connected. Every workspace has an
+Imaginarium project. The Imaginarium tab, below Handoff, offers the 32
+prompts of a catalog compiled into the app; the owner can copy a prompt,
+send it to Ready or save it to Ideas in that project
+([docs/imaginarium/PRD.md](docs/imaginarium/PRD.md)). A gallery task
+records its catalog entry and version (`task.created` version 2) and shows
+an Imaginarium badge on the board.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
@@ -62,7 +73,9 @@ research, and the following code and checks.
   recovery time, `bin/rails leverage:rule_timing` each rule's runs and
   times, and `bin/rails leverage:install_shipped_rules` (run before the
   server starts) installs the shipped rules in workspaces with no rules
-  and updates rules that still match an earlier shipped default;
+  and updates rules that still match an earlier shipped default, and
+  `bin/rails leverage:install_imaginarium_project` (run after it) creates
+  the Imaginarium project of every workspace that has none;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
@@ -75,15 +88,23 @@ research, and the following code and checks.
   LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
+- `docs/subscription/preview/`: an offline browser preview of the
+  subscription flow with sample data and a mock billing module, with its
+  own test (`node --test docs/subscription/preview/mock-billing.test.cjs`),
+  which CI does not run;
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
   specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
-  30 main cases, a 10-case held-out set, and the run record. Earlier results
-  for both suites predate the task text change. Current runs are pending;
+  30 main cases, a 10-case held-out set, and the run record. On the
+  current cases of both suites, Codex and Antigravity met the bar in
+  Orchestrator and General mode, and Claude Code was not run, so it is
+  recorded as not meeting it; results on the earlier cases are in each
+  suite's `history/`;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
-  the API's port in automated runs) and `.env.example`;
+  the API's port in automated runs) and `.env.example`, whose three
+  secrets are empty: `scripts/make_env.py` makes `.env` from it;
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
   with stand-in tools, including the Prompt connection, model report, task
@@ -95,17 +116,19 @@ research, and the following code and checks.
   `e2e_credentials.sh` (three stand-in cases with replay and secret scans),
   `capture_reader_reply.py` (a maintainer-only developer check),
   `restore_drill.sh` (a backup restored into an emptied cluster),
-  `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
+  `speed_run.sh`, `secret_scan.py`, `make_env.py` (makes `.env` with
+  values of its own), `check_home_paths.py`, `generate_swift_contract.py`,
   `app_compose.py`, and the maintainer's runs on real tools,
   `eval_rule.sh` (both suites, scored by `eval_score.py`),
   `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
-  migrations-from-zero check, the import check, the reply-file check, the
-  capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  migrations-from-zero check, the import check, the home folder check, the
+  reply-file check, the capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
   `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
-  scripts), and the marketing page and deployment tests, on every pull request;
+  scripts), the marketing page and deployment tests, and the subscription
+  preview's mock model tests, on every pull request;
   `.github/workflows/docs.yml`: the Markdown, link, PRD, rules and title
   checks, and the comparison of the PRD's tables with the contract;
 - `.github/workflows/deploy-marketing.yml`: publishes the checked marketing
@@ -208,7 +231,11 @@ owner has read it.
 - Add user-visible changes to the `Unreleased` section of
   [CHANGELOG.md](CHANGELOG.md).
 - Disclose AI assistance: commits authored with an agent carry a
-  `Co-Authored-By` trailer naming it. A human remains responsible for every
+  `Co-Authored-By` trailer naming it. An agent adds the trailer itself
+  when its tool does not, on every commit, including documentation and
+  follow-up commits, and checks before it pushes that
+  `git log --no-merges --format='%h %(trailers:key=Co-Authored-By,valueonly)' origin/main..HEAD`
+  shows a trailer on each line. A human remains responsible for every
   change that is merged. The full policy is in
   [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
 
@@ -218,7 +245,7 @@ These run on every pull request and must pass. Run them locally before you
 report work as done:
 
 ```bash
-npx --yes markdownlint-cli2 "**/*.md"                      # Markdown lint
+npx --yes markdownlint-cli2@0.24.2 "**/*.md"               # Markdown lint, CI's version
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules
@@ -235,9 +262,12 @@ python3 -I scripts/check_model_catalog.py            # model catalog and its use
 python3 -I scripts/test_check_model_catalog.py       # self-test of the catalog check
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
+python3 -I scripts/test_make_env.py                  # the .env generator, and the example's empty secrets
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
 python3 -I scripts/test_capture_reader_reply.py      # capture guard and scrub self-test
 python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
+python3 -I scripts/check_home_paths.py               # no tracked file names a home folder
+python3 -I scripts/test_check_home_paths.py          # self-test of that check
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals
@@ -250,6 +280,9 @@ bash scripts/test_eval_rule.sh                       # the eval script's refusal
 bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
 bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
 bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
+node --test docs/subscription/preview/mock-billing.test.cjs  # the subscription preview's mock model
+node --test scripts/test_marketing_demo.mjs          # the marketing page and its demo (needs Node)
+bash scripts/test_deploy_marketing_page.sh           # the marketing deployment script, against stand-ins
 ```
 
 After changing anything under `api/contract/registry.json` or the
@@ -286,10 +319,12 @@ Run these before reporting work as done. Ruby is never run on the Mac
 itself: every Ruby and Rails command runs in the `api` container. Run them
 from the repository root unless a line says otherwise.
 
-Once, to configure (then replace the made-up values in `.env`):
+Once, to configure (it makes `.env` from `.env.example`, with random
+secrets of its own, and never writes over one that is there; the
+end-to-end scripts run it too when there is no `.env`):
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 ```
 
 The API (`api/`):

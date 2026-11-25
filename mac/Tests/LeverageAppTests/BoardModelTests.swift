@@ -297,6 +297,19 @@ struct BoardModelTests {
         #expect(unflagged?.statusLine == "Waiting for a free agent")
     }
 
+    @Test("a task saved from the Imaginarium carries the badge, and no other task does (FR-041)")
+    func imaginariumBadge() {
+        let gallery = TaskSummary(id: UUID(), title: "Pocket to-do", state: .ready, imaginariumEntryID: "pocket-to-do")
+        let typed = TaskSummary(id: UUID(), title: "Invoices", state: .ready)
+        let badged = BoardCard(task: BoardTask(task: gallery), seatNames: [:], reviewerSeatExists: true)
+        let plain = BoardCard(task: BoardTask(task: typed), seatNames: [:], reviewerSeatExists: true)
+        #expect(badged.fromImaginarium)
+        #expect(!plain.fromImaginarium)
+        #expect(AgentFixtures.draws(TaskCard(card: badged, open: { _ in }), width: 260, height: 160))
+        #expect(AgentFixtures.draws(
+            TaskCard(card: badged, open: { _ in }).environment(\.colorScheme, .dark), width: 260, height: 160))
+    }
+
     // MARK: rule checks (RD-27)
 
     private func checkingTask(

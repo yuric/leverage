@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 # The maintainer's restore (milestone 3 plan §2.5, HB-5): makes the
-# database this program is configured for again from one dump, then gives
-# the roles their rights (db:grants) and runs the replay test
+# database this program is configured for again from one dump, runs the
+# migrations a dump of an earlier version has not seen, then gives the
+# roles their rights (db:grants) and runs the replay test
 # (leverage:verify_log). Run it in the backup service, with the API, the
 # sweep and the backup stopped (docs/DEPLOY.md):
 #

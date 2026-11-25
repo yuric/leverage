@@ -9,8 +9,11 @@ import Foundation
 /// key is not verified.
 ///
 /// The answer is the `-o` file; the run failed when the exit is not 0 or
-/// a JSON line has `type: error`; tokens are `turn.completed`'s
-/// `usage.input_tokens` plus `usage.output_tokens` (probe).
+/// a JSON line has `type: turn.failed`; tokens are `turn.completed`'s
+/// `usage.input_tokens` plus `usage.output_tokens` (probe). A line with
+/// `type: error` is not read: Codex prints one for each reconnect attempt,
+/// also in a run that then succeeds (`CodexDetector` says the same of
+/// replies/codex/run-signed-out.json).
 struct CodexDriver: ProviderShape {
     var usesOutputFile: Bool { true }
 
@@ -29,10 +32,9 @@ struct CodexDriver: ProviderShape {
         for line in standardOutput.split(separator: UInt8(ascii: "\n")) {
             guard let event = ProviderShapes.object(Data(line)) else { continue }
             switch event["type"] as? String {
-            case "error": throw ToolFailure.reportedError
+            case "turn.failed": throw ToolFailure.reportedError
             case "turn.completed":
-                let usage = event["usage"] as? [String: Any]
-                tokens += ProviderShapes.count(usage?["input_tokens"]) + ProviderShapes.count(usage?["output_tokens"])
+                tokens = ProviderShapes.sum(tokens, ProviderShapes.tokens(event["usage"]))
             default: continue
             }
         }

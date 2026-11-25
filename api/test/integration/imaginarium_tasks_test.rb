@@ -58,6 +58,26 @@ class ImaginariumTasksTest < ActionDispatch::IntegrationTest
     assert_predicate check.fetch("reason"), :present?
   end
 
+  test "a workspace whose Imaginarium project lost its content before deletion was refused gets no gallery task" do
+    Project.where(id: @project_id).update_all(name: nil, goal: nil, content_deleted_at: @scenario.database_now)
+
+    call("add_task", token: @token, key: new_key, body: source)
+
+    assert_response :unprocessable_entity
+    assert_response_matches_contract
+    assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
+  end
+
+  test "the owner cannot delete the Imaginarium project's content, so the gallery keeps its project" do
+    call("delete_project_content", token: @token, key: new_key, ids: { "id" => @project_id })
+
+    assert_response :conflict
+    assert_response_matches_contract
+    assert_equal %w[refused invalid_state], [ response.parsed_body.fetch("outcome"), response.parsed_body.dig("refusal", "code") ]
+    assert_nil Project.find(@project_id).content_deleted_at
+    add(source)
+  end
+
   private
 
   def source

@@ -14,7 +14,7 @@ module Leverage
           @hold = Holds.open_holds(@task).find { |hold| hold.reason == "action_unconfirmed" }
         end
 
-        def refusals(_ctx)
+        def refusals(ctx)
           guards = if @hold.nil?
             [ "not_held_action_unconfirmed" ]
           elsif !available_builder?
@@ -22,7 +22,7 @@ module Leverage
           elsif !Actions.approvals_complete?(@task)
             %w[held_action_unconfirmed builder_seat_enabled approvals_pending]
           else
-            [ "held_action_unconfirmed", "builder_seat_enabled", "approvals_complete", builder_availability ]
+            [ "held_action_unconfirmed", "builder_seat_enabled", "approvals_complete", builder_availability(ctx.at) ]
           end
           [ state_refusal(@task.state, guards) ].compact
         end
@@ -39,9 +39,9 @@ module Leverage
 
         def available_builder? = @builder && Roles.acts_as?(@builder.role, "builder") && @builder.enabled && @builder.removed_at.nil?
 
-        def builder_availability
+        def builder_availability(at)
           return "builder_holds_task" if Finishing.builder_holds_task?(@task)
-          return "builder_free" if Finishing.builder_free?(@task, lease: :action)
+          return "builder_free" if Finishing.builder_free?(@task, lease: :action, at: at)
 
           "builder_busy"
         end

@@ -9,6 +9,42 @@ struct CredentialCleanup: Sendable {
     let vault: any TokenVault
     let requests: RunningRequests
     let log: Log
+    /// Which add last began for each credential.
+    var adds = LatestAdds()
+
+    /// Notes that an add of the request's credential begins, before it
+    /// saves anything.
+    func addBegan(_ request: HelperRequest) {
+        guard let credentialID = request.credentialID else { return }
+        adds.began(request.id, credentialID: credentialID)
+    }
+
+    /// Undoes what a finished add saved on this Mac, the token and the
+    /// account folder, when the server did not take the add's result. The
+    /// server deletes the unverified row at the next helper start and the
+    /// id is never listed again, so nothing else would ever remove them.
+    ///
+    /// It does nothing once a later add of the same credential began (the
+    /// Add sheet's Retry uses the same id, IN-24): what is saved then is
+    /// that add's. Unlike `forget`, the id is not forgotten, so Retry
+    /// works. True when it removed what the add saved.
+    @discardableResult
+    func rollBackAdd(_ request: HelperRequest) -> Bool {
+        guard let credentialID = request.credentialID else { return false }
+        let undone = adds.ifStillLatest(request.id, credentialID: credentialID) {
+            do {
+                try vault.delete(credentialID: credentialID)
+            } catch {
+                log.warning("could not delete the saved token of credential \(credentialID.contractString)")
+            }
+            // The folder this add made, as a failed add removes it.
+            folders.remove(for: credentialID)
+        }
+        if undone {
+            log.info("removed what the add of credential \(credentialID.contractString) saved: its result was not taken")
+        }
+        return undone
+    }
 
     func acceptToken(_ token: ProviderToken, credentialID: UUID) async {
         guard !requests.isForgotten(credentialID) else { return }
@@ -71,5 +107,28 @@ struct CredentialCleanup: Sendable {
             throw CocoaError(.fileReadUnknown)
         }
         return Data("\(device):\(inode)\n".utf8)
+    }
+}
+
+/// Which add request last began for each credential, so that an earlier
+/// add's late rollback never removes what a later add of the same id saved.
+/// A later add that begins while a rollback runs waits for it, and then
+/// makes its folder and saves its token afresh.
+final class LatestAdds: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest: [UUID: UUID] = [:]
+
+    func began(_ requestID: UUID, credentialID: UUID) {
+        lock.withLock { latest[credentialID] = requestID }
+    }
+
+    /// Runs `undo` when `requestID` is still the credential's latest add;
+    /// true when it ran.
+    func ifStillLatest(_ requestID: UUID, credentialID: UUID, _ undo: () -> Void) -> Bool {
+        lock.withLock {
+            guard latest[credentialID] == requestID else { return false }
+            undo()
+            return true
+        }
     }
 }

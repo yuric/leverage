@@ -4,16 +4,17 @@ require_relative "rows"
 # db:grants (lib/tasks/db_grants.rake) creates the leverage_app role and
 # grants it, from information_schema, SELECT and INSERT on the append-only
 # tables, SELECT alone on the read-only ones (backup_runs, which the owner
-# role's backup writes: milestone 3 plan HB-4) and SELECT, INSERT, UPDATE
-# and DELETE on every other table, never TRUNCATE (PRD, Data model; C1,
-# DB-7). It runs after db:prepare,
+# role's backup writes: milestone 3 plan HB-4; and Rails' own
+# schema_migrations and ar_internal_metadata, which only the owner role's
+# migrations write) and SELECT, INSERT, UPDATE and DELETE on every other
+# table, never TRUNCATE (PRD, Data model; C1, DB-7). It runs after db:prepare,
 # db:schema:load and db:migrate, and test_helper runs it on each parallel
 # worker's database.
 class GrantsTest < ActiveSupport::TestCase
   include DbRows
 
   APPEND_ONLY = %w[events rule_versions].freeze
-  READ_ONLY = %w[backup_runs].freeze
+  READ_ONLY = %w[backup_runs schema_migrations ar_internal_metadata].freeze
   READ_WRITE = %w[DELETE INSERT SELECT UPDATE].freeze
 
   def grants
@@ -111,6 +112,19 @@ class GrantsTest < ActiveSupport::TestCase
     db.execute("GRANT INSERT, UPDATE, DELETE, TRUNCATE ON backup_runs TO leverage_app")
     run_grants
     assert_equal %w[SELECT], grants["backup_runs"]
+  end
+
+  # The owner role's migrations are the only writer of Rails' two
+  # bookkeeping tables. A role that could delete a version row would make
+  # the next server start run that migration again, and fail.
+  test "leverage_app may only read schema_migrations and ar_internal_metadata, even after rights granted by hand" do
+    run_grants
+    %w[schema_migrations ar_internal_metadata].each do |table|
+      assert_equal %w[SELECT], grants[table], table
+      db.execute("GRANT INSERT, UPDATE, DELETE, TRUNCATE ON #{table} TO leverage_app")
+    end
+    run_grants
+    %w[schema_migrations ar_internal_metadata].each { |table| assert_equal %w[SELECT], grants[table], table }
   end
 
   test "rights granted by hand beyond the rule are taken back" do

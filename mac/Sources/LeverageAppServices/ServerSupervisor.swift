@@ -48,12 +48,18 @@ public actor ServerSupervisor: ServerSupervising {
         /// `leverage` project (PK-2).
         public static let defaultComposeProject = "leverage-app"
 
-        /// `LEVERAGE_COMPOSE_PROJECT`, else `leverage-app`.
-        public static func composeProject(environment: [String: String]) -> String {
-            guard let name = environment[EnvironmentKeys.composeProject], !name.isEmpty else {
+        /// `LEVERAGE_COMPOSE_PROJECT`; else `leverage-app` for the standard
+        /// support folder and `leverage-app-<suffix>` for any other, so that
+        /// a second folder's server never replaces the owner's containers.
+        public static func composeProject(
+            environment: [String: String],
+            home: URL = FileManager.default.homeDirectoryForCurrentUser
+        ) -> String {
+            if let name = environment[EnvironmentKeys.composeProject], !name.isEmpty { return name }
+            guard let suffix = SupportFolder(environment: environment, home: home).isolationSuffix else {
                 return defaultComposeProject
             }
-            return name
+            return "\(defaultComposeProject)-\(suffix)"
         }
 
         /// The `leverage-api` image reference.
@@ -142,9 +148,23 @@ public actor ServerSupervisor: ServerSupervising {
             return move(to: .imageMissing)
         }
 
+        let files = ServerFiles(supportFolder: configuration.supportFolder)
+        if !files.hasDatabasePassword() {
+            // New passwords would lock the app out of a database Docker still
+            // keeps: PostgreSQL holds the ones it was made with. Write nothing.
+            let volume = await self.docker(
+                docker, ["volume", "inspect", "\(configuration.composeProject)_db-data"], timeLimit: .seconds(30))
+            if volume?.succeeded == true {
+                log.error(
+                    "the database volume \(configuration.composeProject)_db-data exists, "
+                        + "but the server folder holds no database password")
+                return move(to: .databasePasswordsMissing)
+            }
+        }
+
         let settings: ServerSettings
         do {
-            settings = try ServerFiles(supportFolder: configuration.supportFolder).prepare(
+            settings = try files.prepare(
                 composeSource: configuration.composeSource, imageTag: configuration.imageTag,
                 isPortFree: isPortFree)
         } catch {

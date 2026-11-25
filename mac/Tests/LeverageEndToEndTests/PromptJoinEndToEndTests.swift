@@ -188,7 +188,7 @@ private struct PromptStandInAgent {
     let client: any AgentAPI
 
     init(landingPrompt: String) throws {
-        guard let fields = landingPrompt.wholeMatch(of: #/Join Leverage at (https?://\S+) with token ([A-Za-z0-9_-]+)\. Fetch GET (\S+) with header Authorization: Bearer ([A-Za-z0-9_-]+) and follow its instructions exactly\./#),
+        guard let fields = landingPrompt.wholeMatch(of: #/Join Leverage at (https?://\S+) with token ([A-Za-z0-9_-]+)\. Fetch GET (\S+) with header Authorization: Bearer ([A-Za-z0-9_-]+) and follow its instructions exactly\. Never put the token on a command line, where other accounts on this computer can read it: send the header from a file that only you can read\./#),
               let address = URL(string: String(fields.1)),
               fields.3 == "\(fields.1)/v1/join", fields.2 == fields.4 else {
             throw EndToEndFailure("the agent did not receive a one-line HTTP landing prompt")
@@ -204,6 +204,11 @@ private struct PromptStandInAgent {
         let namesRoleFile = join.text.lowercased().contains("role file")
         let hasJobRules = SeatRole.general.jobRules.allSatisfy { join.text.contains($0) }
         try #require(keepsPolling && stopsOn401 && !namesRoleFile && hasJobRules, "incorrect General join guidance")
+        // The one call the instructions show sends the token from a file,
+        // never as an argument, which every account on the Mac can read.
+        #expect(join.text.contains("curl -sS -H @FOLDER/header"), "the join call does not read its header from a file")
+        #expect(!join.text.contains("-H \"Authorization") && !join.text.contains("$LEVERAGE_SEAT_TOKEN"),
+                "the join instructions put the token on a command line")
     }
 
     func claimTask() async throws -> TaskClaim {

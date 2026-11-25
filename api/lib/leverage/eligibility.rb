@@ -177,12 +177,16 @@ module Leverage
     # not removed, and, for a seat the app runs, one of its candidates is
     # available for the task at at (HE-14); its run need not be on it yet:
     # the fresh lease starts on the first of them and the run follows
-    # (HD-1). It reads the rows: FailReview first ends the builder's leases
+    # (HD-1). It reads the rows, for a General seat too: a task or a review
+    # whose lease is past its due time is still held until a timer ends the
+    # lease, and one seat holds one task (the unique index on
+    # tasks.holder_seat_id). FailReview first ends the builder's leases
     # that are past their due time (Timers.apply_held_by), as the claims end
-    # the leases in their way (Timers.apply_claimable).
+    # the leases in their way (Timers.apply_claimable); a task that waits in
+    # Finishing gets its lease in the command that ends the lapsed one.
     def builder_free?(seat, task = nil, at: Time.current)
       return false unless seat&.enabled && !seat.paused && seat.removed_at.nil?
-      return false if holds_anything?(seat, at: at)
+      return false if holds_rows?(seat) || holds_anything?(seat, at: at)
 
       seat.credential_id.nil? || !Candidates.first_available(seat, task, at).nil?
     end
@@ -229,6 +233,13 @@ module Leverage
 
     def rework_free?(seat, task, at:)
       seat && Permissions.builds?(seat) && builder_free?(seat, task, at: at)
+    end
+
+    # Whether a task or an open review row names the seat, whatever its
+    # lease's due time.
+    def holds_rows?(seat)
+      Task.where(workspace_id: seat.workspace_id, holder_seat_id: seat.id).exists? ||
+        Review.where(workspace_id: seat.workspace_id, reviewer_seat_id: seat.id, verdict: nil).exists?
     end
 
     def holds_anything?(seat, at: Time.current)

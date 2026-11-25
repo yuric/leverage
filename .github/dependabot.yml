@@ -1,4 +1,11 @@
 version: 2
+# A pull request that changes api/Gemfile.lock or api/Dockerfile needs the
+# maintainer to add an `AR-007: N/A — <reason>` line to its description
+# and to run "Rules compliance" again (docs/ARCHITECTURE.md).
+#
+# The "docker" and "docker-compose" entries have not been seen to open a
+# pull request yet: their first run is the proof that they read the two
+# image lines.
 updates:
   # Keeps the actions in .github/workflows up to date. They are pinned to
   # commit SHAs, so nothing changes until one of these pull requests is merged.
@@ -12,5 +19,55 @@ updates:
       prefix: "chore(deps)"
     groups:
       actions:
+        patterns:
+          - "*"
+
+  # The API image's base, pinned by digest in api/Dockerfile. A pull request
+  # that moves it must also change the digest recorded in docs/adr/0002, and
+  # api/.ruby-version when the Ruby version moves: Dependabot edits neither.
+  # A new Ruby minor or major version is a decision (docs/adr/0002), not a
+  # bump, so it is left out. Dependabot names an image by its path without
+  # the docker.io registry, so the official Ruby image is "library/ruby".
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "library/ruby"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      api-image:
+        patterns:
+          - "*"
+
+  # The PostgreSQL image, pinned by digest in compose.yaml. The digest in
+  # docs/adr/0002 changes in the same pull request, by hand. A new
+  # PostgreSQL major version cannot open the existing data volume, so it is
+  # left out.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+    groups:
+      database-image:
+        patterns:
+          - "*"
+
+  # The API's gems, fixed in api/Gemfile.lock.
+  - package-ecosystem: "bundler"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gems:
         patterns:
           - "*"

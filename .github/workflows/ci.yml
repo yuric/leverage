@@ -29,6 +29,16 @@ jobs:
       - run: node --test scripts/test_marketing_demo.mjs
       - run: bash scripts/test_deploy_marketing_page.sh
 
+  subscription-preview:
+    name: Subscription preview tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: node --test docs/subscription/preview/mock-billing.test.cjs
+
   api:
     name: API tests and RuboCop
     runs-on: ubuntu-24.04
@@ -39,9 +49,18 @@ jobs:
           persist-credentials: false
       # The same containers as on the owner's Mac (compose.yaml): the API
       # image built from api/Dockerfile, and the PostgreSQL service the tests
-      # run against. The example values are made up; they never leave this job.
-      - name: Use the example configuration
-        run: cp .env.example .env
+      # run against. A copy of the example alone must start nothing: its
+      # secrets are empty. The values made after that never leave this job.
+      - name: Check that the example alone starts nothing
+        run: |
+          cp .env.example .env
+          if docker compose config --quiet 2>/dev/null; then
+            echo "compose accepted .env.example unchanged" >&2
+            exit 1
+          fi
+          rm .env
+      - name: Make the configuration
+        run: python3 -I scripts/make_env.py
       - name: Build the API image
         run: docker compose build
       - name: Run the API tests against PostgreSQL
@@ -153,8 +172,8 @@ jobs:
           swift --version
           docker --version
           docker compose version
-      - name: Use the example configuration
-        run: cp .env.example .env
+      - name: Make the configuration
+        run: python3 -I scripts/make_env.py
       - name: Build the helper, runner, MCP server and end-to-end tests
         working-directory: mac
         env:
@@ -164,6 +183,8 @@ jobs:
         run: python3 -I mac/Tests/StandIns/test_provider_tool.py
       - name: Self-test of the secret scan
         run: python3 -I scripts/test_secret_scan.py
+      - name: Self-test of the .env generator, and the example it reads
+        run: python3 -I scripts/test_make_env.py
       - name: Self-test of the end-to-end script and of these steps
         run: python3 -I scripts/test_e2e_core_loop.py
       - name: Self-test of the real Gemini check's refusals
@@ -210,12 +231,13 @@ jobs:
       - name: Speed smoke run
         run: scripts/speed_run.sh --smoke
 
-  # The eval suite of the rule "Every task needs specific details"
-  # (milestone 4 plan RV-1 to RV-6): its scorer, its check and the guards of
-  # its run script, none of which reaches a provider; then the check that
-  # the committed results meet the bar for each supported model. The
-  # results are written by the managing agent's eval run (plan §5.3), never
-  # in CI.
+  # The eval suites of "Every task needs specific details" and the
+  # approval of outward actions (milestone 4 plan RV-1 to RV-6, AV-1 to
+  # AV-6): the scorer's, the check's and the run script's self-tests, none
+  # of which reaches a provider; then the check that the committed results
+  # of both suites agree with their cases, wording, ledgers, budgets and
+  # the registry lists. A missed or not-run model is printed, not failed.
+  # The results are written by the maintainer's eval run, never in CI.
   evals:
     name: Eval suite
     runs-on: ubuntu-24.04
@@ -247,3 +269,9 @@ jobs:
         run: python3 -I scripts/check_imports.py
       - name: Self-test of the import check
         run: python3 -I scripts/test_check_imports.py
+      # No tracked file names a real user's home folder (/Users/<name>,
+      # /home/<name>): only the made-up names tests and docs use.
+      - name: No home folder in the tree
+        run: python3 -I scripts/check_home_paths.py
+      - name: Self-test of the home folder check
+        run: python3 -I scripts/test_check_home_paths.py

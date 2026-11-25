@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # v25.1.0 bundles markdownlint-cli2 0.24.2. A bump of this action also
+      # bumps the version in the npx commands of AGENTS.md and CONTRIBUTING.md.
       - uses: DavidAnson/markdownlint-cli2-action@3ce8f712b5d8f31acd8e201be6d97e3d2bb23eb7 # v25.1.0
         with:
           globs: "**/*.md"

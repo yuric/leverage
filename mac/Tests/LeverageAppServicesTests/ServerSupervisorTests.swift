@@ -16,6 +16,7 @@ struct ServerSupervisorTests {
         dockerStartTimeout: Duration = .seconds(10),
         healthTimeout: Duration = .seconds(10),
         mcpProgram: URL? = nil,
+        log: Log = Log(component: "test", write: { _ in }),
         healthy: @escaping @Sendable (URL) async -> Bool
     ) -> ServerSupervisor {
         var configuration = ServerSupervisor.Configuration(
@@ -30,7 +31,7 @@ struct ServerSupervisorTests {
         configuration.pollInterval = .milliseconds(20)
         return ServerSupervisor(
             configuration: configuration, runner: runner, isExecutable: probe.probe,
-            isPortFree: { _ in true }, healthCheck: healthy, log: Log(component: "test", write: { _ in }))
+            isPortFree: { _ in true }, healthCheck: healthy, log: log)
     }
 
     @Test("only compose up gets the bundled MCP command, with spaces preserved")
@@ -45,8 +46,9 @@ struct ServerSupervisorTests {
 
         #expect(await server.start() == .running(apiBaseURL: URL(string: "http://127.0.0.1:47130")!))
         let calls = fake.dockerCalls()
-        #expect(calls.map { $0.arguments.first } == ["info", "image", "compose"])
-        #expect(calls.map { $0.environment["LEVERAGE_MCP_COMMAND"] } == [nil, nil, mcpProgram.path])
+        // A first start looks for an earlier database before it writes passwords.
+        #expect(calls.map { $0.arguments.first } == ["info", "image", "volume", "compose"])
+        #expect(calls.map { $0.environment["LEVERAGE_MCP_COMMAND"] } == [nil, nil, nil, mcpProgram.path])
     }
 
     @Test("no Docker: dockerMissing, nothing run, and no path outside the given folder looked at")
@@ -77,7 +79,7 @@ struct ServerSupervisorTests {
         #expect(fake.openCalls().map(\.arguments) == [["-a", "Docker"]])
         let commands = fake.dockerCalls().map { $0.arguments.first ?? "" }
         #expect(commands.first == "info")
-        #expect(commands.suffix(3) == ["info", "image", "compose"])
+        #expect(commands.suffix(4) == ["info", "image", "volume", "compose"])
         // Every program run and every path looked at is inside the fake.
         #expect(runner.executables.value.allSatisfy { $0.hasPrefix(fake.root.path + "/") })
         #expect(probe.paths.value.allSatisfy { $0.hasPrefix(fake.root.path + "/") })
@@ -141,7 +143,7 @@ struct ServerSupervisorTests {
 
         _ = await server.start()
         let calls = fake.dockerCalls()
-        #expect(calls.count == 3)
+        #expect(calls.map { $0.arguments.first } == ["info", "image", "volume", "compose"])
         for call in calls {
             #expect(call.environment == [
                 "HOME": fake.home.path,
@@ -159,6 +161,29 @@ struct ServerSupervisorTests {
             == "leverage-app")
     }
 
+    @Test("a support folder of its own gets a compose project of its own, so it never takes over the owner's server")
+    func projectNameFollowsSupportFolder() throws {
+        let home = URL(fileURLWithPath: "/Users/made-up", isDirectory: true)
+        func name(_ environment: [String: String]) -> String {
+            ServerSupervisor.Configuration.composeProject(environment: environment, home: home)
+        }
+        #expect(name([:]) == "leverage-app")
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "/Users/made-up/Library/Application Support/leverage"]) == "leverage-app")
+        let first = name(["LEVERAGE_SUPPORT_DIR": "/tmp/a"])
+        #expect(first != "leverage-app")
+        #expect(first.hasPrefix("leverage-app-"))
+        #expect(first.wholeMatch(of: /[a-z0-9][a-z0-9_-]*/) != nil)
+        #expect(first == name(["LEVERAGE_SUPPORT_DIR": "/tmp/a"]))
+        #expect(first == name(["LEVERAGE_SUPPORT_DIR": "/tmp/a/"]))
+        #expect(first != name(["LEVERAGE_SUPPORT_DIR": "/tmp/b"]))
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "/tmp/a", "LEVERAGE_COMPOSE_PROJECT": "smoke-1"]) == "smoke-1")
+        // A relative folder is ignored by SupportFolder, so the default stays.
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "relative/folder"]) == "leverage-app")
+        let suffix = try #require(SupportFolder(environment: ["LEVERAGE_SUPPORT_DIR": "/tmp/a"], home: home).isolationSuffix)
+        #expect(first == "leverage-app-\(suffix)")
+        #expect(SupportFolder(environment: [:], home: home).isolationSuffix == nil)
+    }
+
     @Test("compose up failing: failed, with a reason for the log")
     func composeFails() async throws {
         let fake = try FakeDocker()
@@ -172,6 +197,68 @@ struct ServerSupervisorTests {
             return
         }
         #expect(reason.contains("compose up failed, made up"))
+    }
+
+    @Test("a database still in Docker with its passwords gone: nothing is written and compose is not run")
+    func passwordsGoneDatabaseKept() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        fake.set("volume-present")
+        let server = supervisor(fake, healthy: { _ in fake.isSet("compose-up") })
+        #expect(await server.start() == .databasePasswordsMissing)
+        #expect(await server.state() == .databasePasswordsMissing)
+        let docker = fake.calls().filter { $0.program == "docker" }.map(\.call.arguments)
+        #expect(docker.contains(["volume", "inspect", "leverage-app_db-data"]))
+        #expect(!docker.contains { $0.first == "compose" })
+        #expect(!FileManager.default.fileExists(
+            atPath: fake.supportFolder.appendingPathComponent("server/.env").path))
+    }
+
+    @Test("a first start, with no database volume yet, writes the passwords and runs compose")
+    func firstStartMakesPasswords() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        let server = supervisor(fake, healthy: { _ in fake.isSet("compose-up") })
+        guard case .running = await server.start() else {
+            Issue.record("expected running")
+            return
+        }
+        #expect(ServerFiles(supportFolder: fake.supportFolder).hasDatabasePassword())
+    }
+
+    @Test("with the passwords kept, the volume is not looked at")
+    func keptPasswordsSkipVolumeCheck() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        fake.set("volume-present")
+        try ServerFiles(supportFolder: fake.supportFolder).prepare(
+            composeSource: fake.composeSource, imageTag: "0.1.0-made-up", isPortFree: { _ in true })
+        let server = supervisor(fake, healthy: { _ in fake.isSet("compose-up") })
+        guard case .running = await server.start() else {
+            Issue.record("expected running")
+            return
+        }
+        #expect(!fake.calls().contains { $0.call.arguments.first == "volume" })
+    }
+
+    @Test("the reason a start failed is kept in the app's log file under the support folder")
+    func failureReachesLogFile() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        fake.set("compose-fails")
+        let file = AppLogFile(supportFolder: fake.supportFolder, alsoWrite: { _ in })
+        let server = supervisor(fake, log: Log(component: "app", write: file.write), healthy: { _ in true })
+        guard case .failed = await server.start() else {
+            Issue.record("expected failed")
+            return
+        }
+        let written = try String(contentsOf: file.url, encoding: .utf8)
+        #expect(written.contains("docker compose up failed"))
+        #expect(file.url == fake.supportFolder.appendingPathComponent("logs/app.log"))
     }
 
     @Test("a server that never answers its health check: failed")

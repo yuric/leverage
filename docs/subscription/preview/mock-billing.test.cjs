@@ -122,6 +122,7 @@ test('applies immediate changes without a receipt and replaces a scheduled chang
   assert.equal(scheduled.scheduledPlanId, 'plus');
   const due = billing.failRenewal();
   assert.equal(due.planId, 'starter');
+  assert.equal(due.scheduledPlanId, null);
   assert.equal(due.paymentDue.planId, 'plus');
   assert.equal(due.paymentDue.amountCents, 2000);
   const recovered = billing.recoverPayment();
@@ -146,6 +147,47 @@ test('cancels at the end of the paid period and clears the scheduled change', ()
   assert.deepEqual(billing.cancelSubscription(), cancelled);
   assert.throws(() => billing.changePlan('pro', 'immediate'));
   assert.throws(() => billing.failRenewal());
+});
+
+test('cancels while a payment is due and takes no further payment', () => {
+  const billing = createMockBilling();
+  const active = subscribe(billing);
+  billing.changePlan('pro', 'renewal');
+  const due = billing.failRenewal();
+  const cancelled = billing.cancelSubscription();
+  assert.equal(cancelled.status, 'cancel_at_period_end');
+  assert.equal(cancelled.paymentDue, null);
+  assert.equal(cancelled.cancelOn, due.periodEnd);
+  assert.equal(cancelled.nextPaymentOn, null);
+  assert.equal(cancelled.scheduledPlanId, null);
+  assert.deepEqual(cancelled.receipts, active.receipts);
+  assert.deepEqual(billing.recoverPayment(), cancelled);
+  assert.deepEqual(billing.cancelSubscription(), cancelled);
+});
+
+test('changes plan while a payment is due and bills the new plan on retry', () => {
+  const billing = createMockBilling();
+  subscribe(billing, 'plus');
+  billing.failRenewal();
+  const changed = billing.changePlan('pro', 'immediate');
+  assert.equal(changed.status, 'payment_due');
+  assert.equal(changed.planId, 'pro');
+  assert.equal(changed.paymentDue.planId, 'pro');
+  assert.equal(changed.paymentDue.amountCents, 10000);
+  const recovered = billing.recoverPayment();
+  assert.equal(recovered.planId, 'pro');
+  assert.equal(recovered.receipts[0].planId, 'pro');
+  assert.equal(recovered.receipts[0].amountCents, 10000);
+
+  billing.failRenewal();
+  const scheduled = billing.changePlan('starter', 'renewal');
+  assert.equal(scheduled.status, 'payment_due');
+  assert.equal(scheduled.scheduledPlanId, 'starter');
+  assert.equal(scheduled.paymentDue.planId, 'pro');
+  const retried = billing.recoverPayment();
+  assert.equal(retried.planId, 'pro');
+  assert.equal(retried.receipts[0].planId, 'pro');
+  assert.equal(retried.scheduledPlanId, 'starter');
 });
 
 test('snapshots, independent instances, and reset keep state isolated', () => {

@@ -43,6 +43,21 @@ class SpeedDriverTest < ActiveSupport::TestCase
     flunk error.message
   end
 
+  # Production answers only a request addressed to loopback (config.hosts),
+  # so the driver, which reaches the API by its compose name, must not send
+  # that name as Host.
+  test "every call is addressed to loopback, whatever name the driver reaches the API by" do
+    client = Speed::Client.new("http://api:3000", Speed::Tally.new, token: "fake-token")
+    sent = []
+    reply = Struct.new(:code, :body).new("200", "{}")
+    client.define_singleton_method(:send_request) { |request| sent << request and reply }
+
+    client.call("get_health")
+    client.call("connect_seat", body: {})
+
+    assert_equal [ "127.0.0.1:3000", "127.0.0.1:3000" ], sent.map { |request| request["Host"] }
+  end
+
   test "the seats' first ticks are spread evenly over one tick, in the order they connected" do
     assert_equal [ 100.0, 100.5, 101.0, 101.5 ], Speed.seat_starts(100.0, seats: 4, tick: 2.0)
   end

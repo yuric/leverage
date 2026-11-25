@@ -133,6 +133,7 @@ enum EvalRun {
         let context = FlowContext(
             api: NoServer(), driver: counting, timing: .standard, log: Log(component: "eval", write: { _ in }),
             state: RunnerState(), workRoot: workRoot, home: configuration.home,
+            supportFolder: configuration.supportFolder,
             interruption: Interruption(provider: options.provider, hasCredential: false))
         let lines = Lines(path: options.out)
         var secondTries = 0

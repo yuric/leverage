@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
-| **Last updated** | 2026-11-24 |
+| **Last updated** | 2026-11-25 |
 
 This document says how to run and operate Leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -71,6 +71,16 @@ environment.
 
 ## The first run
 
+Before you add a login, read what the providers' terms say. A login runs
+the provider's own tool under your account. A provider may not allow its
+tool to be driven by another app, or work to move between two logins of
+one provider, and may suspend an account. Google's documents say neither is
+supported on consumer plans. The providers' documents were read by AI
+agents on 2026-11-18, and not all of them in full, so read your provider's
+terms yourself before relying on that reading
+([provider terms check](research/provider-terms/README.md),
+[PRD Risks](PRD.md#risks)). An API token is the alternative to a login.
+
 1. Open `Leverage.app`. It starts Docker Desktop if needed, writes its
    server folder and starts the containers; the first start takes a few
    seconds once the images are on the Mac.
@@ -119,8 +129,19 @@ How it connects, then connect the seat. Copy the one landing prompt and
 paste it into an agent on the same Mac. The prompt contains the seat's
 token and the loopback address. It tells the agent to fetch `GET /v1/join`
 using that token, then follow the instructions and keep polling for
-work. Keep the prompt private. The roster labels
+work. Keep the prompt private. Copy puts it on this Mac's clipboard only,
+not on the owner's other devices, and marks it so that clipboard-history
+tools that honour the mark skip it. The roster labels
 the seat "Connected by prompt."
+
+A token passed on a command line can be read by every other account on
+the Mac for as long as that command runs, through the process list. The
+prompt and the HTTP instructions therefore tell the agent to keep the
+token in a file in a folder only its own account can read, and to send
+the header from that file (`curl -H @file`). An agent that puts the
+token in a command anyway exposes it that way until the seat is
+removed. Through MCP the token is in the settings that start the
+bundled server, which passes it in the child's environment.
 
 To give the agent another landing prompt, choose **Remove** in the roster
 and connect a new seat. The removed seat's next call answers `401` and the
@@ -169,6 +190,26 @@ Codex reads `AGENTS.md` in the work folder and under `CODEX_HOME`.
 Which files Antigravity and Grok Build read from their work or home
 folders remains unverified.
 
+### Folders a tool may change
+
+A build's tool is started in the folder the task's "Where the work is"
+names, in a mode that lets it edit files, and it may change anything
+inside that folder. Name the project's own folder, not a folder that
+holds other things. An agent may write that field too, so the runner
+runs no tool, for a build, a review or an outward action, in:
+
+- the Mac's root, your home folder itself, or a folder above it;
+- Leverage's support folder, a folder above it or anything in it, except
+  the folder the builder made for a task under `work/`;
+- `~/Library`, except folders inside `~/Library/CloudStorage` and
+  `~/Library/Mobile Documents`, where cloud drives keep documents.
+
+A link to one of these folders is refused as well. A task that names one
+is given back like a task whose folder does not exist, and the seat's log
+says that its work reference names no folder a tool may be run in. Other
+folders that hold secrets, such as `~/.ssh` or a tool's own settings
+folder under your home folder, are not refused.
+
 ## Where things live
 
 | What | Where |
@@ -184,8 +225,21 @@ folders remains unverified.
 | Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
 | Tools Leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
-| Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
+| Logs | `<support folder>/logs/app.log` (the app: why the server or its services did not start), `logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
+| What the API answered | Nowhere on the Mac: the app, the helper, the runner and the MCP server call the API with no URL cache and no cookies |
+| The appearance choice | The macOS preferences of the app bundle (`local.leverage.app`), key `appAppearance`; not under the support folder, so `LEVERAGE_SUPPORT_DIR` does not separate it |
+
+Versions before this one kept a URL cache: each answer of the API and
+its request, with the bearer token, in plain files in
+`~/Library/Caches/local.leverage.app` and, for programs run outside the
+app, `~/Library/Caches/LeverageHelper`, `LeverageRunner` and
+`LeverageMCP`. Each program now removes its own `Cache.db`,
+`Cache.db-shm`, `Cache.db-wal` and `fsCachedData` there when it starts.
+After moving from such a version, sign out and in again once, which ends
+the owner session those files held, and remove and connect again any
+agent that connected on its own, whose token does not change by itself.
+You may delete the four folders.
 
 After sign-in, the row under the system health line shows the sign-in
 email. Open that row to reach Settings or Sign out. The Leverage menu
@@ -212,6 +266,23 @@ removing the folder, finding it absent or keeping it because ownership
 could not be verified.
 Readings are kept with their credential. The sweep deletes finished
 and failed read requests after seven days.
+
+An Add saves the token, or the signed-in settings folder, before the
+server takes the add's result. When the server does not take it (it
+refuses it, or the helper stops or gives up before it is sent), the
+helper removes what that add saved, so nothing stays for a credential
+that Credentials will never list. If the result did reach the server
+although the helper could not tell, the credential is listed without its
+token or sign-in: Verify fails, and Sign in again, or Remove and Add,
+mends it.
+
+Three cases still leave something behind that Credentials does not list
+and so cannot remove: the helper is killed outright during an Add, the
+app quits between a Remove and its cleanup record, or the database is
+restored from a dump older than a credential, or replaced. What is left
+is a Keychain item (service `leverage API token`, account the credential
+ID) or a folder `<support folder>/accounts/<credential id>/`. Delete it
+by hand: the item in Keychain Access, the folder in the Finder.
 
 ## Where the log is, and what destroys it
 
@@ -246,6 +317,47 @@ The App round 1 migration folds each task's old goal into its details
 before dropping the goal column. For the handling of empty or duplicate
 text, see [UI-1](../api/contract/decisions.md#app-round-1-ui).
 
+One migration changes rows and no table: it rebuilds, from the log, the
+steps of every task that began as an Imaginarium idea with its checks.
+Those steps were stored wrongly until the step tracker read the criteria
+that `task.created` lists, and the replay test
+(`leverage:verify_log`) now finds each such row. The migration runs once,
+when the updated server first starts, writes no event and leaves a
+database with no such task as it is. Run `leverage:verify_log` after the
+upgrade to see that the log passes.
+
+### If the server folder was lost
+
+The database passwords and `SECRET_KEY_BASE` live only in
+`<support folder>/server/.env`, and PostgreSQL keeps the owner role's
+password it was made with. When that file, or the whole support folder, is
+gone while the volume is not, the app finds the volume
+(`docker volume inspect leverage-app_db-data`), writes nothing, starts
+nothing, and says that the database needs its password back. The log is
+then still in the volume, and may be its only copy if the backups folder
+went with the support folder: do not remove the volume to get the app
+going again.
+
+Put the old `server/.env` back from a copy of the Mac, if there is one,
+and choose Try again. Otherwise give the owner role a new password through
+the database container, which still runs, and keep that password in a new
+`.env`:
+
+```bash
+support="$HOME/Library/Application Support/leverage"
+password=$(openssl rand -hex 16)
+docker start leverage-app-db-1        # if it is not running
+docker exec leverage-app-db-1 psql -U leverage -d postgres \
+  -c "ALTER ROLE leverage PASSWORD '$password'"
+mkdir -p -m 700 "$support/server"
+(umask 077 && printf 'POSTGRES_PASSWORD=%s\n' "$password" > "$support/server/.env")
+```
+
+Then choose Try again. The app keeps that password and makes the others
+again; the API's own role, `leverage_api`, gets its new password from
+`db:grants` when the server starts. These steps have not been run against
+an owner's installation.
+
 Each time the server starts, after the database is prepared,
 `bin/rails leverage:install_shipped_rules` writes the seven shipped rules
 of any workspace that has none. On upgrade it also moves an unchanged
@@ -254,7 +366,9 @@ to the new default. The upgrade preserves the rule's switch setting and
 any owner edits. See [Shipped rules](PRD.md#shipped-rules). The command
 prints one line per workspace it changed. The rules are part of every
 briefing, so an agent whose briefing changed is told at its next call
-and reads it again.
+and reads it again. Then `bin/rails leverage:install_imaginarium_project`
+creates the Imaginarium project of any workspace that has none, once, and
+prints one line per workspace it wrote.
 
 ## Backups and restore
 
@@ -277,7 +391,9 @@ How the backup and the restore are built is
 - **Where.** For the app, `<support folder>/backups`, which the app makes
   with mode 0700 and names in `LEVERAGE_BACKUP_DIR` in its server folder's
   `.env`. For a server started from the repository, the folder in
-  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored).
+  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored). A
+  dump (`*.dump`, `*.dump.partial`) is git-ignored by its name wherever
+  in the checkout it is written.
 - **How many.** The newest `BACKUP_KEEP` (14) dumps that `backup_runs`
   names are kept; older ones are deleted with their row. A file in the
   folder that no `backup_runs` row names is never deleted, so a dump
@@ -309,12 +425,31 @@ in the app. `bin/restore` runs in the `backup` service, which has the
 folder and the database's owner role. It refuses to replace a database
 whose log holds an event unless given `--replace`; otherwise it checks
 that `pg_restore` can read the dump, restores it into a new database
-beside the one it replaces (`<name>_restoring_<hex>`), gives the database
+beside the one it replaces (`<name>_restoring_<hex>`), runs there the
+migrations the dump has not seen, gives the database
 roles their rights again (`db:grants`) and runs the replay test
 (`leverage:verify_log`) there, and only then drops the database and gives
-the new one its name. A dump that cannot be restored, or whose log fails
+the new one its name. A dump made before the migration that rebuilt the
+steps of Imaginarium ideas (see
+[Where the log is](#where-the-log-is-and-what-destroys-it)) has the same
+repair in the new database, before the replay test; a later dump is tested
+as it is. A dump that cannot be restored, or whose log fails
 the replay test, or a database that cannot be dropped, leaves the database
-as it was and removes the new one. If the database was dropped and the
+as it was and removes the new one.
+
+A dump carries the schema of the version that made it. One made by an
+earlier version is therefore brought to this version's schema in the new
+database before the replay test, so the dumps kept from before an upgrade
+stay restorable with the same command; a migration that fails there is a
+failed step like any other. A dump made by a later version than the image
+that runs `bin/restore` is refused, with a message that says so: restore
+it with that version.
+
+The restore also sets the transaction id kept with every restored event
+(`events.xact_id`) to 0. That id is how the database knows that a task's
+state changed in a transaction that wrote an event, and it means nothing
+outside the cluster that issued it: a new cluster issues the same numbers
+again. Every other column of the log is restored as it was. If the database was dropped and the
 new one could not take its name, the message names the new one, to rename
 by hand. It exits 0 only when every
 step passed, 1 when it refused or a step failed (its message says which),
@@ -336,7 +471,9 @@ volume removed, the restore into the new, empty cluster, and the same
 count, highest position and checksum of the events afterwards. It then
 removes the volume again, starts every service on the empty cluster as
 the app does, checks that the backup made no dump of it, and restores the
-same dump again.
+same dump again. It runs on a project of its own and removes it; its
+`--from-project` option, for the end-to-end runs, takes only a project
+whose name starts with `leverage-e2e-`, never the owner's or the app's.
 
 For the app, quit `Leverage.app` first so that it does not start the
 services again, and run the same three lines with the app's own files:
@@ -355,7 +492,10 @@ the drill runs the repository's form.
 **Afterwards, the owner** opens the app, which issues the helper a new
 token. In Credentials the owner runs Verify all and chooses Sign in again
 for any login that needs it. A provider token missing from this Mac needs
-to be removed and added again. Leverage tokens issued after the dump no longer
+to be removed and added again. A token or a settings folder saved for a
+credential the restored database does not hold stays on this Mac, and is
+deleted by hand (see [Where things live](#where-things-live)). Leverage
+tokens issued after the dump no longer
 match, and the log holds nothing written after the dump. The app finds by
 itself that the Needs you cursor it keeps (`<support folder>/inbox-cursor`)
 is of the log before the restore, starts it again, and announces every
@@ -368,14 +508,27 @@ after it are kept until removed by hand.
 
 This is the developer's path, from the repository root. The API and the
 database read their settings from a `.env` file at the root, which
-[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it from
-the example, then replace the made-up values:
+[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it
+with the script, which copies `.env.example` and gives the two database
+passwords and `SECRET_KEY_BASE` random values of its own (mode 0600; it
+never writes over a `.env` that is there). The end-to-end scripts run it
+too when there is no `.env`:
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 docker compose build
 docker compose up -d
 ```
+
+`.env.example` leaves those three values empty, and compose stops with a
+message while `POSTGRES_PASSWORD` or `SECRET_KEY_BASE` is empty, so a
+copy of the example alone starts nothing and no server runs on a password
+published in this repository. That matters most on a Linux host shared
+with other users, where the database container's address can be reached
+from the host; on the Mac the database publishes no port. The passwords
+are set when the database volume is first made: changing
+`POSTGRES_PASSWORD` in `.env` afterwards does not change the role's
+password and stops the API from connecting.
 
 `up` starts four services: `db`, `api` (it prepares the database first),
 `sweep`, which applies due timers every 15 seconds and purges command keys
@@ -386,9 +539,9 @@ older than 7 days once an hour
 | Variable | Used by | Required | What it does |
 | --- | --- | --- | --- |
 | `POSTGRES_USER` | db, api, sweep | Yes | The PostgreSQL user, the database's owner role. compose stops with a message when it is unset. |
-| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. |
+| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. compose stops with a message when it is empty. |
 | `LEVERAGE_API_DB_PASSWORD` | api, sweep | No | The password of `leverage_api`, the login role the server and the sweep connect as; it cannot change the event log. Letters, digits and dashes only. Empty: they connect as `POSTGRES_USER`. |
-| `SECRET_KEY_BASE` | api, sweep | Yes | The key Rails signs with. Make one with `openssl rand -hex 64`. |
+| `SECRET_KEY_BASE` | api, sweep | Yes | Rails does not start in production without it. Leverage signs nothing with it: its tokens are random values whose SHA-256 digests the database keeps, so changing it ends no owner session, seat token or helper token ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md) says what ends each). compose stops with a message when it is empty. To make one by hand: `openssl rand -hex 64`. |
 | `RAILS_ASSUME_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `RAILS_FORCE_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `API_PORT` | compose | No, default `3000` | The port on `127.0.0.1` where the API answers. |
@@ -421,14 +574,14 @@ sets:
 | Variable | Read by | What it does |
 | --- | --- | --- |
 | `LEVERAGE_API_URL` | helper, runner, tests | The API's address, default `http://127.0.0.1:3000`. A value that is not an `http` or `https` URL with a host is ignored. |
-| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. |
-| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, default `leverage-app`. |
+| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. Any other folder gets a compose project `leverage-app-<suffix>` and a Keychain account `owner-session-<suffix>` of its own, eight hex digits drawn from the folder's path, so that it never takes over the owner's server or session. |
+| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, in place of `leverage-app` or `leverage-app-<suffix>`. |
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
-| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
+| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app`, `mcp` or `e2e`. |
 | `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_NOTIFICATIONS` | app | `off` keeps the app from asking for or posting a notification; `scripts/smoke_app.sh` sets it. A notification is posted only by the app opened as `Leverage.app`. |
-| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
+| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs, `questions_approvals` for the seven questions-and-approvals runs, `credentials` for the three Credentials cases), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh`, `scripts/e2e_rule_checks.sh`, `scripts/e2e_questions_approvals.sh` and `scripts/e2e_credentials.sh` set both. |
 | `LEVERAGE_EVAL`, `LEVERAGE_EVAL_REAL` | `LeverageRunner eval`, `scripts/eval_rule.sh` | The eval suite's name, without which neither runs, and `1` for a run on the real tools, which only the maintainer sets, by hand ([Eval suites and real checks](#eval-suites-and-real-checks)). |
 
 The helper's and a seat's tokens, and the run's inputs (among them
@@ -448,8 +601,9 @@ only on `127.0.0.1`, over plain HTTP. The app's database is the volume
 `leverage-app_db-data`; a server started from the repository uses
 `leverage_db-data`.
 
-CI runs the same containers with the example `.env`, and the whole loop with
-stand-in tools on Linux; see `.github/workflows/ci.yml`.
+CI runs the same containers with a `.env` made by `scripts/make_env.py`,
+and the whole loop with stand-in tools on Linux; see
+`.github/workflows/ci.yml`.
 
 The move to a server the owner controls is not decided in detail: _TBD_.
 
@@ -645,7 +799,44 @@ The server's logs are `docker compose -p leverage-app logs api sweep
 backup`: one `leverage.command` line per command with its timings, the
 sweep's passes and each dump. A request's logged parameters keep only
 ids, numbers and true or false; every other text, task text among it, is
-`[FILTERED]`. The Mac side's logs are under
-`<support folder>/logs/`. The daily backup is under
+`[FILTERED]`. Docker keeps at most three files of 10 MB of each
+container's output (`logging` in `compose.yaml`), so older lines are
+dropped. An existing installation takes that limit when an app built
+with it next starts the containers, which makes them again. The Mac
+side's logs are under
+`<support folder>/logs/`: `app.log` for the app, which says why the server
+did not start, `helper.log` and one log per run. The app also writes its
+lines to standard error, which a terminal shows when the app is opened
+from one. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.
+
+Every image the build pulls is named with a digest: the Ruby base image in
+`api/Dockerfile`, which names no separate build frontend, and the
+PostgreSQL image in `compose.yaml`
+([ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) records
+both). `.github/dependabot.yml` asks Dependabot for a weekly pull request
+that moves either digest or the gems in `api/Gemfile.lock`. Dependabot
+changes neither the digest recorded in ADR 0002 nor `api/.ruby-version`;
+whoever takes such a pull request changes them in it. No such pull request
+has been opened yet, so that Dependabot can read these files is unverified.
+
+### Updating the model list
+
+The model catalog is `api/contract/models.json`. The server refuses a model
+or an effort it does not list, and the Mac reads the same list from the
+generated `mac/Sources/LeverageKit/Generated/ModelCatalog.swift`. No
+automated job reaches a provider, so the list changes only by a pull
+request ([UX-4 and UX-5](../api/contract/decisions.md#app-round-2-ux)):
+
+1. Edit `models.json`. Give each new or changed fact its `evidence` (one of
+   the catalog's `evidence_levels`), its `source` and the date it was
+   checked (`checked_on`, YYYY-MM-DD). A `documented` fact cites the
+   vendor's page by its `https://` address. A `help` or `probe` fact cites a
+   file in the repository that names the model or default it evidences.
+   Per-model `efforts` are always `documented`.
+2. Run `python3 scripts/generate_swift_contract.py` and commit the
+   regenerated `ModelCatalog.swift`.
+3. Run `python3 -I scripts/check_model_catalog.py`,
+   `python3 -I scripts/test_check_model_catalog.py` and
+   `python3 -I scripts/generate_swift_contract.py --check`.

@@ -11,7 +11,7 @@ public struct AgentClient: AgentAPI {
         self.transport = transport
     }
 
-    public init(baseURL: URL, seatToken: String, session: URLSession = .shared) {
+    public init(baseURL: URL, seatToken: String, session: URLSession = HTTPTransport.uncachedSession) {
         transport = HTTPTransport(baseURL: baseURL, token: seatToken, session: session)
     }
 

@@ -54,7 +54,8 @@ The default mode uses the material an Orchestrator seat claims. Add
 tool's default model, with the General job rules and a null role file.
 Prompt connections and explicitly selected models are outside that
 coverage. The result records
-`mode: "general"` and `role_file_sha256: null`.
+`mode: "general"`, `role_file_sha256: null` and the job rules'
+`job_rules_sha256`.
 
 ```bash
 LEVERAGE_EVAL=approves-actions LEVERAGE_TOOL_DIR=<copy-of-stand-ins>/bin \
@@ -70,8 +71,12 @@ LEVERAGE_EVAL=approves-actions LEVERAGE_EVAL_REAL=1 \
 ```
 
 The hashes in `bar.json` freeze both case sets and their labels. If a model
-misses, the maintainer can revise the wording of the rule or role file, then
-rerun the main set for every model. Record the reason in the mode's ledger
+misses, the maintainer can revise the wording of the rule, the role file or
+the General job rules, then rerun the main set for every model. CI fails a
+result recorded against other wording, but does not see a change to the
+approval prompt's frame in `JobPrompts.swift`, to the decision parser or to
+a tool's check-mode flags; after one, the maintainer runs the suite again by
+hand. Record the reason in the mode's ledger
 under `changes`. With changed wording, the final main runs are followed by a
 real `--held-out` run once the held-out set is valid for the production input.
 Keep the held-out cases blind during tuning. Starting a held-out run closes
@@ -92,6 +97,8 @@ scores in aggregate.
 The real held-out run requires each candidate to match the contract
 action at its listed position. The offline checker counted two mismatches
 in the frozen held-out set. The first run met all three bars without
-a wording change, so the held-out set was unused. The current results mark
-the folded main cases as `not_run`. A future held-out real run refuses
+a wording change, so the held-out set was unused. On 2026-11-24 Codex and
+Antigravity were run on the folded main cases in both modes and met the
+bar; Claude Code is recorded `not_run` in both, and no held-out run was
+made. A future held-out real run refuses
 the set while the two mismatches remain.

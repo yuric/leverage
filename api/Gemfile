@@ -1,7 +1,16 @@
 source "https://rubygems.org"
 
-# Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.4", ">= 8.1.4.1"
+# The parts of Rails the API uses, not the `rails` gem, which would also lock
+# and install Action Mailer, Action Mailbox, Action Text, Active Storage and
+# Action Cable, left out by docs/adr/0002 (point 2). config/application.rb
+# requires each railtie it loads.
+gem "railties", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "activesupport", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "activemodel", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "activerecord", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "activejob", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "actionpack", "~> 8.1.4", ">= 8.1.4.1", require: false
+gem "actionview", "~> 8.1.4", ">= 8.1.4.1", require: false
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.1"
 # Use the Puma web server [https://github.com/puma/puma]

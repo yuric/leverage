@@ -142,6 +142,20 @@ class EligibilityTest < ActiveSupport::TestCase
     refute E.builder_free?(nil)
   end
 
+  test "a General builder whose lease is past due but not yet ended is not free for a fresh lease" do
+    general = @scenario.seat(role: "general")
+    task = @scenario.task(state: "working", builder: general)
+    now = @scenario.database_now
+    @scenario.make_due(task, at: now - 60)
+
+    refute E.builder_free?(general, at: now), "the row still names the seat as holder until a timer ends the lease"
+
+    reviewing = @scenario.seat(role: "general")
+    review = @scenario.review(@scenario.task(state: "in_review", builder: @builder), reviewer: reviewing)
+    @scenario.make_due(review, at: now - 60)
+    refute E.builder_free?(reviewing, at: now)
+  end
+
   test "a holder's task refusals: not_holder, forbidden, lease_expired and task_cancelled" do
     task = @scenario.task(state: "working", builder: @builder)
     assert_equal [], E.task_refusals(task, @builder)

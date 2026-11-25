@@ -68,10 +68,27 @@ struct AccountMenu: View {
         if context.ownerEmail == nil {
             Task { await context.loadOwnerIdentity() }
         }
-        switch anchor.showMenu(title: context.ownerEmail ?? ShellCopy.account.text) {
-        case .settings: openSettings()
-        case .signOut: Task { await signOut() }
-        case nil: break
+        Self.perform(
+            anchor.showMenu(title: context.ownerEmail ?? ShellCopy.account.text),
+            openSettings: { openSettings() }, signOut: signOut)
+    }
+
+    /// Runs what the owner chose: Settings opens Settings, Sign out does
+    /// what the app menu's Sign out does (FR-004). Returns the sign-out's
+    /// task, if one started.
+    @discardableResult
+    static func perform(
+        _ choice: AccountMenuAnchor.Choice?, openSettings: () -> Void,
+        signOut: @escaping @MainActor () async -> Void
+    ) -> Task<Void, Never>? {
+        switch choice {
+        case .settings:
+            openSettings()
+            return nil
+        case .signOut:
+            return Task { await signOut() }
+        case nil:
+            return nil
         }
     }
 }
@@ -86,16 +103,27 @@ private struct AccountMenuAttachment: NSViewRepresentable {
     func updateNSView(_ view: AccountMenuAnchor, context: Context) {}
 }
 
-private final class AccountMenuAnchor: NSView {
+final class AccountMenuAnchor: NSView {
     enum Choice { case settings, signOut }
 
-    private var choice: Choice?
+    /// The item the owner chose in the menu last shown.
+    private(set) var choice: Choice?
     private weak var header: NSMenuItem?
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func showMenu(title: String) -> Choice? {
         guard window != nil else { return nil }
+        let menu = makeMenu(title: title)
+        defer { header = nil }
+        let top = NSPoint(x: bounds.minX, y: bounds.maxY + menu.size.height)
+        _ = menu.popUp(positioning: nil, at: top, in: self)
+        return choice
+    }
+
+    /// The menu under the email: Subscription, not yet available, then
+    /// Settings ⌘ , and Sign out (FR-002). A choice is recorded in `choice`.
+    func makeMenu(title: String) -> NSMenu {
         choice = nil
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -103,7 +131,6 @@ private final class AccountMenuAnchor: NSView {
         let heading = NSMenuItem.sectionHeader(title: title)
         header = heading
         menu.addItem(heading)
-        defer { header = nil }
 
         let subscription = NSMenuItem(title: ShellCopy.subscription.text, action: nil, keyEquivalent: "")
         subscription.image = NSImage(systemSymbolName: "creditcard", accessibilityDescription: nil)
@@ -120,10 +147,7 @@ private final class AccountMenuAnchor: NSView {
         signOut.image = NSImage(systemSymbolName: "rectangle.portrait.and.arrow.right", accessibilityDescription: nil)
         signOut.target = self
         menu.addItem(signOut)
-
-        let top = NSPoint(x: bounds.minX, y: bounds.maxY + menu.size.height)
-        _ = menu.popUp(positioning: nil, at: top, in: self)
-        return choice
+        return menu
     }
 
     func updateTitle(_ title: String) {

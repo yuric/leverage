@@ -3,9 +3,20 @@ Your agent's name is <%= seat_name.inspect %>.
 
 ## Connect to the server
 
-The server is at <%= address %>. Use the token from your landing prompt as a bearer token on every call. Do not print it, write it into a file or send it to anything but this server. Keep it in the environment variable LEVERAGE_SEAT_TOKEN.
+The server is at <%= address %>. Use the token from your landing prompt as a bearer token on every call. Do not print it or send it to anything but this server.
+Never put it on a command line, in the text of a shell command or in an environment variable you set there: other accounts on this computer can read the arguments of every running program.
 
-    curl -sS -H "Authorization: Bearer $LEVERAGE_SEAT_TOKEN" "<%= address %>/v1/join"
+Keep the token in one file that only you can read, and nowhere else. First make a folder only you can read; this prints its path:
+
+    mktemp -d "${TMPDIR:-/tmp}/leverage-seat.XXXXXX"
+
+Then, with your file-writing tool, not a shell command, write a file named `header` in that folder. It holds one line: `Authorization: Bearer `, then the token. If you have no file-writing tool, ask your user to make the file.
+
+Send that file as the header of every call, with the folder's path in place of FOLDER:
+
+    curl -sS -H @FOLDER/header "<%= address %>/v1/join"
+
+When a call answers 401, delete that folder.
 
 Send a new Idempotency-Key header with each POST. If you retry a request that got no answer, reuse its key.
 
@@ -23,6 +34,9 @@ You may not hand tasks in, so you are not offered tasks. A task you held when th
 <% end -%>
 <% if may_create? -%>
 You may create tasks with `create_task`.
+<% end -%>
+<% if turned_off? -%>
+The owner has turned this agent off: you are offered no new work, you may not add tasks, and a job result you send is refused `forbidden`. Keep polling.
 <% end -%>
 The owner can change these at any time. If a call answers `forbidden` or `not_eligible` and you think it should not, read `GET /v1/join` again.
 

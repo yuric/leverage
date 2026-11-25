@@ -28,6 +28,12 @@ class AddTaskTest < ActiveSupport::TestCase
     { "title" => "Update the pricing page" }.merge(fields.stringify_keys)
   end
 
+  # The newest registered version of task.created's payload.
+  def newest = Leverage::Contract.event_type("task.created").fetch("schema_versions").max
+
+  # The one shape of task.created for a task that is not from the gallery.
+  def ordinary(state) = { "state" => state, "added_action_ids" => [], "imaginarium_entry" => nil, "added_criterion_ids" => [] }
+
   test "adds a task to the Backlog with task.created" do
     outcome = apply(body(details: "Use the price list.", priority: "high", work_reference: "~/work/pricing-page",
       state: "backlog"))
@@ -39,8 +45,24 @@ class AddTaskTest < ActiveSupport::TestCase
       task.attributes.values_at("title", "details", "work_reference", "priority", "state", "round",
         "contract_version", "holder_seat_id", "project_id")
     event = written.sole
-    assert_equal [ "task.created", "owner", @owner.id, task.id, 0, nil, { "state" => "backlog", "added_action_ids" => [] } ],
+    assert_equal [ "task.created", "owner", @owner.id, task.id, 0, nil, ordinary("backlog") ],
       [ event.type, event.actor_kind, event.actor_id, event.task_id, event.round, event.subject_kind, event.payload ]
+  end
+
+  test "every task.created is written at the newest version, in one shape, from the gallery or not" do
+    Leverage::Timers.apply_workspace(@scenario.workspace, "install_imaginarium_project", at: @scenario.database_now)
+    apply(body)
+    plain = written.sole
+    apply(body(state: "ideas"))
+    idea = written.sole
+    apply(body(imaginarium: { "entry_id" => "pocket-to-do", "catalog_version" => 1 }))
+    gallery = written.sole
+
+    assert_equal [ newest ] * 3, [ plain, idea, gallery ].map(&:schema_version)
+    assert_equal [ ordinary("backlog"), ordinary("ideas"), ordinary("backlog").merge("imaginarium_entry" => "pocket-to-do") ],
+      [ plain, idea, gallery ].map(&:payload)
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+    assert_empty Leverage::LogAudit.call(@scenario.workspace_id)
   end
 
   test "the Backlog and normal priority are the defaults" do
@@ -55,7 +77,7 @@ class AddTaskTest < ActiveSupport::TestCase
     task = Task.find(outcome.result.fetch("task_id"))
     assert_equal "ideas", task.state
     event = written.sole
-    assert_equal [ "task.created", { "state" => "ideas", "added_action_ids" => [] } ], [ event.type, event.payload ]
+    assert_equal [ "task.created", ordinary("ideas") ], [ event.type, event.payload ]
     assert_equal [ [ "idea", event.id ] ], TaskStep.where(task_id: task.id).pluck(:kind, :opening_event_id)
   end
 
@@ -101,7 +123,7 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal criteria.map { |criterion| criterion.values_at("text", "kind") }, stored.pluck(:text, :kind)
     assert_equal({ "state" => "ideas", "added_action_ids" => [], "imaginarium_entry" => "pocket-to-do",
       "added_criterion_ids" => stored.ids }, written.sole.payload)
-    assert_equal 2, written.sole.schema_version
+    assert_equal newest, written.sole.schema_version
     assert_equal [ "pocket-to-do", 2 ], Leverage::Reads::Shapes.task_summary(task)
       .values_at(:imaginarium_entry_id, :imaginarium_catalog_version)
     assert_empty Leverage::Replay.diff(@scenario.workspace_id)

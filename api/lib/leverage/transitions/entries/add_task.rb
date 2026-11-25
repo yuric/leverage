@@ -4,7 +4,9 @@ module Leverage
       # add_task (PRD Lifecycle L77; milestone 2 plan SC-3, SC-8; milestone
       # 3 plan HE-24): the owner adds a task to the Backlog, or to the
       # Ideas as an idea, now that Promote takes it out (SC-4 ends);
-      # task.created names the state.
+      # task.created names the state. Every task.created has one shape
+      # (DB-56): a task that is not from the gallery names no entry (null)
+      # and no criteria (an empty list).
       #
       # A project_id names a project of the workspace, and the task is that
       # project's (RD-52). A paused project holds the new task.
@@ -49,12 +51,9 @@ module Leverage
             priority: @params["priority"] || "normal", state: @state,
             imaginarium_entry_id: @imaginarium&.fetch("entry_id"), imaginarium_catalog_version: @imaginarium&.fetch("catalog_version"))
           definitions = Actions.create_for(task, Array(@params["actions"]))
-          payload = { state: @state, added_action_ids: definitions.added_ids }
-          if @imaginarium
-            payload[:imaginarium_entry] = task.imaginarium_entry_id
-            payload[:added_criterion_ids] = @criteria.empty? ? [] : ContractDiff.write(task, @criteria, at: ctx.at).added_ids
-          end
-          ctx.emit("task.created", task: task, payload: payload, schema_version: @imaginarium ? 2 : 1)
+          criterion_ids = @criteria.empty? ? [] : ContractDiff.write(task, @criteria, at: ctx.at).added_ids
+          ctx.emit("task.created", task: task, payload: { state: @state, added_action_ids: definitions.added_ids,
+            imaginarium_entry: task.imaginarium_entry_id, added_criterion_ids: criterion_ids })
           Projects.hold_if_paused(ctx, task)
           @result = { "task_id" => task.id }
         end

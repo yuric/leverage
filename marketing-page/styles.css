@@ -359,6 +359,7 @@ a.feature-card:hover, a.feature-card:focus-visible { border-color: #a7bfff91; ba
   text-wrap: balance;
 }
 
+.section-copy a { text-decoration: underline; text-underline-offset: .18em; }
 .section-copy > p:last-child { max-width: 34rem; color: var(--secondary); font-size: clamp(1rem, 1.6vw, 1.14rem); line-height: 1.65; }
 
 .workflow {

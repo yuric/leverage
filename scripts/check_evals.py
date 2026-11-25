@@ -2,8 +2,10 @@
 """CI's check of the rule eval suites. It never calls a provider.
 
 It checks bar.json, the cases and their recorded results against the
-shipped wording and the frozen case hashes, the run history against its
-ceilings, and the registry against passing results in every suite. The
+shipped wording and the frozen case hashes, each recorded run against the
+latest settled run of its ledger, the run history against its ceilings,
+and the registry against passing results in every suite. It checks that
+the files agree, not that a real run made them. The
 approval suite requires a held-out result after any change to the wording
 used in its primary runs. A recorded miss is printed as "MISS: ...".
 
@@ -22,6 +24,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import check_reply_fixtures  # noqa: E402
 import eval_score  # noqa: E402
 
 VERDICT_SUITE = "specific-details"
@@ -70,8 +73,20 @@ TOKENS = [
     ("a JSON Web Token", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
     ("a private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
 ]
+# Results are free text written by real tools on the maintainer's Mac, as
+# reply files are: they get the reply check's provider key shapes and its
+# home-folder path too.
+TOKENS += [(name, pattern) for name, pattern in check_reply_fixtures.TOKENS
+           if name in ("an xAI key", "a Google key", "a Google token", "a GitHub token")]
+HOME_PATH = check_reply_fixtures.HOME_PATH
+# Why a model was not run is typed by hand and printed in every CI log. It
+# says what the tool did, never the state of the maintainer's account with
+# the provider. The approval cases' "pay" actions are not screened: only a
+# not-run result's reason and misses are.
+ACCOUNT_STATE = re.compile(r"past[- ]?due|overdue|unpaid|billing|invoice|payment|subscription|credit card",
+                           re.IGNORECASE)
 # Result fields that hold hashes, not text.
-HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256"}
+HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256", "job_rules_sha256"}
 
 
 def strings(value, skip=frozenset()):
@@ -88,11 +103,14 @@ def strings(value, skip=frozenset()):
 
 
 def shapes(value, skip=frozenset()):
-    """What in a JSON value looks like an email address or a token."""
+    """What in a JSON value looks like an email address, a token or a path
+    into a user's home folder."""
     found = []
     for text in strings(value, skip):
         if EMAIL.search(text):
             found.append("an email address")
+        if HOME_PATH.search(text):
+            found.append("a path into a user's home folder")
         found += [name for name, pattern in TOKENS if pattern.search(text)]
     return sorted(set(found))
 
@@ -378,7 +396,10 @@ class Check:
             role = None
             if mode == "orchestrator" and (bar["kind"] == "decision" or role_path.exists()):
                 role = eval_score.role_file_sha256(role_path)
-            return instruction, role
+            job_rules = None
+            if mode == "general":
+                job_rules = eval_score.job_rules_sha256(self.root / "api" / "contract" / "roles.json")
+            return instruction, role, job_rules
         except (OSError, ValueError, eval_score.Refused) as error:
             self.problem("results", f"{self.suite.name}: the shipped wording cannot be read ({error})")
             return None
@@ -426,12 +447,16 @@ class Check:
         if result.get("status") not in ("run", "not_run"):
             bad("the status must be run or not_run")
             return
+        if result["status"] == "not_run" and any(
+                ACCOUNT_STATE.search(text) for text in strings([result.get("reason"), result.get("misses")])):
+            bad("its reason names account or billing state; say what the tool did, not why the account refused")
+            return
         if eval_score.record_mode(result) != mode:
             bad(f"the result must be in {mode} mode")
             return
         if result.get("suite") != self.suite.name or result.get("held_out", False) is not held:
             bad("was recorded for another suite or set")
-        instruction, role = wording
+        instruction, role, job_rules = wording
         if result.get("instruction_sha256") != instruction:
             bad("was recorded against another instruction than shipped_rules.json's; run the suite again")
         if result.get("cases_sha256") != case_set:
@@ -442,14 +467,21 @@ class Check:
         elif mode == "orchestrator" and role is not None:
             if result.get("role_file_sha256", LEGACY_ROLE_SHA256) != role:
                 bad("was recorded against another role file; run the suite again")
-        if bar["kind"] == "decision":
-            if result["status"] == "run":
-                matching = [entry for entry in runs if entry.get("provider") == provider
-                            and entry.get("held_out", False) is held and entry.get("reserved") is False]
-                run_keys = ("date", "tool_runs", "instruction_sha256", "role_file_sha256", "cases_sha256")
-                if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
-                    bad("the result does not match the latest settled run")
-                self.result_tool_runs(result, bar, bad)
+        if not valid_job_rules_hash(result, mode):
+            bad(f"has an invalid or missing job_rules_sha256 for {mode} mode")
+        elif mode == "general" and result["job_rules_sha256"] != job_rules:
+            bad("was recorded against other General job rules than roles.json's; run the suite again")
+        if result["status"] == "run":
+            # Both suites: a recorded run is the ledger's latest settled run
+            # of that model, and its tool runs are its cases'.
+            matching = [entry for entry in runs if entry.get("provider") == provider
+                        and entry.get("held_out", False) is held and entry.get("reserved") is False]
+            run_keys = ("date", "tool_runs", "instruction_sha256", "cases_sha256", "job_rules_sha256")
+            if not legacy:
+                run_keys += ("role_file_sha256",)
+            if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
+                bad("the result does not match the latest settled run")
+            self.result_tool_runs(result, bar, bad)
         try:
             met, scores = eval_score.rescore(result, cases, bar)
         except (eval_score.Refused, AttributeError, TypeError, KeyError) as refusal:
@@ -540,8 +572,8 @@ class Check:
             if not valid_role_hash(entry, mode, legacy):
                 self.problem("runs", f"{prefix}: a run has an invalid or missing role_file_sha256 for {mode} mode")
                 continue
-            if not decision:
-                valid_entries.append(entry)
+            if not valid_job_rules_hash(entry, mode):
+                self.problem("runs", f"{prefix}: a run has an invalid or missing job_rules_sha256 for {mode} mode")
                 continue
             hashes = eval_score.wording_hashes(entry)
             # Earlier main runs keep their original case hash and still use budget.
@@ -554,6 +586,9 @@ class Check:
                 continue
             if type(entry.get("reserved")) is not bool:
                 self.problem("runs", f"{prefix}: a run has an invalid reserved value")
+                continue
+            if not decision:
+                valid_entries.append(entry)
                 continue
             if held:
                 held_started = True
@@ -661,6 +696,14 @@ def valid_role_hash(record, mode, legacy):
         return legacy
     value = record["role_file_sha256"]
     return value is None if mode == "general" else digest(value)
+
+
+def valid_job_rules_hash(record, mode):
+    """A General record names the job rules it ran with; an Orchestrator
+    record ran with a role file and names none."""
+    if mode == "general":
+        return digest(record.get("job_rules_sha256"))
+    return record.get("job_rules_sha256") is None
 
 
 def category_pairs(categories):

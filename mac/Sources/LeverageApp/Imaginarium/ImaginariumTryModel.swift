@@ -31,6 +31,8 @@ final class ImaginariumTryModel {
     private var submission: Submission?
     private var taskID: UUID?
     private var editedPrompt: String?
+    /// The prompt Copy prompt last put on the pasteboard.
+    private var copiedPrompt: String?
 
     var fills: [String: String] = [:]
     var isEditingPrompt = false
@@ -51,6 +53,8 @@ final class ImaginariumTryModel {
     var canEdit: Bool { submission == nil }
     var savedProjectID: UUID? { submission?.projectID }
     var isChecking: Bool { state == .checking }
+    /// Copy prompt says Copied until the prompt changes (FR-037).
+    var copied: Bool { copiedPrompt == prompt }
 
     var criteria: [CriterionInput] {
         entry.doneWhen.map { CriterionInput(text: $0, kind: .build) }
@@ -60,6 +64,14 @@ final class ImaginariumTryModel {
     func undoEdits() {
         editedPrompt = nil
         isEditingPrompt = false
+    }
+
+    /// Copy prompt: the prompt as shown goes to the pasteboard of this Mac
+    /// only; nothing is sent (FR-037).
+    func copyPrompt(to write: @MainActor (String) -> Void = { Pasteboard.copy($0) }) {
+        let text = prompt
+        write(text)
+        copiedPrompt = text
     }
 
     func submit(_ destination: Destination, projectID: UUID) async {

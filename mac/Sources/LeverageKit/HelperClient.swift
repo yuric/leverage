@@ -11,7 +11,7 @@ public struct HelperClient: HelperAPI {
         self.transport = transport
     }
 
-    public init(baseURL: URL, helperToken: String, session: URLSession = .shared) {
+    public init(baseURL: URL, helperToken: String, session: URLSession = HTTPTransport.uncachedSession) {
         transport = HTTPTransport(baseURL: baseURL, token: helperToken, session: session)
     }
 

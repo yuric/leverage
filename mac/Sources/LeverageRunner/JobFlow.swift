@@ -108,6 +108,7 @@ extension JobToolRun {
         let runContext = FlowContext(
             api: context.api, driver: context.driver, timing: context.timing, log: context.log,
             state: context.state, workRoot: context.workRoot, home: context.home,
+            supportFolder: context.supportFolder,
             interruption: context.interruption.withoutInPlaceRetries)
         var tokens = 0
         for attempt in 1...attempts {

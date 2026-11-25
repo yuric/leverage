@@ -34,11 +34,22 @@ class DbRoleTest < ActiveSupport::TestCase
     refused { |db| db.execute("TRUNCATE events") }
   end
 
+  # Rails' bookkeeping tables decide which migrations the owner role runs
+  # at the next server start, so the login role only reads them.
+  test "under leverage_api schema_migrations and ar_internal_metadata can be read and not written" do
+    as_api_role { |db| assert_operator db.select_value("SELECT count(*) FROM schema_migrations"), :>, 0 }
+    refused { |db| db.execute("INSERT INTO schema_migrations (version) VALUES ('29991231235959')") }
+    refused { |db| db.execute("DELETE FROM schema_migrations") }
+    refused { |db| db.execute("UPDATE ar_internal_metadata SET value = value") }
+    refused { |db| db.execute("DELETE FROM ar_internal_metadata") }
+  end
+
   test "under leverage_api the transition function still writes: an event, a task and a commands row" do
     entry = Class.new(Leverage::Transitions::Entry) do
       def perform(ctx)
         task = Task.create!(workspace_id: ctx.workspace.id, state: "backlog")
-        ctx.emit("task.created", task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] })
+        ctx.emit("task.created", task: task,
+          payload: { state: "backlog", added_action_ids: [], imaginarium_entry: nil, added_criterion_ids: [] })
         @result = {}
       end
     end

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import Testing
@@ -32,6 +33,22 @@ struct AppearanceSettingsTests {
         reopenedPreference.wrappedValue = .system
         #expect(reopenedPreference.wrappedValue.colorScheme == nil)
         #expect(defaults.string(forKey: AppAppearance.preferenceKey) == AppAppearance.system.rawValue)
+    }
+
+    @Test("the choice reaches the whole app, so panels AppKit opens itself follow it; Same as this Mac follows the Mac")
+    func appliesAppWide() {
+        let app = NSApplication.shared
+        let before = app.appearance
+        defer { app.appearance = before }
+        #expect(AppAppearance.system.nsAppearance == nil)
+        #expect(AppAppearance.light.nsAppearance?.name == .aqua)
+        #expect(AppAppearance.dark.nsAppearance?.name == .darkAqua)
+        AppAppearance.dark.apply(to: app)
+        #expect(app.appearance?.name == .darkAqua)
+        AppAppearance.light.apply(to: app)
+        #expect(app.appearance?.name == .aqua)
+        AppAppearance.system.apply(to: app)
+        #expect(app.appearance == nil)
     }
 
     @Test("the Settings panel draws with each appearance selected", arguments: AppAppearance.allCases)
