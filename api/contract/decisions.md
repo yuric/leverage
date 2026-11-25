@@ -1474,7 +1474,8 @@ task. PRD places are named by their section.
   seat is counted, offered and leased as a task's builder only with Work
   and Deliver both on. Action leases read neither permission. Turning
   Deliver off first cancels a provisional Ready claim or pending Working
-  submit with `invalid_state`. It then releases the Working task with the
+  submit with `invalid_state` (conditional events under the guard
+  `turns_deliver_off_with_pending_transition`). It then releases the Working task with the
   app's new release reason `deliver_turned_off` (conditional event under the guard
   `turns_deliver_off_holding_working_task`), as disabling does; `task.released`
   v1's enum gains it in place (no build has been released, DB-48's

@@ -937,7 +937,8 @@ and every seat has three permissions. Its decisions are UX-1 to UX-16 in
   `deliver_turned_off`, the Needs you items `agent_task_incomplete` and
   `agent_tasks_at_limit`, the choices `complete_contract` and
   `draft_contract`, and the guards `seat_has_landed`,
-  `seat_has_not_landed` and `turns_deliver_off_holding_working_task`.
+  `seat_has_not_landed`, `turns_deliver_off_holding_working_task` and
+  `turns_deliver_off_with_pending_transition`.
   `task.released`, `inbox.opened` and `inbox.resolved` v1 gain the new
   values in place (DB-48's reasoning).
 - `openapi.json` gains `SeatPermissions` (on `Seat`, `ConnectSeatRequest`,
