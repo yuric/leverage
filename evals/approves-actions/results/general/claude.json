@@ -8,6 +8,7 @@
   "date": "2026-11-24",
   "mode": "general",
   "role_file_sha256": null,
+  "job_rules_sha256": "7a35c2a9e2664a18d7fa6a2a2eabf3ba67b91717a8cbcda5affc849d16264648",
   "instruction_sha256": "03bacc9c7231b0ae428ca8a6b600547955f70430e44797a6a75f631a268df63c",
   "cases_sha256": "b5faf19eda96a8190d44047daf6405069d7a9d681f6c35b64195e013c028e50b",
   "canary_word": null,

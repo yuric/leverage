@@ -86,7 +86,7 @@ HOME_PATH = check_reply_fixtures.HOME_PATH
 ACCOUNT_STATE = re.compile(r"past[- ]?due|overdue|unpaid|billing|invoice|payment|subscription|credit card",
                            re.IGNORECASE)
 # Result fields that hold hashes, not text.
-HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256"}
+HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256", "job_rules_sha256"}
 
 
 def strings(value, skip=frozenset()):
@@ -396,7 +396,10 @@ class Check:
             role = None
             if mode == "orchestrator" and (bar["kind"] == "decision" or role_path.exists()):
                 role = eval_score.role_file_sha256(role_path)
-            return instruction, role
+            job_rules = None
+            if mode == "general":
+                job_rules = eval_score.job_rules_sha256(self.root / "api" / "contract" / "roles.json")
+            return instruction, role, job_rules
         except (OSError, ValueError, eval_score.Refused) as error:
             self.problem("results", f"{self.suite.name}: the shipped wording cannot be read ({error})")
             return None
@@ -453,7 +456,7 @@ class Check:
             return
         if result.get("suite") != self.suite.name or result.get("held_out", False) is not held:
             bad("was recorded for another suite or set")
-        instruction, role = wording
+        instruction, role, job_rules = wording
         if result.get("instruction_sha256") != instruction:
             bad("was recorded against another instruction than shipped_rules.json's; run the suite again")
         if result.get("cases_sha256") != case_set:
@@ -464,12 +467,16 @@ class Check:
         elif mode == "orchestrator" and role is not None:
             if result.get("role_file_sha256", LEGACY_ROLE_SHA256) != role:
                 bad("was recorded against another role file; run the suite again")
+        if not valid_job_rules_hash(result, mode):
+            bad(f"has an invalid or missing job_rules_sha256 for {mode} mode")
+        elif mode == "general" and result["job_rules_sha256"] != job_rules:
+            bad("was recorded against other General job rules than roles.json's; run the suite again")
         if result["status"] == "run":
             # Both suites: a recorded run is the ledger's latest settled run
             # of that model, and its tool runs are its cases'.
             matching = [entry for entry in runs if entry.get("provider") == provider
                         and entry.get("held_out", False) is held and entry.get("reserved") is False]
-            run_keys = ("date", "tool_runs", "instruction_sha256", "cases_sha256")
+            run_keys = ("date", "tool_runs", "instruction_sha256", "cases_sha256", "job_rules_sha256")
             if not legacy:
                 run_keys += ("role_file_sha256",)
             if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
@@ -564,6 +571,9 @@ class Check:
             legacy = mode == "orchestrator" and "mode" not in entry and not decision
             if not valid_role_hash(entry, mode, legacy):
                 self.problem("runs", f"{prefix}: a run has an invalid or missing role_file_sha256 for {mode} mode")
+                continue
+            if not valid_job_rules_hash(entry, mode):
+                self.problem("runs", f"{prefix}: a run has an invalid or missing job_rules_sha256 for {mode} mode")
                 continue
             hashes = eval_score.wording_hashes(entry)
             # Earlier main runs keep their original case hash and still use budget.
@@ -686,6 +696,14 @@ def valid_role_hash(record, mode, legacy):
         return legacy
     value = record["role_file_sha256"]
     return value is None if mode == "general" else digest(value)
+
+
+def valid_job_rules_hash(record, mode):
+    """A General record names the job rules it ran with; an Orchestrator
+    record ran with a role file and names none."""
+    if mode == "general":
+        return digest(record.get("job_rules_sha256"))
+    return record.get("job_rules_sha256") is None
 
 
 def category_pairs(categories):

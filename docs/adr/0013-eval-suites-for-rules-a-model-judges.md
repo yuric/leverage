@@ -70,7 +70,10 @@ decisions are the milestone's plan RV-1 to RV-7.
 ## Consequences
 
 - A change to the instruction or a case fails CI until the suite is run
-  again, by the maintainer.
+  again, by the maintainer. So does a change to the role file for
+  Orchestrator results, and to the General role's job rules for General
+  results. A change to the prompt's frame, the parser or a tool's
+  check-mode flags does not; the maintainer runs the suite again by hand.
 - CI checks that each result agrees with its ledger's latest settled run,
   the cases and the wording, not that a real run made it. Only the
   maintainer's eval run changes the results, the ledgers and the registry

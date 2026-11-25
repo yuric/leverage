@@ -71,8 +71,8 @@ Through the production path, outside the server.
 `JobInputs`, from rows it writes and then rolls back. The default mode
 uses the material an Orchestrator seat claims. Add `--mode general` to
 use the material a General seat claims, with the contract's General job
-rules and a null role file. The result records `mode: "general"` and
-`role_file_sha256: null`.
+rules and a null role file. The result records `mode: "general"`,
+`role_file_sha256: null` and the job rules' `job_rules_sha256`.
 `LeverageRunner eval` gives each input to the tool with `CheckJob`'s
 prompt, check mode and parser. One run per case; a case with no verdict
 is run once more, as a check's second attempt would be, and then counts
@@ -125,5 +125,10 @@ and results for email or token shapes, refuses a not-run reason that names
 account or billing state (say what the tool did, not why an account
 refused), and scores each recorded run again.
 When an instruction or case changes, the recorded results need a rerun.
-A role file change also requires rerunning Orchestrator results. The check
-prints any recorded miss.
+A role file change also requires rerunning Orchestrator results, and a
+change to the General role's `job_rules` in `api/contract/roles.json`
+requires rerunning General results: each General result and ledger entry
+records them as `job_rules_sha256`. The check does not see a change to the
+check prompt's frame in `JobPrompts.swift`, to the verdict parser or to a
+tool's check-mode flags; after one, the maintainer runs the suite again by
+hand. The check prints any recorded miss.
