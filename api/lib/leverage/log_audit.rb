@@ -102,8 +102,11 @@ module Leverage
       question_job_queue_timeout question_job_run_timeout
     ].freeze
     # The workspace timers and the one-time write, by what their events name.
-    ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility",
-                    "agent_tasks_at_limit" => "reviewer_eligibility" }.freeze
+    ITEM_TIMERS = { "orchestrator_offline" => "orchestrator_offline", "no_reviewer_eligible" => "reviewer_eligibility" }.freeze
+    # The items a workspace timer only closes: a refused add_task opens the
+    # workspace cap's item under its own key, and the sweep closes it once
+    # the workspace is under the cap (UX-14).
+    ITEM_CLOSERS = { "agent_tasks_at_limit" => "reviewer_eligibility" }.freeze
     INSTALL = "install_shipped_rules".freeze
     INSTALL_IMAGINARIUM = "install_imaginarium_project".freeze
     # The withdrawals a timer that ends a waiting command writes before its
@@ -306,10 +309,12 @@ module Leverage
       return INSTALL_IMAGINARIUM if events.any? { |event| event.type == "project.created" }
       return if events.any? { |event| TIMER_EVENTS.key?(event.type) }
 
-      kinds = events.select { |event| event.type.start_with?("inbox.") }.filter_map do |event|
-        event.type == "inbox.opened" ? (event.payload || {})["kind"] : InboxItem.find_by(id: event.subject_id)&.kind
-      end
-      kinds.filter_map { |kind| ITEM_TIMERS[kind] }.first
+      events.select { |event| event.type.start_with?("inbox.") }.filter_map do |event|
+        next ITEM_TIMERS[(event.payload || {})["kind"]] if event.type == "inbox.opened"
+
+        kind = InboxItem.find_by(id: event.subject_id)&.kind
+        ITEM_TIMERS[kind] || ITEM_CLOSERS[kind]
+      end.first
     end
 
     # A job timeout always starts its timer. When the task's last effective

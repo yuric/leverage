@@ -169,4 +169,13 @@ class LogAuditAgentTasksTest < ActiveSupport::TestCase
     assert_equal [ nil, "app" ], [ closed.command_id, closed.actor_kind ]
     assert_empty audit
   end
+
+  test "the cap's item opened with no key is no timer's: only a refused add opens it" do
+    item = InboxItem.create!(workspace_id: scenario.workspace_id, kind: "agent_tasks_at_limit", about_kind: "workspace",
+      about_id: scenario.workspace_id, facts: {}, choices: [], opened_at: scenario.database_now)
+    opened = scenario.append("inbox.opened", subject: item, payload: { kind: item.kind })
+    assert_equal [ nil, "app" ], [ opened.command_id, opened.actor_kind ]
+
+    assert_match(/events with no command \(seq #{opened.seq}, inbox\.opened\): no command no timer writes them/, audit.sole)
+  end
 end
