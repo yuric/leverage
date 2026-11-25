@@ -195,7 +195,8 @@ struct AppModelLaunchTests {
             (.dockerNotStarting, .dockerNotStarting),
             (.imageMissing, .imageMissing),
             (.failed(reason: "made-up reason for the log"), .serverFailed),
-            (.notStarted, .serverFailed),
+            (.notStarted, .servicesUnavailable),
+            (.databasePasswordsMissing, .databasePasswordsMissing),
             (.starting, .serverFailed),
         ]
         for (state, phase) in table {
@@ -207,6 +208,17 @@ struct AppModelLaunchTests {
             #expect(model.signIn == nil)
             #expect(rig.owner.calls.isEmpty, "server \(state)")
         }
+    }
+
+    @Test("the start-up screens say where the reason is, and only Docker's own screens send the owner to Docker")
+    func startupSentences() {
+        #expect(!ShellCopy.servicesUnavailableBody.text.contains("Docker"))
+        #expect(!ShellCopy.servicesUnavailableTitle.text.isEmpty)
+        #expect(ShellCopy.servicesUnavailableBody.text.contains("logs/app.log"))
+        #expect(ShellCopy.serverFailedBody.text.contains("logs/app.log"))
+        // The database is safe in Docker; the screen sends the owner to the recovery, not to Docker Desktop.
+        #expect(ShellCopy.databasePasswordsMissingBody.text.contains("DEPLOY.md"))
+        #expect(!ShellCopy.databasePasswordsMissingBody.text.contains("Docker Desktop"))
     }
 
     @Test("while Docker Desktop is starting the window says so, then moves on when it has")

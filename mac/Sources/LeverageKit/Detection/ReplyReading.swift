@@ -20,13 +20,24 @@ enum ReplyReading {
         return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) as? [String: Any]
     }
 
-    /// A time a structured field gives in seconds since 1970.
+    /// The seconds since 1970 of years 0001 to 9999, the years the
+    /// contract's four-digit dates state (`CodexUsageParser` reads the same
+    /// range).
+    static let statedSeconds: ClosedRange<Double> = -62_135_596_800...253_402_300_799
+
+    /// A time a structured field gives in seconds since 1970. A tool's
+    /// output is untrusted: a value that is not finite ("nan", "inf",
+    /// `1e30`) or outside `statedSeconds`, such as a time in milliseconds,
+    /// states no time, and nothing is estimated (L615).
     static func time(fromSeconds value: Any?) -> Date? {
+        let seconds: Double?
         switch value {
-        case let number as NSNumber: Date(timeIntervalSince1970: number.doubleValue)
-        case let text as String: Double(text).map(Date.init(timeIntervalSince1970:))
-        default: nil
+        case let number as NSNumber: seconds = number.doubleValue
+        case let text as String: seconds = Double(text)
+        default: seconds = nil
         }
+        guard let seconds, seconds.isFinite, statedSeconds.contains(seconds) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     /// The first ISO 8601 time (`2026-11-19T12:00:00Z`, with or without

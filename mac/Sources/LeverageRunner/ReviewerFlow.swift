@@ -46,6 +46,7 @@ struct ReviewerFlow: Sendable {
         }
         if end != .paused { context.state.hold(.nothing) }
         if case .accountStopped(let report) = end { context.state.accountStopped(report) }
+        context.state.flowEnded(end, of: .review(reviewID))
         context.log.info("review \(reviewID.contractString): \(end.name)")
         return end
     }
@@ -100,8 +101,9 @@ struct ReviewerFlow: Sendable {
 
     private func attempt(_ reviewID: UUID, _ response: BriefingResponse, acknowledge: Bool) async throws -> Step {
         let api = context.api
-        guard let folder = WorkFolder.reviewer(reference: response.workReference, home: context.home) else {
-            context.log.warning("review \(reviewID.contractString): its work reference is not a local folder")
+        guard let folder = WorkFolder.reviewer(reference: response.workReference, places: context.places) else {
+            context.log.warning(
+                "review \(reviewID.contractString): its work reference names no folder on this Mac a tool may be run in")
             return .end(try await release(reviewID))
         }
         let hash = response.briefing.hash
@@ -110,7 +112,7 @@ struct ReviewerFlow: Sendable {
         }), reviewID) { return step }
 
         let numbered = Prompts.builderCriteria(of: response.briefing.contract.criteria)
-        let prompt = Prompts.reviewer(briefing: response.briefing, folder: folder)
+        let prompt = Prompts.reviewer(briefing: response.briefing)
         let answer: ToolAnswer
         let driver = context.driver
         switch try await context.interruption.run(for: .review(reviewID), {

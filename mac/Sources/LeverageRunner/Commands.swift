@@ -87,8 +87,15 @@ struct FlowContext: Sendable {
     let state: RunnerState
     let workRoot: URL
     let home: String
+    /// Leverage's support folder, which no task's tool is run in.
+    let supportFolder: String
     /// What a failed tool run means for the account (HD-5).
     let interruption: Interruption
+
+    /// What decides where a tool may be run.
+    var places: WorkFolder.Places {
+        WorkFolder.Places(home: home, supportFolder: supportFolder, workRoot: workRoot)
+    }
 
     /// Sends one command with a key of its own. A network failure sends it
     /// again with the same key, after a pause of at most 2 seconds, for as
@@ -180,6 +187,8 @@ final class RunnerState: @unchecked Sendable {
     private let lock = NSLock()
     private var heldNow: Held = .nothing
     private var failures = 0
+    private var giveBacks = 0
+    private var lastGivenBack: Held = .nothing
     private var stoppedAccount: RunEndReport?
 
     var held: Held { lock.withLock { heldNow } }
@@ -189,6 +198,33 @@ final class RunnerState: @unchecked Sendable {
     var consecutiveToolFailures: Int { lock.withLock { failures } }
     func toolAnswered() { lock.withLock { failures = 0 } }
     func toolFailed() { lock.withLock { failures += 1 } }
+
+    /// Flows in a row that ended by giving their work back, for whatever
+    /// reason: a failed tool run, a work reference that is no local folder,
+    /// a tool that says it cannot do it, a command that failed. The server
+    /// offers released work straight back to the seat, so three in a row
+    /// end the runner as three failed tool runs do (CL-22). Only a flow
+    /// that finished its work starts the count again: an answer of the tool
+    /// does not, since a tool that answers "cannot" every time has answered.
+    var consecutiveGiveBacks: Int { lock.withLock { giveBacks } }
+    /// The work the last such flow gave back, for a log line.
+    var lastGiveBack: Held { lock.withLock { lastGivenBack } }
+    func gaveBack(_ work: Held) {
+        lock.withLock {
+            giveBacks += 1
+            lastGivenBack = work
+        }
+    }
+    func workFinished() { lock.withLock { giveBacks = 0 } }
+
+    /// Counts how one flow ended.
+    func flowEnded(_ end: FlowEnd, of work: Held) {
+        switch end {
+        case .released: gaveBack(work)
+        case .finished: workFinished()
+        case .paused, .ended, .accountStopped: break
+        }
+    }
 
     /// The report of the account that stopped, once a flow found it (HD-6).
     var accountStop: RunEndReport? { lock.withLock { stoppedAccount } }

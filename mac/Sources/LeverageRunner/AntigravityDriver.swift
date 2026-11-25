@@ -33,9 +33,6 @@ struct AntigravityDriver: ProviderShape {
         guard let result = ProviderShapes.object(standardOutput) else { throw ToolFailure.unreadableOutput }
         guard result["status"] as? String == "SUCCESS" else { throw ToolFailure.reportedError }
         guard let text = result["response"] as? String else { throw ToolFailure.unreadableOutput }
-        let usage = result["usage"] as? [String: Any]
-        return ToolAnswer(
-            text: text,
-            tokens: ProviderShapes.count(usage?["input_tokens"]) + ProviderShapes.count(usage?["output_tokens"]))
+        return ToolAnswer(text: text, tokens: ProviderShapes.tokens(result["usage"]))
     }
 }

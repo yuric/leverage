@@ -14,7 +14,8 @@ enum RunnerExit: Int32, Sendable {
     case configuration = 1
     /// `401`: the seat's token is no longer good.
     case unauthenticated = 3
-    /// Three failed tool runs in a row (CL-22).
+    /// Three failed tool runs in a row, or three flows in a row that gave
+    /// their work back (CL-22).
     case toolFailures = 4
     /// The account stopped: a limit or a sign-out. The report line is on
     /// standard output (HD-6).
@@ -35,8 +36,9 @@ struct RunnerTiming: Sendable {
     var nextWait: Int
     /// The pause after an error before the next call.
     var errorPause: Duration
-    /// The pause after an item the seat cannot act on, or a refused claim,
-    /// since the item repeats until the seat acts.
+    /// The pause after an item the seat cannot act on, a refused claim, or
+    /// work the seat gave back, since the item repeats until the seat acts
+    /// and the server offers released work straight back.
     var idlePause: Duration
     /// The wait before the next heartbeat, from the lease's end and now.
     var heartbeatInterval: @Sendable (_ leaseDueAt: Date, _ now: Date) -> Duration
@@ -82,13 +84,14 @@ final class RunnerLoop: @unchecked Sendable {
 
     init(
         role: SeatRole, api: any AgentAPI, driver: any ToolDriver, workRoot: URL, home: String,
-        timing: RunnerTiming = .standard, interruption: Interruption? = nil, continuing: WorkToContinue? = nil,
+        supportFolder: String, timing: RunnerTiming = .standard, interruption: Interruption? = nil, continuing: WorkToContinue? = nil,
         log: Log
     ) {
         self.role = role
         self.continuing = continuing
         context = FlowContext(
             api: api, driver: driver, timing: timing, log: log, state: RunnerState(), workRoot: workRoot, home: home,
+            supportFolder: supportFolder,
             interruption: interruption ?? Interruption(provider: .claude, hasCredential: false))
     }
 
@@ -96,8 +99,9 @@ final class RunnerLoop: @unchecked Sendable {
     var endReport: RunEndReport? { context.state.accountStop }
 
     /// Continues the work it was started with, if any, then runs until
-    /// stopped, unauthenticated, three tool runs failed in a row, or the
-    /// account stopped; returns the exit code.
+    /// stopped, unauthenticated, three tool runs failed in a row, three
+    /// flows in a row gave their work back, or the account stopped; returns
+    /// the exit code.
     func run() async -> Int32 {
         let task = Task { await loop() }
         let stopped = lock.withLock {
@@ -176,8 +180,9 @@ final class RunnerLoop: @unchecked Sendable {
     }
 
     /// Runs one step of the loop and says whether the run ends: on a `401`,
-    /// a stop, an account that stopped (HD-6) or three failed tool runs in a
-    /// row (CL-22). Any other error is logged and paused after.
+    /// a stop, an account that stopped (HD-6), three failed tool runs in a
+    /// row, or three flows in a row that gave their work back (CL-22). Any
+    /// other error is logged and paused after.
     private func settle(_ step: () async throws -> Void) async -> RunnerExit? {
         do {
             try await step()
@@ -196,10 +201,27 @@ final class RunnerLoop: @unchecked Sendable {
             context.log.error("three tool runs in a row failed")
             return .toolFailures
         }
+        if context.state.consecutiveGiveBacks >= 3 {
+            // The server offers released work straight back to this seat,
+            // so going on would claim and give back the same work for ever.
+            let last = Self.name(context.state.lastGiveBack)
+            context.log.error("three flows in a row gave their work back, the last one \(last)")
+            return .toolFailures
+        }
         return nil
     }
 
-    /// Acts on one item; false when there was nothing to do with it.
+    private static func name(_ work: RunnerState.Held) -> String {
+        switch work {
+        case .nothing: "nothing"
+        case .task(let id): "task \(id.contractString)"
+        case .review(let id): "review \(id.contractString)"
+        }
+    }
+
+    /// Acts on one item; false when there was nothing to do with it, or
+    /// when the seat gave the work back: the loop then pauses before it
+    /// asks again, since the server offers the same work at once.
     private func act(on item: NextItem, builder: BuilderFlow, reviewer: ReviewerFlow, jobs: JobFlow) async throws
         -> Bool {
         switch item.kind {
@@ -216,11 +238,11 @@ final class RunnerLoop: @unchecked Sendable {
         case .job where role.actsAs(.planner) || role.actsAs(.orchestrator):
             return try await jobs.claim() != nil
         case .task where role.actsAs(.builder):
-            return try await builder.claim() != nil
+            guard let end = try await builder.claim() else { return false }
+            return end != .released
         case .action where role.actsAs(.builder):
             guard let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
-            _ = try await FinishingFlow(context: context).continueTask(id)
-            return true
+            return try await FinishingFlow(context: context).continueTask(id) != .released
         case .answer where role.actsAs(.builder):
             // NextItem names only the question. Use the task this runner
             // is holding; a fresh runner never asks a question of its own.
@@ -233,15 +255,14 @@ final class RunnerLoop: @unchecked Sendable {
             return false
         case .rework, .resume, .briefingChanged:
             if item.kind == .briefingChanged, role.actsAs(.reviewer), let reviewID = item.reviewID {
-                _ = try await reviewer.continueReview(reviewID)
-                return true
+                return try await reviewer.continueReview(reviewID) != .released
             }
             guard role.actsAs(.builder), item.reviewID == nil,
                   let id = item.id.flatMap(UUID.init(uuidString:)) else { return false }
-            _ = try await builder.continueTask(id)
-            return true
+            return try await builder.continueTask(id) != .released
         case .review where role.actsAs(.reviewer):
-            return try await reviewer.claim() != nil
+            guard let end = try await reviewer.claim() else { return false }
+            return end != .released
         default:
             return false
         }

@@ -131,6 +131,110 @@ struct TokenChecksTests {
         #expect(observations.value.map(\.state) == [.unavailable])
     }
 
+    // An Add saves the token before the server takes its result. When the
+    // server never takes it, the row is deleted at the next helper start and
+    // the id is never listed again, so the saved token must go too.
+
+    private func tokenAdd(_ id: UUID) -> HelperRequest {
+        helperRequest(.runAddChecks, credential: id, params: .init(provider: provider, credentialKind: .apiToken))
+    }
+
+    @Test("a token add whose result the server refuses leaves no saved token, and the id can be added again")
+    func refusedAddIsRolledBack() async throws {
+        let rig = try HelperRig()
+        let stub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
+        defer { stub.invalidateAndCancel() }
+        let vault = MemoryTokenVault()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
+                                    vault: vault, http: try stubTransport())
+        let id = UUID()
+        let first = tokenAdd(id), second = tokenAdd(id)
+        let queue = RequestLoopTests.Queue([.success(first)])
+        let savedAtReport = Locked<[Bool]>([])
+        let refuse = Locked(true)
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, result, key in
+                savedAtReport.update { $0.append(result.outcome == .finished && (try? vault.read(credentialID: id)) != nil) }
+                if refuse.value { throw TransportError(code: .notFound, message: "made up") }
+                return .completed(.object([:]), key: key.value, command: .reportRequestResult)
+            }
+        }
+        try await paste(into: runtime, id: id, provider: provider)
+        let loop = Task { await runtime.run() }
+
+        #expect(await eventually { savedAtReport.value == [true] && ((try? vault.read(credentialID: id)) ?? nil) == nil })
+        #expect(!runtime.cleanup.requests.isForgotten(id), "Retry adds the same id again")
+
+        // Retry: the same id, a result the server takes.
+        refuse.value = false
+        try await paste(into: runtime, id: id, provider: provider)
+        let retry = RequestLoopTests.Queue([.success(second)])
+        rig.api.script { $0.next = { _ in try await retry.next() } }
+        #expect(await eventually { savedAtReport.value == [true, true] })
+        await runtime.shutdown()
+        _ = await loop.value
+        #expect(try vault.read(credentialID: id) == ProviderToken(provider: provider, value: token))
+    }
+
+    @Test("a token add whose result is unsent when the helper stops leaves no saved token")
+    func unsentAddIsRolledBack() async throws {
+        let rig = try HelperRig()
+        let stub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
+        defer { stub.invalidateAndCancel() }
+        let vault = MemoryTokenVault()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
+                                    vault: vault, http: try stubTransport())
+        let id = UUID()
+        let queue = RequestLoopTests.Queue([.success(tokenAdd(id))])
+        let sends = Locked(0)
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, _ in
+                sends.update { $0 += 1 }
+                // The server never answers; the send ends when the helper stops.
+                try await Task.sleep(for: Patience.scaled(.seconds(60)))
+                throw URLError(.timedOut)
+            }
+        }
+        try await paste(into: runtime, id: id, provider: provider)
+        let loop = Task { await runtime.run() }
+
+        #expect(await eventually { sends.value == 1 })
+        #expect(try vault.read(credentialID: id) != nil, "saved while its result is on the way")
+        await runtime.shutdown()
+        _ = await loop.value
+        #expect(try vault.read(credentialID: id) == nil)
+    }
+
+    /// A vault whose `store` succeeds just as the helper begins to stop.
+    final class StoppingVault: TokenVault, @unchecked Sendable {
+        let inner = MemoryTokenVault()
+        func store(_ token: ProviderToken, credentialID: UUID) throws {
+            try inner.store(token, credentialID: credentialID)
+            withUnsafeCurrentTask { $0?.cancel() }
+        }
+        func read(credentialID: UUID) throws -> ProviderToken? { try inner.read(credentialID: credentialID) }
+        func delete(credentialID: UUID) throws { try inner.delete(credentialID: credentialID) }
+    }
+
+    @Test("a token add that finished just as the helper stopped reports nothing and leaves no saved token")
+    func addFinishedWhileStopping() async throws {
+        let rig = try HelperRig()
+        let stub = StubURLProtocol.session(host: host, answer: .init(status: 200, json: "{}"))
+        defer { stub.invalidateAndCancel() }
+        let vault = StoppingVault()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog,
+                                    vault: vault, http: try stubTransport())
+        let id = UUID()
+        try await paste(into: runtime, id: id, provider: provider)
+
+        let result = await Task { await runtime.handle(tokenAdd(id)) }.value
+
+        #expect(result == nil)
+        #expect(try vault.read(credentialID: id) == nil)
+    }
+
     private func stubTransport() throws -> ProviderHTTP {
         try ProviderHTTP(executableURL: URL(fileURLWithPath: "/test/LeverageHelper"), environment: [:],
                          protocolClasses: [StubURLProtocol.self])

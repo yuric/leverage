@@ -14,7 +14,7 @@ struct ConnectAgentSheet: View {
     var body: some View {
         let model = box.model {
             ConnectAgentModel(
-                api: context.owner, copy: Pasteboard.copy, onConnected: connected,
+                api: context.owner, copy: { Pasteboard.copySecret($0) }, onConnected: connected,
                 preferredLoginID: SetupChecklistHelp.preferredLoginID(context.setup),
                 preferredName: SetupChecklistHelp.preferredAgentName(context.setup))
         }
@@ -72,6 +72,7 @@ struct ConnectAgentForm: View {
         .padding(Tokens.Spacing.sheet)
         .frame(width: 480, height: 640)
         .background(Tokens.Palette.sheet)
+        .interactiveDismissDisabled(!model.canFinish)
         .task(id: loginReadAttempt) { await model.load() }
     }
 
@@ -227,6 +228,7 @@ struct ConnectAgentForm: View {
                 Button(AgentsCopy.done.text, action: cancel)
                     .buttonStyle(PrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!model.canFinish)
             }
         }
     }

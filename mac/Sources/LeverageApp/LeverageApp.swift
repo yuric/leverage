@@ -14,6 +14,7 @@ struct LeverageApp: App {
         Window(ShellCopy.appName.text, id: Self.windowID) {
             WindowRoot(model: model, delegate: delegate, settingsAreOpen: settingsAreOpen)
                 .preferredColorScheme(appearance.colorScheme)
+                .onChange(of: appearance, initial: true) { _, chosen in chosen.apply() }
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1040, height: 700)
@@ -33,6 +34,7 @@ struct LeverageApp: App {
         Settings {
             AppearanceSettingsView(selection: $appearance)
                 .preferredColorScheme(appearance.colorScheme)
+                .onChange(of: appearance, initial: true) { _, chosen in chosen.apply() }
                 .background { SettingsWindowPresence(isOpen: $settingsAreOpen).frame(width: 0, height: 0) }
         }
     }

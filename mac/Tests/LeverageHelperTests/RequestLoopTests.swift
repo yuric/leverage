@@ -191,6 +191,105 @@ struct RequestLoopTests {
         #expect(!results(rig.api).contains(silent.id.contractString))
     }
 
+    // A result the server did not take is handed back, so that what the
+    // request saved on this Mac can be undone.
+
+    final class HandedBack: @unchecked Sendable {
+        private let lock = NSLock()
+        private var ids: [UUID] = []
+        var record: RequestLoop.Unaccepted { { [self] request, _ in lock.withLock { ids.append(request.id) } } }
+        var all: [UUID] { lock.withLock { ids } }
+    }
+
+    private static let finished = HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
+
+    @Test("a result the server takes is not handed back")
+    func acceptedIsNotHandedBack() async throws {
+        let rig = try HelperRig()
+        let request = helperRequest(.runAddChecks, credential: UUID())
+        let queue = Queue([.success(request)])
+        rig.api.script { $0.next = { _ in try await queue.next() } }
+        let back = HandedBack()
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog, onUnaccepted: back.record) { _ in
+            Self.finished
+        }
+
+        let running = Task { await loop.run() }
+        #expect(await eventually { results(rig.api) == [request.id.contractString] })
+        running.cancel()
+        _ = await running.value
+        #expect(back.all.isEmpty)
+    }
+
+    @Test("a result the server refuses is handed back once, and not sent again")
+    func refusedIsHandedBack() async throws {
+        let rig = try HelperRig()
+        let request = helperRequest(.runAddChecks, credential: UUID())
+        let queue = Queue([.success(request)])
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, _ in throw TransportError(code: .notFound, message: "made up") }
+        }
+        let back = HandedBack()
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog, onUnaccepted: back.record) { _ in
+            Self.finished
+        }
+
+        let running = Task { await loop.run() }
+        #expect(await eventually { back.all == [request.id] })
+        running.cancel()
+        _ = await running.value
+        #expect(back.all == [request.id])
+        #expect(results(rig.api).count == 1)
+    }
+
+    @Test("a result still unsent when the helper stops is handed back")
+    func unsentIsHandedBack() async throws {
+        let rig = try HelperRig()
+        let request = helperRequest(.runAddChecks, credential: UUID())
+        let queue = Queue([.success(request)])
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, _, _ in throw URLError(.cannotConnectToHost) }
+        }
+        let back = HandedBack()
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog, onUnaccepted: back.record) { _ in
+            Self.finished
+        }
+
+        let running = Task { await loop.run() }
+        #expect(await eventually { results(rig.api).count >= 2 })
+        #expect(back.all.isEmpty, "it is still being sent")
+        running.cancel()
+        _ = await running.value
+        #expect(back.all == [request.id])
+    }
+
+    @Test("a result that came once the helper was stopping is handed back, and never sent")
+    func lateResultIsHandedBack() async throws {
+        let rig = try HelperRig()
+        let request = helperRequest(.runAddChecks, credential: UUID())
+        let queue = Queue([.success(request)])
+        rig.api.script { $0.next = { _ in try await queue.next() } }
+        let started = Gate(), stopping = Gate()
+        let back = HandedBack()
+        let loop = RequestLoop(api: rig.api, timings: fastTimings, log: quietLog, onUnaccepted: back.record) { _ in
+            started.release()
+            await stopping.wait()
+            return Self.finished
+        }
+
+        let running = Task { await loop.run() }
+        await started.wait()
+        running.cancel()
+        // The loop waits for its requests; this one ends after the stop.
+        try await Task.sleep(for: .milliseconds(50))
+        stopping.release()
+        _ = await running.value
+        #expect(back.all == [request.id])
+        #expect(results(rig.api).isEmpty)
+    }
+
     @Test("a result the network lost is sent again with the same key until it is accepted")
     func resultSentAgain() async throws {
         let rig = try HelperRig()

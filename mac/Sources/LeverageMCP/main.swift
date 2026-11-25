@@ -7,6 +7,9 @@ if CommandLine.arguments.dropFirst() == ["--version"] {
 }
 
 let log = Log(component: "mcp")
+// Before any call: what an earlier version's URL cache kept of this
+// program's calls, a seat's token included.
+LeftoverURLCache.remove()
 do {
     let configuration = try MCPConfiguration(environment: ProcessInfo.processInfo.environment)
     let http = MCPHTTPClient(transport: HTTPTransport(

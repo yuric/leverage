@@ -119,7 +119,9 @@ How it connects, then connect the seat. Copy the one landing prompt and
 paste it into an agent on the same Mac. The prompt contains the seat's
 token and the loopback address. It tells the agent to fetch `GET /v1/join`
 using that token, then follow the instructions and keep polling for
-work. Keep the prompt private. The roster labels
+work. Keep the prompt private. Copy puts it on this Mac's clipboard only,
+not on the owner's other devices, and marks it so that clipboard-history
+tools that honour the mark skip it. The roster labels
 the seat "Connected by prompt."
 
 A token passed on a command line can be read by every other account on
@@ -178,6 +180,26 @@ Codex reads `AGENTS.md` in the work folder and under `CODEX_HOME`.
 Which files Antigravity and Grok Build read from their work or home
 folders remains unverified.
 
+### Folders a tool may change
+
+A build's tool is started in the folder the task's "Where the work is"
+names, in a mode that lets it edit files, and it may change anything
+inside that folder. Name the project's own folder, not a folder that
+holds other things. An agent may write that field too, so the runner
+runs no tool, for a build, a review or an outward action, in:
+
+- the Mac's root, your home folder itself, or a folder above it;
+- Leverage's support folder, a folder above it or anything in it, except
+  the folder the builder made for a task under `work/`;
+- `~/Library`, except folders inside `~/Library/CloudStorage` and
+  `~/Library/Mobile Documents`, where cloud drives keep documents.
+
+A link to one of these folders is refused as well. A task that names one
+is given back like a task whose folder does not exist, and the seat's log
+says that its work reference names no folder a tool may be run in. Other
+folders that hold secrets, such as `~/.ssh` or a tool's own settings
+folder under your home folder, are not refused.
+
 ## Where things live
 
 | What | Where |
@@ -193,8 +215,20 @@ folders remains unverified.
 | Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
 | Tools Leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
-| Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
+| Logs | `<support folder>/logs/app.log` (the app: why the server or its services did not start), `logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
+| What the API answered | Nowhere on the Mac: the app, the helper, the runner and the MCP server call the API with no URL cache and no cookies |
+
+Versions before this one kept a URL cache: each answer of the API and
+its request, with the bearer token, in plain files in
+`~/Library/Caches/local.leverage.app` and, for programs run outside the
+app, `~/Library/Caches/LeverageHelper`, `LeverageRunner` and
+`LeverageMCP`. Each program now removes its own `Cache.db`,
+`Cache.db-shm`, `Cache.db-wal` and `fsCachedData` there when it starts.
+After moving from such a version, sign out and in again once, which ends
+the owner session those files held, and remove and connect again any
+agent that connected on its own, whose token does not change by itself.
+You may delete the four folders.
 
 After sign-in, the row under the system health line shows the sign-in
 email. Open that row to reach Settings or Sign out. The Leverage menu
@@ -221,6 +255,23 @@ removing the folder, finding it absent or keeping it because ownership
 could not be verified.
 Readings are kept with their credential. The sweep deletes finished
 and failed read requests after seven days.
+
+An Add saves the token, or the signed-in settings folder, before the
+server takes the add's result. When the server does not take it (it
+refuses it, or the helper stops or gives up before it is sent), the
+helper removes what that add saved, so nothing stays for a credential
+that Credentials will never list. If the result did reach the server
+although the helper could not tell, the credential is listed without its
+token or sign-in: Verify fails, and Sign in again, or Remove and Add,
+mends it.
+
+Three cases still leave something behind that Credentials does not list
+and so cannot remove: the helper is killed outright during an Add, the
+app quits between a Remove and its cleanup record, or the database is
+restored from a dump older than a credential, or replaced. What is left
+is a Keychain item (service `leverage API token`, account the credential
+ID) or a folder `<support folder>/accounts/<credential id>/`. Delete it
+by hand: the item in Keychain Access, the folder in the Finder.
 
 ## Where the log is, and what destroys it
 
@@ -263,6 +314,38 @@ that `task.created` lists, and the replay test
 when the updated server first starts, writes no event and leaves a
 database with no such task as it is. Run `leverage:verify_log` after the
 upgrade to see that the log passes.
+
+### If the server folder was lost
+
+The database passwords and `SECRET_KEY_BASE` live only in
+`<support folder>/server/.env`, and PostgreSQL keeps the owner role's
+password it was made with. When that file, or the whole support folder, is
+gone while the volume is not, the app finds the volume
+(`docker volume inspect leverage-app_db-data`), writes nothing, starts
+nothing, and says that the database needs its password back. The log is
+then still in the volume, and may be its only copy if the backups folder
+went with the support folder: do not remove the volume to get the app
+going again.
+
+Put the old `server/.env` back from a copy of the Mac, if there is one,
+and choose Try again. Otherwise give the owner role a new password through
+the database container, which still runs, and keep that password in a new
+`.env`:
+
+```bash
+support="$HOME/Library/Application Support/leverage"
+password=$(openssl rand -hex 16)
+docker start leverage-app-db-1        # if it is not running
+docker exec leverage-app-db-1 psql -U leverage -d postgres \
+  -c "ALTER ROLE leverage PASSWORD '$password'"
+mkdir -p -m 700 "$support/server"
+(umask 077 && printf 'POSTGRES_PASSWORD=%s\n' "$password" > "$support/server/.env")
+```
+
+Then choose Try again. The app keeps that password and makes the others
+again; the API's own role, `leverage_api`, gets its new password from
+`db:grants` when the server starts. These steps have not been run against
+an owner's installation.
 
 Each time the server starts, after the database is prepared,
 `bin/rails leverage:install_shipped_rules` writes the seven shipped rules
@@ -392,7 +475,10 @@ the drill runs the repository's form.
 **Afterwards, the owner** opens the app, which issues the helper a new
 token. In Credentials the owner runs Verify all and chooses Sign in again
 for any login that needs it. A provider token missing from this Mac needs
-to be removed and added again. Leverage tokens issued after the dump no longer
+to be removed and added again. A token or a settings folder saved for a
+credential the restored database does not hold stays on this Mac, and is
+deleted by hand (see [Where things live](#where-things-live)). Leverage
+tokens issued after the dump no longer
 match, and the log holds nothing written after the dump. The app finds by
 itself that the Needs you cursor it keeps (`<support folder>/inbox-cursor`)
 is of the log before the restore, starts it again, and announces every
@@ -470,8 +556,8 @@ sets:
 | Variable | Read by | What it does |
 | --- | --- | --- |
 | `LEVERAGE_API_URL` | helper, runner, tests | The API's address, default `http://127.0.0.1:3000`. A value that is not an `http` or `https` URL with a host is ignored. |
-| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. |
-| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, default `leverage-app`. |
+| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. Any other folder gets a compose project `leverage-app-<suffix>` and a Keychain account `owner-session-<suffix>` of its own, eight hex digits drawn from the folder's path, so that it never takes over the owner's server or session. |
+| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, in place of `leverage-app` or `leverage-app-<suffix>`. |
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
 | `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
@@ -700,7 +786,10 @@ container's output (`logging` in `compose.yaml`), so older lines are
 dropped. An existing installation takes that limit when an app built
 with it next starts the containers, which makes them again. The Mac
 side's logs are under
-`<support folder>/logs/`. The daily backup is under
+`<support folder>/logs/`: `app.log` for the app, which says why the server
+did not start, `helper.log` and one log per run. The app also writes its
+lines to standard error, which a terminal shows when the app is opened
+from one. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.
 

@@ -328,6 +328,38 @@ struct DriverTests {
         #expect(argv.dropFirst(index + 1).first == "60s")
     }
 
+    // A tool gets its prompt as one argument, and the Mac starts no program
+    // whose arguments pass 1 MiB: every run refuses a longer prompt itself.
+    @Test("a prompt over the byte limit starts no tool, for a build, a review and a check",
+          arguments: [ToolPurpose.build, .review, .check])
+    func promptOverTheLimit(purpose: ToolPurpose) async throws {
+        let setup = try Setup()
+        let test = Self.cases[0]
+        try setup.signIn(test)
+        // Two bytes a character: the limit counts bytes, not characters.
+        let prompt = String(repeating: "é", count: JobToolRun.promptByteLimit / 2 + 1)
+        let ran = try await setup.driver(test).execute(prompt: prompt, in: setup.work, purpose: purpose)
+
+        guard case .failed(.couldNotStart(let reason), nil) = ran else {
+            Issue.record("expected the run not to start, got \(ran)")
+            return
+        }
+        #expect(reason.contains("\(JobToolRun.promptByteLimit + 2) bytes"))
+        #expect(reason.contains("\(JobToolRun.promptByteLimit)"))
+        #expect(try setup.tools.calls().isEmpty, "the stand-in was never started")
+    }
+
+    @Test("a prompt of exactly the byte limit starts the tool")
+    func promptAtTheLimit() async throws {
+        let setup = try Setup()
+        let test = Self.cases[0]
+        try setup.signIn(test)
+        let prompt = String(repeating: "d", count: JobToolRun.promptByteLimit)
+        _ = try await setup.driver(test).execute(prompt: prompt, in: setup.work, purpose: .check)
+
+        #expect(try setup.tools.calls().count == 1)
+    }
+
     @Test("the provider's shape is chosen by the provider")
     func shapes() {
         #expect(ProviderShapes.shape(for: .claude) is ClaudeDriver)
@@ -335,6 +367,97 @@ struct DriverTests {
         #expect(ProviderShapes.shape(for: .gemini) is AntigravityDriver)
         #expect(ProviderShapes.shape(for: .grok) is GrokDriver)
         #expect(ProviderShapes.shape(for: .claudeApi) == nil)
+    }
+}
+
+// What each provider's shape makes of a tool's output: untrusted text of a
+// run that exited 0.
+@Suite("Reading a tool's output")
+struct OutputReadingTests {
+    static let reconnected = Data("""
+        {"type":"thread.started","thread_id":"made-up-thread"}
+        {"type":"turn.started"}
+        {"type":"error","message":"Reconnecting... 1/5 (unexpected status 429 Too Many Requests)"}
+        {"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+        """.utf8)
+
+    @Test("a Codex run that reconnected and then completed is an answer")
+    func codexReconnected() throws {
+        let answer = try CodexDriver().read(standardOutput: Self.reconnected, outputFile: Data("ready".utf8))
+        #expect(answer == ToolAnswer(text: "ready", tokens: 2))
+    }
+
+    @Test("a Codex run with a failed turn is a reported error")
+    func codexTurnFailed() {
+        let output = Data("""
+            {"type":"turn.started"}
+            {"type":"error","message":"made-up failure"}
+            {"type":"turn.failed","error":{"message":"made-up failure"}}
+            """.utf8)
+        #expect(throws: ToolFailure.reportedError) {
+            _ = try CodexDriver().read(standardOutput: output, outputFile: Data("ready".utf8))
+        }
+    }
+
+    @Test("a Codex run with no output file is unreadable")
+    func codexNoOutputFile() {
+        #expect(throws: ToolFailure.unreadableOutput) {
+            _ = try CodexDriver().read(standardOutput: Self.reconnected, outputFile: nil)
+        }
+    }
+
+    // A tool's usage figures are untrusted: one that is no believable count
+    // is read as 0 and never ends the runner.
+
+    static func json(_ text: String) -> Any? {
+        ProviderShapes.object(Data("{\"value\":\(text)}".utf8))?["value"]
+    }
+
+    @Test("a usage figure that is a whole number of a believable size is read", arguments: [
+        ("0", 0), ("150", 150), ("150.0", 150), ("9000000000000000", 9_000_000_000_000_000),
+    ])
+    func believableCount(text: String, expected: Int) {
+        #expect(ProviderShapes.count(Self.json(text)) == expected)
+    }
+
+    @Test("a usage figure out of range, negative, fractional or no number is 0", arguments: [
+        "1e30", "-1e30", "10000000000000000000", "9223372036854775807", "9000000000000001", "-5", "1.5",
+        "\"12\"", "null", "[1]",
+    ])
+    func unbelievableCount(text: String) {
+        #expect(ProviderShapes.count(Self.json(text)) == 0)
+    }
+
+    @Test("token sums stop at the largest whole number instead of overflowing")
+    func saturatingSum() {
+        #expect(ProviderShapes.sum(2, 3) == 5)
+        #expect(ProviderShapes.sum(Int.max, 1) == Int.max)
+        #expect(ProviderShapes.sum(Int.max - 1, Int.max) == Int.max)
+    }
+
+    static let hugeUsage = [
+        #"{"input_tokens":1e30,"output_tokens":7}"#,
+        #"{"input_tokens":9223372036854775807,"output_tokens":7}"#,
+        #"{"input_tokens":10000000000000000000,"output_tokens":7}"#,
+    ]
+
+    @Test("a usage figure out of range in a tool's answer costs the figure, not the answer", arguments: hugeUsage)
+    func hugeUsageIsAnAnswer(usage: String) throws {
+        let claude = Data(#"{"type":"result","is_error":false,"result":"ready","usage":\#(usage)}"#.utf8)
+        #expect(try ClaudeDriver().read(standardOutput: claude, outputFile: nil) == ToolAnswer(text: "ready", tokens: 7))
+        let agy = Data(#"{"status":"SUCCESS","response":"ready","usage":\#(usage)}"#.utf8)
+        #expect(try AntigravityDriver().read(standardOutput: agy, outputFile: nil)
+            == ToolAnswer(text: "ready", tokens: 7))
+        let codex = Data(#"{"type":"turn.completed","usage":\#(usage)}"#.utf8)
+        #expect(try CodexDriver().read(standardOutput: codex, outputFile: Data("ready".utf8))
+            == ToolAnswer(text: "ready", tokens: 7))
+    }
+
+    @Test("Codex's turns never add up past the largest whole number")
+    func codexManyTurns() throws {
+        let turn = #"{"type":"turn.completed","usage":{"input_tokens":9000000000000000,"output_tokens":9000000000000000}}"#
+        let output = Data(Array(repeating: turn, count: 600).joined(separator: "\n").utf8)
+        #expect(try CodexDriver().read(standardOutput: output, outputFile: Data("ready".utf8)).tokens == Int.max)
     }
 }
 

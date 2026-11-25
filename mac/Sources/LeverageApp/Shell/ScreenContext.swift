@@ -38,6 +38,13 @@ final class Navigator {
         show(.board)
     }
 
+    /// Opens the Board on this project with no agent filter, so a task just
+    /// saved into it shows (the Imaginarium's See it on the board, FR-040).
+    func showProjectAlone(_ id: UUID?) {
+        boardFilter.agentID = nil
+        selectProject(id)
+    }
+
     /// Opens a task's page, with a way back to the board (MA-9). `editing`
     /// asks the page to open the contract editor once it has read the task
     /// (Needs you's Change the task, HM-24, HM-49).

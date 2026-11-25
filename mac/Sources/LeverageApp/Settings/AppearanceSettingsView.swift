@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AppAppearance: String, CaseIterable {
@@ -13,6 +14,23 @@ enum AppAppearance: String, CaseIterable {
         case .light: .light
         case .dark: .dark
         }
+    }
+
+    /// The same choice for AppKit: nil follows the Mac.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+
+    /// Sets the choice for the whole app. `preferredColorScheme` reaches only
+    /// the SwiftUI windows; a panel AppKit opens on its own, such as Choose
+    /// folder, follows the app's appearance.
+    @MainActor
+    func apply(to application: NSApplication = .shared) {
+        application.appearance = nsAppearance
     }
 
     var label: AppearanceSettingsCopy {

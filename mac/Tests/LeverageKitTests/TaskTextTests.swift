@@ -12,6 +12,22 @@ struct TaskTextTests {
         #expect(task.details == example["details"]?.stringValue)
     }
 
+    @Test("a task summary reads the Imaginarium entry it came from, and none when absent (FR-041)")
+    func imaginariumSource() throws {
+        let example = try #require(ContractDocument.examples(of: "TaskSummary").first?.objectValue)
+        var fromGallery = example
+        fromGallery["imaginarium_entry_id"] = .string("pocket-to-do")
+        fromGallery["imaginarium_catalog_version"] = .number(7)
+        let saved = try LeverageJSON.decoder().decode(
+            TaskSummary.self, from: ContractDocument.data(.object(fromGallery)))
+        #expect(saved.imaginariumEntryID == "pocket-to-do")
+        #expect(saved.imaginariumCatalogVersion == 7)
+
+        let typed = try LeverageJSON.decoder().decode(TaskSummary.self, from: ContractDocument.data(.object(example)))
+        #expect(typed.imaginariumEntryID == nil)
+        #expect(typed.imaginariumCatalogVersion == nil)
+    }
+
     @Test("a briefing contract reads and writes its title without a goal")
     func briefing() throws {
         let example = try #require(ContractDocument.examples(of: "Briefing").first)

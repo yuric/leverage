@@ -27,7 +27,7 @@ enum ToolFailure: Error, Equatable, Sendable, CustomStringConvertible {
     case signaled(Int32)
     case timedOut
     /// The output says the run failed (`is_error`, a status that is not
-    /// `SUCCESS`, an `error` line, the signed-out text).
+    /// `SUCCESS`, a failed turn, the signed-out text).
     case reportedError
     case unreadableOutput
 
@@ -149,15 +149,40 @@ enum ProviderShapes {
         (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// The whole-number value of a JSON field, or 0. Each form is asked
-    /// for, since JSONSerialization on Linux may not hand back an NSNumber.
+    /// The largest usage figure read: the bound `JSONValue.intValue` uses,
+    /// under which every whole number is exact as a Double.
+    static let largestCount = 9_000_000_000_000_000
+
+    /// The whole-number value of a JSON field, or 0. A tool's output is
+    /// untrusted, so a figure that is negative, not whole, not finite or
+    /// past `largestCount` is no count and reads as 0; converting it would
+    /// end the runner on a number such as `1e30`. Each form is asked for,
+    /// since JSONSerialization on Linux may not hand back an NSNumber.
     static func count(_ value: Any?) -> Int {
+        let number: Double
         switch value {
-        case let number as Int: number
-        case let number as Double: Int(number)
-        case let number as NSNumber: number.intValue
-        default: 0
+        case let whole as Int: return (0...largestCount).contains(whole) ? whole : 0
+        case let double as Double: number = double
+        case let other as NSNumber: number = other.doubleValue
+        default: return 0
         }
+        guard number.isFinite, number >= 0, number <= Double(largestCount), number.rounded() == number
+        else { return 0 }
+        return Int(number)
+    }
+
+    /// The sum, or the largest whole number when it would pass it: a sum of
+    /// counts never ends the runner.
+    static func sum(_ first: Int, _ second: Int) -> Int {
+        let (sum, overflow) = first.addingReportingOverflow(second)
+        guard overflow else { return sum }
+        return first < 0 ? Int.min : Int.max
+    }
+
+    /// A usage object's input and output tokens together.
+    static func tokens(_ usage: Any?) -> Int {
+        let usage = usage as? [String: Any]
+        return sum(count(usage?["input_tokens"]), count(usage?["output_tokens"]))
     }
 
     /// The Boolean value of a JSON field, or nil.
@@ -185,8 +210,28 @@ struct ProcessToolDriver: ToolDriver {
         self.shape = shape
     }
 
+    /// The most bytes of prompt a tool run is started with, whatever it is
+    /// for. A tool gets the prompt as one argument, and the Mac refuses to
+    /// start a program whose arguments and environment pass `ARG_MAX`
+    /// (1 MiB): a prompt over this limit would fail to start every time
+    /// (milestone 4 review, finding 9). The server's limits on task text
+    /// make such a prompt rare, not impossible: they count characters, not
+    /// bytes, and not the evidence rows and review notes a task gathers.
+    static let promptByteLimit = 512 * 1024
+
+    /// Why the prompt is not run, or nil when it fits.
+    static func tooLong(_ prompt: String) -> String? {
+        let bytes = prompt.utf8.count
+        guard bytes > promptByteLimit else { return nil }
+        return "the prompt is \(bytes) bytes, over the \(promptByteLimit) a tool's argument may hold"
+    }
+
     func execute(_ request: ToolRunRequest) async throws -> ToolRun {
         let prompt = request.prompt, folder = request.folder, purpose = request.purpose
+        // Refused here, with a reason that names the sizes, where the Mac
+        // would only answer `E2BIG`. A build, a review and an outward
+        // action reach this check; a job asks first (`JobToolRun`).
+        if let reason = Self.tooLong(prompt) { return .failed(.couldNotStart(reason), nil) }
         // Codex writes its last message to a file of its own, kept outside the
         // work folder and removed after the run.
         var scratch: URL?

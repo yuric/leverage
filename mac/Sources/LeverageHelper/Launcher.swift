@@ -234,8 +234,9 @@ final class Launcher: Sendable {
     static let accountStoppedCode: Int32 = 5
 
     /// `stopped` when the helper stopped it, `finished` when the runner
-    /// exited 0 by itself, `error` otherwise (three failed tool runs, CL-22,
-    /// a code 5 with no readable report line, HD-6, or a crash).
+    /// exited 0 by itself, `error` otherwise (three failed tool runs or
+    /// three flows that gave their work back, CL-22, a code 5 with no
+    /// readable report line, HD-6, or a crash).
     static func stopReason(_ result: SubprocessResult, stopAsked: Bool) -> RunStopReason {
         if stopAsked || result.endedBy == .stop { return .stopped }
         if result.termination == .exited(0) { return .finished }

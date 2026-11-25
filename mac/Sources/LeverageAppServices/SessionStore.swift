@@ -8,12 +8,18 @@ import Security
 /// Where the owner's session token is kept between launches (plan MA-7).
 public enum SessionStores {
     /// `LEVERAGE_SESSION_STORE=memory` keeps the session out of the Keychain
-    /// (the smoke run); otherwise it is kept in the owner's login Keychain.
+    /// (the smoke run); otherwise it is kept in the owner's login Keychain,
+    /// under an account of its own for a support folder other than the
+    /// standard one, whose server is another workspace.
     public static func make(
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> any SessionStoring {
         if environment[EnvironmentKeys.sessionStore] == "memory" { return MemorySessionStore() }
-        return KeychainSessionStore()
+        guard let suffix = SupportFolder(environment: environment, home: home).isolationSuffix else {
+            return KeychainSessionStore()
+        }
+        return KeychainSessionStore(account: "owner-session-\(suffix)")
     }
 }
 

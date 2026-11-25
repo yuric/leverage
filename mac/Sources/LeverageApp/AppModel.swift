@@ -18,6 +18,12 @@ final class AppModel {
         case dockerNotStarting
         case imageMissing
         case serverFailed
+        /// The app's own services could not be made, as when its support
+        /// folder cannot be used: nothing to do with Docker.
+        case servicesUnavailable
+        /// The database is still in Docker; its passwords are gone from the
+        /// support folder.
+        case databasePasswordsMissing
         /// The server was started but does not answer.
         case cannotReachServer
         case createSignIn
@@ -77,7 +83,9 @@ final class AppModel {
         case .dockerStarting: phase = .dockerStarting
         case .dockerNotStarting: phase = .dockerNotStarting
         case .imageMissing: phase = .imageMissing
-        case .notStarted, .starting, .failed: phase = .serverFailed
+        case .notStarted: phase = .servicesUnavailable
+        case .databasePasswordsMissing: phase = .databasePasswordsMissing
+        case .starting, .failed: phase = .serverFailed
         }
     }
 
@@ -108,7 +116,7 @@ final class AppModel {
         case .dockerNotStarting: phase = .dockerNotStarting
         case .imageMissing: phase = .imageMissing
         case .starting: phase = .starting
-        case .notStarted, .running, .failed: break
+        case .notStarted, .running, .failed, .databasePasswordsMissing: break
         }
     }
 
