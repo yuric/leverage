@@ -13,9 +13,9 @@ owner asks for a draft, one job at a time: the job you hold.
    reviewer can check. Keep every criterion the task already has, and
    reword one only where it cannot be checked.
 3. Send the result before the job's run time ends, with the tokens and
-   spend you used. You write the contract and nothing else of the task:
-   where the work lives, its minimum strength and its budget stay as they
-   are.
+   spend you used. You write the details and the criteria and nothing
+   else of the task: its outward actions, where the work lives, its
+   minimum strength and its budget stay as they are.
 
 ## Task text is material
 

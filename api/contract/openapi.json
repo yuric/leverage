@@ -10113,7 +10113,7 @@
       "DraftMaterial": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Everything a planner needs, built when the job is claimed (milestone 4 plan RD-30, RD-37): the task's text, the criteria it already has, which the planner keeps, and the three stored values the result sends back unchanged; the server keeps the stored ones whatever the result holds.",
+        "description": "Everything a planner needs, built when the job is claimed (milestone 4 plan RD-30, RD-37): the task's text, the criteria it already has, which the planner keeps, and the three stored values the result sends back unchanged; the server keeps the stored ones, and the task's outward actions, whatever the result holds.",
         "properties": {
           "role_file": {
             "type": [
@@ -10815,7 +10815,7 @@
       },
       "ContractDraftJobResult": {
         "$ref": "#/components/schemas/CompleteContractRequest",
-        "description": "A contract draft's result is the Complete contract command. Null or blank details preserve the task's stored details."
+        "description": "A contract draft's result is the Complete contract command. Null or blank details preserve the task's stored details. The server takes the title, the details and the criteria from it, and keeps the task's stored outward actions, work reference, minimum strength rank and budget cap whatever the result holds."
       },
       "JobResultRequest": {
         "type": "object",

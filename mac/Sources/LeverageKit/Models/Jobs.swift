@@ -142,7 +142,7 @@ public struct RuleCheckJobInput: Codable, Equatable, Sendable {
 /// `DraftMaterial`: everything a planner needs (RD-30, RD-37): the task's
 /// text, the criteria it already has, which the planner keeps, and the three
 /// stored values the result sends back unchanged. The server keeps the
-/// stored ones whatever the result holds.
+/// stored ones, and the task's outward actions, whatever the result holds.
 public struct DraftMaterial: Codable, Equatable, Sendable {
     /// The planner's role file, absent for a General seat.
     public let roleFile: String?

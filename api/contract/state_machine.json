@@ -181,7 +181,7 @@
       "source": "prd",
       "prd_cells": ["Draft contract", "Backlog", "Backlog", "Owner", "None", "`job.queued`"],
       "rows": [
-        {"command": "draft_contract", "from": "backlog", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["job.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a contract_draft job for a planner; its result is the Complete contract command (L110)."}
+        {"command": "draft_contract", "from": "backlog", "guard": [], "to": "backlog", "refusal": null, "who": ["owner"], "hook": null, "builder_lease": null, "events": ["job.queued"], "conditional_events": [], "side_events": [], "holds_opened": [], "holds_closed": [], "note": "Queues a contract_draft job for a planner; its result is the Complete contract command (L110), run with the task's stored outward actions, work reference, minimum strength rank and budget cap (UX-11d)."}
       ]
     },
     {

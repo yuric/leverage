@@ -121,7 +121,7 @@ Saving the Add task form is two commands in a row: Add task, then Complete contr
 
 Every workspace has a project named Imaginarium, where tasks from the prompt gallery go. Creating the owner's sign-in creates it, in the same transaction, after the shipped rules, writing `project.created`. A workspace created before then gets it once, through the transition function, with the app as actor, with the command Create the Imaginarium project, which the server runs when it starts for a workspace that has none. The workspace knows the project by its id, not its name. The project's own content cannot be deleted, so the gallery always has its project; the content of its Done and Cancelled tasks can. In every other way it is an ordinary project, with a brief, a budget and a pause. The side pane lists it first among the projects, as a plain row with a faint rainbow tint and no icon.
 
-Draft contract queues a planner job. Its result is the Complete contract command (see `POST /v1/jobs/{id}/result`). A draft with null or blank details keeps the task's saved details.
+Draft contract queues a planner job. Its result is the Complete contract command (see `POST /v1/jobs/{id}/result`). A draft with null or blank details keeps the task's saved details. A draft never changes the task's outward actions, work reference, minimum strength or budget cap: the server keeps the saved ones, whatever the result holds.
 
 `action.requested` runs once per action. The server starts it, not a command.
 
@@ -565,7 +565,7 @@ A seat has one of five roles. A General seat does the work of the other four: it
 | --- | --- | --- |
 | Builder | The task it holds | That task's contract, criteria, evidence, questions and work reference, its project's brief, and the notes of its task's failed reviews |
 | Reviewer | The review it holds | The same, for the task under review |
-| Planner | The contract of the task its job names | That task and its project's brief |
+| Planner | The title, details and acceptance criteria of the task its job names | That task and its project's brief |
 | Orchestrator | The result of the job it holds | The task its job names and that task's project. Nothing from other projects. |
 | General | What the role it acts as may change, in the work it holds: its task, its review or its job | What the role it acts as may read, for the work it holds |
 

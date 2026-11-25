@@ -13,10 +13,11 @@ module Leverage
       # that transition is gated again (CheckReentry.after, with the
       # trigger check_finished). A contract draft's result is the Complete
       # contract command, run as the planner with this call's key
-      # (Transitions.run_as, RE-6), from the result's title, details,
-      # criteria and actions and the task's stored work reference, minimum
-      # strength rank and budget cap, whatever the result says of those
-      # three (RD-37, L539). A null or blank draft keeps the stored details.
+      # (Transitions.run_as, RE-6), from the result's title, details and
+      # criteria and the task's stored outward actions, work reference,
+      # minimum strength rank and budget cap, whatever the result says of
+      # those four (RD-37, L539). A null or blank draft keeps the stored
+      # details.
       # When that Complete contract waits on a model check, this call is the
       # one waiting: pending? answers true.
       #

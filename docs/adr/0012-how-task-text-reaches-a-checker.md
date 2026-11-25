@@ -58,7 +58,8 @@ and RD-39.
    server also enforces. `DraftParser` keeps the task's title, makes each
    sentence a `build` criterion, adds the one review criterion and sends
    back the stored work reference, minimum strength and budget cap, which
-   the server keeps whatever a result says (RD-37).
+   the server keeps whatever a result says (RD-37). The server also keeps
+   the task's outward actions, whatever a result says.
 4. **The check run.** The drivers' check mode (`ToolPurpose.check`), as
    milestone 2 merged it for the answering check, with the seat's model
    and effort added when the seat sets them (`--model` and `--effort` for

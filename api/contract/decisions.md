@@ -1482,6 +1482,16 @@ task. PRD places are named by their section.
 - **UX-11b** `[reading]` The agent's call takes no outward actions, state,
   minimum strength or budget cap. Alternative: allow actions (the
   approval rule would then approve what the adding agent wrote).
+- **UX-11d** `[reading]` A planner's draft takes no outward actions
+  either: the result's `actions` are ignored and Complete contract runs
+  with the task's stored ones, as it does with the stored work reference,
+  minimum strength and budget cap. A draft writes the title, the details
+  and the criteria. The reasoning is UX-11b's: the approval rule approves
+  a publish or a send that "the contract names", so an action a planner
+  wrote would be approved on the planner's own words, with no owner step.
+  The schema `ContractDraftJobResult` keeps its shape. Alternative: let a
+  draft set actions, as the Planner row "the contract of the task its job
+  names" could be read.
 - **UX-11c** `[reading]` While the seat holds a task, a review or a job,
   the new task goes into that work's project; any other project is 422
   `invalid`. A seat that holds nothing may name any project or none.

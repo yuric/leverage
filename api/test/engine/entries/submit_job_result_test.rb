@@ -7,8 +7,9 @@ require_relative "jobs_support"
 # (RuleChecks.finish, WP4's), cost.reported about the job, and the pending
 # transition gated again (PendingTransitions.reenter, WP4's); for a contract
 # draft, Complete contract run as the planner with this call's key
-# (Transitions.run_as, RE-6), from the result's contract and the task's
-# three stored values. Refused, and nothing written: a job that timed out
+# (Transitions.run_as, RE-6), from the result's title, details and
+# criteria and the task's stored outward actions, work reference, minimum
+# strength rank and budget cap. Refused, and nothing written: a job that timed out
 # or was withdrawn (invalid_state), a cancelled task's job
 # (task_cancelled), another seat (not_holder).
 class SubmitJobResultTest < ActiveSupport::TestCase
@@ -169,6 +170,32 @@ class SubmitJobResultTest < ActiveSupport::TestCase
     assert_equal [ nil, nil, nil ], calls.sole.keywords[:params].values_at("work_reference", "minimum_strength_rank", "budget_cap")
     assert_nil task.reload.work_reference
     assert_nil task.details
+  end
+
+  test "a planner cannot change the outward actions: the task's stored actions are sent, whatever the result says" do
+    task, job = claimed_draft
+    stored = [ [ 1, "send", "Send the price list." ], [ 2, "publish", "Publish the made-up page." ] ].map do |position, kind, text|
+      Action.create!(workspace_id: task.workspace_id, task_id: task.id, position: position, kind: kind, description: text)
+    end
+    before = stored.map { |action| action.attributes.slice("id", "position", "kind", "description", "state") }
+
+    assert_completed(submit_result(@planner, job,
+      draft_result("actions" => [ { "kind" => "publish", "description" => "Publish to the made-up blog." } ])))
+
+    after = Action.where(task_id: task.id).order(:position)
+    assert_equal before, after.map { |action| action.attributes.slice("id", "position", "kind", "description", "state") }
+    changed = Event.where(workspace_id: task.workspace_id, type: "task.contract_changed", task_id: task.id).order(:seq).last
+    assert_equal [ [], [] ], changed.payload.values_at("added_action_ids", "removed_action_ids")
+  end
+
+  test "a planner's draft that names an action adds none to a task that has none" do
+    task, job = claimed_draft
+
+    assert_completed(submit_result(@planner, job,
+      draft_result("actions" => [ { "kind" => "send", "description" => "Send the made-up letter." } ])))
+
+    assert_equal "ready", task.reload.state
+    assert_empty Action.where(task_id: task.id)
   end
 
   test "null and blank draft details preserve the task's text even when its model check fails" do
