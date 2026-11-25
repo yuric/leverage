@@ -38,18 +38,39 @@ class IssueLandingPromptTest < ActiveSupport::TestCase
     assert_raises(T::NotFound) { issue(removed) }
   end
 
-  test "releases a Working task once and leaves work acquired after issuance alone" do
+  test "two fresh keys before landing issue different tokens and release nothing" do
     seat = own_seat
-    task = scenario.task(state: "working", builder: seat)
-    key = new_key
-    released = events_written { assert_completed(issue(seat, key: key)) }.find { |event| event.type == "task.released" }
+    tokens = []
+    events = events_written do
+      2.times { tokens << assert_completed(issue(seat)).once.fetch("seat_token") }
+    end
 
-    assert_equal [ "ready", nil ], task.reload.values_at(:state, :holder_seat_id)
-    assert_equal [ task.id, "new_prompt" ], [ released.task_id, released.payload.fetch("reason") ]
+    assert_empty events
+    refute_equal tokens.first, tokens.last
+    assert_nil Leverage::Tokens.find(tokens.first, kind: :seat)
+    assert_equal seat.id, Leverage::Tokens.find(tokens.last, kind: :seat).id
+  end
 
-    subsequent = scenario.task(state: "working", builder: seat)
-    assert_empty events_written { assert_completed(issue(seat, key: key)) }
-    assert_equal [ "working", seat.id ], subsequent.reload.values_at(:state, :holder_seat_id)
+  test "after polling or receiving work the seat cannot receive a new prompt" do
+    polled = own_seat
+    polled.update!(last_polled_at: scenario.database_now)
+    builder = own_seat
+    task = scenario.task(state: "working", builder: builder)
+    reviewer = own_seat(role: "reviewer")
+    review = scenario.review(scenario.task(state: "in_review"), reviewer: reviewer)
+    checker = own_seat(role: "orchestrator")
+    scenario.rule_check(scenario.task(state: "ready"), rule: scenario.rule(hook: "task.before_claim"),
+      started: true, checker: checker)
+    job = Job.find_by!(claimed_by_seat_id: checker.id)
+
+    [ polled, builder, reviewer, checker ].each do |seat|
+      original = seat.token_hash
+      assert_empty events_written { assert_refused("invalid_state", issue(seat)) }
+      assert_equal original, seat.reload.token_hash
+    end
+    assert_equal [ "working", builder.id ], task.reload.values_at(:state, :holder_seat_id)
+    assert_equal reviewer.id, review.reload.reviewer_seat_id
+    assert_equal "claimed", job.reload.state
   end
 
   private
