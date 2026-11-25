@@ -964,7 +964,7 @@ One rule covers every word the owner reads: a word on an owner-facing screen tha
 | System health | One line on every screen: whether the timer sweep and the orchestrator are running, and whether the daily backup is late. |
 | Account menu | One row at the foot of the left pane, below the system health line, that opens Subscription, Settings and Sign out. See Subscription. |
 | Subscription | Choosing a plan, paying through Stripe, the plan, the payment method, receipts and cancelling. See Subscription. |
-| Settings | Appearance: Same as this Mac, Light or Dark. Open it from the Leverage menu or with Command-comma. The account menu also opens it when that menu is added. |
+| Settings | Appearance: Same as this Mac, Light or Dark. Open it from the Leverage menu or with Command-comma. The account menu also opens it. |
 | Credentials | Its own tab in the left pane. Logins and API tokens grouped by provider, each account's limits and available resets, Refresh and Verify all, and the Add credential pop-up. Add credential for logins arrives in the Core loop milestone; a row's limit sentence and Sign in again in the Handoff milestone; API tokens and the rest in the Credentials milestone. |
 | Handoff | Its own tab in the left pane. The handoff rules as plain sentences, with no switch, and the one order of accounts, which the owner can reorder. The tab and the default order arrive in the Handoff milestone, reordering in the Credentials milestone. |
 
@@ -1157,5 +1157,5 @@ One gate stands before the contract. The contract is not started until these are
 | Changing plans in the middle of a month | Not decided: charge the difference at once, or from the next payment. | Change plan (FR-014). |
 | Support for subscribers | Not decided. MAINTENANCE.md says no support is owed under the MIT License. | A line in MAINTENANCE.md on what a subscriber's support is and how to reach it. |
 | The service's host, its privacy notice and sales tax | Not decided. Stripe Tax can work out tax, at a fee. | The ADR of FR-024. |
-| Following the Mac's appearance | Decided: "Same as this Mac" is the default alongside Light and Dark. | Settings (FR-005). |
+| Following the Mac's appearance | Decided by the owner on 2026-11-24, in the managing agent's session: "Same as this Mac" is the default alongside Light and Dark. | Settings (FR-005). |
 | Stripe's details | To confirm in Stripe's documents when the ADR is written: that Link and Apple Pay work in subscription-mode Checkout, and that Apple Pay needs no domain set up for hosted Checkout. | Checkout (FR-009). |

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | One environment on the owner's Mac. The app starts the server's containers, with all seven shipped rules active. Credentials can add, check and manage API tokens. |
-| **Last updated** | 2026-11-24 |
+| **Last updated** | 2026-11-25 |
 
 This document says how to run and operate Leverage: how to stand it up from
 scratch, check that it works, stop it, and what is not decided yet. It is
@@ -70,6 +70,16 @@ far it has been opened only by `scripts/smoke_app.sh`, with a Finder-like
 environment.
 
 ## The first run
+
+Before you add a login, read what the providers' terms say. A login runs
+the provider's own tool under your account. A provider may not allow its
+tool to be driven by another app, or work to move between two logins of
+one provider, and may suspend an account. Google's documents say neither is
+supported on consumer plans. The providers' documents were read by AI
+agents on 2026-11-18, and not all of them in full, so read your provider's
+terms yourself before relying on that reading
+([provider terms check](research/provider-terms/README.md),
+[PRD Risks](PRD.md#risks)). An API token is the alternative to a login.
 
 1. Open `Leverage.app`. It starts Docker Desktop if needed, writes its
    server folder and starts the containers; the first start takes a few
@@ -218,6 +228,7 @@ folder under your home folder, are not refused.
 | Logs | `<support folder>/logs/app.log` (the app: why the server or its services did not start), `logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
 | What the API answered | Nowhere on the Mac: the app, the helper, the runner and the MCP server call the API with no URL cache and no cookies |
+| The appearance choice | The macOS preferences of the app bundle (`local.leverage.app`), key `appAppearance`; not under the support folder, so `LEVERAGE_SUPPORT_DIR` does not separate it |
 
 Versions before this one kept a URL cache: each answer of the API and
 its request, with the bearer token, in plain files in
@@ -355,7 +366,9 @@ to the new default. The upgrade preserves the rule's switch setting and
 any owner edits. See [Shipped rules](PRD.md#shipped-rules). The command
 prints one line per workspace it changed. The rules are part of every
 briefing, so an agent whose briefing changed is told at its next call
-and reads it again.
+and reads it again. Then `bin/rails leverage:install_imaginarium_project`
+creates the Imaginarium project of any workspace that has none, once, and
+prints one line per workspace it wrote.
 
 ## Backups and restore
 
@@ -565,10 +578,10 @@ sets:
 | `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, in place of `leverage-app` or `leverage-app-<suffix>`. |
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
-| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
+| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app`, `mcp` or `e2e`. |
 | `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_NOTIFICATIONS` | app | `off` keeps the app from asking for or posting a notification; `scripts/smoke_app.sh` sets it. A notification is posted only by the app opened as `Leverage.app`. |
-| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
+| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs, `questions_approvals` for the seven questions-and-approvals runs, `credentials` for the three Credentials cases), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh`, `scripts/e2e_rule_checks.sh`, `scripts/e2e_questions_approvals.sh` and `scripts/e2e_credentials.sh` set both. |
 | `LEVERAGE_EVAL`, `LEVERAGE_EVAL_REAL` | `LeverageRunner eval`, `scripts/eval_rule.sh` | The eval suite's name, without which neither runs, and `1` for a run on the real tools, which only the maintainer sets, by hand ([Eval suites and real checks](#eval-suites-and-real-checks)). |
 
 The helper's and a seat's tokens, and the run's inputs (among them

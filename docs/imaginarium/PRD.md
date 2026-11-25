@@ -1,6 +1,15 @@
 # The Imaginarium
 
-Status: Approved by the maintainer on 24 November 2026.
+Status: Built in [#36](https://github.com/yuric/leverage/pull/36). The
+maintainer approved starting Part 3, the gallery tab, on 24 November 2026.
+The managing agent asked "Which paused Leverage items should I start? You
+can answer in one reply: (1) Imaginarium Part 3, start or hold? (2)
+Payments step 1, start or hold?", with the approval field as item 3 and a
+test fix as item 4, and he answered "1", picking the first item (the
+managing agent's Codex session, 00:22 UTC on 25 November). The wording of FR-030 to FR-041 in the main PRD
+and the build's answers to the [open questions](#open-questions) are the
+managing agent's and wait for the maintainer (question 18 in
+[IMPLEMENTATION.md](../IMPLEMENTATION.md#questions-for-the-owner)).
 
 The Imaginarium is a tab in the Mac app where the owner browses ready-made
 prompts that make something fun: a picture in a style, a website in a style,
@@ -105,7 +114,8 @@ a separate file in the app bundle.
 
 1. No task state, effect or label named `imaginarium` is left, an old event
    log still replays, and every test passes (IM-1 to IM-4).
-2. A new installation has the Imaginarium project right after setup,    updated one gets it exactly once (IM-5, IM-6).
+2. A new installation has the Imaginarium project right after setup, and an
+   updated one gets it exactly once (IM-5, IM-6).
 3. From the tab, Send to Ready puts a task in Ready in the Imaginarium
    project, with the catalog's checks as its criteria and the text shown,
    edited or not, as its details.
@@ -137,3 +147,11 @@ a separate file in the app bundle.
 - **The specific-details check.** Catalog prompts are written to pass it.
   Should it still run, at a model-check cost, on prompts the owner has not
   edited?
+
+The build answered each question for now, and the maintainer has not
+confirmed the answers: gallery tasks use the app's ordinary per-task work
+folder; Send to Ready is not refused for a picture prompt, whose tile and
+sheet say it needs an agent with an image tool; the gallery adds tasks to
+the workspace's recorded Imaginarium project while that project's content
+has not been deleted, and says the project is unavailable after that; and
+every Send to Ready runs the usual rule checks.

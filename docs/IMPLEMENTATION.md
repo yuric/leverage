@@ -28,8 +28,11 @@ person can pick it up after an interruption.
 
 The owner delegated this build to one managing agent on 2026-11-19, under
 the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md). Claude Code
-(Claude Fable 5.2) started as the managing agent, and Codex now manages
-the run. The run ends when the build is done or the owner stops it.
+(Claude Fable 5.2) started as the managing agent. The owner told Codex
+"Yes, take over and continue" on 2026-11-24 on his Mac (00:11 UTC on
+2026-11-25), and Codex has managed the run since Claude Code's handoff
+record of about 00:25 UTC; pull requests 34 to 44 were merged under it.
+The run ends when the build is done or the owner stops it.
 
 - The managing agent plans each milestone, gives the work to other agents,
   reviews what they return, merges, and keeps this file current. Agents it
@@ -49,14 +52,23 @@ the run. The run ends when the build is done or the owner stops it.
   [Installed for the build](#installed-for-the-build).
 - No agent signs in to a provider or types a credential. Tests against real
   providers use only tools that are already signed in on the owner's Mac.
+- Every commit an agent writes carries a `Co-Authored-By` trailer naming
+  it. Eleven commits merged on 2026-11-24 while Codex managed the run carry
+  none and only the owner's identity, although they sit on Codex's
+  branches between commits signed by Codex: `5440802` (#35), `1c68a78`,
+  `d45eb5d`, `fdac311` and `8539bb2` (#36), `6cc2043` (#39), and
+  `2cf72f1`, `40ea69b`, `9adffe0`, `1be0f8a` and `b073c33` (#40). `3b0361b`
+  (#41) names "OpenAI Codex" with no address. `main` cannot be rewritten,
+  so this list is the record; the owner confirms who wrote them in
+  question 19.
 
 ## Current state
 
 | | |
 | --- | --- |
-| **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, and Subscription steps 1 and 2 |
-| **Local deployment record** | The owner's Mac was verified at `a2c63b6` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. Earlier verified deployments include `2573be4` and `300db09`. |
+| **As of** | 2026-11-25 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, Subscription steps 1 and 2, and the offline subscription preview with its billing handoff |
+| **Local deployment record** | The owner's Mac was verified at `a2c63b6` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. Earlier verified deployments include `2573be4` and `300db09`. Pull requests 41 to 44 are on `main` and are not recorded as verified on the owner's Mac. |
 | **Next** | Settle the [subscription decisions](PRD.md#open-decisions) before building the billing service. |
 
 ### Recent merges
@@ -64,6 +76,7 @@ the run. The run ends when the build is done or the owner stops it.
 - App round 1. See the [contract decisions](../api/contract/decisions.md#app-round-1-ui)
   and question 16. [#29](https://github.com/yuric/leverage/pull/29)
 - The 32-prompt Imaginarium catalog. [#30](https://github.com/yuric/leverage/pull/30)
+- The checked deploy of the Age of Lever marketing page. [#31](https://github.com/yuric/leverage/pull/31)
 - The event-log audit fix for sign-ups recorded before DB-53. [#32](https://github.com/yuric/leverage/pull/32)
 - The marketing demo order puts Handoff before Imaginarium. [#33](https://github.com/yuric/leverage/pull/33)
 - Implementation status and managing-agent handoff. [#34](https://github.com/yuric/leverage/pull/34)
@@ -74,10 +87,14 @@ the run. The run ends when the build is done or the owner stops it.
 - Approval field decision and deployment record. [#39](https://github.com/yuric/leverage/pull/39)
 - Subscription step 1: Rules, appearance settings and Login copy. [#40](https://github.com/yuric/leverage/pull/40)
 - Subscription step 2: account row and menu. [#41](https://github.com/yuric/leverage/pull/41)
+- What Leverage does, in the README and contributing guide. [#42](https://github.com/yuric/leverage/pull/42)
+- Offline subscription preview and billing handoff, documents only. [#43](https://github.com/yuric/leverage/pull/43)
+- The event-log audit fix for a credential switch after an action override. [#44](https://github.com/yuric/leverage/pull/44)
 
 ### In flight
 
-None.
+- The fixes from the 2026-11-25 review of pull requests 34 to 44, made by
+  Claude Code agents on branches cut from `036087a`. No pull request yet.
 
 ### General role and landing prompt on `main`
 
@@ -973,27 +990,43 @@ The interface decisions are recorded in the
 ### App round 2
 
 The [App round 2 contract](../api/contract/decisions.md#app-round-2-ux)
-records the changes. The owner approved these choices for the round.
+records the changes. The owner's approvals below are quoted from the
+managing agent's Codex session; times are UTC, and 2026-11-25 before
+07:00 UTC is still 2026-11-24 on the owner's Mac.
 
-- Turning off Deliver tasks gives back the Working task. With Work on
-  tasks still on, the agent can take reviews and jobs its role allows.
-- Both Native and Prompt seats show Create tasks, and the server
-  enforces it. Task creation is available to Prompt agents in this
-  round. The Native runner does not expose the call to provider tools.
-- The owner's Add task form keeps its "What goes out at the end" field
-  for outward actions that go through approval. On 2026-11-24 the owner
-  approved keeping the exact “What goes out at the end” label and the current
-  outward-action approval behavior.
+- With Deliver tasks off and Work on tasks on, the agent takes only the
+  reviews and jobs its role allows. Native and Prompt seats both show
+  Create tasks, and the server enforces it; task creation is available to
+  Prompt agents in this round, and the Native runner does not expose the
+  call to provider tools. These are the two defaults of the handoff. The
+  owner approved them at 00:21 UTC on 2026-11-25: "Go ahead and finish
+  Round 2 from the verified branch. Use the defaults from the handoff".
+- Turning off Deliver tasks also gives back the Working task (UX-11a).
+  That part is the managing agent's reading, not the owner's; see
+  question 17.
+- The owner's Add task form keeps its "What goes out at the end" field,
+  with that exact label, for outward actions that go through approval,
+  and the outward-action approval behavior is unchanged. The managing
+  agent offered keeping, renaming or removing the field and closed with
+  "Want me to start Settings with that “Same as this Mac” default, keep
+  the approval field as is, and fix the flaky test?". The owner answered
+  at 01:51 UTC on 2026-11-25: "All good. Approved. All three. Continue".
 
+The other choices made for the owner in this round are question 17.
 Native Codex and Grok have no effort drop-down in this round. UX-15
 records the documentation checked for each tool in the contract.
 
 ### Subscription step 1
 
 FR-005, FR-006 and FR-025 cover the Rules tab, the appearance controls
-under Leverage > Settings (⌘ ,), and the Login label. The owner chose
-Same as this Mac as the default. This step uses the existing local app
-and its macOS preferences. The account menu and billing follow the
+under Leverage > Settings (⌘ ,), and the Login label. The owner approved
+Same as this Mac as the default. The managing agent offered Light and
+Dark only, or Same as this Mac as the default, and closed with "Want me
+to start Settings with that “Same as this Mac” default, keep the approval
+field as is, and fix the flaky test?". He answered "All good. Approved.
+All three. Continue" in the managing agent's Codex session at 01:51 UTC
+on 2026-11-25 (2026-11-24 on his Mac). This step uses the existing local
+app and its macOS preferences. The account menu and billing follow the
 [remaining subscription steps](PRD.md#build-order-for-subscription).
 
 ### Subscription step 2
@@ -2507,6 +2540,113 @@ skeleton's pull request description, as rule AR-004 asks.
       their Mac and that the banner clears when they return to Leverage
       after turning notifications on.
 
+17. **The choices made for the owner for App round 2.** The owner
+    approved building the round with the handoff's two defaults (see
+    [App round 2](#app-round-2)). He did not decide the choices below,
+    which the managing agent made and which are now in the PRD and the
+    [contract](../api/contract/decisions.md#app-round-2-ux). Work
+    proceeds with them.
+
+    - **UX-2.** The landing prompt is issued only until the seat lands;
+      a new prompt is a new seat. **Alternative.** Issue the token inside
+      Connect's answer.
+    - **UX-6 and UX-6b.** The tool's default is the first choice of both
+      lists, and with it no effort is offered. A model newer than the
+      login's tool is shown disabled with the version it needs.
+      **Alternative.** Offer the default model's efforts; hide newer
+      models, or offer them and let the run fail.
+    - **UX-7 and UX-8.** A model or an effort not in the catalog is
+      refused `invalid`. A seat that connects on its own takes no model or
+      effort from the owner and needs a login provider.
+      **Alternative.** A new refusal code; catalog entries for API
+      providers.
+    - **UX-11a.** Turning Deliver tasks off gives back the Working task
+      (release reason `deliver_turned_off`). **Alternative.** The seat
+      keeps the task it is working on until it gives it back.
+    - **UX-11b.** An agent's Add task takes no outward actions, state,
+      minimum strength or budget cap. **Alternative.** Allow outward
+      actions, which the approval rule would then check.
+    - **UX-11c.** While the seat holds work, the task it adds goes into
+      that work's project. **Alternative.** The project of the seat's
+      latest work, or any project.
+    - **UX-13.** After a failed check only the owner or a planner
+      completes the contract. **Alternative.** Let the adding seat retry
+      its own Backlog task.
+    - **UX-14.** The refusal `add_task_limit`: at most 20 tasks added per
+      seat in any rolling hour, no task from a task a seat added, and at
+      most 50 open tasks agents added per workspace, at which the Needs
+      you item "Agents have added 50 open tasks" opens.
+      **Alternative.** Only the rate, or a 429 answer.
+    - **UX-15.** Native Codex and Grok seats have no effort list, because
+      their tools' documents show no way to pass one that the driver
+      uses. This is a disclosed departure from the owner's request for
+      an effort list. **Alternative.** Hide effort for both whatever
+      their documents later show.
+    - **UX-16.** A task an agent added whose check fails opens the Needs
+      you item "A task an agent added needs its contract".
+      **Alternative.** Only the Backlog card and the task page show it.
+
+18. **The choices made for the owner for the Imaginarium gallery.** The
+    owner approved starting Part 3, the gallery tab (see the
+    [gallery's status](imaginarium/PRD.md)). He did not read the
+    requirements FR-030 to FR-041 that the managing agent wrote into the
+    PRD from the proposal's IM-8 to IM-19, or decide the
+    [open questions](imaginarium/PRD.md#open-questions). Work proceeds
+    with the build's answers.
+
+    - **Wording.** FR-033 no longer says that the Try it sheet shows no
+      category, and FR-039 names the action "Save to Ideas" where the
+      mockup says "Save it to Ideas". **Alternative.** The proposal's
+      wording.
+    - **The four open questions.** Gallery tasks use the ordinary
+      per-task work folder, not a folder under `~/Leverage/Imaginarium/`.
+      Picture prompts are not refused; the tile and sheet say they need an
+      agent with an image tool. The gallery adds tasks to the recorded
+      Imaginarium project while its content has not been deleted. Every
+      Send to Ready runs the usual rule checks. **Alternative.** The
+      proposals in the open questions: a folder per task, a Blocked wait
+      for an image tool, a project that cannot be deleted, and no
+      specific-details check on an unedited prompt.
+
+19. **Who wrote the eleven commits with no agent trailer.** The commits
+    listed under [How the build is run](#how-the-build-is-run) are taken
+    to be Codex's, from their branches and times; the repository cannot
+    show it. **Chosen.** They are recorded as Codex's work merged without
+    the trailer. **Alternative.** The owner names any he wrote himself,
+    and they come off the list.
+
+20. **Where a person who adds a login is told about the providers'
+    terms.** The repository is public, so people other than the owner can
+    build and run the app. The [PRD's Risks](PRD.md#risks) and the
+    [provider terms record](research/provider-terms/README.md) say a
+    provider may not allow its tool to be driven by another app, or work
+    to move between two logins of one provider, and may suspend an
+    account. **Chosen.** Documents only:
+    [DEPLOY.md](DEPLOY.md#the-first-run) and the README now say so and
+    link both. The Age of Lever page carries no terms note, because its
+    words are product copy. The app shows no warning when a Gemini login
+    is added, as the PRD's [Gemini login decision](PRD.md#open-decisions)
+    says. **Alternative.** The owner decides each of two things: (a) the
+    Age of Lever page gets a terms note or a link beside its Handoff
+    section; (b) the decision "No warning is shown when a Gemini login is
+    added" changes, since a person who builds the app from the public
+    repository adds a Gemini login without having read that decision.
+    That is a change to the PRD.
+
+21. **The provider names and the marks beside them on the Age of Lever
+    page.** No person has read any provider's brand or trademark
+    guidelines. The [provider terms record](research/provider-terms/README.md)
+    lists Anthropic's Trademark Guidelines among the documents not read
+    and names no other provider's. The page names Codex, Grok, Claude and
+    Gemini, each beside a Unicode glyph in a tinted tile
+    (`marketing-page/styles.css`, `.provider-mark`), not a provider's
+    logo file. **Chosen.** The page's footer and the README say that the
+    names belong to their owners and that Leverage is not affiliated with
+    or endorsed by them. The names and the glyphs stay.
+    **Alternative.** A person reads each provider's guidelines, and the
+    tinted glyphs give way to the names alone or to marks that resemble
+    no provider's, if the guidelines ask for it.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -2534,7 +2674,7 @@ run is also listed here until the owner has read it.
 | [ADR 0011](adr/0011-gating-reads-and-the-transition-function-writes.md) | Added in the delegated run: the rules engine reads, the gate and four writers write, and a waiting command is stored whole. The owner has not read it |
 | [ADR 0012](adr/0012-how-task-text-reaches-a-checker.md) | Added in the delegated run: how task text reaches a checker, and what a checker on each provider can reach. The owner has not read it |
 | [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md) | Added in the delegated run: eval suites, their bar, their ceilings, and that their results refuse nothing. The owner has not read it |
-| The eval suite of "Every task needs specific details" | The 24 cases and their labels, the instruction's wording, the bar and the list of supported models (RV-2 to RV-5), all chosen by agents. No supported model missed the bar: Claude Code, Codex and Antigravity each scored 24 of 24 at their default model ([Measurements](#measurements)) |
+| The eval suite of "Every task needs specific details" | The 24 cases and their labels, the instruction's wording, the bar and the list of supported models (RV-2 to RV-5), all chosen by agents. On the case set of 2026-11-20 no supported model missed the bar: Claude Code, Codex and Antigravity each scored 24 of 24 at their default model. On the current case set, run on 2026-11-24, Codex and Antigravity met the bar, each 24 of 24 as Orchestrator and as General, and Claude Code was not run ([Measurements](#measurements)) |
 | The orchestrator's and the planner's role files | `api/config/role_files/orchestrator.md` and `planner.md`, written in the delegated run (RD-61) |
 | A first run with the rules on | On real logins with an orchestrator connected: three agents on two providers, a task that waits for its check and goes on, and one the check sends back for details. No real builder, reviewer or planner has run through this milestone; real model checks ran only in the eval and in the real checks through the server |
 | The first run on real logins | No agent can sign in, so the owner does it, in the app built by `scripts/build_app.sh`: (1) open `Leverage.app` and create the sign-in; (2) add two logins in Credentials, signing in in each provider's window (the first time a real installer or sign-in command runs from the pop-up; the provider table above says what is known of each); (3) connect a builder on one login, a reviewer on a login of another provider and an orchestrator, since the shipped rules are on; (4) add a task with Add task; (5) watch it reach Done on the board and its log on the task page. A failed review cannot be forced on a real tool |
@@ -2546,6 +2686,9 @@ run is also listed here until the owner has read it.
 | A restore from inside the app, and a copy of the backups off the Mac | Neither is built. A restore is the maintainer's terminal command ([DEPLOY.md](DEPLOY.md#restoring)) |
 | Pull request 15 | The Rule checks milestone is merged. Its AI-assistance boxes remain for the owner. |
 | Questions and approvals pull request ([#16](https://github.com/yuric/leverage/pull/16)) | Both AI-assistance boxes await the owner's review. |
+| Pull requests 17 to 33 | Merged before Claude Code handed the run to Codex (the Credentials milestone, the General role, the Imaginarium project and catalog, onboarding, the subscription proposal, App round 1, the marketing page and test and audit fixes). Both AI-assistance boxes are unticked on each, as GitHub showed on 2026-11-25 |
+| Pull requests 34 to 36 and 38 to 44 | Merged while Codex managed the run. Both AI-assistance boxes are unticked on each, as GitHub showed on 2026-11-25. Each description records its review only in Codex's own words. The first review of all ten that is recorded as done by an agent other than Codex ran on 2026-11-25 (see [In flight](#in-flight)) |
+| Pull request 37 | Dependabot's update of the Markdown lint action, merged in the run. It has no AI-assistance section |
 | [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md), [ADR 0015](adr/0015-one-method-decides-what-a-finishing-task-does-next.md) and [ADR 0016](adr/0016-an-overturned-approval-that-changes-nothing-is-an-event.md) | The owner reads the MCP, Finishing and overturn records. |
 | The owner's MCP run | Connect an agent through MCP from Agents and let the agent finish one task. |
 | The approval rule and materials | Read `api/config/role_files/builder.md` and `orchestrator.md`, the approval instruction and the 40 cases with their labels. Each supported tool met both bars. |
@@ -2559,3 +2702,7 @@ run is also listed here until the owner has read it.
 | Five real provider tokens | Add and verify each token, check its reading, and check the rebuilt app's Keychain prompt. |
 | Native Handoff controls | Drag a row in the live app and verify keyboard and cancellation behavior. |
 | General role and landing prompt | Read the choices in question 15, including the limits for a custom review-pass check, a task given back across providers and the orchestrator offline notice during General work. |
+| App round 2 ([#35](https://github.com/yuric/leverage/pull/35)) | Read the choices in question 17, including the limits on tasks agents add and the two new Needs you items. |
+| Imaginarium gallery ([#36](https://github.com/yuric/leverage/pull/36)) | Accept or change FR-030 to FR-041 and the build's answers to the gallery's open questions (question 18). |
+| The providers' terms for people who add a login | Decide whether the Age of Lever page carries a terms note, and whether the PRD's decision that no warning is shown when a Gemini login is added still stands (question 20). |
+| The providers' brand and trademark guidelines | No person has read them. Read them and decide whether the tinted glyphs beside the provider names on the Age of Lever page stay (question 21). |

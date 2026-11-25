@@ -61,6 +61,6 @@ and the automated checks; direct pushes are blocked. Agents follow
 
 ## Changes to this policy
 
-This policy will change as the project does: when there is code, when there
-are releases, and when there is more than one maintainer. Changes are made by
+This policy will change as the project does: when there are releases, and
+when there is more than one maintainer. Changes are made by
 pull request like everything else.

@@ -41,7 +41,18 @@ notification settings. Native Connect guides the owner to Add credential
 if there are no logins and offers Try again if the login read fails.
 Native Connect and Change use the shared catalog for model and supported
 effort choices.
-Settings groups rules by checker.
+The Rules tab groups rules by checker and holds the workspace settings.
+The Settings window, opened from the Leverage menu (⌘ ,) or the account
+menu, sets the appearance: Same as this Mac, Light or Dark. An account
+row at the foot of the side pane shows the signed-in owner's email and
+opens a menu with Settings and Sign out; its Subscription entry is
+disabled, and no subscription service is connected. Every workspace has an
+Imaginarium project. The Imaginarium tab, below Handoff, offers the 32
+prompts of a catalog compiled into the app; the owner can copy a prompt,
+send it to Ready or save it to Ideas in that project
+([docs/imaginarium/PRD.md](docs/imaginarium/PRD.md)). A gallery task
+records its catalog entry and version (`task.created` version 2) and shows
+an Imaginarium badge on the board.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
@@ -62,7 +73,9 @@ research, and the following code and checks.
   recovery time, `bin/rails leverage:rule_timing` each rule's runs and
   times, and `bin/rails leverage:install_shipped_rules` (run before the
   server starts) installs the shipped rules in workspaces with no rules
-  and updates rules that still match an earlier shipped default;
+  and updates rules that still match an earlier shipped default, and
+  `bin/rails leverage:install_imaginarium_project` (run after it) creates
+  the Imaginarium project of every workspace that has none;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its
@@ -75,13 +88,18 @@ research, and the following code and checks.
   LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
+- `docs/subscription/preview/`: an offline browser preview of the
+  subscription flow with sample data and a mock billing module, with its
+  own test (`node --test docs/subscription/preview/mock-billing.test.cjs`),
+  which CI does not run;
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
   specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
-  30 main cases, a 10-case held-out set, and the run record. Earlier results
-  for both suites predate the task text change. On the current cases Codex
-  and Antigravity met both bars in both modes, and Claude Code is recorded
-  not run;
+  30 main cases, a 10-case held-out set, and the run record. On the
+  current cases of both suites, Codex and Antigravity met the bar in
+  Orchestrator and General mode, and Claude Code was not run, so it is
+  recorded as not meeting it; results on the earlier cases are in each
+  suite's `history/`;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
@@ -213,7 +231,11 @@ owner has read it.
 - Add user-visible changes to the `Unreleased` section of
   [CHANGELOG.md](CHANGELOG.md).
 - Disclose AI assistance: commits authored with an agent carry a
-  `Co-Authored-By` trailer naming it. A human remains responsible for every
+  `Co-Authored-By` trailer naming it. An agent adds the trailer itself
+  when its tool does not, on every commit, including documentation and
+  follow-up commits, and checks before it pushes that
+  `git log --no-merges --format='%h %(trailers:key=Co-Authored-By,valueonly)' origin/main..HEAD`
+  shows a trailer on each line. A human remains responsible for every
   change that is merged. The full policy is in
   [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
 
@@ -259,6 +281,8 @@ bash scripts/test_real_rule_check.sh                 # the real rule check's ref
 bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
 bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
 node --test docs/subscription/preview/mock-billing.test.cjs  # the subscription preview's mock model
+node --test scripts/test_marketing_demo.mjs          # the marketing page and its demo (needs Node)
+bash scripts/test_deploy_marketing_page.sh           # the marketing deployment script, against stand-ins
 ```
 
 After changing anything under `api/contract/registry.json` or the
