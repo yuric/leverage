@@ -658,3 +658,13 @@ ids, numbers and true or false; every other text, task text among it, is
 `<support folder>/logs/`. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.
+
+Every image the build pulls is named with a digest: the Ruby base image in
+`api/Dockerfile`, which names no separate build frontend, and the
+PostgreSQL image in `compose.yaml`
+([ADR 0002](adr/0002-rails-api-and-swift-package-skeleton.md) records
+both). `.github/dependabot.yml` asks Dependabot for a weekly pull request
+that moves either digest or the gems in `api/Gemfile.lock`. Dependabot
+changes neither the digest recorded in ADR 0002 nor `api/.ruby-version`;
+whoever takes such a pull request changes them in it. No such pull request
+has been opened yet, so that Dependabot can read these files is unverified.

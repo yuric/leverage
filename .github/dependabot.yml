@@ -14,3 +14,34 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # The API image's base, pinned by digest in api/Dockerfile. A pull request
+  # that moves it must also change the digest recorded in docs/adr/0002, and
+  # api/.ruby-version when the Ruby version moves: Dependabot edits neither.
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # The PostgreSQL image, pinned by digest in compose.yaml. The digest in
+  # docs/adr/0002 changes in the same pull request, by hand.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # The API's gems, fixed in api/Gemfile.lock.
+  - package-ecosystem: "bundler"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gems:
+        patterns:
+          - "*"

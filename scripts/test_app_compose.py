@@ -11,6 +11,11 @@ exactly that changes and every other line is kept, in order, and that a
 compose file of another shape fails and says why instead of being
 changed in a way nobody checked.
 
+They also hold what the bundle's images are made from to rule AR-004's
+pin: every image that api/Dockerfile (which build_app.sh builds) and
+compose.yaml pull from a registry is named with a digest, the Dockerfile's
+build frontend included.
+
 Usage: python3 scripts/test_app_compose.py [-v]
 Standard library only; exits 0 when every case behaves as expected.
 """
@@ -25,6 +30,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SCRIPT = HERE / "app_compose.py"
 COMPOSE = ROOT / "compose.yaml"
+DOCKERFILE = ROOT / "api" / "Dockerfile"
 VERBOSE = "-v" in sys.argv[1:]
 PULL = "pull_policy: never"
 SERVICES = ("api", "sweep", "backup")
@@ -65,6 +71,37 @@ def service_block(text, name):
         if inside:
             block.append(line)
     return block
+
+
+def unpinned_images(dockerfile, compose):
+    """The registry images the two files name without a digest.
+
+    In the Dockerfile: the build frontend a `# syntax=` line names, which
+    BuildKit pulls and runs at every build, and every FROM that is not an
+    earlier stage or `scratch`. In the compose file: every `image:` whose
+    name is not the locally built `leverage-api`.
+    """
+    found, stages = [], set()
+    for line in dockerfile.splitlines():
+        words = line.split()
+        if line.startswith("#"):
+            directive = line[1:].strip()
+            if directive.lower().startswith("syntax=") and "@sha256:" not in directive:
+                found.append(line)
+        elif words and words[0].upper() == "FROM":
+            names = [word for word in words[1:] if not word.startswith("--")]
+            image = names[0] if names else ""
+            if image not in stages and image != "scratch" and "@sha256:" not in image:
+                found.append(line)
+            if len(names) >= 3 and names[1].upper() == "AS":
+                stages.add(names[2])
+    for line in compose.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("image:"):
+            image = stripped.split(":", 1)[1].strip()
+            if not image.startswith("leverage-api:") and "@sha256:" not in image:
+                found.append(line)
+    return found
 
 
 def first_setting(block):
@@ -134,6 +171,20 @@ def main():
                     "    environment:" in api
                     and "      <<: *api-environment" in api
                     and "      LEVERAGE_MCP_COMMAND: ${LEVERAGE_MCP_COMMAND:-}" in api)
+
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    cases.check("every registry image of api/Dockerfile and compose.yaml is named with a digest",
+                unpinned_images(dockerfile, original) == [], unpinned_images(dockerfile, original))
+    cases.check("the Dockerfile and the compose file each name a registry image at all",
+                "@sha256:" in dockerfile and "@sha256:" in original)
+    cases.check("a build frontend named by a tag alone is found",
+                unpinned_images("# syntax=docker/dockerfile:1\nFROM scratch\n", "") == ["# syntax=docker/dockerfile:1"])
+    cases.check("a base image named by a tag alone is found, and a stage name is not an image",
+                unpinned_images("FROM ruby:4-slim AS base\nFROM base AS build\nFROM --platform=linux/arm64 base\n", "")
+                == ["FROM ruby:4-slim AS base"])
+    cases.check("a compose image named by a tag alone is found, and the image built here is not",
+                unpinned_images("", "    image: postgres:17\n  image: leverage-api:${API_IMAGE_TAG:-local}\n")
+                == ["    image: postgres:17"])
 
     code, messages, output = run(original, to_file=False)
     cases.check("without --output it writes the same text to standard output", code == 0 and output == made, messages)

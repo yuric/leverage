@@ -1,5 +1,8 @@
-# syntax=docker/dockerfile:1
 # check=error=true
+
+# No `# syntax=` line: it would make BuildKit pull and run a build frontend
+# image at every build, and this file needs nothing beyond the frontend
+# built into Docker. Every image named here carries a digest (rule AR-004).
 
 # The API image. Build and run it with compose.yaml at the repository root,
 # which publishes the API on 127.0.0.1 only and passes the settings from
