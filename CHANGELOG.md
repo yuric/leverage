@@ -237,6 +237,9 @@ once it makes its first release.
 
 ### Fixed
 
+- `bin/rails leverage:verify_log` passes again for a workspace created
+  before the Imaginarium project. Its sign-up wrote only the shipped
+  rules, and the check now reads it that way.
 - A planner's empty draft keeps the task's saved details, including goal
   text folded on upgrade.
 - Add task refreshes project work references after task changes, builder
