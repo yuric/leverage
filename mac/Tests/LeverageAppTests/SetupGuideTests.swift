@@ -126,7 +126,7 @@ struct SetupGuideTests {
             body: "Use Add task to write what should get done. One agent builds it and the other reviews it.",
             offersFinish: false),
         Row(
-            name: "agents connected, on Settings", facts: Points.agents, place: .settings, target: .addTask,
+            name: "agents connected, on Rules", facts: Points.agents, place: .rules, target: .addTask,
             side: .below, step: 3, title: "Give them something to do",
             body: "Use Add task to write what should get done. One agent builds it and the other reviews it.",
             offersFinish: false),

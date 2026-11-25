@@ -980,6 +980,14 @@ records the changes. The owner approved these choices for the round.
 Native Codex and Grok have no effort drop-down in this round. UX-15
 records the documentation checked for each tool in the contract.
 
+### Subscription step 1
+
+FR-005, FR-006 and FR-025 cover the Rules tab, the appearance controls
+under Leverage > Settings (⌘ ,), and the Login label. The owner chose
+Same as this Mac as the default. This step uses the existing local app
+and its macOS preferences. The account menu and billing follow the
+[remaining subscription steps](PRD.md#build-order-for-subscription).
+
 ## What the Rule checks milestone proves, and how far
 
 - **The rules work end to end with stand-in tools.**
@@ -2484,7 +2492,7 @@ run is also listed here until the owner has read it.
 
 | Item | What is waiting |
 | --- | --- |
-| The recovery time ceiling | The owner can set it in Settings > Workspace settings. The setting is empty. Handoff stays not called done until the owner sets it. The six scripted cases used a verification bar of 900 seconds. |
+| The recovery time ceiling | The owner can set it in Rules > Workspace settings. The setting is empty. Handoff stays not called done until the owner sets it. The six scripted cases used a verification bar of 900 seconds. |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
 | Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |

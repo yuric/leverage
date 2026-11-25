@@ -98,7 +98,7 @@ struct RenderSmokeTests {
     @Test("the side pane and the toolbar draw for each place the owner can be")
     func paneAndToolbar() async {
         let (_, context) = await readyModel()
-        for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff, .settings] {
+        for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff, .rules] {
             context.navigator.show(place)
             #expect(drawsSomething(render(SidePane(context: context))), "\(place)")
             #expect(drawsSomething(render(Toolbar(context: context), height: 80)), "\(place)")

@@ -91,7 +91,7 @@ struct AppShell: View {
         case .credentials: CredentialsView()
         case .handoff: HandoffView()
         case .imaginarium: ImaginariumView()
-        case .settings:
+        case .rules:
             TabView {
                 RulesView().tabItem { Text(RulesCopy.title.text) }
                 WorkspaceSettingsView().tabItem { Text(WorkspaceSettingsCopy.title.text) }

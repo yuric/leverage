@@ -90,7 +90,7 @@ environment.
    Reviewer on different providers, and an Orchestrator that can share
    either login. A seat the app runs starts at once. Settings, at the
    foot of the left pane, lists the rules and turns each on or off.
-   Settings > Workspace settings sets the lease length, check timeouts,
+   Rules > Workspace settings sets the lease length, check timeouts,
    maximum rounds, re-run limit and recovery time ceiling.
 5. Choose Add task, fill in the form and save it. The task waits in
    Backlog, "Checking the details", until the orchestrator has checked it;
