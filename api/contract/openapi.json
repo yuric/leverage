@@ -9784,8 +9784,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999,
-            "description": "US dollars since the last report."
+            "maximum": 100000,
+            "description": "US dollars since the last report. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [
@@ -9882,7 +9882,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999
+            "maximum": 100000,
+            "description": "US dollars. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [
@@ -10846,8 +10847,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999,
-            "description": "US dollars."
+            "maximum": 100000,
+            "description": "US dollars. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [
