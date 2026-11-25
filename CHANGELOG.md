@@ -255,6 +255,8 @@ once it makes its first release.
 
 ### Fixed
 
+- Log verification recognizes a credential switch when an action
+  approved by a check override grants the builder a fresh lease.
 - `bin/rails leverage:verify_log` passes again for a workspace created
   before the Imaginarium project. Its sign-up wrote only the shipped
   rules, and the check now reads it that way.
