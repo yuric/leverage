@@ -1484,7 +1484,9 @@ task. PRD places are named by their section.
   commands row or without it (a restored backup keeps the row past
   `command_key_retention`), and only for that seat's own work: the one
   task it built, the reviews it had started, its own waiting commands and
-  the Finishing tasks it built. Neither the receipt nor the events say
+  the Finishing tasks it built. A group with no release is not read this
+  way: its holds and Needs you items go through the ordinary audit as the
+  command's side events, whoever built the task. Neither the receipt nor the events say
   which build wrote them, so the reading has no end date: the audit cannot
   tell that old command from an `issue_landing_prompt` that released a
   landed seat's work now, so that the command releases nothing now is held
