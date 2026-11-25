@@ -12154,8 +12154,8 @@
             "id": "00000000-0000-4000-8000-000000000143",
             "name": "example",
             "provider": "claude",
-            "model": "example",
-            "effort": "example",
+            "model": "claude-opus-5-5",
+            "effort": "high",
             "role": "builder",
             "strength_rank": 1,
             "credential_id": "00000000-0000-4000-8000-000000000144",
@@ -12250,7 +12250,8 @@
         "examples": [
           {
             "name": "example",
-            "role": "builder"
+            "role": "builder",
+            "provider": "claude"
           }
         ]
       },
@@ -13084,7 +13085,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. Model, effort and strength rank are what handoff uses; whether the Mac app fills them from a provider default or the owner chooses them is the PRD's open decision \"How a credential's model is set\", and either way they arrive here.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. A login may name a model in the catalog, or let the server use the catalog default. Effort is empty for every new credential, and model is empty for API tokens (UX-7). Strength rank is what Handoff uses.",
         "properties": {
           "credential_id": {
             "type": "string",
@@ -13177,8 +13178,8 @@
             "provider": "claude_api",
             "name": "example",
             "masked_label": "••••••••",
-            "model": "claude-model-1",
-            "effort": "high",
+            "model": null,
+            "effort": null,
             "strength_rank": 2
           }
         ]
