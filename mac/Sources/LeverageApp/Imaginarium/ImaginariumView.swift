@@ -328,8 +328,7 @@ struct ImaginariumTrySheet: View {
             }
             HStack {
                 Button(ImaginariumCopy.seeOnBoard.text) {
-                    context.navigator.boardFilter.agentID = nil
-                    context.navigator.selectProject(model.savedProjectID)
+                    context.navigator.showProjectAlone(model.savedProjectID)
                     dismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())

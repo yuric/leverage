@@ -75,6 +75,20 @@ struct SidePaneTests {
         #expect(navigator.boardFilter.agentID == agentID)
     }
 
+    @Test("showing a project alone opens the Board on it with no agent filter (FR-040)")
+    func showsProjectAlone() {
+        let navigator = Navigator()
+        let projectID = UUID()
+        navigator.boardFilter.agentID = UUID()
+        navigator.show(.imaginarium)
+
+        navigator.showProjectAlone(projectID)
+
+        #expect(navigator.place == .board)
+        #expect(navigator.boardFilter.projectID == projectID)
+        #expect(navigator.boardFilter.agentID == nil)
+    }
+
     @Test("All projects clears the project filter and returns from a task to the Board")
     func choosesAllProjects() {
         let navigator = Navigator()
