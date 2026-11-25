@@ -32,7 +32,7 @@
         "state": "active",
         "limited_until": null,
         "position": 1,
-        "model": "grok-model-1",
+        "model": "grok-4.6",
         "effort": null,
         "strength_rank": 1
       },
@@ -44,7 +44,7 @@
         "state": "active",
         "limited_until": null,
         "position": 2,
-        "model": "claude-model-1",
+        "model": "claude-opus-5-5",
         "effort": null,
         "strength_rank": 1
       },
@@ -66,7 +66,7 @@
         "id": "$seat:builder",
         "name": "Builder",
         "provider": "claude",
-        "model": "claude-model-1",
+        "model": "claude-opus-5-5",
         "effort": "high",
         "role": "builder",
         "strength_rank": 1,
@@ -79,8 +79,8 @@
         "id": "$seat:reviewer",
         "name": "Reviewer",
         "provider": "grok",
-        "model": "grok-model-1",
-        "effort": "high",
+        "model": "grok-4.6",
+        "effort": "",
         "role": "reviewer",
         "strength_rank": 1,
         "credential_id": "$credential:grok_r",
@@ -286,7 +286,7 @@
             "payload": {
               "seat_id": "$seat:builder",
               "credential_id": "$credential:claude_a",
-              "model": "claude-model-1"
+              "model": "claude-opus-5-5"
             }
           }
         ],
@@ -313,7 +313,7 @@
         ],
         "result_fields": {
           "credential_id": "$credential:claude_a",
-          "model": "claude-model-1"
+          "model": "claude-opus-5-5"
         }
       }
     },
@@ -768,7 +768,7 @@
             "command_id": null,
             "payload": {
               "from_credential_id": "$credential:codex_h",
-              "model": "claude-model-1",
+              "model": "claude-opus-5-5",
               "seat_id": "$seat:builder",
               "review_id": null,
               "job_id": null
@@ -968,7 +968,7 @@
             "command_id": "$key:t1_review_claim_2520",
             "payload": {
               "credential_id": "$credential:grok_r",
-              "model": "grok-model-1"
+              "model": "grok-4.6"
             }
           }
         ],
@@ -995,7 +995,7 @@
         ],
         "result_fields": {
           "credential_id": "$credential:grok_r",
-          "model": "grok-model-1"
+          "model": "grok-4.6"
         }
       }
     },
