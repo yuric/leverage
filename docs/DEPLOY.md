@@ -377,14 +377,26 @@ after it are kept until removed by hand.
 
 This is the developer's path, from the repository root. The API and the
 database read their settings from a `.env` file at the root, which
-[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it from
-the example, then replace the made-up values:
+[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it
+with the script, which copies `.env.example` and gives the two database
+passwords and `SECRET_KEY_BASE` random values of its own (mode 0600; it
+never writes over a `.env` that is there):
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 docker compose build
 docker compose up -d
 ```
+
+`.env.example` leaves those three values empty, and compose stops with a
+message while `POSTGRES_PASSWORD` or `SECRET_KEY_BASE` is empty, so a
+copy of the example alone starts nothing and no server runs on a password
+published in this repository. That matters most on a Linux host shared
+with other users, where the database container's address can be reached
+from the host; on the Mac the database publishes no port. The passwords
+are set when the database volume is first made: changing
+`POSTGRES_PASSWORD` in `.env` afterwards does not change the role's
+password and stops the API from connecting.
 
 `up` starts four services: `db`, `api` (it prepares the database first),
 `sweep`, which applies due timers every 15 seconds and purges command keys
@@ -395,9 +407,9 @@ older than 7 days once an hour
 | Variable | Used by | Required | What it does |
 | --- | --- | --- | --- |
 | `POSTGRES_USER` | db, api, sweep | Yes | The PostgreSQL user, the database's owner role. compose stops with a message when it is unset. |
-| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. |
+| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. compose stops with a message when it is empty. |
 | `LEVERAGE_API_DB_PASSWORD` | api, sweep | No | The password of `leverage_api`, the login role the server and the sweep connect as; it cannot change the event log. Letters, digits and dashes only. Empty: they connect as `POSTGRES_USER`. |
-| `SECRET_KEY_BASE` | api, sweep | Yes | Rails does not start in production without it. Leverage signs nothing with it: its tokens are random values whose SHA-256 digests the database keeps, so changing it ends no owner session, seat token or helper token ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md) says what ends each). Make one with `openssl rand -hex 64`. |
+| `SECRET_KEY_BASE` | api, sweep | Yes | Rails does not start in production without it. Leverage signs nothing with it: its tokens are random values whose SHA-256 digests the database keeps, so changing it ends no owner session, seat token or helper token ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md) says what ends each). compose stops with a message when it is empty. To make one by hand: `openssl rand -hex 64`. |
 | `RAILS_ASSUME_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `RAILS_FORCE_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `API_PORT` | compose | No, default `3000` | The port on `127.0.0.1` where the API answers. |
@@ -457,8 +469,9 @@ only on `127.0.0.1`, over plain HTTP. The app's database is the volume
 `leverage-app_db-data`; a server started from the repository uses
 `leverage_db-data`.
 
-CI runs the same containers with the example `.env`, and the whole loop with
-stand-in tools on Linux; see `.github/workflows/ci.yml`.
+CI runs the same containers with a `.env` made by `scripts/make_env.py`,
+and the whole loop with stand-in tools on Linux; see
+`.github/workflows/ci.yml`.
 
 The move to a server the owner controls is not decided in detail: _TBD_.
 

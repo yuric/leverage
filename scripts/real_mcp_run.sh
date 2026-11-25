@@ -3,7 +3,7 @@
 # LEVERAGE_REAL_MCP=1 LEVERAGE_REAL_PROVIDER=claude scripts/real_mcp_run.sh claude
 # Optional: API_IMAGE_TAG to reuse an API image, LEVERAGE_E2E_SCRATCH for
 # the Swift build, LEVERAGE_MCP_CHECK_OUT for the two verified artifacts.
-# Set up .env from .env.example as described in AGENTS.md before running.
+# Make .env as described in AGENTS.md before running.
 # Exit 2 for a refusal, 3 if Claude is absent, 1 for failure, 130 for an
 # interrupt. CI presence, including an empty value, always refuses.
 { set +x; } 2>/dev/null
@@ -228,7 +228,7 @@ class Check:
         self.compose = ["docker", "compose"]
         env_file = ROOT / ".env"
         if not env_file.is_file():
-            raise Failed("copy .env.example to .env before running the check")
+            raise Failed("make .env with scripts/make_env.py before running the check")
         self.compose += ["--env-file", str(env_file)]
         self.compose += ["-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "compose.test.yaml")]
         self.scratch = Path(os.environ.get("LEVERAGE_E2E_SCRATCH") or folder / "build").resolve()

@@ -1,6 +1,6 @@
 # The API, its timer sweep, its daily backup and their PostgreSQL database,
-# for the first run on the owner's Mac. Copy .env.example to .env first; every secret comes
-# from that file. Automated runs add compose.test.yaml, which lets Docker
+# for the first run on the owner's Mac. Make .env first
+# (python3 -I scripts/make_env.py); every secret comes from that file. Automated runs add compose.test.yaml, which lets Docker
 # pick the API's port.
 name: leverage
 
@@ -29,6 +29,9 @@ x-api-environment: &api-environment
   DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432
   API_DATABASE_URL: ${LEVERAGE_API_DB_PASSWORD:+postgres://leverage_api:${LEVERAGE_API_DB_PASSWORD}@db:5432}
   LEVERAGE_API_DB_PASSWORD: ${LEVERAGE_API_DB_PASSWORD:-}
+  # Required here so that a .env copied from the example, whose secrets
+  # are empty, stops compose before any container starts.
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
   # Puma's threads, and the database connections they share; a long poll
   # gives its connection back between looks (milestone 2 plan EN-21).
   RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-64}

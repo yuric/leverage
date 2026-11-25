@@ -21,7 +21,7 @@
 # disable_rule before its seats connect, so every Complete contract, claim,
 # submit, review claim and verdict passes the gate with the app-run rules only.
 #
-# Needs Docker and a .env (made from .env.example when there is none).
+# Needs Docker and a .env (made by scripts/make_env.py when there is none).
 # COMPOSE_PROJECT_NAME and API_IMAGE_TAG may be set; the defaults are a
 # project of this run's own and the tag "speed". The exit code is not
 # changed by a figure above the target: nothing is tuned to pass.
@@ -62,7 +62,7 @@ U() { docker compose -f compose.yaml -f compose.test.yaml "$@"; }
 
 made_env=false
 if [ ! -f .env ]; then
-  cp .env.example .env
+  python3 -I scripts/make_env.py >/dev/null
   made_env=true
 fi
 
