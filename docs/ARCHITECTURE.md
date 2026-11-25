@@ -292,7 +292,8 @@ must satisfy; where a practice is also a rule, the rule is the authority.
   stand-in in automated tests; nothing in CI calls a provider.
 - **No secret in the repository, a log, an event, a fixture or a
   screenshot.** Tests use made-up values. Records name a credential by its
-  id.
+  id. No tracked file names a real user's home folder
+  (`scripts/check_home_paths.py`).
 - **An adversarial review before merge in a delegated run.** In a run
   delegated under [CONTRIBUTING.md](../CONTRIBUTING.md#ai-assisted-contributions),
   a reviewer who did not write the change tries to break it, and its

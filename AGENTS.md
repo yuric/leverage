@@ -100,8 +100,8 @@ research, and the following code and checks.
   `eval_rule.sh` (both suites, scored by `eval_score.py`),
   `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
 - `.github/workflows/ci.yml`: the API and Swift test suites, the
-  migrations-from-zero check, the import check, the reply-file check, the
-  capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
+  migrations-from-zero check, the import check, the home folder check, the
+  reply-file check, the capture self-test, app bundle, on Linux the end-to-end runs (`e2e_core_loop.sh`,
   `e2e_handoff.sh`, `e2e_rule_checks.sh`, `e2e_questions_approvals.sh`, `e2e_credentials.sh`)
   and the restore drill, and the
   eval suite's checks (`check_evals.py` and the self-tests of the eval
@@ -239,6 +239,8 @@ python3 -I scripts/test_secret_scan.py               # self-test of the secret s
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
 python3 -I scripts/test_capture_reader_reply.py      # capture guard and scrub self-test
 python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
+python3 -I scripts/check_home_paths.py               # no tracked file names a home folder
+python3 -I scripts/test_check_home_paths.py          # self-test of that check
 python3 -I scripts/test_e2e_core_loop.py             # the end-to-end script's plumbing, CI's steps
 python3 -I scripts/test_speed_report.py              # self-test of the speed report
 python3 -I scripts/test_real_gemini_through_app.py   # the real Gemini check's refusals

@@ -7,9 +7,8 @@ result recorded against today's instruction and case set, that each
 result's "met the bar" is what scoring it again gives, that the registry
 list orchestrator_tested_providers equals the providers whose result met
 the bar, that runs.json is within the ceilings of RV-6, and that no case or
-result holds anything shaped like an email address, a token or a path into a
-home folder. A recorded
-miss does not fail it: it is printed.
+result holds anything shaped like an email address, a token or a path into
+a home folder. A recorded miss does not fail it: it is printed.
 
 Each case copies the repository's suite, shipped rules and registry into a
 temporary folder, records a result for each supported model there with
