@@ -67,11 +67,16 @@ struct ImaginariumCatalog: Decodable, Equatable, Sendable {
         try JSONDecoder().decode(ImaginariumCatalog.self, from: Data(json.utf8))
     }
 
+    /// The entries in `category` (all when nil) whose title, description or
+    /// category name holds `search`, as the gallery's design matches them.
     func filteredEntries(category: String?, search: String) -> [Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let names = Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         return entries.filter { entry in
             (category == nil || category == entry.category) &&
-                (query.isEmpty || entry.title.localizedStandardContains(query) || entry.description.localizedStandardContains(query))
+                (query.isEmpty || entry.title.localizedStandardContains(query) ||
+                    entry.description.localizedStandardContains(query) ||
+                    (names[entry.category]?.localizedStandardContains(query) ?? false))
         }
     }
 

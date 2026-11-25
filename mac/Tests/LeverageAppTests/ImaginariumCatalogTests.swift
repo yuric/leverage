@@ -72,6 +72,17 @@ struct ImaginariumCatalogTests {
         #expect(launch.filteredEntries(category: nil, search: "  ").count == 32)
     }
 
+    @Test("search also finds prompts by the name of their category, as each tile's chip shows it")
+    func searchByCategoryName() throws {
+        let launch = try Catalog.launch()
+        let gifts = launch.entries.filter { $0.category == "gifts" }.map(\.id)
+        let home = launch.entries.filter { $0.category == "home" }.map(\.id)
+        #expect(gifts.count == 4 && home.count == 4)
+        #expect(launch.filteredEntries(category: nil, search: "gifts").map(\.id) == gifts)
+        #expect(launch.filteredEntries(category: nil, search: " Home and LIFE ").map(\.id) == home)
+        #expect(launch.filteredEntries(category: "websites", search: "gifts").isEmpty)
+    }
+
     @Test("every shipped picture prompt says it needs an image tool, and no entry needs anything else")
     func launchNeeds() throws {
         let launch = try Catalog.launch()
