@@ -73,7 +73,9 @@ research, and the following code and checks.
   recovery time, `bin/rails leverage:rule_timing` each rule's runs and
   times, and `bin/rails leverage:install_shipped_rules` (run before the
   server starts) installs the shipped rules in workspaces with no rules
-  and updates rules that still match an earlier shipped default;
+  and updates rules that still match an earlier shipped default, and
+  `bin/rails leverage:install_imaginarium_project` (run after it) creates
+  the Imaginarium project of every workspace that has none;
 - `api/contract/`: the contract every part is built against (the fixed
   lists, event payloads, state and step tables, hooks, jobs, roles, timers,
   Needs you, the interface schema and the golden traces), described in its

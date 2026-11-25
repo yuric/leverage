@@ -17,9 +17,10 @@ some may not allow it and may suspend an account
 > [Implementation progress](docs/IMPLEMENTATION.md) for the milestones
 > and what each check proved.
 
-Leverage is an open source project that is being specified in the open. The
-requirements are written first, in [docs/PRD.md](docs/PRD.md); architecture,
-deployment, and implementation follow from them.
+Leverage is an open source project that is specified in the open. The
+requirements are written first, in [docs/PRD.md](docs/PRD.md); the
+architecture, the deployment, and the code in `api/` and `mac/` follow
+from them.
 
 ## What is here
 
@@ -32,6 +33,11 @@ deployment, and implementation follow from them.
 | `docs/adr/` | Architecture decision records, listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#architecture-decision-records). |
 | `api/` | The server: a Rails application in API mode, run with PostgreSQL in Docker containers (`compose.yaml`, `.env.example`). |
 | `mac/` | A Swift package with the Mac app, helper, reference runner, MCP server and shared library. |
+| `scripts/` | The repository's checks, the end-to-end runs with stand-in tools, the restore drill and the app build. |
+| `evals/` | The eval suites of two shipped rules: [specific details](evals/specific-details/README.md) and [outward action approval](evals/approves-actions/README.md). |
+| [docs/onboarding/PRD.md](docs/onboarding/PRD.md) | Onboarding: the setup assistant and the setup checklist. |
+| [docs/imaginarium/PRD.md](docs/imaginarium/PRD.md) | The Imaginarium: the gallery of ready-made project prompts. |
+| [docs/subscription/README.md](docs/subscription/README.md) | The subscription and account menu design reference, with an offline preview. |
 | [`marketing-page/`](marketing-page/) | Age of Lever, the public-facing site for Leverage. |
 | [docs/design/](docs/design/README.md) | The design reference: a working mockup of the owner-facing screens. |
 | [AGENTS.md](AGENTS.md) | Instructions for AI coding agents working in this repository. |

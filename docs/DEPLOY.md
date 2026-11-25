@@ -265,7 +265,9 @@ to the new default. The upgrade preserves the rule's switch setting and
 any owner edits. See [Shipped rules](PRD.md#shipped-rules). The command
 prints one line per workspace it changed. The rules are part of every
 briefing, so an agent whose briefing changed is told at its next call
-and reads it again.
+and reads it again. Then `bin/rails leverage:install_imaginarium_project`
+creates the Imaginarium project of any workspace that has none, once, and
+prints one line per workspace it wrote.
 
 ## Backups and restore
 
