@@ -500,28 +500,44 @@ module Leverage
       problems
     end
 
-    # Before UX-2, New prompt released the seat's work (GA-17). Only the
+    # Before UX-2, New prompt released the seat's work (GA-17): the one
+    # Working task it held, the reviews it held and the commands it had
+    # waiting on them, and it held the Finishing tasks it held. Only the
     # releases, cancelled checks, holds and inbox changes carried its key.
     # A held job's immediate timeout wrote under its own keyless timer.
-    # Side events alone go through the ordinary audit. After key retention
-    # only a task release with the old reason can identify the command.
+    # Side events alone go through the ordinary audit.
+    #
+    # The reading covers that seat's own work and nothing else: the
+    # releases are the owner's, of a task the seat built and of reviews it
+    # had started, a withdrawn check belongs to a command of that seat,
+    # and a held Finishing task is one it built. The seat is the
+    # receipt's; after key retention only a task release with the old
+    # reason can identify the command, and that task's builder is the seat.
+    #
+    # Neither the receipt nor the events say which build wrote them, so
+    # the reading has no end date: the audit cannot tell an old New prompt
+    # from an issue_landing_prompt that released a landed seat's work now.
+    # That the command releases nothing now is held by its own tests (UX-17).
     def historical_prompt_release?(events, states, receipt:)
       releases = events.select { |event| %w[task.released review.released].include?(event.type) }
-      return false if releases.empty?
-      return false if receipt.nil? && releases.none? { |event| event.type == "task.released" && event.payload["reason"] == "new_prompt" }
+      seat_id = prompt_seat(releases, receipt)
+      return false unless seat_id
 
       events.all? do |event|
         state = states[event.task_id]
         case event.type
-        when "task.released" then state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt"
-        when "review.released" then state == "in_review" && event.actor_kind == "owner"
-        when "check.finished" then prompt_withdrawal?(event, state, releases, receipt)
+        when "task.released"
+          state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt" &&
+            builder_before(event) == seat_id
+        when "review.released" then state == "in_review" && event.actor_kind == "owner" && reviewer_before(event) == seat_id
+        when "check.finished" then prompt_withdrawal?(event, state, releases, seat_id)
         when "job.withdrawn"
           events.any? do |check|
             check.type == "check.finished" && check.task_id == event.task_id && check.seq < event.seq &&
               Steps.queued_for(check)&.payload&.fetch("job_id", nil) == event.subject_id
           end
-        when "hold.opened" then state == "finishing" && event.payload["reason"] == "action_unconfirmed"
+        when "hold.opened"
+          state == "finishing" && event.payload["reason"] == "action_unconfirmed" && builder_before(event) == seat_id
         when "hold.closed"
           reason = event.payload["reason"]
           cause = "task.released" if Holds::SEAT_BOUND.include?(reason)
@@ -538,12 +554,39 @@ module Leverage
       end
     end
 
-    def prompt_withdrawal?(event, state, releases, receipt)
+    # The seat an old New prompt's releases are about, or nil when the
+    # group is not one: no release, or more than one task released (a seat
+    # holds one task). With the receipt, the seat it names; without it,
+    # the builder of the task released with the old reason.
+    def prompt_seat(releases, receipt)
+      tasks = releases.select { |event| event.type == "task.released" }
+      return nil if releases.empty? || tasks.size > 1
+      return receipt.result&.fetch("seat_id", nil) if receipt
+
+      builder_before(tasks.first) if tasks.first&.payload&.fetch("reason", nil) == "new_prompt"
+    end
+
+    # The seat the task's builder lease was last granted to before the
+    # event, read from the log (Leases.builder_grantee).
+    def builder_before(event)
+      grant = task_history_before(event).where("type = ? OR payload->>? IS NOT NULL", Leases::BUILDER_GRANT, LEASE_FIELD)
+        .order(:seq).last
+      grant && Leases.builder_grantee(grant)
+    end
+
+    # The seat that holds the review an event is about, read from the log:
+    # the one that started it, when nothing has ended that since.
+    def reviewer_before(event)
+      last = task_history_before(event).where(subject_kind: "review", subject_id: event.subject_id,
+        type: %w[review.started review.released review.lease_expired review.passed review.failed]).order(:seq).last
+      last.actor_id if last&.type == "review.started"
+    end
+
+    def prompt_withdrawal?(event, state, releases, seat_id)
       return false unless event.subject_kind == "rule_check" && event.payload["result"] == "withdrawn"
 
-      pending = withdrawn_pending(event)
-      return false unless pending&.requester_kind == "seat"
-      return false if receipt && pending.requester_id != receipt.result&.fetch("seat_id", nil)
+      pending = withdrawn_pending(event, seat_id)
+      return false unless pending
       return true if state == "ready" && pending.command == "claim" && claim_withdrawal?(event) &&
         event.payload.values_at("subject_kind", "subject_id") == [ "seat", pending.requester_id ]
 
@@ -554,19 +597,20 @@ module Leverage
       end
     end
 
-    # The cancelled pending transition a withdrawn check belonged to: the
-    # one its check.queued names. A check held at the re-run limit was
+    # The seat's cancelled pending transition a withdrawn check belonged
+    # to: the one its check.queued names. A check held at the re-run limit was
     # never queued (RD-45): its rerun_limit hold, still open when the check
     # is withdrawn, was opened by the waiting command under its own key
     # (Gate), so that key finds the transition. The check's row is not
     # read: meeting the same inputs again points it at the later command.
-    def withdrawn_pending(event)
-      cancelled = PendingTransition.where(workspace_id: event.workspace_id, task_id: event.task_id, state: "cancelled")
+    def withdrawn_pending(event, seat_id)
+      cancelled = PendingTransition.where(workspace_id: event.workspace_id, task_id: event.task_id, state: "cancelled",
+        requester_kind: "seat", requester_id: seat_id)
       queued = Steps.queued_for(event)
       return cancelled.find_by(id: queued.payload["pending_transition_id"]) if queued
 
       held = open_check_hold(task_history_before(event), event.subject_id, "rerun_limit")
-      cancelled.find_by(command_key: held.command_id, requester_kind: "seat") if held&.command_id
+      cancelled.find_by(command_key: held.command_id) if held&.command_id
     end
 
     # An override can approve a stopped action or reenter an errored

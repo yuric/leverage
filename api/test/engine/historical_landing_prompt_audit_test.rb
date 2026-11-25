@@ -86,6 +86,74 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
     assert_match(/issue_landing_prompt wrote task\.released/, audit(after).sole)
   end
 
+  # --- what the reading does not cover: only the receipt's seat's own work ------
+
+  test "a New prompt receipt does not excuse the release of another seat's Working task" do
+    other = @scenario.seat(role: "general")
+    @scenario.task(state: "working", builder: other)
+    after = @scenario.workspace.reload.last_seq
+    released = Leverage::SeatRuns.release_working_task(@scenario.context(request: @request), other, reason: "new_prompt")
+    assert_equal [ "owner", "new_prompt" ], [ released.actor_kind, released.payload["reason"] ]
+    assert_match(/issue_landing_prompt wrote task\.released/, audit(after).sole)
+  end
+
+  test "a New prompt receipt does not excuse the release of another seat's review" do
+    other = @scenario.seat(role: "general")
+    @scenario.review(@scenario.task(state: "in_review"), reviewer: other)
+    after = @scenario.workspace.reload.last_seq
+    Leverage::SeatRuns.release_held_reviews(@scenario.context(request: @request), other)
+    assert_match(/issue_landing_prompt wrote review\.released/, audit(after).sole)
+  end
+
+  test "a New prompt receipt does not excuse a second Working task's release" do
+    # A seat holds one task (tasks.holder_seat_id is unique), so one
+    # command released one: the second release is the first, copied onto
+    # a task the seat built earlier.
+    earlier = @scenario.task(state: "working", builder: @seat)
+    Leverage::SeatRuns.release_working_task(@scenario.context, @seat, reason: "seat_disabled")
+    task = @scenario.task(state: "working", builder: @seat)
+    released = Leverage::SeatRuns.release_working_task(@scenario.context(request: @request), @seat, reason: "new_prompt")
+    second = released.dup.tap { |event| event.assign_attributes(task_id: earlier.id, seq: released.seq + 1) }
+    states = { task.id => "working", earlier.id => "working" }
+
+    assert Leverage::LogAudit.historical_prompt_release?([ released ], states, receipt: @command)
+    assert Leverage::LogAudit.historical_prompt_release?([ second ], states, receipt: @command)
+    refute Leverage::LogAudit.historical_prompt_release?([ released, second ], states, receipt: @command)
+  end
+
+  test "a New prompt receipt does not excuse a hold on another seat's Finishing task" do
+    other = @scenario.seat(role: "general")
+    theirs = @scenario.finishing_task(builder: other, actions: [ { kind: "send", description: "Send the sample.", state: "approved" } ])
+    mine = @scenario.finishing_task(builder: @seat, actions: [ { kind: "send", description: "Send the sample.", state: "approved" } ])
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: @seat)
+    after = @scenario.workspace.reload.last_seq
+    ctx = @scenario.context(request: @request)
+    Leverage::Finishing.lose_builder(ctx, mine, cause: nil)
+    Leverage::SeatRuns.release_held_reviews(ctx, @seat)
+    assert_equal %w[hold.opened inbox.opened review.released], key_events.map(&:type)
+    states = { mine.id => "finishing", theirs.id => "finishing", review.task_id => "in_review" }
+    assert Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: @command)
+
+    Leverage::Finishing.lose_builder(ctx, theirs, cause: nil)
+    assert_equal %w[hold.opened inbox.opened review.released hold.opened inbox.opened], key_events.map(&:type)
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: @command)
+  end
+
+  test "after key retention the old reason does not excuse the release of another seat's review" do
+    @command.destroy!
+    other = @scenario.seat(role: "general")
+    task = @scenario.task(state: "working", builder: @seat)
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: other)
+    ctx = @scenario.context(request: @request)
+    Leverage::SeatRuns.release_working_task(ctx, @seat, reason: "new_prompt")
+    states = { task.id => "working", review.task_id => "in_review" }
+    assert Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: nil)
+
+    Leverage::SeatRuns.release_held_reviews(ctx, other)
+    assert_equal %w[task.released review.released], key_events.map(&:type)
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: nil)
+  end
+
   test "a release cannot excuse an orphan job withdrawal on an unrelated task after key retention" do
     @command.destroy!
     task = @scenario.task(state: "backlog")

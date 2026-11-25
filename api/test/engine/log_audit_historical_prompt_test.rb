@@ -49,7 +49,7 @@ class LogAuditHistoricalPromptTest < ActiveSupport::TestCase
     [ receipt, Event.where(workspace_id: scenario.workspace_id, command_id: request.key).order(:seq).to_a ]
   end
 
-  def audit = Leverage::LogAudit.call(scenario.workspace_id, after_seq: @after)
+  def audit(after = @after) = Leverage::LogAudit.call(scenario.workspace_id, after_seq: after)
 
   test "a New prompt that cancelled a submit held at the re-run limit passes the audit" do
     hold_at_rerun_limit
@@ -61,6 +61,24 @@ class LogAuditHistoricalPromptTest < ActiveSupport::TestCase
     assert_empty audit
     receipt.destroy! # After the command key retention period.
     assert_empty audit
+  end
+
+  # UX-17: the audit cannot tell an old receipt from a new one, so what
+  # the command writes now is held here and by its own tests.
+  test "a landing prompt issued now writes no event, so the audit reads it without the old shape" do
+    fresh = own_seat
+    after = scenario.workspace.reload.last_seq
+    key = new_key
+    params = { "id" => fresh.id, "connection" => "http", "address" => "http://example.test" }
+    assert_empty events_written { assert_completed(owner_command("issue_landing_prompt", params, key: key)) }
+    receipt = Command.find_by!(workspace_id: scenario.workspace_id, key: key)
+    assert_equal [ "issue_landing_prompt", fresh.id ], [ receipt.command, receipt.result["seat_id"] ]
+    refute Leverage::LogAudit.historical_prompt_release?([], {}, receipt: receipt)
+    assert_empty audit(after)
+
+    assert_empty events_written { assert_refused("invalid_state", owner_command("issue_landing_prompt", params.merge("id" => @seat.id))) }
+    assert_equal [ "working", @seat.id ], @task.reload.values_at(:state, :holder_seat_id)
+    assert_empty audit(after)
   end
 
   test "the held row met again under a later submit does not hide the New prompt that withdrew it" do
