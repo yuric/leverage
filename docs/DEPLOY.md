@@ -186,6 +186,7 @@ folders remains unverified.
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
+| The appearance choice | The macOS preferences of the app bundle (`local.leverage.app`), key `appAppearance`; not under the support folder, so `LEVERAGE_SUPPORT_DIR` does not separate it |
 
 After sign-in, the row under the system health line shows the sign-in
 email. Open that row to reach Settings or Sign out. The Leverage menu
