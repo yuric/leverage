@@ -234,7 +234,7 @@
           {
             "ref": "@event:3",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:20",
             "effective_at": "@t:20",
             "actor_kind": "owner",
@@ -248,7 +248,9 @@
             "command_id": "$key:add_task_3",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],
@@ -506,7 +508,7 @@
           {
             "ref": "@event:8",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:60",
             "effective_at": "@t:60",
             "actor_kind": "owner",
@@ -520,7 +522,9 @@
             "command_id": "$key:add_task_7",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],
@@ -1979,7 +1983,7 @@
           {
             "ref": "@event:50",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:210",
             "effective_at": "@t:210",
             "actor_kind": "owner",
@@ -1993,7 +1997,9 @@
             "command_id": "$key:add_task_22",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           }
         ],

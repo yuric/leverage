@@ -3,7 +3,9 @@ module Leverage
   # milestone 2 plan §2.1; test/engine/one_writer_test.rb holds it). It runs
   # inside a command's transaction, under the workspace lock that
   # WorkspaceLock took, so seq comes from workspaces.last_seq and seq order
-  # is commit order (DB-4). Each payload is validated against its schema,
+  # is commit order (DB-4). Each event is written at the newest registered
+  # version of its payload, and no caller names another (the contract's
+  # versioning rule). The payload is validated against that schema,
   # payloads/<type>.v<n>.json, before it is inserted; an invalid event
   # raises and the whole command rolls back. Steps.on_event opens and closes
   # steps in the same call.
@@ -29,19 +31,16 @@ module Leverage
     # subject:     - an Active Record row the event is about, or nil;
     #                subject_kind is its class's name in snake case.
     # payload:     - the payload, with symbol or string keys.
-    # schema_version: - defaults to the latest registered payload shape.
     # actor_kind:, actor_id: - default: the request's caller (Context#actor).
     # command_id:  - default: the request's key.
     # effective_at: - default: ctx.at; a timer's event carries its due time.
     def append(ctx, type:, payload: {}, task: nil, task_id: task&.id, project_id: task&.project_id, round: task&.round,
                subject: nil, subject_kind: subject && kind_of(subject), subject_id: subject&.id, cause_id: nil,
                actor_kind: ctx.actor.first, actor_id: ctx.actor.last, command_id: ctx.request.key,
-               effective_at: ctx.at, schema_version: nil)
+               effective_at: ctx.at)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       entry = registered(type)
-      versions = entry.fetch("schema_versions")
-      version = schema_version || versions.max
-      raise InvalidEvent, "Unregistered schema version #{version} for #{type}" unless versions.include?(version)
+      version = entry.fetch("schema_versions").max
       check_subject(entry, subject_kind)
       check_payload(type, version, payload)
 

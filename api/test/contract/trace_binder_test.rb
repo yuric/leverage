@@ -115,7 +115,7 @@ class TraceBinderTest < Minitest::Test
         "expect" => {
           "outcome" => "completed", "refusal" => nil,
           "events" => [ {
-            "ref" => "@event:1", "type" => "task.created", "schema_version" => 1, "at" => "@t:5",
+            "ref" => "@event:1", "type" => "task.created", "schema_version" => 2, "at" => "@t:5",
             "effective_at" => "@t:5", "actor_kind" => "owner", "actor_id" => "$user:owner", "project_id" => nil,
             "task_id" => "$task:1", "round" => 0, "subject_kind" => nil, "subject_id" => nil, "cause_id" => nil,
             "command_id" => "$key:add", "payload" => {}

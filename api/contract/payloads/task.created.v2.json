@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "task.created v2",
-  "description": "Add a task from the Imaginarium. The task lands in Ideas or Backlog.",
+  "description": "Add task, from the Imaginarium gallery or not. The task lands in Ideas or Backlog. Every task.created is written in this shape (plan DB-56).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -22,7 +22,7 @@
       "uniqueItems": true
     },
     "imaginarium_entry": {
-      "description": "The catalog entry id. The catalog version is stored on the task.",
+      "description": "The catalog entry id of a task from the Imaginarium gallery, from the registry's imaginarium_entries, or null for any other task. The catalog version is stored on the task.",
       "enum": [
         "bedtime-story-book",
         "birthday-time-capsule",
@@ -55,11 +55,12 @@
         "trivia-night-host",
         "typing-trainer",
         "weekly-folder-digest",
-        "word-garden"
+        "word-garden",
+        null
       ]
     },
     "added_criterion_ids": {
-      "description": "The ids of the criteria saved with an Imaginarium idea, in contract order.",
+      "description": "The ids of the criteria saved with an Imaginarium idea, in contract order. Empty for every other task, whose criteria Complete contract adds.",
       "type": "array",
       "items": {
         "type": "string",
@@ -75,6 +76,12 @@
     "added_criterion_ids"
   ],
   "examples": [
+    {
+      "state": "backlog",
+      "added_action_ids": [],
+      "imaginarium_entry": null,
+      "added_criterion_ids": []
+    },
     {
       "state": "backlog",
       "added_action_ids": [],

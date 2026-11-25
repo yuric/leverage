@@ -353,12 +353,21 @@ class PayloadSchemasTest < Minitest::Test
     end
   end
 
-  def test_imaginarium_created_events_use_the_closed_catalog_vocabulary
+  # The newest task.created is one shape for every task (README,
+  # Versioning): a task that is not from the gallery names no entry (null)
+  # and no criteria (an empty list), and both fields are required.
+  def test_created_events_have_one_shape_with_the_closed_catalog_vocabulary_or_null
     schema = schema_for("task.created", 2)
-    assert_equal registry.fetch("lists").fetch("imaginarium_entries"), schema.dig("properties", "imaginarium_entry", "enum")
-    example = schema.fetch("examples").first
-    refute_empty Leverage::Contract.validate_payload("task.created", 2, example.merge("imaginarium_entry" => "unlisted-prompt"))
-    refute_empty Leverage::Contract.validate_payload("task.created", 2, example.merge("catalog_version" => 1))
+    entries = schema.dig("properties", "imaginarium_entry", "enum")
+    assert_equal registry.fetch("lists").fetch("imaginarium_entries") + [ nil ], entries
+    assert_equal %w[added_action_ids added_criterion_ids imaginarium_entry state], schema.fetch("required").sort
+    ordinary = { "state" => "backlog", "added_action_ids" => [], "imaginarium_entry" => nil, "added_criterion_ids" => [] }
+    assert_includes schema.fetch("examples"), ordinary
+    assert_empty Leverage::Contract.validate_payload("task.created", 2, ordinary)
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, ordinary.except("imaginarium_entry"))
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, ordinary.except("added_criterion_ids"))
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, ordinary.merge("imaginarium_entry" => "unlisted-prompt"))
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, ordinary.merge("catalog_version" => 1))
   end
 
   # json_schemer asserts formats, so format uuid and date-time close a string.

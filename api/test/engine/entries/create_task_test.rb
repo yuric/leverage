@@ -18,6 +18,10 @@ class CreateTaskTest < ActiveSupport::TestCase
     end
     assert_equal %w[task.created task.contract_changed task.ready], events.map(&:type)
     assert events.all? { |event| event.actor_kind == "seat" && event.actor_id == @seat.id }
+    created = events.first
+    assert_equal Leverage::Contract.event_type("task.created").fetch("schema_versions").max, created.schema_version
+    assert_equal({ "state" => "backlog", "added_action_ids" => [], "imaginarium_entry" => nil, "added_criterion_ids" => [] },
+      created.payload)
   end
 
   test "Create off refuses the command without creating a task" do

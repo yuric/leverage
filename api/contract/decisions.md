@@ -444,6 +444,29 @@ Where two inventories chose differently, the decision names the conflict.
   is still the owner's to answer. Alternative: allow the deletion and
   create a fresh Imaginarium project when the recorded one has no
   content.
+- **DB-56** `[shape]` `task.created` has one current shape, version 2,
+  written for every task, as the README's Versioning rule asks: the
+  server writes the newest version, and a field that may be absent in
+  fact is required and null. `imaginarium_entry` is the catalog entry id
+  of a task from the gallery, from the registry's `imaginarium_entries`,
+  or `null` for any other task (FR-041). `added_criterion_ids` lists the
+  criteria saved with an Imaginarium idea, in contract order, and is
+  empty for any other task (FR-039). The gallery first added version 2 as
+  a second live shape, written for gallery tasks only while every other
+  task was written as version 1, through a version a caller of
+  `EventLog.append` could name. No caller names a version now:
+  `EventLog.append` writes the newest registered one. Version 2 changed
+  in place (`null` joined the entry's values), which DB-48's reasoning
+  allows before the first release; every version 2 event already written
+  is valid in the new shape. Version 1 stays registered, unchanged, for
+  reading: a log written before this holds version 1 events with neither
+  field, and the replay and the step tracker read that as no entry and no
+  criteria. Every golden trace's `task.created` moved to version 2 with
+  `"imaginarium_entry": null` and `"added_criterion_ids": []`.
+  Alternatives: fold both fields into version 1 in place and drop
+  version 2, DB-50's way, which leaves the version 2 events already
+  stored with an unregistered version; or keep two live shapes, which
+  changes the versioning rule and is the owner's to decide.
 
 ## State machine (SM)
 
@@ -1531,19 +1554,26 @@ task. PRD places are named by their section.
 
 ## Imaginarium gallery
 
-- **Gallery source (FR-030, FR-041).** The existing owner `add_task`
-  operation accepts the catalog entry id and version. The workspace's
-  recorded project determines where the task goes. The two source columns
-  are written together. `task.created` v2 records the entry id from the
-  closed catalog vocabulary and the ids of any criteria saved with an
-  idea. Ordinary task creation uses v1. Replay accepts both, and rebuilds
-  the entry id and the idea criteria's state. The catalog version and
-  prompt text live on the task.
-- **Gallery ideas (FR-039).** Add task into Ideas writes the supplied build
-  checks and the final independent review using `ContractDiff`. Completing
-  the contract after promotion reads those criteria through the existing
-  task page. Send to Ready adds in Backlog and submits the separate
-  Complete contract command through the normal rule checks (FR-038).
+The gallery's other decisions are DB-53 (the project), DB-55 (its content
+is not deletable) and DB-56 (the shape of `task.created`).
+
+- **Gallery source (FR-030, FR-041).** `[shape]` The existing owner
+  `add_task` operation accepts the catalog entry id and version. The
+  workspace's recorded project determines where the task goes. The two
+  source columns are written together. `task.created` records the entry
+  id from the closed catalog vocabulary and the ids of any criteria saved
+  with an idea, in the one shape every task's `task.created` has (DB-56).
+  Replay rebuilds the entry id and the idea criteria's state, and reads a
+  version 1 event, which has neither field, as a task with no entry and
+  no criteria. The catalog version and prompt text live on the task.
+- **Gallery ideas (FR-039).** `[reading]` Add task into Ideas writes the
+  supplied build checks and the final independent review using
+  `ContractDiff`. Completing the contract after promotion reads those
+  criteria through the existing task page, and keeps or resets them by
+  position and kind, so `task.contract_changed` names none of them as
+  added: the step tracker reads a task's criteria from `task.created` as
+  well. Send to Ready adds in Backlog and submits the separate Complete
+  contract command through the normal rule checks (FR-038).
 
 ## Coverage index
 

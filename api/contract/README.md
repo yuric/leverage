@@ -179,6 +179,10 @@ handles every listed version. Old events are never rewritten. Until the
 first release of Leverage no log holds an event a released build wrote, so
 a version may still change in place; each such change is recorded in
 [decisions.md](decisions.md) (DB-48 is the first, DB-49 the second).
+`task.created` is the one type with two versions: version 2 is the shape
+every task is written in, and version 1 is kept for the logs that hold it
+(DB-56). `EventLog.append` takes no version, and the golden traces hold
+only newest versions (`test/contract/traces_test.rb`).
 
 ## The event record
 
@@ -951,3 +955,30 @@ and every seat has three permissions. Its decisions are UX-1 to UX-16 in
 - Trace 25 has a seat add a task that waits on the model gate and reaches
   Ready, then one that fails the app gate and opens
   `agent_task_incomplete`.
+
+## What the Imaginarium gallery added
+
+The prompt gallery of the PRD's Imaginarium section (FR-030, FR-038,
+FR-039, FR-041). Its decisions are DB-53, DB-55 and DB-56 and the two
+entries under [Imaginarium gallery](decisions.md#imaginarium-gallery).
+
+- The registry gains the list `imaginarium_entries`, the ids of the
+  catalog's prompts. Add task refuses a source whose entry id is not in
+  it.
+- `openapi.json`: `AddTaskRequest` gains the optional `imaginarium`, an
+  `ImaginariumSource` with the catalog `entry_id` and `catalog_version`,
+  and `TaskSummary` gains `imaginarium_entry_id` and
+  `imaginarium_catalog_version`. A task with a source goes to the
+  workspace's Imaginarium project. An idea with a source carries its
+  criteria, two to four build checks and a final review; any other Add
+  task with criteria is `invalid`.
+- `tasks` gains `imaginarium_entry_id` and `imaginarium_catalog_version`
+  (migration `AddImaginariumSourceToTasks`), set together or not at all.
+- `task.created` version 2 is the shape of every task's creation (DB-56):
+  `imaginarium_entry` is the entry id or `null`, and
+  `added_criterion_ids` lists an idea's criteria or is empty. Version 1,
+  with neither field, stays for the logs that hold it. The replay
+  rebuilds `tasks.imaginarium_entry_id` and the idea's criteria from it,
+  and the step tracker reads the idea's criteria from it.
+- `delete_content` is refused `invalid_state` for the workspace's
+  Imaginarium project: the `content_deletability` guards name it (DB-55).

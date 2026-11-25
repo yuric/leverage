@@ -157,7 +157,7 @@
           {
             "ref": "@event:1",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:0",
             "effective_at": "@t:0",
             "actor_kind": "seat",
@@ -171,7 +171,9 @@
             "command_id": "$key:agent_add_1",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           },
           {
@@ -509,7 +511,7 @@
           {
             "ref": "@event:12",
             "type": "task.created",
-            "schema_version": 1,
+            "schema_version": 2,
             "at": "@t:60",
             "effective_at": "@t:60",
             "actor_kind": "seat",
@@ -523,7 +525,9 @@
             "command_id": "$key:agent_add_2",
             "payload": {
               "state": "backlog",
-              "added_action_ids": []
+              "added_action_ids": [],
+              "imaginarium_entry": null,
+              "added_criterion_ids": []
             }
           },
           {
