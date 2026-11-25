@@ -11,7 +11,12 @@ would, so what the script does around the run is checked in a second:
   shared `leverage-api:local`, and removes that image when it is done, but
   leaves an image whose tag it was given;
 - its secret scan covers the stand-in tools' record of each call, which
-  holds the environment each tool was started with.
+  holds the environment each tool was started with;
+- a .env it makes holds values of its own, never the example's published
+  placeholders (scripts/make_env.py).
+
+Every case runs a copy of scripts/ and the files the scripts read in a
+temporary folder, so nothing is written into the checkout.
 
 It also checks that no step of .github/workflows/ci.yml is skipped because
 the script it runs is missing: a renamed or deleted script must fail CI,
@@ -23,6 +28,8 @@ value is made up.
 """
 
 import os
+import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -30,7 +37,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-SCRIPT = HERE / "e2e_core_loop.sh"
+MAKE_ENV = HERE / "make_env.py"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 SECRET = "made-up-e2e-secret-value"
@@ -79,12 +86,25 @@ exit 0
 FAKE_CURL = "#!/bin/sh\nexit 0\n"
 
 
+def copy_repository(target):
+    """Copies what the scripts under test read into `target`, which then
+    stands for the repository root: scripts/, the compose files, the
+    example configuration and an empty mac/ for their `cd mac`."""
+    shutil.copytree(HERE, target / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    for name in (".env.example", "compose.yaml", "compose.test.yaml"):
+        shutil.copy2(ROOT / name, target / name)
+    (target / "mac").mkdir()
+    return target
+
+
 class Run:
-    """A scratch folder with the stand-in programs and the script's TMPDIR."""
+    """A scratch folder with a copy of the repository, the stand-in programs
+    and the script's TMPDIR."""
 
     def __init__(self):
         self._folder = tempfile.TemporaryDirectory()
         self.root = Path(self._folder.name)
+        self.repo = copy_repository(self.root / "repo")
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.tmp = self.root / "tmp"
@@ -98,7 +118,7 @@ class Run:
     def close(self):
         self._folder.cleanup()
 
-    def run(self, call_value="nothing secret here", *, script=SCRIPT, **extra):
+    def run(self, call_value="nothing secret here", *, script="e2e_core_loop.sh", **extra):
         environment = {
             "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.root),
@@ -109,7 +129,8 @@ class Run:
             **extra,
         }
         result = subprocess.run(
-            ["bash", str(script)], cwd=ROOT, env=environment, capture_output=True, text=True,
+            ["bash", str(self.repo / "scripts" / script)], cwd=self.repo, env=environment,
+            capture_output=True, text=True,
             check=False, timeout=120)
         return result.returncode, result.stdout + result.stderr
 
@@ -205,7 +226,7 @@ class CredentialsScriptTests(unittest.TestCase):
 
     def run_credentials(self, **extra):
         return self.run_.run(
-            script=HERE / "e2e_credentials.sh", LEVERAGE_E2E_ONLY="AddAndReadEndToEndTests",
+            script="e2e_credentials.sh", LEVERAGE_E2E_ONLY="AddAndReadEndToEndTests",
             API_IMAGE_TAG="made-up-tag", FAKE_REPLY_LINE=COPIED_REPLY_LINE, **extra)
 
     def test_the_helper_log_is_required_and_the_failed_run_is_removed(self):
@@ -250,7 +271,7 @@ class BackupFolderTests(unittest.TestCase):
             "PATH": f"{run.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(run.root),
             "TMPDIR": str(run.tmp), "FAKE_MODE": str(mode), "API_IMAGE_TAG": "made-up-tag",
         }
-        subprocess.run(["bash", str(HERE / script)], cwd=ROOT, env=environment, capture_output=True, text=True,
+        subprocess.run(["bash", str(run.repo / "scripts" / script)], cwd=run.repo, env=environment, capture_output=True, text=True,
                        check=False, timeout=120)
         self.assertTrue(mode.exists(), f"{script} handed docker no backup folder")
         return mode.read_text(encoding="utf-8").strip()
@@ -260,6 +281,85 @@ class BackupFolderTests(unittest.TestCase):
 
     def test_the_handoff_runs_folders_are_sticky(self):
         self.assertEqual(self.mode_of_backup_folder("e2e_handoff.sh"), "0o1777")
+
+
+PLACEHOLDER = "change-me"
+SECRET_KEYS = ("POSTGRES_PASSWORD", "LEVERAGE_API_DB_PASSWORD", "SECRET_KEY_BASE")
+
+
+def env_values(path):
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def placeholders(path):
+    return [key for key, value in env_values(path).items() if PLACEHOLDER in value]
+
+
+class EnvFileTests(unittest.TestCase):
+    """Review: a script that made .env copied .env.example, so a later
+    `docker compose up` ran with passwords and a Rails secret published in
+    the repository. A .env a script makes now holds values of its own."""
+
+    def make(self, folder):
+        return subprocess.run(
+            ["python3", "-I", str(folder / "scripts" / "make_env.py"), str(folder)],
+            capture_output=True, text=True, check=False, timeout=60)
+
+    def repository(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        return copy_repository(Path(folder.name) / "repo")
+
+    def test_the_example_has_the_placeholders_the_helper_replaces(self):
+        example = env_values(ROOT / ".env.example")
+        for key in SECRET_KEYS:
+            self.assertTrue(example[key].startswith(PLACEHOLDER), key)
+
+    def test_a_made_env_has_values_of_its_own(self):
+        first, second = self.repository(), self.repository()
+        for folder in (first, second):
+            result = self.make(folder)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("made .env", result.stdout)
+        made, other = env_values(first / ".env"), env_values(second / ".env")
+        self.assertEqual(placeholders(first / ".env"), [])
+        secrets = [made[key] for key in SECRET_KEYS]
+        self.assertEqual(len(set(secrets)), 3, "each secret has a value of its own")
+        for key in SECRET_KEYS:
+            self.assertRegex(made[key], r"^[0-9a-f]{64,}$", key)
+            self.assertNotEqual(made[key], other[key], f"{key} is new on each run")
+        self.assertEqual(made["POSTGRES_USER"], "leverage", "values that are no secret are kept")
+        self.assertEqual(stat.S_IMODE((first / ".env").stat().st_mode), 0o600)
+        self.assertEqual(list(first.glob(".env.*")), [first / ".env.example"], "no temporary file is left")
+
+    def test_an_existing_env_is_left_as_it_is(self):
+        folder = self.repository()
+        existing = "POSTGRES_PASSWORD=the-owners-own-value\n"
+        (folder / ".env").write_text(existing, encoding="utf-8")
+        result = self.make(folder)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((folder / ".env").read_text(encoding="utf-8"), existing)
+        self.assertNotIn("made .env", result.stdout)
+
+    def test_a_script_makes_env_with_the_helper_in_its_own_tree(self):
+        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh"):
+            with self.subTest(script=script):
+                run = Run()
+                self.addCleanup(run.close)
+                run.run(script=script, FAKE_UP_FAILS="1", API_IMAGE_TAG="made-up-tag")
+                made = run.repo / ".env"
+                self.assertTrue(made.exists(), "the script made .env in the copy it ran from")
+                self.assertEqual(placeholders(made), [])
+
+    def test_no_script_copies_the_example(self):
+        for script in sorted(HERE.glob("*.sh")):
+            with self.subTest(script=script.name):
+                self.assertNotRegex(script.read_text(encoding="utf-8"), r"cp [^\n]*\.env\.example")
 
 
 class ContinuousIntegrationTests(unittest.TestCase):

@@ -21,7 +21,7 @@
 # disable_rule before its seats connect, so every Complete contract, claim,
 # submit, review claim and verdict passes the gate with the app-run rules only.
 #
-# Needs Docker and a .env (made from .env.example when there is none).
+# Needs Docker and a .env (made by scripts/make_env.py when there is none).
 # COMPOSE_PROJECT_NAME and API_IMAGE_TAG may be set; the defaults are a
 # project of this run's own and the tag "speed". The exit code is not
 # changed by a figure above the target: nothing is tuned to pass.
@@ -60,18 +60,13 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-leverage-speed-$$}"
 export API_IMAGE_TAG="${API_IMAGE_TAG:-speed}"
 U() { docker compose -f compose.yaml -f compose.test.yaml "$@"; }
 
-made_env=false
-if [ ! -f .env ]; then
-  cp .env.example .env
-  made_env=true
-fi
+python3 -I scripts/make_env.py
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/leverage-speed.XXXXXX")"
 cleanup() {
   status=$?
   U down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
-  if $made_env; then rm -f .env; fi
   exit $status
 }
 trap cleanup EXIT

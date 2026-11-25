@@ -54,7 +54,7 @@ finish() {
 trap finish EXIT
 trap 'exit 130' INT TERM
 
-if [ ! -f .env ]; then cp .env.example .env; fi
+python3 -I scripts/make_env.py
 if [ -n "$own_image" ]; then
   project="$run_id-build"
   U build api

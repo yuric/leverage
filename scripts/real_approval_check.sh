@@ -294,7 +294,7 @@ def audit(logs, results, dump, cases, used_secrets):
 
 def run_check(run_dir):
     os.chdir(root)
-    require(Path(".env").is_file(), "copy .env.example to .env before running the check")
+    require(Path(".env").is_file(), "make .env (python3 -I scripts/make_env.py) before running the check")
     env = dict(os.environ, COMPOSE_PROJECT_NAME=f"leverage-real-approval-check-{os.getpid()}")
     own_image = not env.get("API_IMAGE_TAG")
     if own_image:

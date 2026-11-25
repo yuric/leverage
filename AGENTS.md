@@ -288,10 +288,12 @@ Run these before reporting work as done. Ruby is never run on the Mac
 itself: every Ruby and Rails command runs in the `api` container. Run them
 from the repository root unless a line says otherwise.
 
-Once, to configure (then replace the made-up values in `.env`):
+Once, to configure (`.env` from `.env.example`, with passwords and a
+secret of its own; the end-to-end scripts run it too when there is no
+`.env`):
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 ```
 
 The API (`api/`):

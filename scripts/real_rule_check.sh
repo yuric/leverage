@@ -187,10 +187,7 @@ finish() {
 trap finish EXIT
 trap 'exit 130' INT TERM
 
-if [ ! -f .env ]; then
-  cp .env.example .env
-  say "made .env from .env.example"
-fi
+python3 -I scripts/make_env.py
 
 # 1. The containers, and the e2e lane.
 say "starting db, api and sweep as project $COMPOSE_PROJECT_NAME"

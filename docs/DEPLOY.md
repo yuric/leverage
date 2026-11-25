@@ -368,11 +368,14 @@ after it are kept until removed by hand.
 
 This is the developer's path, from the repository root. The API and the
 database read their settings from a `.env` file at the root, which
-[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it from
-the example, then replace the made-up values:
+[compose.yaml](../compose.yaml) loads. `.env` is git-ignored.
+`scripts/make_env.py` makes it from `.env.example` when there is none,
+with each `change-me` value (the database passwords and Rails's secret)
+replaced by a random value of its own, and never changes an existing one;
+the end-to-end scripts run it too:
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 docker compose build
 docker compose up -d
 ```
