@@ -93,8 +93,11 @@ research, and the following code and checks.
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
   specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
-  30 main cases, a 10-case held-out set, and the run record. Earlier results
-  for both suites predate the task text change. Current runs are pending;
+  30 main cases, a 10-case held-out set, and the run record. On the
+  current cases of both suites, Codex and Antigravity met the bar in
+  Orchestrator and General mode, and Claude Code was not run, so it is
+  recorded as not meeting it; results on the earlier cases are in each
+  suite's `history/`;
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
