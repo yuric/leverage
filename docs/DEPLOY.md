@@ -206,7 +206,7 @@ folder under your home folder, are not refused.
 | Pending local credential cleanup | `<support folder>/pending-removals/<credential id>`, empty files |
 | Tools Leverage unpacked | `<support folder>/tools/<provider>/` |
 | A task's folder when the task names none | `<support folder>/work/<task id>/` |
-| Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
+| Logs | `<support folder>/logs/app.log` (the app: why the server or its services did not start), `logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
 | What the API answered | Nowhere on the Mac: the app, the helper, the runner and the MCP server call the API with no URL cache and no cookies |
 
@@ -700,6 +700,9 @@ backup`: one `leverage.command` line per command with its timings, the
 sweep's passes and each dump. A request's logged parameters keep only
 ids, numbers and true or false; every other text, task text among it, is
 `[FILTERED]`. The Mac side's logs are under
-`<support folder>/logs/`. The daily backup is under
+`<support folder>/logs/`: `app.log` for the app, which says why the server
+did not start, `helper.log` and one log per run. The app also writes its
+lines to standard error, which a terminal shows when the app is opened
+from one. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.

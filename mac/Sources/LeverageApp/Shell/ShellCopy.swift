@@ -23,7 +23,7 @@ enum ShellCopy: OwnerFacingCopy {
     case dockerStartingTitle, dockerStartingBody
     case dockerNotStartingTitle, dockerNotStartingBody
     case imageMissingTitle, imageMissingBody
-    case serverFailedTitle, serverFailedBody
+    case serverFailedTitle, serverFailedBody, servicesUnavailableTitle, servicesUnavailableBody
     case cannotReachTitle, cannotReachBody
 
     // One sentence for each refusal code (MA-19, MA-28).
@@ -87,7 +87,11 @@ enum ShellCopy: OwnerFacingCopy {
         case .imageMissingTitle: "This copy of Leverage was not built on this Mac."
         case .imageMissingBody: "The server it needs is not in Docker on this Mac. Build the app again on this Mac, then open it."
         case .serverFailedTitle: "Leverage could not start"
-        case .serverFailedBody: "Something stopped the server from starting. Check that Docker Desktop is running, then try again."
+        case .serverFailedBody:
+            "Something stopped the server from starting. Check that Docker Desktop is running, then try again. The reason is in logs/app.log in Leverage's support folder."
+        case .servicesUnavailableTitle: "Leverage could not use its folder"
+        case .servicesUnavailableBody:
+            "Leverage keeps its files in its support folder on this Mac and could not use it. Check that the folder can be written, then quit and open Leverage again. The reason is in logs/app.log in that folder when it can be written."
         case .cannotReachTitle: "Can't reach Leverage on this Mac"
         case .cannotReachBody: "The server did not answer. Check that Docker Desktop is running, then try again."
 

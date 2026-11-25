@@ -18,6 +18,9 @@ final class AppModel {
         case dockerNotStarting
         case imageMissing
         case serverFailed
+        /// The app's own services could not be made, as when its support
+        /// folder cannot be used: nothing to do with Docker.
+        case servicesUnavailable
         /// The server was started but does not answer.
         case cannotReachServer
         case createSignIn
@@ -77,7 +80,8 @@ final class AppModel {
         case .dockerStarting: phase = .dockerStarting
         case .dockerNotStarting: phase = .dockerNotStarting
         case .imageMissing: phase = .imageMissing
-        case .notStarted, .starting, .failed: phase = .serverFailed
+        case .notStarted: phase = .servicesUnavailable
+        case .starting, .failed: phase = .serverFailed
         }
     }
 

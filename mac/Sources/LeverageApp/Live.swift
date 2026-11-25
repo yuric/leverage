@@ -94,8 +94,10 @@ enum Live {
             }
             exit(0)
         } catch {
-            // The window says the app could not start; the log says why.
-            Log(component: "app").error("the app's services could not be made: \(error)")
+            // The window says the app could not start; the log says why, in
+            // the support folder's log when that folder can be written.
+            appLog(environment: ProcessInfo.processInfo.environment)
+                .error("the app's services could not be made: \(error)")
             return UnavailableRuntime()
         }
     }
@@ -118,6 +120,7 @@ enum Live {
         } catch {
             throw LiveError.unavailable("\(error)")
         }
+        let log = appLog(environment: environment, home: home)
         let server = ServerSupervisor(configuration: .init(
             supportFolder: support,
             dockerFolders: DockerLocator.applicationFolders(home: home),
@@ -125,9 +128,9 @@ enum Live {
             composeSource: settings.composeSource,
             imageTag: settings.imageTag,
             composeProject: ServerSupervisor.Configuration.composeProject(environment: environment, home: home),
-            mcpProgram: settings.mcpProgram))
+            mcpProgram: settings.mcpProgram), log: log)
         let helper = HelperSupervisor(configuration: .init(
-            helperProgram: settings.helperProgram, supportFolder: support, environment: environment))
+            helperProgram: settings.helperProgram, supportFolder: support, environment: environment), log: log)
         return LiveRuntime(
             server: server, helper: helper, sessions: SessionStores.make(environment: environment, home: home),
             notifier: UserNotifier.make(bundleURL: settings.bundleURL, environment: environment),
@@ -135,6 +138,20 @@ enum Live {
             lock: lock)
         #else
         return UnavailableRuntime()
+        #endif
+    }
+
+    /// The app's log: standard error, and `<support folder>/logs/app.log`
+    /// where the services are built.
+    static func appLog(
+        environment: [String: String],
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> Log {
+        #if canImport(LeverageAppServices)
+        let file = AppLogFile(supportFolder: SupportFolder(environment: environment, home: home).url)
+        return Log(component: "app", write: file.write)
+        #else
+        return Log(component: "app")
         #endif
     }
 }

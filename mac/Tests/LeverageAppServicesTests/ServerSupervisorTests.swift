@@ -16,6 +16,7 @@ struct ServerSupervisorTests {
         dockerStartTimeout: Duration = .seconds(10),
         healthTimeout: Duration = .seconds(10),
         mcpProgram: URL? = nil,
+        log: Log = Log(component: "test", write: { _ in }),
         healthy: @escaping @Sendable (URL) async -> Bool
     ) -> ServerSupervisor {
         var configuration = ServerSupervisor.Configuration(
@@ -30,7 +31,7 @@ struct ServerSupervisorTests {
         configuration.pollInterval = .milliseconds(20)
         return ServerSupervisor(
             configuration: configuration, runner: runner, isExecutable: probe.probe,
-            isPortFree: { _ in true }, healthCheck: healthy, log: Log(component: "test", write: { _ in }))
+            isPortFree: { _ in true }, healthCheck: healthy, log: log)
     }
 
     @Test("only compose up gets the bundled MCP command, with spaces preserved")
@@ -195,6 +196,23 @@ struct ServerSupervisorTests {
             return
         }
         #expect(reason.contains("compose up failed, made up"))
+    }
+
+    @Test("the reason a start failed is kept in the app's log file under the support folder")
+    func failureReachesLogFile() async throws {
+        let fake = try FakeDocker()
+        fake.set("engine-running")
+        fake.set("image-present")
+        fake.set("compose-fails")
+        let file = AppLogFile(supportFolder: fake.supportFolder, alsoWrite: { _ in })
+        let server = supervisor(fake, log: Log(component: "app", write: file.write), healthy: { _ in true })
+        guard case .failed = await server.start() else {
+            Issue.record("expected failed")
+            return
+        }
+        let written = try String(contentsOf: file.url, encoding: .utf8)
+        #expect(written.contains("docker compose up failed"))
+        #expect(file.url == fake.supportFolder.appendingPathComponent("logs/app.log"))
     }
 
     @Test("a server that never answers its health check: failed")

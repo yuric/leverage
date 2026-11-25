@@ -57,7 +57,7 @@ struct RenderSmokeTests {
 
     @Test("the start-up screens draw, one for each state the server can be in")
     func startupScreens() async {
-        for state in [ServerState.dockerMissing, .dockerStarting, .dockerNotStarting, .imageMissing, .failed(reason: "made up")] {
+        for state in [ServerState.dockerMissing, .dockerStarting, .dockerNotStarting, .imageMissing, .failed(reason: "made up"), .notStarted] {
             let rig = ShellRig()
             rig.runtime.fakeServer.afterStart.value = state
             let model = rig.makeModel()

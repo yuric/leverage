@@ -11,7 +11,7 @@ struct RootView: View {
             Backdrop().ignoresSafeArea()
             switch model.phase {
             case .starting, .dockerMissing, .dockerStarting, .dockerNotStarting, .imageMissing, .serverFailed,
-                .cannotReachServer:
+                .servicesUnavailable, .cannotReachServer:
                 StartupView(model: model)
             case .createSignIn, .signIn:
                 if let signIn = model.signIn {
