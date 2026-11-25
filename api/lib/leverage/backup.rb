@@ -22,7 +22,9 @@ module Leverage
   # A restore (bin/restore) makes the database again from a dump: it
   # refuses a database whose events table holds a row unless replace is
   # given, checks that pg_restore can read the dump's list, creates a
-  # staging database beside it, runs pg_restore into that with no
+  # staging database beside it, runs pg_restore into that (the tables
+  # and rows first, then, once every restored event's transaction id is
+  # set to 0, the indexes and triggers) with no
   # --create and no --clean, and with --no-owner (pg_dump ignores
   # --no-owner for an archive format, so the dump keeps each object's
   # owner and the restore drops it: a new cluster may lack that role),
@@ -198,8 +200,9 @@ module Leverage
     def restore_into(staging, file, workspace_id, spawner)
       tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
         staging.database)
-      tool!(staging, spawner, "pg_restore", *RESTORE_FLAGS, *staging.connection_args, "--dbname", staging.database,
-        file)
+      pg_restore!(staging, spawner, file, "pre-data", "data")
+      forget_transaction_ids(staging)
+      pg_restore!(staging, spawner, file, "post-data")
       connected_to(staging) do
         load_tasks
         migrate!
@@ -211,6 +214,32 @@ module Leverage
       raise if error.is_a?(Failed)
 
       raise Failed, "#{error.class.name}: #{first_line(error.message)}"
+    end
+
+    # pg_restore of the named sections of the dump into staging. The
+    # tables and their rows are pre-data and data; the indexes, the
+    # constraints and the triggers are post-data.
+    def pg_restore!(staging, spawner, file, *sections)
+      tool!(staging, spawner, "pg_restore", *RESTORE_FLAGS, *sections.map { |section| "--section=#{section}" },
+        *staging.connection_args, "--dbname", staging.database, file)
+    end
+
+    # Gives every restored event the transaction id 0. events.xact_id
+    # holds the id of the transaction that wrote the row, and the state
+    # trigger lets a task's state change only when an event of the task
+    # carries the current transaction's id (DB-6). An id means something
+    # only in the cluster that issued it: a new cluster, as after a lost
+    # volume, issues the same numbers again, and a restored row would then
+    # stand in for an event that a later transaction never wrote. No
+    # transaction has the id 0. Done between the data and the triggers,
+    # so the append-only trigger is not there yet and is never switched
+    # off.
+    def forget_transaction_ids(staging)
+      with_pg(staging, staging.database) do |pg|
+        next if pg.exec("SELECT to_regclass('public.events')").getvalue(0, 0).nil?
+
+        pg.exec("UPDATE public.events SET xact_id = '0'")
+      end
     end
 
     # Drops the target and gives staging its name. A target that cannot be

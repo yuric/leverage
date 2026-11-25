@@ -66,6 +66,16 @@ class BackupRestoreTest < CommittingTestCase
     ).to_a
   end
 
+  # A row as the restore must keep it: every column but xact_id, which
+  # names a transaction of the cluster the dump was made in.
+  def without_xact_id(rows) = rows.map { |row| row.except("xact_id") }
+
+  def triggers_on(table)
+    ActiveRecord::Base.lease_connection.select_values(ActiveRecord::Base.sanitize_sql([ <<~SQL, "public.#{table}" ])).sort
+      SELECT tgname FROM pg_trigger WHERE tgrelid = ?::regclass AND NOT tgisinternal AND tgenabled = 'O'
+    SQL
+  end
+
   def log_figures
     ActiveRecord::Base.lease_connection.select_rows("SELECT count(*), max(seq), max(created_at) FROM events").first
   end
@@ -106,9 +116,20 @@ class BackupRestoreTest < CommittingTestCase
     assert_match(/workspace #{walk.workspace_id}: #{walked.size} events, replay ok, audit ok/, out)
     assert database_exists?(@scratch)
     assert_equal @original, ActiveRecord::Base.connection_db_config, "the restore gives the connection back"
+    live_triggers = { "events" => triggers_on("events"), "tasks" => triggers_on("tasks") }
+    refute_empty live_triggers["events"]
+    refute_empty live_triggers["tasks"]
+    assert(before.none? { |row| row["xact_id"] == "0" }, "the log's own rows name the transactions that wrote them")
     on_database(@scratch) do
-      assert_equal before, events_of(workspace_id)
-      assert_equal walked, events_of(walk.workspace_id)
+      assert_equal without_xact_id(before), without_xact_id(events_of(workspace_id))
+      assert_equal without_xact_id(walked), without_xact_id(events_of(walk.workspace_id))
+      # A transaction id means nothing outside the cluster that issued it,
+      # and a new cluster issues the same numbers again: a restored event
+      # must never look like one a later transaction wrote (the state
+      # trigger, DB-6). No transaction has the id 0.
+      assert_equal 0, ActiveRecord::Base.lease_connection.select_value("SELECT count(*) FROM events WHERE xact_id <> '0'")
+      assert_equal live_triggers["events"], triggers_on("events"), "the append-only triggers are there, and on"
+      assert_equal live_triggers["tasks"], triggers_on("tasks")
       assert_empty Leverage::Replay.diff(workspace_id)
       assert_empty Leverage::LogAudit.call(workspace_id, after_seq: runner.setup_seq)
       assert privilege?("events", "SELECT")
@@ -188,7 +209,7 @@ class BackupRestoreTest < CommittingTestCase
     on_database(@scratch) do
       assert_includes migration_versions, NEWEST_MIGRATION
       assert_includes ActiveRecord::Base.lease_connection.columns("tasks").map(&:name), "imaginarium_entry_id"
-      assert_equal walked, events_of(walk.workspace_id)
+      assert_equal without_xact_id(walked), without_xact_id(events_of(walk.workspace_id))
       assert privilege?("tasks", "UPDATE"), "the grants follow the migrations"
       refute privilege?("events", "UPDATE")
     end

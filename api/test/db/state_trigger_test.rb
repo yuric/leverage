@@ -122,6 +122,16 @@ class StateTriggerAcrossTransactionsTest < ActiveSupport::TestCase
     assert_commit_rejected { change_state("ready") }
   end
 
+  # A restore gives every restored event the transaction id 0 (a
+  # transaction id means nothing outside its cluster): no transaction
+  # ever has that id, so such a row never stands in for a new event.
+  test "an event of the task whose transaction id is 0, as after a restore, does not count" do
+    db.transaction { event(task_id: @task_id, type: "task.ready", xact_id: "0") }
+    assert_commit_rejected { change_state("ready") }
+    assert_equal "0", sql("SELECT xact_id FROM events WHERE task_id = $1 AND type = 'task.ready'", @task_id).rows.first.first
+    refute_equal "0", sql("SELECT pg_current_xact_id()::text").rows.first.first
+  end
+
   test "an event for another task does not count" do
     assert_commit_rejected do
       event(task_id: task)

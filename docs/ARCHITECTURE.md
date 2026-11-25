@@ -776,7 +776,10 @@ and `USER` for Claude.
   - A task's state changes only in a transaction that writes an event for
     that task in its workspace: two deferred constraint triggers on
     `tasks` check at commit for an `events` row whose `xact_id` (set by
-    default to `pg_current_xact_id()`) is the transaction's own.
+    default to `pg_current_xact_id()`) is the transaction's own. A
+    transaction id means nothing outside its cluster, so `bin/restore`
+    sets `xact_id` to 0, which no transaction has, on every event it
+    restores.
   - `rule_checks (rule_id, rule_version_id)` and `rules (id,
     current_version)` are composite foreign keys, so a check's version and
     a rule's current version belong to that rule.

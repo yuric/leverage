@@ -102,6 +102,13 @@ milestone's plan HB-1 to HB-8.
   version does not have (one made by a later version). Without that step
   no dump made before the newest migration could be restored by
   `bin/restore`.
+- The restore loads the tables and their rows, sets `events.xact_id` to 0
+  on every restored event, and only then creates the indexes and the
+  triggers. A transaction id means nothing outside the cluster that
+  issued it, and a new cluster issues the same numbers again; left as
+  they were, a restored event could satisfy the state trigger for a later
+  transaction that wrote none. The restored log therefore differs from
+  the dump in that one column.
 - After a restore, tokens issued after the dump no longer match: the app
   issues the helper a new token at its next start, and the owner verifies
   each account and signs in again where needed (HB-7).

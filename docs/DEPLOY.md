@@ -332,7 +332,13 @@ database before the replay test, so the dumps kept from before an upgrade
 stay restorable with the same command; a migration that fails there is a
 failed step like any other. A dump made by a later version than the image
 that runs `bin/restore` is refused, with a message that says so: restore
-it with that version. If the database was dropped and the
+it with that version.
+
+The restore also sets the transaction id kept with every restored event
+(`events.xact_id`) to 0. That id is how the database knows that a task's
+state changed in a transaction that wrote an event, and it means nothing
+outside the cluster that issued it: a new cluster issues the same numbers
+again. Every other column of the log is restored as it was. If the database was dropped and the
 new one could not take its name, the message names the new one, to rename
 by hand. It exits 0 only when every
 step passed, 1 when it refused or a step failed (its message says which),
