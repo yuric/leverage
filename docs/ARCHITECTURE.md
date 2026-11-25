@@ -628,8 +628,8 @@ adds the MCP server.
   task, Pause and Continue, the Add task form (with Save as an idea), Needs
   you, the Agent roster with Connect for the five roles, Pause, Resume,
   Change and Remove, the Credentials list with Add credential, Refresh,
-  Verify all, usage and resets where available, and row actions, the Handoff tab with a
-  reorderable list and its eight fixed rules, and
+  Verify all, usage and resets where available, and row actions, the
+  Handoff tab with a reorderable list and its eight fixed rules, and
   Settings with Rules and Workspace, Projects, Activity and Decided for
   you. The task page includes questions, outward actions and task settings.
   On a new installation the signed-in window opens on the setup assistant,
@@ -862,7 +862,7 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Models and efforts | `api/contract/models.json`; on the Mac side, `mac/Sources/LeverageKit/Generated/ModelCatalog.swift`, generated from it |
+| Models and efforts | `api/contract/models.json` and its generated Swift copy in `mac/Sources/LeverageKit/Generated/ModelCatalog.swift` |
 | Expected behavior, end to end | `api/contract/traces/` (25 golden traces, all run whole) |
 | Agent MCP tools | `api/contract/openapi.json`, `api/contract/roles.json` and the session behavior in [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
