@@ -10,8 +10,11 @@ once it makes its first release.
 
 ### Added
 
-- An offline subscription preview exercises plan selection, checkout,
-  billing changes and payment recovery with sample data.
+- An offline subscription preview, a page to open in a browser
+  ([docs/subscription/README.md](docs/subscription/README.md#interactive-preview)),
+  exercises plan selection, checkout, billing changes and payment recovery
+  with sample data. The app has no Subscription page yet, and its
+  Subscription menu entry stays disabled.
 - The sidebar account row shows the owner's sign-in email and opens a
   menu with Settings and Sign out.
 
