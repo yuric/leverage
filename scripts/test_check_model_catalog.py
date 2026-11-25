@@ -97,6 +97,17 @@ def cases(models):
         entry["evidence"] = "help"
         entry["source"] = "docs/no-such-file.md"
 
+    def probe_file_without_the_id(m):
+        entry = first_model(m, "codex")
+        entry["evidence"] = "probe"
+        entry["source"] = "README.md"
+
+    def probe_default_in_another_file(m):
+        provider(m, "claude")["default_model"]["source"] = "README.md"
+
+    def default_the_reply_contradicts(m):
+        provider(m, "grok")["default_model"]["value"] = "grok-4.7"
+
     def efforts_from_help(m):
         first_model(m, "claude")["efforts"] = {"values": ["low"], "evidence": "help",
                                               "source": "mac/Sources/LeverageRunner/ClaudeDriver.swift",
@@ -133,6 +144,12 @@ def cases(models):
         ("a documented source that is not https", documented_over_http, ["claude", "documented", "address"]),
         ("a help entry citing no repository path", help_without_path, ["codex", "help", "repository"]),
         ("a help entry citing a path that does not exist", help_with_missing_path, ["codex", "docs/no-such-file.md"]),
+        ("a probe model citing a file that does not name it", probe_file_without_the_id,
+         ["codex", "README.md", "does not name"]),
+        ("a probe default citing a file that does not name it", probe_default_in_another_file,
+         ["claude default_model", "README.md", "claude-opus-5-5"]),
+        ("a default the reply it cites does not name", default_the_reply_contradicts,
+         ["grok default_model", "status-signed-out.json", "grok-4.7"]),
         ("efforts with help evidence", efforts_from_help, ["claude", "efforts", "documented"]),
         ("a model listed twice", duplicate_model, ["claude", "twice"]),
         ("a default model not among the models", default_not_listed, ["grok", "grok-made-up", "default"]),

@@ -12,7 +12,8 @@ never invented: each says how it is known. This check fails on
     calendar date in the form YYYY-MM-DD;
   * a documented fact whose source is not a page address (https://);
   * a help or probe fact whose source is not a path to a file in the
-    repository (a recorded reply, a probe, or a saved --help output);
+    repository (a recorded reply, a probe, or a saved --help output), or a
+    model id or default model whose cited file does not name it;
   * efforts whose evidence is not documented (a tool's --help lists efforts
     for the whole tool and never says which model accepts which);
   * an effort, or a model id, listed twice;
@@ -40,7 +41,8 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RECORDED = ("help", "probe", "probe (full environment)")
 
 
-def fact_problems(where, fact, levels, root):
+def fact_problems(where, fact, levels, root, value=None):
+    """Problems with one fact; value is the model id or default it evidences."""
     problems = []
     evidence = fact.get("evidence")
     if evidence not in levels:
@@ -56,6 +58,8 @@ def fact_problems(where, fact, levels, root):
             problems.append(f"{where}: a {evidence} fact must cite a repository path, not {source!r}")
         elif not (root / path).is_file():
             problems.append(f"{where}: {path} is not a file in the repository ({evidence} evidence)")
+        elif isinstance(value, str) and value not in (root / path).read_text(encoding="utf-8", errors="replace"):
+            problems.append(f"{where}: {path} does not name {value!r} ({evidence} evidence)")
     if not is_date(fact.get("checked_on")):
         problems.append(f"{where}: checked_on is missing or not a date")
     return problems
@@ -89,7 +93,7 @@ def check(models, registry, root):
         problems += fact_problems(f"{name} native_effort", native, levels, root)
         default = entry.get("default_model")
         if default is not None:
-            problems += fact_problems(f"{name} default_model", default, levels, root)
+            problems += fact_problems(f"{name} default_model", default, levels, root, default.get("value"))
         ids = []
         for model in entry.get("models", []):
             model_id = model.get("id")
@@ -97,7 +101,7 @@ def check(models, registry, root):
             if model_id in ids:
                 problems.append(f"{where}: the model is listed twice")
             ids.append(model_id)
-            problems += fact_problems(where, model, levels, root)
+            problems += fact_problems(where, model, levels, root, model_id)
             efforts = model.get("efforts")
             if efforts is None:
                 continue
