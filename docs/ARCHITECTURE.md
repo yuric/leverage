@@ -845,6 +845,11 @@ and `USER` for Claude.
   that folder or, for a provider with one sign-in for the Mac, where the
   tool keeps it. The bundled helper keeps API tokens in the Keychain as
   described in [ADR 0017](adr/0017-api-tokens-the-keychain-and-the-local-channel.md).
+  A support folder other than the standard one gets a compose project
+  (`leverage-app-<suffix>`, unless `LEVERAGE_COMPOSE_PROJECT` names one)
+  and a Keychain account for the session (`owner-session-<suffix>`) of its
+  own, the suffix drawn from the folder's path, so that it never replaces
+  the owner's containers or signs the owner out.
 - **Reply files.** `mac/Tests/StandIns/replies/` holds 61 test replies.
   Run and status fixtures follow
   [ADR 0009](adr/0009-detectors-from-recorded-and-made-replies.md).

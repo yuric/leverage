@@ -48,12 +48,18 @@ public actor ServerSupervisor: ServerSupervising {
         /// `leverage` project (PK-2).
         public static let defaultComposeProject = "leverage-app"
 
-        /// `LEVERAGE_COMPOSE_PROJECT`, else `leverage-app`.
-        public static func composeProject(environment: [String: String]) -> String {
-            guard let name = environment[EnvironmentKeys.composeProject], !name.isEmpty else {
+        /// `LEVERAGE_COMPOSE_PROJECT`; else `leverage-app` for the standard
+        /// support folder and `leverage-app-<suffix>` for any other, so that
+        /// a second folder's server never replaces the owner's containers.
+        public static func composeProject(
+            environment: [String: String],
+            home: URL = FileManager.default.homeDirectoryForCurrentUser
+        ) -> String {
+            if let name = environment[EnvironmentKeys.composeProject], !name.isEmpty { return name }
+            guard let suffix = SupportFolder(environment: environment, home: home).isolationSuffix else {
                 return defaultComposeProject
             }
-            return name
+            return "\(defaultComposeProject)-\(suffix)"
         }
 
         /// The `leverage-api` image reference.

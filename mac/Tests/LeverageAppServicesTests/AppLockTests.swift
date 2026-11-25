@@ -58,4 +58,18 @@ struct SessionStoreTests {
         // Keychain (MA-7: no automated test reads or writes it).
         #expect(SessionStores.make(environment: [:]) is KeychainSessionStore)
     }
+
+    @Test("a support folder of its own keeps its session under a Keychain account of its own")
+    func storePerSupportFolder() throws {
+        let home = URL(fileURLWithPath: "/Users/made-up", isDirectory: true)
+        let standard = try #require(SessionStores.make(environment: [:], home: home) as? KeychainSessionStore)
+        #expect(standard.account == "owner-session")
+        #expect(standard.service == "leverage")
+        let environment = ["LEVERAGE_SUPPORT_DIR": "/tmp/a"]
+        let other = try #require(SessionStores.make(environment: environment, home: home) as? KeychainSessionStore)
+        let suffix = try #require(SupportFolder(environment: environment, home: home).isolationSuffix)
+        #expect(other.account == "owner-session-\(suffix)")
+        #expect(SessionStores.make(environment: environment.merging(["LEVERAGE_SESSION_STORE": "memory"]) { $1 }, home: home)
+            is MemorySessionStore)
+    }
 }

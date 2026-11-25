@@ -475,8 +475,8 @@ sets:
 | Variable | Read by | What it does |
 | --- | --- | --- |
 | `LEVERAGE_API_URL` | helper, runner, tests | The API's address, default `http://127.0.0.1:3000`. A value that is not an `http` or `https` URL with a host is ignored. |
-| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. |
-| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, default `leverage-app`. |
+| `LEVERAGE_SUPPORT_DIR` | app, helper | Replaces `~/Library/Application Support/leverage`. Any other folder gets a compose project `leverage-app-<suffix>` and a Keychain account `owner-session-<suffix>` of its own, eight hex digits drawn from the folder's path, so that it never takes over the owner's server or session. |
+| `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, in place of `leverage-app` or `leverage-app-<suffix>`. |
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
 | `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |

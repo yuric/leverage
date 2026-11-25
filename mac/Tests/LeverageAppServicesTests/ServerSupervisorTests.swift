@@ -159,6 +159,29 @@ struct ServerSupervisorTests {
             == "leverage-app")
     }
 
+    @Test("a support folder of its own gets a compose project of its own, so it never takes over the owner's server")
+    func projectNameFollowsSupportFolder() throws {
+        let home = URL(fileURLWithPath: "/Users/made-up", isDirectory: true)
+        func name(_ environment: [String: String]) -> String {
+            ServerSupervisor.Configuration.composeProject(environment: environment, home: home)
+        }
+        #expect(name([:]) == "leverage-app")
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "/Users/made-up/Library/Application Support/leverage"]) == "leverage-app")
+        let first = name(["LEVERAGE_SUPPORT_DIR": "/tmp/a"])
+        #expect(first != "leverage-app")
+        #expect(first.hasPrefix("leverage-app-"))
+        #expect(first.wholeMatch(of: /[a-z0-9][a-z0-9_-]*/) != nil)
+        #expect(first == name(["LEVERAGE_SUPPORT_DIR": "/tmp/a"]))
+        #expect(first == name(["LEVERAGE_SUPPORT_DIR": "/tmp/a/"]))
+        #expect(first != name(["LEVERAGE_SUPPORT_DIR": "/tmp/b"]))
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "/tmp/a", "LEVERAGE_COMPOSE_PROJECT": "smoke-1"]) == "smoke-1")
+        // A relative folder is ignored by SupportFolder, so the default stays.
+        #expect(name(["LEVERAGE_SUPPORT_DIR": "relative/folder"]) == "leverage-app")
+        let suffix = try #require(SupportFolder(environment: ["LEVERAGE_SUPPORT_DIR": "/tmp/a"], home: home).isolationSuffix)
+        #expect(first == "leverage-app-\(suffix)")
+        #expect(SupportFolder(environment: [:], home: home).isolationSuffix == nil)
+    }
+
     @Test("compose up failing: failed, with a reason for the log")
     func composeFails() async throws {
         let fake = try FakeDocker()

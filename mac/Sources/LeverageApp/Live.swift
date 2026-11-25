@@ -124,12 +124,12 @@ enum Live {
             home: home,
             composeSource: settings.composeSource,
             imageTag: settings.imageTag,
-            composeProject: ServerSupervisor.Configuration.composeProject(environment: environment),
+            composeProject: ServerSupervisor.Configuration.composeProject(environment: environment, home: home),
             mcpProgram: settings.mcpProgram))
         let helper = HelperSupervisor(configuration: .init(
             helperProgram: settings.helperProgram, supportFolder: support, environment: environment))
         return LiveRuntime(
-            server: server, helper: helper, sessions: SessionStores.make(environment: environment),
+            server: server, helper: helper, sessions: SessionStores.make(environment: environment, home: home),
             notifier: UserNotifier.make(bundleURL: settings.bundleURL, environment: environment),
             inboxCursor: InboxCursorStore(folder: support), setupProgress: SetupProgressStore(folder: support),
             lock: lock)
