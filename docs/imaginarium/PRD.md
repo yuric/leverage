@@ -112,7 +112,8 @@ a separate file in the app bundle.
 
 1. No task state, effect or label named `imaginarium` is left, an old event
    log still replays, and every test passes (IM-1 to IM-4).
-2. A new installation has the Imaginarium project right after setup,    updated one gets it exactly once (IM-5, IM-6).
+2. A new installation has the Imaginarium project right after setup, and an
+   updated one gets it exactly once (IM-5, IM-6).
 3. From the tab, Send to Ready puts a task in Ready in the Imaginarium
    project, with the catalog's checks as its criteria and the text shown,
    edited or not, as its details.
