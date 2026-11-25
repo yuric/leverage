@@ -17,11 +17,16 @@ module V1
       # POST /v1/owner/session. The password is checked here, before the
       # pipeline: a wrong password or an unknown address is 401 and stores
       # no commands row, also for a key used before. authenticate_by spends
-      # the same time on an unknown address. The password is left out of the
-      # request hash and of the command's params (IN-9).
+      # the same time on an unknown address. Wrong passwords are counted:
+      # after ten inside a minute SignInThrottle compares no password, the
+      # right one included, and the answer is 401 with a message that says
+      # to wait. The password is left out of the request hash and of the
+      # command's params (IN-9).
       def create
         body = Leverage::Http::RequestSchema.body!("sign_in_owner", request.raw_post)
-        user = User.authenticate_by(email_address: body.fetch("email_address"), password: body.fetch("password"))
+        user = Leverage::Http::SignInThrottle.check do
+          User.authenticate_by(email_address: body.fetch("email_address"), password: body.fetch("password"))
+        end
         raise Unauthenticated, "The email address or the password is not right" unless user
 
         run_command("sign_in", params: body.except("password"), hash_without: [ "password" ], caller_kind: "owner",

@@ -1027,7 +1027,14 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   `x-leverage-caller` on each operation and `roles.json` say which caller
   may run it, and a token of another kind answers `401`.
   - The owner's session is made by sign-in or setup, kept in the owner's
-    login Keychain, and ended by sign-out. It has no expiry.
+    login Keychain, and ended by sign-out. It has no expiry. Wrong
+    passwords are counted in the server process
+    (`Leverage::Http::SignInThrottle`): after ten inside a minute no
+    password is compared, at sign-in or at setup, until a minute has
+    passed since the oldest, and sign-in answers `401` with a message
+    that says to wait. A program on the Mac can keep sign-in refused that
+    way; a session that is already open is not affected. A restart of
+    the server clears the count.
   - The helper's token is made by the app's `issue_helper_token` each time
     the app starts the helper, lives only in the helper's environment, and
     ends when the next one is issued.

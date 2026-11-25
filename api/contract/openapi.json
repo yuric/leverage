@@ -2082,7 +2082,7 @@
       "post": {
         "operationId": "sign_in_owner",
         "summary": "Signs the owner in and returns a bearer session.",
-        "description": "The one owner call that needs no session. The session token is returned once and never stored in a command outcome.",
+        "description": "The one owner call that needs no session. The session token is returned once and never stored in a command outcome. Wrong passwords are counted: after ten inside a minute every sign-in, the right password included, is answered 401 `unauthenticated` with a message that says to wait, until a minute has passed since the oldest.",
         "tags": [
           "owner"
         ],
