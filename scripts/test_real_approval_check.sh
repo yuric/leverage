@@ -19,6 +19,7 @@ from uuid import UUID
 
 root, script = map(Path, sys.argv[1:])
 quiet_value = "response-and-tool-output-must-stay-private"
+owner_password = "-fixture-owner-password"
 roles = {"builder": 1, "reviewer": 2, "orchestrator": 3}
 
 
@@ -63,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         assert key and key not in self.server.keys
         self.server.keys.add(key)
         if self.path == "/v1/owner/setup":
+            assert body["password"] == owner_password
             result = {"session_token": token(0)}
         elif self.headers.get("Authorization") != f"Bearer {token(0)}":
             self.answer({"body": quiet_value}, 401)
@@ -189,7 +191,15 @@ args = sys.argv[1:]
 work = Path(os.environ.get("TEST_SHIM_ROOT", Path(sys.argv[0]).resolve().parent))
 with (work / "calls").open("a") as calls:
     calls.write(name + "\n")
-if name in {"claude", "codex", "agy", "grok"}:
+if name == "python3":
+    import secrets
+
+    # Exercise a valid token_urlsafe prefix that argparse can mistake for an option.
+    assert args[:2] == ["-I", "-"]
+    secrets.token_urlsafe = lambda _size: os.environ["FIXTURE_OWNER_PASSWORD"]
+    sys.argv = args[1:]
+    exec(compile(sys.stdin.buffer.read(), "<stdin>", "exec"), {"__name__": "__main__"})
+elif name in {"claude", "codex", "agy", "grok"}:
     print("response-and-tool-output-must-stay-private")
 elif name == "docker":
     assert os.environ["DOCKER_CONFIG"] == "fixture-config"
@@ -208,6 +218,8 @@ elif name == "docker":
         assert args[-3:] == ["db", "api", "sweep"]
     elif operation == "logs" and (work / "fault").read_text() == "leaked-token":
         print("lvs_mock_" + "0" * 24)
+    elif operation == "logs" and (work / "fault").read_text() == "leaked-owner-password":
+        print(os.environ["FIXTURE_OWNER_PASSWORD"])
     elif operation == "down":
         assert "--volumes" in args
         (work / "compose-down").touch()
@@ -267,11 +279,10 @@ def start_shims(work):
     shims.mkdir()
     for name in ("dirname", "mkdir"):
         (shims / name).symlink_to(shutil.which(name))
-    (shims / "python3").symlink_to(sys.executable)
     fake = work / "shim"
-    fake.write_text(f"#!{sys.executable}\n" + shim_source)
+    fake.write_text(f"#!{sys.executable} -I\n" + shim_source)
     fake.chmod(0o700)
-    for name in ("docker", "swift", "claude", "codex", "agy", "grok", "runner-shim"):
+    for name in ("docker", "swift", "claude", "codex", "agy", "grok", "runner-shim", "python3"):
         (shims / name).symlink_to(fake)
     return shims
 
@@ -286,7 +297,7 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
     env = {"PATH": str(shims), "HOME": str(work / "home"), "USER": "shim-user", "LANG": "C",
            "TMPDIR": str(work / "tmp"), "TEST_SHIM_ROOT": str(work),
            "DOCKER_CONFIG": "fixture-config", "DOCKER_HOST": "fixture-docker-host",
-           "API_IMAGE_TAG": "fixture-tag"}
+           "API_IMAGE_TAG": "fixture-tag", "FIXTURE_OWNER_PASSWORD": owner_password}
     bash = shutil.which("bash")
     failures = []
 
@@ -377,6 +388,7 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
         ("second-touch", 1, "second canary"),
         ("http-body", 1, "HTTP 422"),
         ("leaked-token", 1, "the secret scan found a leak"),
+        ("leaked-owner-password", 1, "the secret scan found a leak"),
         ("fixed-port", 1, "dynamic loopback port"),
     ]):
         out = work / f"results-{index}"
@@ -403,8 +415,8 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
         check(result.returncode == expected_status and message in result.stderr,
               f"{fault}: expected exit {expected_status} with {message!r}, got exit {result.returncode}")
         combined = result.stdout + result.stderr
-        check(quiet_value not in combined and all(token(i) not in combined for i in range(4)),
-              f"{fault}: a response body or token escaped")
+        private = [quiet_value, owner_password, *(token(i) for i in range(4))]
+        check(all(value not in combined for value in private), f"{fault}: private data escaped")
         if expected_status == 0:
             invoked = calls.read_text().splitlines() if calls.exists() else []
             check(invoked.count("claude") == 2 and all(x not in invoked for x in ("codex", "agy", "grok")),
@@ -414,7 +426,7 @@ with tempfile.TemporaryDirectory(prefix="test-real-approval-check-") as name:
             if out.is_dir():
                 for path in out.iterdir():
                     contents = path.read_text()
-                    check(quiet_value not in contents and all(token(i) not in contents for i in range(4)),
+                    check(all(value not in contents for value in private),
                           f"{fault}: private data escaped into results")
         else:
             check(not out.exists(), f"{fault}: failed run published results")
