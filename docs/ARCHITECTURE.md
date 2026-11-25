@@ -784,8 +784,10 @@ and `USER` for Claude.
     `reviews.reviewer_seat_id` counts only reviews with no verdict.
   - The `leverage_app` role (`NOLOGIN`, kept by the `db:grants` task after
     every task that builds or changes the schema) has `SELECT, INSERT` on
-    `events` and `rule_versions`, `SELECT` only on `backup_runs`, `SELECT,
-    INSERT, UPDATE, DELETE` on every other table, and no `TRUNCATE`.
+    `events` and `rule_versions`, `SELECT` only on `backup_runs` and on
+    Rails' own `schema_migrations` and `ar_internal_metadata` (which only
+    the owner role's migrations write), `SELECT, INSERT, UPDATE, DELETE`
+    on every other table, and no `TRUNCATE`.
     Migrations, tests, the backup, the restore and other commands use the
     database's owner role. Runs of `db:grants` go one at a time across the
     cluster, under an advisory lock taken in the `postgres` database, since
