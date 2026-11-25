@@ -122,6 +122,15 @@ using that token, then follow the instructions and keep polling for
 work. Keep the prompt private. The roster labels
 the seat "Connected by prompt."
 
+A token passed on a command line can be read by every other account on
+the Mac for as long as that command runs, through the process list. The
+prompt and the HTTP instructions therefore tell the agent to keep the
+token in a file in a folder only its own account can read, and to send
+the header from that file (`curl -H @file`). An agent that puts the
+token in a command anyway exposes it that way until the seat is
+removed. Through MCP the token is in the settings that start the
+bundled server, which passes it in the child's environment.
+
 To give the agent another landing prompt, choose **Remove** in the roster
 and connect a new seat. The removed seat's next call answers `401` and the
 agent stops. A Working task goes back to Ready, a review is released, and
@@ -318,7 +327,8 @@ in the app. `bin/restore` runs in the `backup` service, which has the
 folder and the database's owner role. It refuses to replace a database
 whose log holds an event unless given `--replace`; otherwise it checks
 that `pg_restore` can read the dump, restores it into a new database
-beside the one it replaces (`<name>_restoring_<hex>`), gives the database
+beside the one it replaces (`<name>_restoring_<hex>`), runs there the
+migrations the dump has not seen, gives the database
 roles their rights again (`db:grants`) and runs the replay test
 (`leverage:verify_log`) there, and only then drops the database and gives
 the new one its name. A dump made before the migration that rebuilt the
@@ -327,7 +337,21 @@ steps of Imaginarium ideas (see
 repair in the new database, before the replay test; a later dump is tested
 as it is. A dump that cannot be restored, or whose log fails
 the replay test, or a database that cannot be dropped, leaves the database
-as it was and removes the new one. If the database was dropped and the
+as it was and removes the new one.
+
+A dump carries the schema of the version that made it. One made by an
+earlier version is therefore brought to this version's schema in the new
+database before the replay test, so the dumps kept from before an upgrade
+stay restorable with the same command; a migration that fails there is a
+failed step like any other. A dump made by a later version than the image
+that runs `bin/restore` is refused, with a message that says so: restore
+it with that version.
+
+The restore also sets the transaction id kept with every restored event
+(`events.xact_id`) to 0. That id is how the database knows that a task's
+state changed in a transaction that wrote an event, and it means nothing
+outside the cluster that issued it: a new cluster issues the same numbers
+again. Every other column of the log is restored as it was. If the database was dropped and the
 new one could not take its name, the message names the new one, to rename
 by hand. It exits 0 only when every
 step passed, 1 when it refused or a step failed (its message says which),
@@ -381,14 +405,26 @@ after it are kept until removed by hand.
 
 This is the developer's path, from the repository root. The API and the
 database read their settings from a `.env` file at the root, which
-[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it from
-the example, then replace the made-up values:
+[compose.yaml](../compose.yaml) loads. `.env` is git-ignored. Make it
+with the script, which copies `.env.example` and gives the two database
+passwords and `SECRET_KEY_BASE` random values of its own (mode 0600; it
+never writes over a `.env` that is there):
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 docker compose build
 docker compose up -d
 ```
+
+`.env.example` leaves those three values empty, and compose stops with a
+message while `POSTGRES_PASSWORD` or `SECRET_KEY_BASE` is empty, so a
+copy of the example alone starts nothing and no server runs on a password
+published in this repository. That matters most on a Linux host shared
+with other users, where the database container's address can be reached
+from the host; on the Mac the database publishes no port. The passwords
+are set when the database volume is first made: changing
+`POSTGRES_PASSWORD` in `.env` afterwards does not change the role's
+password and stops the API from connecting.
 
 `up` starts four services: `db`, `api` (it prepares the database first),
 `sweep`, which applies due timers every 15 seconds and purges command keys
@@ -399,9 +435,9 @@ older than 7 days once an hour
 | Variable | Used by | Required | What it does |
 | --- | --- | --- | --- |
 | `POSTGRES_USER` | db, api, sweep | Yes | The PostgreSQL user, the database's owner role. compose stops with a message when it is unset. |
-| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. |
+| `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. compose stops with a message when it is empty. |
 | `LEVERAGE_API_DB_PASSWORD` | api, sweep | No | The password of `leverage_api`, the login role the server and the sweep connect as; it cannot change the event log. Letters, digits and dashes only. Empty: they connect as `POSTGRES_USER`. |
-| `SECRET_KEY_BASE` | api, sweep | Yes | The key Rails signs with. Make one with `openssl rand -hex 64`. |
+| `SECRET_KEY_BASE` | api, sweep | Yes | Rails does not start in production without it. Leverage signs nothing with it: its tokens are random values whose SHA-256 digests the database keeps, so changing it ends no owner session, seat token or helper token ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md) says what ends each). compose stops with a message when it is empty. To make one by hand: `openssl rand -hex 64`. |
 | `RAILS_ASSUME_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `RAILS_FORCE_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `API_PORT` | compose | No, default `3000` | The port on `127.0.0.1` where the API answers. |
@@ -461,8 +497,9 @@ only on `127.0.0.1`, over plain HTTP. The app's database is the volume
 `leverage-app_db-data`; a server started from the repository uses
 `leverage_db-data`.
 
-CI runs the same containers with the example `.env`, and the whole loop with
-stand-in tools on Linux; see `.github/workflows/ci.yml`.
+CI runs the same containers with a `.env` made by `scripts/make_env.py`,
+and the whole loop with stand-in tools on Linux; see
+`.github/workflows/ci.yml`.
 
 The move to a server the owner controls is not decided in detail: _TBD_.
 
@@ -658,7 +695,21 @@ The server's logs are `docker compose -p leverage-app logs api sweep
 backup`: one `leverage.command` line per command with its timings, the
 sweep's passes and each dump. A request's logged parameters keep only
 ids, numbers and true or false; every other text, task text among it, is
-`[FILTERED]`. The Mac side's logs are under
+`[FILTERED]`. Docker keeps at most three files of 10 MB of each
+container's output (`logging` in `compose.yaml`), so older lines are
+dropped. An existing installation takes that limit when an app built
+with it next starts the containers, which makes them again. The Mac
+side's logs are under
 `<support folder>/logs/`. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.
+
+Every image the build pulls is named with a digest: the Ruby base image in
+`api/Dockerfile`, which names no separate build frontend, and the
+PostgreSQL image in `compose.yaml`
+([ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) records
+both). `.github/dependabot.yml` asks Dependabot for a weekly pull request
+that moves either digest or the gems in `api/Gemfile.lock`. Dependabot
+changes neither the digest recorded in ADR 0002 nor `api/.ruby-version`;
+whoever takes such a pull request changes them in it. No such pull request
+has been opened yet, so that Dependabot can read these files is unverified.

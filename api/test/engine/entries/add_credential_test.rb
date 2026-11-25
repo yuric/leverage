@@ -221,6 +221,18 @@ class AddCredentialTest < ActiveSupport::TestCase
     assert_equal [ 1, "claude-opus-5-5", nil ], Credential.find(id).attributes.values_at("strength_rank", "model", "effort")
   end
 
+  # The contract's words for AddCredentialRequest: a null model is the
+  # tool's own default, and the server fills in nothing, the catalog's
+  # default_model included.
+  test "a login added with no model keeps none: the server fills in no catalog default" do
+    refute_nil Leverage::Contract.models.fetch("providers").find { |entry| entry.fetch("provider") == "claude" }
+      .fetch("default_model")
+    id = SecureRandom.uuid
+    assert_completed(owner_command("add_credential", body(id: id, model: nil)))
+
+    assert_nil Credential.find(id).model
+  end
+
   private
 
   def add_token(params, **options)

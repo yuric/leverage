@@ -58,9 +58,9 @@ the server depends on it (rule AR-003).
 - A lease can outlive its due time by up to one sweep interval when no call
   touches its task; a call that comes first is refused at once.
 - The server and the sweep cannot change the event log even if a trigger is
-  switched off, once `LEVERAGE_API_DB_PASSWORD` is set (it is in
-  `.env.example` and in the `.env` the app writes). Without it they connect
-  as the owner role.
+  switched off, once `LEVERAGE_API_DB_PASSWORD` is set (it is in the
+  `.env` that `scripts/make_env.py` makes from `.env.example` and in the
+  `.env` the app writes). Without it they connect as the owner role.
 - Under 50 active seats the wait for the workspace lock is about 1 ms at
   the 95th percentile, and writing events and steps 4.7 ms (2026-11-19;
   [IMPLEMENTATION.md](../IMPLEMENTATION.md#measurements)). The lock is held

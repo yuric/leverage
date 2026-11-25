@@ -2,12 +2,14 @@ require "test_helper"
 require "open3"
 
 # Host authorization (PRD, Security; ADR 0006): the API answers only a
-# request addressed to this Mac's loopback (127.0.0.1, localhost, [::1]) or
-# to the compose service name api, which the speed run uses. A web page
-# that rebinds its own name to 127.0.0.1 sends its own name as Host and is
-# refused 403 before any controller runs, so it can neither create the
-# owner's sign-in nor try a password. /up, the compose health check, is
-# answered whatever the Host.
+# request addressed to this Mac's loopback (127.0.0.1, localhost, [::1]).
+# A web page that rebinds its own name to 127.0.0.1 sends its own name as
+# Host and is refused 403 before any controller runs, so it can neither
+# create the owner's sign-in nor try a password. The compose service name
+# api is refused like any other name: the network's resolver answers a
+# single-label name, not this Mac, so whoever controls that resolver could
+# serve a page from http://api:3000 and then point api at loopback. /up,
+# the compose health check, is answered whatever the Host.
 #
 # The setting is production's (config/environments/production.rb), so the
 # test boots the app in production in a child process and sends requests
@@ -44,13 +46,16 @@ class HostAuthorizationTest < ActiveSupport::TestCase
       [ "POST", "attacker.example:3000", "/v1/owner/session" ],
       [ "GET", "rebound.example.test", "/v1/health" ],
       [ "GET", "127.0.0.1.", "/v1/health" ],
+      [ "GET", "api:3000", "/v1/health" ],
+      [ "GET", "api", "/v1/health" ],
+      [ "POST", "api:3000", "/v1/owner/setup" ],
+      [ "POST", "api:3000", "/v1/owner/session" ],
       [ "GET", "[0:0:0:0:0:0:0:1]:3000", "/v1/health" ]
     ]
     answered = [
       [ "GET", "127.0.0.1:3000", "/v1/health" ],
       [ "GET", "localhost:3000", "/v1/health" ],
       [ "GET", "[::1]:3000", "/v1/health" ],
-      [ "GET", "api:3000", "/v1/health" ],
       [ "GET", "attacker.example", "/up" ]
     ]
     got = statuses(refused + answered)

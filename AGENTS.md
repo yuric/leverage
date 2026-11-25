@@ -83,7 +83,8 @@ research, and the following code and checks.
 - `compose.yaml` (the API, the sweep, the daily backup and PostgreSQL in
   Docker containers on the owner's Mac, the one environment in
   [docs/DEPLOY.md](docs/DEPLOY.md)), `compose.test.yaml` (lets Docker pick
-  the API's port in automated runs) and `.env.example`;
+  the API's port in automated runs) and `.env.example`, whose three
+  secrets are empty: `scripts/make_env.py` makes `.env` from it;
 - `scripts/`: besides the checks below, `build_app.sh` (builds
   `dist/Leverage.app`), `smoke_app.sh`, `e2e_core_loop.sh` (the whole loop
   with stand-in tools, including the Prompt connection, model report, task
@@ -235,6 +236,7 @@ python3 -I scripts/check_model_catalog.py            # model catalog and its use
 python3 -I scripts/test_check_model_catalog.py       # self-test of the catalog check
 python3 -I scripts/test_app_compose.py               # self-test of the bundle's compose file
 python3 -I scripts/test_secret_scan.py               # self-test of the secret scan
+python3 -I scripts/test_make_env.py                  # the .env generator, and the example's empty secrets
 python3 -I scripts/check_reply_fixtures.py           # reply files hold no account detail
 python3 -I scripts/test_capture_reader_reply.py      # capture guard and scrub self-test
 python3 -I scripts/test_check_reply_fixtures.py      # self-test of that check
@@ -286,10 +288,11 @@ Run these before reporting work as done. Ruby is never run on the Mac
 itself: every Ruby and Rails command runs in the `api` container. Run them
 from the repository root unless a line says otherwise.
 
-Once, to configure (then replace the made-up values in `.env`):
+Once, to configure (it makes `.env` from `.env.example`, with random
+secrets of its own, and never writes over one that is there):
 
 ```bash
-cp .env.example .env
+python3 -I scripts/make_env.py
 ```
 
 The API (`api/`):

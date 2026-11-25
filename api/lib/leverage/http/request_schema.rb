@@ -22,6 +22,12 @@ module Leverage
       # request. An operation that takes no body accepts an empty body or
       # an empty JSON object, and answers {}; any other body is 422 invalid
       # (one rule for the agent, owner and helper interfaces).
+      #
+      # A body with a NUL character in any key or text is 422 invalid too.
+      # JSON can carry one (the escape \u0000) and every string schema
+      # accepts it, but PostgreSQL text and bcrypt cannot take one: the
+      # command would fail where the value is stored or compared and
+      # answer 500, on sign-in and setup as on any other call.
       def body!(operation_id, raw_body)
         pointer = schema_pointer(operation_id)
         text = raw_body.to_s
@@ -32,6 +38,8 @@ module Leverage
         end
 
         body = parse(text)
+        raise Invalid, "Text cannot contain a NUL character" if nul?(body)
+
         errors = schemer.ref(pointer).validate(body).map { |error| "#{error.fetch("data_pointer")} #{error.fetch("error")}" }
         raise Invalid, "The body does not match the contract: #{errors.first(3).join("; ")}" unless errors.empty?
 
@@ -67,6 +75,18 @@ module Leverage
         JSON.parse(text)
       rescue JSON::ParserError
         raise Malformed, "The body is not JSON"
+      end
+
+      # Whether a parsed body holds a NUL character in a key or a text, at
+      # any depth. The parsed value is read, not the raw body, where the
+      # six characters \u0000 may also be an escaped backslash and "u0000".
+      def nul?(value)
+        case value
+        when String then value.include?("\u0000")
+        when Array then value.any? { |item| nul?(item) }
+        when Hash then value.any? { |key, item| nul?(key) || nul?(item) }
+        else false
+        end
       end
 
       def schemer

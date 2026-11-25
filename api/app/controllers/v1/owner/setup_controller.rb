@@ -21,9 +21,28 @@ module V1
       # request hash leaves the password out (IN-9).
       def create
         body = Leverage::Http::RequestSchema.body!("create_owner", request.raw_post)
-        owner = User.authenticate_by(email_address: body.fetch("email_address"), password: body.fetch("password"))
+        owner = signed_in_owner(body)
         run_command("create_owner", params: body, hash_without: [ "password" ], caller_kind: "owner",
           caller_id: owner&.id, workspace_id: nil)
+      end
+
+      private
+
+      # The owner the body's email address and password sign in, or nil.
+      # Before an owner exists there is nobody to sign in and no password
+      # is compared. Once one exists the comparison is a sign-in attempt
+      # like any other: a wrong password is counted with sign-in's
+      # (SignInThrottle), and while sign-in is refused none is compared, so
+      # the call is answered as a stranger's (404), also for the owner's
+      # own repeat.
+      def signed_in_owner(body)
+        return nil unless User.exists?
+
+        Leverage::Http::SignInThrottle.check do
+          User.authenticate_by(email_address: body.fetch("email_address"), password: body.fetch("password"))
+        end
+      rescue Leverage::Http::SignInThrottle::Blocked
+        nil
       end
     end
   end

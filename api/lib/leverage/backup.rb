@@ -22,10 +22,16 @@ module Leverage
   # A restore (bin/restore) makes the database again from a dump: it
   # refuses a database whose events table holds a row unless replace is
   # given, checks that pg_restore can read the dump's list, creates a
-  # staging database beside it, runs pg_restore into that with no
+  # staging database beside it, runs pg_restore into that (the tables
+  # and rows first, then, once every restored event's transaction id is
+  # set to 0, the indexes and triggers) with no
   # --create and no --clean, and with --no-owner (pg_dump ignores
   # --no-owner for an archive format, so the dump keeps each object's
-  # owner and the restore drops it: a new cluster may lack that role), gives the roles their rights again
+  # owner and the restore drops it: a new cluster may lack that role),
+  # runs there the migrations the dump has not seen (a dump carries the
+  # schema of the day it was made, and the replay test reads today's; a
+  # dump that names a migration this version does not have is refused),
+  # gives the roles their rights again
   # (db:grants: a dump of one database holds no role) and runs
   # leverage:verify_log there. Only then is the database dropped and the
   # staging database renamed to its name, so a dump that cannot be
@@ -186,20 +192,23 @@ module Leverage
       target
     end
 
-    # Makes staging from the dump, gives the roles their rights and runs
-    # the replay test there. A dump made before the migration that rebuilt
-    # the steps of promoted Imaginarium ideas (StepRepair) has that repair
-    # first: the server's next start would run it anyway, and without it
-    # the replay test would refuse every such dump. On any failure, of
-    # whatever kind, staging is dropped, the target was never touched, and
-    # the error is a Failed.
+    # Makes staging from the dump, brings its schema to this version's,
+    # gives the roles their rights (after the migrations, so that a table
+    # they add has its own) and runs the replay test there. The migrations
+    # include the one that rebuilds the steps of promoted Imaginarium ideas
+    # (StepRepair); the call below is that repair for a schema that was
+    # already current, and does nothing once the migration has run. On any
+    # failure, of whatever kind, staging is dropped, the target was never
+    # touched, and the error is a Failed.
     def restore_into(staging, file, workspace_id, spawner)
       tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
         staging.database)
-      tool!(staging, spawner, "pg_restore", *RESTORE_FLAGS, *staging.connection_args, "--dbname", staging.database,
-        file)
+      pg_restore!(staging, spawner, file, "pre-data", "data")
+      forget_transaction_ids(staging)
+      pg_restore!(staging, spawner, file, "post-data")
       connected_to(staging) do
         load_tasks
+        migrate!
         DbGrants.apply(ActiveRecord::Base.lease_connection)
         StepRepair.call unless StepRepair.migrated?
         verify!(workspace_id)
@@ -209,6 +218,32 @@ module Leverage
       raise if error.is_a?(Failed)
 
       raise Failed, "#{error.class.name}: #{first_line(error.message)}"
+    end
+
+    # pg_restore of the named sections of the dump into staging. The
+    # tables and their rows are pre-data and data; the indexes, the
+    # constraints and the triggers are post-data.
+    def pg_restore!(staging, spawner, file, *sections)
+      tool!(staging, spawner, "pg_restore", *RESTORE_FLAGS, *sections.map { |section| "--section=#{section}" },
+        *staging.connection_args, "--dbname", staging.database, file)
+    end
+
+    # Gives every restored event the transaction id 0. events.xact_id
+    # holds the id of the transaction that wrote the row, and the state
+    # trigger lets a task's state change only when an event of the task
+    # carries the current transaction's id (DB-6). An id means something
+    # only in the cluster that issued it: a new cluster, as after a lost
+    # volume, issues the same numbers again, and a restored row would then
+    # stand in for an event that a later transaction never wrote. No
+    # transaction has the id 0. Done between the data and the triggers,
+    # so the append-only trigger is not there yet and is never switched
+    # off.
+    def forget_transaction_ids(staging)
+      with_pg(staging, staging.database) do |pg|
+        next if pg.exec("SELECT to_regclass('public.events')").getvalue(0, 0).nil?
+
+        pg.exec("UPDATE public.events SET xact_id = '0'")
+      end
     end
 
     # Drops the target and gives staging its name. A target that cannot be
@@ -328,6 +363,28 @@ module Leverage
       ensure
         ActiveRecord::Base.establish_connection(original)
       end
+    end
+
+    # Runs, on the database now connected, every migration its
+    # schema_migrations does not name, as the owner role: what the server's
+    # db:prepare would do at its next start, done here so that the replay
+    # test reads the columns it expects. Nothing to run when the dump is of
+    # this version. A dump that names a migration this version does not
+    # have was made by a later one, whose log this code cannot vouch for
+    # and whose schema no migration here takes back: it is refused. No
+    # schema file is written.
+    def migrate!
+      pool = ActiveRecord::Base.connection_pool
+      context = ActiveRecord::MigrationContext.new(Rails.application.paths["db/migrate"].existent,
+        pool.schema_migration, pool.internal_metadata)
+      unknown = context.get_all_versions - context.migrations.map(&:version)
+      unless unknown.empty?
+        raise Failed, "the dump was made by a later version of Leverage than this one (it names the " \
+                      "migration #{unknown.max}, which this version does not have). Restore it with that version."
+      end
+
+      context.migrate
+      ActiveRecord::Base.descendants.each(&:reset_column_information)
     end
 
     def verify!(workspace_id)

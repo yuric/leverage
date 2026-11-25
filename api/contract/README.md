@@ -622,7 +622,13 @@ check result. What it added and changed, each from the milestone 4 plan
   1 MiB. The limits count characters, not bytes, and not the evidence
   rows a task gathers, so they make a prompt over the runner's 512 KiB
   rare, not impossible: such a check starts no tool and ends in `error`
-  after its two run timeouts. `LandingPrompt.check_interval_minutes` is
+  after its two run timeouts. The text that reaches a question job's
+  material, or the owner's reads, from later calls has limits for the
+  same reason: `AskQuestionRequest` (text and assumption, 4000 each),
+  `RequestAccessRequest` (2000), `AnswerQuestionRequest` (4000),
+  `CreateProjectRequest` (name 300, goal 4000) and `EditBriefRequest`
+  (100 entries of 4000). A request body over 4 MiB is `400 malformed`
+  before it is read. `LandingPrompt.check_interval_minutes` is
   20, or 1 for an orchestrator, which counts as offline 90 seconds after
   its last poll (L401), and for a planner, whose presence is not read: a
   draft it does not claim or finish in time is queued once more, then

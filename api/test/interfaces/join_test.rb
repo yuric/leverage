@@ -55,7 +55,17 @@ class JoinTest < ActionDispatch::IntegrationTest
           assert_includes text, ADDRESS
           assert_includes text, "Ask `GET /v1/next?wait=30` again as soon as it answers."
           assert_includes text, "Leverage counts you offline 90 seconds after your last `GET /v1/next`."
-          assert_includes text, "Do not print it, write it into a file or send it to anything but this server."
+          # The token never reaches a command's arguments, which every
+          # account on a Mac can read (ps): the one call shown sends the
+          # header from a file in a folder only the agent's account reads.
+          assert_includes text, "Do not print it or send it to anything but this server."
+          assert_includes text, "Never put it on a command line"
+          assert_includes text, %(mktemp -d "${TMPDIR:-/tmp}/leverage-seat.XXXXXX")
+          assert_includes text, "with your file-writing tool, not a shell command, write a file named `header` in that folder"
+          assert_includes text, %(\n    curl -sS -H @FOLDER/header "#{ADDRESS}/v1/join"\n)
+          assert_includes text, "When a call answers 401, delete that folder."
+          refute_match(/-H\s+["']?Authorization/, text)
+          refute_match(/\$\{?LEVERAGE_SEAT_TOKEN|environment variable LEVERAGE_SEAT_TOKEN/, text)
           allowed = allowed.select { |id| Leverage::Http::RouteTable.serves?(id) }
           expected = allowed.map do |id|
             [ id, *HttpCalls.operation(id).values_at("method", "path") ]

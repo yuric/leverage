@@ -70,6 +70,16 @@ class BackupRestoreTest < CommittingTestCase
     ).to_a
   end
 
+  # A row as the restore must keep it: every column but xact_id, which
+  # names a transaction of the cluster the dump was made in.
+  def without_xact_id(rows) = rows.map { |row| row.except("xact_id") }
+
+  def triggers_on(table)
+    ActiveRecord::Base.lease_connection.select_values(ActiveRecord::Base.sanitize_sql([ <<~SQL, "public.#{table}" ])).sort
+      SELECT tgname FROM pg_trigger WHERE tgrelid = ?::regclass AND NOT tgisinternal AND tgenabled = 'O'
+    SQL
+  end
+
   def log_figures
     ActiveRecord::Base.lease_connection.select_rows("SELECT count(*), max(seq), max(created_at) FROM events").first
   end
@@ -110,9 +120,20 @@ class BackupRestoreTest < CommittingTestCase
     assert_match(/workspace #{walk.workspace_id}: #{walked.size} events, replay ok, audit ok/, out)
     assert database_exists?(@scratch)
     assert_equal @original, ActiveRecord::Base.connection_db_config, "the restore gives the connection back"
+    live_triggers = { "events" => triggers_on("events"), "tasks" => triggers_on("tasks") }
+    refute_empty live_triggers["events"]
+    refute_empty live_triggers["tasks"]
+    assert(before.none? { |row| row["xact_id"] == "0" }, "the log's own rows name the transactions that wrote them")
     on_database(@scratch) do
-      assert_equal before, events_of(workspace_id)
-      assert_equal walked, events_of(walk.workspace_id)
+      assert_equal without_xact_id(before), without_xact_id(events_of(workspace_id))
+      assert_equal without_xact_id(walked), without_xact_id(events_of(walk.workspace_id))
+      # A transaction id means nothing outside the cluster that issued it,
+      # and a new cluster issues the same numbers again: a restored event
+      # must never look like one a later transaction wrote (the state
+      # trigger, DB-6). No transaction has the id 0.
+      assert_equal 0, ActiveRecord::Base.lease_connection.select_value("SELECT count(*) FROM events WHERE xact_id <> '0'")
+      assert_equal live_triggers["events"], triggers_on("events"), "the append-only triggers are there, and on"
+      assert_equal live_triggers["tasks"], triggers_on("tasks")
       assert_empty Leverage::Replay.diff(workspace_id)
       assert_empty Leverage::LogAudit.call(workspace_id, after_seq: runner.setup_seq)
       assert privilege?("events", "SELECT")
@@ -136,6 +157,87 @@ class BackupRestoreTest < CommittingTestCase
     assert_includes restored, "CREATE TABLE public.events"
     refute_match(/OWNER TO/, restored)
     refute_match(/\bGRANT\b/, restored)
+  end
+
+  def psql!(database, statement)
+    out, status = Open3.capture2e(tool_env, "psql", *tool_args, "--dbname", database, "--quiet", "--set",
+      "ON_ERROR_STOP=1", "--command", statement)
+    assert status.success?, out
+    out
+  end
+
+  # A dump of the worker's database as an earlier version of Leverage
+  # would have made it: restored beside it, changed there by the
+  # statement, and dumped again with the backup's own flags.
+  def dump_changed_by(path, statement)
+    earlier = "#{@scratch}_earlier"
+    out, status = Open3.capture2e(tool_env, "createdb", *tool_args, "--maintenance-db=postgres", earlier)
+    assert status.success?, out
+    out, status = Open3.capture2e(tool_env, "pg_restore", *B::RESTORE_FLAGS, *tool_args, "--dbname", earlier, path)
+    assert status.success?, out
+    psql!(earlier, statement)
+    changed = File.join(@folder, "leverage-earlier.dump")
+    out, status = Open3.capture2e(tool_env, "pg_dump", *B::DUMP_FLAGS, *tool_args, "--dbname", earlier, "--file", changed)
+    assert status.success?, out
+    changed
+  end
+
+  # The newest migration, taken back by hand: its columns, its check and
+  # its row in schema_migrations. The replay test reads one of the columns.
+  NEWEST_MIGRATION = "20261125000100".freeze
+  BEFORE_NEWEST_MIGRATION = <<~SQL.freeze
+    ALTER TABLE tasks DROP CONSTRAINT tasks_imaginarium_source,
+      DROP COLUMN imaginarium_entry_id, DROP COLUMN imaginarium_catalog_version;
+    DELETE FROM schema_migrations WHERE version = '#{NEWEST_MIGRATION}';
+  SQL
+
+  def migration_versions
+    ActiveRecord::Base.lease_connection.select_values("SELECT version FROM schema_migrations")
+  end
+
+  # A dump carries the schema of the day it was made, and the replay test
+  # runs with today's code: without the migrations in between, no dump
+  # made before the newest of them could be restored.
+  test "a dump made before the newest migration is migrated in the staging database and passes the replay test" do
+    assert_equal NEWEST_MIGRATION, migration_versions.max, "name the newest migration here, and how to take it back"
+    walk = Walk.new(seed: 606).run
+    walked = events_of(walk.workspace_id)
+    run = B.run!(folder: @folder, keep: 14)
+    earlier = dump_changed_by(File.join(@folder, run.file_name), BEFORE_NEWEST_MIGRATION)
+    listed, = Open3.capture2e(tool_env, "pg_restore", "--schema-only", "--table=tasks", "--file=-", earlier)
+    refute_includes listed, "imaginarium_entry_id", "the earlier dump has no such column"
+
+    out, = capture_io { B.restore(earlier, target: target(@scratch), workspace_id: walk.workspace_id) }
+
+    assert_match(/workspace #{walk.workspace_id}: #{walked.size} events, replay ok, audit ok/, out)
+    on_database(@scratch) do
+      assert_includes migration_versions, NEWEST_MIGRATION
+      assert_includes ActiveRecord::Base.lease_connection.columns("tasks").map(&:name), "imaginarium_entry_id"
+      assert_equal without_xact_id(walked), without_xact_id(events_of(walk.workspace_id))
+      assert privilege?("tasks", "UPDATE"), "the grants follow the migrations"
+      refute privilege?("events", "UPDATE")
+    end
+    assert_equal @original, ActiveRecord::Base.connection_db_config, "the restore gives the connection back"
+    assert_empty Leverage::Replay.diff(walk.workspace_id), "this database's own models read its columns as before"
+  end
+
+  # This version's code cannot replay a log whose schema it has never
+  # seen, and it has no migration that goes back.
+  test "a dump made by a later version is refused, and the database is left as it was" do
+    walk = Walk.new(seed: 607).run
+    run = B.run!(folder: @folder, keep: 14)
+    later = dump_changed_by(File.join(@folder, run.file_name),
+      "INSERT INTO schema_migrations (version) VALUES ('29991231235959')")
+    task = scratch_with_a_task
+
+    error = assert_raises(B::Failed) do
+      capture_io { B.restore(later, target: target(@scratch), replace: true, workspace_id: walk.workspace_id) }
+    end
+
+    assert_match(/later version/, error.message)
+    assert_includes error.message, "29991231235959"
+    assert_equal [ @scratch, "#{@scratch}_earlier" ], restoring_databases.sort, "no staging database is left behind"
+    on_database(@scratch) { assert_equal "Changed after the dump", Task.find(task.id).title }
   end
 
   test "the trace this test commits leaves no id that a later trace run in the same database meets" do

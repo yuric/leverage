@@ -62,10 +62,10 @@ finish() {
 trap finish EXIT
 trap 'exit 130' INT TERM
 
-# .env holds made-up values; the example is used when there is none.
+# .env holds made-up values; scripts/make_env.py makes one when there is none.
 if [ ! -f .env ]; then
-  cp .env.example .env
-  say "made .env from .env.example"
+  python3 -I scripts/make_env.py >/dev/null
+  say "made .env from .env.example, with secrets of its own"
 fi
 
 # 1. The API, its sweep and the database. compose.test.yaml lets Docker pick

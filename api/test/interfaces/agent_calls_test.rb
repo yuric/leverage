@@ -316,6 +316,22 @@ class AgentCallsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # A key is 1 to 128 of A-Z a-z 0-9 _ - (Idempotency), so anything else
+  # names no row. A NUL would otherwise reach PostgreSQL, which cannot
+  # take one, and answer 500.
+  test "get_command is 404 for a key no command can have, a NUL among them, without asking the database" do
+    queries = []
+    counter = ->(*, payload) { queries << payload[:sql] if payload[:sql].include?("\"commands\"") }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      [ "%00", "key%00", "key%20with%20space", "k%C3%A9y" ].each do |key|
+        get_as "/v1/commands/#{key}"
+
+        assert_error :not_found, "not_found"
+      end
+    end
+    assert_empty queries
+  end
+
   test "get_command sets read_at once, under the workspace lock, and leaves the row otherwise as it was" do
     row = stored_command(key: "key-read")
     row.update_columns(read_at: nil)

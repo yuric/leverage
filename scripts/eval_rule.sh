@@ -246,11 +246,11 @@ for provider in "${provider_list[@]}"; do
   run_eval --provider "$provider" --resolve-only || exit 1
 done
 
-# 3. The canary, and the inputs. .env holds made-up values; the example
-# is used when there is none, as scripts/e2e_core_loop.sh does.
+# 3. The canary, and the inputs. .env holds made-up values; one is
+# made when there is none, as scripts/e2e_core_loop.sh does.
 if [ ! -f "$root/.env" ]; then
-  cp "$root/.env.example" "$root/.env"
-  say "made .env from .env.example"
+  python3 -I "$root/scripts/make_env.py" --example "$root/.env.example" --output "$root/.env" >/dev/null
+  say "made .env from .env.example, with secrets of its own"
 fi
 mkdir -p "$work/canary" "$work/inputs" "$work/verdicts" "$work/accounts"
 canary=$(python3 -I -c '

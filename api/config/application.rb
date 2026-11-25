@@ -18,6 +18,7 @@ require "rails/test_unit/railtie"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+require_relative "../lib/middleware/body_size_limit"
 require_relative "../lib/middleware/json_bodies_only"
 
 module Leverage
@@ -54,8 +55,10 @@ module Leverage
     # get the same JSON error shape as the rest; see ApplicationController.
     config.exceptions_app = ->(env) { ApplicationController.exceptions_app(env) }
 
-    # A body that is not sent as JSON is 400 before Rails parses it into
+    # A body over the size limit is 400 before anything reads it, and a
+    # body that is not sent as JSON is 400 before Rails parses it into
     # params, which its log line would print (lib/middleware).
+    config.middleware.use BodySizeLimit
     config.middleware.use JsonBodiesOnly
   end
 end

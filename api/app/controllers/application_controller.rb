@@ -56,7 +56,8 @@ class ApplicationController < ActionController::API
     "Leverage::Transitions::NotFound" => NotFound,
     "Leverage::Transitions::Invalid" => Invalid,
     "Leverage::Http::RequestSchema::Malformed" => Malformed,
-    "Leverage::Http::RequestSchema::Invalid" => Invalid
+    "Leverage::Http::RequestSchema::Invalid" => Invalid,
+    "Leverage::Http::SignInThrottle::Blocked" => Unauthenticated
   }.freeze
 
   # The transport code of a status Rails maps an exception to.

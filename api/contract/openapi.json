@@ -48,7 +48,7 @@
             "name": "wait",
             "in": "query",
             "required": false,
-            "description": "Seconds to wait for an item, at most 30.",
+            "description": "Seconds to wait for an item, at most 30. A seat has one waiting poll at a time: a newer one ends the older, which answers `none` at once.",
             "schema": {
               "type": "integer",
               "minimum": 0,
@@ -2082,7 +2082,7 @@
       "post": {
         "operationId": "sign_in_owner",
         "summary": "Signs the owner in and returns a bearer session.",
-        "description": "The one owner call that needs no session. The session token is returned once and never stored in a command outcome.",
+        "description": "The one owner call that needs no session. The session token is returned once and never stored in a command outcome. Wrong passwords are counted: after ten inside a minute every sign-in, the right password included, is answered 401 `unauthenticated` with a message that says to wait, until a minute has passed since the oldest.",
         "tags": [
           "owner"
         ],
@@ -6900,7 +6900,7 @@
             "name": "wait",
             "in": "query",
             "required": false,
-            "description": "Seconds to wait, at most 30.",
+            "description": "Seconds to wait, at most 30. The helper has one waiting poll at a time: a newer one ends the older, which answers with no request at once.",
             "schema": {
               "type": "integer",
               "minimum": 0,
@@ -7671,7 +7671,7 @@
     },
     "responses": {
       "BadRequest": {
-        "description": "400 `malformed`: the request could not be parsed.",
+        "description": "400 `malformed`: the request could not be parsed, or its body is over 4 MiB (4194304 bytes) or is not sent as `application/json`.",
         "content": {
           "application/json": {
             "schema": {
@@ -7701,7 +7701,7 @@
         }
       },
       "Unprocessable": {
-        "description": "422 `key_reused` (the same key with a different body) or `invalid` (a body that fails its schema, including a link or work reference carrying sign-in details).",
+        "description": "422 `key_reused` (the same key with a different body) or `invalid` (a body that fails its schema, including a link or work reference carrying sign-in details, or that holds a NUL character in any key or text).",
         "content": {
           "application/json": {
             "schema": {
@@ -9731,10 +9731,12 @@
         "properties": {
           "text": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           },
           "assumption": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 4000
           },
           "blocking": {
             "type": "boolean"
@@ -9760,7 +9762,8 @@
         "properties": {
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -11181,7 +11184,8 @@
         "properties": {
           "answer": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           }
         },
         "required": [
@@ -11894,10 +11898,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "goal": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 4000
           },
           "budget": {
             "type": [
@@ -11923,6 +11929,7 @@
         "properties": {
           "entries": {
             "type": "array",
+            "maxItems": 100,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -11937,7 +11944,8 @@
                 },
                 "text": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "maxLength": 4000
                 }
               },
               "required": [
@@ -13157,7 +13165,7 @@
       "AddCredentialRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. A login may name a model in the catalog, or let the server use the catalog default. Effort is empty for every new credential, and model is empty for API tokens (UX-7). Strength rank is what Handoff uses.",
+        "description": "The owner supplies the credential id, which the helper keys the secret by. A pasted token goes to the helper and the Keychain on the Mac and is never part of this request. The row is inserted when this command runs, in state signed_out: until the helper reports every check passed it is not an added credential (list_credentials leaves it out, no seat can be given it, no event is written), and a failed add deletes it (milestone 2 plan IN-24). The masked label is made on the Mac. A login's model is one the catalog lists, or null for the tool's own default; the server stores what the request carries and fills in nothing. The Mac app sends the catalog's `default_model` where one is recorded, the working assumption of the PRD's open decision \"How a credential's model is set\". Effort is empty for every new credential, and model is empty for API tokens (UX-7). Strength rank is what Handoff uses.",
         "properties": {
           "credential_id": {
             "type": "string",
@@ -17843,7 +17851,7 @@
           {
             "seat_id": "00000000-0000-4000-8000-000000000149",
             "seat_token": "example-seat-token",
-            "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+            "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly. Never put the token on a command line, where other accounts on this computer can read it: send the header from a file that only you can read.",
             "connection": "http"
           }
         ]
@@ -17927,7 +17935,7 @@
             "result": {
               "seat_id": "00000000-0000-4000-8000-000000000149",
               "seat_token": "example-seat-token",
-              "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+              "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly. Never put the token on a command line, where other accounts on this computer can read it: send the header from a file that only you can read.",
               "connection": "http"
             },
             "refusal": null
