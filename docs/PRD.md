@@ -1157,5 +1157,5 @@ One gate stands before the contract. The contract is not started until these are
 | Changing plans in the middle of a month | Not decided: charge the difference at once, or from the next payment. | Change plan (FR-014). |
 | Support for subscribers | Not decided. MAINTENANCE.md says no support is owed under the MIT License. | A line in MAINTENANCE.md on what a subscriber's support is and how to reach it. |
 | The service's host, its privacy notice and sales tax | Not decided. Stripe Tax can work out tax, at a fee. | The ADR of FR-024. |
-| Following the Mac's appearance | Decided: "Same as this Mac" is the default alongside Light and Dark. | Settings (FR-005). |
+| Following the Mac's appearance | Decided by the owner on 2026-11-24, in the managing agent's session: "Same as this Mac" is the default alongside Light and Dark. | Settings (FR-005). |
 | Stripe's details | To confirm in Stripe's documents when the ADR is written: that Link and Apple Pay work in subscription-mode Checkout, and that Apple Pay needs no domain set up for hosted Checkout. | Checkout (FR-009). |

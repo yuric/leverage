@@ -973,18 +973,27 @@ The interface decisions are recorded in the
 ### App round 2
 
 The [App round 2 contract](../api/contract/decisions.md#app-round-2-ux)
-records the changes. The owner approved these choices for the round.
+records the changes. The owner's approvals below are quoted from the
+managing agent's Codex session; times are UTC, and 2026-11-25 before
+07:00 UTC is still 2026-11-24 on the owner's Mac.
 
-- Turning off Deliver tasks gives back the Working task. With Work on
-  tasks still on, the agent can take reviews and jobs its role allows.
-- Both Native and Prompt seats show Create tasks, and the server
-  enforces it. Task creation is available to Prompt agents in this
-  round. The Native runner does not expose the call to provider tools.
-- The owner's Add task form keeps its "What goes out at the end" field
-  for outward actions that go through approval. On 2026-11-24 the owner
-  approved keeping the exact “What goes out at the end” label and the current
-  outward-action approval behavior.
+- With Deliver tasks off and Work on tasks on, the agent takes only the
+  reviews and jobs its role allows. Native and Prompt seats both show
+  Create tasks, and the server enforces it; task creation is available to
+  Prompt agents in this round, and the Native runner does not expose the
+  call to provider tools. These are the two defaults of the handoff. The
+  owner approved them at 00:21 UTC on 2026-11-25: "Go ahead and finish
+  Round 2 from the verified branch. Use the defaults from the handoff".
+- Turning off Deliver tasks also gives back the Working task (UX-11a).
+  That part is the managing agent's reading, not the owner's; see
+  question 17.
+- The owner's Add task form keeps its "What goes out at the end" field,
+  with that exact label, for outward actions that go through approval,
+  and the outward-action approval behavior is unchanged. Asked to keep,
+  rename or remove the field, the owner approved keeping it as it is at
+  01:51 UTC on 2026-11-25: "All good. Approved. All three. Continue".
 
+The other choices made for the owner in this round are question 17.
 Native Codex and Grok have no effort drop-down in this round. UX-15
 records the documentation checked for each tool in the contract.
 
@@ -992,7 +1001,11 @@ records the documentation checked for each tool in the contract.
 
 FR-005, FR-006 and FR-025 cover the Rules tab, the appearance controls
 under Leverage > Settings (⌘ ,), and the Login label. The owner chose
-Same as this Mac as the default. This step uses the existing local app
+Same as this Mac as the default: asked to approve starting this step
+with Light and Dark only or with Same as this Mac as the default, he
+answered "All good. Approved. All three. Continue" in the managing
+agent's Codex session at 01:51 UTC on 2026-11-25 (2026-11-24 on his Mac).
+This step uses the existing local app
 and its macOS preferences. The account menu and billing follow the
 [remaining subscription steps](PRD.md#build-order-for-subscription).
 
