@@ -134,7 +134,7 @@ An operation's `caller`:
 | `builder`, `reviewer` | A seat with that role, or a General seat (`roles.json` `acts_as`). |
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
 | `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
-| `job_holder` | The seat that claimed the job. |
+| `job_holder` | The seat that claimed the job, while the owner has not turned it off (UX-13b). |
 | `creator` | An enabled seat whose permissions include Create tasks (UX-11, UX-13c). |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |

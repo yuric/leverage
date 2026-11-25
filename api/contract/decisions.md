@@ -1058,6 +1058,8 @@ on, which the owner may reverse later; it is listed there too.
     This reading also applies with the provider rule off. Escalation does not lift it: the guard `escalates` reads the
     bar as it is (GA-1). Alternatives: let it build what it reviewed, and
     let it check its own draft.
+    UX-13a extends the check bar to the seat that added the task, and
+    makes the draft bar hold whatever the seat's role is now.
   - `[owner-later]` No provider bar beyond the provider rule's own: a task
     given back (a release, a stop, a quit app, a lease expiry) may be
     built by another General seat, also one of another provider group.
