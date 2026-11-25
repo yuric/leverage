@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { mountWorkflow } from '../marketing-page/workflow.mjs'
+
+test('the Handoff section appears before the Imaginarium', () => {
+  const page = readFileSync(new URL('../marketing-page/index.html', import.meta.url), 'utf8')
+  const demoSections = [...page.matchAll(/<section\b[^>]*\sid="(handoffs|imaginarium)"/g)]
+    .map(([, id]) => id)
+  assert.deepEqual(demoSections, ['handoffs', 'imaginarium'])
+})
 
 const fields = ['title', 'brief', 'check', 'delivery']
 

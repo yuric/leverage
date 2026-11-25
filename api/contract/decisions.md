@@ -421,6 +421,14 @@ Where two inventories chose differently, the decision names the conflict.
   project, so that a replay of the log knows it. The field is added to
   `v1` in place, as DB-51's was; a `project.created` written before it
   has no field, and readers treat that as false.
+- **DB-54** `[reading]` The log is append-only, so a `create_owner`
+  logged before DB-53 wrote the shipped rules' `rule.created` and no
+  `project.created`. The log audit behind `leverage:verify_log` reads
+  such a sign-up against `create_owner`'s row without `project.created`;
+  that workspace's project comes from `install_imaginarium_project`,
+  which the audit checks as its own command. The audit cannot tell that
+  sign-up from a new one that left the project out, so that a
+  `create_owner` written now writes both is held by its own tests.
 
 ## State machine (SM)
 

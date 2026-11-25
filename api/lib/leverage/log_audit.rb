@@ -580,7 +580,8 @@ module Leverage
     # row's contract change and the hold, staying in its state; and, where
     # the failed gate is failed_review, fail_review's rows (SM-6: a failed
     # review in full). An install can instead write only superseded-default
-    # reverts (UI-5).
+    # reverts (UI-5), and a sign-up logged before DB-53 no project.created
+    # (DB-54).
     def rows_of(name)
       @rows_of ||= {}
       @rows_of[name] ||= begin
@@ -595,6 +596,10 @@ module Leverage
       if row.fetch("command") == INSTALL
         reverted = row.fetch("conditional_events").find { |entry| entry.fetch("when") == "rule_on_superseded_default" }
         return row.merge("events" => [ reverted.fetch("event") ]) if reverted
+      end
+      # A sign-up logged before DB-53 wrote no project.created (DB-54).
+      if row.fetch("command") == "create_owner" && row.fetch("events").include?("project.created")
+        return row.merge("events" => row.fetch("events") - [ "project.created" ])
       end
       failed_gate_row(row)
     end
