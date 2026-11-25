@@ -3,7 +3,8 @@ module Leverage
     module Entries
       # change_seat (PRD L148, L258; milestone 3 plan HE-27, HE-10, HM-51):
       # only the fields the request sets change (ChangeSeatRequest), and
-      # seat.changed is written.
+      # seat.changed is written. A Prompt seat may report its own model and
+      # effort through report_model (UX-9).
       #
       # - name, model, effort, strength rank apply at once; the next run
       #   uses them. A null model or effort is "", the tool's default, and a
@@ -34,6 +35,9 @@ module Leverage
       #   pass is cancelled when its run is reported stopped (SeatRuns), not
       #   by the change; a job the seat holds as a checker or a planner is
       #   left to its run timeout.
+      # - permissions: the whole set is applied together. Turning Deliver
+      #   off releases the Working task and ends any provisional claim or
+      #   pending submit, while the seat keeps its approved actions (UX-11a).
       #
       # A request that changes no field (an empty body, or every field set
       # to what it is) completes with no event and changes nothing.
@@ -44,12 +48,49 @@ module Leverage
       # Params: id (the seat), and the ChangeSeatRequest body.
       class ChangeSeat < Entry
         CREDENTIAL_HOLDS = %w[credential_limit credential_signed_out].freeze
+        MODEL_FIELDS = %w[effort model].freeze
 
         def load(ctx)
           @params = ctx.request.params
-          @seat = Seat.find_by(id: @params["id"], workspace_id: ctx.workspace.id, removed_at: nil)
+          @report = ctx.request.caller_kind == "seat"
+          id = @report ? ctx.request.caller_id : @params["id"]
+          @seat = Seat.find_by(id: id, workspace_id: ctx.workspace.id, removed_at: nil)
           raise NotFound, "No such seat" unless @seat
 
+          if @report
+            @report_forbidden = @seat.credential_id.present? || @params.keys.sort != MODEL_FIELDS
+            return if @report_forbidden
+          else
+            load_owner_change(ctx)
+          end
+
+          @values = changes
+          validate_model
+        end
+
+        def refusals(_ctx)
+          return [ Refusal.new(code: "forbidden") ] if @report_forbidden
+
+          causes = [ state_refusal(nil) ]
+          causes << Refusal.new(code: Contract.state_machine.fetch("unlisted_pair_refusal")) if role_change_refused?
+          causes.compact
+        end
+
+        def perform(ctx)
+          changed = @values.any? { |column, value| @seat.public_send(column) != value }
+          if @report
+            apply_changes(ctx) if changed
+            @result = @values.stringify_keys
+          elsif changed
+            perform_owner_change(ctx)
+          else
+            @result = { "helper_request_id" => nil }
+          end
+        end
+
+        private
+
+        def load_owner_change(ctx)
           if @params.key?("name") && !(@params["name"].is_a?(String) && !@params["name"].empty?)
             raise Invalid, "A seat needs a name"
           end
@@ -65,30 +106,38 @@ module Leverage
           load_login(ctx) if @params.key?("credential_id")
         end
 
-        def refusals(_ctx)
-          causes = [ state_refusal(nil) ]
-          causes << Refusal.new(code: Contract.state_machine.fetch("unlisted_pair_refusal")) if role_change_refused?
-          causes.compact
-        end
+        def validate_model
+          provider = @values.fetch(:provider, @seat.provider)
+          model_fields_set = MODEL_FIELDS.any? { |field| @params.key?(field) }
+          return unless model_fields_set || provider != @seat.provider
 
-        def perform(ctx)
-          turning_off = @params["enabled"] == false && @seat.enabled
-          login_changes = @login && @login.id != @seat.credential_id
-          values = changes
-          if values.all? { |column, value| @seat.public_send(column) == value }
-            @result = { "helper_request_id" => nil }
-            return
+          if !@report && @seat.credential_id.nil?
+            raise Invalid, "An agent that connects by prompt reports its own model and effort"
           end
 
+          problem = ModelCatalog.problem(provider: provider, model: @values.fetch(:model, @seat.model),
+            effort: @values.fetch(:effort, @seat.effort), native: !@report)
+          raise Invalid, problem if problem
+        end
+
+        def perform_owner_change(ctx)
+          turning_off = @values[:enabled] == false && @seat.enabled
+          turning_deliver_off = @values[:may_deliver] == false && @seat.may_deliver
+          login_changes = @login && @login.id != @seat.credential_id
           old_role = @seat.role
-          @seat.update!(values.merge(turning_off ? { wanted_running: false } : {}))
-          changed = ctx.emit("seat.changed", subject: @seat, payload: {})
+          changed = apply_changes(ctx, **(turning_off ? { wanted_running: false } : {}))
+          if turning_deliver_off && !turning_off
+            SeatRuns.release_working_task(ctx, @seat, reason: "deliver_turned_off", cause: changed)
+          end
           request = turning_off ? turn_off(ctx, changed) : change_role(ctx, old_role, changed)
           look_again(ctx, changed) if login_changes
           @result = { "helper_request_id" => request&.id }
         end
 
-        private
+        def apply_changes(ctx, **extra)
+          @seat.update!(@values.merge(extra))
+          ctx.emit("seat.changed", subject: @seat, payload: {})
+        end
 
         def load_login(ctx)
           credential_id = @params["credential_id"]
@@ -118,6 +167,7 @@ module Leverage
           values[:strength_rank] = @params["strength_rank"] || 1 if @params.key?("strength_rank")
           values[:enabled] = @params["enabled"] if @params.key?("enabled")
           values.merge!(credential_id: @login.id, provider: @login.provider) if @login
+          values.merge!(Permissions.columns(@params.fetch("permissions"))) if @params.key?("permissions")
           values
         end
 

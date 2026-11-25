@@ -315,7 +315,7 @@ class ChangeSeatTest < ActiveSupport::TestCase
     changed, released, closed = events
     assert_equal %w[seat.changed task.released hold.closed], events.map(&:type)
     assert_equal [ task.id, changed.id, "deliver_turned_off" ], [ released.task_id, released.cause_id, released.payload.fetch("reason") ]
-    assert_equal [ hold.id, released.id ], [ closed.subject_id, closed.cause_id ]
+    assert_equal [ hold.id, released.command_id ], [ closed.subject_id, closed.command_id ]
     assert_not_nil hold.reload.closed_at
     assert_equal [ "ready", nil, nil, nil ], task.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id", "lease_due_at")
     assert_equal "cancelled", pending.reload.state

@@ -75,7 +75,7 @@ class JoinTest < ActionDispatch::IntegrationTest
 
         Leverage::Contract.registry.fetch("operations").select { |operation| operation.fetch("tag") == "agent" }.each do |operation|
           id = operation.fetch("operation_id")
-          refute_includes text, "`#{id}`" unless allowed.include?(id)
+          refute_includes text, "`#{id}`" unless entry.fetch("operations").include?(id)
         end
         assert_role_instructions(text, entry, connection)
       end

@@ -194,7 +194,7 @@ class ConnectSeatTest < ActiveSupport::TestCase
     below = @scenario.credential(provider: "codex")
     @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
 
-    outcome = assert_completed(owner_command("connect_seat", body(credential_id: own.id, model: "seat-model")))
+    outcome = assert_completed(owner_command("connect_seat", body(credential_id: own.id, model: "claude-opus-5-5")))
 
     start = HelperRequest.find_by!(seat_id: outcome.result.fetch("seat_id"), kind: "start_seat")
     assert_equal below.id, start.credential_id

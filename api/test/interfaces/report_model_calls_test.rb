@@ -90,14 +90,14 @@ class ReportModelCallsTest < ActionDispatch::IntegrationTest
     assert_response :bad_request
     assert_response_matches_contract
 
-    report(body: @values.except("effort"))
+    report(body: @values.except("effort"), check_request: false)
     assert_response :unprocessable_entity
     assert_response_matches_contract
   end
 
   private
 
-  def report(seat: @seat, token: @scenario.token_for(seat), body: @values, key: new_key)
-    call("report_model", token: token, key: key, body: body)
+  def report(seat: @seat, token: @scenario.token_for(seat), body: @values, key: new_key, check_request: true)
+    call("report_model", token: token, key: key, body: body, check_request: check_request)
   end
 end
