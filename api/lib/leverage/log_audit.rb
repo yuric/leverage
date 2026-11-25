@@ -484,7 +484,8 @@ module Leverage
 
       allowed = kept.flat_map { |row| row.fetch("events") + extra_events(row) }.to_set
       stray = (events + others).reject do |event|
-        allowed.include?(event.type) || side_types.include?(event.type) || action_override?(name, event, events)
+        allowed.include?(event.type) || side_types.include?(event.type) ||
+          action_override?(name, event, events, states[event.task_id])
       end
       problems = []
       problems << "wrote #{stray.map(&:type).uniq.join(", ")}, which no matched row allows" unless stray.empty?
@@ -553,12 +554,13 @@ module Leverage
     # An override can approve a stopped action or reenter an errored
     # action check. If reentry finds another failed gate, the stopped
     # event names that gate's finished check as its cause.
-    def action_override?(name, event, events)
+    def action_override?(name, event, events, state)
       return false unless name == "override_check"
 
       override = events.find { |candidate| candidate.type == "check.overridden" && candidate.task_id == event.task_id }
       return false unless override && override.seq < event.seq
       return event.cause_id == override.id if event.type == "action.approved"
+      return state == "finishing" && override_lease_switch?(event, override, events) if event.type == "credential.switched"
       return false unless event.type == "action.stopped" && event.actor_kind == "app"
 
       cause = Event.find_by(id: event.cause_id, workspace_id: event.workspace_id, task_id: event.task_id,
@@ -566,6 +568,25 @@ module Leverage
       cause && cause.seq < event.seq && cause.subject_id != override.subject_id &&
         cause.payload.values_at("hook", "result", "subject_kind", "subject_id") ==
           [ ACTION_HOOK, "failed", "action", event.subject_id ]
+    end
+
+    # A stopped action approved by an override uses the approval's fresh
+    # lease rules, including a switch to the credential the builder can use.
+    def override_lease_switch?(event, override, events)
+      return false unless event.actor_kind == "app" && event.actor_id.nil? && event.round == override.round
+
+      seat_id, review_id, job_id = event.payload.values_at("seat_id", "review_id", "job_id")
+      return false unless seat_id && review_id.nil? && job_id.nil?
+      already_switched = events.any? do |earlier|
+        earlier.type == "credential.switched" && earlier.cause_id == event.cause_id && earlier.seq < event.seq
+      end
+      return false if already_switched
+
+      events.any? do |approval|
+        approval.type == "action.approved" && approval.task_id == event.task_id && approval.round == event.round &&
+          approval.id == event.cause_id && approval.cause_id == override.id &&
+          override.seq < approval.seq && approval.seq < event.seq && approval.payload[LEASE_FIELD] == seat_id
+      end
     end
 
     def cross_task_side_event?(event, events)

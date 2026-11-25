@@ -21,6 +21,37 @@ class LogAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(walk.workspace_id)
   end
 
+  test "a check override can switch credentials when its approval grants a fresh lease" do
+    walk = Walk.new(seed: 573_846_028, steps: 120, credentials: true).run
+    command = Command.find_by!(workspace_id: walk.workspace_id, key: "walk-573846028-121")
+    assert_equal "override_check", command.command
+
+    written = Event.where(workspace_id: walk.workspace_id, command_id: command.key).order(:seq).to_a
+    override = written.find { |event| event.type == "check.overridden" }
+    approval = written.find { |event| event.type == "action.approved" }
+    switch = written.find { |event| event.type == "credential.switched" }
+    assert override, "the walk must override the check"
+    assert approval, "the override must approve the action"
+    assert switch, "the approval must switch the builder's credential"
+    assert_equal override.id, approval.cause_id
+    assert_equal approval.id, switch.cause_id
+    assert approval.payload["lease_seat_id"], "the approval must grant a fresh lease"
+    assert_equal approval.payload["lease_seat_id"], switch.payload["seat_id"]
+    assert_empty Leverage::LogAudit.call(walk.workspace_id)
+
+    unexpected_switch = [ "wrote credential.switched, which no matched row allows" ]
+    finishing = { switch.task_id => "finishing" }
+    forged = switch.dup
+    forged.payload = switch.payload.merge("seat_id" => SecureRandom.uuid)
+    forged_events = written.map { |event| event == switch ? forged : event }
+    assert_equal unexpected_switch, Leverage::LogAudit.match("override_check", forged_events, finishing)
+    assert_equal unexpected_switch, Leverage::LogAudit.match("override_check", written, { switch.task_id => "working" })
+
+    duplicate = switch.dup
+    duplicate.seq = written.last.seq + 1
+    assert_equal unexpected_switch, Leverage::LogAudit.match("override_check", written + [ duplicate ], finishing)
+  end
+
   test "a cost report that pauses a project can withdraw another task's provisional claim" do
     walk = Walk.new(seed: 383_196_552, steps: 120, credentials: true).run
     key = "walk-383196552-121"
