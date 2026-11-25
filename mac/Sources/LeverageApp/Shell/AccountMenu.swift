@@ -43,6 +43,9 @@ struct AccountMenu: View {
         .accessibilityLabel(ShellCopy.accountMenu.text)
         .accessibilityValue(Text(verbatim: context.ownerEmail ?? ""))
         .accessibilityAddTraits(settingsAreOpen ? .isSelected : [])
+        .onChange(of: context.ownerEmail) { _, email in
+            anchor.updateTitle(email ?? ShellCopy.account.text)
+        }
     }
 
     private var avatar: some View {
@@ -87,6 +90,7 @@ private final class AccountMenuAnchor: NSView {
     enum Choice { case settings, signOut }
 
     private var choice: Choice?
+    private weak var header: NSMenuItem?
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -96,7 +100,10 @@ private final class AccountMenuAnchor: NSView {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.minimumWidth = bounds.width
-        menu.addItem(.sectionHeader(title: title))
+        let heading = NSMenuItem.sectionHeader(title: title)
+        header = heading
+        menu.addItem(heading)
+        defer { header = nil }
 
         let subscription = NSMenuItem(title: ShellCopy.subscription.text, action: nil, keyEquivalent: "")
         subscription.image = NSImage(systemSymbolName: "creditcard", accessibilityDescription: nil)
@@ -117,6 +124,10 @@ private final class AccountMenuAnchor: NSView {
         let top = NSPoint(x: bounds.minX, y: bounds.maxY + menu.size.height)
         _ = menu.popUp(positioning: nil, at: top, in: self)
         return choice
+    }
+
+    func updateTitle(_ title: String) {
+        header?.title = title
     }
 
     @objc private func chooseSettings() { choice = .settings }
