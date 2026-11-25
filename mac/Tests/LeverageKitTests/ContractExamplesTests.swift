@@ -27,7 +27,7 @@ enum ContractDocument {
         }
     }
 
-    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals + credentials + roundTwo
+    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals + credentials + roundTwo + subscription
 
     // Milestone 2 (Core loop).
     static let coreLoop: [String] = [
@@ -77,6 +77,7 @@ enum ContractDocument {
     ]
 
     static let roundTwo = ["create_task", "report_model"]
+    static let subscription = ["get_owner_identity"]
 
     /// The registry entry of one operation.
     static func operation(_ id: String) -> JSONValue? {
@@ -151,6 +152,7 @@ struct ContractExamplesTests {
         "ReportedModelCompleted": decodes(CommandOutcome<ReportedModel>.self),
         "AddCredentialCompleted": decodes(CommandOutcome<AddCredentialResult>.self),
         "OwnerSessionCompleted": decodes(CommandOutcome<OwnerSessionAnswer>.self),
+        "OwnerSessionIdentity": decodes(OwnerSessionIdentity.self),
         "HelperTokenIssuedCompleted": decodes(CommandOutcome<HelperTokenAnswer>.self),
         "SeatConnectedCompleted": decodes(CommandOutcome<SeatConnected>.self),
         "SeatTokenPickupCompleted": decodes(CommandOutcome<SeatTokenPickupAnswer>.self),
@@ -183,7 +185,7 @@ struct ContractExamplesTests {
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 110)
+        #expect(ContractDocument.served.count == 111)
         #expect(ContractDocument.handoff.first == "report_limit")
         #expect(ContractDocument.handoff.last == "change_seat")
         #expect(ContractDocument.ruleChecks.first == "claim_next_job")
@@ -191,6 +193,19 @@ struct ContractExamplesTests {
             #expect(ContractDocument.operation(id) != nil, "\(id) is not in registry.json")
             #expect(ContractDocument.openAPIOperation(id) != nil, "\(id) is not in openapi.json")
         }
+    }
+
+    @Test("the owner identity decodes its email and sequence and keeps the email out of descriptions and mirrors")
+    func privateOwnerIdentity() throws {
+        let example = try #require(ContractDocument.examples(of: "OwnerSessionIdentity").first)
+        let email = try #require(example["email_address"]?.stringValue)
+        let identity = try LeverageJSON.decoder().decode(OwnerSessionIdentity.self, from: ContractDocument.data(example))
+
+        #expect(identity.emailAddress == email)
+        #expect(example["as_of_seq"] == .number(Double(identity.asOfSeq)))
+        #expect(!String(describing: identity).contains(email))
+        #expect(!String(reflecting: identity).contains(email))
+        #expect(!Mirror(reflecting: identity).children.contains { $0.label == "emailAddress" })
     }
 
     @Test("every response example of every served operation decodes into its model")

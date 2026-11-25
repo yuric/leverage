@@ -632,8 +632,10 @@ adds the MCP server.
   Handoff tab with a reorderable list and its eight fixed rules, and
   the Rules tab with Rules and Workspace settings, Projects, Activity and
   Decided for you. The app's Settings window keeps its appearance choice
-  in macOS preferences. The task page includes questions, outward actions
-  and task settings.
+  in macOS preferences. The sidebar account menu reads the sign-in email
+  for the current owner session, opens the same native Settings window
+  and calls the same sign-out action as the Leverage menu. The task page
+  includes questions, outward actions and task settings.
   On a new installation the signed-in window opens on the setup assistant,
   and after that is left the task board carries the setup checklist with
   its spotlight ([onboarding/PRD.md](onboarding/PRD.md)). `SetupModel`

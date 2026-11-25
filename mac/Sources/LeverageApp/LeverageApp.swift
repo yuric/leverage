@@ -5,13 +5,14 @@ import SwiftUI
 struct LeverageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @AppStorage(AppAppearance.preferenceKey) private var appearance = AppAppearance.system
+    @State private var settingsAreOpen = false
     @State private var model = AppModel(
         runtime: Live.runtime(),
         makeOwnerAPI: { url, token in OwnerClient(baseURL: url, sessionToken: token) })
 
     var body: some Scene {
         Window(ShellCopy.appName.text, id: Self.windowID) {
-            WindowRoot(model: model, delegate: delegate)
+            WindowRoot(model: model, delegate: delegate, settingsAreOpen: settingsAreOpen)
                 .preferredColorScheme(appearance.colorScheme)
         }
         .windowResizability(.contentMinSize)
@@ -32,6 +33,7 @@ struct LeverageApp: App {
         Settings {
             AppearanceSettingsView(selection: $appearance)
                 .preferredColorScheme(appearance.colorScheme)
+                .background { SettingsWindowPresence(isOpen: $settingsAreOpen).frame(width: 0, height: 0) }
         }
     }
 
@@ -43,10 +45,11 @@ struct LeverageApp: App {
 private struct WindowRoot: View {
     let model: AppModel
     let delegate: AppDelegate
+    let settingsAreOpen: Bool
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        RootView(model: model)
+        RootView(model: model, settingsAreOpen: settingsAreOpen)
             .task { await model.launch() }
             .onAppear {
                 delegate.openMainWindow = { openWindow(id: LeverageApp.windowID) }

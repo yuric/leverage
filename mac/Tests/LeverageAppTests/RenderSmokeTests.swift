@@ -100,7 +100,7 @@ struct RenderSmokeTests {
         let (_, context) = await readyModel()
         for place in [Navigator.Place.board, .needsYou, .agents, .credentials, .handoff, .rules] {
             context.navigator.show(place)
-            #expect(drawsSomething(render(SidePane(context: context))), "\(place)")
+            #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: false, signOut: {}))), "\(place)")
             #expect(drawsSomething(render(Toolbar(context: context), height: 80)), "\(place)")
         }
         context.navigator.open(task: UUID())
@@ -145,7 +145,7 @@ struct RenderSmokeTests {
         #expect(context.inbox.openCount == 0)
         #expect(SidePane.badge(for: 0) == nil)
         #expect(SidePane.badge(for: 3) == "3")
-        #expect(drawsSomething(render(SidePane(context: context))))
+        #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: false, signOut: {}))))
     }
 
     @Test("the design tokens carry the mockup's numbers")

@@ -65,6 +65,8 @@ public final class FakeHelper: HelperSupervising, @unchecked Sendable {
     public let starts = Locked<[URL]>([])
     public let tryAgainCount = Locked(0)
     public let stopCount = Locked(0)
+    /// The next stop waits for this stream to finish.
+    public let nextStopGate = Locked<AsyncStream<Void>?>(nil)
     /// The helper messages sent so far, including any whose send failed.
     public let messages = Locked<[LocalHelperMessage]>([])
     /// When set, every send throws this error.
@@ -88,6 +90,11 @@ public final class FakeHelper: HelperSupervising, @unchecked Sendable {
 
     public func stop() async {
         stopCount.update { $0 += 1 }
+        let gate = nextStopGate.update { gate in
+            defer { gate = nil }
+            return gate
+        }
+        if let gate { for await _ in gate {} }
         current.value = .stopped
     }
 

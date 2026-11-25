@@ -140,6 +140,7 @@ struct ClientPathsTests {
         },
         "sign_in_owner": ClientCall { _ = try await $0.owner.signIn(F.signIn, key: F.key("sign_in_owner")) },
         "sign_out_owner": ClientCall { _ = try await $0.owner.signOut(key: F.key("sign_out_owner")) },
+        "get_owner_identity": ClientCall { _ = try await $0.owner.ownerIdentity() },
         "get_owner_command": ClientCall(path: ["key": "key-get_owner_command"]) {
             _ = try await $0.owner.command(key: F.key("get_owner_command"))
         },

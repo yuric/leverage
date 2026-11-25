@@ -92,4 +92,21 @@ struct SessionGuardTests {
         try await call(guarded)
         #expect(fake.calls.count == 1 && told.value == 0, "\(name)")
     }
+
+    @Test("the session guard returns the owner identity and ends the session if its read answers 401")
+    func ownerIdentity() async throws {
+        let fake = FakeOwnerAPI()
+        let told = Locked(0)
+        let guarded = SessionGuard(base: fake, onUnauthenticated: { told.update { $0 += 1 } })
+
+        let identity = try await guarded.ownerIdentity()
+        #expect(identity == OwnerSessionIdentity(emailAddress: "owner@example.com", asOfSeq: 0))
+        #expect(told.value == 0)
+
+        let error = TransportError(code: .unauthenticated, message: "made up")
+        fake.script { $0.ownerIdentity = { throw error } }
+        await #expect(throws: error) { _ = try await guarded.ownerIdentity() }
+        #expect(told.value == 1)
+        #expect(fake.calls == [FakeCall(.getOwnerIdentity), FakeCall(.getOwnerIdentity)])
+    }
 }

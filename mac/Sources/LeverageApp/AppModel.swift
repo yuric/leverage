@@ -39,7 +39,9 @@ final class AppModel {
     @ObservationIgnored private let log = Log(component: "app")
     @ObservationIgnored private var apiURL: URL?
     @ObservationIgnored private var rawOwner: (any OwnerAPI)?
+    @ObservationIgnored private var activeSessionGeneration: UUID?
     @ObservationIgnored private var helperStart: Task<Void, Never>?
+    @ObservationIgnored private var helperStop: Task<Void, Never>?
     @ObservationIgnored private var didLaunch = false
     @ObservationIgnored private var isQuitting = false
 
@@ -157,16 +159,24 @@ final class AppModel {
 
     private func enterReady(url: URL, token: String) {
         let raw = makeOwnerAPI(url, token)
-        let guarded = SessionGuard(base: raw) { [weak self] in self?.sessionEnded() }
+        let generation = UUID()
+        let guarded = SessionGuard(base: raw) { [weak self] in
+            self?.sessionEnded(generation: generation)
+        }
         let feed = EventFeed(owner: guarded)
         let health = HealthLineModel(owner: guarded, helper: runtime.helper, server: runtime.server)
         rawOwner = raw
+        activeSessionGeneration = generation
         screens = ScreenContext(owner: guarded, feed: feed, health: health, runtime: runtime)
         signIn = nil
         phase = .ready
         // The helper starts after the owner signs in, and never blocks the window (PK-4).
+        guard !isQuitting else { return }
+        let stopping = helperStop
+        helperStop = nil
         let runtime = runtime
         helperStart = Task {
+            await stopping?.value
             _ = await runtime.helper.start(apiBaseURL: url, issuer: OwnerHelperTokenIssuer(owner: guarded))
         }
     }
@@ -174,27 +184,37 @@ final class AppModel {
     /// Sign out in the app menu (MA-6): ends the session on the server when
     /// it can be reached, and here either way.
     func signOut() async {
-        guard phase == .ready, let raw = rawOwner else { return }
+        guard phase == .ready, let raw = rawOwner, let generation = activeSessionGeneration else { return }
         _ = try? await raw.signOut(key: IdempotencyKey())
-        sessionEnded()
+        sessionEnded(generation: generation)
     }
 
     /// The session is over, by Sign out or by a 401 from any call: forget it,
     /// stop what ran for it and show Sign in. Does nothing twice.
-    private func sessionEnded() {
-        guard phase == .ready, let url = apiURL else { return }
+    private func sessionEnded(generation: UUID) {
+        guard phase == .ready, activeSessionGeneration == generation, let url = apiURL else { return }
+        activeSessionGeneration = nil
         screens?.feed.stop()
         screens = nil
         rawOwner = nil
         try? runtime.sessions.clear()
+        stopHelper()
+        beginSignIn(mode: .signIn, api: makeOwnerAPI(url, nil), url: url)
+    }
+
+    /// A replacement session waits for this stop, as does a concurrent quit.
+    @discardableResult
+    private func stopHelper() -> Task<Void, Never> {
+        if let helperStop { return helperStop }
         let starting = helperStart
         helperStart = nil
         let runtime = runtime
-        Task {
+        let stopping = Task {
             await starting?.value
             await runtime.helper.stop()
         }
-        beginSignIn(mode: .signIn, api: makeOwnerAPI(url, nil), url: url)
+        helperStop = stopping
+        return stopping
     }
 
     // MARK: quitting
@@ -202,10 +222,8 @@ final class AppModel {
     /// Before the app quits: the events tail ends and the helper is asked to
     /// stop, which stops the runs (PK-8). The owner stays signed in.
     func prepareToQuit() async {
-        guard !isQuitting else { return }
         isQuitting = true
         screens?.feed.stop()
-        await helperStart?.value
-        await runtime.helper.stop()
+        await stopHelper().value
     }
 }

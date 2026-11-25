@@ -17,6 +17,8 @@ public protocol OwnerAPI: Sendable {
     func signIn(_ request: SignInRequest, key: IdempotencyKey) async throws -> CommandOutcome<OwnerSessionAnswer>
     /// `sign_out_owner`: ends this session.
     func signOut(key: IdempotencyKey) async throws -> PlainOutcome
+    /// `get_owner_identity`: the signed-in owner's identity.
+    func ownerIdentity() async throws -> OwnerSessionIdentity
     /// `get_owner_command`: a command's outcome by its key.
     func command(key: IdempotencyKey) async throws -> PlainOutcome
 

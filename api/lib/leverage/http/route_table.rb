@@ -30,6 +30,7 @@ module Leverage
         # Owner.
         "get_setup_state" => "v1/owner/setup#show",
         "create_owner" => "v1/owner/setup#create",
+        "get_owner_identity" => "v1/owner/sessions#show",
         "sign_in_owner" => "v1/owner/sessions#create",
         "sign_out_owner" => "v1/owner/sessions#sign_out",
         "get_owner_command" => "v1/owner/commands#show",

@@ -838,6 +838,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
     case getHealth = "get_health"
     case getSetupState = "get_setup_state"
     case createOwner = "create_owner"
+    case getOwnerIdentity = "get_owner_identity"
     case signInOwner = "sign_in_owner"
     case signOutOwner = "sign_out_owner"
     case getOwnerCommand = "get_owner_command"
@@ -952,6 +953,7 @@ public enum ContractOperation: String, CaseIterable, Sendable {
         case .getHealth: return (.get, "/v1/health", .`public`, .infrastructure)
         case .getSetupState: return (.get, "/v1/owner/setup", .`public`, .owner)
         case .createOwner: return (.post, "/v1/owner/setup", .`public`, .owner)
+        case .getOwnerIdentity: return (.get, "/v1/owner/session", .owner, .owner)
         case .signInOwner: return (.post, "/v1/owner/session", .owner, .owner)
         case .signOutOwner: return (.post, "/v1/owner/session/sign-out", .owner, .owner)
         case .getOwnerCommand: return (.get, "/v1/owner/commands/{key}", .owner, .owner)

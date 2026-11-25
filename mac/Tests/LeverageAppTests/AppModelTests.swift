@@ -349,6 +349,54 @@ struct AppModelSessionTests {
         #expect(feed?.connection == .idle)
     }
 
+    @Test("a replacement session starts its helper after the signed-out session finishes stopping")
+    func replacementHelperWaitsForSignOut() async throws {
+        let (rig, model) = await signedInRig()
+        let helper = rig.runtime.fakeHelper
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        helper.nextStopGate.value = gate
+
+        await model.signOut()
+        try #require(await ShellFixtures.eventually { helper.stopCount.value == 1 })
+        let signIn = try #require(model.signIn)
+        signIn.email = ShellFixtures.madeUpEmail
+        signIn.password = ShellFixtures.madeUpPassword
+        await signIn.submit()
+        #expect(model.isSignedIn)
+        #expect(await !ShellFixtures.eventually(timeout: .milliseconds(100)) { helper.starts.value.count > 1 })
+
+        release.finish()
+        try #require(await ShellFixtures.eventually { helper.starts.value.count == 2 && helper.current.value == .running })
+        await model.prepareToQuit()
+        #expect(helper.stopCount.value == 2)
+        #expect(helper.current.value == .stopped)
+    }
+
+    @Test("quitting while sign-out is stopping the helper waits for that stop")
+    func quitDuringSignOut() async throws {
+        let (rig, model) = await signedInRig()
+        let helper = rig.runtime.fakeHelper
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        helper.nextStopGate.value = gate
+
+        await model.signOut()
+        try #require(await ShellFixtures.eventually { helper.stopCount.value == 1 })
+        let quitFinished = Locked(false)
+        let quit = Task {
+            await model.prepareToQuit()
+            quitFinished.value = true
+        }
+        #expect(await !ShellFixtures.eventually(timeout: .milliseconds(100)) {
+            quitFinished.value || helper.stopCount.value > 1
+        })
+        release.finish()
+        await quit.value
+        #expect(helper.stopCount.value == 1)
+        #expect(helper.current.value == .stopped)
+    }
+
     @Test("Sign out signs out here even when the server cannot be asked")
     func signOutOffline() async {
         let (rig, model) = await signedInRig()
