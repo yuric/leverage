@@ -12,7 +12,7 @@ supported model before its milestone is done (PRD, Shipped rules).
 | `bar.json` | The bar, supported models, categories, frozen case hashes and run limits |
 | `results/<provider>.json`, `results/general/<provider>.json` | The recorded results for Orchestrator and General mode, respectively |
 | `history/<case-hash>/<mode>/<provider>.json` | Results from earlier cases |
-| `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls, hashes and changes between runs |
+| `runs.json`, `runs-general.json` | The real-run ledger for each mode, with dates, tool calls and hashes, and in `changes` the reason for a change made after a miss (CI does not read `changes`) |
 | `RESULTS.md`, `RESULTS-general.md` | The report for each mode, written by `scripts/eval_score.py report` |
 
 A case's `label` is the known right answer, `passed` or `failed`. Its
@@ -117,7 +117,10 @@ results stand for the inputs they evaluated.
 
 CI never calls a provider. `scripts/check_evals.py` checks the cases'
 shape and counts, the required Orchestrator results and any General
-results, the two registry lists, and the suite's budget. It rescans cases
+results, that each recorded run matches its ledger's latest settled run
+(date, tool runs and hashes) and that every ledger entry holds an
+instruction hash and the current or a superseded case set, the two
+registry lists, and the suite's budget. It rescans cases
 and results for email or token shapes, refuses a not-run reason that names
 account or billing state (say what the tool did, not why an account
 refused), and scores each recorded run again.

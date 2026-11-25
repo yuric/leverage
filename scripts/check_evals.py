@@ -2,8 +2,10 @@
 """CI's check of the rule eval suites. It never calls a provider.
 
 It checks bar.json, the cases and their recorded results against the
-shipped wording and the frozen case hashes, the run history against its
-ceilings, and the registry against passing results in every suite. The
+shipped wording and the frozen case hashes, each recorded run against the
+latest settled run of its ledger, the run history against its ceilings,
+and the registry against passing results in every suite. It checks that
+the files agree, not that a real run made them. The
 approval suite requires a held-out result after any change to the wording
 used in its primary runs. A recorded miss is printed as "MISS: ...".
 
@@ -462,14 +464,17 @@ class Check:
         elif mode == "orchestrator" and role is not None:
             if result.get("role_file_sha256", LEGACY_ROLE_SHA256) != role:
                 bad("was recorded against another role file; run the suite again")
-        if bar["kind"] == "decision":
-            if result["status"] == "run":
-                matching = [entry for entry in runs if entry.get("provider") == provider
-                            and entry.get("held_out", False) is held and entry.get("reserved") is False]
-                run_keys = ("date", "tool_runs", "instruction_sha256", "role_file_sha256", "cases_sha256")
-                if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
-                    bad("the result does not match the latest settled run")
-                self.result_tool_runs(result, bar, bad)
+        if result["status"] == "run":
+            # Both suites: a recorded run is the ledger's latest settled run
+            # of that model, and its tool runs are its cases'.
+            matching = [entry for entry in runs if entry.get("provider") == provider
+                        and entry.get("held_out", False) is held and entry.get("reserved") is False]
+            run_keys = ("date", "tool_runs", "instruction_sha256", "cases_sha256")
+            if not legacy:
+                run_keys += ("role_file_sha256",)
+            if not matching or any(matching[-1].get(key) != result.get(key) for key in run_keys):
+                bad("the result does not match the latest settled run")
+            self.result_tool_runs(result, bar, bad)
         try:
             met, scores = eval_score.rescore(result, cases, bar)
         except (eval_score.Refused, AttributeError, TypeError, KeyError) as refusal:
@@ -560,9 +565,6 @@ class Check:
             if not valid_role_hash(entry, mode, legacy):
                 self.problem("runs", f"{prefix}: a run has an invalid or missing role_file_sha256 for {mode} mode")
                 continue
-            if not decision:
-                valid_entries.append(entry)
-                continue
             hashes = eval_score.wording_hashes(entry)
             # Earlier main runs keep their original case hash and still use budget.
             # Results are checked separately against the current cases.
@@ -574,6 +576,9 @@ class Check:
                 continue
             if type(entry.get("reserved")) is not bool:
                 self.problem("runs", f"{prefix}: a run has an invalid reserved value")
+                continue
+            if not decision:
+                valid_entries.append(entry)
                 continue
             if held:
                 held_started = True

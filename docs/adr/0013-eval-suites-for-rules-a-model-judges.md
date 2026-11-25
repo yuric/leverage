@@ -71,6 +71,10 @@ decisions are the milestone's plan RV-1 to RV-7.
 
 - A change to the instruction or a case fails CI until the suite is run
   again, by the maintainer.
+- CI checks that each result agrees with its ledger's latest settled run,
+  the cases and the wording, not that a real run made it. Only the
+  maintainer's eval run changes the results, the ledgers and the registry
+  lists, and every pull request is the owner's to read.
 - The suite covers the shipped wording, each tool's default model at the
   version on the Mac, and one run per case. An edited instruction, a model
   the owner chooses, the model of a credential a job is handed to, another

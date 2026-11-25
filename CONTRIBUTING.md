@@ -54,6 +54,14 @@ Every change to `main` goes through a pull request, including the
 maintainer's. A maintainer will review yours when time allows. Expect
 questions and requested changes; that is the process working, not a rejection.
 
+Eval results come only from a real eval run, which only the maintainer (or
+the managing agent of a delegated run) makes: a pull request from anyone
+else does not change `evals/**/results`, the `runs*.json` ledgers, the
+`RESULTS*.md` reports or the registry lists `orchestrator_tested_providers`
+and `general_tested_providers`. CI checks that those files agree with each
+other, the cases and the shipped wording; it cannot tell whether a real
+run made them.
+
 ### Automated checks
 
 Each pull request runs these checks, and all of them must pass before it can
