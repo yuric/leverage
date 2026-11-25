@@ -55,7 +55,7 @@ the run. The run ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, and Subscription step 1 |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, and Subscription steps 1 and 2 |
 | **Local deployment record** | The owner's Mac was verified at `a2c63b6` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. Earlier verified deployments include `2573be4` and `300db09`. |
 | **Next** | Settle the [subscription decisions](PRD.md#open-decisions) before building the billing service. |
 
@@ -73,10 +73,11 @@ the run. The run ends when the build is done or the owner stops it.
 - Approval secret scan self-test fix. [#38](https://github.com/yuric/leverage/pull/38)
 - Approval field decision and deployment record. [#39](https://github.com/yuric/leverage/pull/39)
 - Subscription step 1: Rules, appearance settings and Login copy. [#40](https://github.com/yuric/leverage/pull/40)
+- Subscription step 2: account row and menu. [#41](https://github.com/yuric/leverage/pull/41)
 
 ### In flight
 
-- Subscription step 2 is on `feat/subscription-account-menu`.
+None.
 
 ### General role and landing prompt on `main`
 
