@@ -286,6 +286,87 @@ class TransportErrorsTest < ActionDispatch::IntegrationTest
     assert_not_includes io.string, "made-up@example.test"
   end
 
+  # A request body has a size limit (BodySizeLimit, lib/middleware): the
+  # contract's length limits bound the fields that have one, and nothing
+  # else bounded what the server reads into memory and parses, on the two
+  # calls that need no token as on the rest. The sign-in below is valid
+  # JSON that fits its schema, so without the limit it would reach the
+  # controller and answer 401.
+  def sign_in_body(bytes)
+    body = { email_address: "made-up@example.test", password: "" }
+    body[:password] = "p" * (bytes - body.to_json.bytesize)
+    body.to_json
+  end
+
+  test "a body one byte over the size limit is 400 malformed before any controller; one at the limit passes" do
+    limit = BodySizeLimit::LIMIT
+    head = { "Content-Type" => "application/json", "Idempotency-Key" => "key-#{SecureRandom.hex(6)}" }
+
+    post "/v1/owner/session", params: sign_in_body(limit + 1), headers: head
+    assert_transport_error :bad_request, "malformed"
+    assert_equal "A request body is at most #{limit} bytes", response.parsed_body.dig("error", "message")
+
+    post "/v1/owner/session", params: sign_in_body(limit), headers: head
+    assert_transport_error :unauthorized, "unauthenticated"
+  end
+
+  # The answer comes from the stated length alone, whatever the method
+  # and path: the body is not read.
+  class UnreadableBody
+    def read(*) = raise("the body was read")
+    alias_method :gets, :read
+    alias_method :each, :read
+    def rewind = 0
+    def close = nil
+  end
+
+  def rack_call(method, path, overrides)
+    env = Rack::MockRequest.env_for(path, method: method, "CONTENT_TYPE" => "application/json",
+      "HTTP_HOST" => "127.0.0.1", "HTTP_IDEMPOTENCY_KEY" => "key-#{SecureRandom.hex(6)}").merge(overrides)
+    env.delete("CONTENT_LENGTH") unless overrides.key?("CONTENT_LENGTH")
+    status, headers, answer = Rails.application.call(env)
+    text = +""
+    answer.each { |part| text << part }
+    answer.close if answer.respond_to?(:close)
+    [ status, headers, JSON.parse(text) ]
+  end
+
+  test "a body whose stated length is over the limit is refused unread, on any path and method" do
+    over = { "CONTENT_LENGTH" => (BodySizeLimit::LIMIT + 1).to_s, "rack.input" => UnreadableBody.new }
+    [ [ "POST", "/v1/owner/setup" ], [ "POST", "//v1/owner/session" ], [ "POST", "/v1/tasks" ], [ "GET", "/v1/health" ],
+      [ "PUT", "/" ] ].each do |method, path|
+      status, headers, body = rack_call(method, path, over)
+
+      assert_equal 400, status, "#{method} #{path}"
+      assert_equal "malformed", body.dig("error", "code"), "#{method} #{path}"
+      assert_matches_component("TransportError", body)
+      assert_match %r{\Aapplication/json}, headers["content-type"]
+    end
+  end
+
+  # Puma decodes a chunked body and states its length before the
+  # application runs. A body that still arrives without one cannot be
+  # measured, so it is refused and not read.
+  test "a body sent in chunks with no stated length is 400 malformed and not read" do
+    status, _, body = rack_call("POST", "/v1/owner/session",
+      { "HTTP_TRANSFER_ENCODING" => "chunked", "rack.input" => UnreadableBody.new })
+
+    assert_equal 400, status
+    assert_equal [ "malformed", "A request body must state its length" ], body.fetch("error").values_at("code", "message")
+  end
+
+  test "the size limit leaves room for the largest body the contract's length limits allow" do
+    schema = Leverage::Contract.openapi.dig("components", "schemas", "AddTaskRequest")
+    text = schema.fetch("properties").values.sum { |property| property["maxLength"].to_i }
+    criteria = schema.dig("properties", "criteria", "maxItems") *
+      Leverage::Contract.openapi.dig("components", "schemas", "CriterionInput", "properties", "text", "maxLength")
+    actions = schema.dig("properties", "actions", "maxItems") *
+      Leverage::Contract.openapi.dig("components", "schemas", "ActionInput", "properties", "description", "maxLength")
+
+    # Four bytes for a character is UTF-8's most.
+    assert_operator (text + criteria + actions) * 4, :<, BodySizeLimit::LIMIT / 2
+  end
+
   test "a GET with no body is answered whatever its media type" do
     get "/v1/health", headers: { "Content-Type" => "application/x-www-form-urlencoded" }
     assert_response :ok

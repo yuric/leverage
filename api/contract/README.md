@@ -623,7 +623,8 @@ check result. What it added and changed, each from the milestone 4 plan
   same reason: `AskQuestionRequest` (text and assumption, 4000 each),
   `RequestAccessRequest` (2000), `AnswerQuestionRequest` (4000),
   `CreateProjectRequest` (name 300, goal 4000) and `EditBriefRequest`
-  (100 entries of 4000). `LandingPrompt.check_interval_minutes` is
+  (100 entries of 4000). A request body over 4 MiB is `400 malformed`
+  before it is read. `LandingPrompt.check_interval_minutes` is
   20, or 1 for an orchestrator, which counts as offline 90 seconds after
   its last poll (L401), and for a planner, whose presence is not read: a
   draft it does not claim or finish in time is queued once more, then

@@ -7671,7 +7671,7 @@
     },
     "responses": {
       "BadRequest": {
-        "description": "400 `malformed`: the request could not be parsed.",
+        "description": "400 `malformed`: the request could not be parsed, or its body is over 4 MiB (4194304 bytes) or is not sent as `application/json`.",
         "content": {
           "application/json": {
             "schema": {
