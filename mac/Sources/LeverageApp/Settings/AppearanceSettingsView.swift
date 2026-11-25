@@ -83,6 +83,7 @@ struct AppearanceSettingsView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(appearance.label.text)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
