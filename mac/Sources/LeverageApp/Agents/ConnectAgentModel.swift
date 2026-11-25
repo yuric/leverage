@@ -288,6 +288,11 @@ final class ConnectAgentModel {
         }
     }
 
+    /// Done waits for the one-time landing prompt: closing while it loads
+    /// would drop the only answer that carries the seat's token. A failed
+    /// prompt may still be closed.
+    var canFinish: Bool { prompt?.state != .loading }
+
     /// Closing the sheet drops the prompt and its token.
     func finish() {
         finished = true

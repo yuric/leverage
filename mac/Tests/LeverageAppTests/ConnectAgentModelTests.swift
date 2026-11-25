@@ -437,6 +437,51 @@ struct ConnectAgentModelTests {
         #expect(model.prompt?.state == .failed(ShellCopy.somethingWentWrong.text))
     }
 
+    @Test("Done waits while the landing prompt is loading: closing then would drop the only answer with the token")
+    func doneWaitsForPrompt() async throws {
+        let owner = owner()
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        owner.script {
+            $0.issueLandingPrompt = { seatID, connection, key in
+                for await _ in gate {}
+                return Fixtures.issuedPrompt(seatID, connection: connection, key: key)
+            }
+        }
+        let model = makeModel(owner)
+        model.mode = .connectsOnItsOwn
+        model.name = "Independent builder"
+        #expect(model.canFinish)
+        let connecting = Task { await model.connect() }
+        try #require(await ShellFixtures.eventually { model.prompt?.state == .loading })
+        #expect(model.phase == .shown)
+        #expect(!model.canFinish)
+        release.finish()
+        await connecting.value
+        #expect(model.prompt?.state == .ready(Fixtures.landingText))
+        #expect(model.canFinish)
+    }
+
+    @Test("Done stays open after a failed landing prompt and for an agent the app runs", arguments: [true, false])
+    func doneAfterFailureOrLogin(prompt: Bool) async {
+        let owner = owner()
+        owner.script {
+            $0.issueLandingPrompt = { seatID, _, key in Fixtures.issuedPrompt(seatID, connection: .http, key: key) }
+        }
+        let model = makeModel(owner)
+        if prompt {
+            model.mode = .connectsOnItsOwn
+            model.connection = .mcp
+        } else {
+            await model.load()
+        }
+        model.name = "Builder one"
+        await model.connect()
+        #expect(model.phase == (prompt ? .shown : .done))
+        if prompt { #expect(model.prompt?.state == .failed(ShellCopy.somethingWentWrong.text)) }
+        #expect(model.canFinish)
+    }
+
     // MARK: a seat the app runs
 
     @Test("connecting on a login sends role, name, the login and its provider; model and effort are null when empty")

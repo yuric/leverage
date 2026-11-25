@@ -72,6 +72,7 @@ struct ConnectAgentForm: View {
         .padding(Tokens.Spacing.sheet)
         .frame(width: 480, height: 640)
         .background(Tokens.Palette.sheet)
+        .interactiveDismissDisabled(!model.canFinish)
         .task(id: loginReadAttempt) { await model.load() }
     }
 
@@ -227,6 +228,7 @@ struct ConnectAgentForm: View {
                 Button(AgentsCopy.done.text, action: cancel)
                     .buttonStyle(PrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
+                    .disabled(!model.canFinish)
             }
         }
     }
