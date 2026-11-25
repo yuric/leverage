@@ -41,7 +41,18 @@ notification settings. Native Connect guides the owner to Add credential
 if there are no logins and offers Try again if the login read fails.
 Native Connect and Change use the shared catalog for model and supported
 effort choices.
-Settings groups rules by checker.
+The Rules tab groups rules by checker and holds the workspace settings.
+The Settings window, opened from the Leverage menu (⌘ ,) or the account
+menu, sets the appearance: Same as this Mac, Light or Dark. An account
+row at the foot of the side pane shows the signed-in owner's email and
+opens a menu with Settings and Sign out; its Subscription entry is
+disabled, and no subscription service is connected. Every workspace has an
+Imaginarium project. The Imaginarium tab, below Handoff, offers the 32
+prompts of a catalog compiled into the app; the owner can copy a prompt,
+send it to Ready or save it to Ideas in that project
+([docs/imaginarium/PRD.md](docs/imaginarium/PRD.md)). A gallery task
+records its catalog entry and version (`task.created` version 2) and shows
+an Imaginarium badge on the board.
 
 The full workflows use stand-in tools. Developer checks also ran a
 Gemini task through the app, a Claude Code task through MCP, and checks
@@ -75,6 +86,10 @@ research, and the following code and checks.
   LeverageAppServices and the Mac app LeverageApp, with Swift Testing tests,
   stand-in provider tools in `mac/Tests/StandIns/` and the provider replies
   they play in `mac/Tests/StandIns/replies/`;
+- `docs/subscription/preview/`: an offline browser preview of the
+  subscription flow with sample data and a mock billing module, with its
+  own test (`node --test docs/subscription/preview/mock-billing.test.cjs`),
+  which CI does not run;
 - `evals/specific-details/`: the eval suite of the rule "Every task needs
   specific details" (24 made-up cases, the bar, and the run record);
 - `evals/approves-actions/`: the outward action approval eval suite, with
