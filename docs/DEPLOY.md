@@ -662,7 +662,7 @@ maintenance are _TBD_.
 Every image the build pulls is named with a digest: the Ruby base image in
 `api/Dockerfile`, which names no separate build frontend, and the
 PostgreSQL image in `compose.yaml`
-([ADR 0002](adr/0002-rails-api-and-swift-package-skeleton.md) records
+([ADR 0002](adr/0002-pinned-versions-test-tools-and-code-units.md) records
 both). `.github/dependabot.yml` asks Dependabot for a weekly pull request
 that moves either digest or the gems in `api/Gemfile.lock`. Dependabot
 changes neither the digest recorded in ADR 0002 nor `api/.ruby-version`;
