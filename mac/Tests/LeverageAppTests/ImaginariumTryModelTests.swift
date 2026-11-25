@@ -45,6 +45,30 @@ struct ImaginariumTryModelTests {
         #expect(!model.isEdited)
     }
 
+    @Test("Copy prompt copies the prompt as shown, sends nothing, and says Copied until the prompt changes (FR-037)")
+    func copyPromptStaysOnThisMac() {
+        let api = FakeOwnerAPI()
+        let model = makeModel(api)
+        let board = AgentFixtures.pasteboard()
+        model.fills["look"] = "glass"
+        #expect(!model.copied)
+
+        model.copyPrompt(to: board.copy)
+
+        #expect(board.copied.value == ["Build a to-do app styled like glass."])
+        #expect(model.copied)
+        #expect(api.calls.isEmpty)
+        #expect(model.state == .editing)
+        model.fills["look"] = "wood"
+        #expect(!model.copied)
+        model.copyPrompt(to: board.copy)
+        model.prompt = "My edited prompt."
+        #expect(!model.copied)
+        model.copyPrompt(to: board.copy)
+        #expect(board.copied.value.last == "My edited prompt.")
+        #expect(model.copied)
+    }
+
     @Test func ideasSavesThePromptAndCriteriaOnce() async throws {
         let api = owner()
         let model = makeModel(api)

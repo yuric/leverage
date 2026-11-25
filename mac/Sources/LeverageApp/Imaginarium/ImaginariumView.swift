@@ -148,7 +148,6 @@ struct ImaginariumTrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScreenContext.self) private var context
     @State private var model: ImaginariumTryModel
-    @State private var copied = false
 
     init(entry: ImaginariumCatalog.Entry, catalogVersion: Int, api: any OwnerAPI) {
         _model = State(wrappedValue: ImaginariumTryModel(entry: entry, catalogVersion: catalogVersion, api: api))
@@ -186,7 +185,6 @@ struct ImaginariumTrySheet: View {
         .frame(width: 720, height: 570)
         .background(Tokens.Palette.sheet)
         .task(id: model.isChecking) { await model.watchStatus() }
-        .onChange(of: model.prompt) { _, _ in copied = false }
     }
 
     private var form: some View {
@@ -282,9 +280,8 @@ struct ImaginariumTrySheet: View {
                     .foregroundStyle(Tokens.Tone.wait.foreground)
             }
             HStack {
-                Button(copied ? ImaginariumCopy.copied.text : ImaginariumCopy.copyPrompt.text) {
-                    Pasteboard.copy(model.prompt)
-                    copied = true
+                Button(model.copied ? ImaginariumCopy.copied.text : ImaginariumCopy.copyPrompt.text) {
+                    model.copyPrompt()
                 }
                 if let project, model.canEdit {
                     Button(ImaginariumCopy.sendToReady.text) { Task { await model.submit(.ready, projectID: project.id) } }
