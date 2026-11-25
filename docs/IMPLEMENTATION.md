@@ -55,9 +55,9 @@ the run. The run ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)) |
-| **Local deployment record** | The owner’s Mac was verified at `300db09` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. |
-| **Next** | Verify the App round 2 and Imaginarium gallery deployments on the owner's Mac. |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), and the recent merged work in [#34](https://github.com/yuric/leverage/pull/34), [#35](https://github.com/yuric/leverage/pull/35), [#36](https://github.com/yuric/leverage/pull/36) and [#37](https://github.com/yuric/leverage/pull/37) |
+| **Local deployment record** | The owner’s Mac is running the app and API at `2573be4` on 2026-11-24. The event-log audit passed for 1 workspace and 10 events. The earlier verified deployment at `300db09` remains the historical record. |
+| **Next** | Settings step 1 and the flaky approval self-test fixes are approved and underway. Future billed plans follow the remaining product decisions. |
 
 ### Recent merges
 
@@ -66,12 +66,12 @@ the run. The run ends when the build is done or the owner stops it.
 - The 32-prompt Imaginarium catalog. [#30](https://github.com/yuric/leverage/pull/30)
 - The event-log audit fix for sign-ups recorded before DB-53. [#32](https://github.com/yuric/leverage/pull/32)
 - The marketing demo order puts Handoff before Imaginarium. [#33](https://github.com/yuric/leverage/pull/33)
+- The deployment and follow-up fixes. [#34](https://github.com/yuric/leverage/pull/34), [#35](https://github.com/yuric/leverage/pull/35), [#36](https://github.com/yuric/leverage/pull/36) and [#37](https://github.com/yuric/leverage/pull/37)
 
 ### In flight
 
-- App round 2. Server and Mac implementation in [#35](https://github.com/yuric/leverage/pull/35).
-  The contract and data model were first verified at `4d7c479`.
-- Imaginarium Part 3. The gallery implementation is in [#36](https://github.com/yuric/leverage/pull/36).
+- Settings step 1 and the flaky approval self-test fixes are approved and underway.
+- Future billed plans wait for the remaining product decisions.
 
 ### General role and landing prompt on `main`
 
@@ -976,6 +976,9 @@ records the changes. The owner approved these choices for the round.
   round. The Native runner does not expose the call to provider tools.
 - The owner's Add task form keeps its "What goes out at the end" field
   for outward actions that go through approval.
+
+On 2026-11-24 the owner approved keeping the exact “What goes out at the end”
+label and the current outward-action approval behavior.
 
 Native Codex and Grok have no effort drop-down in this round. UX-15
 records the documentation checked for each tool in the contract.
