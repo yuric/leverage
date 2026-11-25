@@ -228,6 +228,11 @@ module Leverage
 
         return findings + [ "#{label}: #{row&.command || pending.command} #{verb} but wrote #{own.uniq.join(", ")}" ]
       end
+      if (row.nil? || row.command == "issue_landing_prompt") && group.events.all? { |event| historical_prompt_event?(event, states[event.task_id]) }
+        advance(group.events, states)
+        return findings
+      end
+
       names = row ? [ row.command ] : candidates(group.events.first.type)
       findings + named(label, names, group.events, states)
     end
@@ -488,6 +493,22 @@ module Leverage
         problems << "led #{task} from #{state.inspect} to #{observed.inspect}, which no matched row allows"
       end
       problems
+    end
+
+    # Before UX-2, New prompt released the seat's work (GA-17). Only the
+    # releases, cancelled checks, holds and inbox changes carried its key.
+    # A held job's immediate timeout wrote under its own keyless timer.
+    def historical_prompt_event?(event, state)
+      case event.type
+      when "task.released" then state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt"
+      when "review.released" then state == "in_review" && event.actor_kind == "owner"
+      when "check.finished" then event.payload["result"] == "withdrawn"
+      when "hold.opened" then event.payload["reason"] == "action_unconfirmed"
+      when "hold.closed" then %w[seat_paused credential_limit credential_signed_out check_error rerun_limit].include?(event.payload["reason"])
+      when "inbox.opened" then %w[unconfirmed_action no_reviewer_eligible].include?(event.payload["kind"])
+      when "job.withdrawn", "inbox.resolved" then true
+      else false
+      end
     end
 
     # An override can approve a stopped action or reenter an errored
