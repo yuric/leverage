@@ -1613,7 +1613,7 @@
       "post": {
         "operationId": "claim_next_job",
         "summary": "Claims the next job: a rule check, a question, an approval or a contract draft.",
-        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A General seat claims every kind, and only while it holds no task, review or provisional claim and no approved action waits for it; it is not given a check at task.before_ready of a task whose contract it drafted (GA-3, GA-5). A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
+        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A General seat claims every kind, and only while it holds no task, review or provisional claim and no approved action waits for it; it is not given a check at task.before_ready of a task whose contract it drafted (GA-3, GA-5). No seat is given a check at task.before_ready of a task it added with create_task (UX-13a). A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
         "tags": [
           "agent"
         ],

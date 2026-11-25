@@ -25,6 +25,19 @@ class GeneralOrchestratorPresenceTest < ActiveSupport::TestCase
     assert_stays_in_error(check, [ general ])
   end
 
+  test "a General seat's own added task cannot start repeated offline notifications" do
+    scenario.with_shipped_rules
+    general = scenario.seat(role: "general")
+    body = contract_body.slice("title", "details", "criteria")
+    assert_equal :pending, seat_command(general, "add_task", body).outcome
+    task_id = Event.find_by!(workspace_id: scenario.workspace_id, type: "task.created", actor_id: general.id).task_id
+    rule = Rule.find_by!(workspace_id: scenario.workspace_id, key: "specific_details")
+    check = RuleCheck.find_by!(task_id: task_id, rule_id: rule.id)
+
+    assert_stays_in_error(check, [ general ])
+    assert_equal "backlog", Task.find(task_id).state
+  end
+
   test "two General seats cannot start repeated offline notifications while a review pass waits on a check" do
     builder = scenario.seat(role: "general")
     reviewer = scenario.seat(role: "general", provider: "codex")

@@ -1453,6 +1453,17 @@ task. PRD places are named by their section.
   `complete_contract`'s is `owner`, `planner` and `creator`, the creator
   only in the call that adds the task. Alternative: let the adding seat
   retry its own Backlog task.
+- **UX-13a** `[reading]` The seat that added a task (its `task.created`
+  actor) is not given that task's rule-check jobs at `task.before_ready`,
+  whatever its role, as GA-5 says of the seat that drafted the contract:
+  it wrote the whole contract the check reads. The bar is on the task, so
+  it stays when the owner completes the contract after a failed check.
+  GA-5's draft bar no longer reads the seat's role now, so a seat whose
+  role changed after its draft is barred too. With no other seat to take
+  the check it ends in error, and "Orchestrator offline" opens, as for a
+  lone General seat's own draft. Alternatives: let the adding seat check
+  its own task; or bar it only from the check of the Complete contract it
+  sent itself, so that it may check a contract the owner completes later.
 - **UX-14** `[reading]` One new refusal, `add_task_limit` (agent calls,
   precedence 14, after `duplicate_name`; its `reason` names the limit):
   20 tasks added per seat in any rolling hour; no task from a task a seat

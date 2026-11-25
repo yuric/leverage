@@ -14,8 +14,10 @@ module Leverage
   # of a builder or a reviewer), so the claim records the account that does
   # the work. A seat holds one job at a time and gets that one again (RD-40);
   # otherwise the oldest queued job, by queue time and then id (action batches use enqueue order), of a task
-  # it never claimed as a builder (RC-49, from task.claimed). A job whose
-  # due time has passed is never given out: its timer ends it (L399).
+  # it never claimed as a builder (RC-49, from task.claimed), and never the
+  # task.before_ready check of a task whose contract it drafted or that it
+  # added (GA-5, UX-11). A job whose due time has passed is never given
+  # out: its timer ends it (L399).
   #
   # The events carry the command's caller, key and time unless the caller
   # names them: a writer that runs inside a timer passes its effective time,
@@ -235,12 +237,18 @@ module Leverage
         (job.kind != "question" || !ended_tasks(seat.workspace_id).exists?(id: job.task_id))
     end
 
+    # PRD Who may check, GA-5: a seat does not check at task.before_ready
+    # a task whose contract it wrote, as the planner of a finished draft or
+    # as the seat that added the task (its task.created actor, UX-11). Both
+    # read what the seat did, not the role it has now.
     def own_draft_check?(job, seat)
-      return false unless seat.role == "general" && job.kind == "rule_check" && job.task_id
+      return false unless job.kind == "rule_check" && job.task_id
       return false unless RuleCheck.exists?(workspace_id: job.workspace_id, id: job.target_id, hook: "task.before_ready")
 
       Job.where(workspace_id: job.workspace_id, task_id: job.task_id, kind: "contract_draft",
-        claimed_by_seat_id: seat.id, state: "finished").exists?
+        claimed_by_seat_id: seat.id, state: "finished").exists? ||
+        Event.where(workspace_id: job.workspace_id, task_id: job.task_id, type: "task.created",
+          actor_kind: "seat", actor_id: seat.id).exists?
     end
 
     # The job kinds a role claims (IF-13, jobs.json claimer_role).

@@ -81,6 +81,21 @@ class CreateTaskTest < ActiveSupport::TestCase
     assert_empty events.select { |event| event.type == "inbox.resolved" }
   end
 
+  test "the seat that added a task is not given its ready check, which another orchestrator answers" do
+    creator = scenario.seat(role: "general")
+    orchestrator = online_orchestrator
+    model_rule
+    assert_equal :pending, seat_command(creator, "add_task", @body).outcome
+    task = Task.find(Event.find_by!(type: "task.created", actor_id: creator.id).task_id)
+    assert_equal "backlog", task.state
+
+    assert_refused "not_eligible", claim_job(creator)
+    assert_equal "none", Leverage::Reads::NextItem.call(creator).fetch("kind")
+    job = answer_next(orchestrator, PASSED)
+    assert_equal [ task.id, orchestrator.id ], [ job.task_id, job.reload.claimed_by_seat_id ]
+    assert_equal "ready", task.reload.state
+  end
+
   test "the idle creator may choose a project, but a holder whose work has none cannot" do
     project = scenario.project
     id = assert_completed(seat_command(@seat, "add_task", @body.merge("project_id" => project.id))).result.fetch("task_id")
