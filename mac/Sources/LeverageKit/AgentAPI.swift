@@ -12,6 +12,11 @@ public protocol AgentAPI: Sendable {
     /// `get_command`: a command's outcome by its key.
     func command(key: IdempotencyKey) async throws -> PlainOutcome
 
+    /// `report_model`: records the model and effort a Prompt seat reports.
+    func reportModel(_ request: ReportModelRequest, key: IdempotencyKey) async throws -> CommandOutcome<ReportedModel>
+    /// `create_task`: adds a task and completes its contract.
+    func createTask(_ request: CreateTaskRequest, key: IdempotencyKey) async throws -> CommandOutcome<AgentTaskCreated>
+
     // Building.
 
     /// `claim_next_task`.
@@ -87,4 +92,17 @@ extension AgentAPI {
     public func join(connection: LandingPromptConnection) async throws -> JoinInstructions {
         throw LeverageClientError.unsupportedOperation(.getJoin)
     }
+
+    public func reportModel(
+        _ request: ReportModelRequest, key: IdempotencyKey
+    ) async throws -> CommandOutcome<ReportedModel> {
+        throw LeverageClientError.unsupportedOperation(.reportModel)
+    }
+
+    public func createTask(
+        _ request: CreateTaskRequest, key: IdempotencyKey
+    ) async throws -> CommandOutcome<AgentTaskCreated> {
+        throw LeverageClientError.unsupportedOperation(.createTask)
+    }
+
 }

@@ -62,6 +62,19 @@ struct InboxWatcherTests {
         #expect(rig.watcher.openCount == 3)
     }
 
+    @Test("Both agent task items announce their Needs you headings and bodies")
+    func announcesAgentTaskItems() async {
+        let rig = makeRig(open: [
+            Fixtures.item(.agentTaskIncomplete, seq: 6),
+            Fixtures.item(.agentTasksAtLimit, seq: 7, task: nil, about: .workspace),
+        ], stored: 5)
+        await rig.watcher.start()
+        #expect(rig.notifier.posted.value.map(\.title) ==
+                ["A task an agent added needs its contract", "Agents have added 50 open tasks"])
+        #expect(rig.notifier.posted.value.first?.body.contains(Fixtures.taskTitle) == true)
+        #expect(rig.cursor.stored.value == 7)
+    }
+
     // Review: the cursor is kept in the support folder, the log in the
     // database. After a restore or a lost volume the log's positions start
     // lower than the stored cursor, and every new item would sit below it.

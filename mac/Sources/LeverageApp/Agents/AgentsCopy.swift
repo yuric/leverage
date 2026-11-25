@@ -12,7 +12,7 @@ enum AgentsCopy: OwnerFacingCopy {
     case runsOn, defaultModel, defaultEffort, effortNamed, on, off
     case lastAsked, neverAsked
     case chipRunning
-    case start, stop, starting, stopping, remove, newPrompt, copied
+    case start, stop, starting, stopping, remove, copied
     case startFailed, stopFailed
     // Pause, Resume and Change (HM-45, HM-51, HE-26, HE-27).
     case stateNotRunning, stateWaitingFor, chipNotRunning, pausedNote
@@ -23,13 +23,14 @@ enum AgentsCopy: OwnerFacingCopy {
     // The Connect sheet.
     case connectTitle, modeRunOnLogin, modeOwn, roleLabel, nameLabel, namePlaceholder, nameRequired
     case loginLabel, noLogins, geminiHidden, providerLabel
-    case modelLabel, effortLabel, effortHint
+    case modelLabel, effortLabel, promptModelHint, reportedModel, notReported, notOffered, needsNewerTool
+    case permissionHeading, mayWork, mayDeliver, mayCreate, mayList, mayNothing, deliverOffNote
     case strengthLabel, strengthStandard, strengthStronger, strengthStrongest
     case connectionLabel, connectionMCP, connectionHTTP
     case notTestedForChecking
     case connectButton, connecting
     case copy
-    case landingTitle, landingNote, landingLoading, landingRetry, newPromptConfirmation
+    case landingTitle, landingNote, landingLoading, landingRetry
     case done
 
     var text: String {
@@ -64,7 +65,6 @@ enum AgentsCopy: OwnerFacingCopy {
         case .starting: "Starting…"
         case .stopping: "Stopping…"
         case .remove: "Remove"
-        case .newPrompt: "New prompt"
         case .copied: "Copied"
         case .startFailed: "{name} could not start. Check its login in Credentials."
         case .stopFailed: "{name} did not stop. Try again."
@@ -105,7 +105,18 @@ enum AgentsCopy: OwnerFacingCopy {
         case .notTestedForChecking: "Not tested for checking tasks."
         case .modelLabel: "Model"
         case .effortLabel: "Effort"
-        case .effortHint: "Leave empty to use the tool's own default."
+        case .promptModelHint: "The agent tells Leverage its model when it joins."
+        case .reportedModel: "Reported by the agent: {settings}"
+        case .notReported: "Not reported yet"
+        case .notOffered: "{value} (not offered now)"
+        case .needsNewerTool: "{value} (needs {tool} {version} or newer)"
+        case .permissionHeading: "What this agent may do"
+        case .mayWork: "Work on tasks"
+        case .mayDeliver: "Deliver tasks"
+        case .mayCreate: "Create tasks"
+        case .mayList: "May: {permissions}"
+        case .mayNothing: "nothing"
+        case .deliverOffNote: "It gives back the task it is working on."
         case .strengthLabel: "How strong is its model"
         case .strengthStandard: "Standard"
         case .strengthStronger: "Stronger"
@@ -118,7 +129,6 @@ enum AgentsCopy: OwnerFacingCopy {
         case .copy: "Copy"
         case .landingTitle: "Landing prompt"
         case .landingNote: "Paste this into the agent. The prompt contains the agent’s token."
-        case .newPromptConfirmation: "A new prompt stops the agent using the current one and gives back its work."
         case .landingLoading: "Getting the landing prompt…"
         case .landingRetry: "Try again"
         case .done: "Done"

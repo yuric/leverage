@@ -29,7 +29,7 @@ enum ShellCopy: OwnerFacingCopy {
     case refusalLeaseExpired, refusalTaskCancelled, refusalNotHolder, refusalForbidden, refusalInvalidState
     case refusalPending, refusalOnHold, refusalBriefingNotAcknowledged, refusalBriefingChanged
     case refusalCriteriaIncomplete, refusalBlockedByRule, refusalCredentialInUse, refusalDuplicateName
-    case refusalNotEligible
+    case refusalNotEligible, refusalAddTaskLimit
 
     // One sentence for each transport error.
     case transportMalformed, transportUnauthenticated, transportNotFound, transportKeyReused, transportInvalid
@@ -98,6 +98,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .refusalBlockedByRule: "A rule stops that."
         case .refusalCredentialInUse: "An agent is using that login. Remove the agent first."
         case .refusalDuplicateName: "That name is already used. Pick another."
+        case .refusalAddTaskLimit: "The agent reached a limit on adding tasks."
         case .refusalNotEligible: "That agent can't take this task."
 
         case .transportMalformed: "That request was not understood. Try again."
@@ -128,6 +129,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .credentialInUse: .refusalCredentialInUse
         case .duplicateName: .refusalDuplicateName
         case .notEligible: .refusalNotEligible
+        case .addTaskLimit: .refusalAddTaskLimit
         }
     }
 

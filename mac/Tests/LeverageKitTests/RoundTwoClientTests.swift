@@ -28,7 +28,7 @@ struct RoundTwoClientTests {
         for provider in Provider.allCases where provider.kind == .login {
             let generated = try #require(ModelCatalog.entry(for: provider))
             let entry = try #require(ProviderCatalog.entry(for: provider.rawValue))
-            #expect(entry.models.map(\.id) == generated.models.map(\.id))
+            #expect(entry.models == generated.models)
             #expect(entry.defaultModel == generated.defaultModel)
         }
     }

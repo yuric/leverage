@@ -758,8 +758,12 @@ extension TaskLogTests {
     @Test("Task creation names the adding agent and turning Deliver off explains why work was returned")
     func agentCreationAndDeliverOff() {
         #expect(sentence(event(.taskCreated, actor: builder)) == "Builder One added the task.")
-        #expect(sentence(event(.taskReleased, actorKind: .owner, payload: [
-            "reason": .string("deliver_turned_off"), "seat_id": .string(builder.contractString)
-        ])) == "Builder One was not allowed to hand tasks in any more, so the task went back to Ready.")
+        let events = [
+            Fixtures.event(.taskClaimed, seq: 1, taskID: taskID, actor: builder),
+            Fixtures.event(.taskReleased, seq: 2, taskID: taskID, actorKind: .owner,
+                           payload: ["reason": .string("deliver_turned_off"), "wait_cause": .null]),
+        ]
+        let log = TaskLog.entries(events: events, names: names, criteria: criteria)
+        #expect(log.last?.text == "Builder One was not allowed to hand tasks in any more, so the task went back to Ready.")
     }
 }

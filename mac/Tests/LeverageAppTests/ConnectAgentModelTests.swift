@@ -99,24 +99,20 @@ struct ConnectAgentModelTests {
         let model = makeModel(owner)
         await model.load()
         let claude = try #require(ProviderCatalog.entry(for: "claude"))
-        let menu = AgentModelPicker(
-            provider: .claude, existingModel: nil, selection: .constant(model.modelName))
-        #expect(menu.choices == [""] + claude.models.value)
-        #expect(menu.choices.first == model.modelName)
+        #expect(model.modelChoices.map(\.value) == [""] + claude.models.map(\.id))
+        #expect(model.modelChoices.first?.value == model.modelName)
         #expect(model.modelName.isEmpty)
         #expect(AgentsCopy.defaultModel.text == "The tool's default")
-        let modelChoice = try #require(claude.models.value.first)
+        let modelChoice = try #require(claude.models.first?.id)
         model.modelName = modelChoice
         model.credentialID = sameProviderID
         #expect(model.modelName == modelChoice)
         model.credentialID = Fixtures.secondLoginID
         #expect(model.modelName.isEmpty)
-        let provider = try #require(model.chosenProvider)
+        #expect(model.chosenProvider == .codex)
         let codex = try #require(ProviderCatalog.entry(for: "codex"))
-        let newMenu = AgentModelPicker(
-            provider: provider, existingModel: nil, selection: .constant(model.modelName))
-        #expect(newMenu.choices == [""] + codex.models.value)
-        #expect(newMenu.choices.first == model.modelName)
+        #expect(model.modelChoices.map(\.value) == [""] + codex.models.map(\.id))
+        #expect(model.modelChoices.first?.value == model.modelName)
         model.name = "Example agent"
         await model.connect()
         #expect(body(owner)["provider"] == .string("codex"))
@@ -128,12 +124,16 @@ struct ConnectAgentModelTests {
         let owner = owner()
         let model = makeModel(owner)
         await model.load()
-        model.modelName = "claude-made-up"
+        model.modelName = "claude-opus-5-5"
+        model.effort = "high"
         model.mode = .connectsOnItsOwn
         model.name = "Example agent"
         await model.connect()
         #expect(model.phase == .shown)
         #expect(body(owner)["model"] == .null)
+        #expect(body(owner)["effort"] == .null)
+        #expect(model.modelChoices.isEmpty && model.effortChoices.isEmpty)
+        #expect(body(owner)["permissions"] == .object(["work": .bool(true), "deliver": .bool(true), "create": .bool(true)]))
     }
 
     @Test("Add credential opens with the Credentials tab and can be dismissed")
@@ -190,12 +190,11 @@ struct ConnectAgentModelTests {
         #expect(ConnectAgentModel.roles.map { AgentsCopy.role($0).text } == ["General", "Builder", "Reviewer", "Planner", "Orchestrator"])
     }
 
-    @Test("Connect and New prompt use the owner's requested words")
+    @Test("Connect use the owner's requested words")
     func connectionCopy() {
         #expect(AgentsCopy.modeRunOnLogin.text == "Native: run on my login")
         #expect(AgentsCopy.modeOwn.text == "Prompt: paste into any agent")
         #expect(AgentsCopy.stateConnectsOnItsOwn.text == "Connected by prompt.")
-        #expect(AgentsCopy.newPrompt.text == "New prompt")
         #expect(AgentsCopy.landingNote.text.contains("contains the agent’s token"))
     }
 
@@ -203,7 +202,6 @@ struct ConnectAgentModelTests {
     func shownPromptCopy() {
         #expect(AgentsCopy.landingNote.text.hasPrefix("Paste this into the agent."))
         #expect(!AgentsCopy.landingNote.text.contains("gives back its work"))
-        #expect(AgentsCopy.newPromptConfirmation.text == "A new prompt stops the agent using the current one and gives back its work.")
     }
 
     @Test("the General note covers only app-run default models on tested providers")
@@ -299,7 +297,7 @@ struct ConnectAgentModelTests {
     @Test("a builder, a reviewer and a planner never get the checking note")
     func noNoteForOtherRoles() async {
         let model = await orchestratorModel(tested: [])
-        model.modelName = "some-model"
+        model.modelName = "claude-opus-5-5"
         #expect(model.showsNotTestedNote)
         for role in [SeatRole.builder, .reviewer, .planner] {
             model.role = role
@@ -317,11 +315,11 @@ struct ConnectAgentModelTests {
         let model = await orchestratorModel(tested: [], logins: [])
         #expect(model.chosenProvider == nil)
         #expect(!model.showsNotTestedNote)
-        model.modelName = "some-model"
+        model.modelName = "claude-opus-5-5"
         #expect(model.showsNotTestedNote)
     }
 
-    @Test("a planner and an orchestrator may pick any login, a Gemini one included, with a model and an effort")
+    @Test("a planner and an orchestrator may pick any login, a Gemini one included, with a catalog model")
     func jobRolesPickAnyLogin() async {
         let list = Fixtures.credentials().credentials + [
             Fixtures.credential(Fixtures.geminiLoginID, name: "Antigravity", provider: .gemini, position: 3)
@@ -333,15 +331,15 @@ struct ConnectAgentModelTests {
             #expect(model.logins.count == 3, "\(role)")
             #expect(!model.geminiHiddenForReviewer)
             model.credentialID = Fixtures.geminiLoginID
-            model.modelName = "some-model"
-            model.effort = "high"
+            model.modelName = "claude-opus-5-5"
+            #expect(!model.offersEffort)
             await model.connect()
             let fields = body(owner)
             #expect(fields["role"] == .string(role.rawValue))
             #expect(fields["provider"] == .string("gemini"))
             #expect(fields["credential_id"] == .string(Fixtures.geminiLoginID.contractString))
-            #expect(fields["model"] == .string("some-model"))
-            #expect(fields["effort"] == .string("high"))
+            #expect(fields["model"] == .string("claude-opus-5-5"))
+            #expect(fields["effort"] == .null)
             #expect(model.phase == .done)
         }
     }
@@ -464,19 +462,19 @@ struct ConnectAgentModelTests {
         #expect(connected.value == 1)
     }
 
-    @Test("model and effort the owner typed are sent as typed")
+    @Test("the selected model and effort are sent exactly as the catalog names them")
     func modelAndEffort() async {
         let owner = owner()
         let model = makeModel(owner)
         await model.load()
         model.name = "Reviewer one"
         model.role = .reviewer
-        model.modelName = "some-model"
+        model.modelName = "claude-opus-5-5"
         model.effort = "high"
         await model.connect()
         let fields = body(owner)
         #expect(fields["role"] == .string("reviewer"))
-        #expect(fields["model"] == .string("some-model"))
+        #expect(fields["model"] == .string("claude-opus-5-5"))
         #expect(fields["effort"] == .string("high"))
     }
 
@@ -486,8 +484,11 @@ struct ConnectAgentModelTests {
         let model = makeModel(owner)
         await model.load()
         model.name = "Builder one"
-        #expect(model.offersEffort, "the first login is Claude's")
+        #expect(!model.offersEffort, "the tool's default model has no explicit effort")
+        model.modelName = "claude-opus-5-5"
+        #expect(model.offersEffort)
         model.credentialID = Fixtures.secondLoginID
+        model.modelName = "gpt-6.2-astra"
         #expect(!model.offersEffort, "Codex is given no effort")
         model.effort = "high"
         await model.connect()
@@ -498,7 +499,9 @@ struct ConnectAgentModelTests {
         own.provider = .grok
         #expect(!own.offersEffort)
         own.provider = .gemini
-        #expect(own.offersEffort)
+        #expect(!own.offersEffort)
+        #expect(AgentSettingChoice.efforts(provider: .gemini, model: "gemini-4-neon").isEmpty)
+        #expect(AgentSettingChoice.efforts(provider: .grok, model: "grok-4.7").isEmpty)
     }
 
     @Test("a seat the app runs asks for no landing prompt")
@@ -821,10 +824,35 @@ extension ConnectAgentModelTests {
         #expect(body(owner)["permissions"] == .object(["work": .bool(true), "deliver": .bool(false), "create": .bool(true)]))
     }
 
+    @Test("The settings picker is shared by Connect and Change; only the name is typed")
+    func settingsUsePickers() throws {
+        let agents = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/LeverageApp/Agents")
+        for name in ["ConnectAgentSheet.swift", "ChangeAgentSheet.swift"] {
+            let code = LiteralScanner.code(of: try String(contentsOf: agents.appending(path: name), encoding: .utf8))
+            #expect(code.components(separatedBy: "TextField(").count == 2)
+            #expect(code.contains("AgentModelPicker(label: AgentsCopy.modelLabel.text"))
+            #expect(code.contains("AgentModelPicker(label: AgentsCopy.effortLabel.text"))
+        }
+        let picker = LiteralScanner.code(of: try String(
+            contentsOf: agents.appending(path: "AgentModelPicker.swift"), encoding: .utf8))
+        #expect(picker.contains(".pickerStyle(.menu)"))
+        #expect(!picker.contains("TextField("))
+    }
+
+    @Test("The Credentials read leaves the selected login's version available to Connect")
+    func readsToolVersion() async {
+        let login = Fixtures.credential(Fixtures.loginID, name: "Personal", toolVersion: "Claude Code 2.9.0")
+        let model = makeModel(owner(logins: [login]))
+        await model.load()
+        #expect(model.logins.first?.toolVersion == "Claude Code 2.9.0")
+    }
+
     @Test("A model requiring a newer tool is listed with the exact requirement")
     func newerToolChoice() {
         let model = ModelCatalog.providers[0].models[0]
-        let choice = AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: "2.9.0")
+        let choice = AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: "Claude Code 2.9.0")
         #expect(choice.enabled == false)
         #expect(choice.label == "\(model.id) (needs Claude Code 2.10.0 or newer)")
         #expect(AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: "2.10.0").enabled)
