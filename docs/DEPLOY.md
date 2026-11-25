@@ -438,10 +438,10 @@ sets:
 | `LEVERAGE_COMPOSE_PROJECT` | app | The compose project, default `leverage-app`. |
 | `LEVERAGE_SESSION_STORE` | app | `memory` keeps the owner's session out of the Keychain. |
 | `LEVERAGE_TOOL_DIR` | helper | When set, the only folder searched for providers' tools (the stand-ins in tests). |
-| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app` or `e2e`. |
+| `LEVERAGE_ONLY` | `mac/Package.swift` | Builds one lane of the package: `kit`, `runner`, `helper`, `services`, `app`, `mcp` or `e2e`. |
 | `LEVERAGE_TEST_PATIENCE` | Mac tests | A multiplier, at least 1 (default 1), for the tests' waits and the ceilings handed to the code under test; CI sets 4 on its slow macOS runner. |
 | `LEVERAGE_NOTIFICATIONS` | app | `off` keeps the app from asking for or posting a notification; `scripts/smoke_app.sh` sets it. A notification is posted only by the app opened as `Leverage.app`. |
-| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh` and `scripts/e2e_rule_checks.sh` set both. |
+| `LEVERAGE_E2E`, `LEVERAGE_E2E_DIR` | end-to-end tests | Switch the end-to-end tests on (`1` for the core loop's, `handoff` for the six interrupted runs, `rule_checks` for the eight rule-check runs, `questions_approvals` for the seven questions-and-approvals runs, `credentials` for the three Credentials cases), and the folder each test keeps its files in; `scripts/e2e_core_loop.sh`, `scripts/e2e_handoff.sh`, `scripts/e2e_rule_checks.sh`, `scripts/e2e_questions_approvals.sh` and `scripts/e2e_credentials.sh` set both. |
 | `LEVERAGE_EVAL`, `LEVERAGE_EVAL_REAL` | `LeverageRunner eval`, `scripts/eval_rule.sh` | The eval suite's name, without which neither runs, and `1` for a run on the real tools, which only the maintainer sets, by hand ([Eval suites and real checks](#eval-suites-and-real-checks)). |
 
 The helper's and a seat's tokens, and the run's inputs (among them
