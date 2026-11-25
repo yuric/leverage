@@ -97,7 +97,8 @@ research, and the following code and checks.
   `e2e_credentials.sh` (three stand-in cases with replay and secret scans),
   `capture_reader_reply.py` (a maintainer-only developer check),
   `restore_drill.sh` (a backup restored into an emptied cluster),
-  `speed_run.sh`, `secret_scan.py`, `generate_swift_contract.py`,
+  `speed_run.sh`, `secret_scan.py`, `make_env.py` (makes `.env` with
+  values of its own), `check_home_paths.py`, `generate_swift_contract.py`,
   `app_compose.py`, and the maintainer's runs on real tools,
   `eval_rule.sh` (both suites, scored by `eval_score.py`),
   `real_rule_check.sh`, `real_mcp_run.sh` and `real_approval_check.sh`;
