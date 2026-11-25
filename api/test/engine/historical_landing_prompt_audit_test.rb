@@ -13,13 +13,17 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
 
   test "a New prompt that released its Working task passes the audit" do
     task = @scenario.task(state: "working", builder: @seat)
+    pending = @scenario.pending_transition(task, command: "submit", requester: @seat)
+    @scenario.rule_check(task, rule: @scenario.rule(hook: "task.before_submit"), pending: pending)
     @scenario.hold(task, reason: "seat_paused")
     after = @scenario.workspace.reload.last_seq
     ctx = @scenario.context(request: @request)
     released = Leverage::SeatRuns.release_working_task(ctx, @seat, reason: "new_prompt")
     assert_equal [ task.id, "new_prompt", @request.key ], [ released.task_id, released.payload["reason"], released.command_id ]
     events = Event.where(workspace_id: @scenario.workspace_id, command_id: @request.key).order(:seq)
-    assert_equal %w[task.released hold.closed], events.pluck(:type)
+    assert_equal %w[check.finished job.withdrawn task.released hold.closed], events.pluck(:type)
+    assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+    @command.destroy!
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
   end
 
@@ -40,6 +44,34 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
     assert_equal [ "review.released", @request.key ], [ released.type, released.command_id ]
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
     @command.destroy! # After the command key retention period.
+    assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+  end
+
+  test "a release cannot excuse an orphan job withdrawal on an unrelated task after key retention" do
+    @command.destroy!
+    task = @scenario.task(state: "backlog")
+    job = @scenario.job(kind: "contract_draft", task: task)
+    @scenario.task(state: "working", builder: @seat)
+    after = @scenario.workspace.reload.last_seq
+    ctx = @scenario.context(request: @request)
+    Leverage::SeatRuns.release_working_task(ctx, @seat, reason: "new_prompt")
+    orphan = Leverage::Jobs.withdraw(ctx, job)
+    refute Leverage::LogAudit.historical_prompt_release?([ orphan ], { task.id => "backlog" }, receipt: nil)
+    findings = Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+    assert findings.any? { |line| line.include?(@request.key) }, findings.inspect
+  end
+
+  test "New prompt could withdraw a provisional claim before it got a lease" do
+    task = @scenario.task(state: "ready")
+    pending = @scenario.pending_transition(task, command: "claim", requester: @seat)
+    task.update!(holder_seat_id: @seat.id)
+    @scenario.rule_check(task, rule: @scenario.rule(hook: "task.before_claim"), subject: @seat, pending: pending)
+    after = @scenario.workspace.reload.last_seq
+    Leverage::SeatRuns.cancel_provisional_claim(@scenario.context(request: @request), @seat)
+    events = Event.where(workspace_id: @scenario.workspace_id, command_id: @request.key).order(:seq)
+    assert_equal %w[check.finished job.withdrawn], events.pluck(:type)
+    assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+    @command.destroy!
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
   end
 

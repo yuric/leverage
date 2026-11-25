@@ -228,7 +228,7 @@ module Leverage
 
         return findings + [ "#{label}: #{row&.command || pending.command} #{verb} but wrote #{own.uniq.join(", ")}" ]
       end
-      if (row.nil? || row.command == "issue_landing_prompt") && group.events.all? { |event| historical_prompt_event?(event, states[event.task_id]) }
+      if (row.nil? || row.command == "issue_landing_prompt") && historical_prompt_release?(group.events, states, receipt: row)
         advance(group.events, states)
         return findings
       end
@@ -498,16 +498,55 @@ module Leverage
     # Before UX-2, New prompt released the seat's work (GA-17). Only the
     # releases, cancelled checks, holds and inbox changes carried its key.
     # A held job's immediate timeout wrote under its own keyless timer.
-    def historical_prompt_event?(event, state)
-      case event.type
-      when "task.released" then state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt"
-      when "review.released" then state == "in_review" && event.actor_kind == "owner"
-      when "check.finished" then event.payload["result"] == "withdrawn"
-      when "hold.opened" then event.payload["reason"] == "action_unconfirmed"
-      when "hold.closed" then %w[seat_paused credential_limit credential_signed_out check_error rerun_limit].include?(event.payload["reason"])
-      when "inbox.opened" then %w[unconfirmed_action no_reviewer_eligible].include?(event.payload["kind"])
-      when "job.withdrawn", "inbox.resolved" then true
-      else false
+    # Side events alone go through the ordinary audit. After key retention
+    # only a task release with the old reason can identify the command.
+    def historical_prompt_release?(events, states, receipt:)
+      releases = events.select { |event| %w[task.released review.released].include?(event.type) }
+      return false if releases.empty?
+      return false if receipt.nil? && releases.none? { |event| event.type == "task.released" && event.payload["reason"] == "new_prompt" }
+
+      events.all? do |event|
+        state = states[event.task_id]
+        case event.type
+        when "task.released" then state == "working" && event.actor_kind == "owner" && event.payload["reason"] == "new_prompt"
+        when "review.released" then state == "in_review" && event.actor_kind == "owner"
+        when "check.finished" then prompt_withdrawal?(event, state, releases, receipt)
+        when "job.withdrawn"
+          events.any? do |check|
+            check.type == "check.finished" && check.task_id == event.task_id && check.seq < event.seq &&
+              Steps.queued_for(check)&.payload&.fetch("job_id", nil) == event.subject_id
+          end
+        when "hold.opened" then state == "finishing" && event.payload["reason"] == "action_unconfirmed"
+        when "hold.closed"
+          reason = event.payload["reason"]
+          cause = "task.released" if Holds::SEAT_BOUND.include?(reason)
+          cause = "check.finished" if %w[check_error rerun_limit].include?(reason)
+          events.any? { |other| other.type == cause && other.task_id == event.task_id && other.seq < event.seq }
+        when "inbox.opened" then %w[unconfirmed_action no_reviewer_eligible].include?(event.payload["kind"])
+        when "inbox.resolved"
+          opened = task_history_before(event).find_by(type: "inbox.opened", subject_id: event.subject_id)
+          kind = opened&.payload&.fetch("kind", nil)
+          kind == "no_reviewer_eligible" || (%w[check_could_not_run check_past_rerun_limit limit_with_no_reset_time account_signed_out].include?(kind) &&
+            events.any? { |other| other.type == "hold.closed" && other.task_id == event.task_id && other.seq < event.seq })
+        else false
+        end
+      end
+    end
+
+    def prompt_withdrawal?(event, state, releases, receipt)
+      return false unless event.subject_kind == "rule_check" && event.payload["result"] == "withdrawn"
+
+      pending_id = Steps.queued_for(event)&.payload&.fetch("pending_transition_id", nil)
+      pending = PendingTransition.find_by(id: pending_id, task_id: event.task_id, workspace_id: event.workspace_id, state: "cancelled")
+      return false unless pending&.requester_kind == "seat"
+      return false if receipt && pending.requester_id != receipt.result&.fetch("seat_id", nil)
+      return true if state == "ready" && pending.command == "claim" && claim_withdrawal?(event) &&
+        event.payload.values_at("subject_kind", "subject_id") == [ "seat", pending.requester_id ]
+
+      releases.any? do |release|
+        release.task_id == event.task_id && release.seq > event.seq &&
+          ((release.type == "task.released" && pending.command == "submit" && event.payload["hook"] == "task.before_submit") ||
+           (release.type == "review.released" && pending.command == "pass_review" && event.payload["hook"] == "task.before_done"))
       end
     end
 
