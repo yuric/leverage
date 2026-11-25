@@ -274,6 +274,8 @@ bash scripts/test_eval_rule.sh                       # the eval script's refusal
 bash scripts/test_real_rule_check.sh                 # the real rule check's refusals and plumbing
 bash scripts/test_real_mcp_run.sh                    # the MCP check against stand-ins
 bash scripts/test_real_approval_check.sh             # the approval check against stand-ins
+node --test scripts/test_marketing_demo.mjs          # the marketing page and its demo (needs Node)
+bash scripts/test_deploy_marketing_page.sh           # the marketing deployment script, against stand-ins
 ```
 
 After changing anything under `api/contract/registry.json` or the
