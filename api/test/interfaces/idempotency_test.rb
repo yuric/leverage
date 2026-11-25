@@ -47,6 +47,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
 
   # operation => the method that builds its state and returns its Call.
   CASES = {
+    "create_task" => :create_task,
     "report_model" => :report_model,
     "claim_next_task" => :claim_next_task,
     "acknowledge_task_briefing" => :acknowledge_task_briefing,
@@ -506,6 +507,13 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     engine("fail_review", reviewer_seat, { "id" => review.id }.merge(verdict("failed", failed: [ criterion.id ])))
     assert Hold.exists?(task_id: review.task_id, reason: "rounds_exceeded", closed_at: nil), "the hold is open"
     owner_call(ids: { "id" => review.task_id })
+  end
+
+  def create_task
+    body = { "title" => "A made-up task", "details" => "Add sample work.",
+             "criteria" => [ { "kind" => "build", "text" => "Produce a sample." },
+                             { "kind" => "review", "text" => "Check the sample." } ] }
+    Call.new(token: token(builder_seat), body: body)
   end
 
   def report_model

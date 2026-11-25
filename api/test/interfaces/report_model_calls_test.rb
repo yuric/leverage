@@ -13,6 +13,7 @@ class ReportModelCallsTest < ActionDispatch::IntegrationTest
 
   test "a Prompt seat reports only for itself and the event records the seat as actor" do
     other = @scenario.seat(model: "")
+    @seat.update!(may_deliver: false)
     key = new_key
     report(key: key)
 
@@ -25,6 +26,14 @@ class ReportModelCallsTest < ActionDispatch::IntegrationTest
     assert_equal @values, @seat.reload.attributes.slice("model", "effort")
     assert_equal "", other.reload.model
     assert_nil @seat.last_polled_at
+
+    call("list_seats", token: @scenario.owner_token)
+    assert_response :ok
+    assert_response_matches_contract
+    listed = response.parsed_body.fetch("seats").find { |seat| seat.fetch("id") == @seat.id }
+    assert_equal @values, listed.slice("model", "effort")
+    assert_equal({ "work" => true, "deliver" => false, "create" => true }, listed.fetch("permissions"))
+
     assert_no_difference -> { Event.where(type: "seat.changed").count } do
       report
       assert_response :ok

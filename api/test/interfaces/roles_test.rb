@@ -40,6 +40,7 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
   # job the seat holds.
   JOB_CALLS = %w[claim_next_job submit_job_result].freeze
   JOB_ROLES = %w[orchestrator planner].freeze
+  ROLE_INDEPENDENT = %w[get_join get_next get_command create_task report_model].freeze
   READS = { "get_task_briefing" => :task, "get_review_briefing" => :review }.freeze
 
   # Ranked no lower than forbidden in L548's order.
@@ -56,9 +57,10 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     SERVED_AGENT.each do |operation_id|
       assert(ROLES.keys.any? { |role| ROLES.fetch(role).include?(operation_id) }, operation_id)
     end
-    covered = TASK_CALLS + ACTION_CALLS.keys + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS +
-      %w[get_join get_next get_command get_question]
+    covered = TASK_CALLS + ACTION_CALLS.keys + REVIEW_CALLS + CLAIMS.values + READS.keys + JOB_CALLS + ROLE_INDEPENDENT +
+      %w[get_question]
     assert_equal SERVED_AGENT.sort, covered.sort
+    ROLES.each { |role, operations| assert_empty ROLE_INDEPENDENT - operations, role }
     builder_only = TASK_CALLS + ACTION_CALLS.keys + %w[get_question]
     %w[builder general].each { |role| assert_empty builder_only - ROLES.fetch(role), role }
     (ROLES.keys - %w[builder general]).each do |role|
@@ -66,7 +68,7 @@ class SeatRolesTest < ActionDispatch::IntegrationTest
     end
     REVIEW_CALLS.each { |operation_id| refute_includes ROLES.fetch("builder"), operation_id }
     JOB_ROLES.each do |role|
-      assert_equal (JOB_CALLS + %w[get_join get_next get_command]).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
+      assert_equal (JOB_CALLS + ROLE_INDEPENDENT).sort, (ROLES.fetch(role) & SERVED_AGENT).sort, role
     end
     JOB_CALLS.each { |operation_id| %w[builder reviewer].each { |role| refute_includes ROLES.fetch(role), operation_id } }
   end
