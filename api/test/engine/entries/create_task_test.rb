@@ -25,6 +25,20 @@ class CreateTaskTest < ActiveSupport::TestCase
     assert_no_difference("Task.count") { assert_refused "forbidden", seat_command(@seat, "add_task", @body) }
   end
 
+  test "a seat turned off cannot create a task, whatever its body, and a paused seat still can" do
+    project = scenario.project
+    scenario.review(scenario.task(state: "in_review"), reviewer: @seat)
+    assert_completed(owner_command("change_seat", { "id" => @seat.id, "enabled" => false }))
+    assert_no_difference("Task.count") do
+      assert_refused "forbidden", seat_command(@seat, "add_task", @body)
+      assert_refused "forbidden", seat_command(@seat, "add_task", @body.merge("project_id" => project.id))
+    end
+
+    assert_completed(owner_command("change_seat", { "id" => @seat.id, "enabled" => true }))
+    assert_completed(owner_command("pause_seat", { "id" => @seat.id }))
+    assert_difference("Task.count", 1) { assert_completed(seat_command(@seat, "add_task", @body)) }
+  end
+
   test "a removed seat cannot create a task at the transition boundary" do
     assert_completed(owner_command("remove_seat", { "id" => @seat.id }))
     assert_no_difference("Task.count") do

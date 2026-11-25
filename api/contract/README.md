@@ -135,7 +135,7 @@ An operation's `caller`:
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
 | `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
 | `job_holder` | The seat that claimed the job. |
-| `creator` | A seat whose permissions include Create tasks (UX-11). |
+| `creator` | An enabled seat whose permissions include Create tasks (UX-11, UX-13c). |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
 | `public` | No sign-in: the infrastructure health check, and setup on a new installation (whether an owner exists, and creating it, which is allowed once). |

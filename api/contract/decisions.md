@@ -1472,6 +1472,14 @@ task. PRD places are named by their section.
   timeout, as before. A paused seat's result is accepted: a pause stops
   new claims only. Alternatives: accept the result until the run
   timeout; or withdraw and requeue the job when its seat is turned off.
+- **UX-13c** `[reading]` A seat the owner has turned off is refused
+  `forbidden` by `create_task`, before its body is read, and its join
+  instructions leave the call out and say the agent is off: Off stops a
+  seat from starting work, and a seat that connects on its own keeps its
+  token. A paused seat may still add a task: a pause stops claims and
+  leaves held work going, and a follow-up task belongs to that work.
+  Alternatives: Create tasks independent of Off; or refuse a paused seat
+  too.
 - **UX-14** `[reading]` One new refusal, `add_task_limit` (agent calls,
   precedence 14, after `duplicate_name`; its `reason` names the limit):
   20 tasks added per seat in any rolling hour; no task from a task a seat

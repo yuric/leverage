@@ -126,6 +126,31 @@ class JoinTest < ActionDispatch::IntegrationTest
       assert_empty %w[submit_task give_verdict submit_job_result start_action report_action_done] - listed
     end
 
+    test "#{connection} join for a seat turned off leaves out create_task and says why" do
+      seat = @scenario.seat(role: "general", provider: "claude")
+      join(seat, connection: connection)
+      assert_includes listed_operations(response.parsed_body.fetch("text"), connection), "create_task"
+      refute_includes response.parsed_body.fetch("text"), "The owner has turned this agent off"
+
+      seat.update!(enabled: false)
+      join(seat, connection: connection)
+      assert_response :ok
+      assert_response_matches_contract
+      body = response.parsed_body
+      assert_equal({ "work" => true, "deliver" => true, "create" => true }, body.fetch("permissions"))
+      text = body.fetch("text")
+      refute_includes text, "`create_task`"
+      assert_includes text, "The owner has turned this agent off: you are offered no new work, you may not add tasks, " \
+        "and a job result you send is refused `forbidden`. Keep polling."
+      assert_includes listed_operations(text, connection), "submit_job_result"
+
+      seat.update!(enabled: true, paused: true)
+      join(seat, connection: connection)
+      text = response.parsed_body.fetch("text")
+      assert_includes listed_operations(text, connection), "create_task"
+      assert_includes text, "You may create tasks with `create_task`."
+    end
+
     test "#{connection} join for a Native seat has no report operation or model catalog" do
       seat = @scenario.seat(role: "general", credential: @scenario.credential)
       join(seat, connection: connection)
@@ -195,7 +220,10 @@ class JoinTest < ActionDispatch::IntegrationTest
       seat.update!(state)
       join(seat)
       assert_response :ok
-      assert_equal instructions, response.parsed_body
+      # A seat turned off reads its own text (no create_task, and why);
+      # everything else is the same.
+      assert_equal instructions.except("text"), response.parsed_body.except("text")
+      assert_equal instructions, response.parsed_body if seat.enabled
       assert_equal before, [ seat.reload.last_polled_at, Event.count, Command.count ]
     end
   end
