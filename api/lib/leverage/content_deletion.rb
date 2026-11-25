@@ -1,6 +1,8 @@
 module Leverage
   # Blanks the content columns while preserving the rows and their timing
-  # (DB-42, milestone 5 plan AP-36).
+  # (DB-42, milestone 5 plan AP-36). The workspace's Imaginarium project is
+  # never deletable (DB-55): the gallery places every task in it (FR-030)
+  # and nothing creates another. Its tasks are deletable one by one.
   module ContentDeletion
     TERMINAL_STATES = %w[done cancelled].freeze
     TASK_COLUMNS = { title: nil, details: nil, work_reference: nil }.freeze
@@ -20,8 +22,14 @@ module Leverage
     def deletable?(task: nil, project: nil)
       return false if (task || project).content_deleted_at
       return TERMINAL_STATES.include?(task.state) if task
+      return false if imaginarium?(project)
 
       !tasks_in(project).where.not(state: TERMINAL_STATES).exists?
+    end
+
+    # Whether the project is its workspace's Imaginarium project.
+    def imaginarium?(project)
+      Workspace.where(id: project.workspace_id, imaginarium_project_id: project.id).exists?
     end
 
     def delete(ctx, task: nil, project: nil)
@@ -54,6 +62,6 @@ module Leverage
       ctx.emit("content.deleted", task: task)
     end
 
-    private_class_method :tasks_in, :delete_task
+    private_class_method :tasks_in, :delete_task, :imaginarium?
   end
 end

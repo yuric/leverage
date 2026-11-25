@@ -429,6 +429,21 @@ Where two inventories chose differently, the decision names the conflict.
   which the audit checks as its own command. The audit cannot tell that
   sign-up from a new one that left the project out, so that a
   `create_owner` written now writes both is held by its own tests.
+- **DB-55** `[reading]` The content of the workspace's Imaginarium project
+  is not deletable: `delete_content` for that project is refused
+  `invalid_state` (the guard `content_not_deletable`), whatever the states
+  of its tasks. The gallery places every task in that project (FR-030),
+  the workspace knows it by its id (DB-53), and
+  `install_imaginarium_project` makes one only for a workspace that has
+  none, so deleting it left Send to Ready and Save to Ideas refused for
+  good. A Done or Cancelled task in it is deletable on its own, as in any
+  project. A workspace whose project lost its content before this still
+  gets "The Imaginarium project is unavailable." from Add task; nothing
+  repairs it. This takes the proposal of the gallery's open question
+  "Renaming or deleting the project" in `docs/imaginarium/PRD.md`, which
+  is still the owner's to answer. Alternative: allow the deletion and
+  create a fresh Imaginarium project when the recorded one has no
+  content.
 
 ## State machine (SM)
 

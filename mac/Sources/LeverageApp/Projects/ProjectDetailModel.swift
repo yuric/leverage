@@ -31,9 +31,11 @@ final class ProjectDetailModel {
         SpendingAmount.fieldText(project?.budget, locale: projects.locale)
     }
 
+    /// The server refuses to delete the Imaginarium project's content: the
+    /// gallery sends every task there and nothing creates another.
     var canDeleteContent: Bool {
         guard let project else { return false }
-        return project.contentDeletedAt == nil && project.openTasks == 0
+        return !project.imaginarium && project.contentDeletedAt == nil && project.openTasks == 0
     }
 
     func clearFailure() { projects.clearFailure() }
