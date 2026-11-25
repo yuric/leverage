@@ -459,6 +459,9 @@ final class TaskPageModel {
         filled.priority = page.task.priority
         filled.criteriaText = page.criteria.filter { $0.kind == .build }
             .sorted { $0.position < $1.position }.map(\.text).joined(separator: "\n")
+        if let review = page.criteria.first(where: { $0.kind == .review }) {
+            filled.reviewCriterionText = review.text
+        }
         prefilling = true
         draft = filled
         prefilling = false

@@ -94,7 +94,8 @@ final class ImaginariumTryModel {
             guard let taskID else { throw LeverageClientError.invalidBody }
             let request = CompleteContractRequest(
                 title: entry.title, details: submission.prompt, criteria: criteria, workReference: nil)
-            update(try await api.completeContract(taskID: taskID, request, key: submission.completeKey))
+            let outcome = try await api.completeContract(taskID: taskID, request, key: submission.completeKey)
+            try await update(outcome)
         } catch let error as TransportError where taskID == nil && error.code == .invalid {
             // A rejected Add task never started. The owner can edit and send a new body.
             self.submission = nil
@@ -109,7 +110,7 @@ final class ImaginariumTryModel {
         do {
             let outcome = try await api.command(key: submission.completeKey)
             try Task.checkCancellation()
-            update(outcome)
+            try await update(outcome)
         } catch is CancellationError {
             return
         } catch {
@@ -124,10 +125,19 @@ final class ImaginariumTryModel {
         }
     }
 
-    private func update(_ outcome: PlainOutcome) {
+    private func update(_ outcome: PlainOutcome) async throws {
         switch outcome.outcome {
         case .completed:
-            state = .saved(.ready, reason: nil)
+            guard let taskID else { throw LeverageClientError.invalidBody }
+            let page = try await api.task(id: taskID)
+            try Task.checkCancellation()
+            if page.task.state == .backlog {
+                let hold = page.holds.last { $0.reason == .contractIncomplete && $0.closedAt == nil }
+                let reason = hold.map { failedCheckReason(on: page, heldBy: $0) }
+                state = .saved(.backlog, reason: reason)
+            } else {
+                state = .saved(.ready, reason: nil)
+            }
         case .pending:
             state = .checking
         case .refused:
@@ -139,5 +149,13 @@ final class ImaginariumTryModel {
                 state = .failed(explanation)
             }
         }
+    }
+
+    private func failedCheckReason(on page: TaskPage, heldBy hold: Hold) -> String {
+        let failed = page.ruleChecks.last { check in
+            check.hook == .taskBeforeReady && check.result == .failed && check.overriddenAt == nil
+                && (hold.ruleID == nil || check.ruleID == hold.ruleID)
+        }
+        return failed?.reason ?? ShellCopy.refusalBlockedByRule.text
     }
 }

@@ -36,14 +36,26 @@ class ImaginariumTasksTest < ActionDispatch::IntegrationTest
   test "sending to Ready uses ordinary Add task followed by Complete contract" do
     task_id = add(source)
     assert_equal "backlog", Task.find(task_id).state
-    contract = source.slice("title", "details").merge("criteria" => checks, "actions" => [],
-      "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil)
-    call("complete_contract", token: @token, key: new_key, ids: { "id" => task_id }, body: contract)
-    assert_response :ok
-    assert_response_matches_contract
+    complete(task_id)
     assert_equal [ @project_id, "ready", "pocket-to-do" ], Task.find(task_id).values_at(:project_id, :state, :imaginarium_entry_id)
     assert_empty Leverage::Replay.diff(@scenario.workspace_id)
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id)
+  end
+
+  test "a failed Ready check completes the command and leaves its reason on the Backlog task" do
+    @scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 4 })
+    task_id = add(source)
+    complete(task_id)
+    assert_equal "completed", response.parsed_body.fetch("outcome")
+    call("get_task", token: @token, ids: { "id" => task_id })
+    assert_response :ok
+    assert_response_matches_contract
+    assert_equal "backlog", response.parsed_body.dig("task", "state")
+    assert_includes response.parsed_body.fetch("holds").pluck("reason"), "contract_incomplete"
+    check = response.parsed_body.fetch("rule_checks").find { |row| row["hook"] == "task.before_ready" && row["result"] == "failed" }
+    assert check
+    assert_predicate check.fetch("reason"), :present?
   end
 
   private
@@ -64,5 +76,13 @@ class ImaginariumTasksTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_response_matches_contract
     response.parsed_body.fetch("result").fetch("task_id")
+  end
+
+  def complete(task_id)
+    contract = source.slice("title", "details").merge("criteria" => checks, "actions" => [],
+      "minimum_strength_rank" => nil, "budget_cap" => nil, "work_reference" => nil)
+    call("complete_contract", token: @token, key: new_key, ids: { "id" => task_id }, body: contract)
+    assert_response :ok
+    assert_response_matches_contract
   end
 end

@@ -24,6 +24,9 @@ struct ImaginariumTryModelTests {
         api.script {
             $0.addTask = { _, key in .completed(TaskCreatedResult(taskID: id), key: key.value, command: .addTask) }
             $0.completeContract = { _, _, key in .completed(nil, key: key.value, command: .completeContract) }
+            $0.task = { taskID in
+                TaskPage(task: TaskSummary(id: taskID, title: "Pocket to-do", state: .ready), reviewerSeatExists: true, asOfSeq: 1)
+            }
         }
         return api
     }
@@ -68,20 +71,29 @@ struct ImaginariumTryModelTests {
         let first = try api.call(at: 1)
         api.script { $0.completeContract = { _, _, key in .completed(nil, key: key.value, command: .completeContract) } }
         await model.retry()
-        #expect(api.calls.map(\.operation) == [.addTask, .completeContract, .completeContract])
+        #expect(api.calls.map(\.operation) == [.addTask, .completeContract, .completeContract, .getTask])
         #expect(first == (try api.call(at: 2)))
         #expect(first.body?["criteria"] == FakeCall.json(model.criteria))
         #expect((try api.call(at: 0)).body?["criteria"] == nil)
         #expect(model.state == .saved(.ready, reason: nil))
     }
 
-    @Test func pendingRuleRefusalShowsTheTaskInBacklogWithItsReason() async {
+    @Test func aCompletedRuleCheckCanLeaveTheTaskInBacklogWithItsReason() async {
         let api = owner()
         api.script {
             $0.completeContract = { _, _, key in .pending(key: key.value, command: .completeContract) }
-            $0.command = { key in
-                .refused(.init(code: .blockedByRule, ruleID: UUID(), reason: "Name the intended audience."),
-                         key: key.value, command: .completeContract)
+            $0.command = { key in .completed(nil, key: key.value, command: .completeContract) }
+            $0.task = { taskID in
+                let rule = UUID()
+                let at = Date()
+                return TaskPage(
+                    task: TaskSummary(id: taskID, title: "Pocket to-do", state: .backlog),
+                    holds: [Hold(id: UUID(), taskID: taskID, reason: .contractIncomplete, ruleID: rule, openedAt: at)],
+                    reviewerSeatExists: true, asOfSeq: 1,
+                    ruleChecks: [RuleCheckRow(
+                        id: UUID(), ruleID: rule, ruleName: "Specific details", ruleVersionID: UUID(),
+                        version: 1, versionSavedAt: at, hook: .taskBeforeReady, momentName: "Before Ready", checker: .model,
+                        result: .failed, reason: "Name the intended audience.")])
             }
         }
         let model = makeModel(api)
