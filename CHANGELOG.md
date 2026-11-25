@@ -10,6 +10,15 @@ once it makes its first release.
 
 ### Added
 
+- `scripts/check_home_paths.py` fails CI when a tracked file names a real
+  user's home folder. The eval results check also looks for home paths
+  and for more provider key shapes.
+- CI runs the subscription preview's tests on every pull request.
+- Dependabot proposes weekly updates for the API's gems, the Ruby image
+  (patch versions only) and the PostgreSQL image (no new major version).
+- [docs/DEPLOY.md](docs/DEPLOY.md#updating-the-model-list) describes how
+  to update the model list.
+
 - An offline subscription preview, a page to open in a browser
   ([docs/subscription/README.md](docs/subscription/README.md#interactive-preview)),
   exercises plan selection, checkout, billing changes and payment recovery
@@ -239,6 +248,58 @@ once it makes its first release.
 
 ### Changed
 
+- An agent that adds a task no longer takes that task's checks at "before
+  a task is ready", whatever its role, also after the owner completes the
+  task's contract. With one agent able to check, a task that agent adds
+  ends its check in error, and with a General agent "Orchestrator
+  offline" opens, where the agent used to pass its own task.
+- An agent the owner has turned off can no longer send the result of a
+  job it holds or add tasks: both are refused `forbidden`, and its join
+  instructions say it is off. Its job goes to another agent, or to the
+  owner, when the job's time runs out. A paused agent still finishes its
+  job and can still add tasks.
+- A planner's contract draft can no longer add, replace or remove a
+  task's outward actions. The server keeps the saved actions, as it keeps
+  the work reference, minimum strength and budget cap.
+- The content of the Imaginarium project can no longer be deleted, in the
+  server or the app, because nothing makes another one and the gallery
+  needs it. The content of its Done and Cancelled tasks can still be
+  deleted.
+- Every `task.created` event is written in one shape, payload version 2,
+  with `imaginarium_entry` and `added_criterion_ids`. Version 1 is kept for
+  logs that already hold it.
+- One cost report, review verdict or job result carries at most 100,000
+  US dollars of spend, and a larger one is `422 invalid`, so one mistaken
+  report can no longer fill a project's total and block every later
+  report with a cost in that project.
+- A question, its assumption, an access request, the owner's answer, a
+  project's name and goal and a brief entry have length limits, and a
+  brief has at most 100 entries; a longer one is `422 invalid`. A request
+  body over 4 MiB is refused `400 malformed` before it is read.
+- A build, a review or an outward action whose prompt is over 512 KiB
+  starts no tool, logs the sizes and counts as a failed tool run.
+- Copy in Connect keeps the landing prompt on this Mac's clipboard (no
+  Universal Clipboard) and marks it so that clipboard-history tools that
+  honour the mark skip it.
+- Each container's log is capped at three files of 10 MB.
+- `.env.example` and DEPLOY.md say that `SECRET_KEY_BASE` is needed for
+  Rails to start and signs none of Leverage's tokens. The contract says
+  that the server stores the model Add credential sends and fills in no
+  default.
+- `scripts/check_model_catalog.py` rejects a `checked_on` that is not a
+  calendar date, a documented source that is not an `https` address, and
+  a help or probe file that does not name the model id or default it
+  evidences as a whole id.
+- `scripts/restore_drill.sh --from-project` takes only an end-to-end run's
+  `leverage-e2e-` project, and `scripts/speed_run.sh` always runs in a
+  compose project of its own, so neither can remove the database of the
+  owner's, the app's or another exported stack.
+- The local Markdown lint command is pinned to markdownlint-cli2 0.24.2,
+  the version CI runs. CONTRIBUTING.md names the code checks every pull
+  request runs and points to their commands in AGENTS.md.
+- The subscription preview keeps Change plan and Cancel subscription
+  while a payment is due.
+
 - The Age of Lever page and the README say that Leverage is built to keep
   work moving at a limit or a sign-out and that this has been shown so far
   only with stand-in tools, with a link to
@@ -278,6 +339,80 @@ once it makes its first release.
 
 ### Fixed
 
+- When the owner completes the contract of a task an agent added, or a
+  planner drafts it at the owner's request, the task log records that
+  choice instead of "That no longer needs you."
+- An agent with Work on tasks off is still offered the job it already
+  holds, and can pick it up again after its run moves to another account.
+  Its join instructions list `submit_task` when Deliver tasks is on.
+- A task saved to Ideas from the Imaginarium, promoted and sent records
+  its build steps per criterion and its review step against the review
+  criterion. The steps already stored for such a task are rebuilt from the
+  log once, when the updated server first starts, and `bin/restore` makes
+  the same repair in a dump made before it, so `leverage:verify_log` and a
+  restore pass again.
+- A General agent whose lease on one task had lapsed, while another task
+  it built waited in Finishing, no longer makes every other command in the
+  workspace fail with a server error.
+- `leverage:verify_log` and `bin/restore` no longer report a New prompt
+  logged before App round 2 that ended a waiting command whose check was
+  held at the re-run limit.
+- The log audit reads a New prompt logged before App round 2 only for that
+  seat's own work: the task it built, the reviews it held, its own waiting
+  commands and the Finishing tasks it built. A release, withdrawn check or
+  hold of another seat's work under that command is now reported, as is a
+  sweep that writes anything other than closing the "Agents have added 50
+  open tasks" item.
+- `bin/restore` brings a dump made by an earlier version to the current
+  schema before the replay test, so dumps kept from before an upgrade
+  restore with the documented command. A dump made by a later version is
+  refused with a message that says so. Every restored event gets the
+  transaction id 0, so that in a new cluster no restored event can stand
+  in for one a later transaction never wrote.
+- A NUL character in a request is refused `422 invalid`, or `404` in a
+  command key, instead of causing a server error.
+- An app-run agent no longer claims and gives back the same task or review
+  without end. After giving work back it waits a second before asking
+  again, and three give-backs in a row (a work reference that names no
+  folder on this Mac, a tool that says it cannot do the work, a failed
+  run) stop the agent with an error.
+- A Codex run that reconnected and then succeeded is no longer thrown away
+  as a failed run, and its tokens are reported.
+- A number out of range in a provider tool's output (a usage figure, or
+  Codex's reset time) no longer crashes the runner. A limit with an
+  unreadable reset time is reported with no reset time.
+- When the server does not take the result of an Add credential, the
+  helper removes the token or sign-in that Add saved, so nothing stays on
+  the Mac for a credential that is never listed.
+- The Imaginarium gallery's search also finds prompts by their category
+  name, as each tile's chip shows it.
+- Each Make it yours field in Try it shows its label above it, also while
+  it holds its default.
+- Connect's Done waits until the landing prompt has arrived, so closing
+  the sheet can no longer lose the only prompt with the seat's token.
+- The chosen appearance, Light or Dark, also applies to panels such as
+  Choose folder, and Same as this Mac follows the Mac again.
+- An app started with another `LEVERAGE_SUPPORT_DIR` gets its own compose
+  project and Keychain session, instead of taking over the owner's server
+  or signing the owner out. A folder used that way before keeps its data
+  under the project `leverage-app`, which `LEVERAGE_COMPOSE_PROJECT`
+  reaches.
+- Why the server did not start is kept in `logs/app.log` in the support
+  folder, and the start-up screen says where it is. A problem with the
+  app's own folder no longer tells the owner to check Docker Desktop.
+- When the support folder's `server/.env` is lost but the database is
+  still in Docker, the app writes no new passwords and explains how to get
+  the database back.
+- The eval results no longer record why a provider's account refused a
+  run, and the eval check refuses a not-run reason that names account or
+  billing state.
+- The eval check holds specific-details results to their ledger's latest
+  settled run and tool-run counts, as it already did for the approvals
+  suite.
+- General-mode eval results and ledger entries record the General job
+  rules they ran with (`job_rules_sha256`), so changing those rules
+  without running the suites again fails CI.
+
 - Log verification recognizes a credential switch when an action
   approved by a check override grants the builder a fresh lease.
 - `bin/rails leverage:verify_log` passes again for a workspace created
@@ -295,3 +430,48 @@ once it makes its first release.
   the workspace's offline item opens.
 - Saving an unchanged seat leaves reviewer eligibility updates to the
   timer sweep.
+
+### Security
+
+- The API answers only requests addressed to `127.0.0.1`, `localhost` or
+  `[::1]`. The compose service name `api` is no longer an allowed host, so
+  a network that controls name resolution cannot point a page at the
+  server.
+- Owner sign-in counts wrong passwords: after ten inside a minute, sign-in
+  is refused for a minute, with the right password too. A session that is
+  already open keeps working.
+- A seat and the helper each hold one waiting long poll. A newer one ends
+  the older, so one agent cannot occupy every thread of the server.
+- The landing prompt and the HTTP join instructions tell a
+  prompt-connected agent to keep its token in a file only it can read and
+  send the header from that file, never on a command line, where other
+  accounts on the Mac could read it.
+- `.env.example` no longer carries working secrets: its database passwords
+  and `SECRET_KEY_BASE` are empty. `python3 -I scripts/make_env.py`
+  replaces `cp .env.example .env`: it writes a `.env` with random values of
+  its own and never touches an existing one. compose refuses to start
+  while `POSTGRES_PASSWORD` or `SECRET_KEY_BASE` is empty. A `.env` copied
+  from an earlier example still holds its published `change-me` values
+  and runs on them until they are replaced; PostgreSQL keeps the password
+  its volume was first made with.
+- The application's database role can only read Rails' `schema_migrations`
+  and `ar_internal_metadata`; only the owner role's migrations write them.
+- `api/Dockerfile` no longer pulls a build frontend image by a floating
+  tag. Every image the build pulls is named with a digest, the Ruby
+  image's tag is written out instead of taken from `ARG RUBY_VERSION`,
+  and a self-test holds both.
+- Database dumps and exported keychains are git-ignored by name wherever
+  they are written in the checkout.
+- The app, the helper, the runner and the MCP server no longer keep a URL
+  cache. Earlier builds wrote the API's answers and their bearer tokens,
+  the owner's session among them, to plain files under `~/Library/Caches`.
+  Each program now removes its own cache files when it starts. If you ran
+  an earlier build, sign out and in once, and remove and connect again
+  any agent that connected on its own.
+- A task's "Where the work is" can no longer point a tool at the Mac's
+  root, the home folder itself, Leverage's own support folder, or
+  `~/Library` outside cloud drive folders. A link to one of these is
+  refused too, and such a task is given back like one whose folder does
+  not exist.
+- The work folder's path is no longer part of a builder's or reviewer's
+  prompt, so a folder's name cannot add instructions to it.
