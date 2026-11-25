@@ -54,7 +54,7 @@ struct CredentialsModelTests {
         #expect(model.state == .loaded)
         #expect(model.rows.map(\.name) == ["Personal", "Team"])
         #expect(model.rows.map(\.providerName) == ["Claude", "Codex"])
-        #expect(model.rows.allSatisfy { $0.kindLine == "Subscription login" })
+        #expect(model.rows.allSatisfy { $0.kindLine == "Login" })
         #expect(reads.value == [17])
     }
 

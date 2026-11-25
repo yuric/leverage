@@ -643,7 +643,7 @@ body { background: #17181D; color: #E7E9EE; font: 13px/1.4 -apple-system, BlinkM
 
   function credsHtml() {
     var rows = s.logins.map(function (l) {
-      return '<li class="lv-row"><div class="lv-row-main"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login. Signed in and answering.</span></div><span class="lv-chip lv-chip--done">Ready</span></li>';
+      return '<li class="lv-row"><div class="lv-row-main"><b>' + esc(l.label) + '</b><span class="lv-muted">Login. Signed in and answering.</span></div><span class="lv-chip lv-chip--done">Ready</span></li>';
     }).join('');
     return '<div class="lv-page"><div class="lv-page-head"><div class="lv-page-head-text lv-muted">The order they take over in is set on Handoff.</div>' +
       '<button type="button" class="lv-btn" aria-disabled="' + !s.logins.length + '">Refresh</button><button type="button" class="lv-btn" aria-disabled="' + !s.logins.length + '">Verify all</button>' +

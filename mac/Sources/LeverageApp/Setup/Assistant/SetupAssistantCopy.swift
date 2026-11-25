@@ -68,7 +68,7 @@ enum SetupAssistantCopy: OwnerFacingCopy {
         case .alreadyAdded: "Already added"
         case .geminiTileNote: "Builds, but does not review yet"
         case .loginsAdded: "Logins added"
-        case .loginRowLine: "Subscription login."
+        case .loginRowLine: "Login"
         case .nextLogin: "Next, a second login from a different provider."
         case .checking: "Checking {login}"
         case .oneSubscription: "I only have one subscription"

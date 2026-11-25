@@ -523,9 +523,9 @@ figure.ix-art { margin: 0; }
         provider: '', credName: '', addedCred: null, announce: '', project: 'all', taskProject: '',
         /* sample data: the handoff order, top to bottom */
         creds: [
-          { name: 'Claude, Personal', kind: 'Subscription login', status: 'At its limit', tone: 'stop', usage: 'Weekly limit. Resets Thursday.' },
-          { name: 'Codex, Team', kind: 'Subscription login', status: 'Working', tone: 'done', usage: 'No limit reported.' },
-          { name: 'Claude, Work', kind: 'Subscription login', status: 'At its limit', tone: 'stop', usage: 'Session limit. Resets at 6:00 PM.' }
+          { name: 'Claude, Personal', kind: 'Login', status: 'At its limit', tone: 'stop', usage: 'Weekly limit. Resets Thursday.' },
+          { name: 'Codex, Team', kind: 'Login', status: 'Working', tone: 'done', usage: 'No limit reported.' },
+          { name: 'Claude, Work', kind: 'Login', status: 'At its limit', tone: 'stop', usage: 'Session limit. Resets at 6:00 PM.' }
         ]
       };
     }
@@ -775,7 +775,7 @@ figure.ix-art { margin: 0; }
         var label = s.provider + ', ' + (s.credName.trim() || 'Personal');
         var taken = function (name) { return s.creds.some(function (c) { return c.name === name; }); };
         for (var copy = 2, baseLabel = label; taken(label); copy++) { label = baseLabel + ' ' + copy; }
-        s.creds.push({ name: label, kind: 'Subscription login', status: 'Ready', tone: 'info', usage: 'Signed in and answering.' });
+        s.creds.push({ name: label, kind: 'Login', status: 'Ready', tone: 'info', usage: 'Signed in and answering.' });
         var first = [];
         if (!s.resolved.credential || s.resolved.credential.tone === 'plain') { s.resolved.credential = { text: 'You added ' + label, tone: 'done' }; first = ['result-credential']; }
         if (!s.addedCred) { s.addedCred = { provider: s.provider, label: label }; }
