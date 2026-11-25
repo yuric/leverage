@@ -71,7 +71,7 @@ the run. The run ends when the build is done or the owner stops it.
 
 - App round 2. Server and Mac implementation in [#35](https://github.com/yuric/leverage/pull/35).
   The contract and data model were first verified at `4d7c479`.
-- Imaginarium Part 3. The gallery is being verified on the Round 2 base.
+- Imaginarium Part 3. The gallery implementation is in [#36](https://github.com/yuric/leverage/pull/36).
 
 ### General role and landing prompt on `main`
 
