@@ -101,9 +101,22 @@ final class ChangeAgentModel {
     var unavailableEffort: String? {
         guard let modelProvider, modelProvider == seat.provider, modelName == (seat.model ?? ""),
               ModelCatalog.entry(for: modelProvider)?.nativeEffort.value == true,
-              effort == seat.effort, !effort.isEmpty, effortChoices.isEmpty
+              let stored = seat.effort, !stored.isEmpty,
+              effort.isEmpty || effort == stored, effortChoices.isEmpty
         else { return nil }
-        return AgentSettingChoice.unavailable(effort).label
+        return effort.isEmpty ? AgentsCopy.defaultModel.text : AgentSettingChoice.unavailable(stored).label
+    }
+
+    var canClearUnavailableEffort: Bool {
+        guard unavailableEffort != nil, !effort.isEmpty, let modelProvider else { return false }
+        // The server checks the model whenever the effort changes, so an
+        // unlisted model still needs to be replaced before changing effort.
+        return modelName.isEmpty || ModelCatalog.entry(for: modelProvider)?.model(modelName) != nil
+    }
+
+    func clearUnavailableEffort() {
+        guard phase == .editing, canClearUnavailableEffort else { return }
+        effort = ""
     }
 
     var reportedSettings: String? {

@@ -61,7 +61,14 @@ struct ChangeAgentForm: View {
             if model.offersEffort {
                 AgentModelPicker(label: AgentsCopy.effortLabel.text, choices: model.effortChoices, selection: $model.effort)
             } else if let effort = model.unavailableEffort {
-                FormField(label: AgentsCopy.effortLabel.text) { Text(verbatim: effort) }
+                FormField(label: AgentsCopy.effortLabel.text) {
+                    HStack(spacing: 8) {
+                        Text(verbatim: effort)
+                        if let clearEffortButton {
+                            clearEffortButton.buttonStyle(.link).disabled(model.isBusy)
+                        }
+                    }
+                }
             }
             if let report = model.reportedSettings {
                 FormField(label: AgentsCopy.modelLabel.text) { Text(verbatim: report) }
@@ -77,6 +84,11 @@ struct ChangeAgentForm: View {
                 .foregroundStyle(Tokens.Palette.text2)
             AgentPermissionsFields(permissions: $model.permissions, deliverNote: model.deliverNote)
         }
+    }
+
+    var clearEffortButton: Button<Text>? {
+        guard model.canClearUnavailableEffort else { return nil }
+        return Button(AgentsCopy.clearEffort.text, action: model.clearUnavailableEffort)
     }
 
     private var actions: some View {
