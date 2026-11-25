@@ -16,6 +16,27 @@ public struct SetupState: Codable, Equatable, Sendable {
     }
 }
 
+/// The signed-in owner's identity (FR-001). Printed with the email removed.
+public struct OwnerSessionIdentity: Codable, Equatable, Sendable, CustomStringConvertible,
+    CustomDebugStringConvertible, CustomReflectable {
+    public let emailAddress: String
+    public let asOfSeq: Int
+
+    public init(emailAddress: String, asOfSeq: Int) {
+        self.emailAddress = emailAddress
+        self.asOfSeq = asOfSeq
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case emailAddress = "email_address"
+        case asOfSeq = "as_of_seq"
+    }
+
+    public var description: String { "OwnerSessionIdentity(emailAddress: [removed], asOfSeq: \(asOfSeq))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: ["asOfSeq": asOfSeq]) }
+}
+
 /// `BoardTask`: one card of the board.
 public struct BoardTask: Codable, Equatable, Sendable {
     public let task: TaskSummary

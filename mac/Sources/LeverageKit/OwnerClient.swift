@@ -39,6 +39,10 @@ public struct OwnerClient: OwnerAPI, HelperTokenIssuing {
         try await transport.command(.signOutOwner, key: key)
     }
 
+    public func ownerIdentity() async throws -> OwnerSessionIdentity {
+        try await transport.read(.getOwnerIdentity)
+    }
+
     public func command(key: IdempotencyKey) async throws -> PlainOutcome {
         try await transport.read(.getOwnerCommand, path: ["key": key.value])
     }

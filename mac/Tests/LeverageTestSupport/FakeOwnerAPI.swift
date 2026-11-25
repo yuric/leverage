@@ -56,9 +56,9 @@ final class FakeState<Answers: Sendable>: @unchecked Sendable {
 }
 
 /// An in-memory `OwnerAPI` for the app's view model tests. The test
-/// scripts the answers it needs (`script { $0.board = { ... } }`); every
-/// other call throws `FakeAPIError.notScripted`. Every call is recorded,
-/// in order, in `calls`.
+/// scripts the answers it needs (`script { $0.board = { ... } }`). The owner
+/// identity has a fixture by default. Unscripted calls without a fixture
+/// throw `FakeAPIError.notScripted`. Every call is recorded in order in `calls`.
 public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendable {
     public typealias Command<Request, Result: Sendable> = @Sendable (Request, IdempotencyKey) async throws
         -> CommandOutcome<Result>
@@ -74,6 +74,9 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
         }
         public var signOut: @Sendable (IdempotencyKey) async throws -> PlainOutcome = { _ in
             throw FakeAPIError.notScripted(.signOutOwner)
+        }
+        public var ownerIdentity: @Sendable () async throws -> OwnerSessionIdentity = {
+            OwnerSessionIdentity(emailAddress: "owner@example.com", asOfSeq: 0)
         }
         public var command: @Sendable (IdempotencyKey) async throws -> PlainOutcome = { _ in
             throw FakeAPIError.notScripted(.getOwnerCommand)
@@ -273,6 +276,10 @@ public final class FakeOwnerAPI: OwnerAPI, HelperTokenIssuing, @unchecked Sendab
 
     public func signOut(key: IdempotencyKey) async throws -> PlainOutcome {
         try await record(.signOutOwner, key: key).signOut(key)
+    }
+
+    public func ownerIdentity() async throws -> OwnerSessionIdentity {
+        try await record(.getOwnerIdentity).ownerIdentity()
     }
 
     public func command(key: IdempotencyKey) async throws -> PlainOutcome {

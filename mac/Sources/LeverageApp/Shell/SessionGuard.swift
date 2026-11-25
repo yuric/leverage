@@ -36,6 +36,10 @@ struct SessionGuard: OwnerAPI {
         try await guarded { try await base.signOut(key: key) }
     }
 
+    func ownerIdentity() async throws -> OwnerSessionIdentity {
+        try await guarded { try await base.ownerIdentity() }
+    }
+
     func command(key: IdempotencyKey) async throws -> PlainOutcome {
         try await guarded { try await base.command(key: key) }
     }
