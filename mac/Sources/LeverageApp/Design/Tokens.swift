@@ -65,6 +65,8 @@ enum Tokens {
                 Color(red: 0.424, green: 0.784, blue: 0.996).opacity(0.10),
             ],
             startPoint: .leading, endPoint: .trailing)
+        static let imaginariumOutline = LinearGradient(
+            colors: [.pink, .orange, .yellow, .mint, .cyan, .purple], startPoint: .leading, endPoint: .trailing)
 
         // The same surfaces when Reduce Transparency is on: solid, no blur.
         static let flatBackdrop = pair(0xE4E9F6, 0x0D111E)

@@ -23,13 +23,15 @@ public struct TaskSummary: Codable, Equatable, Sendable {
     public let spent: Decimal
     public let workReference: String?
     public let priority: Priority
+    public let imaginariumEntryID: String?
+    public let imaginariumCatalogVersion: Int?
 
     public init(
         id: UUID, projectID: UUID? = nil, title: String, details: String? = nil,
         state: TaskState, round: Int = 0, holderSeatID: UUID? = nil, builderSeatID: UUID? = nil,
         leaseDueAt: Date? = nil, leaseTimeLeftWhilePaused: Int? = nil, minimumStrengthRank: Int? = nil,
         contractVersion: Int = 0, budgetCap: Decimal? = nil, spent: Decimal = 0, workReference: String? = nil,
-        priority: Priority = .normal
+        priority: Priority = .normal, imaginariumEntryID: String? = nil, imaginariumCatalogVersion: Int? = nil
     ) {
         self.id = id
         self.projectID = projectID
@@ -47,6 +49,8 @@ public struct TaskSummary: Codable, Equatable, Sendable {
         self.spent = spent
         self.workReference = workReference
         self.priority = priority
+        self.imaginariumEntryID = imaginariumEntryID
+        self.imaginariumCatalogVersion = imaginariumCatalogVersion
     }
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +64,8 @@ public struct TaskSummary: Codable, Equatable, Sendable {
         case contractVersion = "contract_version"
         case budgetCap = "budget_cap"
         case workReference = "work_reference"
+        case imaginariumEntryID = "imaginarium_entry_id"
+        case imaginariumCatalogVersion = "imaginarium_catalog_version"
     }
 }
 

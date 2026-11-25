@@ -82,23 +82,12 @@ Part 2 is built, and IM-5 to IM-7 are now in [docs/PRD.md](../PRD.md#the-imagina
 | IM-5 | Creating the owner's sign-in on a new installation, the setup command in [`setup_controller.rb`](../../api/app/controllers/v1/owner/setup_controller.rb), also creates a project named "Imaginarium" in the same transaction, writing `project.created`. Setup cannot finish without it. |
 | IM-6 | An existing installation gets the project once, when an update of the app starts its server, through a command that skips a workspace that already has it. Running it twice creates nothing new. No payment or plan change is involved. |
 | IM-7 | The workspace records which project is the Imaginarium project by its id, not by its name. In every other way it is an ordinary project, with a brief, a budget and a pause. It is listed first among the projects in the side pane, as a plain project row with a faint rainbow tint and no icon, so that it reads as related to the Imaginarium tab. |
-| IM-8 | Every task sent from the Imaginarium goes to this project. The Try it sheet offers no project choice. The owner can still move a task to another project later with the existing command that changes a task's project. |
 
 ## Part 3: the Imaginarium tab
 
-| ID | Requirement |
-| --- | --- |
-| IM-9 | The side pane has an "Imaginarium" item below Handoff, drawn with the rainbow outline in the design reference. It opens the gallery: a heading, a search field, a "Surprise me" button that opens a random prompt, category filters (All, then one per category) and a grid of tiles. |
-| IM-10 | Each tile shows its category, title, one-line description, an agent-time estimate (for example "~25 min"), a "Try it" button and a copy button. A prompt that needs an image tool says "Needs an agent with an image tool". |
-| IM-11 | "Try it" opens a sheet with the time estimate, the title, the one-line description, a "Make it yours" field for each fill-in the prompt has, the Done when list, and the prompt. The sheet shows no category and no project choice. A line under the prompt says it goes to the Imaginarium project. |
-| IM-12 | Each fill-in starts with the catalog's default. Changing it updates the prompt as the owner types. |
-| IM-13 | "Edit prompt" turns the prompt into editable text, and "Done editing" turns it back. Once the owner has edited it, the text is theirs: fill-ins stop rewriting it, and the sheet says so. "Undo my edits" returns to the filled-in prompt. |
-| IM-14 | The Done when list shows the catalog's checks, then "A second agent reviews the work", which every task gets as its last check. |
-| IM-15 | "Copy prompt" copies exactly the text shown, edited or not, and says "Copied". Copying adds nothing to the board and sends nothing to the server. |
-| IM-16 | "Send to Ready" runs the same two commands as saving the Add task form, Add task and then Complete contract, in the Imaginarium project. The title is the prompt's title, the goal is the text shown, the acceptance criteria are the Done when checks, and the priority is normal. If `task.before_ready` stops it, the task stays in Backlog and the sheet shows the reason, as Add task does. |
-| IM-17 | "Save it to Ideas", a small link under the two buttons, runs Add task into the `ideas` state with the same contract, so that promoting it later needs no retyping. |
-| IM-18 | After either action, the sheet says where the task went and offers "See it on the board" (the board, filtered to the Imaginarium project) and "Keep browsing". Pressing a button twice creates one task: both presses share one command id. |
-| IM-19 | A task made from the Imaginarium records its catalog entry id and the catalog version, and its card shows an "Imaginarium" badge. Event payloads carry the entry id only, never prompt text, because events hold no content. |
+FR-030 to FR-041 in [the main PRD](../PRD.md#the-gallery-functional-requirements)
+are the accepted gallery requirements. This page retains the design
+reference and product questions.
 
 ## Part 4: the catalog
 

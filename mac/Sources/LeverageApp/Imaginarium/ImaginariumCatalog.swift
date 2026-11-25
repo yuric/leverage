@@ -51,8 +51,9 @@ struct ImaginariumCatalog: Decodable, Equatable, Sendable {
         /// The prompt with each `{key}` replaced by the owner's value for that
         /// fill-in, or by its default when the owner gave none.
         func filledPrompt(_ values: [String: String] = [:]) -> String {
-            fills.reduce(prompt) { text, fill in
-                text.replacingOccurrences(of: "{\(fill.key)}", with: values[fill.key] ?? fill.defaultValue)
+            prompt.replacing(ImaginariumCatalog.placeholder) { match in
+                let key = String(match.output.1)
+                return values[key] ?? fills.first { $0.key == key }?.defaultValue ?? String(match.output.0)
             }
         }
     }
@@ -64,6 +65,14 @@ struct ImaginariumCatalog: Decodable, Equatable, Sendable {
 
     static func decode(_ json: String) throws -> ImaginariumCatalog {
         try JSONDecoder().decode(ImaginariumCatalog.self, from: Data(json.utf8))
+    }
+
+    func filteredEntries(category: String?, search: String) -> [Entry] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return entries.filter { entry in
+            (category == nil || category == entry.category) &&
+                (query.isEmpty || entry.title.localizedStandardContains(query) || entry.description.localizedStandardContains(query))
+        }
     }
 
     /// Everything FR-028 forbids, one line per defect; empty for a sound

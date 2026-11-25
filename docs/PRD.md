@@ -834,7 +834,7 @@ The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends
 
 ## Imaginarium
 
-The Imaginarium is a gallery of ready-made prompts that make something fun on the owner's Mac: a picture in a style, a website in a style, a small app, a game, an automation or a gift. The owner copies a prompt, or sends it to Ready in the Imaginarium project (see [The Imaginarium project](#the-imaginarium-project)). The design and the parts not yet accepted are in [docs/imaginarium/PRD.md](imaginarium/PRD.md).
+The Imaginarium is a gallery of ready-made prompts for pictures, websites, small apps, games, automations and gifts on the owner's Mac. The owner can copy a prompt, send it to Ready, or save it to Ideas in the [Imaginarium project](#the-imaginarium-project). The design is in [docs/imaginarium/PRD.md](imaginarium/PRD.md).
 
 ### The prompt catalog: functional requirements
 
@@ -844,6 +844,23 @@ The Imaginarium is a gallery of ready-made prompts that make something fun on th
 | FR-027 | The catalog lists its categories, each with an id and a name, and its entries. Each entry has an id, a category, a title, a one-sentence description, a time estimate in minutes, one to four fill-ins (a key, a label and a default), a prompt that names each fill-in as `{key}`, two to four Done when checks, and what it needs beyond a coding agent, such as an image tool. |
 | FR-028 | A test loads the catalog and fails if two entries share an id, an entry names a category that does not exist, a prompt names a key with no fill-in or holds any other brace, a fill-in is unused, two fill-ins of an entry share a key, an entry has fewer than one or more than four fill-ins or fewer than two or more than four Done when checks, a text is empty, a time estimate is not positive, or an entry needs something the app does not know. |
 | FR-029 | The launch catalog has 32 entries, four in each of eight categories: Pictures, Websites, Apps, Games, Automations, Gifts, Learning, and Home and life. Each asks for something that runs or opens on the owner's Mac with no account, no sign-in, no paid or cloud service and no API key, and none names or imitates an existing game, film, brand or artist. |
+
+### The gallery: functional requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-030 | The server places every gallery task in the workspace's Imaginarium project. The Try it sheet offers no project choice. The owner can move a task to another project afterward. |
+| FR-031 | An Imaginarium item with a rainbow outline sits below Handoff. It opens Gallery A, with a search field, All and category filters, a tile grid, and Surprise me to open a random prompt. |
+| FR-032 | Each tile shows the category, title, short description, approximate agent time, Try it, and Copy prompt. A picture prompt says "Needs an agent with an image tool". |
+| FR-033 | Try it opens a sheet with the time estimate, title, description, Make it yours fields, Done when checks, and the prompt. The sheet names the Imaginarium project. |
+| FR-034 | Each Make it yours field starts at its catalog default. The prompt updates as the owner types. |
+| FR-035 | Edit prompt opens the text for editing. Done editing returns to preview. Edited text takes precedence over the fill-ins. Undo my edits returns to the current filled-in prompt. |
+| FR-036 | The Done when list shows the catalog's checks followed by "A second agent reviews the work". |
+| FR-037 | Copy prompt copies the displayed text and shows "Copied". It makes no server call and creates no task. |
+| FR-038 | Send to Ready runs Add task and then Complete contract with normal priority, the prompt's title, the displayed text as details, and the Done when checks as acceptance criteria. The sheet shows when a rule check is pending. If a check refuses the contract, the task stays in Backlog and the sheet shows the reason. |
+| FR-039 | Save to Ideas runs Add task into Ideas and keeps the displayed prompt and all its criteria for later promotion. |
+| FR-040 | After the save, the sheet shows where the task went and offers See it on the board, filtered to its project, or Keep browsing. Retrying or pressing twice reuses the key for each command and creates one task. |
+| FR-041 | Each gallery task stores the catalog entry id and version and has an Imaginarium badge on the board. The event log records the entry id. The version and prompt text are stored on the task. |
 
 ## Data model
 
@@ -856,7 +873,7 @@ These tables are part of the shared contract, which is listed in full under Buil
 | `projects` | Projects | Name, goal, budget, spent, paused |
 | `brief_entries` | Each project's rules, decisions and lessons | Project, kind, text, author |
 | `seats` | Connected agents | Name, provider, model, effort, role (builder, reviewer, planner, orchestrator or general), strength rank, credential (set for a seat the app runs, empty for a seat that connects on its own), enabled, paused, token hash, last polled |
-| `tasks` | Tasks | Project (empty for "no project"), title, details, state (one of eight), round, holder seat (the seat with the live builder lease or the provisional claim), builder seat (the seat that last claimed the task, kept through In review and Finishing), lease due time, lease time left while paused, minimum strength rank, contract version, budget cap, spent, work reference (free text naming a folder, a repository, a branch or a commit; never fetched by the server), priority |
+| `tasks` | Tasks | Project (empty for "no project"), title, details, state (one of eight), round, holder seat (the seat with the live builder lease or the provisional claim), builder seat (the seat that last claimed the task, kept through In review and Finishing), lease due time, lease time left while paused, minimum strength rank, contract version, budget cap, spent, work reference (free text naming a folder, a repository, a branch or a commit; never fetched by the server), priority, Imaginarium entry id and catalog version |
 | `criteria` | Acceptance criteria | Task, position, text, kind (build or review), state, passed at, passed by |
 | `evidence` | Proof for a criterion | Criterion, kind (link or note), `https` link or a note locating proof inside the work reference |
 | `reviews` | One row per review round | Task, round, reviewer seat, lease due time, verdict, failed criteria, notes |
@@ -893,7 +910,7 @@ Constraints the database enforces, not the application code alone:
 
 Replaying the log into empty tables must reproduce exactly these columns:
 
-- `tasks`: state, round, holder, builder, minimum strength rank, contract version. The holder is set by `task.claimed` and by the event that gives a builder a fresh lease (after a failed review, an approved action, or the owner offering the task again), and by `action.lease_granted` when an approved action waited for a builder that held something else. It is cleared by `task.submitted`, `task.released`, `task.lease_expired`, `task.returned` and `task.cancelled`. The builder is set by `task.claimed` and cleared when the task returns to Ready or Backlog or is cancelled.
+- `tasks`: state, round, holder, builder, minimum strength rank, contract version, and Imaginarium entry id. The holder is set by `task.claimed` and by the event that gives a builder a fresh lease (after a failed review, an approved action, or the owner offering the task again), and by `action.lease_granted` when an approved action waited for a builder that held something else. It is cleared by `task.submitted`, `task.released`, `task.lease_expired`, `task.returned` and `task.cancelled`. The builder is set by `task.claimed` and cleared when the task returns to Ready or Backlog or is cancelled.
 - `criteria`: state. `reviews`: verdict. `actions`: state.
 - `holds`: the open set with reasons.
 - `rule_checks`: result, and override (who and when; the reason is text and outside the replay). `rules`: enabled and current version.

@@ -353,6 +353,14 @@ class PayloadSchemasTest < Minitest::Test
     end
   end
 
+  def test_imaginarium_created_events_use_the_closed_catalog_vocabulary
+    schema = schema_for("task.created", 2)
+    assert_equal registry.fetch("lists").fetch("imaginarium_entries"), schema.dig("properties", "imaginarium_entry", "enum")
+    example = schema.fetch("examples").first
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, example.merge("imaginarium_entry" => "unlisted-prompt"))
+    refute_empty Leverage::Contract.validate_payload("task.created", 2, example.merge("catalog_version" => 1))
+  end
+
   # json_schemer asserts formats, so format uuid and date-time close a string.
   def test_formats_are_asserted
     schema = JSONSchemer.schema({ "type" => "object", "properties" => {

@@ -40,6 +40,7 @@ struct Toolbar: View {
         case .agents: ShellCopy.tabAgents
         case .credentials: ShellCopy.tabCredentials
         case .handoff: ShellCopy.tabHandoff
+        case .imaginarium: ShellCopy.tabImaginarium
         case .settings: ShellCopy.tabSettings
         case .projects: ShellCopy.projects
         }

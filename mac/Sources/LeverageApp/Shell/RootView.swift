@@ -90,6 +90,7 @@ struct AppShell: View {
         case .agents: RosterView()
         case .credentials: CredentialsView()
         case .handoff: HandoffView()
+        case .imaginarium: ImaginariumView()
         case .settings:
             TabView {
                 RulesView().tabItem { Text(RulesCopy.title.text) }

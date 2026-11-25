@@ -8271,6 +8271,16 @@
           "title": {
             "type": "string"
           },
+          "imaginarium_entry_id": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "imaginarium_catalog_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
           "details": {
             "type": [
               "string",
@@ -10779,10 +10789,29 @@
           }
         ]
       },
+      "ImaginariumSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The entry and catalog version used to create a task from the Imaginarium.",
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "catalog_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": ["entry_id", "catalog_version"],
+        "examples": [{"entry_id": "pocket-to-do", "catalog_version": 1}]
+      },
       "AddTaskRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Creates a task in Ideas or the Backlog (default Backlog). Priority is normal by default.",
+        "description": "Creates a task in Ideas or the Backlog (default Backlog). Priority is normal by default. An Imaginarium task goes to the workspace's recorded Imaginarium project. An Imaginarium idea carries its criteria here, including one final independent review.",
         "properties": {
           "title": {
             "type": "string",
@@ -10802,6 +10831,9 @@
               "$ref": "#/components/schemas/CriterionInput"
             },
             "maxItems": 50
+          },
+          "imaginarium": {
+            "$ref": "#/components/schemas/ImaginariumSource"
           },
           "actions": {
             "type": "array",

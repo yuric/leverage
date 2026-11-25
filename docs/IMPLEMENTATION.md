@@ -110,6 +110,12 @@ Hard-to-reverse choices are recorded as ADRs in [adr/](adr/). Smaller choices
 an agent made without the owner are listed here until the owner has seen
 them.
 
+- **Imaginarium gallery defaults (2026-11-24).** Gallery tasks use the
+  app's ordinary per-task work folder. Every Send to Ready runs the usual
+  rule checks. Picture prompts ask the owner to use an agent with an
+  image tool. The gallery creates tasks in its recorded project while
+  that project has content. See the
+  [gallery's open questions](imaginarium/PRD.md#open-questions).
 - **Approval eval budget (2026-11-24).** The owner added three main runs
   per model across Orchestrator and General mode so Codex and Antigravity
   can repeat both. [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md#2026-11-24-budget-update)

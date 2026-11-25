@@ -240,6 +240,8 @@ module ExpectedSchema
         "lease_time_left_while_paused" => col("interval", null: true),
         "minimum_strength_rank" => int(null: true),
         "contract_version" => int(default: "0"),
+        "imaginarium_entry_id" => col("character varying(128)", null: true),
+        "imaginarium_catalog_version" => int(null: true),
         "budget_cap" => money,
         "spent" => money(null: false, default: "0.0"),
         "priority" => text(default: "'normal'::text"),

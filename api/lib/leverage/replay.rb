@@ -70,7 +70,7 @@ module Leverage
     # yet project.
     class Unsupported < StandardError; end
 
-    TASK_COLUMNS = %w[state round holder_seat_id builder_seat_id minimum_strength_rank contract_version].freeze
+    TASK_COLUMNS = %w[state round holder_seat_id builder_seat_id minimum_strength_rank contract_version imaginarium_entry_id].freeze
     STEP_COLUMNS = %w[
       task_id round kind step_class subject_kind subject_id seat_id cause_kind cause_rule_id opened_at closed_at
       opening_event_id closing_event_id
@@ -161,7 +161,9 @@ module Leverage
       case event.type
       when "task.created"
         projection[:tasks][event.task_id] = { "state" => StoredEvents.task_state(payload.fetch("state")), "round" => 0,
-          "holder_seat_id" => nil, "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0 }
+          "holder_seat_id" => nil, "builder_seat_id" => nil, "minimum_strength_rank" => nil, "contract_version" => 0,
+          "imaginarium_entry_id" => payload["imaginarium_entry"] }
+        payload.fetch("added_criterion_ids", []).each { |id| projection[:criteria][id] = { "state" => "open" } }
         return
       when /\Arule\./ then return rule(projection, event, payload)
       when /\Acheck\./ then return check(projection, event, payload, task)

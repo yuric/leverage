@@ -29,16 +29,19 @@ module Leverage
     # subject:     - an Active Record row the event is about, or nil;
     #                subject_kind is its class's name in snake case.
     # payload:     - the payload, with symbol or string keys.
+    # schema_version: - defaults to the latest registered payload shape.
     # actor_kind:, actor_id: - default: the request's caller (Context#actor).
     # command_id:  - default: the request's key.
     # effective_at: - default: ctx.at; a timer's event carries its due time.
     def append(ctx, type:, payload: {}, task: nil, task_id: task&.id, project_id: task&.project_id, round: task&.round,
                subject: nil, subject_kind: subject && kind_of(subject), subject_id: subject&.id, cause_id: nil,
                actor_kind: ctx.actor.first, actor_id: ctx.actor.last, command_id: ctx.request.key,
-               effective_at: ctx.at)
+               effective_at: ctx.at, schema_version: nil)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       entry = registered(type)
-      version = entry.fetch("schema_versions").max
+      versions = entry.fetch("schema_versions")
+      version = schema_version || versions.max
+      raise InvalidEvent, "Unregistered schema version #{version} for #{type}" unless versions.include?(version)
       check_subject(entry, subject_kind)
       check_payload(type, version, payload)
 

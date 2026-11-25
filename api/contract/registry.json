@@ -1,6 +1,6 @@
 {
   "event_types": [
-    {"type": "task.created", "group": "Task", "subject_kinds": [null], "schema_versions": [1], "written_as_side_event": false},
+    {"type": "task.created", "group": "Task", "subject_kinds": [null], "schema_versions": [1, 2], "written_as_side_event": false},
     {"type": "task.promoted", "group": "Task", "subject_kinds": [null], "schema_versions": [1], "written_as_side_event": false},
     {"type": "task.contract_changed", "group": "Task", "subject_kinds": [null], "schema_versions": [1], "written_as_side_event": false},
     {"type": "task.changed", "group": "Task", "subject_kinds": [null], "schema_versions": [1], "written_as_side_event": false},
@@ -331,6 +331,14 @@
     {"provider": "openrouter", "kind": "api_token", "provider_group": "openrouter"}
   ],
   "lists": {
+    "imaginarium_entries": [
+      "bedtime-story-book", "birthday-time-capsule", "budget-jars", "chore-wheel", "downloads-tidy-up",
+      "field-guide-plate", "flashcard-coach", "glass-portfolio", "habit-streaks", "inside-joke-crossword",
+      "link-in-bio-page", "loud-launch-page", "math-quest", "meal-planner", "menu-bar-pet", "neon-synthwave-poster",
+      "our-story-timeline", "party-rsvp-site", "pet-runner", "photo-renamer", "plant-care-tracker",
+      "playable-explainer", "pocket-to-do", "receipt-sorter", "recipe-box", "storybook-pet-portrait",
+      "tiny-clay-world", "trip-planner-map", "trivia-night-host", "typing-trainer", "weekly-folder-digest", "word-garden"
+    ],
     "important_event_types": [
       "task.created", "task.claimed", "task.submitted", "task.reassigned",
       "task.returned_for_rework", "task.done", "task.cancelled", "review.passed",
