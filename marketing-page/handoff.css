@@ -21,6 +21,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+.handoff-controls {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
 .handoff-header strong {
   font-size: clamp(.93rem, 2vw, 1.06rem);
   font-weight: 640;

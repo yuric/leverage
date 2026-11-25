@@ -2,8 +2,10 @@
 
 Leverage is a Mac app for coordinating AI agents from multiple providers
 without opening a terminal. Connect provider accounts and add a task in a
-form, and Leverage can keep work moving when a provider hits a limit or a
-login expires.
+form. Leverage is built to keep work moving when a provider hits a limit or
+a login expires; so far that has been shown only with stand-in tools, not
+on a real provider
+([how far it is proven](docs/IMPLEMENTATION.md#what-the-handoff-milestone-proves-and-how-far)).
 
 > **Status: in development.** See
 > [Implementation progress](docs/IMPLEMENTATION.md) for the milestones
