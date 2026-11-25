@@ -1,6 +1,6 @@
 # The Imaginarium
 
-Status: Proposed, for the maintainer's review (24 November 2026)
+Status: Approved by the maintainer on 24 November 2026.
 
 The Imaginarium is a tab in the Mac app where the owner browses ready-made
 prompts that make something fun: a picture in a style, a website in a style,
@@ -9,11 +9,9 @@ edit it, or send it to Ready so that a free agent builds it. Every prompt sent
 from the Imaginarium lands in one project, also called Imaginarium, which every
 workspace has from the start.
 
-This file is a proposal. Requirement IDs use the prefix `IM-` so they cannot
-be mistaken for accepted `FR-` and `NFR-` requirements. When the maintainer
-accepts the proposal, its requirements move into [docs/PRD.md](../PRD.md)
-with `FR-` IDs, and this file keeps only the design reference, so that each
-requirement has one home.
+The [main PRD](../PRD.md) defines the accepted requirements. This page
+keeps the design reference, the original build order, and the product
+questions raised during design. The `IM-` IDs refer to the original proposal.
 
 ## Design reference
 
