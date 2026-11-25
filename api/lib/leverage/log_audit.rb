@@ -544,8 +544,9 @@ module Leverage
 
     # Before UX-2, New prompt released the seat's work (GA-17): the one
     # Working task it held, the reviews it held and the commands it had
-    # waiting on them, and it held the Finishing tasks it held. Only the
-    # releases, cancelled checks, holds and inbox changes carried its key.
+    # waiting on them, and it opened a hold on a Finishing task it held.
+    # Only the releases, cancelled checks, holds and inbox changes carried
+    # its key.
     # A held job's immediate timeout wrote under its own keyless timer.
     # Side events alone go through the ordinary audit.
     #
@@ -640,10 +641,10 @@ module Leverage
     end
 
     # The seat's cancelled pending transition a withdrawn check belonged
-    # to: the one its check.queued names. A check held at the re-run limit was
-    # never queued (RD-45): its rerun_limit hold, still open when the check
-    # is withdrawn, was opened by the waiting command under its own key
-    # (Gate), so that key finds the transition. The check's row is not
+    # to: the one its check.queued names. A check held at the re-run limit
+    # was never queued (RD-45): its rerun_limit hold, still open when the
+    # check is withdrawn, was opened by the waiting command under its own
+    # key (Gate), so that key finds the transition. The check's row is not
     # read: meeting the same inputs again points it at the later command.
     def withdrawn_pending(event, seat_id)
       cancelled = PendingTransition.where(workspace_id: event.workspace_id, task_id: event.task_id, state: "cancelled",
