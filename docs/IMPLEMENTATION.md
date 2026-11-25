@@ -52,6 +52,15 @@ The run ends when the build is done or the owner stops it.
   [Installed for the build](#installed-for-the-build).
 - No agent signs in to a provider or types a credential. Tests against real
   providers use only tools that are already signed in on the owner's Mac.
+- Every commit an agent writes carries a `Co-Authored-By` trailer naming
+  it. Eleven commits merged on 2026-11-24 while Codex managed the run carry
+  none and only the owner's identity, although they sit on Codex's
+  branches between commits signed by Codex: `5440802` (#35), `1c68a78`,
+  `d45eb5d`, `fdac311` and `8539bb2` (#36), `6cc2043` (#39), and
+  `2cf72f1`, `40ea69b`, `9adffe0`, `1be0f8a` and `b073c33` (#40). `3b0361b`
+  (#41) names "OpenAI Codex" with no address. `main` cannot be rewritten,
+  so this list is the record; the owner confirms who wrote them in
+  question 19.
 
 ## Current state
 
@@ -2595,6 +2604,13 @@ skeleton's pull request description, as rule AR-004 asks.
       proposals in the open questions: a folder per task, a Blocked wait
       for an image tool, a project that cannot be deleted, and no
       specific-details check on an unedited prompt.
+
+19. **Who wrote the eleven commits with no agent trailer.** The commits
+    listed under [How the build is run](#how-the-build-is-run) are taken
+    to be Codex's, from their branches and times; the repository cannot
+    show it. **Chosen.** They are recorded as Codex's work merged without
+    the trailer. **Alternative.** The owner names any he wrote himself,
+    and they come off the list.
 
 ## Waiting for the owner
 
