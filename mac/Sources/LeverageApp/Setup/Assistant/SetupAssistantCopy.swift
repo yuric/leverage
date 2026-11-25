@@ -73,7 +73,7 @@ enum SetupAssistantCopy: OwnerFacingCopy {
         case .checking: "Checking {login}"
         case .oneSubscription: "I only have one subscription"
         case .oneSubscriptionNote:
-            "You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings."
+            "You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Rules."
         case .continueWithOne: "Continue with one"
 
         case .agentsTitle: "Start an agent for each login"
@@ -84,7 +84,7 @@ enum SetupAssistantCopy: OwnerFacingCopy {
         case .startAgents: "Start agents"
         case .geminiRowNote: "Builds, but does not review yet."
         case .oneProviderNote:
-            "With one provider, finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings."
+            "With one provider, finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Rules."
         case .geminiReviewNote:
             "Gemini does not review yet. {other} reviews what Gemini builds, and what {other} builds will wait for another reviewer."
         case .turnOnOne: "Turn on at least one agent to continue."
