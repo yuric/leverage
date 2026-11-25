@@ -1,5 +1,10 @@
 import Foundation
 import LeverageKit
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// Where the tool runs (CL-7). If the task's "Where the work is" names an
 /// existing local folder, there. If it is empty, the builder makes
@@ -130,39 +135,38 @@ enum WorkFolder {
     /// is spelled, so a link to a refused folder, or its name in another
     /// case on a disk that ignores case, is refused too.
     static func mayRunTool(in path: String, places: Places) -> Bool {
-        let folder = lineage(of: path)
+        let folder = Lineage(of: path)
         guard folder.exists, let itself = folder.identities.first else { return false }
         let above = folder.identities.dropFirst()
         if above.isEmpty { return false }
 
         /// Whether the folder is `other`, when `other` exists.
-        func equals(_ other: String) -> Bool {
-            let other = lineage(of: other)
-            return other.exists && other.identities.first == itself
-        }
+        func equals(_ other: Lineage) -> Bool { other.exists && other.identities.first == itself }
         /// Whether the folder lies inside `other`, at any depth.
-        func isInside(_ other: String) -> Bool {
-            let other = lineage(of: other)
+        func isInside(_ other: Lineage) -> Bool {
             guard other.exists, let identity = other.identities.first else { return false }
             return above.contains(identity)
         }
         /// Whether the folder is `other` or a folder above it, also when
         /// `other` does not exist yet.
-        func isOrHolds(_ other: String) -> Bool { lineage(of: other).identities.contains(itself) }
+        func isOrHolds(_ other: Lineage) -> Bool { other.identities.contains(itself) }
 
-        if isOrHolds(places.home) { return false }
+        if isOrHolds(Lineage(of: places.home)) { return false }
 
-        let workRoot = places.workRoot.path
-        let jobs = places.workRoot.appendingPathComponent("jobs").path
+        let workRoot = Lineage(of: places.workRoot.path)
+        let jobs = Lineage(of: places.workRoot.appendingPathComponent("jobs").path)
         if equals(workRoot) || equals(jobs) || isInside(jobs) { return false }
         if isInside(workRoot) { return true }
 
-        if isOrHolds(places.supportFolder) || isInside(places.supportFolder) { return false }
+        let support = Lineage(of: places.supportFolder)
+        if isOrHolds(support) || isInside(support) { return false }
 
-        let library = places.home + "/Library"
+        let libraryPath = places.home + "/Library"
+        let library = Lineage(of: libraryPath)
         if equals(library) { return false }
         if isInside(library) {
-            return isInside(library + "/CloudStorage") || isInside(library + "/Mobile Documents")
+            return isInside(Lineage(of: libraryPath + "/CloudStorage"))
+                || isInside(Lineage(of: libraryPath + "/Mobile Documents"))
         }
         return true
     }
@@ -171,34 +175,51 @@ enum WorkFolder {
     private struct Identity: Equatable {
         let volume: UInt64
         let file: UInt64
+
+        /// Of what the path names once every link is followed, or nil when
+        /// it names nothing. One `stat` call: this is asked for every
+        /// folder above a work folder, before every tool run.
+        init?(path: String) {
+            var information = stat()
+            guard stat(path, &information) == 0 else { return nil }
+            volume = UInt64(truncatingIfNeeded: information.st_dev)
+            file = UInt64(truncatingIfNeeded: information.st_ino)
+        }
     }
 
     /// The folder a path names and every folder above it, the folder first,
     /// each as what it is on disk once every link is followed. For a path
     /// that names nothing, `exists` is false and the list starts at the
     /// nearest folder above it that exists.
-    private static func lineage(of path: String) -> (exists: Bool, identities: [Identity]) {
-        var named = URL(fileURLWithPath: path).standardized
-        var exists = true
-        while named.path != "/", !FileManager.default.fileExists(atPath: named.path) {
-            named.deleteLastPathComponent()
-            exists = false
-        }
-        // With its links followed, the path's parents are the folders above.
-        var real = named.resolvingSymlinksInPath()
-        var identities: [Identity] = []
-        while true {
-            if let identity = identity(of: real.path) { identities.append(identity) }
-            if real.path == "/" { break }
-            real.deleteLastPathComponent()
-        }
-        return (exists, identities)
-    }
+    private struct Lineage {
+        let exists: Bool
+        let identities: [Identity]
 
-    private static func identity(of path: String) -> Identity? {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
-              let volume = attributes[.systemNumber] as? NSNumber,
-              let file = attributes[.systemFileNumber] as? NSNumber else { return nil }
-        return Identity(volume: volume.uint64Value, file: file.uint64Value)
+        init(of path: String) {
+            var named = URL(fileURLWithPath: path).standardized.path
+            var exists = true
+            while named != "/", Identity(path: named) == nil {
+                named = Self.parent(of: named)
+                exists = false
+            }
+            // With its links followed, the path's parents are the folders
+            // above it.
+            var real = URL(fileURLWithPath: named).resolvingSymlinksInPath().path
+            var identities: [Identity] = []
+            while true {
+                if let identity = Identity(path: real) { identities.append(identity) }
+                if real == "/" { break }
+                real = Self.parent(of: real)
+            }
+            self.exists = exists
+            self.identities = identities
+        }
+
+        /// The folder above an absolute path with no `.`, `..` or doubled
+        /// slash in it; the root's is the root.
+        private static func parent(of path: String) -> String {
+            guard let slash = path.lastIndex(of: "/"), slash != path.startIndex else { return "/" }
+            return String(path[..<slash])
+        }
     }
 }
