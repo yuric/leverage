@@ -2520,6 +2520,74 @@ skeleton's pull request description, as rule AR-004 asks.
       their Mac and that the banner clears when they return to Leverage
       after turning notifications on.
 
+17. **The choices made for the owner for App round 2.** The owner
+    approved building the round with the handoff's two defaults (see
+    [App round 2](#app-round-2)). He did not decide the choices below,
+    which the managing agent made and which are now in the PRD and the
+    [contract](../api/contract/decisions.md#app-round-2-ux). Work
+    proceeds with them.
+
+    - **UX-2.** The landing prompt is issued only until the seat lands;
+      a new prompt is a new seat. **Alternative.** Issue the token inside
+      Connect's answer.
+    - **UX-6 and UX-6b.** The tool's default is the first choice of both
+      lists, and with it no effort is offered. A model newer than the
+      login's tool is shown disabled with the version it needs.
+      **Alternative.** Offer the default model's efforts; hide newer
+      models, or offer them and let the run fail.
+    - **UX-7 and UX-8.** A model or an effort not in the catalog is
+      refused `invalid`. A seat that connects on its own takes no model or
+      effort from the owner and needs a login provider.
+      **Alternative.** A new refusal code; catalog entries for API
+      providers.
+    - **UX-11a.** Turning Deliver tasks off gives back the Working task
+      (release reason `deliver_turned_off`). **Alternative.** The seat
+      keeps the task it is working on until it gives it back.
+    - **UX-11b.** An agent's Add task takes no outward actions, state,
+      minimum strength or budget cap. **Alternative.** Allow outward
+      actions, which the approval rule would then check.
+    - **UX-11c.** While the seat holds work, the task it adds goes into
+      that work's project. **Alternative.** The project of the seat's
+      latest work, or any project.
+    - **UX-13.** After a failed check only the owner or a planner
+      completes the contract. **Alternative.** Let the adding seat retry
+      its own Backlog task.
+    - **UX-14.** The refusal `add_task_limit`: at most 20 tasks added per
+      seat in any rolling hour, no task from a task a seat added, and at
+      most 50 open tasks agents added per workspace, at which the Needs
+      you item "Agents have added 50 open tasks" opens.
+      **Alternative.** Only the rate, or a 429 answer.
+    - **UX-15.** Native Codex and Grok seats have no effort list, because
+      their tools' documents show no way to pass one that the driver
+      uses. This is a disclosed departure from the owner's request for
+      an effort list. **Alternative.** Hide effort for both whatever
+      their documents later show.
+    - **UX-16.** A task an agent added whose check fails opens the Needs
+      you item "A task an agent added needs its contract".
+      **Alternative.** Only the Backlog card and the task page show it.
+
+18. **The choices made for the owner for the Imaginarium gallery.** The
+    owner approved starting Part 3, the gallery tab (see the
+    [gallery's status](imaginarium/PRD.md)). He did not read the
+    requirements FR-030 to FR-041 that the managing agent wrote into the
+    PRD from the proposal's IM-8 to IM-19, or decide the
+    [open questions](imaginarium/PRD.md#open-questions). Work proceeds
+    with the build's answers.
+
+    - **Wording.** FR-033 no longer says that the Try it sheet shows no
+      category, and FR-039 names the action "Save to Ideas" where the
+      mockup says "Save it to Ideas". **Alternative.** The proposal's
+      wording.
+    - **The four open questions.** Gallery tasks use the ordinary
+      per-task work folder, not a folder under `~/Leverage/Imaginarium/`.
+      Picture prompts are not refused; the tile and sheet say they need an
+      agent with an image tool. The gallery adds tasks to the recorded
+      Imaginarium project while its content has not been deleted. Every
+      Send to Ready runs the usual rule checks. **Alternative.** The
+      proposals in the open questions: a folder per task, a Blocked wait
+      for an image tool, a project that cannot be deleted, and no
+      specific-details check on an unedited prompt.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -2572,3 +2640,5 @@ run is also listed here until the owner has read it.
 | Five real provider tokens | Add and verify each token, check its reading, and check the rebuilt app's Keychain prompt. |
 | Native Handoff controls | Drag a row in the live app and verify keyboard and cancellation behavior. |
 | General role and landing prompt | Read the choices in question 15, including the limits for a custom review-pass check, a task given back across providers and the orchestrator offline notice during General work. |
+| App round 2 ([#35](https://github.com/yuric/leverage/pull/35)) | Read the choices in question 17, including the limits on tasks agents add and the two new Needs you items. |
+| Imaginarium gallery ([#36](https://github.com/yuric/leverage/pull/36)) | Accept or change FR-030 to FR-041 and the build's answers to the gallery's open questions (question 18). |
