@@ -27,9 +27,9 @@ person can pick it up after an interruption.
 ## How the build is run
 
 The owner delegated this build to one managing agent on 2026-11-19, under
-the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md). The managing
-agent is Claude Code (Claude Fable 5.2); the run started on 2026-11-19 and
-ends when the build is done or the owner stops it.
+the delegated-run rule in [CONTRIBUTING.md](../CONTRIBUTING.md). Claude Code
+(Claude Fable 5.2) started as the managing agent, and Codex now manages
+the run. The run ends when the build is done or the owner stops it.
 
 - The managing agent plans each milestone, gives the work to other agents,
   reviews what they return, merges, and keeps this file current. Agents it
@@ -56,13 +56,20 @@ ends when the build is done or the owner stops it.
 | --- | --- |
 | **As of** | 2026-11-24 |
 | **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)) |
-| **Next** | Review App round 1 and read the choices in question 16. |
+| **Running locally** | Leverage is running on the owner's Mac at `300db09`. The event-log audit passed for 1 workspace and 10 events. |
+| **Next** | Implement App round 2 and Imaginarium Part 3, both approved by the owner. The Round 2 contract and data model were verified locally at `4d7c479`. |
+
+### Recent merges
+
+- App round 1. See the [contract decisions](../api/contract/decisions.md#app-round-1-ui)
+  and question 16. [#29](https://github.com/yuric/leverage/pull/29)
+- The 32-prompt Imaginarium catalog. [#30](https://github.com/yuric/leverage/pull/30)
+- The event-log audit fix for sign-ups recorded before DB-53. [#32](https://github.com/yuric/leverage/pull/32)
+- The marketing demo order puts Handoff before Imaginarium. [#33](https://github.com/yuric/leverage/pull/33)
 
 ### In flight
 
-| Work | Branch | Pull request | State |
-| --- | --- | --- | --- |
-| App round 1 | `feat/app-round-1` | | Integrated locally with both rounds of review addressed. The second round covers a builder's submitted work reference and the draft parser's marker and criteria tests. See [the contract decisions](../api/contract/decisions.md#app-round-1-ui) and question 16. |
+App round 2 and Imaginarium Part 3 have no implementation pull requests yet.
 
 ### General role and landing prompt on `main`
 
