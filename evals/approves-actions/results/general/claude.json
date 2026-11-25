@@ -14,9 +14,9 @@
   "met_bar": false,
   "scores": null,
   "misses": [
-    "not run: Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment"
+    "not run: Claude Code refused every run on this Mac"
   ],
-  "reason": "Claude Code refused every run: the Claude subscription on this Mac reports a past-due payment",
+  "reason": "Claude Code refused every run on this Mac",
   "tool_runs": 0,
   "cases": []
 }

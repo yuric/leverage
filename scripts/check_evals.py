@@ -77,6 +77,12 @@ TOKENS = [
 TOKENS += [(name, pattern) for name, pattern in check_reply_fixtures.TOKENS
            if name in ("an xAI key", "a Google key", "a Google token", "a GitHub token")]
 HOME_PATH = check_reply_fixtures.HOME_PATH
+# Why a model was not run is typed by hand and printed in every CI log. It
+# says what the tool did, never the state of the maintainer's account with
+# the provider. The approval cases' "pay" actions are not screened: only a
+# not-run result's reason and misses are.
+ACCOUNT_STATE = re.compile(r"past[- ]?due|overdue|unpaid|billing|invoice|payment|subscription|credit card",
+                           re.IGNORECASE)
 # Result fields that hold hashes, not text.
 HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256"}
 
@@ -435,6 +441,10 @@ class Check:
             return
         if result.get("status") not in ("run", "not_run"):
             bad("the status must be run or not_run")
+            return
+        if result["status"] == "not_run" and any(
+                ACCOUNT_STATE.search(text) for text in strings([result.get("reason"), result.get("misses")])):
+            bad("its reason names account or billing state; say what the tool did, not why the account refused")
             return
         if eval_score.record_mode(result) != mode:
             bad(f"the result must be in {mode} mode")

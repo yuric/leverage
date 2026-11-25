@@ -326,6 +326,19 @@ class CheckEvalsTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("MISS: gemini was not run", output)
 
+    def test_a_not_run_reason_about_the_owners_account_standing_fails(self):
+        for reason in ("the made-up account reports a payment past due", "billing is overdue",
+                       "an unpaid invoice"):
+            with self.subTest(reason=reason):
+                code, output = python(SCORER, "not-run", "--suite", self.copy.suite,
+                                      "--shipped", self.copy.root / "api" / "contract" / "shipped_rules.json",
+                                      "--provider", "gemini", "--reason", reason, "--date", "2026-11-20",
+                                      "--out", self.copy.result_path("gemini"))
+                self.assertEqual(code, 0, output)
+                self.copy.set_tested(["claude", "codex"])
+                output = self.assertFails("results: gemini", "account or billing state")
+                self.assertNotIn(reason, output)
+
     def test_the_budget_counts_both_ledgers_together(self):
         claude = self.copy.run_entry("claude", 30)
         general = {**claude, "mode": "general", "role_file_sha256": None}

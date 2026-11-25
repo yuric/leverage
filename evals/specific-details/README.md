@@ -118,7 +118,9 @@ results stand for the inputs they evaluated.
 CI never calls a provider. `scripts/check_evals.py` checks the cases'
 shape and counts, the required Orchestrator results and any General
 results, the two registry lists, and the suite's budget. It rescans cases
-and results for email or token shapes and scores each recorded run again.
+and results for email or token shapes, refuses a not-run reason that names
+account or billing state (say what the tool did, not why an account
+refused), and scores each recorded run again.
 When an instruction or case changes, the recorded results need a rerun.
 A role file change also requires rerunning Orchestrator results. The check
 prints any recorded miss.
