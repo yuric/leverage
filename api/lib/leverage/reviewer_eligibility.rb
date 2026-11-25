@@ -44,7 +44,7 @@ module Leverage
     # state_machine.json): the one list of commands after which it runs.
     REEVALUATED_BY = %w[
       submit release_review review_lease_expiry report_limit report_signed_out
-      connect_seat issue_landing_prompt change_seat pause_seat resume_seat remove_seat report_run_stopped report_request_result
+      connect_seat change_seat pause_seat resume_seat remove_seat report_run_stopped report_request_result
       install_shipped_rules enable_rule disable_rule save_rule revert_rule remove_rule reviewer_eligibility
     ].freeze
 

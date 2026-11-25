@@ -5,7 +5,9 @@ module Leverage
       # through the same gate as the owner and the planner (UX-11).
       class CreateTask < AddTask
         def load(ctx)
-          @seat = Seat.find_by!(workspace_id: ctx.workspace.id, id: ctx.request.caller_id)
+          @seat = Seat.find_by(workspace_id: ctx.workspace.id, id: ctx.request.caller_id, removed_at: nil)
+          raise NotFound, "No such seat" unless @seat
+
           return unless Permissions.creates?(@seat)
 
           @work = AgentTasks.held_work(@seat, at: ctx.at)

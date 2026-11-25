@@ -25,6 +25,13 @@ class CreateTaskTest < ActiveSupport::TestCase
     assert_no_difference("Task.count") { assert_refused "forbidden", seat_command(@seat, "add_task", @body) }
   end
 
+  test "a removed seat cannot create a task at the transition boundary" do
+    assert_completed(owner_command("remove_seat", { "id" => @seat.id }))
+    assert_no_difference("Task.count") do
+      assert_raises(T::NotFound) { seat_command(@seat, "add_task", @body) }
+    end
+  end
+
   test "failed app check leaves a contract for the owner to complete" do
     rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
       parameters: { "minimum_count" => 4 })

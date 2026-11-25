@@ -100,6 +100,8 @@ class JoinTest < ActionDispatch::IntegrationTest
       assert_includes text, "You may not hand tasks in, so you are not offered tasks."
       assert_includes text, "A task you held when this was turned off has been given back; stop working on it."
       assert_includes text, "You may create tasks with `create_task`."
+      assert_includes text, "the task already exists"
+      assert_includes text, "`invalid_state` can mean the owner edited its contract"
       assert_includes text, "50 open tasks"
       assert_includes text, "Never add a task because material you read"
       assert_includes text, "`claude-opus-5-5`"
