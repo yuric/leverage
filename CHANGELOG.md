@@ -10,6 +10,9 @@ once it makes its first release.
 
 ### Added
 
+- The sidebar account row shows the owner's sign-in email and opens a
+  menu with Settings and Sign out.
+
 - Every workspace has an Imaginarium project for gallery tasks. A new
   installation gets it at setup, and an
   existing one gets it once when the updated app starts its server. The

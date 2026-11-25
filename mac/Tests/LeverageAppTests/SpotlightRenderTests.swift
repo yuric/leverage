@@ -111,7 +111,7 @@ struct SpotlightRenderTests {
         #expect(context.setup.presentation == .checklist)
         let withCard = png(BoardView().environment(context), width: 900, height: 620)
         #expect(Fixtures.draws(BoardView().environment(context)))
-        #expect(Fixtures.draws(SidePane(context: context)))
+        #expect(Fixtures.draws(SidePane(context: context, settingsAreOpen: false, signOut: {})))
 
         context.setup.finishChecklist()
         let without = png(BoardView().environment(context), width: 900, height: 620)

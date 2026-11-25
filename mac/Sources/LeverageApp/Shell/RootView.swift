@@ -4,6 +4,7 @@ import SwiftUI
 /// the app itself, by the model's phase.
 struct RootView: View {
     let model: AppModel
+    var settingsAreOpen = false
 
     var body: some View {
         ZStack {
@@ -18,7 +19,7 @@ struct RootView: View {
                 }
             case .ready:
                 if let context = model.screens {
-                    AppShell(context: context)
+                    AppShell(context: context, settingsAreOpen: settingsAreOpen, signOut: model.signOut)
                 }
             }
         }
@@ -33,6 +34,8 @@ struct RootView: View {
 /// the Add task sheet over it, and the setup spotlight while the checklist shows.
 struct AppShell: View {
     let context: ScreenContext
+    let settingsAreOpen: Bool
+    let signOut: @MainActor () async -> Void
 
     var body: some View {
         Group {
@@ -55,7 +58,7 @@ struct AppShell: View {
     private var app: some View {
         @Bindable var navigator = context.navigator
         return HStack(alignment: .top, spacing: Tokens.Spacing.window) {
-            SidePane(context: context)
+            SidePane(context: context, settingsAreOpen: settingsAreOpen, signOut: signOut)
             VStack(spacing: 0) {
                 Toolbar(context: context)
                 content

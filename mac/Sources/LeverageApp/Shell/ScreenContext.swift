@@ -101,6 +101,8 @@ final class ScreenContext {
     /// First-run setup: the assistant, the checklist, or neither (docs/onboarding/PRD.md).
     let setup: SetupModel
     private(set) var paneProjects: [Project] = []
+    private(set) var ownerEmail: String?
+    @ObservationIgnored private var isReadingOwnerIdentity = false
     private(set) var projectListFailure: ShellCopy?
 
     init(
@@ -117,6 +119,17 @@ final class ScreenContext {
             select: { [navigator] in navigator.show(.needsYou) })
         self.setup = SetupModel(
             api: owner, store: runtime.setupProgress, noteRead: { [feed] in feed.noteRead(asOfSeq: $0) })
+    }
+
+    /// Loads the email for this session without delaying the workspace.
+    /// Opening the account menu can retry a failed read.
+    func loadOwnerIdentity() async {
+        guard ownerEmail == nil, !isReadingOwnerIdentity else { return }
+        isReadingOwnerIdentity = true
+        defer { isReadingOwnerIdentity = false }
+
+        guard let identity = try? await owner.ownerIdentity(), !Task.isCancelled else { return }
+        ownerEmail = identity.emailAddress
     }
 
     /// Reads where setup stands, then again on every batch of events, until

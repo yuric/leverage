@@ -2,9 +2,11 @@ import LeverageKit
 import SwiftUI
 
 /// The floating left pane: tabs, project filters, setup's progress while the
-/// checklist shows, and the health line.
+/// checklist shows, the health line, and the account menu.
 struct SidePane: View {
     let context: ScreenContext
+    let settingsAreOpen: Bool
+    let signOut: @MainActor () async -> Void
     @State private var projectListAttempt = 0
 
     var body: some View {
@@ -38,9 +40,12 @@ struct SidePane: View {
                 .padding(.horizontal, 6)
             }
 
-            HealthLineView(model: context.health)
-                .padding(.horizontal, 6)
-                .padding(.bottom, 2)
+            VStack(alignment: .leading, spacing: 8) {
+                HealthLineView(model: context.health)
+                    .padding(.horizontal, 6)
+                Divider().padding(.horizontal, 6)
+                AccountMenu(context: context, settingsAreOpen: settingsAreOpen, signOut: signOut)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 12)
@@ -48,6 +53,7 @@ struct SidePane: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .glass(.nav, radius: Tokens.Radius.window - Tokens.Spacing.window)
         .task { await context.health.run() }
+        .task { await context.loadOwnerIdentity() }
         .task(id: projectListAttempt) { await context.watchProjects() }
     }
 

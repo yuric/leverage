@@ -10,6 +10,7 @@ enum ShellCopy: OwnerFacingCopy {
     case tabBoard, tabNeedsYou, tabDecided, tabActivity, tabAgents, tabCredentials, tabHandoff, tabImaginarium, tabRules
     case projects, allProjects, manageProjects, manageProjectsAccessibility
     case addTask, backToBoard, signOut
+    case account, accountMenu, subscription, settings
 
     // The health line at the foot of the pane (MA-23).
     case healthChecking, healthRunning, healthLate, healthAgentsStopped, healthUnreachable
@@ -56,6 +57,10 @@ enum ShellCopy: OwnerFacingCopy {
         case .addTask: "Add task"
         case .backToBoard: "Back to the task board"
         case .signOut: "Sign out"
+        case .account: "Account"
+        case .accountMenu: "Subscription, settings and sign out"
+        case .subscription: "Subscription"
+        case .settings: "Settings"
 
         case .healthChecking: "Checking…"
         case .healthRunning: "System is running"

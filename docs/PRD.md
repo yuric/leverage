@@ -847,7 +847,10 @@ The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends
 ### Build order for Subscription
 
 1. The words (FR-025), the Rules tab (FR-006) and Settings with Same as this Mac, Light and Dark (FR-005). The Settings window opens from the app menu (⌘ ,).
-2. The row and the menu with Sign out (FR-001 to FR-004). Until the service exists, the row's second line is left out.
+2. The row and the menu with Sign out (FR-001 to FR-004). Until the
+   service exists, the row has just the sign-in email and the menu header
+   leaves out the plan and price. The Subscription entry is disabled
+   until the page is built.
 3. The ADR and the service (FR-021 to FR-024).
 4. Choosing and paying (FR-007 to FR-011), then the Subscription page (FR-012 to FR-016), then failed payments (FR-017 to FR-020).
 

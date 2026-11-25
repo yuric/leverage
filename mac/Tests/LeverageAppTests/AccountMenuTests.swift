@@ -58,6 +58,40 @@ struct AccountMenuTests {
         #expect(context.ownerEmail == ShellFixtures.madeUpEmail)
     }
 
+    @Test("a delayed 401 from an old identity read leaves the new session signed in")
+    func oldIdentityReadCannotEndNewSession() async throws {
+        let rig = ShellRig()
+        rig.scriptSignIn(ownerExists: true)
+        let started = Locked(false)
+        let (release, request) = AsyncStream<Void>.makeStream()
+        rig.owner.script {
+            $0.ownerIdentity = {
+                started.update { $0 = true }
+                for await _ in release {}
+                throw ShellFixtures.unauthenticated()
+            }
+        }
+        try rig.runtime.sessions.save(ShellFixtures.madeUpSessionToken)
+        let model = rig.makeModel()
+        await model.launch()
+        let previous = try #require(model.screens)
+        let read = Task { await previous.loadOwnerIdentity() }
+        defer { request.finish() }
+        try #require(await ShellFixtures.eventually { started.value })
+
+        await model.signOut()
+        let signIn = try #require(model.signIn)
+        signIn.email = ShellFixtures.madeUpEmail
+        signIn.password = ShellFixtures.madeUpPassword
+        await signIn.submit()
+        let current = try #require(model.screens)
+
+        request.finish()
+        await read.value
+        #expect(model.screens === current)
+        #expect(model.isSignedIn)
+    }
+
     @Test("the identity read observes a server-ended session")
     func respectsSessionExpiry() async throws {
         let rig = ShellRig()

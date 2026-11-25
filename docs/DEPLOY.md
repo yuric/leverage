@@ -187,6 +187,10 @@ folders remains unverified.
 | Logs | `<support folder>/logs/helper.log` (the helper) and `logs/seat-<id>.log` (each run); `docker compose -p leverage-app logs api sweep` for the server |
 | The owner's session | The login Keychain, service `leverage`, account `owner-session` |
 
+After sign-in, the row under the system health line shows the sign-in
+email. Open that row to reach Settings or Sign out. The Leverage menu
+also offers both actions.
+
 For an API token, choose Add credential, pick an API token provider,
 name the credential and paste the token into the secure field. The
 bundled helper saves a verified token and its provider in a generic
