@@ -23,7 +23,7 @@ enum AgentsCopy: OwnerFacingCopy {
     // The Connect sheet.
     case connectTitle, modeRunOnLogin, modeOwn, roleLabel, nameLabel, namePlaceholder, nameRequired
     case loginLabel, noLogins, geminiHidden, providerLabel
-    case modelLabel, effortLabel, promptModelHint, reportedModel, notReported, notOffered, needsNewerTool
+    case modelLabel, effortLabel, clearEffort, promptModelHint, reportedModel, notReported, notOffered, needsNewerTool
     case permissionHeading, mayWork, mayDeliver, mayCreate, mayList, mayNothing, deliverOffNote
     case strengthLabel, strengthStandard, strengthStronger, strengthStrongest
     case connectionLabel, connectionMCP, connectionHTTP
@@ -105,6 +105,7 @@ enum AgentsCopy: OwnerFacingCopy {
         case .notTestedForChecking: "Not tested for checking tasks."
         case .modelLabel: "Model"
         case .effortLabel: "Effort"
+        case .clearEffort: "Use default effort"
         case .promptModelHint: "The agent tells Leverage its model when it joins."
         case .reportedModel: "Reported by the agent: {settings}"
         case .notReported: "Not reported yet"
