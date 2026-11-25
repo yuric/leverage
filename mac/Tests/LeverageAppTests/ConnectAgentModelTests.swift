@@ -797,3 +797,37 @@ struct ConnectAgentModelTests {
         #expect(Fixtures.draws(ConnectAgentForm(model: checker, cancel: {}, addLogin: {}), width: 480, height: 640))
     }
 }
+
+extension ConnectAgentModelTests {
+    @Test("Connect offers catalog efforts only for a Native model and sends the three permissions")
+    func modelChoicesAndPermissions() async throws {
+        let owner = owner()
+        let model = makeModel(owner)
+        await model.load()
+        let claude = try #require(ModelCatalog.entry(for: .claude))
+        let first = try #require(claude.models.first { $0.efforts?.values.isEmpty == false })
+        #expect(model.modelChoices.map(\.value) == [""] + claude.models.map(\.id))
+        #expect(!model.offersEffort)
+        model.modelName = first.id
+        #expect(model.effortChoices.map(\.value) == [""] + claude.efforts(for: first.id))
+        model.effort = try #require(claude.efforts(for: first.id).first)
+        model.modelName = ""
+        #expect(model.effort == "")
+        #expect(!model.offersEffort)
+        #expect(model.permissions == SeatPermissions())
+        model.permissions.deliver = false
+        model.name = "Example"
+        await model.connect()
+        #expect(body(owner)["permissions"] == .object(["work": .bool(true), "deliver": .bool(false), "create": .bool(true)]))
+    }
+
+    @Test("A model requiring a newer tool is listed with the exact requirement")
+    func newerToolChoice() {
+        let model = ModelCatalog.providers[0].models[0]
+        let choice = AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: "2.9.0")
+        #expect(choice.enabled == false)
+        #expect(choice.label == "\(model.id) (needs Claude Code 2.10.0 or newer)")
+        #expect(AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: "2.10.0").enabled)
+        #expect(AgentSettingChoice.model(model.id, provider: .claude, minimum: "2.10.0", installed: nil).enabled)
+    }
+}

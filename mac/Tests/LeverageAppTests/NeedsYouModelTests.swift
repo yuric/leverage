@@ -1120,3 +1120,17 @@ extension NeedsYouModelTests {
         expectCall(projectOwner, .resumeProject, id: Self.projectID)
     }
 }
+
+extension NeedsYouModelTests {
+    @Test("The items for agent-added tasks use their contract choices and report the workspace cap")
+    func agentAddedTasks() {
+        let incomplete = NeedsYouFixtures.item(.agentTaskIncomplete, seq: 1, choices: [.completeContract, .draftContract, .cancel])
+        let atLimit = NeedsYouFixtures.item(.agentTasksAtLimit, seq: 2, task: nil, about: .workspace)
+        let names = NeedsYouNames()
+        #expect(NeedsYouWords.heading(for: incomplete, names: names) == "A task an agent added needs its contract")
+        #expect(NeedsYouWords.buttons(for: incomplete, names: names).map(\.label) ==
+                ["Complete the contract", "Ask a planner to draft it", "Cancel task"])
+        #expect(NeedsYouWords.heading(for: atLimit, names: names) == "Agents have added 50 open tasks")
+        #expect(NeedsYouWords.buttons(for: atLimit, names: names).isEmpty)
+    }
+}

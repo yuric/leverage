@@ -918,3 +918,29 @@ struct RosterModelTests {
         #expect(draw(failed, false))
     }
 }
+
+extension RosterModelTests {
+    @Test("The menu drawn for both connection types has no replacement prompt")
+    func noReplacementPromptInMenu() {
+        let native = AgentFixtures.seat(AgentFixtures.builderID, name: "Native", credential: AgentFixtures.loginID)
+        let prompt = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt")
+        for (seat, expected) in [(native, ["Start", "Pause", "Change", "Remove"]), (prompt, ["Pause", "Change", "Remove"])] {
+            let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: Date())
+            #expect(RosterRowView.menuItems(for: row).map(\.text) == expected)
+        }
+    }
+
+    @Test("Roster shows Native defaults, Prompt reports and the permissions the agent has")
+    func reportsAndPermissions() {
+        let native = Seat(id: UUID(), name: "Native", provider: .claude, role: .builder,
+                          credentialID: AgentFixtures.loginID, permissions: SeatPermissions(work: false, deliver: false, create: false))
+        let unreported = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt")
+        let reported = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt", provider: .codex, model: "gpt-example", effort: "high")
+        func row(_ seat: Seat) -> RosterRow { RosterRow(seat: seat, loginName: nil, doing: nil, now: Date()) }
+        #expect(row(native).detailLine.contains("The tool's default"))
+        #expect(row(native).permissionsLine == "May: nothing")
+        #expect(row(unreported).detailLine.contains("Not reported yet"))
+        #expect(row(reported).detailLine.contains("gpt-example · high effort"))
+        #expect(row(reported).permissionsLine == "May: work on tasks, deliver tasks, create tasks")
+    }
+}

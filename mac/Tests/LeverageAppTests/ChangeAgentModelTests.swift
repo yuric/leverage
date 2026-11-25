@@ -405,3 +405,32 @@ struct ChangeAgentModelTests {
         #expect(Fixtures.draws(ChangeAgentForm(model: own, cancel: {}), width: 460, height: 560))
     }
 }
+
+extension ChangeAgentModelTests {
+    @Test("Change keeps stored permissions and sends all three with the Deliver-off note")
+    func changesPermissions() async {
+        let owner = owner()
+        let seat = Seat(id: UUID(), name: "Builder One", provider: .claude, role: .builder,
+                        credentialID: Fixtures.loginID, permissions: SeatPermissions(work: false))
+        let model = ChangeAgentModel(api: owner, seat: seat, logins: [claudeLogin], holdsTask: true, onChanged: {})
+        #expect(model.permissions == SeatPermissions(work: false))
+        #expect(model.deliverNote == nil)
+        model.permissions.deliver = false
+        #expect(model.deliverNote == "It gives back the task it is working on.")
+        await model.save()
+        #expect(body(owner) == ["permissions": .object(["work": .bool(false), "deliver": .bool(false), "create": .bool(true)])])
+    }
+
+    @Test("Prompt Change shows reports read-only, including an effort for a tool Native does not set")
+    func promptReport() {
+        let seat = Fixtures.seat(Fixtures.ownID, name: "Example agent", provider: .codex, model: "gpt-example", effort: "high")
+        let model = makeModel(owner(), seat: seat)
+        #expect(model.modelChoices.isEmpty)
+        #expect(model.effortChoices.isEmpty)
+        #expect(model.reportedSettings == "Reported by the agent: gpt-example · high")
+        model.effort = "low"
+        #expect(model.request == nil)
+        let unreported = makeModel(owner(), seat: Fixtures.seat(Fixtures.ownID, name: "Example agent"))
+        #expect(unreported.reportedSettings == "Not reported yet")
+    }
+}
