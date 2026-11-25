@@ -22,6 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import check_reply_fixtures  # noqa: E402
 import eval_score  # noqa: E402
 
 VERDICT_SUITE = "specific-details"
@@ -70,6 +71,12 @@ TOKENS = [
     ("a JSON Web Token", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
     ("a private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
 ]
+# Results are free text written by real tools on the maintainer's Mac, as
+# reply files are: they get the reply check's provider key shapes and its
+# home-folder path too.
+TOKENS += [(name, pattern) for name, pattern in check_reply_fixtures.TOKENS
+           if name in ("an xAI key", "a Google key", "a Google token", "a GitHub token")]
+HOME_PATH = check_reply_fixtures.HOME_PATH
 # Result fields that hold hashes, not text.
 HASH_FIELDS = {"instruction_sha256", "cases_sha256", "role_file_sha256"}
 
@@ -88,11 +95,14 @@ def strings(value, skip=frozenset()):
 
 
 def shapes(value, skip=frozenset()):
-    """What in a JSON value looks like an email address or a token."""
+    """What in a JSON value looks like an email address, a token or a path
+    into a user's home folder."""
     found = []
     for text in strings(value, skip):
         if EMAIL.search(text):
             found.append("an email address")
+        if HOME_PATH.search(text):
+            found.append("a path into a user's home folder")
         found += [name for name, pattern in TOKENS if pattern.search(text)]
     return sorted(set(found))
 

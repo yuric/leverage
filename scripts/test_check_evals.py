@@ -7,7 +7,8 @@ result recorded against today's instruction and case set, that each
 result's "met the bar" is what scoring it again gives, that the registry
 list orchestrator_tested_providers equals the providers whose result met
 the bar, that runs.json is within the ceilings of RV-6, and that no case or
-result holds anything shaped like an email address or a token. A recorded
+result holds anything shaped like an email address, a token or a path into a
+home folder. A recorded
 miss does not fail it: it is printed.
 
 Each case copies the repository's suite, shipped rules and registry into a
@@ -265,6 +266,21 @@ class CheckEvalsTests(unittest.TestCase):
         result["cases"][5]["reason"] = "It printed lvs_aaaaaaaaaaaaaaaaaaaaaaaa somewhere."
         self.copy.write_result("claude", result)
         self.assertFails("results: claude", "token")
+
+    def test_a_result_with_a_path_into_a_home_folder_fails(self):
+        result = self.copy.result("claude")
+        result["cases"][5]["reason"] = "It read " + "/Us" + "ers/someone/.config/tool first."
+        self.copy.write_result("claude", result)
+        self.assertFails("results: claude", "home folder")
+
+    def test_a_result_with_a_provider_key_or_token_the_reply_check_knows_fails(self):
+        for value in ("AI" + "za" + "a" * 30, "ya" + "29." + "b" * 20, "x" + "ai-" + "c" * 20,
+                      "github" + "_pat_" + "d" * 30):
+            with self.subTest(shape=value[:6]):
+                result = self.copy.result("gemini")
+                result["tool_version"] = f"gemini 1.0 ({value})"
+                self.copy.write_result("gemini", result)
+                self.assertFails("results: gemini", "token" if value.startswith(("ya", "github")) else "key")
 
     def test_a_result_with_an_email_address_fails(self):
         result = self.copy.result("codex")
@@ -614,6 +630,13 @@ class ApprovalCheckTests(unittest.TestCase):
         case["review"]["evidence"] = "A made-up email for fixture.user@example.test."
         self.copy.write_case(path, case)
         self.assertFails("cases:", case["id"], "email address")
+
+    def test_an_approval_case_with_a_path_into_a_home_folder_fails(self):
+        path = self.copy.approval_cases()[0]
+        case = self.copy.case(path)
+        case["review"]["evidence"] = "The notes are in " + "/ho" + "me/someone/notes.txt."
+        self.copy.write_case(path, case)
+        self.assertFails("cases:", case["id"], "home folder")
 
     def test_an_approval_case_set_must_match_the_frozen_hash(self):
         for held in (False, True):
