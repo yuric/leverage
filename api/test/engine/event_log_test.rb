@@ -19,7 +19,7 @@ class EventLogTest < ActiveSupport::TestCase
 
   def with_task
     task = Task.create!(workspace_id: @scenario.workspace_id, state: "backlog")
-    [ task, append(task: task, payload: { state: "backlog", added_action_ids: [] }) ]
+    [ task, append(task: task, schema_version: 1, payload: { state: "backlog", added_action_ids: [] }) ]
   end
 
   test "seq comes from the workspace's counter, which each append moves on" do
@@ -34,11 +34,13 @@ class EventLogTest < ActiveSupport::TestCase
   end
 
   test "an event takes the context's at, the newest schema version, and the task's round and project" do
-    task, event = with_task
+    task = Task.create!(workspace_id: @scenario.workspace_id, state: "backlog")
+    payload = { "state" => "backlog", "added_action_ids" => [], "imaginarium_entry" => "pocket-to-do", "added_criterion_ids" => [] }
+    event = append(task: task, payload: payload)
 
-    assert_equal [ @ctx.at, @ctx.at, 1, 0, nil, task.id ],
+    assert_equal [ @ctx.at, @ctx.at, 2, 0, nil, task.id ],
       [ event.at, event.effective_at, event.schema_version, event.round, event.project_id, event.task_id ]
-    assert_equal({ "state" => "backlog", "added_action_ids" => [] }, event.reload.payload)
+    assert_equal payload, event.reload.payload
   end
 
   test "a timer's event carries its due time as effective_at" do
@@ -53,7 +55,7 @@ class EventLogTest < ActiveSupport::TestCase
     task, = with_task
     count = Event.count
     error = assert_raises(Leverage::EventLog::InvalidEvent) do
-      append("task.created", task: task, payload: { state: "made_up_state", added_action_ids: [] })
+      append("task.created", task: task, schema_version: 1, payload: { state: "made_up_state", added_action_ids: [] })
     end
     assert_match(/task\.created/, error.message)
     assert_equal count, Event.count
