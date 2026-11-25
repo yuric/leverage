@@ -11,6 +11,23 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
       result: { seat_id: @seat.id, connection: "http" })
   end
 
+  # A check of the seat's waiting command held at the re-run limit: a row
+  # with no attempt and no check.queued (RD-45), under the rerun_limit
+  # hold the waiting command opened with its own key.
+  def held_at_rerun_limit(task, pending, hook:, subject: nil, key: pending.command_key)
+    check = @scenario.rule_check(task, rule: @scenario.rule(hook: hook), subject: subject, pending: pending, attempts: 0)
+    sent = Leverage::Transitions::Request.new(command: pending.command, workspace_id: @scenario.workspace_id, caller_kind: "seat",
+      caller_id: pending.requester_id, key: key, request_hash: "s" * 64, params: {})
+    Leverage::Transitions::Gate.open_hold(@scenario.context(request: sent), task,
+      Leverage::Gating::PlannedHold.new(reason: "rerun_limit", rule_id: check.rule_id, rule_check_id: check.id), check_id: check.id)
+    refute Event.exists?(workspace_id: @scenario.workspace_id, type: "check.queued", subject_id: check.id)
+    check
+  end
+
+  def key_events = Event.where(workspace_id: @scenario.workspace_id, command_id: @request.key).order(:seq).to_a
+
+  def audit(after) = Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+
   test "a New prompt that released its Working task passes the audit" do
     task = @scenario.task(state: "working", builder: @seat)
     pending = @scenario.pending_transition(task, command: "submit", requester: @seat)
@@ -45,6 +62,28 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
     @command.destroy! # After the command key retention period.
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
+  end
+
+  test "a New prompt that cancelled a pass held at the re-run limit passes the audit" do
+    task = @scenario.task(state: "in_review")
+    review = @scenario.review(task, reviewer: @seat)
+    pending = @scenario.pending_transition(task, command: "pass_review", requester: @seat)
+    held_at_rerun_limit(task, pending, hook: "task.before_done", subject: review)
+    after = @scenario.workspace.reload.last_seq
+    Leverage::SeatRuns.release_held_reviews(@scenario.context(request: @request), @seat)
+    assert_equal %w[check.finished hold.closed inbox.resolved review.released], key_events.map(&:type)
+    assert_equal "cancelled", pending.reload.state
+    assert_empty audit(after)
+  end
+
+  test "a held check whose re-run limit hold another key opened is not the New prompt's to withdraw" do
+    task = @scenario.task(state: "working", builder: @seat)
+    pending = @scenario.pending_transition(task, command: "submit", requester: @seat)
+    held_at_rerun_limit(task, pending, hook: "task.before_submit", key: "another-key")
+    after = @scenario.workspace.reload.last_seq
+    Leverage::SeatRuns.release_working_task(@scenario.context(request: @request), @seat, reason: "new_prompt")
+    assert_equal %w[check.finished hold.closed inbox.resolved task.released], key_events.map(&:type)
+    assert_match(/issue_landing_prompt wrote task\.released/, audit(after).sole)
   end
 
   test "a release cannot excuse an orphan job withdrawal on an unrelated task after key retention" do

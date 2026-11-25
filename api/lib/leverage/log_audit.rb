@@ -389,11 +389,15 @@ module Leverage
       end
     end
 
-    def open_check_error?(earlier, check_id)
+    def open_check_error?(earlier, check_id) = !open_check_hold(earlier, check_id, "check_error").nil?
+
+    # The hold.opened of the hold of this reason that names the check and
+    # is still open at the end of earlier, or nil.
+    def open_check_hold(earlier, check_id, reason)
       holds = earlier.where(subject_kind: "hold")
-      opened = holds.where(type: "hold.opened").where("payload->>'reason' = 'check_error' AND payload->>'rule_check_id' = ?", check_id)
+      opened = holds.where(type: "hold.opened").where("payload->>'reason' = ? AND payload->>'rule_check_id' = ?", reason, check_id)
         .order(:seq).last
-      opened && !holds.where(type: "hold.closed", subject_id: opened.subject_id).where("seq > ?", opened.seq).exists?
+      opened unless opened.nil? || holds.where(type: "hold.closed", subject_id: opened.subject_id).where("seq > ?", opened.seq).exists?
     end
 
     def task_history_before(event)
@@ -537,8 +541,7 @@ module Leverage
     def prompt_withdrawal?(event, state, releases, receipt)
       return false unless event.subject_kind == "rule_check" && event.payload["result"] == "withdrawn"
 
-      pending_id = Steps.queued_for(event)&.payload&.fetch("pending_transition_id", nil)
-      pending = PendingTransition.find_by(id: pending_id, task_id: event.task_id, workspace_id: event.workspace_id, state: "cancelled")
+      pending = withdrawn_pending(event)
       return false unless pending&.requester_kind == "seat"
       return false if receipt && pending.requester_id != receipt.result&.fetch("seat_id", nil)
       return true if state == "ready" && pending.command == "claim" && claim_withdrawal?(event) &&
@@ -549,6 +552,21 @@ module Leverage
           ((release.type == "task.released" && pending.command == "submit" && event.payload["hook"] == "task.before_submit") ||
            (release.type == "review.released" && pending.command == "pass_review" && event.payload["hook"] == "task.before_done"))
       end
+    end
+
+    # The cancelled pending transition a withdrawn check belonged to: the
+    # one its check.queued names. A check held at the re-run limit was
+    # never queued (RD-45): its rerun_limit hold, still open when the check
+    # is withdrawn, was opened by the waiting command under its own key
+    # (Gate), so that key finds the transition. The check's row is not
+    # read: meeting the same inputs again points it at the later command.
+    def withdrawn_pending(event)
+      cancelled = PendingTransition.where(workspace_id: event.workspace_id, task_id: event.task_id, state: "cancelled")
+      queued = Steps.queued_for(event)
+      return cancelled.find_by(id: queued.payload["pending_transition_id"]) if queued
+
+      held = open_check_hold(task_history_before(event), event.subject_id, "rerun_limit")
+      cancelled.find_by(command_key: held.command_id, requester_kind: "seat") if held&.command_id
     end
 
     # An override can approve a stopped action or reenter an errored
