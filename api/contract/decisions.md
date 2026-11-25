@@ -1526,7 +1526,9 @@ task. PRD places are named by their section.
   GA-5's draft bar no longer reads the seat's role now, so a seat whose
   role changed after its draft is barred too. With no other seat to take
   the check it ends in error, and "Orchestrator offline" opens, as for a
-  lone General seat's own draft. Alternatives: let the adding seat check
+  lone General seat's own draft; a lone seat of the orchestrator role
+  keeps the role online, so the check misses twice and its error opens
+  the task's own item instead. Alternatives: let the adding seat check
   its own task; or bar it only from the check of the Complete contract it
   sent itself, so that it may check a contract the owner completes later.
 - **UX-13b** `[reading]` A seat the owner has turned off (`enabled`

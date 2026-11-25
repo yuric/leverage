@@ -38,6 +38,45 @@ class GeneralOrchestratorPresenceTest < ActiveSupport::TestCase
     assert_equal "backlog", Task.find(task_id).state
   end
 
+  # UX-13a with one seat only: the orchestrator that added the task is the
+  # one seat that could check it and is barred, so the check's job is
+  # never claimed, misses twice (RD-17) and ends in error once. The role is
+  # online, so the item is the task's "check could not run", not the
+  # workspace's "Orchestrator offline", and the retry is not offered to
+  # the creator either.
+  test "a lone orchestrator's own added task ends in one check error on the task" do
+    scenario.with_shipped_rules
+    creator = scenario.seat(role: "orchestrator")
+    body = contract_body.slice("title", "details", "criteria")
+    assert_equal :pending, seat_command(creator, "add_task", body).outcome
+    task_id = Event.find_by!(workspace_id: scenario.workspace_id, type: "task.created", actor_id: creator.id).task_id
+    rule = Rule.find_by!(workspace_id: scenario.workspace_id, key: "specific_details")
+    check = RuleCheck.find_by!(task_id: task_id, rule_id: rule.id)
+    seq = scenario.workspace.reload.last_seq
+    start = scenario.database_now + 1
+
+    with_sweep_clock do
+      0.step(1800, 60) do |elapsed|
+        @sweep_at = start + elapsed
+        creator.update_columns(last_polled_at: @sweep_at)
+        Leverage::Sweep.sweep_workspace(scenario.workspace_id)
+        assert_nil Leverage::Jobs.next_for(creator, at: @sweep_at)
+      end
+    end
+
+    written = Event.where(workspace_id: scenario.workspace_id).where("seq > ?", seq).order(:seq).pluck(:type)
+    assert_equal %w[job.timed_out job.requeued check.queued job.timed_out check.finished hold.opened inbox.opened], written
+    assert_equal [ "error", "backlog" ], [ check.reload.result, Task.find(task_id).state ]
+    hold = Hold.find_by!(task_id: task_id, closed_at: nil)
+    assert_equal "check_error", hold.reason
+    assert_equal [ [ "check_could_not_run", "open", hold.id ] ],
+      InboxItem.where(workspace_id: scenario.workspace_id).pluck(:kind, :state, :hold_id)
+    retry_attempt = Leverage::RolePresence::ErroredCheck.new(hold: hold, check: check).next_attempt(@sweep_at)
+    refute Leverage::Jobs.may_claim_proposal?(retry_attempt, creator, at: @sweep_at)
+    other = scenario.seat(role: "orchestrator", last_polled_at: @sweep_at)
+    assert Leverage::Jobs.may_claim_proposal?(retry_attempt, other, at: @sweep_at)
+  end
+
   test "two General seats cannot start repeated offline notifications while a review pass waits on a check" do
     builder = scenario.seat(role: "general")
     reviewer = scenario.seat(role: "general", provider: "codex")
