@@ -84,7 +84,7 @@ say "building the e2e lane in $scratch"
 # 3. The tests: each writes its folder (support folder, logs, the secrets it
 # used) under LEVERAGE_E2E_DIR.
 filter=LeverageEndToEnd
-expected=3
+expected=7
 if [ -n "${LEVERAGE_E2E_ONLY:-}" ]; then
   filter="$filter.*$LEVERAGE_E2E_ONLY"
   expected=1
@@ -115,15 +115,25 @@ U logs --no-color >"$out/containers.log" 2>&1
 # shellcheck disable=SC2016 # expanded by the db container's shell
 U exec -T db sh -c 'pg_dump --data-only --no-owner -U "$POSTGRES_USER" leverage_production' \
   >"$out/dump.sql" 2>"$out/dump.err"
-scan=(python3 -I scripts/secret_scan.py --credentials-dump "$out/dump.sql"
-  --account-email "standin.owner@example.invalid")
+scan=(python3 -I scripts/secret_scan.py --credentials-dump "$out/dump.sql")
 for secrets in "$out"/tests/*/secrets.txt; do scan+=(--secrets "$secrets"); done
-for logs in "$out"/tests/*/support/logs; do scan+=("$logs"); done
 # The stand-in tools' record of each call holds the environment each tool
 # was started with.
+account_email_option=--literal
+if [ -z "${LEVERAGE_E2E_ONLY:-}" ]; then account_email_option=--account-email; fi
 for calls in "$out"/tests/*/StandIns/state/calls.jsonl; do
-  if [ -f "$calls" ]; then scan+=("$calls"); fi
+  if [ -f "$calls" ]; then
+    scan+=("$calls")
+    account_email_option=--account-email
+  fi
 done
+# A Prompt-only case adds no login. Still check that the stand-in email
+# appears nowhere in that run.
+scan+=("$account_email_option" "standin.owner@example.invalid")
+helper_logs=("$out"/tests/*/support/logs)
+if [ "$account_email_option" = --account-email ] || [ -d "${helper_logs[0]}" ]; then
+  scan+=("${helper_logs[@]}")
+fi
 scan+=("$out/containers.log")
 say "scanning the logs and the database dump"
 "${scan[@]}"

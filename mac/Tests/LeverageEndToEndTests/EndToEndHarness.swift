@@ -371,17 +371,19 @@ extension OwnerClient {
     }
 
     func connectByPrompt(
-        _ name: String, role: SeatRole, provider: Provider, connection: LandingPromptConnection = .http
+        _ name: String, role: SeatRole, provider: Provider, connection: LandingPromptConnection = .http,
+        permissions: SeatPermissions? = nil
     ) async throws -> LandingPromptIssued {
         let outcome = try await connectSeat(
-            ConnectSeatRequest(name: name, role: role, provider: provider), key: IdempotencyKey())
+            ConnectSeatRequest(name: name, role: role, provider: provider, permissions: permissions),
+            key: IdempotencyKey())
         guard let seat = try outcome.completedResult() else {
             throw EndToEndFailure("connect_seat answered no seat")
         }
-        return try await newPrompt(seat: seat.seatID, connection: connection)
+        return try await landingPrompt(seat: seat.seatID, connection: connection)
     }
 
-    func newPrompt(seat: UUID, connection: LandingPromptConnection = .http) async throws -> LandingPromptIssued {
+    private func landingPrompt(seat: UUID, connection: LandingPromptConnection) async throws -> LandingPromptIssued {
         let outcome = try await issueLandingPrompt(seatID: seat, connection: connection, key: IdempotencyKey())
         guard case .shown(let prompt)? = try outcome.completedResult(),
               prompt.seatID == seat, prompt.connection == connection else {
