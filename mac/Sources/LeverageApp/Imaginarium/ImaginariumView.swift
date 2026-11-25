@@ -207,8 +207,7 @@ struct ImaginariumTrySheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(ImaginariumCopy.makeItYours.text).font(.headline)
                     ForEach(model.entry.fills, id: \.key) { fill in
-                        TextField(fill.label, text: fillValue(fill))
-                            .textFieldStyle(.roundedBorder)
+                        ImaginariumFillField(label: fill.label, value: fillValue(fill))
                     }
                     Text(ImaginariumCopy.doneWhen.text).font(.headline)
                     ForEach(Array(model.criteria.enumerated()), id: \.offset) { _, criterion in
@@ -340,6 +339,21 @@ struct ImaginariumTrySheet: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(26)
+    }
+}
+
+/// One Make it yours fill-in of the Try it sheet, its label above it: the
+/// field opens holding its default, so a placeholder would never show.
+struct ImaginariumFillField: View {
+    let label: String
+    @Binding var value: String
+
+    var body: some View {
+        FormField(label: label) {
+            TextField(label, text: $value)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+        }
     }
 }
 

@@ -148,6 +148,19 @@ struct RenderSmokeTests {
         #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: false, signOut: {}))))
     }
 
+    @Test("a Make it yours field shows its label above it, also while it holds a value")
+    func imaginariumFillLabel() {
+        // The fields open holding their default, so a label drawn only as the
+        // placeholder never shows: two labels must draw two different pictures.
+        func picture(_ label: String) -> Data? {
+            let fill = ImaginariumFillField(label: label, value: .constant("A made-up value"))
+            return render(fill, width: 230, height: 60)?.tiffRepresentation
+        }
+        let short = picture("Name")
+        #expect(short != nil)
+        #expect(short != picture("Who the story is for"))
+    }
+
     @Test("the design tokens carry the mockup's numbers")
     func tokens() {
         #expect(Tokens.Radius.window == 18)
