@@ -182,6 +182,33 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
     assert_empty Leverage::LogAudit.call(@scenario.workspace_id, after_seq: after)
   end
 
+  test "a New prompt that released a review and withdrew a provisional claim passes the audit" do
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: @seat)
+    task = @scenario.task(state: "ready")
+    pending = @scenario.pending_transition(task, command: "claim", requester: @seat)
+    task.update!(holder_seat_id: @seat.id)
+    @scenario.rule_check(task, rule: @scenario.rule(hook: "task.before_claim"), subject: @seat, pending: pending)
+    after = @scenario.workspace.reload.last_seq
+    ctx = @scenario.context(request: @request)
+    Leverage::SeatRuns.cancel_provisional_claim(ctx, @seat)
+    Leverage::SeatRuns.release_held_reviews(ctx, @seat)
+
+    assert_equal %w[check.finished job.withdrawn review.released], key_events.map(&:type)
+    assert_equal [ task.id, task.id, review.task_id ], key_events.map(&:task_id)
+    states = { task.id => "ready", review.task_id => "in_review" }
+    assert Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: @command)
+    assert_empty audit(after)
+
+    # The claim is the receipt's seat's, on a Ready task, and its own check.
+    another = @command.dup.tap { |row| row.result = row.result.merge("seat_id" => @scenario.seat(role: "general").id) }
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: another)
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states.merge(task.id => "working"), receipt: @command)
+    withdrawal = key_events.first
+    of_another = withdrawal.dup.tap { |event| event.payload = withdrawal.payload.merge("subject_id" => SecureRandom.uuid) }
+    of_another.seq = withdrawal.seq
+    refute Leverage::LogAudit.historical_prompt_release?([ of_another, *key_events.drop(1) ], states, receipt: @command)
+  end
+
   test "a task released because its seat was removed is still flagged under New prompt" do
     @scenario.task(state: "working", builder: @seat)
     after = @scenario.workspace.reload.last_seq
