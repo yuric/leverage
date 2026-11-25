@@ -122,6 +122,15 @@ using that token, then follow the instructions and keep polling for
 work. Keep the prompt private. The roster labels
 the seat "Connected by prompt."
 
+A token passed on a command line can be read by every other account on
+the Mac for as long as that command runs, through the process list. The
+prompt and the HTTP instructions therefore tell the agent to keep the
+token in a file in a folder only its own account can read, and to send
+the header from that file (`curl -H @file`). An agent that puts the
+token in a command anyway exposes it that way until the seat is
+removed. Through MCP the token is in the settings that start the
+bundled server, which passes it in the child's environment.
+
 To give the agent another landing prompt, choose **Remove** in the roster
 and connect a new seat. The removed seat's next call answers `401` and the
 agent stops. A Working task goes back to Ready, a review is released, and

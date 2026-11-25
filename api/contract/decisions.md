@@ -1173,10 +1173,16 @@ on, which the owner may reverse later; it is listed there too.
   ```text
   Join Leverage at ADDRESS with token TOKEN. Fetch GET ADDRESS/v1/join
   with header Authorization: Bearer TOKEN and follow its instructions
-  exactly.
+  exactly. Never put the token on a command line, where other accounts
+  on this computer can read it: send the header from a file that only
+  you can read.
   ```
 
-  The MCP form names `ADDRESS/v1/join?connection=mcp`. The address is the one the owner's
+  The last sentence is there because a program's arguments can be read
+  by every account on a Mac, and its environment cannot. The HTTP join
+  text gives the steps: a folder from `mktemp -d`, a file `header` in it
+  written with the agent's file-writing tool, and `curl -H @file` on
+  every call. The MCP form names `ADDRESS/v1/join?connection=mcp`. The address is the one the owner's
   request came in on; the API listens on `127.0.0.1`, so only an agent on
   the owner's Mac can land, and a server elsewhere is out of scope. The
   server keeps only token hashes, so a read cannot give the prompt again:

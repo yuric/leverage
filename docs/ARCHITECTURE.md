@@ -1045,7 +1045,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
     the next pickup, when the run is reported stopped, and when the seat is
     removed. A seat that connects on its own receives its token only in
     the landing prompt issued by Connect. Remove ends the token, and the
-    Prompt agent stops on `401`. An MCP client starts `LeverageMCP` using
+    Prompt agent stops on `401`. Over HTTP the prompt and the join
+    instructions tell that agent to keep the token in one file, in a
+    folder only its account can read, and to send the header from the
+    file: a program's arguments can be read by every account on the Mac,
+    so the token is never to be on a command line. Whether the agent
+    does so is the agent's to keep. An MCP client starts `LeverageMCP` using
     the seat token from the client's settings as `LEVERAGE_SEAT_TOKEN` in
     the child environment. The MCP server uses the token for API
     authentication and never logs it. The settings

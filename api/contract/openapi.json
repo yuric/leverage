@@ -17850,7 +17850,7 @@
           {
             "seat_id": "00000000-0000-4000-8000-000000000149",
             "seat_token": "example-seat-token",
-            "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+            "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly. Never put the token on a command line, where other accounts on this computer can read it: send the header from a file that only you can read.",
             "connection": "http"
           }
         ]
@@ -17934,7 +17934,7 @@
             "result": {
               "seat_id": "00000000-0000-4000-8000-000000000149",
               "seat_token": "example-seat-token",
-              "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly.",
+              "text": "Join Leverage at http://127.0.0.1:3000 with token example-seat-token. Fetch GET http://127.0.0.1:3000/v1/join with header Authorization: Bearer example-seat-token and follow its instructions exactly. Never put the token on a command line, where other accounts on this computer can read it: send the header from a file that only you can read.",
               "connection": "http"
             },
             "refusal": null

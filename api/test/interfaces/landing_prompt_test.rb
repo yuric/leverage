@@ -26,7 +26,10 @@ class LandingPromptTest < ActionDispatch::IntegrationTest
       join = "#{address}/v1/join"
       join += "?connection=mcp" if connection == "mcp"
       assert_equal "Join Leverage at #{address} with token #{seat_token}. " \
-        "Fetch GET #{join} with header Authorization: Bearer #{seat_token} and follow its instructions exactly.", result.fetch("text")
+        "Fetch GET #{join} with header Authorization: Bearer #{seat_token} and follow its instructions exactly. " \
+        "Never put the token on a command line, where other accounts on this computer can read it: " \
+        "send the header from a file that only you can read.", result.fetch("text")
+      assert_equal 1, result.fetch("text").lines.size
       assert_equal [ seat_token ], result.fetch("text").scan(/lv[sho]_[A-Za-z0-9_-]{43}/).uniq
     end
   end
