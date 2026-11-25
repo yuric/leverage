@@ -3,6 +3,7 @@ require "open3"
 require "tmpdir"
 require_relative "../support/trace_runner"
 require_relative "../support/walk"
+require_relative "../support/old_step_tracker"
 
 # The restore (milestone 3 plan §2.5, HB-5, HB-6; PRD L921 "a restore
 # passes the replay test"). Trace 09's log (milestone 2's commands) is
@@ -19,7 +20,10 @@ require_relative "../support/walk"
 # here checks a walk's workspace, whose whole log the engine wrote, and
 # the test checks trace 09's after its setup itself.
 class BackupRestoreTest < CommittingTestCase
+  include OldStepTracker
+
   B = Leverage::Backup
+  T = Leverage::Transitions
 
   setup do
     BackupRun.delete_all
@@ -180,6 +184,79 @@ class BackupRestoreTest < CommittingTestCase
     on_database(@scratch) { Task.where(id: task.id).update_all(title: "Changed after the dump") }
     capture_io { B.restore(path, target: target(@scratch), replace: true, workspace_id: walk.workspace_id) }
     on_database(@scratch) { assert_equal task.title, Task.find(task.id).title }
+  end
+
+  # A walk's workspace (its whole log is the engine's) with every rule off,
+  # in which a promoted Imaginarium idea reached its first working step
+  # while the step tracker read criteria the old way: the rows a database
+  # held before the tracker read task.created's criteria (FR-039).
+  def workspace_with_old_idea_steps
+    walk = Walk.new(seed: 77, steps: 0).run
+    id = walk.workspace_id
+    owner = walk.scenario.owner
+    builder = Seat.where(workspace_id: id, role: "builder", credential_id: nil).order(:created_at, :id).first
+    calls = 0
+    apply = lambda do |name, caller, params|
+      kind = caller.is_a?(User) ? "owner" : "seat"
+      outcome = T.apply(T::Request.new(command: name, workspace_id: id, caller_kind: kind, caller_id: caller.id,
+        key: "old-steps-#{calls += 1}", request_hash: Digest::SHA256.hexdigest(JSON.generate(params)), params: params))
+      assert outcome.completed?, "#{name} was #{outcome.outcome}"
+      outcome
+    end
+    Rule.where(workspace_id: id, enabled: true).each { |rule| apply.call("disable_rule", owner, "id" => rule.id) }
+    assert Leverage::Timers.apply_workspace(id, "install_imaginarium_project", at: Time.current).completed?
+    criteria = [ { "text" => "It opens on the Mac.", "kind" => "build" }, { "text" => "Tasks are kept.", "kind" => "build" },
+                 { "text" => "A second agent reviews the work", "kind" => "review" } ]
+    with_the_old_step_tracker do
+      task = Task.find(apply.call("add_task", owner, "title" => "Pocket to-do", "details" => "A made-up checklist.",
+        "state" => "ideas", "criteria" => criteria,
+        "imaginarium" => { "entry_id" => "pocket-to-do", "catalog_version" => 1 }).result.fetch("task_id"))
+      apply.call("promote", owner, "id" => task.id)
+      apply.call("complete_contract", owner, "id" => task.id, "title" => "Pocket to-do",
+        "details" => "A made-up checklist.", "criteria" => criteria, "actions" => [], "minimum_strength_rank" => nil,
+        "budget_cap" => nil, "work_reference" => nil)
+      apply.call("claim", builder, {})
+      apply.call("acknowledge_briefing", builder, "id" => task.id,
+        "briefing_hash" => Leverage::Briefing.hash_for(task.reload, seat: builder))
+    end
+    id
+  end
+
+  def without_the_step_repair_migration
+    version = ActiveRecord::Base.lease_connection.quote(Leverage::StepRepair::MIGRATION)
+    ActiveRecord::Base.lease_connection.execute("DELETE FROM schema_migrations WHERE version = #{version}")
+    yield
+  ensure
+    ActiveRecord::Base.establish_connection(@original)
+    ActiveRecord::Base.lease_connection.execute(
+      "INSERT INTO schema_migrations (version) VALUES (#{version}) ON CONFLICT DO NOTHING"
+    )
+  end
+
+  # The steps of a promoted Imaginarium idea stored before the tracker read
+  # task.created's criteria fail the replay test. A dump made before the
+  # migration that repairs them is repaired in the restored copy, before
+  # the replay test; a dump made after it is held to the replay test as it
+  # is.
+  test "a dump made before the step repair is repaired in the restored copy, and a later one is not" do
+    workspace_id = workspace_with_old_idea_steps
+    refute_empty Leverage::Replay.diff(workspace_id), "the old rows differ from the log's"
+    later = File.join(@folder, B.run!(folder: @folder, keep: 14).file_name)
+    earlier = without_the_step_repair_migration { File.join(@folder, B.run!(folder: @folder, keep: 14).file_name) }
+
+    error = nil
+    capture_io { error = assert_raises(B::Failed) { B.restore(later, target: target(@scratch), workspace_id: workspace_id) } }
+    assert_match(/replay test/, error.message)
+    refute database_exists?(@scratch)
+
+    out, = capture_io { B.restore(earlier, target: target(@scratch), workspace_id: workspace_id) }
+
+    assert_match(/workspace #{workspace_id}: \d+ events, replay ok, audit ok/, out)
+    on_database(@scratch) { assert_empty Leverage::Replay.diff(workspace_id) }
+  ensure
+    # This worker's database keeps the workspace: its rows are repaired, so
+    # that no later test finds them.
+    Leverage::StepRepair.call
   end
 
   # The shortest beginning of a dump whose list pg_restore still reads:
