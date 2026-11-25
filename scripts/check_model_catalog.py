@@ -13,7 +13,9 @@ never invented: each says how it is known. This check fails on
   * a documented fact whose source is not a page address (https://);
   * a help or probe fact whose source is not a path to a file in the
     repository (a recorded reply, a probe, or a saved --help output), or a
-    model id or default model whose cited file does not name it;
+    model id or default model whose cited file does not name it as a whole
+    id (the file may name it anywhere: what the file says about it is for
+    the reviewer of the pull request to read);
   * efforts whose evidence is not documented (a tool's --help lists efforts
     for the whole tool and never says which model accepts which);
   * an effort, or a model id, listed twice;
@@ -58,11 +60,22 @@ def fact_problems(where, fact, levels, root, value=None):
             problems.append(f"{where}: a {evidence} fact must cite a repository path, not {source!r}")
         elif not (root / path).is_file():
             problems.append(f"{where}: {path} is not a file in the repository ({evidence} evidence)")
-        elif isinstance(value, str) and value not in (root / path).read_text(encoding="utf-8", errors="replace"):
+        elif isinstance(value, str) and not names(
+                (root / path).read_text(encoding="utf-8", errors="replace"), value):
             problems.append(f"{where}: {path} does not name {value!r} ({evidence} evidence)")
     if not is_date(fact.get("checked_on")):
         problems.append(f"{where}: checked_on is missing or not a date")
     return problems
+
+
+def names(text, value):
+    """Whether text holds value as a whole id, not as part of a longer one.
+
+    grok-4 is not named by a file that holds only grok-4.6 or grok-4-fast.
+    A full stop that ends a sentence after the id does not count as part of
+    it. Where in the file the id stands is not checked.
+    """
+    return re.search(rf"(?<![\w-]){re.escape(value)}(?![\w-]|\.\w)", text) is not None
 
 
 def is_date(value):

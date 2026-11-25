@@ -108,6 +108,10 @@ def cases(models):
     def default_the_reply_contradicts(m):
         provider(m, "grok")["default_model"]["value"] = "grok-4.7"
 
+    def default_that_is_only_the_start_of_an_id(m):
+        default = provider(m, "grok")["default_model"]
+        default["value"] = default["value"].rsplit(".", 1)[0]  # grok-4, of grok-4.6
+
     def efforts_from_help(m):
         first_model(m, "claude")["efforts"] = {"values": ["low"], "evidence": "help",
                                               "source": "mac/Sources/LeverageRunner/ClaudeDriver.swift",
@@ -150,6 +154,8 @@ def cases(models):
          ["claude default_model", "README.md", "claude-opus-5-5"]),
         ("a default the reply it cites does not name", default_the_reply_contradicts,
          ["grok default_model", "status-signed-out.json", "grok-4.7"]),
+        ("a default that is only the start of the id its file names", default_that_is_only_the_start_of_an_id,
+         ["grok default_model", "status-signed-out.json", "does not name"]),
         ("efforts with help evidence", efforts_from_help, ["claude", "efforts", "documented"]),
         ("a model listed twice", duplicate_model, ["claude", "twice"]),
         ("a default model not among the models", default_not_listed, ["grok", "grok-made-up", "default"]),
