@@ -54,7 +54,7 @@ final class ImaginariumTryModel {
 
     var criteria: [CriterionInput] {
         entry.doneWhen.map { CriterionInput(text: $0, kind: .build) }
-            + [CriterionInput(text: "A second agent reviews the work", kind: .review)]
+            + [CriterionInput(text: ImaginariumCopy.reviewCriterion.text, kind: .review)]
     }
 
     func undoEdits() {
