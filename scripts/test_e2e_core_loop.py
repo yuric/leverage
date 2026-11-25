@@ -462,6 +462,34 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertEqual(text.count('prefix: "chore(deps)"'), len(entries),
                          "every entry gives its pull requests the Conventional Commits title")
 
+    def test_dependabot_can_read_and_name_each_pinned_image(self):
+        """Review: the Ruby image's tag came from an ARG, which Dependabot
+        does not resolve, so the entry for api/Dockerfile found no image;
+        and its ignore rule named `ruby`, while Dependabot names an image by
+        its whole path with only the docker.io registry removed."""
+        text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        ignored = {}
+        for block in re.split(r"(?m)^  - (?=package-ecosystem:)", text)[1:]:
+            ecosystem = re.match(r'package-ecosystem:\s*"([^"]+)"', block).group(1)
+            ignored[ecosystem] = set(re.findall(r'dependency-name:\s*"([^"]+)"', block))
+        image = r"(?P<image>[a-z0-9./_-]+):(?P<tag>\w[\w.-]*)@sha256:[0-9a-f]{64}"
+        froms = re.findall(r"(?m)^FROM\s+(\S+)", (ROOT / "api" / "Dockerfile").read_text(encoding="utf-8"))
+        external = [ref for ref in froms if ref != "base"]
+        self.assertEqual(len(external), 1, f"one image from a registry, the others build on it: {froms}")
+        ruby = re.fullmatch(image, external[0])
+        self.assertIsNotNone(ruby, f"{external[0]}: a literal tag and a digest, no ARG, or Dependabot finds no image")
+        version = (ROOT / "api" / ".ruby-version").read_text(encoding="utf-8").strip().removeprefix("ruby-")
+        self.assertEqual(ruby["tag"], f"{version}-slim", "the image's tag and api/.ruby-version name one version")
+        compose = re.findall(r"(?m)^\s+image:\s*(\S+)", (ROOT / "compose.yaml").read_text(encoding="utf-8"))
+        pinned = [re.fullmatch(image, ref) for ref in compose if "@" in ref]
+        self.assertEqual(len(pinned), 1, f"one digest-pinned image in compose.yaml: {compose}")
+        self.assertIsNotNone(pinned[0], "a literal tag and a digest")
+        for ecosystem, found in (("docker", ruby), ("docker-compose", pinned[0])):
+            with self.subTest(ecosystem=ecosystem):
+                name = found["image"].removeprefix("docker.io/")
+                self.assertEqual(ignored[ecosystem], {name},
+                                 "the ignore rule names the image as Dependabot does")
+
 
 if __name__ == "__main__":
     unittest.main()

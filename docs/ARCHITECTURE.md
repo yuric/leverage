@@ -95,6 +95,7 @@ A product source file is a source file outside `docs/`, `scripts/`,
 
 Dependabot proposes updates for the actions, the API's gems and its two
 pinned container images ([.github/dependabot.yml](../.github/dependabot.yml)).
+The two image entries are unverified until Dependabot's first run on them.
 Its pull requests are exempt from the "Architecture rules" section,
 because Dependabot cannot fill it in. The checks on what the change adds still
 run on them, and with no answers there is no `N/A` to soften one. A bot's

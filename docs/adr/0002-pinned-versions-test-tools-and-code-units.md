@@ -85,6 +85,10 @@ GitHub's list of runner images, not taken from memory.
   proposes those pull requests once a week for the gems in
   `api/Gemfile.lock`, the Ruby image in `api/Dockerfile` (patch versions
   only) and the PostgreSQL image in `compose.yaml` (no new major version).
+  For that, the Dockerfile writes the image's tag out instead of taking
+  it from an `ARG`, which Dependabot does not resolve, and a test keeps
+  the tag equal to `api/.ruby-version`. The two image entries are
+  unverified until Dependabot's first run on them.
   The maintainer completes an image pull request by updating the digest
   here before merging. That is an update signal, not a scan: it does not
   replace the security scanner left out above.
