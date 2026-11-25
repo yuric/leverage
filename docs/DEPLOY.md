@@ -654,7 +654,11 @@ The server's logs are `docker compose -p leverage-app logs api sweep
 backup`: one `leverage.command` line per command with its timings, the
 sweep's passes and each dump. A request's logged parameters keep only
 ids, numbers and true or false; every other text, task text among it, is
-`[FILTERED]`. The Mac side's logs are under
+`[FILTERED]`. Docker keeps at most three files of 10 MB of each
+container's output (`logging` in `compose.yaml`), so older lines are
+dropped. An existing installation takes that limit when an app built
+with it next starts the containers, which makes them again. The Mac
+side's logs are under
 `<support folder>/logs/`. The daily backup is under
 [Backups and restore](#backups-and-restore). Metrics, alerts and routine
 maintenance are _TBD_.

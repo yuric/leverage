@@ -186,6 +186,26 @@ def main():
                 unpinned_images("", "    image: postgres:17\n  image: leverage-api:${API_IMAGE_TAG:-local}\n")
                 == ["    image: postgres:17"])
 
+    # Docker's default log driver keeps a container's output without a
+    # limit, and the sweep writes lines for as long as the install lives.
+    for label, compose in (("repository", original), ("bundle", made)):
+        lines = compose.splitlines()
+        start = lines.index("x-logging: &logging") if "x-logging: &logging" in lines else None
+        block = []
+        if start is not None:
+            for line in lines[start + 1:]:
+                if line and not line.startswith(" "):
+                    break
+                block.append(line.strip())
+        cases.check(f"the {label} compose file caps each container's log by size and file count",
+                    "driver: json-file" in block and any(line.startswith("max-size:") for line in block)
+                    and any(line.startswith("max-file:") for line in block), block)
+        shared = lines[lines.index("x-api: &api") + 1:]
+        shared = shared[:next(i for i, line in enumerate(shared) if not line.startswith(" "))]
+        cases.check(f"the {label} API, sweep and backup share the log cap", "  logging: *logging" in shared, shared)
+        cases.check(f"the {label} database has the log cap",
+                    "    logging: *logging" in service_block(compose, "db"))
+
     code, messages, output = run(original, to_file=False)
     cases.check("without --output it writes the same text to standard output", code == 0 and output == made, messages)
 

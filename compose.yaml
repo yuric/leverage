@@ -4,6 +4,15 @@
 # pick the API's port.
 name: leverage
 
+# Every container's output: at most three files of 10 MB each. Docker's
+# default keeps it without a limit, in the disk that also holds the
+# database, and the sweep alone writes several lines every 15 seconds.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 # What the API, the sweep and the backup share: the image, the settings and
 # the two database URLs. DATABASE_URL names the owner role and is what every
 # command but the server and the sweep uses; bin/docker-entrypoint puts
@@ -14,6 +23,7 @@ x-api: &api
   image: leverage-api:${API_IMAGE_TAG:-local}
   env_file: .env
   restart: unless-stopped
+  logging: *logging
 
 x-api-environment: &api-environment
   DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432
@@ -34,6 +44,7 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     restart: unless-stopped
+    logging: *logging
     healthcheck:
       # The temporary server that initializes a new cluster listens only on
       # a socket. Wait for the server that will accept the API's connections.
