@@ -200,7 +200,37 @@ struct DetectorFixtureTests {
         #expect(ReplyReading.statedTime(in: "resets at 2026-11-18T12:06:40+01:00") == base)
         #expect(ReplyReading.statedTime(in: "resets in 2 hours") == nil)
         #expect(ReplyReading.time(fromSeconds: 1_795_000_000) == base)
+        #expect(ReplyReading.time(fromSeconds: "1795000000") == base)
         #expect(ReplyReading.time(fromSeconds: "soon") == nil)
+    }
+
+    // A tool's output is untrusted: a number that is no time the contract's
+    // four-digit years can state is no reset time, and nothing is estimated.
+    @Test("a reset time that is no finite time inside years 1 to 9999 is not read", arguments: [
+        "1e30", "-1e30", "1795000000000", "253402300800", "-62135596801", #""nan""#, #""inf""#, #""-inf""#,
+        #""infinity""#, #""1e30""#,
+    ])
+    func unstatedSeconds(text: String) throws {
+        let object = try #require(try JSONSerialization.jsonObject(with: Data("{\"at\":\(text)}".utf8)) as? [String: Any])
+        #expect(ReplyReading.time(fromSeconds: object["at"]) == nil)
+    }
+
+    @Test("the first and the last second of years 1 to 9999 are read")
+    func edgeSeconds() {
+        #expect(ReplyReading.time(fromSeconds: -62_135_596_800) == Date(timeIntervalSince1970: -62_135_596_800))
+        #expect(ReplyReading.time(fromSeconds: 253_402_300_799) == Date(timeIntervalSince1970: 253_402_300_799))
+    }
+
+    @Test("a Codex limit whose reset time is out of range is a limit with no reset time",
+          arguments: ["1e30", #""nan""#, "1795000000000"])
+    func codexLimitWithNoBelievableReset(resetsAt: String) throws {
+        let stdout = #"{"type":"error","message":"You've hit your usage limit.","limit":"#
+            + #"{"window":"five_hour","resets_at":\#(resetsAt)}}"# + "\n"
+            + #"{"type":"turn.failed","error":{"message":"You've hit your usage limit."}}"#
+        let record = ToolRunRecord(
+            termination: .exited(1), standardOutput: Data(stdout.utf8), standardError: Data(), endedBy: nil)
+        let detector = try #require(Detectors.detector(for: .codex))
+        #expect(detector.outcome(of: record, at: Self.endedAt) == .limit(window: .fiveHour, resetAt: nil))
     }
 
     // MARK: The stand-ins play the same files

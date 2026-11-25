@@ -373,6 +373,60 @@ struct OutputReadingTests {
             _ = try CodexDriver().read(standardOutput: Self.reconnected, outputFile: nil)
         }
     }
+
+    // A tool's usage figures are untrusted: one that is no believable count
+    // is read as 0 and never ends the runner.
+
+    static func json(_ text: String) -> Any? {
+        ProviderShapes.object(Data("{\"value\":\(text)}".utf8))?["value"]
+    }
+
+    @Test("a usage figure that is a whole number of a believable size is read", arguments: [
+        ("0", 0), ("150", 150), ("150.0", 150), ("9000000000000000", 9_000_000_000_000_000),
+    ])
+    func believableCount(text: String, expected: Int) {
+        #expect(ProviderShapes.count(Self.json(text)) == expected)
+    }
+
+    @Test("a usage figure out of range, negative, fractional or no number is 0", arguments: [
+        "1e30", "-1e30", "10000000000000000000", "9223372036854775807", "9000000000000001", "-5", "1.5",
+        "\"12\"", "null", "[1]",
+    ])
+    func unbelievableCount(text: String) {
+        #expect(ProviderShapes.count(Self.json(text)) == 0)
+    }
+
+    @Test("token sums stop at the largest whole number instead of overflowing")
+    func saturatingSum() {
+        #expect(ProviderShapes.sum(2, 3) == 5)
+        #expect(ProviderShapes.sum(Int.max, 1) == Int.max)
+        #expect(ProviderShapes.sum(Int.max - 1, Int.max) == Int.max)
+    }
+
+    static let hugeUsage = [
+        #"{"input_tokens":1e30,"output_tokens":7}"#,
+        #"{"input_tokens":9223372036854775807,"output_tokens":7}"#,
+        #"{"input_tokens":10000000000000000000,"output_tokens":7}"#,
+    ]
+
+    @Test("a usage figure out of range in a tool's answer costs the figure, not the answer", arguments: hugeUsage)
+    func hugeUsageIsAnAnswer(usage: String) throws {
+        let claude = Data(#"{"type":"result","is_error":false,"result":"ready","usage":\#(usage)}"#.utf8)
+        #expect(try ClaudeDriver().read(standardOutput: claude, outputFile: nil) == ToolAnswer(text: "ready", tokens: 7))
+        let agy = Data(#"{"status":"SUCCESS","response":"ready","usage":\#(usage)}"#.utf8)
+        #expect(try AntigravityDriver().read(standardOutput: agy, outputFile: nil)
+            == ToolAnswer(text: "ready", tokens: 7))
+        let codex = Data(#"{"type":"turn.completed","usage":\#(usage)}"#.utf8)
+        #expect(try CodexDriver().read(standardOutput: codex, outputFile: Data("ready".utf8))
+            == ToolAnswer(text: "ready", tokens: 7))
+    }
+
+    @Test("Codex's turns never add up past the largest whole number")
+    func codexManyTurns() throws {
+        let turn = #"{"type":"turn.completed","usage":{"input_tokens":9000000000000000,"output_tokens":9000000000000000}}"#
+        let output = Data(Array(repeating: turn, count: 600).joined(separator: "\n").utf8)
+        #expect(try CodexDriver().read(standardOutput: output, outputFile: Data("ready".utf8)).tokens == Int.max)
+    }
 }
 
 @Suite("Probe", .timeLimit(.minutes(Patience.minutes(1))))

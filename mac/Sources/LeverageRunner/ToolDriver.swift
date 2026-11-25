@@ -149,15 +149,40 @@ enum ProviderShapes {
         (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// The whole-number value of a JSON field, or 0. Each form is asked
-    /// for, since JSONSerialization on Linux may not hand back an NSNumber.
+    /// The largest usage figure read: the bound `JSONValue.intValue` uses,
+    /// under which every whole number is exact as a Double.
+    static let largestCount = 9_000_000_000_000_000
+
+    /// The whole-number value of a JSON field, or 0. A tool's output is
+    /// untrusted, so a figure that is negative, not whole, not finite or
+    /// past `largestCount` is no count and reads as 0; converting it would
+    /// end the runner on a number such as `1e30`. Each form is asked for,
+    /// since JSONSerialization on Linux may not hand back an NSNumber.
     static func count(_ value: Any?) -> Int {
+        let number: Double
         switch value {
-        case let number as Int: number
-        case let number as Double: Int(number)
-        case let number as NSNumber: number.intValue
-        default: 0
+        case let whole as Int: return (0...largestCount).contains(whole) ? whole : 0
+        case let double as Double: number = double
+        case let other as NSNumber: number = other.doubleValue
+        default: return 0
         }
+        guard number.isFinite, number >= 0, number <= Double(largestCount), number.rounded() == number
+        else { return 0 }
+        return Int(number)
+    }
+
+    /// The sum, or the largest whole number when it would pass it: a sum of
+    /// counts never ends the runner.
+    static func sum(_ first: Int, _ second: Int) -> Int {
+        let (sum, overflow) = first.addingReportingOverflow(second)
+        guard overflow else { return sum }
+        return first < 0 ? Int.min : Int.max
+    }
+
+    /// A usage object's input and output tokens together.
+    static func tokens(_ usage: Any?) -> Int {
+        let usage = usage as? [String: Any]
+        return sum(count(usage?["input_tokens"]), count(usage?["output_tokens"]))
     }
 
     /// The Boolean value of a JSON field, or nil.

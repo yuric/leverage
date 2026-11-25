@@ -29,6 +29,12 @@ public enum LeverageJSON {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
+            // A date the contract cannot state is refused, never rewritten.
+            guard writableSeconds.contains(date.timeIntervalSince1970) else {
+                throw EncodingError.invalidValue(date, EncodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "not a date four digits of a year can state"))
+            }
             try container.encode(string(from: date))
         }
         return encoder
@@ -97,10 +103,21 @@ public enum LeverageJSON {
         return Date(timeIntervalSince1970: Double(whole) + fraction)
     }
 
-    /// Writes the date in UTC, with its microseconds when it has any.
+    /// The seconds since 1970 that four digits of a year can state: from
+    /// the first second of year 0000 to the last of year 9999. NaN is in
+    /// no range.
+    static let writableSeconds: ClosedRange<Double> = -62_167_219_200...253_402_300_799
+
+    /// Writes the date in UTC, with its microseconds when it has any. It
+    /// answers for every date: one outside `writableSeconds` is written as
+    /// the nearest second inside it, and one that is no time at all (NaN)
+    /// as 1970. The encoder refuses such a date before it gets here.
     public static func string(from date: Date) -> String {
-        var whole = Int(date.timeIntervalSince1970.rounded(.down))
-        var micros = Int(((date.timeIntervalSince1970 - Double(whole)) * 1_000_000).rounded())
+        let stated = date.timeIntervalSince1970
+        let seconds = stated.isNaN
+            ? 0 : min(max(stated, writableSeconds.lowerBound), writableSeconds.upperBound)
+        var whole = Int(seconds.rounded(.down))
+        var micros = Int(((seconds - Double(whole)) * 1_000_000).rounded())
         if micros >= 1_000_000 {
             whole += 1
             micros -= 1_000_000

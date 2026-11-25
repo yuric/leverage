@@ -257,6 +257,17 @@ struct RunnerEndTests {
         #expect(written.isEmpty)
     }
 
+    @Test("code 5 with a reset time that cannot be written writes nothing and is code 4",
+          arguments: [Double.nan, .infinity, -.infinity, 1e30, 1_795_000_000_000])
+    func unwritableReset(seconds: Double) {
+        let unwritable = RunEndReport(
+            kind: .limit, window: .fiveHour, resetAt: Date(timeIntervalSince1970: seconds), taskID: UUID(),
+            reviewID: nil, toolVersion: nil, observedAt: Date(timeIntervalSince1970: 1_899_999_000))
+        var written: [String] = []
+        #expect(RunnerEnd.finish(code: 5, report: unwritable, log: log) { written.append($0) } == 4)
+        #expect(written.isEmpty)
+    }
+
     @Test("every other code writes nothing", arguments: [Int32(0), 1, 3, 4])
     func otherCodes(code: Int32) {
         var written: [String] = []

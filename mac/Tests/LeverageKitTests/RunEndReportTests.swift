@@ -50,6 +50,15 @@ struct RunEndReportTests {
         String(decoding: try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]), as: UTF8.self)
     }
 
+    @Test("a report whose reset time cannot be written has no line",
+          arguments: [Double.nan, .infinity, 1e30, 1_795_000_000_000])
+    func unwritableReset(seconds: Double) {
+        let report = RunEndReport(
+            kind: .limit, window: .fiveHour, resetAt: Date(timeIntervalSince1970: seconds), taskID: taskID,
+            reviewID: nil, toolVersion: nil, observedAt: observed)
+        #expect(throws: EncodingError.self) { _ = try report.line() }
+    }
+
     @Test("a limit and a sign-out each round-trip through their line")
     func roundTrip() throws {
         for report in [limit, signedOut, limitOnAJob, signedOutOnAJob] {

@@ -34,8 +34,7 @@ struct CodexDriver: ProviderShape {
             switch event["type"] as? String {
             case "turn.failed": throw ToolFailure.reportedError
             case "turn.completed":
-                let usage = event["usage"] as? [String: Any]
-                tokens += ProviderShapes.count(usage?["input_tokens"]) + ProviderShapes.count(usage?["output_tokens"])
+                tokens = ProviderShapes.sum(tokens, ProviderShapes.tokens(event["usage"]))
             default: continue
             }
         }

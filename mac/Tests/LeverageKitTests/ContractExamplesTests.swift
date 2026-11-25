@@ -481,6 +481,32 @@ struct ContractExamplesTests {
         #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: 1_767_225_600)) == "2026-01-01T00:00:00Z")
     }
 
+    @Test("a date four digits of a year cannot state is written as the nearest one they can")
+    func dateOutOfRange() {
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: .infinity)) == "9999-12-31T23:59:59Z")
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: 1e30)) == "9999-12-31T23:59:59Z")
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: 253_402_300_799.9999999))
+            == "9999-12-31T23:59:59Z")
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: -.infinity)) == "0000-01-01T00:00:00Z")
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: -1e30)) == "0000-01-01T00:00:00Z")
+        #expect(LeverageJSON.string(from: Date(timeIntervalSince1970: .nan)) == "1970-01-01T00:00:00Z")
+    }
+
+    @Test("the encoder refuses a date four digits of a year cannot state",
+          arguments: [Double.nan, .infinity, -.infinity, 1e30, -1e30, 253_402_300_800])
+    func encoderRefusesDate(seconds: Double) {
+        #expect(throws: EncodingError.self) {
+            _ = try LeverageJSON.encoder().encode([Date(timeIntervalSince1970: seconds)])
+        }
+    }
+
+    @Test("the encoder writes the first and the last second four digits of a year can state")
+    func encoderEdges() throws {
+        let edges = [Date(timeIntervalSince1970: -62_167_219_200), Date(timeIntervalSince1970: 253_402_300_799)]
+        #expect(String(decoding: try LeverageJSON.encoder().encode(edges), as: UTF8.self)
+            == #"["0000-01-01T00:00:00Z","9999-12-31T23:59:59Z"]"#)
+    }
+
     /// Fields the Swift models read with a generated enum, and that enum's
     /// values: the interface schema's enum must equal them.
     static let enumFields: [(component: String, path: [String], values: [String])] = [
