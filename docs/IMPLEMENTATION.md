@@ -93,12 +93,12 @@ The run ends when the build is done or the owner stops it.
 
 ### In flight
 
-- The fixes from the 2026-11-25 review of pull requests 34 to 44, made by
-  Claude Code agents on six branches cut from `036087a` (engine, log
-  audit, API hardening, Mac, documents, and scripts and evals) and
-  brought together on one branch. They go to `main` in one pull request,
-  which is being opened (pull request to be opened from
-  `fix/post-handoff-review`). None of it is merged. The choices made for
+- The fixes from the 2026-11-25 review of pull requests 34 to 44 and of
+  the whole repository, made by Claude Code agents on six branches cut
+  from `036087a` (engine, log audit, API hardening, Mac, documents, and
+  scripts and evals) and brought together on `fix/post-handoff-review`.
+  They go to `main` in one pull request,
+  [#45](https://github.com/yuric/leverage/pull/45). None of it is merged. The choices made for
   the owner are question 22.
 
 ### General role and landing prompt on `main`
