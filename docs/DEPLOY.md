@@ -388,7 +388,7 @@ older than 7 days once an hour
 | `POSTGRES_USER` | db, api, sweep | Yes | The PostgreSQL user, the database's owner role. compose stops with a message when it is unset. |
 | `POSTGRES_PASSWORD` | db, api, sweep | Yes | That user's password. Letters, digits and dashes only, because it is put into `DATABASE_URL`. |
 | `LEVERAGE_API_DB_PASSWORD` | api, sweep | No | The password of `leverage_api`, the login role the server and the sweep connect as; it cannot change the event log. Letters, digits and dashes only. Empty: they connect as `POSTGRES_USER`. |
-| `SECRET_KEY_BASE` | api, sweep | Yes | The key Rails signs with. Make one with `openssl rand -hex 64`. |
+| `SECRET_KEY_BASE` | api, sweep | Yes | Rails does not start in production without it. Leverage signs nothing with it: its tokens are random values whose SHA-256 digests the database keeps, so changing it ends no owner session, seat token or helper token ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md) says what ends each). Make one with `openssl rand -hex 64`. |
 | `RAILS_ASSUME_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `RAILS_FORCE_SSL` | api, sweep | No, default `true` | Set `false` while the API is served over plain HTTP on the Mac. |
 | `API_PORT` | compose | No, default `3000` | The port on `127.0.0.1` where the API answers. |
