@@ -182,13 +182,17 @@ class BackupRestoreTest < CommittingTestCase
     changed
   end
 
-  # The newest migration, taken back by hand: its columns, its check and
-  # its row in schema_migrations. The replay test reads one of the columns.
-  NEWEST_MIGRATION = "20261125000100".freeze
+  # The newest migrations, taken back by hand. The newest rebuilds stored
+  # steps (Leverage::StepRepair) and changes no table's shape, so only its
+  # row in schema_migrations goes. The one before it is the newest that
+  # changes a table: its columns, its check and its row go. The replay
+  # test reads one of the columns.
+  NEWEST_MIGRATION = "20261125190000".freeze
+  NEWEST_SHAPE_MIGRATION = "20261125000100".freeze
   BEFORE_NEWEST_MIGRATION = <<~SQL.freeze
     ALTER TABLE tasks DROP CONSTRAINT tasks_imaginarium_source,
       DROP COLUMN imaginarium_entry_id, DROP COLUMN imaginarium_catalog_version;
-    DELETE FROM schema_migrations WHERE version = '#{NEWEST_MIGRATION}';
+    DELETE FROM schema_migrations WHERE version IN ('#{NEWEST_MIGRATION}', '#{NEWEST_SHAPE_MIGRATION}');
   SQL
 
   def migration_versions
@@ -200,6 +204,7 @@ class BackupRestoreTest < CommittingTestCase
   # made before the newest of them could be restored.
   test "a dump made before the newest migration is migrated in the staging database and passes the replay test" do
     assert_equal NEWEST_MIGRATION, migration_versions.max, "name the newest migration here, and how to take it back"
+    assert_equal NEWEST_MIGRATION, Leverage::StepRepair::MIGRATION, "the newest migration is the step repair"
     walk = Walk.new(seed: 606).run
     walked = events_of(walk.workspace_id)
     run = B.run!(folder: @folder, keep: 14)
@@ -212,6 +217,7 @@ class BackupRestoreTest < CommittingTestCase
     assert_match(/workspace #{walk.workspace_id}: #{walked.size} events, replay ok, audit ok/, out)
     on_database(@scratch) do
       assert_includes migration_versions, NEWEST_MIGRATION
+      assert_includes migration_versions, NEWEST_SHAPE_MIGRATION
       assert_includes ActiveRecord::Base.lease_connection.columns("tasks").map(&:name), "imaginarium_entry_id"
       assert_equal without_xact_id(walked), without_xact_id(events_of(walk.workspace_id))
       assert privilege?("tasks", "UPDATE"), "the grants follow the migrations"
