@@ -154,6 +154,80 @@ class HistoricalLandingPromptAuditTest < ActiveSupport::TestCase
     refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: nil)
   end
 
+  # A provisional claim another seat has waiting on a Ready task, with its
+  # task.before_claim check about that seat.
+  def provisional_claim(seat)
+    task = @scenario.task(state: "ready")
+    pending = @scenario.pending_transition(task, command: "claim", requester: seat)
+    task.update!(holder_seat_id: seat.id)
+    @scenario.rule_check(task, rule: @scenario.rule(hook: "task.before_claim"), subject: seat, pending: pending)
+    task
+  end
+
+  test "a New prompt receipt does not excuse the withdrawal of another seat's provisional claim" do
+    other = @scenario.seat(role: "general")
+    claimed = provisional_claim(other)
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: @seat)
+    after = @scenario.workspace.reload.last_seq
+    ctx = @scenario.context(request: @request)
+    Leverage::SeatRuns.cancel_provisional_claim(ctx, other)
+    Leverage::SeatRuns.release_held_reviews(ctx, @seat)
+
+    assert_equal %w[check.finished job.withdrawn review.released], key_events.map(&:type)
+    states = { claimed.id => "ready", review.task_id => "in_review" }
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: @command)
+    assert_match(/command #{@request.key} .*issue_landing_prompt wrote/, audit(after).sole)
+  end
+
+  test "after key retention the old reason does not excuse the withdrawal of another seat's provisional claim" do
+    @command.destroy!
+    other = @scenario.seat(role: "general")
+    claimed = provisional_claim(other)
+    task = @scenario.task(state: "working", builder: @seat)
+    after = @scenario.workspace.reload.last_seq
+    ctx = @scenario.context(request: @request)
+    Leverage::SeatRuns.cancel_provisional_claim(ctx, other)
+    Leverage::SeatRuns.release_working_task(ctx, @seat, reason: "new_prompt")
+
+    assert_equal %w[check.finished job.withdrawn task.released], key_events.map(&:type)
+    states = { claimed.id => "ready", task.id => "working" }
+    refute Leverage::LogAudit.historical_prompt_release?(key_events, states, receipt: nil)
+    assert audit(after).any? { |line| line.include?(@request.key) }, audit(after).inspect
+  end
+
+  test "a New prompt receipt does not excuse the release of a review the seat no longer held" do
+    # The seat started the review and lost it before the New prompt, so
+    # the release under the key is not of a review it holds.
+    review = @scenario.review(@scenario.task(state: "in_review"), reviewer: @seat)
+    Leverage::SeatRuns.release_held_reviews(@scenario.context, @seat)
+    after = @scenario.workspace.reload.last_seq
+    released = Leverage::SeatRuns.release_review(@scenario.context(request: @request), review)
+
+    assert_equal [ "review.released", "owner", @request.key ], [ released.type, released.actor_kind, released.command_id ]
+    refute Leverage::LogAudit.historical_prompt_release?([ released ], { review.task_id => "in_review" }, receipt: @command)
+    assert_match(/issue_landing_prompt wrote review\.released/, audit(after).sole)
+  end
+
+  test "a New prompt that released a Working task leased again after a failed review passes the audit" do
+    # The seat's latest builder lease came from review.failed's
+    # lease_seat_id, not from a claim (Leases.builder_grantee).
+    task = @scenario.task(state: "in_review", builder: @seat)
+    review = @scenario.review(task)
+    review.update!(verdict: "failed", lease_due_at: nil)
+    task.update!(state: "working", holder_seat_id: @seat.id, lease_due_at: @scenario.database_now + 3600)
+    grant = @scenario.append("review.failed", task: task, subject: review, actor_kind: "seat", actor_id: review.reviewer_seat_id,
+      payload: { failed_criterion_ids: [], failed_rule_check_id: nil, lease_seat_id: @seat.id, wait_cause: nil })
+    after = @scenario.workspace.reload.last_seq
+    released = Leverage::SeatRuns.release_working_task(@scenario.context(request: @request), @seat, reason: "new_prompt")
+
+    assert_equal task.id, released.task_id
+    assert_equal grant.id, Event.where(task_id: task.id).where("seq < ?", released.seq)
+      .where("type = 'task.claimed' OR payload->>'lease_seat_id' IS NOT NULL").order(:seq).last.id
+    assert_empty audit(after)
+    @command.destroy!
+    assert_empty audit(after)
+  end
+
   test "a release cannot excuse an orphan job withdrawal on an unrelated task after key retention" do
     @command.destroy!
     task = @scenario.task(state: "backlog")
