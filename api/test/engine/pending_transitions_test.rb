@@ -32,10 +32,10 @@ class PendingTransitionsTest < ActiveSupport::TestCase
   end
 
   # A pending submit: the builder's submit met a blocking model gate.
-  def pending_submit(rule = custom_rule("task.before_submit"))
+  def pending_submit(rule = custom_rule("task.before_submit"), builder: @builder)
     gating(rule)
-    task = ready_to_submit(@builder)
-    outcome = command("submit", @builder, submit_params(task))
+    task = ready_to_submit(builder)
+    outcome = command("submit", builder, submit_params(task))
     assert_equal :pending, outcome.outcome
     [ task.reload, P.of(task), RuleCheck.find_by!(rule_id: rule.id, task_id: task.id), @key ]
   end
@@ -261,6 +261,26 @@ class PendingTransitionsTest < ActiveSupport::TestCase
       assert command("heartbeat", @builder, { "id" => task.id }).completed?
       assert_not_equal "pending", command("release", @builder, { "id" => task.id, "reason" => "stopping" }).refusal&.code
     end
+  end
+
+  test "under a pending submit a seat that connects on its own may report its model, and the transition still waits (UX-9)" do
+    with_jobs do
+      prompt = @scenario.seat(role: "builder", provider: "claude", model: "", effort: "")
+      task, pending, = pending_submit(builder: prompt)
+
+      outcome = command("change_seat", prompt, { "model" => "claude-opus-5-5", "effort" => "high" })
+
+      assert outcome.completed?, "expected completed, got #{outcome.refusal&.code}"
+      changed = mine(Event).where(command_id: @key).sole
+      assert_equal [ "seat.changed", "seat", prompt.id ], [ changed.type, changed.actor_kind, changed.actor_id ]
+      assert_equal %w[claude-opus-5-5 high], prompt.reload.values_at(:model, :effort)
+      assert_equal [ "pending", "working" ], [ pending.reload.state, task.reload.state ]
+    end
+  end
+
+  test "the commands a waiting seat may send are the PRD's list: heartbeat, release, report cost and report its model" do
+    allowed = Leverage::Contract.state_machine.fetch("commands").select { |entry| entry.fetch("allowed_while_pending") }
+    assert_equal %w[change_seat heartbeat heartbeat_review release release_review report_cost], allowed.pluck("command").sort
   end
 
   test "under a pending pass the reviewer's other verdict answers pending; a claimant's claim answers pending; the owner is not held back" do

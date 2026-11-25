@@ -120,7 +120,7 @@
     {"command": "connect_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "pause_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "resume_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
-    {"command": "change_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
+    {"command": "change_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true, "note": "Allowed while pending for the seat itself, which reaches this command only through report_model (UX-9): it changes its own model and effort and never touches the pending transition (L391). The owner's Change an agent is never held back by a pending transition (RC-41)."},
     {"command": "remove_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "start_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "stop_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},

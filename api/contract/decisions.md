@@ -1398,11 +1398,15 @@ task. PRD places are named by their section.
   with the seat as actor, only when a value changes. Values are checked as
   in UX-7 against the seat's provider; `null` means "cannot tell" and
   stores `""` (a null model needs a null effort). Not a claim
-  precondition; an agent that switches model reports again. The answer is
+  precondition; an agent that switches model reports again, also while
+  it waits on a pending transition: `change_seat` is
+  `allowed_while_pending`, which only the seat's own report reads, since
+  the owner is never held back (PRD Pending transitions). The answer is
   `ReportedModel`. `JoinInstructions` gains `models` (the provider's ids
   and efforts, `CatalogModel`) for a seat that connects on its own.
   Alternative: report on `GET /v1/join` (a read that writes), or refuse
-  claims until reported.
+  claims until reported; or answer `pending` to a report until the check
+  ends.
 - **UX-10** `[shape]` `seats.may_work`, `may_deliver` and `may_create`,
   `boolean NOT NULL DEFAULT true`. The migration `AddPermissionsToSeats`
   turns all three on for every existing seat and clears `model` and

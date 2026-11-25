@@ -388,7 +388,7 @@ A rule check result is one of `passed`, `failed`, `not_applicable`, `applied` (p
 ### Pending transitions
 
 - A task has at most one pending transition and stays in its earlier state while it is pending.
-- The holder, or the reviewer holding the review, may heartbeat, release, read and report cost. Its other commands are refused with `pending`.
+- The holder, or the reviewer holding the review, may heartbeat, release, read, report cost and, when it connects on its own, report its model. Its other commands are refused with `pending`.
 - The lease keeps running. If it expires, the pending transition is cancelled and its checks are withdrawn.
 - A contract edit, in any state, cancels the pending transition and withdraws its checks and jobs in the same way.
 - A hold opened while a transition is pending does not cancel it. Its checks keep running, and the result is applied when the last hold lifts. A provisional claim's reservation lapses when a hold opens. While the hold is open, the open step is the hold's waiting step, not `check`.
