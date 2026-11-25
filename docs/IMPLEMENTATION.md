@@ -2612,6 +2612,38 @@ skeleton's pull request description, as rule AR-004 asks.
     the trailer. **Alternative.** The owner names any he wrote himself,
     and they come off the list.
 
+20. **Where a person who adds a login is told about the providers'
+    terms.** The repository is public, so people other than the owner can
+    build and run the app. The [PRD's Risks](PRD.md#risks) and the
+    [provider terms record](research/provider-terms/README.md) say a
+    provider may not allow its tool to be driven by another app, or work
+    to move between two logins of one provider, and may suspend an
+    account. **Chosen.** Documents only:
+    [DEPLOY.md](DEPLOY.md#the-first-run) and the README now say so and
+    link both. The Age of Lever page carries no terms note, because its
+    words are product copy. The app shows no warning when a Gemini login
+    is added, as the PRD's [Gemini login decision](PRD.md#open-decisions)
+    says. **Alternative.** The owner decides each of two things: (a) the
+    Age of Lever page gets a terms note or a link beside its Handoff
+    section; (b) the decision "No warning is shown when a Gemini login is
+    added" changes, since a person who builds the app from the public
+    repository adds a Gemini login without having read that decision.
+    That is a change to the PRD.
+
+21. **The provider names and the marks beside them on the Age of Lever
+    page.** No person has read any provider's brand or trademark
+    guidelines. The [provider terms record](research/provider-terms/README.md)
+    lists Anthropic's Trademark Guidelines among the documents not read
+    and names no other provider's. The page names Codex, Grok, Claude and
+    Gemini, each beside a Unicode glyph in a tinted tile
+    (`marketing-page/styles.css`, `.provider-mark`), not a provider's
+    logo file. **Chosen.** The page's footer and the README say that the
+    names belong to their owners and that Leverage is not affiliated with
+    or endorsed by them. The names and the glyphs stay.
+    **Alternative.** A person reads each provider's guidelines, and the
+    tinted glyphs give way to the names alone or to marks that resemble
+    no provider's, if the guidelines ask for it.
+
 ## Waiting for the owner
 
 Merged pull requests keep both AI-assistance boxes unticked until the owner
@@ -2669,3 +2701,5 @@ run is also listed here until the owner has read it.
 | General role and landing prompt | Read the choices in question 15, including the limits for a custom review-pass check, a task given back across providers and the orchestrator offline notice during General work. |
 | App round 2 ([#35](https://github.com/yuric/leverage/pull/35)) | Read the choices in question 17, including the limits on tasks agents add and the two new Needs you items. |
 | Imaginarium gallery ([#36](https://github.com/yuric/leverage/pull/36)) | Accept or change FR-030 to FR-041 and the build's answers to the gallery's open questions (question 18). |
+| The providers' terms for people who add a login | Decide whether the Age of Lever page carries a terms note, and whether the PRD's decision that no warning is shown when a Gemini login is added still stands (question 20). |
+| The providers' brand and trademark guidelines | No person has read them. Read them and decide whether the tinted glyphs beside the provider names on the Age of Lever page stay (question 21). |
