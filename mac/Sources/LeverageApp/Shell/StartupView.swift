@@ -61,6 +61,7 @@ struct StartupView: View {
         case .imageMissing: .imageMissingTitle
         case .serverFailed: .serverFailedTitle
         case .servicesUnavailable: .servicesUnavailableTitle
+        case .databasePasswordsMissing: .databasePasswordsMissingTitle
         case .cannotReachServer: .cannotReachTitle
         default: .startingTitle
         }
@@ -74,6 +75,7 @@ struct StartupView: View {
         case .imageMissing: .imageMissingBody
         case .serverFailed: .serverFailedBody
         case .servicesUnavailable: .servicesUnavailableBody
+        case .databasePasswordsMissing: .databasePasswordsMissingBody
         case .cannotReachServer: .cannotReachBody
         default: .startingBody
         }

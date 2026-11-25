@@ -82,6 +82,9 @@ final class FakeDocker: @unchecked Sendable {
                   image)
                     [ -f "$state/image-present" ] && { echo sha256:made-up; exit 0; }
                     echo "Error: No such image" >&2; exit 1 ;;
+                  volume)
+                    [ -f "$state/volume-present" ] && { echo '[{"Name":"made-up"}]'; exit 0; }
+                    echo "Error response from daemon: get made-up: no such volume" >&2; exit 1 ;;
                   compose)
                     [ -f .env ] || { echo "no .env here" >&2; exit 5; }
                     [ -f "$state/compose-fails" ] && { echo "compose up failed, made up" >&2; exit 1; }

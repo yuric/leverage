@@ -148,9 +148,23 @@ public actor ServerSupervisor: ServerSupervising {
             return move(to: .imageMissing)
         }
 
+        let files = ServerFiles(supportFolder: configuration.supportFolder)
+        if !files.hasDatabasePassword() {
+            // New passwords would lock the app out of a database Docker still
+            // keeps: PostgreSQL holds the ones it was made with. Write nothing.
+            let volume = await self.docker(
+                docker, ["volume", "inspect", "\(configuration.composeProject)_db-data"], timeLimit: .seconds(30))
+            if volume?.succeeded == true {
+                log.error(
+                    "the database volume \(configuration.composeProject)_db-data exists, "
+                        + "but the server folder holds no database password")
+                return move(to: .databasePasswordsMissing)
+            }
+        }
+
         let settings: ServerSettings
         do {
-            settings = try ServerFiles(supportFolder: configuration.supportFolder).prepare(
+            settings = try files.prepare(
                 composeSource: configuration.composeSource, imageTag: configuration.imageTag,
                 isPortFree: isPortFree)
         } catch {

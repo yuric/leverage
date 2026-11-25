@@ -196,6 +196,7 @@ struct AppModelLaunchTests {
             (.imageMissing, .imageMissing),
             (.failed(reason: "made-up reason for the log"), .serverFailed),
             (.notStarted, .servicesUnavailable),
+            (.databasePasswordsMissing, .databasePasswordsMissing),
             (.starting, .serverFailed),
         ]
         for (state, phase) in table {
@@ -215,6 +216,9 @@ struct AppModelLaunchTests {
         #expect(!ShellCopy.servicesUnavailableTitle.text.isEmpty)
         #expect(ShellCopy.servicesUnavailableBody.text.contains("logs/app.log"))
         #expect(ShellCopy.serverFailedBody.text.contains("logs/app.log"))
+        // The database is safe in Docker; the screen sends the owner to the recovery, not to Docker Desktop.
+        #expect(ShellCopy.databasePasswordsMissingBody.text.contains("DEPLOY.md"))
+        #expect(!ShellCopy.databasePasswordsMissingBody.text.contains("Docker Desktop"))
     }
 
     @Test("while Docker Desktop is starting the window says so, then moves on when it has")

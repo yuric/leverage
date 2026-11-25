@@ -98,6 +98,12 @@ public struct ServerFiles: Sendable {
         return ServerSettings(folder: folder, port: port)
     }
 
+    /// Whether `.env` still holds the database owner's password. Without it
+    /// `prepare` makes a new one, which a database already in Docker refuses.
+    public func hasDatabasePassword() -> Bool {
+        !(readEnv()["POSTGRES_PASSWORD"] ?? "").isEmpty
+    }
+
     /// The port the server folder names, or nil before it is written.
     public func port() throws -> Int? {
         readEnv()["API_PORT"].flatMap(Int.init)

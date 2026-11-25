@@ -52,6 +52,18 @@ struct ServerFilesTests {
         #expect(try files.port() == 47130)
     }
 
+    @Test("tells whether the server folder still holds the database password")
+    func knowsThePassword() throws {
+        let fake = try FakeDocker()
+        let files = ServerFiles(supportFolder: fake.supportFolder)
+        #expect(!files.hasDatabasePassword())
+        try files.prepare(composeSource: fake.composeSource, imageTag: "0.1.0", isPortFree: { _ in true })
+        #expect(files.hasDatabasePassword())
+        let env = fake.supportFolder.appendingPathComponent("server/.env")
+        try Data("POSTGRES_USER=leverage\nPOSTGRES_PASSWORD=\n".utf8).write(to: env)
+        #expect(!files.hasDatabasePassword())
+    }
+
     @Test("takes the first free port from 47130 to 47139")
     func firstFreePort() throws {
         let fake = try FakeDocker()

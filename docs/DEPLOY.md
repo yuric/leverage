@@ -297,6 +297,38 @@ The App round 1 migration folds each task's old goal into its details
 before dropping the goal column. For the handling of empty or duplicate
 text, see [UI-1](../api/contract/decisions.md#app-round-1-ui).
 
+### If the server folder was lost
+
+The database passwords and `SECRET_KEY_BASE` live only in
+`<support folder>/server/.env`, and PostgreSQL keeps the owner role's
+password it was made with. When that file, or the whole support folder, is
+gone while the volume is not, the app finds the volume
+(`docker volume inspect leverage-app_db-data`), writes nothing, starts
+nothing, and says that the database needs its password back. The log is
+then still in the volume, and may be its only copy if the backups folder
+went with the support folder: do not remove the volume to get the app
+going again.
+
+Put the old `server/.env` back from a copy of the Mac, if there is one,
+and choose Try again. Otherwise give the owner role a new password through
+the database container, which still runs, and keep that password in a new
+`.env`:
+
+```bash
+support="$HOME/Library/Application Support/leverage"
+password=$(openssl rand -hex 16)
+docker start leverage-app-db-1        # if it is not running
+docker exec leverage-app-db-1 psql -U leverage -d postgres \
+  -c "ALTER ROLE leverage PASSWORD '$password'"
+mkdir -p -m 700 "$support/server"
+(umask 077 && printf 'POSTGRES_PASSWORD=%s\n' "$password" > "$support/server/.env")
+```
+
+Then choose Try again. The app keeps that password and makes the others
+again; the API's own role, `leverage_api`, gets its new password from
+`db:grants` when the server starts. These steps have not been run against
+an owner's installation.
+
 Each time the server starts, after the database is prepared,
 `bin/rails leverage:install_shipped_rules` writes the seven shipped rules
 of any workspace that has none. On upgrade it also moves an unchanged
