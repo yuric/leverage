@@ -42,7 +42,9 @@ case "$*" in
   *" port api 3000"*) echo "127.0.0.1:40001"; exit 0 ;;
   *"pg_dump"*)
     printf '%s\\n' 'COPY public.credentials (id, plan, account_email) FROM stdin;'
-    printf '1\\t\\\\N\\t%s\\n' 'standin.owner@example.invalid'
+    if [ "${LEVERAGE_E2E_ONLY:-}" != promptReportsModel ] || [ -n "${FAKE_LEAK_ACCOUNT_EMAIL:-}" ]; then
+      printf '1\\t\\\\N\\t%s\\n' 'standin.owner@example.invalid'
+    fi
     printf '%s\\n' '\\.'
     exit 0 ;;
 esac
@@ -53,15 +55,21 @@ FAKE_SWIFT = """#!/bin/sh
 case "$1" in
   build) exit 0 ;;
   test)
-    names="CoreLoop StoppedReviewer PromptJoin"
-    if [ -n "${FAKE_NO_PROMPT_JOIN:-}" ]; then names="CoreLoop StoppedReviewer"; fi
+    names="CoreLoop StoppedReviewer PromptJoin ReportModel CreateTask DeliverOffOffer DeliverOffRelease"
     case "$*" in *"--filter LeverageEndToEnd.*PromptJoinEndToEndTests"*) names="PromptJoin" ;; esac
+    case "$*" in *"--filter LeverageEndToEnd.*promptReportsModel"*) names="ReportModel" ;; esac
     for name in $names; do
+      if [ "$name" = "${FAKE_OMIT_CASE:-}" ]; then continue; fi
       folder="$LEVERAGE_E2E_DIR/$name"
-      mkdir -p "$folder/support/logs" "$folder/StandIns/state"
+      mkdir -p "$folder"
       printf '%s\\n' "$FAKE_SECRET" >"$folder/secrets.txt"
-      echo "helper info: nothing to see" >"$folder/support/logs/helper.log"
-      printf '{"tool": "claude", "env": {"MADE_UP": "%s"}}\\n' "$FAKE_CALL_VALUE" >"$folder/StandIns/state/calls.jsonl"
+      case "$name" in
+        CoreLoop|StoppedReviewer|PromptJoin)
+          mkdir -p "$folder/support/logs" "$folder/StandIns/state"
+          echo "helper info: nothing to see" >"$folder/support/logs/helper.log"
+          printf '{"tool": "claude", "env": {"MADE_UP": "%s"}}\\n' "$FAKE_CALL_VALUE" >"$folder/StandIns/state/calls.jsonl"
+          ;;
+      esac
     done
     exit 0 ;;
 esac
@@ -121,15 +129,30 @@ class EndToEndScriptTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("no secret found", output)
 
-    def test_the_full_run_requires_the_prompt_join_case(self):
-        code, output = self.run_.run(FAKE_NO_PROMPT_JOIN="1")
-        self.assertEqual(code, 1, output)
-        self.assertIn("expected all 3 end-to-end tests to run", output)
+    def test_the_full_run_requires_the_prompt_join_and_deliver_off_release_cases(self):
+        for case in ("PromptJoin", "DeliverOffRelease"):
+            with self.subTest(case=case):
+                code, output = self.run_.run(FAKE_OMIT_CASE=case)
+                self.assertEqual(code, 1, output)
+                self.assertIn("expected all 7 end-to-end tests to run", output)
 
     def test_the_prompt_join_case_can_run_on_its_own(self):
         code, output = self.run_.run(LEVERAGE_E2E_ONLY="PromptJoinEndToEndTests")
         self.assertEqual(code, 0, output)
         self.assertIn("running 1 end-to-end test", output)
+
+    def test_a_prompt_only_case_passes_with_no_helper_log(self):
+        code, output = self.run_.run(LEVERAGE_E2E_ONLY="promptReportsModel")
+        self.assertEqual(code, 0, output)
+        self.assertIn("running 1 end-to-end test", output)
+        self.assertIn("no secret found", output)
+        self.assertNotIn("expected account email", output)
+
+    def test_a_prompt_only_case_refuses_the_stand_in_account_email(self):
+        code, output = self.run_.run(LEVERAGE_E2E_ONLY="promptReportsModel", FAKE_LEAK_ACCOUNT_EMAIL="1")
+        self.assertEqual(code, 1, output)
+        self.assertIn("dump.sql", output)
+        self.assertNotIn("standin.owner@example.invalid", output)
 
     def test_the_api_image_has_a_tag_of_its_own_and_is_removed_after_the_run(self):
         code, output = self.run_.run(FAKE_UP_FAILS="1")

@@ -122,16 +122,12 @@ using that token, then follow the instructions and keep polling for
 work. Keep the prompt private. The roster labels
 the seat "Connected by prompt."
 
-Choose **New prompt** in the roster and confirm to issue a replacement
-for the same seat. The replacement prompt displays its token and paste
-instructions once issued. The old agent's next call answers `401` and
-it stops. Leverage also
-gives back the seat's work immediately. A Working task goes back to Ready,
-a review is released, and a held job times out as if its run timer had
-expired. A pending submit, pending pass or provisional claim is cancelled.
-A Finishing lease ends and any open approved or started actions come to
-Needs you as "Unconfirmed action". An approved action already waiting
-for the seat can still be taken by the new agent.
+To give the agent another landing prompt, choose **Remove** in the roster
+and connect a new seat. The removed seat's next call answers `401` and the
+agent stops. A Working task goes back to Ready, a review is released, and
+a held job runs to its timeout. A pending submit, pending pass or provisional
+claim is cancelled. Any open approved or started actions on a Finishing task
+come to Needs you as "Unconfirmed action".
 
 ### Connect a seat through MCP
 
@@ -493,7 +489,10 @@ scripts/build_app.sh && scripts/smoke_app.sh
 `scripts/e2e_core_loop.sh` exercises a task with one failed review using
 the real helper and runner with stand-in tools. It also tests a
 prompt-connected agent that fetches its instructions, takes a task to
-Done with a second seat, and gives a second task back on New prompt.
+Done with a second seat, and gives a second task back when removed. Four
+Prompt cases cover reporting a model and effort to the roster, adding a
+Ready task as a seat, offering a Ready task only to the seat with Deliver
+on, and giving back a Working task when Deliver turns off.
 The script checks the log and scans for secrets in its own compose
 project, then removes the project.
 `scripts/e2e_handoff.sh` runs six tests, each in a compose project of its

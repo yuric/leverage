@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Rules in force. The Core loop, Handoff, Rule checks, Questions and approvals, and Credentials are built. The owner's Mac runs the API, the timer sweep, daily backups, the Mac app and its agents. Agents can connect directly over HTTP or through the MCP server. |
-| **Last updated** | 2026-11-23 |
+| **Last updated** | 2026-11-24 |
 
 This document describes how Leverage is built: its components, how they
 communicate, where data lives, and why the design is the way it is. It
@@ -626,10 +626,9 @@ adds the MCP server.
   page with its log, its Timing section, its rule checklist with "Let it
   through once" and "Run it again", and "Draft the details", Change the
   task, Pause and Continue, the Add task form (with Save as an idea), Needs
-  you, the Agent roster with Connect for the five roles, Pause, Resume and
-  Change, and New prompt for a seat that connects on its own, the
-  Credentials list with Add credential, Refresh, Verify all, usage and
-  resets where available, and row actions, the Handoff tab with a
+  you, the Agent roster with Connect for the five roles, Pause, Resume,
+  Change and Remove, the Credentials list with Add credential, Refresh,
+  Verify all, usage and resets where available, and row actions, the Handoff tab with a
   reorderable list and its eight fixed rules, and
   Settings with Rules and Workspace, Projects, Activity and Decided for
   you. The task page includes questions, outward actions and task settings.
@@ -660,9 +659,11 @@ adds the MCP server.
 locator, temporary folders, `StubURLProtocol` and in-memory fakes of the
 three API protocols and of the app's runtime, among them `FakeNotifier`
 and `FakeInboxCursorStore`. `LeverageEndToEndTests` runs the built helper
-and runner against the real API. `scripts/e2e_core_loop.sh` also runs a
-prompt-connected agent. `scripts/e2e_handoff.sh` runs the six interrupted
-cases, and `scripts/e2e_rule_checks.sh` runs the eight rule-check cases.
+and runner against the real API. `scripts/e2e_core_loop.sh` also runs
+Prompt agents against the real API to check joining, removing the seat,
+reporting a model and effort, adding a task and enforcing Deliver.
+`scripts/e2e_handoff.sh` runs the six interrupted cases, and
+`scripts/e2e_rule_checks.sh` runs the eight rule-check cases.
 `scripts/e2e_questions_approvals.sh` adds seven runs and starts the built
 MCP server against the real API with `ScriptedMCPClient`.
 `LeverageMCPTests` checks protocol, process, tool and heartbeat behavior.
@@ -861,7 +862,8 @@ the stability rules.
 | States, commands, steps, hooks, jobs, roles, timers, Needs you | `api/contract/*.json`, one file each |
 | The transition function and rule gating, in process | `Leverage::Gating` (`api/lib/leverage/gating.rb`) and the conformance suite `api/test/support/gating_conformance.rb` |
 | Credential readers | `api/contract/readers.json` |
-| Expected behavior, end to end | `api/contract/traces/` (24 golden traces, all run whole) |
+| Models and efforts | `api/contract/models.json`; on the Mac side, `mac/Sources/LeverageKit/Generated/ModelCatalog.swift`, generated from it |
+| Expected behavior, end to end | `api/contract/traces/` (25 golden traces, all run whole) |
 | Agent MCP tools | `api/contract/openapi.json`, `api/contract/roles.json` and the session behavior in [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md) |
 | The provider's tool | Its command line, driven by the runner (see [Providers' tools](#providers-tools)) |
 
@@ -900,7 +902,9 @@ refuses malformed lines and uses a payload-free diagnostic.
 
 The runner and the helper drive four login providers' tools from one table,
 `ProviderCatalog` in LeverageKit and one driver per provider in
-`LeverageRunner`. Each fact carries how far it is proven: `probe` ran on the
+`LeverageRunner`. The API validates model and effort against the same
+[model catalog](#interfaces) that supplies the Mac app's choices. Each
+tool fact below carries how far it is proven: `probe` ran on the
 owner's Mac on 2026-11-19 under the allow-listed environment; `help` is in
 the tool's own `--help`, never run; `documented` is in the vendor's
 documentation, never run; `unverified` is none of these. Nothing below
@@ -1024,12 +1028,11 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
     the app runs, and lives only in its runner's environment; it ends at
     the next pickup, when the run is reported stopped, and when the seat is
     removed. A seat that connects on its own receives its token only in
-    the landing prompt, when Connect or New prompt issues one. Remove and
-    New prompt end the old token. The prompt's agent stops at its next
-    `401`. An MCP client starts `LeverageMCP` using the seat token from
-    the client's settings as `LEVERAGE_SEAT_TOKEN` in the child
-    environment. The MCP server uses
-    the token for API authentication and never logs it. The settings
+    the landing prompt issued by Connect. Remove ends the token, and the
+    Prompt agent stops on `401`. An MCP client starts `LeverageMCP` using
+    the seat token from the client's settings as `LEVERAGE_SEAT_TOKEN` in
+    the child environment. The MCP server uses the token for API
+    authentication and never logs it. The settings
     that start the child may hold the token. The app and runner do not
     store it there. [ADR 0014](adr/0014-the-mcp-server-is-a-swift-program-over-standard-input-and-output.md)
 - **The setup call.** `POST /v1/owner/setup` needs no token and creates the
