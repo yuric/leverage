@@ -191,12 +191,18 @@ struct WorkFolderTests {
 
     var root: URL { folder.path("root") }
 
+    /// The places of a Mac whose home is `home`, with the work root of this test.
+    func places(home: String) -> WorkFolder.Places {
+        WorkFolder.Places(
+            home: home, supportFolder: home + "/Library/Application Support/leverage", workRoot: root)
+    }
+
     @Test("an existing local folder is used as it is, its reference kept")
     func existing() throws {
         let work = try folder.folder("site")
         let home = folder.url.path
         for reference in [work.path, "~/site", "file://\(work.path)"] {
-            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: home)
+            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, places: places(home: home))
             guard case .existing(let found, let kept) = resolution else {
                 Issue.record("\(reference) was not used: \(resolution)")
                 continue
@@ -211,7 +217,7 @@ struct WorkFolderTests {
     func made() throws {
         let expected = root.appendingPathComponent(taskID.contractString)
         for reference in [nil, "", "   "] as [String?] {
-            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: "/nowhere")
+            let resolution = WorkFolder.builder(reference: reference, taskID: taskID, places: places(home: "/nowhere"))
             guard case .made(let made) = resolution else {
                 Issue.record("no folder was made: \(resolution)")
                 continue
@@ -227,23 +233,155 @@ struct WorkFolderTests {
         "https://github.com/example/repo", "relative/path", "/no/such/folder", "git@example.test:repo.git",
     ])
     func unusable(reference: String) throws {
-        #expect(WorkFolder.builder(reference: reference, taskID: taskID, workRoot: root, home: "/nowhere")
+        #expect(WorkFolder.builder(reference: reference, taskID: taskID, places: places(home: "/nowhere"))
                 == .unusable)
-        #expect(WorkFolder.reviewer(reference: reference, home: "/nowhere") == nil)
+        #expect(WorkFolder.reviewer(reference: reference, places: places(home: "/nowhere")) == nil)
     }
 
     @Test("a file is not a folder")
     func file() throws {
         let file = folder.path("note.txt")
         try Data("x".utf8).write(to: file)
-        #expect(WorkFolder.builder(reference: file.path, taskID: taskID, workRoot: root, home: "/") == .unusable)
+        #expect(WorkFolder.builder(reference: file.path, taskID: taskID, places: places(home: "/")) == .unusable)
     }
 
     @Test("the reviewer never makes a folder")
     func reviewerNeverMakes() throws {
-        #expect(WorkFolder.reviewer(reference: nil, home: "/nowhere") == nil)
-        #expect(WorkFolder.reviewer(reference: "", home: "/nowhere") == nil)
+        #expect(WorkFolder.reviewer(reference: nil, places: places(home: "/nowhere")) == nil)
+        #expect(WorkFolder.reviewer(reference: "", places: places(home: "/nowhere")) == nil)
         let work = try folder.folder("site")
-        #expect(WorkFolder.reviewer(reference: work.path, home: "/nowhere")?.path == work.path)
+        #expect(WorkFolder.reviewer(reference: work.path, places: places(home: "/nowhere"))?.path == work.path)
+    }
+}
+
+// Where a tool is never run. The work reference is text a seat may write,
+// and the folder it names becomes the working directory of a tool that may
+// edit files there: the Mac's root, the home folder itself, the start-up
+// and settings folders under `~/Library`, and Leverage's own support folder
+// are refused, however the reference reaches them.
+@Suite("Work folder: where no tool is run")
+struct WorkFolderRefusalTests {
+    /// A made-up Mac in a temporary folder, laid out as a real one is: the
+    /// support folder under `~/Library/Application Support`, the work root
+    /// inside it.
+    struct Mac {
+        let folder: TemporaryFolder
+        let home: URL
+        let support: URL
+        let workRoot: URL
+        let taskID = UUID()
+
+        init() throws {
+            folder = try TemporaryFolder(prefix: "leverage-work-refusal")
+            home = try folder.folder("home")
+            support = try folder.folder("home/Library/Application Support/leverage")
+            workRoot = try folder.folder("home/Library/Application Support/leverage/work")
+            for name in [
+                "home/Library/Application Support/leverage/accounts/made-up-account",
+                "home/Library/Application Support/leverage/tools/claude",
+                "home/Library/Application Support/leverage/work/jobs/made-up-job",
+                "home/Library/Application Support/leverage/work/\(taskID.contractString)/site",
+                "home/Library/LaunchAgents", "home/Library/CloudStorage/Drive/site",
+                "home/Library/Mobile Documents/made-up-container/site", "home/projects/site", "home/links",
+            ] { try folder.folder(name) }
+            for (link, target) in [
+                ("to-support", support.path), ("to-home", home.path), ("to-root", "/"),
+                ("to-launch-agents", home.appendingPathComponent("Library/LaunchAgents").path),
+                ("to-tools", support.appendingPathComponent("tools").path),
+                ("to-site", home.appendingPathComponent("projects/site").path),
+            ] {
+                try FileManager.default.createSymbolicLink(
+                    atPath: home.appendingPathComponent("links/\(link)").path, withDestinationPath: target)
+            }
+        }
+
+        var places: WorkFolder.Places {
+            WorkFolder.Places(home: home.path, supportFolder: support.path, workRoot: workRoot)
+        }
+
+        func builder(_ reference: String) -> WorkFolder.Resolution {
+            WorkFolder.builder(reference: reference, taskID: UUID(), places: places)
+        }
+
+        func reviewer(_ reference: String) -> URL? { WorkFolder.reviewer(reference: reference, places: places) }
+    }
+
+    @Test("the root, the home folder and what is above it are refused", arguments: ["/", "~", "~/", "<home>", "<home>/.."])
+    func rootAndHome(reference: String) throws {
+        let mac = try Mac()
+        let given = reference.replacingOccurrences(of: "<home>", with: mac.home.path)
+        #expect(mac.builder(given) == .unusable)
+        #expect(mac.reviewer(given) == nil)
+        #expect(mac.builder("file://" + mac.home.path) == .unusable)
+    }
+
+    @Test("Leverage's support folder, what is above it and what is in it are refused", arguments: [
+        "", "/..", "/accounts", "/accounts/made-up-account", "/tools", "/tools/claude", "/work", "/work/jobs",
+        "/work/jobs/made-up-job",
+    ])
+    func supportFolder(inside: String) throws {
+        let mac = try Mac()
+        let given = mac.support.path + inside
+        #expect(mac.builder(given) == .unusable)
+        #expect(mac.reviewer(given) == nil)
+        #expect(mac.builder("~/Library/Application Support/leverage" + inside) == .unusable)
+    }
+
+    @Test("the folders of ~/Library that hold start-up items and settings are refused", arguments: [
+        "~/Library", "~/Library/LaunchAgents", "~/Library/Application Support", "~/Library/CloudStorage",
+        "~/Library/Mobile Documents",
+    ])
+    func library(reference: String) throws {
+        let mac = try Mac()
+        #expect(mac.builder(reference) == .unusable)
+        #expect(mac.reviewer(reference) == nil)
+    }
+
+    @Test("a link to a refused folder is refused", arguments: ["to-support", "to-home", "to-root", "to-launch-agents", "to-tools"])
+    func links(link: String) throws {
+        let mac = try Mac()
+        let given = mac.home.appendingPathComponent("links/\(link)").path
+        #expect(mac.builder(given) == .unusable)
+        #expect(mac.reviewer(given) == nil)
+        #expect(mac.builder("~/links/\(link)") == .unusable)
+    }
+
+    @Test("a refused folder spelled in another case is refused where the disk ignores case")
+    func otherCase() throws {
+        let mac = try Mac()
+        let shouted = mac.home.appendingPathComponent("LIBRARY/LAUNCHAGENTS").path
+        var isFolder: ObjCBool = false
+        // Only a disk that ignores case finds the folder under this name.
+        guard FileManager.default.fileExists(atPath: shouted, isDirectory: &isFolder), isFolder.boolValue else { return }
+        #expect(mac.builder(shouted) == .unusable)
+        #expect(mac.reviewer(shouted) == nil)
+        #expect(mac.builder(mac.support.path.uppercased()) == .unusable)
+    }
+
+    @Test("the folder the builder made under the work root is used again, in the support folder too")
+    func madeFolder() throws {
+        let mac = try Mac()
+        let made = mac.workRoot.appendingPathComponent(mac.taskID.contractString)
+        for folder in [made, made.appendingPathComponent("site")] {
+            #expect(mac.builder(folder.path) == .existing(folder, reference: folder.path))
+            #expect(mac.reviewer(folder.path)?.path == folder.path)
+        }
+        // And the one made now is the one resolved next time.
+        let taskID = UUID()
+        let first = WorkFolder.builder(reference: nil, taskID: taskID, places: mac.places)
+        let reference = try #require(first.reference)
+        #expect(WorkFolder.builder(reference: reference, taskID: taskID, places: mac.places).folder?.path == reference)
+        #expect(mac.reviewer(reference)?.path == reference)
+    }
+
+    @Test("an ordinary folder under home, in a cloud drive or behind a link is used", arguments: [
+        "~/projects/site", "~/projects", "~/Library/CloudStorage/Drive", "~/Library/CloudStorage/Drive/site",
+        "~/Library/Mobile Documents/made-up-container/site", "~/links/to-site",
+    ])
+    func ordinary(reference: String) throws {
+        let mac = try Mac()
+        let expected = mac.home.path + reference.dropFirst()
+        #expect(mac.builder(reference) == .existing(URL(fileURLWithPath: expected, isDirectory: true), reference: reference))
+        #expect(mac.reviewer(reference)?.path == expected)
     }
 }

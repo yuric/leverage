@@ -549,7 +549,9 @@ adds the MCP server.
   [ADR 0013](adr/0013-eval-suites-for-rules-a-model-judges.md)
 - **Owns:** nothing stored. It makes `<work root>/<task id>/` when a task
   names no folder, and `<work root>/jobs/<random id>/` for each tool run
-  of a job, removed after the run.
+  of a job, removed after the run. It runs no tool in a folder that
+  `WorkFolder.mayRunTool` refuses (see
+  [Trust boundaries](#trust-boundaries)).
 - **Depends on:** LeverageKit.
 - **Code:** `mac/Sources/LeverageRunner/`; tests in
   `mac/Tests/LeverageRunnerTests/`.
@@ -1059,7 +1061,14 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   is untrusted. Of a tool's output the runner reads only its marker lines,
   and quoted material in a prompt has its marker words neutralised. A link
   in evidence or a work reference is shown as plain text and never
-  fetched. An event payload holds only ids, numbers, digests and values
+  fetched. A work reference chooses the folder a build's tool may change,
+  and a seat may write it, so the runner uses no reference that names the
+  Mac's root, the home folder or a folder above it, Leverage's support
+  folder or anything in it other than a task's own folder under the work
+  root, or `~/Library` outside `CloudStorage` and `Mobile Documents`. It
+  compares folders by what they are on disk, so a link to one of them is
+  refused too. The folder's path is never part of a prompt. An event
+  payload holds only ids, numbers, digests and values
   from closed lists, never free text; the one exception is `model`, a
   model name of at most 128 characters from a fixed character set with no
   `@`. An installer's address must be HTTPS on a host its catalog entry

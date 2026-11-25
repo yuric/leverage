@@ -49,6 +49,7 @@ let loop = RunnerLoop(
     role: configuration.role,
     api: AgentClient(baseURL: configuration.apiBaseURL, seatToken: configuration.seatToken),
     driver: driver, workRoot: configuration.workRoot, home: configuration.tool.home,
+    supportFolder: configuration.tool.supportFolder,
     interruption: .runner(tool: configuration.tool, credentialID: configuration.credentialID, log: log),
     continuing: configuration.continuing, log: log)
 

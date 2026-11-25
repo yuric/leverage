@@ -152,10 +152,10 @@ struct BuilderFlow: Sendable {
 
     private func attempt(_ taskID: UUID, _ response: BriefingResponse, acknowledge: Bool) async throws -> Step {
         let api = context.api
-        let resolution = WorkFolder.builder(
-            reference: response.workReference, taskID: taskID, workRoot: context.workRoot, home: context.home)
+        let resolution = WorkFolder.builder(reference: response.workReference, taskID: taskID, places: context.places)
         guard let folder = resolution.folder, let reference = resolution.reference else {
-            context.log.warning("task \(taskID.contractString): its work reference is not a local folder")
+            context.log.warning(
+                "task \(taskID.contractString): its work reference names no folder on this Mac a tool may be run in")
             return .end(try await context.releaseBuilderTask(taskID))
         }
         let hash = response.briefing.hash

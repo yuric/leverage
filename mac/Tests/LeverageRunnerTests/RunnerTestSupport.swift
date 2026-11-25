@@ -198,7 +198,8 @@ struct Harness {
         continuing: WorkToContinue? = nil, log: Log = Log(component: "runner-test", write: { _ in })
     ) -> RunnerLoop {
         RunnerLoop(
-            role: role, api: api, driver: driver, workRoot: workRoot, home: folder.url.path, timing: timing,
+            role: role, api: api, driver: driver, workRoot: workRoot, home: folder.url.path,
+            supportFolder: folder.path("support").path, timing: timing,
             interruption: interruption, continuing: continuing, log: log)
     }
 

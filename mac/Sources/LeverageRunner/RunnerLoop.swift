@@ -84,13 +84,14 @@ final class RunnerLoop: @unchecked Sendable {
 
     init(
         role: SeatRole, api: any AgentAPI, driver: any ToolDriver, workRoot: URL, home: String,
-        timing: RunnerTiming = .standard, interruption: Interruption? = nil, continuing: WorkToContinue? = nil,
+        supportFolder: String, timing: RunnerTiming = .standard, interruption: Interruption? = nil, continuing: WorkToContinue? = nil,
         log: Log
     ) {
         self.role = role
         self.continuing = continuing
         context = FlowContext(
             api: api, driver: driver, timing: timing, log: log, state: RunnerState(), workRoot: workRoot, home: home,
+            supportFolder: supportFolder,
             interruption: interruption ?? Interruption(provider: .claude, hasCredential: false))
     }
 

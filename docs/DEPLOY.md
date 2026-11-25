@@ -169,6 +169,26 @@ Codex reads `AGENTS.md` in the work folder and under `CODEX_HOME`.
 Which files Antigravity and Grok Build read from their work or home
 folders remains unverified.
 
+### Folders a tool may change
+
+A build's tool is started in the folder the task's "Where the work is"
+names, in a mode that lets it edit files, and it may change anything
+inside that folder. Name the project's own folder, not a folder that
+holds other things. An agent may write that field too, so the runner
+runs no tool, for a build, a review or an outward action, in:
+
+- the Mac's root, your home folder itself, or a folder above it;
+- Leverage's support folder, a folder above it or anything in it, except
+  the folder the builder made for a task under `work/`;
+- `~/Library`, except folders inside `~/Library/CloudStorage` and
+  `~/Library/Mobile Documents`, where cloud drives keep documents.
+
+A link to one of these folders is refused as well. A task that names one
+is given back like a task whose folder does not exist, and the seat's log
+says that its work reference names no folder a tool may be run in. Other
+folders that hold secrets, such as `~/.ssh` or a tool's own settings
+folder under your home folder, are not refused.
+
 ## Where things live
 
 | What | Where |

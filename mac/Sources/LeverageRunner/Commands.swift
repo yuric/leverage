@@ -87,8 +87,15 @@ struct FlowContext: Sendable {
     let state: RunnerState
     let workRoot: URL
     let home: String
+    /// Leverage's support folder, which no task's tool is run in.
+    let supportFolder: String
     /// What a failed tool run means for the account (HD-5).
     let interruption: Interruption
+
+    /// What decides where a tool may be run.
+    var places: WorkFolder.Places {
+        WorkFolder.Places(home: home, supportFolder: supportFolder, workRoot: workRoot)
+    }
 
     /// Sends one command with a key of its own. A network failure sends it
     /// again with the same key, after a pause of at most 2 seconds, for as

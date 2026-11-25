@@ -127,7 +127,7 @@ extension Harness {
     ) -> FlowContext {
         FlowContext(
             api: api, driver: driver, timing: timing, log: log, state: state, workRoot: workRoot,
-            home: folder.url.path, interruption: interruption ?? Interruption(provider: .claude, hasCredential: false))
+            home: folder.url.path, supportFolder: folder.path("support").path, interruption: interruption ?? Interruption(provider: .claude, hasCredential: false))
     }
 }
 
