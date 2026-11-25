@@ -46,6 +46,7 @@ struct ReviewerFlow: Sendable {
         }
         if end != .paused { context.state.hold(.nothing) }
         if case .accountStopped(let report) = end { context.state.accountStopped(report) }
+        context.state.flowEnded(end, of: .review(reviewID))
         context.log.info("review \(reviewID.contractString): \(end.name)")
         return end
     }

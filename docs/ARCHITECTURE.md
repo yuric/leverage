@@ -513,6 +513,13 @@ adds the MCP server.
   [Providers' tools](#providers-tools)). `LeverageRunner probe` runs one
   test prompt, for the helper's `test_prompt` check. On a stop signal it
   ends the tool's process group, gives back what it holds and exits 0.
+  A failed tool run, a work reference that names no folder on this Mac
+  and a tool that answers that it cannot do the work each give the work
+  back; the runner then waits a second before it asks again, because the
+  server offers released work straight back to the seat. Three failed
+  tool runs in a row, or three flows in a row that end by giving their
+  work back, end the runner with code 4, which the helper reports as a
+  run stopped with `error`.
   After a failed tool run of a seat with a credential, `Interruption` asks
   the provider's detector and, when that settles nothing, `SignInStatus`;
   it retries a short rate limit after 5, 15 and 45 seconds. On a limit or

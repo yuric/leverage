@@ -339,6 +339,82 @@ struct RunnerLoopTests {
         #expect(driver.runs.count == 6)
     }
 
+    // The server offers a task or a review straight back to the seat that
+    // gave it back, so the fake `next` below always answers the same item.
+
+    @Test("a task given back three times in a row for its work reference exits with code 4, pausing in between")
+    func threeGiveBacksOfATask() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver.agreeable()
+        var timing = RunnerTiming.fast()
+        timing.idlePause = .milliseconds(40)
+        let loop = builder(harness, driver: driver, timing: timing)
+        let claim = Fixture.claim(taskID, criteria: criteria(), workReference: "https://github.com/example/repo")
+        harness.api.script {
+            $0.claimNextTask = { _ in .completed(claim, key: "k", command: .claim) }
+            $0.next = { _ in NextItem(kind: .task) }
+        }
+
+        let started = ContinuousClock.now
+        #expect(await runToEnd(loop, deadline: .seconds(10)) == 4)
+        #expect(harness.calls(.claimNextTask).count == 3)
+        #expect(harness.calls(.releaseTask).count == 3)
+        #expect(driver.runs.isEmpty)
+        // A pause follows each give-back before the seat asks again.
+        #expect(ContinuousClock.now - started >= .milliseconds(80))
+    }
+
+    @Test("a task the tool cannot do three times in a row exits with code 4")
+    func threeCannotAnswers() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver { _, _ in .answer("LEVERAGE-CANNOT: the price list is missing", tokens: 2) }
+        let loop = builder(harness, driver: driver)
+        harness.api.script { $0.next = { _ in NextItem(kind: .task) } }
+
+        #expect(await runToEnd(loop, deadline: .seconds(10)) == 4)
+        #expect(driver.runs.count == 3)
+        #expect(harness.calls(.releaseTask).count == 3)
+    }
+
+    @Test("a review given back three times in a row for its work reference exits with code 4")
+    func threeGiveBacksOfAReview() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver.agreeable()
+        let loop = harness.loop(.reviewer, driver: driver)
+        let review = Fixture.reviewClaim(
+            UUID(), taskID: taskID, criteria: criteria(first: .passed),
+            workReference: "https://github.com/example/repo/pull/1")
+        harness.api.script {
+            $0.claimNextReview = { _ in .completed(review, key: "k", command: .claimReview) }
+            $0.releaseReview = { _, _ in Fixture.done(.releaseReview) }
+            $0.next = { _ in NextItem(kind: .review) }
+        }
+
+        #expect(await runToEnd(loop, deadline: .seconds(10)) == 4)
+        #expect(harness.calls(.claimNextReview).count == 3)
+        #expect(harness.calls(.releaseReview).count == 3)
+        #expect(driver.runs.isEmpty)
+    }
+
+    @Test("a finished task in between starts the count of give-backs again")
+    func giveBacksNotInARow() async throws {
+        let harness = try Harness()
+        let driver = ScriptedDriver.agreeable()
+        let loop = builder(harness, driver: driver)
+        let stuck = Fixture.claim(UUID(), criteria: criteria(), workReference: "https://github.com/example/repo")
+        let good = Fixture.claim(taskID, criteria: criteria(), workReference: harness.existingWork.path)
+        // Given back, given back, finished, given back, given back: never
+        // three in a row.
+        let claims = Queue([stuck, stuck, good, stuck, stuck]) { stuck }
+        harness.api.script { $0.claimNextTask = { _ in .completed(claims.next(), key: "k", command: .claim) } }
+        harness.next(Array(repeating: NextItem(kind: .task), count: 5), then: loop)
+
+        #expect(await runToEnd(loop, deadline: .seconds(10)) == 0)
+        #expect(harness.calls(.claimNextTask).count == 5)
+        #expect(harness.calls(.releaseTask).count == 4)
+        #expect(harness.calls(.submitTask).count == 1)
+    }
+
     @Test("an item the builder cannot act on is followed by a pause, not a call")
     func otherKinds() async throws {
         let harness = try Harness()
