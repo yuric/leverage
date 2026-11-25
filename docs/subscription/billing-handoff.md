@@ -65,13 +65,19 @@ flow into a live payment.
 
 ## Implement the billing flow
 
-- Bind the signed-in owner to the service-issued owner ID and to the Stripe
-  Customer for that environment. The service verifies that binding and
-  authorizes every billing operation. The verified email goes to Stripe for
-  receipts. For plan selection, the Mac app supplies a stable plan key and
-  authenticated owner context. The service resolves the Price and controls
-  session creation. Stripe API keys, signing secrets and Stripe client secrets
-  remain outside the Mac app. Email alone is insufficient for authentication.
+- Bind the owner to the service-issued owner ID and to the Stripe Customer for
+  that environment. The service verifies that binding and authorizes every
+  billing operation. The sign-in email goes to Stripe for receipts (FR-022).
+  For plan selection, the Mac app supplies a stable plan key and authenticated
+  owner context. The service resolves the Price and controls session creation.
+  Stripe API keys, signing secrets and Stripe client secrets remain outside
+  the Mac app. Email alone is insufficient for authentication.
+- Today the owner's sign-in is checked only by the server on the owner's own
+  Mac, and nothing verifies the sign-in email, so neither proves anything to
+  the service. The ADR of FR-024 settles what the Mac app presents to the
+  service, where that is kept on the Mac, how the binding is recovered on
+  another Mac or revoked, and whether the email is proven before it is bound
+  to a Customer.
 - Serialize Checkout creation for the owner, deduplicate repeated requests and
   use Stripe idempotency keys for writes. Reopen the same pending Checkout
   session. Expire open sessions on Cancel and reconcile a completion that wins
