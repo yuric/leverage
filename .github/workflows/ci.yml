@@ -220,12 +220,13 @@ jobs:
       - name: Speed smoke run
         run: scripts/speed_run.sh --smoke
 
-  # The eval suite of the rule "Every task needs specific details"
-  # (milestone 4 plan RV-1 to RV-6): its scorer, its check and the guards of
-  # its run script, none of which reaches a provider; then the check that
-  # the committed results meet the bar for each supported model. The
-  # results are written by the managing agent's eval run (plan §5.3), never
-  # in CI.
+  # The eval suites of "Every task needs specific details" and the
+  # approval of outward actions (milestone 4 plan RV-1 to RV-6, AV-1 to
+  # AV-6): the scorer's, the check's and the run script's self-tests, none
+  # of which reaches a provider; then the check that the committed results
+  # of both suites agree with their cases, wording, ledgers, budgets and
+  # the registry lists. A missed or not-run model is printed, not failed.
+  # The results are written by the maintainer's eval run, never in CI.
   evals:
     name: Eval suite
     runs-on: ubuntu-24.04

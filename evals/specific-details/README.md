@@ -99,8 +99,9 @@ own settings folders (`~/.claude`, and `~/.codex` unless
 seat, so a model, a setting or a memory file set there may apply, and the
 model that ran is not known. The previous runs in the ledgers were made
 that way. Both modes' earlier results are under `history/` and their runs
-still count toward the shared budget. The current results mark the folded
-cases and revised instruction as `not_run`.
+still count toward the shared budget. On 2026-11-24 Codex and Antigravity
+were run on the folded cases and revised instruction in both modes and met
+the bar; Claude Code is recorded `not_run` in both.
 `LEVERAGE_EVAL_PROVIDERS` chooses the providers (default
 `claude codex gemini`); `LEVERAGE_EVAL_CODEX_HOME` names the Codex
 account folder to run on.

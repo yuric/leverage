@@ -97,6 +97,8 @@ scores in aggregate.
 The real held-out run requires each candidate to match the contract
 action at its listed position. The offline checker counted two mismatches
 in the frozen held-out set. The first run met all three bars without
-a wording change, so the held-out set was unused. The current results mark
-the folded main cases as `not_run`. A future held-out real run refuses
+a wording change, so the held-out set was unused. On 2026-11-24 Codex and
+Antigravity were run on the folded main cases in both modes and met the
+bar; Claude Code is recorded `not_run` in both, and no held-out run was
+made. A future held-out real run refuses
 the set while the two mismatches remain.
