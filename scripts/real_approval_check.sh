@@ -282,7 +282,7 @@ def audit(logs, results, dump, cases, used_secrets):
     args = [str(logs), str(results), str(dump), "--logs", str(logs), "--events-dump", str(dump),
             "--replies", str(root / "mac/Tests/StandIns/replies")]
     for value in used_secrets:
-        args.extend(["--literal", value])
+        args.append(f"--literal={value}")
     for case in cases:
         words = [case["contract"]["title"], case["action"]["description"], *case["review"].values()]
         for word in words:
