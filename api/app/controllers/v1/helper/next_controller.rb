@@ -3,8 +3,9 @@ module V1
     # GET /v1/helper/next?wait=30 (get_helper_next): the helper's oldest
     # queued request, marked picked up, waiting up to `wait` seconds for one
     # (IF-15, IF-14). It waits like GET /v1/next (V1::Agent::NextController):
-    # outside any transaction, a connection only while it looks, and a 401
-    # at the look after the helper's token was replaced.
+    # outside any transaction, a connection only while it looks, a 401 at
+    # the look after the helper's token was replaced, and one waiting poll
+    # at a time: a second one ends the first, which answers null.
     class NextController < ApplicationController
       include AuthenticatesHelper
 
@@ -13,7 +14,7 @@ module V1
       def show
         wait = wait_seconds
         Leverage::Transitions::RecordPoll.helper(current_helper)
-        picked = Leverage::LongPoll.wait(wait) { look }
+        picked = Leverage::LongPoll.wait(wait, key: "helper:#{current_helper.id}") { look }
         render json: { request: picked && Leverage::Reads::HelperNext.body(picked) }
       end
 

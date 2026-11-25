@@ -48,7 +48,7 @@
             "name": "wait",
             "in": "query",
             "required": false,
-            "description": "Seconds to wait for an item, at most 30.",
+            "description": "Seconds to wait for an item, at most 30. A seat has one waiting poll at a time: a newer one ends the older, which answers `none` at once.",
             "schema": {
               "type": "integer",
               "minimum": 0,
@@ -6900,7 +6900,7 @@
             "name": "wait",
             "in": "query",
             "required": false,
-            "description": "Seconds to wait, at most 30.",
+            "description": "Seconds to wait, at most 30. The helper has one waiting poll at a time: a newer one ends the older, which answers with no request at once.",
             "schema": {
               "type": "integer",
               "minimum": 0,

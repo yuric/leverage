@@ -5,6 +5,9 @@ module V1
     # The wait happens outside any transaction and gives the connection back
     # between looks (LongPoll); each look reads the committed rows and sees
     # a seat that was removed or whose token was replaced meanwhile as 401.
+    # A seat has one waiting poll at a time: a second one ends the first,
+    # which answers `none` (LongPoll's key), so one seat cannot hold every
+    # thread of the server.
     class NextController < ApplicationController
       include AuthenticatesSeat
 
@@ -13,7 +16,7 @@ module V1
       def show
         wait = wait_seconds
         Leverage::Transitions::RecordPoll.seat(current_seat)
-        item = Leverage::LongPoll.wait(wait) { look }
+        item = Leverage::LongPoll.wait(wait, key: "seat:#{current_seat.id}") { look }
         render json: item || Leverage::Reads::NextItem::NONE
       end
 

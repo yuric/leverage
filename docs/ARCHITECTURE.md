@@ -1061,7 +1061,11 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
   from closed lists, never free text; the one exception is `model`, a
   model name of at most 128 characters from a fixed character set with no
   `@`. An installer's address must be HTTPS on a host its catalog entry
-  lists, also after a redirect.
+  lists, also after a redirect. A waiting poll holds a thread of the
+  server's pool, so a seat and the helper each have one waiting poll at
+  a time (`Leverage::LongPoll`'s key): a newer `GET /v1/next` or
+  `GET /v1/helper/next` ends the older, which answers nothing within
+  250 ms. A look that does not wait (`wait=0`) ends none.
 - **Task text reaches a checker only as material**
   ([ADR 0012](adr/0012-how-task-text-reaches-a-checker.md)). In a rule
   check, draft, question or approval prompt every piece of task text, the contract
