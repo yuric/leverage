@@ -336,7 +336,9 @@ volume removed, the restore into the new, empty cluster, and the same
 count, highest position and checksum of the events afterwards. It then
 removes the volume again, starts every service on the empty cluster as
 the app does, checks that the backup made no dump of it, and restores the
-same dump again.
+same dump again. It runs on a project of its own and removes it; its
+`--from-project` option, for the end-to-end runs, takes only a project
+whose name starts with `leverage-e2e-`, never the owner's or the app's.
 
 For the app, quit `Leverage.app` first so that it does not start the
 services again, and run the same three lines with the app's own files:

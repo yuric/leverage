@@ -380,6 +380,50 @@ class EnvFileTests(unittest.TestCase):
                 self.assertNotRegex(script.read_text(encoding="utf-8"), r"cp [^\n]*\.env\.example")
 
 
+# A docker for the drill: every query answers 1, and the first `stop`
+# fails, so a drill that was not refused ends at its first step.
+FAKE_DOCKER_DRILL = """#!/bin/sh
+printf '%s|%s|%s\\n' "${API_IMAGE_TAG:-}" "${COMPOSE_PROJECT_NAME:-}" "$*" >>"$FAKE_LOG"
+case "$*" in
+  *" exec "*) echo 1 ;;
+  *" stop "*) exit 1 ;;
+esac
+exit 0
+"""
+
+
+class RestoreDrillProjectTests(unittest.TestCase):
+    """Review: --from-project removes the named project and its database
+    volume, also on failure, and took any name, the owner's `leverage` and
+    the app's `leverage-app` included. It now takes only the end-to-end
+    runs' own projects, and refuses before any docker call."""
+
+    def drill(self, name):
+        run = Run()
+        self.addCleanup(run.close)
+        (run.bin / "docker").write_text(FAKE_DOCKER_DRILL, encoding="utf-8")
+        backups = run.root / "backups"
+        backups.mkdir()
+        code, output = run.run(script="restore_drill.sh", arguments=("--from-project", name),
+                               LEVERAGE_BACKUP_DIR=str(backups), API_IMAGE_TAG="made-up-tag")
+        return code, output, run.docker_calls()
+
+    def test_the_owners_and_the_apps_projects_are_refused_before_docker(self):
+        for name in ("leverage", "leverage-app", "made-up-dev-stack", "leverage-e2e"):
+            with self.subTest(name=name):
+                code, output, calls = self.drill(name)
+                self.assertEqual(code, 2, output)
+                self.assertIn("removes the project and its database volume", output)
+                self.assertEqual(calls, [], "no docker call, so no `down --volumes`")
+
+    def test_an_end_to_end_runs_project_is_taken(self):
+        code, output, calls = self.drill("leverage-e2e-handoff-1-6")
+        self.assertNotEqual(code, 2, output)
+        self.assertTrue(calls, output)
+        self.assertTrue(all("-p leverage-e2e-handoff-1-6" in arguments for _tag, _project, arguments in calls
+                            if arguments.startswith("compose")), calls)
+
+
 class ContinuousIntegrationTests(unittest.TestCase):
     def test_no_step_is_skipped_because_its_script_is_missing(self):
         guards = CI.read_text(encoding="utf-8").count("hashFiles(")
