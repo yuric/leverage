@@ -148,7 +148,7 @@ enum RealProviderRun {
         }
 
         let prompt = Prompts.builder(
-            number: 1, criterion: checkCriterion, briefing: checkBriefing, reviewNotes: [], folder: inputs.folder)
+            number: 1, criterion: checkCriterion, briefing: checkBriefing, reviewNotes: [])
         let clock = ContinuousClock()
         let started = clock.now
         do {

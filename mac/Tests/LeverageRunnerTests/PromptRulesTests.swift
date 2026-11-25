@@ -39,11 +39,10 @@ struct PromptRulesTests {
 
     var prompts: [String] {
         let rules = briefing(rules: [acceptance, custom])
-        let folder = URL(fileURLWithPath: "/work/t")
         return [
-            Prompts.builder(number: 1, criterion: criteria[0], briefing: rules, reviewNotes: [], folder: folder),
-            Prompts.reviewer(briefing: rules, folder: folder),
-            BuilderFlow.rulePrompt(ruleName: custom.name, reason: "It names none.", briefing: rules, folder: folder),
+            Prompts.builder(number: 1, criterion: criteria[0], briefing: rules, reviewNotes: []),
+            Prompts.reviewer(briefing: rules),
+            BuilderFlow.rulePrompt(ruleName: custom.name, reason: "It names none.", briefing: rules),
         ]
     }
 
@@ -86,11 +85,10 @@ struct PromptRulesTests {
 
     @Test("a briefing with no rule adds no rules section")
     func none() {
-        let folder = URL(fileURLWithPath: "/w")
         let plain = briefing(rules: [])
-        let builder = Prompts.builder(number: 1, criterion: criteria[0], briefing: plain, reviewNotes: [], folder: folder)
+        let builder = Prompts.builder(number: 1, criterion: criteria[0], briefing: plain, reviewNotes: [])
         #expect(!builder.contains(Prompts.rulesHeading))
-        #expect(!Prompts.reviewer(briefing: plain, folder: folder).contains(Prompts.rulesHeading))
+        #expect(!Prompts.reviewer(briefing: plain).contains(Prompts.rulesHeading))
     }
 
     // Milestone 4 review, finding 11: every line of quoted text keeps its

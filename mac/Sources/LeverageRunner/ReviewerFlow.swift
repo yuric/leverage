@@ -111,7 +111,7 @@ struct ReviewerFlow: Sendable {
         }), reviewID) { return step }
 
         let numbered = Prompts.builderCriteria(of: response.briefing.contract.criteria)
-        let prompt = Prompts.reviewer(briefing: response.briefing, folder: folder)
+        let prompt = Prompts.reviewer(briefing: response.briefing)
         let answer: ToolAnswer
         let driver = context.driver
         switch try await context.interruption.run(for: .review(reviewID), {
