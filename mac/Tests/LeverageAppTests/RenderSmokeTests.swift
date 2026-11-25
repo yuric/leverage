@@ -105,6 +105,10 @@ struct RenderSmokeTests {
         }
         context.navigator.open(task: UUID())
         #expect(drawsSomething(render(Toolbar(context: context), height: 80)))
+        // The account row drawn selected while Settings is open (FR-002).
+        #expect(drawsSomething(render(SidePane(context: context, settingsAreOpen: true, signOut: {}))))
+        #expect(drawsSomething(render(
+            SidePane(context: context, settingsAreOpen: true, signOut: {}).environment(\.colorScheme, .dark))))
     }
 
     @Test("each screen of the content area draws inside the shell's context, built with no arguments")
