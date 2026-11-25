@@ -37,7 +37,36 @@ module Leverage
   # credential.switched is marked written_as_side_event, but the PRD (L896)
   # allows it only beside the rows that name it (milestone 3 plan §2.3): a
   # report that hands over at once, a credential hold's close, a fresh
-  # lease on another account. So it must belong to a fitting row.
+  # lease on another account. So it must belong to a fitting row. One
+  # command writes it with no row of its own that names it: an
+  # override_check that approves a stopped action applies approve_action's
+  # lease rows (AP-15, its row's note). Its switch is taken only on a
+  # Finishing task, written by the app for a seat (no review, no job) in
+  # the override's round, as the first switch caused by the
+  # action.approved that the check.overridden caused, and only when that
+  # approval grants its fresh lease to that seat.
+  #
+  # A seat's add_task of a Backlog task also runs Complete contract under
+  # the same key (UX-11). When the seat wrote task.created with state
+  # backlog, a task.contract_changed follows and every event is on that
+  # one task, the group may also be read in two parts: add_task up to
+  # task.contract_changed, and complete_contract from it on, from Backlog.
+  # Nothing else is read so: not the owner's add_task, and not a task
+  # created in another state.
+  #
+  # Before UX-2, New prompt (issue_landing_prompt) released the seat's
+  # work (GA-17), and its row now writes no event. A group with an
+  # issue_landing_prompt receipt, or with no receipt and a task released
+  # with the old reason new_prompt, is read as that old command instead
+  # of being matched to a row, when it holds the owner's release of the
+  # one task that seat built or of reviews that seat had started, and
+  # beside them only the withdrawn checks and jobs of that seat's own
+  # waiting commands, the holds and Needs you items the release or those
+  # withdrawals close, the hold and item on a Finishing task that seat
+  # built, and the "No reviewer is eligible" item
+  # (historical_prompt_release?). The log does not say which build wrote
+  # a group, so this reading has no end date (UX-17).
+  #
   # A command whose rows have no state (report_request_result, change_seat:
   # a verified login may close the credential holds of several tasks) may
   # touch several tasks. Any other touches its own task (its first event's),
@@ -66,8 +95,11 @@ module Leverage
   # the workspace timers orchestrator_offline and reviewer_eligibility
   # (their Needs you items name them, or an errored check's history names
   # recovery before the offline item opens) and from the one-time write
-  # of the shipped rules (rule.created). Several timers on one task can have
-  # the same effective time when their due times precede its latest event.
+  # of the shipped rules (rule.created). reviewer_eligibility also closes
+  # the workspace cap's item (agent_tasks_at_limit, UX-14) and never opens
+  # it: a refused add_task does, under its key. Several timers on one task
+  # can have the same effective time when their due times precede its
+  # latest event.
   #
   # The gate (RT-4, test 4): no task.ready, task.claimed, task.submitted or
   # review.passed is written by a command that had, at its hook, an
@@ -75,14 +107,17 @@ module Leverage
   # the rules on at that point of the log; a frozen rule turned off or
   # removed before the move is not enabled) without a rule check row of
   # that version, hook, round and subject that passed, did not apply, was
-  # withdrawn or was overridden.
+  # withdrawn or was overridden. A seat's add_task that wrote task.ready
+  # is held to the task.before_ready gate, as the Complete contract it ran.
   #
   # Steps. Each task's rows, in the order they opened: the first opens at
-  # task.created, each closes where the next opens (the same time, in the
-  # same command), at most one is open,
-  # none after task.done or task.cancelled (where the last closes), none is
-  # negative, and they sum to the task's lifetime. A task's effective
-  # times never go backwards (L120).
+  # task.created's time, on task.created itself or, for a task a seat
+  # created in Backlog, on a later event of the same command that opens
+  # its kind (the creator's Complete contract changes the step in place);
+  # each closes where the next opens (the same time, in the same
+  # command), at most one is open, none after task.done or task.cancelled
+  # (where the last closes), none is negative, and they sum to the task's
+  # lifetime. A task's effective times never go backwards (L120).
   module LogAudit
     TIMER_EVENTS = { "task.lease_expired" => "builder_lease_expiry", "review.lease_expired" => "review_lease_expiry" }.freeze
     CREDENTIAL_HOLD_RELEASE = "credential_hold_release".freeze
@@ -242,6 +277,8 @@ module Leverage
 
     def named(label, names, events, states)
       problems = names.map { |name| match(name, events, states) }
+      # A seat's add_task of a Backlog task, read in its two parts (UX-11):
+      # add_task, then the Complete contract it ran under the same key.
       created = events.first
       if names.include?("add_task") && created.type == "task.created" && created.actor_kind == "seat" && created.payload["state"] == "backlog"
         contract = events.index { |event| event.type == "task.contract_changed" }
@@ -892,6 +929,7 @@ module Leverage
     def gate_findings(group, row, pending, audit, label)
       command = pending&.command || row&.command
       other = RUN_AS[command]
+      # A seat's add_task runs Complete contract, at its hook (UX-11).
       other = "complete_contract" if command == "add_task" && row&.caller_kind == "seat"
       command = other if other && group.events.any? { |event| event.type == GATED.fetch(other).first }
       move, hook = GATED[command]
@@ -995,6 +1033,9 @@ module Leverage
       problems
     end
 
+    # Whether the first step of a task a seat created in Backlog opens at a
+    # later event of that same command, at the same time: the creator's
+    # Complete contract changed the step in place (Steps.coalescible?).
     def creator_opening?(created, step)
       return false unless created.actor_kind == "seat" && created.command_id && created.payload["state"] == "backlog"
 
