@@ -26,9 +26,9 @@ webhook and SDK versions, and justification.
   each endpoint's signing secret in the hosted service's secret store.
   [Stripe API keys](https://docs.stripe.com/keys#sandbox-versus-live-mode),
   [Stripe webhooks](https://docs.stripe.com/webhooks).
-- Create separate recurring monthly USD Prices in each environment for Starter
-  ($7), Plus ($20) and Pro ($100). Configure the service to map stable plan
-  keys to those Price IDs. Set up Checkout for cards, Link and Apple Pay and
+- Create a separate recurring Price in each environment for each plan of
+  FR-007, at the price, currency and interval FR-007 gives. Configure the
+  service to map stable plan keys to those Price IDs. Set up Checkout for cards, Link and Apple Pay and
   enable payment-method updates in the customer portal. Configure receipt
   delivery and trusted, fixed HTTPS URLs for Checkout success and cancel and
   for the portal return. Verify the environment, account, Price amounts,
@@ -38,12 +38,10 @@ webhook and SDK versions, and justification.
   delivery in Stripe. [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions/create),
   [portal configuration](https://docs.stripe.com/customer-management/configure-portal),
   [Stripe receipts](https://docs.stripe.com/receipts).
-- The Mac app opens Stripe-hosted subscription Checkout in the owner's default
-  desktop browser. Stripe collects all payment details for cards, Link and
-  Apple Pay. Apple Pay appears only when Stripe and the browser, device and
-  wallet are eligible. Include Safari on a Mac with compatible Touch ID or an
-  iPhone in the test matrix. Stripe's standard hosted Checkout needs no
-  merchant domain registration for Apple Pay.
+- Checkout opens as FR-009 says, and Stripe collects all payment details.
+  Include Safari on a Mac with compatible Touch ID or an iPhone in the test
+  matrix. Confirm, as the PRD's open decision on Stripe's details asks, that
+  hosted Checkout needs no merchant domain registration for Apple Pay.
   [Stripe Apple Pay](https://docs.stripe.com/apple-pay?platform=web),
   [wallet product support](https://docs.stripe.com/payments/wallets#product-support).
 
@@ -53,7 +51,7 @@ webhook and SDK versions, and justification.
 | --- | --- |
 | Stripe API key | Secret store entry for the selected Stripe environment |
 | Webhook signing secret | Secret store entry for that environment's Stripe webhook destination |
-| Starter, Plus and Pro Price IDs | Three recurring USD monthly Prices from that environment |
+| The Price ID of each plan of FR-007 | One recurring Price per plan from that environment |
 | Payment methods | Stripe Checkout and portal configuration for the selected environment |
 | Portal configuration ID, if overriding the default | That environment's Customer Portal configuration |
 | Service base URL and return URLs | Approved HTTPS host, with fixed paths for browser return and signed webhooks |
@@ -67,11 +65,12 @@ flow into a live payment.
 
 - Bind the owner to the service-issued owner ID and to the Stripe Customer for
   that environment. The service verifies that binding and authorizes every
-  billing operation. The sign-in email goes to Stripe for receipts (FR-022).
-  For plan selection, the Mac app supplies a stable plan key and authenticated
-  owner context. The service resolves the Price and controls session creation.
-  Stripe API keys, signing secrets and Stripe client secrets remain outside
-  the Mac app. Email alone is insufficient for authentication.
+  billing operation. FR-022 says what identifies the owner to the service and
+  what Stripe receives. For plan selection, the Mac app supplies a stable plan
+  key and authenticated owner context. The service resolves the Price and
+  controls session creation. Besides the secret key of FR-021, signing
+  secrets and Stripe client secrets also stay off the Mac. Email alone is
+  insufficient for authentication.
 - Today the owner's sign-in is checked only by the server on the owner's own
   Mac, and nothing verifies the sign-in email, so neither proves anything to
   the service. The ADR of FR-024 settles what the Mac app presents to the
@@ -95,28 +94,24 @@ flow into a live payment.
   effective payment method. [Checkout fulfillment](https://docs.stripe.com/checkout/fulfillment),
   [subscription webhooks](https://docs.stripe.com/billing/subscriptions/webhooks),
   [Stripe webhooks](https://docs.stripe.com/webhooks).
-- Return the plan, next payment amount and date, approved payment-method
-  summary and paid receipts newest first with date, amount and plan. View
-  opens the Stripe receipt. Both Update and Needs you open a Stripe-hosted
-  payment-method flow for the bound Customer. Verify which methods actually
-  appear in the portal update flow.
+- Return what the Subscription page of FR-012 shows. Update, View and the
+  Needs you button open the Stripe pages of FR-013 and FR-018 for the bound
+  Customer. Verify which methods actually appear in the portal update flow.
   If that flow falls short of FR-013, research Stripe-hosted Checkout setup
   mode and confirm wallet availability before proposing it. A portal update
   may change only the customer default. Check that recovery uses the effective
   subscription payment method and that the failed invoice is paid before
-  clearing the row, banner and single Needs you item.
+  undoing the three changes of FR-017.
   [Portal deep links](https://docs.stripe.com/customer-management/portal-deep-links),
   [Checkout setup mode](https://docs.stripe.com/payments/checkout/save-and-reuse?payment-ui=stripe-hosted),
   [payment retry behavior](https://docs.stripe.com/billing/revenue-recovery/smart-retries#payment-method-ordering).
 - Change the existing subscription using the owner's decision on timing and
-  proration. Cancel subscription confirms once in the app and schedules the
-  end of the paid period. Preserve local tasks, rules and history. A failed
-  payment leaves tasks in place and running work continues. Wire the single
-  Needs you item and macOS notification as called for by FR-018.
-- Keep the service's data limited to billing and owner binding. The Mac keeps
-  subscription state and payment summary outside the event log. The summary
-  contains the method kind and, for a card, the brand, last four digits and
-  expiry. Keep card numbers, CVC, secrets and customer data out of the
+  proration. Cancel as FR-015 says, by scheduling the end at the paid period
+  in Stripe. A failed payment stays within FR-020. Wire the single Needs you
+  item and macOS notification as called for by FR-018.
+- Keep the service's data limited to billing and owner binding. Keep
+  subscription state on the Mac as FR-023 says, holding only the payment
+  summary of FR-016. Keep card numbers, CVC, secrets and customer data out of the
   repository, operational logs and Leverage event log. Keep raw webhook bodies,
   receipt URLs and hosted session URLs out of logs.
 
