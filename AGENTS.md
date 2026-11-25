@@ -228,9 +228,9 @@ owner has read it.
 - Add user-visible changes to the `Unreleased` section of
   [CHANGELOG.md](CHANGELOG.md).
 - Disclose AI assistance: commits authored with an agent carry a
-  `Co-Authored-By` trailer naming it, with an address. An agent adds the
-  trailer itself when its tool does not, on every commit, including
-  documentation and follow-up commits, and checks before it pushes that
+  `Co-Authored-By` trailer naming it. An agent adds the trailer itself
+  when its tool does not, on every commit, including documentation and
+  follow-up commits, and checks before it pushes that
   `git log --no-merges --format='%h %(trailers:key=Co-Authored-By,valueonly)' origin/main..HEAD`
   shows a trailer on each line. A human remains responsible for every
   change that is merged. The full policy is in
