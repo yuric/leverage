@@ -50,6 +50,11 @@ class RoutesTest < ActiveSupport::TestCase
     "issue_landing_prompt" => [ "POST", "/v1/owner/seats/:id/landing-prompt", "v1/owner/seats#issue_landing_prompt" ]
   }.freeze
 
+  ROUND_2_OPERATIONS = {
+    "report_model" => [ "POST", "/v1/seat/model", "v1/agent/seats#report_model" ],
+    "create_task" => [ "POST", "/v1/tasks", "v1/agent/tasks#create" ]
+  }.freeze
+
   def operations = Leverage::Contract.registry.fetch("operations").index_by { |operation| operation.fetch("operation_id") }
 
   def drawn
@@ -59,7 +64,7 @@ class RoutesTest < ActiveSupport::TestCase
   test "the served operations match their milestones, each a registry operation" do
     refute RouteTable.const_defined?(:PENDING, false)
     assert_equal operations.keys.sort, RouteTable::ROUTES.keys.sort
-    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6 + JOIN_OPERATIONS.keys).sort,
+    assert_equal (MILESTONE_2 + MILESTONE_3 + MILESTONE_4 + MILESTONE_5 + MILESTONE_6 + JOIN_OPERATIONS.keys + ROUND_2_OPERATIONS.keys).sort,
       RouteTable::ROUTES.keys.sort
     RouteTable::ROUTES.each_key { |operation_id| assert operations.key?(operation_id), operation_id }
     RouteTable.routes.each do |route|
@@ -83,7 +88,7 @@ class RoutesTest < ActiveSupport::TestCase
   end
 
   test "each controller is one of the plans', under v1/agent, v1/owner, v1/helper or the health check" do
-    allowed = %r{\Av1/(agent/(actions|questions|join|next|commands|tasks|criteria|reviews|jobs)|owner/(actions|questions|projects|decisions|settings|setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
+    allowed = %r{\Av1/(agent/(actions|questions|join|next|commands|tasks|criteria|reviews|jobs|seats)|owner/(actions|questions|projects|decisions|settings|setup|sessions|commands|events|board|tasks|seats|credentials|tools|helpers|helper_requests|health|inbox|rules|rule_checks)|helper/(next|requests|seats|credentials)|health)\z}
     RouteTable::ROUTES.each_value { |target| assert_match allowed, target.split("#").first }
   end
 
@@ -99,6 +104,14 @@ class RoutesTest < ActiveSupport::TestCase
     end
     refute RouteTable.serves?("get_landing_prompt")
     refute drawn.key?("get_landing_prompt")
+  end
+
+  test "the Round 2 operations use their registered routes and actions" do
+    ROUND_2_OPERATIONS.each do |operation_id, (verb, path, target)|
+      assert_equal target, RouteTable::ROUTES[operation_id]
+      route = drawn.fetch(operation_id)
+      assert_equal [ verb, path ], [ route.verb, route.path.spec.to_s ]
+    end
   end
 
   test "the route table's rails paths and verbs are read from the registry" do

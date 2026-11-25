@@ -27,7 +27,7 @@ enum ContractDocument {
         }
     }
 
-    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals + credentials
+    static let served = coreLoop + handoff + ruleChecks + questionsAndApprovals + credentials + roundTwo
 
     // Milestone 2 (Core loop).
     static let coreLoop: [String] = [
@@ -75,6 +75,8 @@ enum ContractDocument {
         "rename_credential", "remove_credential", "refresh_usage", "verify_all_credentials",
         "reorder_credentials", "report_reading",
     ]
+
+    static let roundTwo = ["create_task", "report_model"]
 
     /// The registry entry of one operation.
     static func operation(_ id: String) -> JSONValue? {
@@ -145,6 +147,8 @@ struct ContractExamplesTests {
         "HeartbeatTaskCompleted": decodes(CommandOutcome<HeartbeatResult>.self),
         "HeartbeatReviewCompleted": decodes(CommandOutcome<HeartbeatResult>.self),
         "AddTaskCompleted": decodes(CommandOutcome<TaskCreatedResult>.self),
+        "AgentTaskCreatedCompleted": decodes(CommandOutcome<AgentTaskCreated>.self),
+        "ReportedModelCompleted": decodes(CommandOutcome<ReportedModel>.self),
         "AddCredentialCompleted": decodes(CommandOutcome<AddCredentialResult>.self),
         "OwnerSessionCompleted": decodes(CommandOutcome<OwnerSessionAnswer>.self),
         "HelperTokenIssuedCompleted": decodes(CommandOutcome<HelperTokenAnswer>.self),
@@ -179,7 +183,7 @@ struct ContractExamplesTests {
 
     @Test("every served operation is in the registry and the interface schema")
     func servedOperationsExist() {
-        #expect(ContractDocument.served.count == 108)
+        #expect(ContractDocument.served.count == 110)
         #expect(ContractDocument.handoff.first == "report_limit")
         #expect(ContractDocument.handoff.last == "change_seat")
         #expect(ContractDocument.ruleChecks.first == "claim_next_job")
@@ -614,7 +618,8 @@ struct ContractExamplesTests {
             {"id":"00000000-0000-4000-8000-000000000001","name":"Made-up","provider":"claude","model":null,
              "effort":null,"role":"builder","strength_rank":null,"credential_id":null,"enabled":true,
              "paused":false,"last_polled_at":null,"run_state":"stopped","removed_at":null,
-             "wanted_running":true,"run_credential_id":null,"run_stop_reason":"signed_out"}
+             "wanted_running":true,"run_credential_id":null,"run_stop_reason":"signed_out",
+             "permissions":{"work":true,"deliver":true,"create":true}}
             """.utf8)
         let again = try LeverageJSON.decoder().decode(Seat.self, from: stopped)
         #expect(again.runStopReason == .signedOut && again.runCredentialID == nil)

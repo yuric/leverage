@@ -96,7 +96,7 @@ module Leverage
       def seat(seat)
         { id: seat.id, name: seat.name, provider: seat.provider, model: seat.model.presence, effort: seat.effort.presence,
           role: seat.role, strength_rank: seat.strength_rank, credential_id: seat.credential_id, enabled: seat.enabled,
-          paused: seat.paused, last_polled_at: time(seat.last_polled_at), run_state: seat.run_state,
+          permissions: Permissions.to_h(seat), paused: seat.paused, last_polled_at: time(seat.last_polled_at), run_state: seat.run_state,
           removed_at: time(seat.removed_at), wanted_running: seat.wanted_running,
           run_credential_id: seat.run_credential_id, run_stop_reason: seat.run_stop_reason }
       end

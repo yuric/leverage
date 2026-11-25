@@ -251,7 +251,12 @@ module Leverage
     def settle(pending, outcome, state: "completed")
       pending.update!(state: state, params: nil)
       row = Command.find_by(caller_kind: pending.requester_kind, caller_id: pending.requester_id, key: pending.command_key)
-      row&.update!(outcome: outcome.outcome.to_s, result: outcome.result, refusal: Idempotency.stored_refusal(outcome.refusal),
+      result = if row&.command == "add_task" && outcome.completed?
+        { "task_id" => pending.task_id, "state" => Task.find(pending.task_id).state }
+      else
+        outcome.result
+      end
+      row&.update!(outcome: outcome.outcome.to_s, result: result, refusal: Idempotency.stored_refusal(outcome.refusal),
         notify: true, read_at: nil)
     end
 

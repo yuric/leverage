@@ -110,6 +110,26 @@ enum TaskLog {
             id.flatMap { seats[$0] } ?? TaskPageCopy.anAgent.text
         }
 
+        /// The owner is the actor of the release, but the builder was the
+        /// actor of the claim or the agent named in a later grant.
+        func agentGivingBackTask(_ event: EventRecord) -> String {
+            if let cause = event.causeID.flatMap({ events[$0] }), cause.subjectKind == .seat,
+               let seat = cause.subjectID {
+                return agent(named: seat)
+            }
+            let grant = events.values.filter { previous in
+                guard previous.taskID == event.taskID, previous.seq < event.seq else { return false }
+                switch previous.type {
+                case .taskClaimed, .taskReleased, .taskLeaseExpired, .taskSubmitted: return true
+                default: return uuid(previous, "lease_seat_id") != nil
+                }
+            }.max { $0.seq < $1.seq }
+            guard let grant else { return TaskPageCopy.anAgent.text }
+            let holder = grant.type == .taskClaimed
+                ? uuid(grant, "seat_id") ?? grant.actorID : uuid(grant, "lease_seat_id")
+            return agent(named: holder)
+        }
+
         /// The account with this id as the owner knows it, or "an account".
         func account(_ id: UUID?) -> String {
             id.flatMap { credentials[$0] } ?? BoardCopy.anAccount.text
@@ -298,6 +318,8 @@ enum TaskLog {
         case .checkCouldNotRun: return TaskPageCopy.logInboxCheckCouldNotRun.text
         case .noReviewerEligible: return TaskPageCopy.logInboxNoReviewer.text
         case .orchestratorOffline: return TaskPageCopy.logInboxOrchestratorOffline.text
+        case .agentTaskIncomplete: return NeedsYouCopy.agentTaskIncompleteHeading.text + "."
+        case .agentTasksAtLimit: return NeedsYouCopy.agentTasksAtLimitHeading.text + "."
         default: return TaskPageCopy.logInboxOther.text
         }
     }
@@ -306,6 +328,8 @@ enum TaskLog {
         switch event.payload["choice"]?.stringValue.flatMap(InboxChoice.init(rawValue:)) {
         case .allowAnotherRound: return TaskPageCopy.logChoseTryAgain.text
         case .editContract: return TaskPageCopy.logChoseChange.text
+        case .completeContract: return TaskPageCopy.logChoseCompleteContract.text
+        case .draftContract: return TaskPageCopy.logChoseDraftContract.text
         case .cancel: return TaskPageCopy.logCancelled.text
         case .signInAgain: return TaskPageCopy.logChoseSignIn.text
         case .overrideOnce: return TaskPageCopy.logChoseLetThrough.text
@@ -340,7 +364,8 @@ enum TaskLog {
     private static func baseSentence(for event: EventRecord, in context: Context) -> String {
         let agent = ["agent": context.agent(event)]
         switch event.type {
-        case .taskCreated: return TaskPageCopy.logCreated.text
+        case .taskCreated:
+            return event.actorKind == .seat ? TaskPageCopy.logCreatedByAgent.filled(agent) : TaskPageCopy.logCreated.text
         case .taskContractChanged: return TaskPageCopy.logContractChanged.text
         case .taskChanged: return TaskPageCopy.logTaskChanged.text
         case .taskReady: return TaskPageCopy.logReady.text
@@ -379,6 +404,8 @@ enum TaskLog {
             case .seatDisabled: copy = .logReleasedSwitchedOff
             case .seatRemoved: copy = .logReleasedRemoved
             case .newPrompt: copy = .logReleasedNewPrompt
+            case .deliverTurnedOff:
+                return TaskPageCopy.logReleasedDeliverOff.filled(["agent": context.agentGivingBackTask(event)])
             case nil: copy = .logReleasedOther
             }
             return copy.filled(agent)

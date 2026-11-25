@@ -23,11 +23,10 @@ struct RosterModelTests {
     private let now = Date(timeIntervalSince1970: 1_780_000_600)
 
     private func makeModel(
-        _ owner: FakeOwnerAPI, reads: Locked<[Int]> = Locked([]),
-        copy: @escaping @MainActor (String) -> Void = { _ in }
+        _ owner: FakeOwnerAPI, reads: Locked<[Int]> = Locked([])
     ) -> RosterModel {
         RosterModel(
-            api: owner, noteRead: { seq in reads.update { $0.append(seq) } }, copy: copy, now: { now }, timing: .quick)
+            api: owner, noteRead: { seq in reads.update { $0.append(seq) } }, now: { now }, timing: .quick)
     }
 
     private func row(_ model: RosterModel, _ id: UUID) -> RosterRow? { model.rows.first { $0.id == id } }
@@ -92,7 +91,7 @@ struct RosterModelTests {
         #expect(row(model, Fixtures.builderID)?.roleLine == "Builder. Running. Waiting for work.")
     }
 
-    @Test("a Codex or Grok agent shows the tool's default effort, whatever effort it was given")
+    @Test("Native Codex hides effort and Prompt Grok shows reported effort")
     func effortDefaultWhereNotTaken() async {
         var list = Fixtures.seats().seats
         list[1] = Fixtures.seat(
@@ -101,8 +100,8 @@ struct RosterModelTests {
         list[2] = Fixtures.seat(Fixtures.ownID, name: "Helper agent", provider: .grok, effort: "high")
         let model = makeModel(Fixtures.owner(seats: SeatsList(seats: list, asOfSeq: 12)))
         await model.load()
-        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · Default effort · On")
-        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · The tool's default · Default effort · On")
+        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · On")
+        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · Not reported yet · high effort · On")
     }
 
     @Test("a row names its login, its model and effort or their defaults, and on or off")
@@ -116,8 +115,8 @@ struct RosterModelTests {
         await model.load()
         #expect(row(model, Fixtures.builderID)?.detailLine == "Claude · some-model · high effort · On")
         #expect(row(model, Fixtures.builderID)?.loginLine == "Runs on Personal.")
-        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · Default effort · On")
-        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · The tool's default · Default effort · Off")
+        #expect(row(model, Fixtures.reviewerID)?.detailLine == "Codex · The tool's default · On")
+        #expect(row(model, Fixtures.ownID)?.detailLine == "Grok · Not reported yet · Off")
         #expect(row(model, Fixtures.ownID)?.loginLine == nil)
     }
 
@@ -133,7 +132,7 @@ struct RosterModelTests {
         #expect(row(model, Fixtures.reviewerID)?.lastPolledLine == "Has not asked for work yet.")
     }
 
-    @Test("only a seat the app runs has Start or Stop, and only one that connects on its own has New prompt")
+    @Test("only a seat the app runs has Start or Stop")
     func buttonsByKind() async {
         let model = makeModel(Fixtures.owner())
         await model.load()
@@ -143,8 +142,6 @@ struct RosterModelTests {
         #expect(running?.canStop == true && running?.canStart == false)
         #expect(stopped?.canStart == true && stopped?.canStop == false)
         #expect(own?.canStart == false && own?.canStop == false)
-        #expect(running?.canIssueNewPrompt == false && stopped?.canIssueNewPrompt == false)
-        #expect(own?.canIssueNewPrompt == true)
     }
 
     // MARK: refused, cannot reach, signed out
@@ -358,88 +355,6 @@ struct RosterModelTests {
         #expect(keys.count == 2 && keys[0] == keys[1])
     }
 
-    // MARK: New prompt
-
-    @Test("New prompt issues a replacement only after confirmation and copies only on request",
-          arguments: LandingPromptConnection.allCases)
-    func issuesNewPrompt(_ connection: LandingPromptConnection) async throws {
-        let owner = Fixtures.owner()
-        owner.script {
-            $0.issueLandingPrompt = { Fixtures.issuedPrompt($0, connection: $1, key: $2) }
-        }
-        let board = Fixtures.pasteboard()
-        let model = makeModel(owner, copy: board.copy)
-        await model.load()
-        model.prepareNewPrompt(Fixtures.ownID, connection: connection)
-        let prompt = try #require(model.newPrompt)
-        #expect(Fixtures.calls(owner, .issueLandingPrompt).isEmpty)
-        await prompt.issue()
-        let first = try #require(Fixtures.calls(owner, .issueLandingPrompt).last)
-        #expect(first.path["id"] == Fixtures.ownID.contractString)
-        #expect(first.body == .object(["connection": .string(connection.rawValue)]))
-        #expect(prompt.state == .ready(Fixtures.landingText))
-        #expect(board.copied.value.isEmpty)
-        prompt.copyPrompt()
-        #expect(board.copied.value == [Fixtures.landingText])
-        model.closeNewPrompt()
-        #expect(model.newPrompt == nil)
-        #expect(prompt.state == .none)
-        model.prepareNewPrompt(Fixtures.ownID, connection: connection)
-        await model.newPrompt?.issue()
-        let calls = Fixtures.calls(owner, .issueLandingPrompt)
-        #expect(calls.count == 2)
-        #expect(first.key != calls.last?.key)
-    }
-
-    @Test("New prompt is unavailable for a seat the app runs")
-    func noPromptForAppSeat() async {
-        let owner = Fixtures.owner()
-        let model = makeModel(owner)
-        await model.load()
-        owner.forgetCalls()
-        model.prepareNewPrompt(Fixtures.builderID, connection: .mcp)
-        #expect(model.newPrompt == nil)
-        #expect(owner.calls.isEmpty)
-    }
-
-    @Test("a refused New prompt shows the reason and leaves nothing to copy")
-    func promptRefused() async throws {
-        let owner = Fixtures.owner()
-        owner.script {
-            $0.issueLandingPrompt = { _, _, key in
-                .refused(Refusal(code: .invalidState, ruleID: nil, reason: nil), key: key.value, command: .issueLandingPrompt)
-            }
-        }
-        let board = Fixtures.pasteboard()
-        let model = makeModel(owner, copy: board.copy)
-        await model.load()
-        model.prepareNewPrompt(Fixtures.ownID, connection: .http)
-        let prompt = try #require(model.newPrompt)
-        await prompt.issue()
-        #expect(prompt.state == .failed(ShellCopy.refusalInvalidState.text))
-        prompt.copyPrompt()
-        #expect(board.copied.value.isEmpty)
-    }
-
-    @Test("a replacement containing a second token-shaped string is refused")
-    func promptWithTokenShape() async throws {
-        let owner = Fixtures.owner()
-        owner.script {
-            $0.issueLandingPrompt = {
-                Fixtures.issuedPrompt($0, connection: $1, key: $2, text: Fixtures.landingText + " " + Fixtures.madeUpToken + "-other")
-            }
-        }
-        let board = Fixtures.pasteboard()
-        let model = makeModel(owner, copy: board.copy)
-        await model.load()
-        model.prepareNewPrompt(Fixtures.ownID, connection: .http)
-        let prompt = try #require(model.newPrompt)
-        await prompt.issue()
-        #expect(prompt.state == .failed(ShellCopy.somethingWentWrong.text))
-        prompt.copyPrompt()
-        #expect(board.copied.value.isEmpty)
-    }
-
     // MARK: staying current
 
     @Test("an event from the tail reads the roster again")
@@ -455,7 +370,7 @@ struct RosterModelTests {
             }
         }
         let feed = EventFeed(owner: owner, waitSeconds: 25, retryDelay: .milliseconds(5))
-        let model = RosterModel(api: owner, noteRead: { feed.noteRead(asOfSeq: $0) }, copy: { _ in }, now: { now }, timing: .quick)
+        let model = RosterModel(api: owner, noteRead: { feed.noteRead(asOfSeq: $0) }, now: { now }, timing: .quick)
         model.attach(to: feed)
         await model.load()
         #expect(model.rows.count == 3)
@@ -760,6 +675,19 @@ struct RosterModelTests {
         #expect(model.changing == nil)
     }
 
+    @Test("Change receives the login version and warns when the agent holds a Working task")
+    func opensChangeWithVersionAndTask() async {
+        let login = Fixtures.credential(Fixtures.loginID, name: "Personal", toolVersion: "2.9.0")
+        let credentials = CredentialsList(credentials: [login], asOfSeq: 11)
+        let board = Fixtures.board(building: "Check invoices", by: Fixtures.builderID)
+        let model = makeModel(Fixtures.owner(credentials: credentials, board: board))
+        await model.load()
+        model.beginChange(Fixtures.builderID)
+        #expect(model.changing?.loginChoices.first?.toolVersion == "2.9.0")
+        model.changing?.permissions.deliver = false
+        #expect(model.changing?.deliverNote == "It gives back the task it is working on.")
+    }
+
     @Test("a saved change closes the sheet and reads the roster again")
     func changeSaved() async {
         let owner = Fixtures.owner()
@@ -803,7 +731,7 @@ struct RosterModelTests {
             run: credential == nil ? nil : .running, model: model)
         let owner = Fixtures.owner(seats: SeatsList(seats: [seat], asOfSeq: 12))
         let model = RosterModel(
-            api: owner, noteRead: { _ in }, copy: { _ in }, now: { now }, timing: .quick, testedProviders: tested)
+            api: owner, noteRead: { _ in }, now: { now }, timing: .quick, testedProviders: tested)
         await model.load()
         return model.rows.first
     }
@@ -904,7 +832,7 @@ struct RosterModelTests {
         #expect(checker?.notTestedNote == note)
         let checkerModel = RosterModel(
             api: Fixtures.owner(seats: SeatsList(seats: [Fixtures.seat(orchestratorID, name: "Checker", role: .orchestrator, credential: Fixtures.loginID, run: .running)], asOfSeq: 1)),
-            noteRead: { _ in }, copy: { _ in }, now: { now }, timing: .quick, testedProviders: [])
+            noteRead: { _ in }, now: { now }, timing: .quick, testedProviders: [])
         await checkerModel.load()
         #expect(draw(checkerModel, false))
         #expect(draw(checkerModel, true))
@@ -916,5 +844,31 @@ struct RosterModelTests {
         let failed = makeModel(owner)
         await failed.load()
         #expect(draw(failed, false))
+    }
+}
+
+extension RosterModelTests {
+    @Test("The menu drawn for both connection types has no replacement prompt")
+    func noReplacementPromptInMenu() {
+        let native = AgentFixtures.seat(AgentFixtures.builderID, name: "Native", credential: AgentFixtures.loginID)
+        let prompt = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt")
+        for (seat, expected) in [(native, ["Start", "Pause", "Change", "Remove"]), (prompt, ["Pause", "Change", "Remove"])] {
+            let row = RosterRow(seat: seat, loginName: nil, doing: nil, now: Date())
+            #expect(RosterRowView.menuItems(for: row).map(\.text) == expected)
+        }
+    }
+
+    @Test("Roster shows Native defaults, Prompt reports and the permissions the agent has")
+    func reportsAndPermissions() {
+        let native = Seat(id: UUID(), name: "Native", provider: .claude, role: .builder,
+                          credentialID: AgentFixtures.loginID, permissions: SeatPermissions(work: false, deliver: false, create: false))
+        let unreported = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt")
+        let reported = AgentFixtures.seat(AgentFixtures.ownID, name: "Prompt", provider: .codex, model: "gpt-example", effort: "high")
+        func row(_ seat: Seat) -> RosterRow { RosterRow(seat: seat, loginName: nil, doing: nil, now: Date()) }
+        #expect(row(native).detailLine.contains("The tool's default"))
+        #expect(row(native).permissionsLine == "May: nothing")
+        #expect(row(unreported).detailLine.contains("Not reported yet"))
+        #expect(row(reported).detailLine.contains("gpt-example · high effort"))
+        #expect(row(reported).permissionsLine == "May: work on tasks, deliver tasks, create tasks")
     }
 }

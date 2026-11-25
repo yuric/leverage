@@ -260,6 +260,19 @@ public struct TaskPage: Codable, Equatable, Sendable {
     }
 }
 
+/// What a seat may do. All three are on by default for a new seat.
+public struct SeatPermissions: Codable, Equatable, Sendable {
+    public var work: Bool
+    public var deliver: Bool
+    public var create: Bool
+
+    public init(work: Bool = true, deliver: Bool = true, create: Bool = true) {
+        self.work = work
+        self.deliver = deliver
+        self.create = create
+    }
+}
+
 /// `Seat`: one agent seat.
 public struct Seat: Codable, Equatable, Sendable {
     public let id: UUID
@@ -272,6 +285,7 @@ public struct Seat: Codable, Equatable, Sendable {
     /// The login it runs on; nil for a seat that connects on its own.
     public let credentialID: UUID?
     public let enabled: Bool
+    public let permissions: SeatPermissions
     public let paused: Bool
     public let lastPolledAt: Date?
     public let runState: SeatRunState?
@@ -287,7 +301,7 @@ public struct Seat: Codable, Equatable, Sendable {
         id: UUID, name: String, provider: Provider, model: String? = nil, effort: String? = nil, role: SeatRole,
         strengthRank: Int? = nil, credentialID: UUID? = nil, enabled: Bool = true, paused: Bool = false,
         lastPolledAt: Date? = nil, runState: SeatRunState? = nil, removedAt: Date? = nil, wantedRunning: Bool = false,
-        runCredentialID: UUID? = nil, runStopReason: RunStopReason? = nil
+        runCredentialID: UUID? = nil, runStopReason: RunStopReason? = nil, permissions: SeatPermissions = .init()
     ) {
         self.id = id
         self.name = name
@@ -298,6 +312,7 @@ public struct Seat: Codable, Equatable, Sendable {
         self.strengthRank = strengthRank
         self.credentialID = credentialID
         self.enabled = enabled
+        self.permissions = permissions
         self.paused = paused
         self.lastPolledAt = lastPolledAt
         self.runState = runState
@@ -308,7 +323,7 @@ public struct Seat: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, provider, model, effort, role, enabled, paused
+        case id, name, provider, model, effort, role, enabled, paused, permissions
         case strengthRank = "strength_rank"
         case credentialID = "credential_id"
         case lastPolledAt = "last_polled_at"
@@ -397,10 +412,42 @@ public struct JoinInstructions: Codable, Equatable, Sendable {
     public let role: SeatRole
     public let connection: LandingPromptConnection
 
-    public init(text: String, role: SeatRole, connection: LandingPromptConnection) {
+    public let permissions: SeatPermissions
+    /// The provider's models for a Prompt seat. Nil for a seat the app runs.
+    public let models: [Model]?
+
+    public struct Model: Codable, Equatable, Sendable {
+        public let id: String
+        public let efforts: [String]
+
+        public init(id: String, efforts: [String]) {
+            self.id = id
+            self.efforts = efforts
+        }
+    }
+
+    public init(
+        text: String, role: SeatRole, connection: LandingPromptConnection,
+        permissions: SeatPermissions = .init(), models: [Model]? = nil
+    ) {
         self.text = text
         self.role = role
         self.connection = connection
+        self.permissions = permissions
+        self.models = models
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text, role, connection, permissions, models
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encode(role, forKey: .role)
+        try container.encode(connection, forKey: .connection)
+        try container.encode(permissions, forKey: .permissions)
+        try container.encode(models, forKey: .models)
     }
 }
 

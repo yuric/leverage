@@ -19,13 +19,13 @@ module Leverage
       # Any registry seat role: the planner and the
       # orchestrator arrived with rules (milestone 4 plan §0.1 fact 12,
       # RV-5), and are connected exactly as a builder is, on any login, with
-      # or without a model; nothing is refused for an orchestrator's
-      # provider or model (L955). Another role is 422 invalid. An empty or
-      # null model or effort is stored as "" (the tool's default, IN-29);
-      # the strength rank is 1 through 3 and defaults to 1 (AP-24).
+      # or without a model from the login's catalog. A Prompt seat
+      # reports its own model and effort. An empty or null model or effort
+      # is stored as "". The strength rank defaults to 1 (AP-24), and all
+      # permissions default on (UX-10).
       #
       # Params: "name", "role", "provider", "model", "effort",
-      # "strength_rank", "credential_id".
+      # "strength_rank", "credential_id", "permissions".
       class ConnectSeat < Entry
         ROLES = Contract.list("seat_roles").freeze
 
@@ -42,6 +42,8 @@ module Leverage
           end
           @strength_rank = rank.to_i
 
+          @model, @effort = params.values_at("model", "effort").map(&:to_s)
+          @permissions = params.key?("permissions") ? Permissions.columns(params.fetch("permissions")) : {}
           params["credential_id"] ? load_login(ctx, params["credential_id"]) : load_own
         end
 
@@ -49,8 +51,7 @@ module Leverage
 
         def perform(ctx)
           seat = Seat.create!(workspace_id: ctx.workspace.id, name: @name, role: @role, provider: @provider,
-            model: ctx.request.params["model"].to_s, effort: ctx.request.params["effort"].to_s,
-            strength_rank: @strength_rank, credential_id: @credential&.id)
+            model: @model, effort: @effort, strength_rank: @strength_rank, credential_id: @credential&.id, **@permissions)
           ctx.emit("seat.connected", subject: seat, payload: {})
           SeatRuns.connected(ctx, seat)
           @result = { "seat_id" => seat.id }
@@ -65,11 +66,17 @@ module Leverage
           raise Invalid, "The seat's provider is its login's" if @provider && @provider != @credential.provider
 
           @provider = @credential.provider
+          problem = ModelCatalog.problem(provider: @provider, model: @model, effort: @effort, native: true)
+          raise Invalid, problem if problem
         end
 
         def load_own
-          known = Contract.registry.fetch("credential_providers").any? { |entry| entry.fetch("provider") == @provider }
-          raise Invalid, "A seat that connects on its own names its provider" unless known
+          unless ModelCatalog.provider?(@provider)
+            raise Invalid, "A seat that connects on its own names a login provider"
+          end
+          return if @model.empty? && @effort.empty?
+
+          raise Invalid, "An agent that connects by prompt reports its own model and effort"
         end
       end
     end

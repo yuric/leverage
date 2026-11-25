@@ -65,11 +65,6 @@ module Leverage
         @result = { "timed_out_job_ids" => missed.map(&:id) }
       end
 
-      # GA-17 makes a claimed job miss its run time at the command's clock.
-      def miss_now(ctx, job)
-        Timers.as_timer(ctx, command, ctx.at) { |timer_ctx| miss(timer_ctx, job) }
-      end
-
       private
 
       def due_kind = Timers::JOB_TIMERS.fetch(command).fetch(:due)

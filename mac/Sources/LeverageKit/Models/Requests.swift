@@ -167,10 +167,11 @@ public struct ConnectSeatRequest: Encodable, Equatable, Sendable {
     /// The login a seat the app runs uses; nil for a seat that connects on
     /// its own.
     public let credentialID: UUID?
+    public let permissions: SeatPermissions?
 
     public init(
         name: String, role: SeatRole, provider: Provider? = nil, model: String? = nil, effort: String? = nil,
-        strengthRank: Int? = nil, credentialID: UUID? = nil
+        strengthRank: Int? = nil, credentialID: UUID? = nil, permissions: SeatPermissions? = nil
     ) {
         self.name = name
         self.role = role
@@ -179,10 +180,11 @@ public struct ConnectSeatRequest: Encodable, Equatable, Sendable {
         self.effort = effort.flatMap { $0.isEmpty ? nil : $0 }
         self.strengthRank = strengthRank
         self.credentialID = credentialID
+        self.permissions = permissions
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, role, provider, model, effort
+        case name, role, provider, model, effort, permissions
         case strengthRank = "strength_rank"
         case credentialID = "credential_id"
     }
@@ -196,6 +198,7 @@ public struct ConnectSeatRequest: Encodable, Equatable, Sendable {
         try container.encode(effort, forKey: .effort)
         try container.encode(strengthRank, forKey: .strengthRank)
         try container.encodeID(credentialID, forKey: .credentialID)
+        try container.encodeIfPresent(permissions, forKey: .permissions)
     }
 }
 
@@ -440,11 +443,12 @@ public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
     public var strengthRank: Setting<Int>
     public var credentialID: Setting<UUID>
     public var enabled: Bool?
+    public var permissions: SeatPermissions?
 
     public init(
         name: String? = nil, role: SeatRole? = nil, model: Setting<String> = .keep,
         effort: Setting<String> = .keep, strengthRank: Setting<Int> = .keep,
-        credentialID: Setting<UUID> = .keep, enabled: Bool? = nil
+        credentialID: Setting<UUID> = .keep, enabled: Bool? = nil, permissions: SeatPermissions? = nil
     ) {
         self.name = name
         self.role = role
@@ -453,10 +457,11 @@ public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
         self.strengthRank = strengthRank
         self.credentialID = credentialID
         self.enabled = enabled
+        self.permissions = permissions
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, role, model, effort, enabled
+        case name, role, model, effort, enabled, permissions
         case strengthRank = "strength_rank"
         case credentialID = "credential_id"
     }
@@ -474,6 +479,7 @@ public struct ChangeSeatRequest: Encodable, Equatable, Sendable {
         case .clear: try container.encodeNil(forKey: .credentialID)
         }
         try container.encodeIfPresent(enabled, forKey: .enabled)
+        try container.encodeIfPresent(permissions, forKey: .permissions)
     }
 }
 

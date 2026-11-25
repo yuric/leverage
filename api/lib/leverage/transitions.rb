@@ -102,7 +102,11 @@ module Leverage
       private
 
       def run(request)
-        entry_class = Table.entry_for(request.command)
+        entry_class = if request.command == "add_task" && request.caller_kind == "seat"
+          Entries::CreateTask
+        else
+          Table.entry_for(request.command)
+        end
         started = monotonic
         timing = { lock_wait: 0.0, writes: 0.0, gate: 0.0 }
         outcome = ActiveRecord::Base.transaction(requires_new: true) do
@@ -116,6 +120,7 @@ module Leverage
           refusal = Precedence.first(refusals(ctx, entry))
           outcome = refusal ? Outcome.refused(refusal) : gated(ctx, entry, timing)
           Finishing.after_command(ctx) unless credential_bookkeeping?(entry, ctx)
+          AgentTasks.after_command(ctx, outcome)
           pending = PendingTransitions.for_request(request)
           outcome = Outcome.new(outcome: :pending) if pending && !outcome.refused?
           unless request.by_app?

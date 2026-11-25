@@ -26,6 +26,27 @@ struct ToolCallerTests {
         #expect(sendsIdenticalRequests)
     }
 
+    @Test func reportsModelAndCreatesTaskWithTheGeneratedTools() async throws {
+        let fake = RecordingTransport()
+        let caller = ToolCaller(transport: fake.send)
+        let report = try #require(catalog.tool(named: "report_model"))
+        let create = try #require(catalog.tool(named: "create_task"))
+        let reportBody: [String: JSONValue] = ["model": .null, "effort": .null]
+        let createBody: [String: JSONValue] = [
+            "title": .string("Check the totals"), "criteria": .array([.object([
+                "text": .string("Review the totals"), "kind": .string("review"),
+            ])]),
+        ]
+        let reportResult = await caller.call(report, arguments: reportBody)
+        let createResult = await caller.call(create, arguments: createBody)
+        #expect(!reportResult.isError && !createResult.isError)
+        let sent = await fake.requests
+        #expect(sent == [
+            ToolRequest(operation: .reportModel, body: reportBody, key: try #require(reportResult.key)),
+            ToolRequest(operation: .createTask, body: createBody, key: try #require(createResult.key)),
+        ])
+    }
+
     @Test func getNextDefaultsToTwentySecondsAndRejectsInvalidWaits() async throws {
         let fake = RecordingTransport()
         let caller = ToolCaller(transport: fake.send)

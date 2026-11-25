@@ -20,10 +20,10 @@ class AddCredentialTest < ActiveSupport::TestCase
     id = SecureRandom.uuid
 
     outcome = assert_completed(owner_command("add_credential",
-      body(id: id, model: "made-up-model", effort: "high", strength_rank: 2)))
+      body(id: id, model: "claude-opus-5-5", effort: "", strength_rank: 2)))
 
     row = Credential.find(id)
-    assert_equal [ @scenario.workspace_id, "login", "claude", "Made-up work account", nil, "made-up-model", "high", 2 ],
+    assert_equal [ @scenario.workspace_id, "login", "claude", "Made-up work account", nil, "claude-opus-5-5", "", 2 ],
       [ row.workspace_id, row.kind, row.provider, row.name, row.masked_label, row.model, row.effort, row.strength_rank ]
     assert_equal [ "signed_out", nil ], [ row.state, row.last_verified_at ]
     assert_equal 2, row.position
@@ -203,11 +203,22 @@ class AddCredentialTest < ActiveSupport::TestCase
 
   # Milestone 3 plan HE-5: Add credential sets strength rank 1 when the
   # request names none, and keeps the model the request carries.
+  test "login Add refuses unlisted models and nonempty efforts, and token Add takes neither" do
+    [ body(model: "made-up-model"), body(model: "claude-opus-5-5", effort: "high"),
+      body(kind: "api_token", provider: "claude_api", masked_label: "••••••••", model: "claude-opus-5-5"),
+      body(kind: "api_token", provider: "claude_api", masked_label: "••••••••", effort: "high") ].each do |fields|
+      assert_raises(T::Invalid) { owner_command("add_credential", fields) }
+    end
+
+    assert_empty Credential.where(workspace_id: scenario.workspace_id)
+    assert_empty HelperRequest.where(workspace_id: scenario.workspace_id)
+  end
+
   test "a request with no strength rank adds the login with rank 1 and the model it names" do
     id = SecureRandom.uuid
-    assert_completed(owner_command("add_credential", body(id: id, model: "tool-default-model")))
+    assert_completed(owner_command("add_credential", body(id: id, model: "claude-opus-5-5")))
 
-    assert_equal [ 1, "tool-default-model", nil ], Credential.find(id).attributes.values_at("strength_rank", "model", "effort")
+    assert_equal [ 1, "claude-opus-5-5", nil ], Credential.find(id).attributes.values_at("strength_rank", "model", "effort")
   end
 
   private

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "models.json",
+  "description": "The model catalog (contract decisions UX-4 to UX-6b): for each login provider, the models its tool accepts, the efforts each model accepts, the oldest tool version that accepts it where a source states one, the model the tool names as its default, and whether the reference runner's driver passes an effort to the tool. Every fact says how it is known. models_catalog_contract_test.rb and scripts/check_model_catalog.py check it against the registry and the repository.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_levels", "providers"],
+  "properties": {
+    "evidence_levels": {
+      "description": "How a fact may be known, strongest first. Nothing unverified and nothing stated only in the PRD enters the catalog.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["probe", "probe (full environment)", "help", "documented"]}
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "native_effort", "default_model", "models"],
+        "properties": {
+          "provider": {"description": "A registry credential_providers entry of kind login.", "$ref": "#/$defs/name"},
+          "native_effort": {
+            "description": "Whether the reference runner's driver passes an effort to this provider's tool, and the source that shows how the tool takes one (UX-15).",
+            "allOf": [{"$ref": "#/$defs/fact"}],
+            "properties": {"value": {"type": "boolean"}}
+          },
+          "default_model": {
+            "description": "The model the tool names as its default, one of models[].id; null where nothing evidences one. Add credential stores it as a login's model.",
+            "oneOf": [
+              {"allOf": [{"$ref": "#/$defs/fact"}], "properties": {"value": {"type": "string", "minLength": 1}}},
+              {"type": "null"}
+            ]
+          },
+          "models": {
+            "description": "The models, in drop-down order. Empty when no source could be read: the drop-down then offers only the tool's default.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "evidence", "source", "checked_on", "min_tool_version", "efforts"],
+              "properties": {
+                "id": {"description": "The exact name the tool accepts.", "type": "string", "minLength": 1, "maxLength": 200},
+                "evidence": {"$ref": "#/$defs/evidence"},
+                "source": {"$ref": "#/$defs/source"},
+                "checked_on": {"$ref": "#/$defs/date"},
+                "min_tool_version": {"description": "The oldest version of the tool that accepts the model, only when the source states one (UX-6b).", "type": ["string", "null"], "minLength": 1},
+                "efforts": {
+                  "description": "null: not known. Otherwise the efforts the vendor's documentation says the model accepts; an empty list means it takes none. Either way the drop-down offers the tool's default first.",
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["values", "evidence", "source", "checked_on"],
+                      "properties": {
+                        "values": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 200}},
+                        "evidence": {"const": "documented"},
+                        "source": {"$ref": "#/$defs/source"},
+                        "checked_on": {"$ref": "#/$defs/date"}
+                      }
+                    },
+                    {"type": "null"}
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"},
+    "evidence": {"enum": ["probe", "probe (full environment)", "help", "documented"]},
+    "source": {"description": "A vendor page's address for documented; a path in the repository for probe and help.", "type": "string", "pattern": "\\S"},
+    "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "source", "checked_on"],
+      "properties": {
+        "value": true,
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "source": {"$ref": "#/$defs/source"},
+        "checked_on": {"$ref": "#/$defs/date"}
+      }
+    }
+  }
+}

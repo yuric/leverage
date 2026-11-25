@@ -6,9 +6,9 @@ import Testing
 struct ToolCatalogTests {
     @Test func catalogMatchesGeneratedAgentToolsAndAddsControlArguments() throws {
         let catalog = ToolCatalog()
-        #expect(catalog.tools.count == 25)
+        #expect(catalog.tools.count == 27)
         #expect(catalog.tools.map(\.name) == AgentTools.all.map(\.id))
-        #expect(Set(catalog.tools.map(\.name)).count == 25)
+        #expect(Set(catalog.tools.map(\.name)).count == 27)
         for tool in catalog.tools {
             #expect(tool.name.range(of: "^[a-z_]{1,64}$", options: .regularExpression) != nil)
             #expect(tool.inputSchema["type"] == .string("object"))
@@ -31,7 +31,7 @@ struct ToolCatalogTests {
         let catalog = ToolCatalog(role: role)
         let names = AgentTools.all.filter { $0.roles.contains(role) }.map(\.id)
         #expect(catalog.tools.map(\.name) == names)
-        if role == .builder { #expect(names.count == 17) }
+        if role == .builder { #expect(names.count == 19) }
         for tool in AgentTools.all {
             #expect((catalog.tool(named: tool.id) != nil) == names.contains(tool.id))
         }

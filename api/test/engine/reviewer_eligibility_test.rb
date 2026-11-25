@@ -222,7 +222,7 @@ class ReviewerEligibilityTest < ActiveSupport::TestCase
   # --- What it runs after -------------------------------------------------------
 
   test "walk 132052406: an unchanged seat model leaves the waiting review to the eligibility timer" do
-    planner = scenario.seat(role: "planner")
+    planner = scenario.seat(role: "planner", credential: @claude, model: "claude-opus-5-5")
     scenario.seat(role: "reviewer", credential: @claude)
     scenario.credential(provider: "codex")
     scenario.limit_credential(@claude, reset_at: from_now(3600))

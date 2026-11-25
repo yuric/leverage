@@ -121,8 +121,11 @@ struct ConnectAgentForm: View {
 
             if model.mode == .runOnLogin {
                 loginField
-                if let provider = model.chosenProvider {
-                    AgentModelPicker(provider: provider, existingModel: nil, selection: $model.modelName)
+                if !model.modelChoices.isEmpty {
+                    AgentModelPicker(label: AgentsCopy.modelLabel.text, choices: model.modelChoices, selection: $model.modelName)
+                }
+                if model.offersEffort {
+                    AgentModelPicker(label: AgentsCopy.effortLabel.text, choices: model.effortChoices, selection: $model.effort)
                 }
             } else {
                 FormField(label: AgentsCopy.connectionLabel.text) {
@@ -134,7 +137,7 @@ struct ConnectAgentForm: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
-                FormField(label: AgentsCopy.providerLabel.text) {
+                FormField(label: AgentsCopy.providerLabel.text, hint: AgentsCopy.promptModelHint.text) {
                     Picker(AgentsCopy.providerLabel.text, selection: $model.provider) {
                         ForEach(ProviderNames.logins, id: \.self) { provider in
                             Text(ProviderNames.name(provider)).tag(provider)
@@ -157,17 +160,12 @@ struct ConnectAgentForm: View {
                 }
             }
             AgentStrengthPicker(selection: $model.strengthRank)
-            if model.offersEffort {
-                FormField(label: AgentsCopy.effortLabel.text, hint: AgentsCopy.effortHint.text) {
-                    TextField(AgentsCopy.defaultEffort.text, text: $model.effort)
-                        .textFieldStyle(.roundedBorder)
-                }
-            }
             if model.showsNotTestedNote {
                 Text(AgentsCopy.notTestedForChecking.text)
                     .font(.system(size: Tokens.FontSize.small, weight: .medium))
                     .foregroundStyle(Tokens.Tone.wait.foreground)
             }
+            AgentPermissionsFields(permissions: $model.permissions)
         }
     }
 

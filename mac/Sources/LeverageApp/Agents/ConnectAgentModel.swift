@@ -32,16 +32,21 @@ final class ConnectAgentModel {
         let provider: Provider
         /// "Claude, Personal"
         let label: String
+        let toolVersion: String?
 
-        init(id: UUID, provider: Provider, label: String) {
+        init(id: UUID, provider: Provider, label: String, toolVersion: String? = nil) {
             self.id = id
             self.provider = provider
             self.label = label
+            self.toolVersion = toolVersion
         }
 
         /// A login of the Credentials list, labelled by its provider and name, never its email.
-        init(_ credential: Credential) {
-            self.init(id: credential.id, provider: credential.provider, label: ProviderNames.account(credential))
+        init(_ entry: CredentialWithReading) {
+            let credential = entry.credential
+            self.init(
+                id: credential.id, provider: credential.provider, label: ProviderNames.account(credential),
+                toolVersion: entry.reading?.toolVersion)
         }
     }
 
@@ -49,7 +54,12 @@ final class ConnectAgentModel {
     static let roles: [SeatRole] = [.general, .builder, .reviewer, .planner, .orchestrator]
 
     var mode: Mode = .runOnLogin {
-        didSet { if mode != oldValue { clearFormLines() } }
+        didSet {
+            guard mode != oldValue else { return }
+            clearFormLines()
+            modelName = ""
+            effort = ""
+        }
     }
     var role: SeatRole = .general {
         didSet {
@@ -59,8 +69,9 @@ final class ConnectAgentModel {
     }
     var credentialID: UUID? {
         didSet {
-            if loginProvider(for: oldValue) != loginProvider(for: credentialID) {
+            if loginProvider(for: oldValue) != loginProvider(for: credentialID) || !isModelAvailable {
                 modelName = ""
+                effort = ""
             }
         }
     }
@@ -70,8 +81,13 @@ final class ConnectAgentModel {
     var provider: Provider = .claude
     var strengthRank = AgentStrength.standard.rawValue
     var connection: LandingPromptConnection = .http
-    var modelName = ""
+    var modelName = "" {
+        didSet {
+            if !effortChoices.contains(where: { $0.value == effort }) { effort = "" }
+        }
+    }
     var effort = ""
+    var permissions = SeatPermissions()
 
     private(set) var phase: Phase = .editing
     private(set) var loginRead: LoginRead = .loading
@@ -112,7 +128,8 @@ final class ConnectAgentModel {
     var showsNotTestedNote: Bool {
         guard role == .general || role == .orchestrator else { return false }
         return OrchestratorTesting.isUntested(
-            provider: chosenProvider, model: modelName, connectsOnItsOwn: mode == .connectsOnItsOwn,
+            provider: chosenProvider, model: mode == .runOnLogin ? modelName : nil,
+            connectsOnItsOwn: mode == .connectsOnItsOwn,
             tested: role == .general ? generalTestedProviders : testedProviders)
     }
 
@@ -143,8 +160,21 @@ final class ConnectAgentModel {
         allLogins.first { $0.id == id }?.provider
     }
 
-    /// Effort is asked for only where the tool is given one.
-    var offersEffort: Bool { chosenProvider.map(ProviderCatalog.takesEffort) ?? true }
+    var modelChoices: [AgentSettingChoice] {
+        guard mode == .runOnLogin, let login = selectedLogin else { return [] }
+        return AgentSettingChoice.models(provider: login.provider, installed: login.toolVersion)
+    }
+
+    var effortChoices: [AgentSettingChoice] {
+        guard mode == .runOnLogin, let login = selectedLogin else { return [] }
+        return AgentSettingChoice.efforts(provider: login.provider, model: modelName)
+    }
+
+    var offersEffort: Bool { !effortChoices.isEmpty }
+
+    private var isModelAvailable: Bool {
+        modelChoices.contains { $0.value == modelName && $0.enabled }
+    }
 
     /// The owner chose Native and has yet to add any login.
     var needsLogin: Bool { mode == .runOnLogin && loginRead == .loaded && allLogins.isEmpty }
@@ -161,7 +191,7 @@ final class ConnectAgentModel {
     var canConnect: Bool {
         phase == .editing && !finished && !trimmedName.isEmpty
             && AgentStrength(rawValue: strengthRank) != nil
-            && (mode == .connectsOnItsOwn || (loginRead == .loaded && selectedLogin != nil))
+            && (mode == .connectsOnItsOwn || (loginRead == .loaded && isModelAvailable))
     }
 
     private func clearFormLines() {
@@ -190,9 +220,10 @@ final class ConnectAgentModel {
         do {
             let list = try await api.credentials()
             guard !finished, !Task.isCancelled else { return }
-            allLogins = list.credentials.map(\.credential).filter { $0.kind == .login }.map(LoginChoice.init)
+            allLogins = list.credentials.filter { $0.credential.kind == .login }.map(LoginChoice.init)
             applyPreferredLogin()
             keepALoginPicked()
+            if mode == .runOnLogin && !isModelAvailable { modelName = "" }
             loginRead = .loaded
         } catch is CancellationError {
             return
@@ -206,17 +237,16 @@ final class ConnectAgentModel {
 
     private func makeRequest() -> ConnectSeatRequest? {
         let typed = trimmedName
-        let effortText = offersEffort ? effort.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let effortText = effortChoices.contains { $0.value == effort } ? effort : ""
         switch mode {
         case .runOnLogin:
             guard let login = selectedLogin else { return nil }
-            let modelText = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
             return ConnectSeatRequest(
-                name: typed, role: role, provider: login.provider, model: modelText, effort: effortText,
-                strengthRank: strengthRank, credentialID: login.id)
+                name: typed, role: role, provider: login.provider, model: modelName, effort: effortText,
+                strengthRank: strengthRank, credentialID: login.id, permissions: permissions)
         case .connectsOnItsOwn:
             return ConnectSeatRequest(
-                name: typed, role: role, provider: provider, effort: effortText, strengthRank: strengthRank)
+                name: typed, role: role, provider: provider, strengthRank: strengthRank, permissions: permissions)
         }
     }
 

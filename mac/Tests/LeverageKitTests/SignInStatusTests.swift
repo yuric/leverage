@@ -107,8 +107,7 @@ struct SignInStatusTests {
             id: base.id, displayName: base.displayName, toolDisplayName: base.toolDisplayName,
             toolName: base.toolName, accountFolderVariable: base.accountFolderVariable, version: base.version,
             status: Evidenced(StatusCheck(arguments: ["status"], reading: reading), .unverified),
-            signIn: base.signIn, installer: base.installer, environment: base.environment,
-            defaultModel: base.defaultModel)
+            signIn: base.signIn, installer: base.installer, environment: base.environment)
     }
 
     private var email: String { StandIns.statusEmail }

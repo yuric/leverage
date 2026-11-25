@@ -17,7 +17,7 @@ class PromptConnectedAgentsTest < ActionDispatch::IntegrationTest
     @owner = @scenario.owner_token
   end
 
-  test "two prompt-connected General seats finish work and a New prompt gives held work back" do
+  test "two prompt-connected General seats finish work and removal gives held work back" do
     first, first_token = connect("Made-up first seat", "claude")
     _second, second_token = connect("Made-up second seat", "codex")
     assert_equal "none", next_item(first_token).fetch("kind")
@@ -34,33 +34,32 @@ class PromptConnectedAgentsTest < ActionDispatch::IntegrationTest
     assert_equal "task", next_item(first_token).fetch("kind")
     assert_equal next_task, change("claim_next_task", token: first_token).dig("result", "task", "id")
 
-    replacement = issue(first, connection: "mcp")
+    refused = change("issue_landing_prompt", id: first, body: { "connection" => "mcp" }, status: :conflict)
+    assert_equal "invalid_state", refused.dig("refusal", "code")
+    assert_equal [ "working", first ], Task.find(next_task).values_at(:state, :holder_seat_id)
+
+    change("remove_seat", id: first)
     call("get_next", token: first_token, query: { "wait" => 0 })
     assert_response :unauthorized
     assert_response_matches_contract
     assert_equal [ "ready", nil ], Task.find(next_task).values_at(:state, :holder_seat_id)
-    assert_equal "new_prompt", Event.find_by!(task_id: next_task, type: "task.released").payload.fetch("reason")
+    assert_equal "seat_removed", Event.find_by!(task_id: next_task, type: "task.released").payload.fetch("reason")
     assert_equal next_task, change("claim_next_task", token: second_token).dig("result", "task", "id")
-    assert_equal "mcp", read("get_join", token: replacement, query: { "connection" => "mcp" }).fetch("connection")
   end
 
-  test "a New prompt ends the second attempt of the check job its seat holds" do
+  test "a landing prompt refusal leaves the held check job and session active" do
     seat, token = connect("Made-up check seat", "codex")
     next_item(token)
     @scenario.rule(key: "specific_details", origin: "shipped")
     task = add_task
     change("complete_contract", id: task, body: CONTRACT, status: :accepted)
-    first_job = claim_check(token)
+    job = claim_check(token)
 
-    token = issue(seat)
-    assert_equal "timed_out", Job.find(first_job).state
-    second_job = claim_check(token)
-    assert_equal 2, Job.find(second_job).attempt_number
+    refused = change("issue_landing_prompt", id: seat, body: { "connection" => "http" }, status: :conflict)
 
-    issue(seat)
-    assert_equal "timed_out", Job.find(second_job).state
-    assert_equal "check_error", Hold.find_by!(task_id: task, closed_at: nil).reason
-    assert_equal "error", RuleCheck.find(Job.find(second_job).target_id).result
+    assert_equal "invalid_state", refused.dig("refusal", "code")
+    assert_equal [ "claimed", seat, 1 ], Job.find(job).attributes.values_at("state", "claimed_by_seat_id", "attempt_number")
+    assert_equal "job", next_item(token).fetch("kind")
     assert_empty Job.where(task_id: task, state: "queued")
   end
 

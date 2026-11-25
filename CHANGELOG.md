@@ -37,12 +37,15 @@ once it makes its first release.
   login wait when a General seat with a free login lacks standing to build it.
   General build and review briefings include the instructions for that work.
 - Prompt connections use one landing prompt with the seat's token and
-  instructions to fetch `GET /v1/join` for HTTP or MCP. New prompt in the
-  roster confirms the replacement, then ends the old token and gives back
-  work the seat holds. A Working
-  task returns to Ready, a review is released, a held job times out, and a
-  Finishing lease ends with any open actions that need confirmation sent to
-  the owner.
+  instructions to fetch `GET /v1/join` for HTTP or MCP. Prompt agents
+  report their model and effort to the roster. To issue another landing
+  prompt, remove the seat and connect a new one. Remove ends the seat's
+  token and gives back its work.
+- Connect and Change let the owner set Work on tasks, Deliver tasks and
+  Create tasks. Turning Deliver tasks off returns held Working tasks to
+  Ready. A Prompt agent with Create tasks can add a task with criteria
+  and put it through the same checks as an owner's task. The task log and
+  Activity name the agent that added it.
 
 - Added the Credentials screen with limits and resets where available, API
   tokens, Refresh and Verify all, renaming and removing a credential, and
@@ -226,8 +229,9 @@ once it makes its first release.
   when no project is selected or the work-reference field is empty.
 - Needs you offers Open System Settings when notifications are off.
 - Native Connect offers Add a login when there are no logins. Native
-  Connect and Change offer the provider's documented models with the
-  tool's default first. Prompt can connect without a login or model choice.
+  Connect and Change offer model and supported effort choices from the
+  shared catalog, with the tool's default first. Prompt can connect
+  without a login or model choice.
 - Settings groups the list into Orchestrator rules and Other agent rules.
 - The Agent roster marks task checking as untested until the eval suites
   pass on the updated task contract.

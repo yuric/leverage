@@ -35,6 +35,9 @@ enum NeedsYouCopy: OwnerFacingCopy {
     case taskBudgetHeading, projectBudgetHeading, aProject, reportedAmount
     case raiseCap, changeBudget, resumeProject, amount, amountHint, saveAmount
 
+    case agentTaskIncompleteHeading, agentTaskIncompleteBody, agentTasksAtLimitHeading, agentTasksAtLimitBody
+    case completeContract, draftContract
+
     // An item whose details could not be read.
     case detailsUnavailable
 
@@ -159,6 +162,13 @@ enum NeedsYouCopy: OwnerFacingCopy {
         case .amount: "Amount in US dollars"
         case .amountHint: "Use up to two decimal places. Leave it empty for no limit."
         case .saveAmount: "Save"
+        case .agentTaskIncompleteHeading: "A task an agent added needs its contract"
+        case .agentTaskIncompleteBody: "“{task}” is waiting in the Backlog."
+        case .agentTasksAtLimitHeading: "Agents have added 50 open tasks"
+        case .agentTasksAtLimitBody: "When one of those tasks is done or cancelled, agents can add another."
+        case .completeContract: "Complete the contract"
+        case .draftContract: "Ask a planner to draft it"
+
         case .detailsUnavailable: "The details could not be read."
 
         case .notificationsOff:

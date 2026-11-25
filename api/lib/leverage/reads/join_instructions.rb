@@ -10,11 +10,14 @@ module Leverage
 
       Call = Data.define(:id, :method, :path)
 
-      Page = Data.define(:role, :seat_name, :address, :operations, :calls, :lease_seconds, :mcp_command) do
+      Page = Data.define(:role, :seat_name, :address, :operations, :calls, :lease_seconds, :mcp_command, :permissions, :models) do
         def article = role == "orchestrator" ? "an" : "a"
         def builds? = Roles.acts_as?(role, "builder")
         def reviews? = Roles.acts_as?(role, "reviewer")
         def works_on_jobs? = Roles.acts_as?(role, "orchestrator") || Roles.acts_as?(role, "planner")
+        def may_work? = permissions.fetch("work")
+        def may_deliver? = permissions.fetch("deliver")
+        def may_create? = permissions.fetch("create")
         def role_file? = Roles.role_file?(role)
         def job_rules = Roles.job_rules(role)
         def work_rules(acting_as) = Roles.work_rules(role, acting_as) || []
@@ -35,14 +38,28 @@ module Leverage
         end
 
         role = seat.role
-        operations = Roles::DEFINITIONS.fetch(role).fetch("operations")
+        operations = allowed_operations(seat)
+        permissions = Permissions.to_h(seat)
+        models = ModelCatalog.reportable_models(seat.provider) unless seat.credential_id
         seat_name = seat.name.gsub(LEVERAGE_TOKEN_IN_TEXT, "[FILTERED]") if connection == "http"
         page = Page.new(role: role, seat_name: seat_name, address: address, operations: operations,
           calls: (http_calls(operations) if connection == "http"), lease_seconds: lease_seconds(seat),
-          mcp_command: (mcp_command if connection == "mcp"))
+          mcp_command: (mcp_command if connection == "mcp"), permissions: permissions, models: models)
         source = Rails.root.join("config", template).read
         text = ERB.new(source, trim_mode: "-").result(page.get_binding)
-        { role: role, connection: connection, text: "#{text.strip}\n" }
+        { role: role, connection: connection, permissions: permissions, models: models, text: "#{text.strip}\n" }
+      end
+
+      def allowed_operations(seat)
+        Roles::DEFINITIONS.fetch(seat.role).fetch("operations").select do |operation|
+          case operation
+          when "claim_next_task", "submit_task" then Permissions.builds?(seat)
+          when "claim_next_review", "claim_next_job" then Permissions.works?(seat)
+          when "create_task" then Permissions.creates?(seat)
+          when "report_model" then seat.credential_id.nil?
+          else true
+          end
+        end
       end
 
       def http_calls(ids)

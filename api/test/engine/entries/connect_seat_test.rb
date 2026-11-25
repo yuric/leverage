@@ -52,18 +52,54 @@ class ConnectSeatTest < ActiveSupport::TestCase
     credential = @scenario.credential(provider: "codex")
     written = events_written do
       @outcome = assert_completed(owner_command("connect_seat",
-        body(role: "reviewer", name: "Made-up reviewer", credential_id: credential.id, model: "made-up-model", effort: nil)))
+        body(role: "reviewer", name: "Made-up reviewer", credential_id: credential.id, model: "gpt-6.2-astra", effort: nil)))
     end
 
     assert_nil @outcome.once
     seat = Seat.find(@outcome.result.fetch("seat_id"))
-    assert_equal [ "codex", credential.id, "made-up-model", "", nil, "stopped", true ],
+    assert_equal [ "codex", credential.id, "gpt-6.2-astra", "", nil, "stopped", true ],
       [ seat.provider, seat.credential_id, seat.model, seat.effort, seat.token_hash, seat.run_state, seat.wanted_running ]
     assert_equal [ "seat.connected" ], written.map(&:type)
     start = HelperRequest.find_by!(seat_id: seat.id)
     assert_equal [ "start_seat", "queued", credential.id ], [ start.kind, start.state, start.credential_id ]
-    assert_equal({ "role" => "reviewer", "provider" => "codex", "model" => "made-up-model", "effort" => nil }, start.params)
+    assert_equal({ "role" => "reviewer", "provider" => "codex", "model" => "gpt-6.2-astra", "effort" => nil }, start.params)
     assert_not_includes start.attributes.to_json, "Made-up reviewer"
+  end
+
+  test "Connect stores the full permissions set and defaults every permission on" do
+    default = assert_completed(owner_command("connect_seat", body(provider: "codex")))
+    assert_equal [ true, true, true ], Seat.find(default.result.fetch("seat_id")).attributes.values_at("may_work", "may_deliver", "may_create")
+
+    permissions = { "work" => false, "deliver" => true, "create" => false }
+    custom = assert_completed(owner_command("connect_seat", body(credential_id: scenario.credential.id, permissions: permissions)))
+    assert_equal [ false, true, false ], Seat.find(custom.result.fetch("seat_id")).attributes.values_at("may_work", "may_deliver", "may_create")
+  end
+
+  test "Native Connect refuses unlisted models, unlisted efforts, and effort with the tool's default model" do
+    login = scenario.credential(provider: "claude")
+    [ { model: "made-up-model" }, { model: "claude-opus-5-5", effort: "made-up-effort" }, { effort: "high" } ].each do |fields|
+      assert_raises(T::Invalid) { owner_command("connect_seat", body(credential_id: login.id, **fields)) }
+    end
+
+    assert_empty Seat.where(workspace_id: scenario.workspace_id)
+    assert_empty HelperRequest.where(workspace_id: scenario.workspace_id)
+  end
+
+  test "Native Connect refuses an effort for a provider whose runner does not pass effort" do
+    login = scenario.credential(provider: "codex")
+
+    error = assert_raises(T::Invalid) do
+      owner_command("connect_seat", body(credential_id: login.id, model: "gpt-6.2-astra", effort: "high"))
+    end
+    assert_match(/codex.*tool's default/, error.message)
+  end
+
+  test "Prompt Connect refuses an owner model or effort and an API token provider" do
+    [ { model: "claude-opus-5-5" }, { effort: "high" }, { provider: "claude_api" } ].each do |fields|
+      assert_raises(T::Invalid) { owner_command("connect_seat", body(provider: "claude", **fields)) }
+    end
+
+    assert_empty Seat.where(workspace_id: scenario.workspace_id)
   end
 
   test "a login whose add still runs cannot be given to a seat" do
@@ -107,10 +143,13 @@ class ConnectSeatTest < ActiveSupport::TestCase
   test "a planner and an orchestrator connect like a builder: on any login, with or without a model" do
     logins = Leverage::Contract.registry.fetch("credential_providers").select { |entry| entry.fetch("kind") == "login" }
       .map { |entry| @scenario.credential(provider: entry.fetch("provider")) }
+    models = Leverage::Contract.models.fetch("providers").to_h do |entry|
+      [ entry.fetch("provider"), entry.fetch("models").first.fetch("id") ]
+    end
     %w[planner orchestrator].each do |role|
       logins.each do |login|
         provider = login.provider
-        [ nil, "#{provider}-model-1" ].each do |model|
+        [ nil, models.fetch(provider) ].each do |model|
           outcome = assert_completed(owner_command("connect_seat", body(name: "Made-up #{role}", role: role,
             credential_id: login.id, model: model)))
           seat = Seat.find(outcome.result.fetch("seat_id"))
@@ -155,7 +194,7 @@ class ConnectSeatTest < ActiveSupport::TestCase
     below = @scenario.credential(provider: "codex")
     @scenario.limit_credential(own, reset_at: @scenario.database_now + 3600)
 
-    outcome = assert_completed(owner_command("connect_seat", body(credential_id: own.id, model: "seat-model")))
+    outcome = assert_completed(owner_command("connect_seat", body(credential_id: own.id, model: "claude-opus-5-5")))
 
     start = HelperRequest.find_by!(seat_id: outcome.result.fetch("seat_id"), kind: "start_seat")
     assert_equal below.id, start.credential_id

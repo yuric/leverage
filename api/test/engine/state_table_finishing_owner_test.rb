@@ -91,7 +91,10 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
       [ ACTIONS, :last_open? ] => ->(action) { @guard.include?("last_open_action") && action == @action },
       [ ACTIONS, :approvals_complete? ] => ->(task) { @guard.include?("approvals_complete") && task == @task },
       [ ACTIONS, :any_started? ] => ->(task) { @guard.include?("action_started") && task == @task },
-      [ FINISHING, :builder_free? ] => ->(task) { @guard.include?("builder_free") && task == @task },
+      [ FINISHING, :builder_free? ] => ->(task, lease:, at: Time.current) {
+        assert_equal(@row.command == "return_for_rework" ? :task : :action, lease)
+        @guard.include?("builder_free") && task == @task
+      },
       [ FINISHING, :builder_holds_task? ] => ->(task) { @guard.include?("builder_holds_task") && task == @task },
       [ ACTIONS, :waive ] => ->(ctx, action) { waive(ctx, action) },
       [ ACTIONS, :mark_done ] => ->(ctx, action) { write_action(ctx, action, "action.marked_done", "done") },

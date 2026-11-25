@@ -67,6 +67,18 @@ struct ClientPathsTests {
         "get_command": ClientCall(path: ["key": "key-get_command"]) {
             _ = try await $0.agent.command(key: F.key("get_command"))
         },
+        "create_task": ClientCall {
+            _ = try await $0.agent.createTask(
+                CreateTaskRequest(
+                    title: "Check invoices", details: "Use the sample invoices",
+                    criteria: [CriterionInput(text: "Review totals", kind: .review)],
+                    projectID: F.task, priority: .high, workReference: "https://example.invalid/invoices"),
+                key: F.key("create_task"))
+        },
+        "report_model": ClientCall {
+            _ = try await $0.agent.reportModel(
+                ReportModelRequest(model: "claude-opus-5-5", effort: "high"), key: F.key("report_model"))
+        },
         "claim_next_task": ClientCall { _ = try await $0.agent.claimNextTask(key: F.key("claim_next_task")) },
         "get_task_briefing": ClientCall(path: ["id": F.id(F.task)]) {
             _ = try await $0.agent.taskBriefing(taskID: F.task)

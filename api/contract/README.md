@@ -26,6 +26,7 @@ and leaves its meaning to the PRD.
 | `needs_you.json` | The Needs you items, their choices and the facts each stores. |
 | `readers.json` | The credential readers per provider, and which are provisional. |
 | `goal_fold.json` | How a task's goal was folded into its details, with examples (decisions.md, UI-1). |
+| `models.json` | The model catalog: each login provider's models, the efforts each accepts and its default model, each with how it is known (decisions.md, UX-4). |
 | `openapi.json` | The agent, owner and helper interfaces, in OpenAPI 3.1. |
 | `traces/<nn>-<name>.json` | The golden traces. |
 | `meta/<file>.schema.json` | The shape of each data file above, in JSON Schema 2020-12. |
@@ -134,6 +135,7 @@ An operation's `caller`:
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
 | `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
 | `job_holder` | The seat that claimed the job. |
+| `creator` | A seat whose permissions include Create tasks (UX-11). |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
 | `public` | No sign-in: the infrastructure health check, and setup on a new installation (whether an owner exists, and creating it, which is allowed once). |
@@ -344,7 +346,7 @@ How the traces write what the PRD leaves to the writer:
   `validate_payload(type, version, payload)` (returns the errors, empty
   when valid; raises `KeyError` for an unregistered type or version),
   `state_machine`, `steps`, `hooks`, `shipped_rules`, `jobs`, `roles`,
-  `timers`, `needs_you`, `readers`, `openapi`, `trace(name)`,
+  `timers`, `needs_you`, `readers`, `models`, `openapi`, `trace(name)`,
   `meta_schema(name)` and `load(path)`. The folder is `Rails.root/contract`,
   or this folder found from the file when Rails is not loaded. The Docker
   build context is `api/`, so the image holds the contract.
@@ -375,6 +377,8 @@ python3 scripts/check_registry.py
 python3 scripts/test_check_registry.py
 python3 scripts/check_contract_tables.py
 python3 scripts/test_check_contract_tables.py
+python3 scripts/check_model_catalog.py
+python3 scripts/test_check_model_catalog.py
 (cd mac && swift test --filter RegistryDecodingTests)
 ```
 
@@ -905,3 +909,45 @@ other things, that a task have no goal. Its decisions are UI-1 to UI-8 in
 - `Project` gains `latest_work_reference`, read from the project's tasks,
   which Add task uses to fill "Where the work is".
 - A project keeps its goal.
+
+## What app round 2 changed
+
+The owner's three follow-ups of 2026-11-24, after round 1: New prompt
+goes, the model and the effort are picked from lists the server checks,
+and every seat has three permissions. Its decisions are UX-1 to UX-16 in
+[`decisions.md`](decisions.md#app-round-2-ux).
+
+- `models.json` (shape `meta/models.schema.json`) is the model catalog,
+  read as `Leverage::Contract.models` and written for the Mac as
+  `ModelCatalog.swift` by `scripts/generate_swift_contract.py`.
+  `scripts/check_model_catalog.py` holds it to its evidence (UX-4, UX-5).
+- `issue_landing_prompt` is issued only before the seat lands: its row
+  splits on the guard family `seat_landing` and the landed row is refused
+  `invalid_state`; it releases nothing. The release reason `new_prompt`
+  stays readable with a note (UX-1 to UX-3).
+- The registry gains the list `seat_permissions`, the operation caller
+  `creator`, the operations `create_task` (`POST /v1/tasks`, running
+  `add_task` and `complete_contract`) and `report_model`
+  (`POST /v1/seat/model`, running `change_seat` as the seat), the refusal
+  `add_task_limit` (precedence 14), the release reason
+  `deliver_turned_off`, the Needs you items `agent_task_incomplete` and
+  `agent_tasks_at_limit`, the choices `complete_contract` and
+  `draft_contract`, and the guards `seat_has_landed`,
+  `seat_has_not_landed` and `turns_deliver_off_holding_working_task`.
+  `task.released`, `inbox.opened` and `inbox.resolved` v1 gain the new
+  values in place (DB-48's reasoning).
+- `openapi.json` gains `SeatPermissions` (on `Seat`, `ConnectSeatRequest`,
+  `ChangeSeatRequest` and `JoinInstructions`), `CreateTaskRequest`,
+  `AgentTaskCreated`, `ReportModelRequest`, `ReportedModel` and
+  `CatalogModel` (`JoinInstructions.models`).
+- `state_machine.json`: `add_task` may be asked by the `creator`,
+  `complete_contract` by the `creator` in the call that adds the task, and
+  `change_seat` by `self`, the seat changing its own model and effort;
+  `change_seat` turning Deliver tasks off releases the Working task. The
+  `builder_availability` guards say which permissions a task lease reads
+  and that an action lease reads none.
+- `seats` gains `may_work`, `may_deliver` and `may_create` (migration
+  `AddPermissionsToSeats`), read through `Leverage::Permissions`.
+- Trace 25 has a seat add a task that waits on the model gate and reaches
+  Ready, then one that fails the app gate and opens
+  `agent_task_incomplete`.

@@ -70,7 +70,7 @@ struct ProcessTests {
         #expect(reply["id"] as? Int == 20)
         let result = try #require(reply["result"] as? [String: Any])
         let tools = try #require(result["tools"] as? [[String: Any]])
-        #expect(tools.count == 25)
+        #expect(tools.count == 27)
         #expect(tools.compactMap { $0["name"] as? String } == AgentTools.all.map(\.id))
 
         try client.closeInput()

@@ -84,6 +84,13 @@ jobs:
         run: python3 -I scripts/check_contract_tables.py
       - name: Self-test of the tables check
         run: python3 -I scripts/test_check_contract_tables.py
+      # The model catalog (api/contract/models.json) lists only evidenced
+      # entries; a probe or a help reading cites a file in the repository,
+      # which the Ruby tests cannot see (contract decision UX-5).
+      - name: Check the model catalog's evidence
+        run: python3 -I scripts/check_model_catalog.py
+      - name: Self-test of the model catalog check
+        run: python3 -I scripts/test_check_model_catalog.py
 
   rules:
     name: Rules compliance

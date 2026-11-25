@@ -1,0 +1,728 @@
+{
+  "name": "25-agent-adds-task",
+  "description": "App round 2: a seat that connects on its own, with Create tasks on, adds tasks through the owner's path (UX-11). Its first task waits on the shipped model gate at task.before_ready and reaches Ready when the orchestrator passes it, with the seat as actor of every task event and its key on the completion. Its second task has only the review criterion: the app gate fails at once, the task stays in Backlog held with contract_incomplete, and the app opens A task an agent added needs its contract (UX-16), which closes when the owner cancels the task.",
+  "covers": [
+    "Contract decision UX-11: create_task runs add_task and complete_contract with the seat as caller and one key; task.created, task.contract_changed and task.ready name the seat as actor.",
+    "Contract decisions UX-11 and RE-3: a completion after the model check carries the adding seat as actor and its key, and the check.finished as cause, inside the orchestrator's command.",
+    "Contract decision UX-16 and PRD Holds, contract_incomplete: a failed gate on a task a seat added keeps the contract change, holds the task in Backlog and opens agent_task_incomplete, which closes with the hold when the task is cancelled."
+  ],
+  "setup": {
+    "settings": {},
+    "users": [
+      {
+        "id": "$user:owner"
+      }
+    ],
+    "helpers": [
+      {
+        "id": "$helper:mac",
+        "name": "Owner's Mac"
+      }
+    ],
+    "credentials": [
+      {
+        "id": "$credential:codex_o",
+        "kind": "login",
+        "provider": "codex",
+        "name": "Codex O",
+        "state": "active",
+        "limited_until": null,
+        "position": 1,
+        "model": null,
+        "effort": null,
+        "strength_rank": 1
+      }
+    ],
+    "seats": [
+      {
+        "id": "$seat:orchestrator",
+        "name": "Orchestrator",
+        "provider": "codex",
+        "model": "codex-model-1",
+        "effort": "high",
+        "role": "orchestrator",
+        "strength_rank": 2,
+        "credential_id": "$credential:codex_o",
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": "@t:-10"
+      },
+      {
+        "id": "$seat:agent",
+        "name": "Prompt agent",
+        "provider": "claude",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "role": "general",
+        "strength_rank": 2,
+        "credential_id": null,
+        "enabled": true,
+        "paused": false,
+        "last_polled_at": "@t:-10",
+        "may_work": true,
+        "may_deliver": true,
+        "may_create": true
+      }
+    ],
+    "projects": [],
+    "rules": [
+      {
+        "id": "$rule:acceptance_criteria",
+        "key": "acceptance_criteria",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:acceptance_criteria_1"
+      },
+      {
+        "id": "$rule:specific_details",
+        "key": "specific_details",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:specific_details_1"
+      },
+      {
+        "id": "$rule:ask_orchestrator_first",
+        "key": "ask_orchestrator_first",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:ask_orchestrator_first_1"
+      },
+      {
+        "id": "$rule:different_provider_review",
+        "key": "different_provider_review",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:different_provider_review_1"
+      },
+      {
+        "id": "$rule:escalate_after_failed_reviews",
+        "key": "escalate_after_failed_reviews",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:escalate_after_failed_reviews_1"
+      },
+      {
+        "id": "$rule:project_budget_pause",
+        "key": "project_budget_pause",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:project_budget_pause_1"
+      },
+      {
+        "id": "$rule:orchestrator_approves_actions",
+        "key": "orchestrator_approves_actions",
+        "origin": "shipped",
+        "enabled": true,
+        "current_version": 1,
+        "current_version_id": "$rule_version:orchestrator_approves_actions_1"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "note": "The agent, holding nothing, adds a task with no project. create_task runs Add task, then Complete contract with the seat as caller and this call's key; the shipped model gate makes the call wait (UX-11). The task opens the check step only: a task's open step changes at most once in a command (steps.json).",
+      "at": "@t:0",
+      "caller": "$seat:agent",
+      "command": "add_task",
+      "operation_id": "create_task",
+      "key": "$key:agent_add_1",
+      "path_params": {},
+      "body": {
+        "title": "Add a changelog entry for the 2.4 export fix",
+        "details": "The CSV export of version 2.4 now keeps leading zeros. Add one line under Fixed in CHANGELOG.md that says so and links pull request 812.",
+        "criteria": [
+          {
+            "text": "CHANGELOG.md has one line under Fixed for the 2.4 export fix, linking pull request 812.",
+            "kind": "build"
+          },
+          {
+            "text": "An independent reviewer agrees.",
+            "kind": "review"
+          }
+        ],
+        "project_id": null,
+        "priority": "normal",
+        "work_reference": null
+      },
+      "expect": {
+        "outcome": "pending",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:1",
+            "type": "task.created",
+            "schema_version": 1,
+            "at": "@t:0",
+            "effective_at": "@t:0",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "state": "backlog",
+              "added_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:2",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:0",
+            "effective_at": "@t:0",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:t1_criteria",
+            "cause_id": null,
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "hook": "task.before_ready",
+              "rule_id": "$rule:acceptance_criteria",
+              "rule_version_id": "$rule_version:acceptance_criteria_1",
+              "result": "passed",
+              "effect": null,
+              "wait_cause": null,
+              "subject_kind": null,
+              "subject_id": null,
+              "input_hash": "5f0c2a11d4b9e3a7c6f8b0d1e2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"
+            }
+          },
+          {
+            "ref": "@event:3",
+            "type": "check.queued",
+            "schema_version": 1,
+            "at": "@t:0",
+            "effective_at": "@t:0",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:t1_details",
+            "cause_id": null,
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "hook": "task.before_ready",
+              "rule_id": "$rule:specific_details",
+              "rule_version_id": "$rule_version:specific_details_1",
+              "attempt_number": 1,
+              "job_id": "$job:t1_details",
+              "blocking": true,
+              "claimant_seat_id": null,
+              "pending_transition_id": "$pending_transition:t1_ready",
+              "action_id": null,
+              "subject_kind": null,
+              "subject_id": null,
+              "input_hash": "5f0c2a11d4b9e3a7c6f8b0d1e2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"
+            }
+          },
+          {
+            "ref": "@event:4",
+            "type": "job.queued",
+            "schema_version": 1,
+            "at": "@t:0",
+            "effective_at": "@t:0",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_details",
+            "cause_id": null,
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "kind": "rule_check"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "check",
+            "step_class": "rule_check",
+            "round": 0,
+            "subject_kind": "pending_transition",
+            "subject_id": "$pending_transition:t1_ready",
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:3"
+          }
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "at": "@t:20",
+      "caller": "$seat:orchestrator",
+      "command": "claim_job",
+      "operation_id": "claim_next_job",
+      "key": "$key:job_claim_20",
+      "path_params": {},
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:5",
+            "type": "job.claimed",
+            "schema_version": 1,
+            "at": "@t:20",
+            "effective_at": "@t:20",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_details",
+            "cause_id": null,
+            "command_id": "$key:job_claim_20",
+            "payload": {
+              "credential_id": "$credential:codex_o",
+              "model": "codex-model-1"
+            }
+          },
+          {
+            "ref": "@event:6",
+            "type": "check.started",
+            "schema_version": 1,
+            "at": "@t:20",
+            "effective_at": "@t:20",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:t1_details",
+            "cause_id": null,
+            "command_id": "$key:job_claim_20",
+            "payload": {
+              "attempt_number": 1
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "The check passes. The completion carries the agent as actor and its key, as a planner's draft does (RE-3); the agent's get_command now answers completed with the task and state ready (UX-11).",
+      "at": "@t:50",
+      "caller": "$seat:orchestrator",
+      "command": "submit_job_result",
+      "operation_id": "submit_job_result",
+      "key": "$key:job_result_50",
+      "path_params": {
+        "id": "$job:t1_details"
+      },
+      "body": {
+        "result": {
+          "result": "passed",
+          "reason": "The details name the file, the section, the line and the pull request."
+        },
+        "tokens": 350,
+        "spend": 0
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:7",
+            "type": "job.finished",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_details",
+            "cause_id": null,
+            "command_id": "$key:job_result_50",
+            "payload": {}
+          },
+          {
+            "ref": "@event:8",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:t1_details",
+            "cause_id": null,
+            "command_id": "$key:job_result_50",
+            "payload": {
+              "hook": "task.before_ready",
+              "rule_id": "$rule:specific_details",
+              "rule_version_id": "$rule_version:specific_details_1",
+              "result": "passed",
+              "effect": null,
+              "wait_cause": null,
+              "subject_kind": null,
+              "subject_id": null,
+              "input_hash": "5f0c2a11d4b9e3a7c6f8b0d1e2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"
+            }
+          },
+          {
+            "ref": "@event:9",
+            "type": "cost.reported",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:orchestrator",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": "job",
+            "subject_id": "$job:t1_details",
+            "cause_id": null,
+            "command_id": "$key:job_result_50",
+            "payload": {
+              "tokens": 350,
+              "spend": 0
+            }
+          },
+          {
+            "ref": "@event:10",
+            "type": "task.contract_changed",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": "@event:8",
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "contract_version": 1,
+              "minimum_strength_rank": null,
+              "added_criterion_ids": [
+                "$criterion:t1_build",
+                "$criterion:t1_review"
+              ],
+              "reset_criterion_ids": [],
+              "removed_criterion_ids": [],
+              "added_action_ids": [],
+              "removed_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:11",
+            "type": "task.ready",
+            "schema_version": 1,
+            "at": "@t:50",
+            "effective_at": "@t:50",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:1",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": "@event:8",
+            "command_id": "$key:agent_add_1",
+            "payload": {
+              "wait_cause": null
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:1",
+            "kind": "wait_ready",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:11"
+          }
+        ],
+        "steps_closed": [
+          {
+            "task_id": "$task:1",
+            "kind": "check",
+            "closing_event_id": "@event:11"
+          }
+        ]
+      }
+    },
+    {
+      "note": "A second task with only the review criterion. The app gate fails at once, so the model check is not queued; the contract change is kept, contract_incomplete holds the task in Backlog, and, because a seat added it, the app opens A task an agent added needs its contract (UX-16). The call answers completed with the task and state backlog. A task a command creates and moves at once opens only the step it ends in, since a task's open step changes at most once in a command (steps.json).",
+      "at": "@t:60",
+      "caller": "$seat:agent",
+      "command": "add_task",
+      "operation_id": "create_task",
+      "key": "$key:agent_add_2",
+      "path_params": {},
+      "body": {
+        "title": "Check the export of version 2.4",
+        "details": "Open the CSV export and look at it.",
+        "criteria": [
+          {
+            "text": "An independent reviewer agrees.",
+            "kind": "review"
+          }
+        ],
+        "project_id": null,
+        "priority": "low",
+        "work_reference": null
+      },
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:12",
+            "type": "task.created",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:agent_add_2",
+            "payload": {
+              "state": "backlog",
+              "added_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:13",
+            "type": "check.finished",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "rule_check",
+            "subject_id": "$rule_check:t2_criteria",
+            "cause_id": null,
+            "command_id": "$key:agent_add_2",
+            "payload": {
+              "hook": "task.before_ready",
+              "rule_id": "$rule:acceptance_criteria",
+              "rule_version_id": "$rule_version:acceptance_criteria_1",
+              "result": "failed",
+              "effect": null,
+              "wait_cause": null,
+              "subject_kind": null,
+              "subject_id": null,
+              "input_hash": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a"
+            }
+          },
+          {
+            "ref": "@event:14",
+            "type": "task.contract_changed",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:agent_add_2",
+            "payload": {
+              "contract_version": 1,
+              "minimum_strength_rank": null,
+              "added_criterion_ids": [
+                "$criterion:t2_review"
+              ],
+              "reset_criterion_ids": [],
+              "removed_criterion_ids": [],
+              "added_action_ids": [],
+              "removed_action_ids": []
+            }
+          },
+          {
+            "ref": "@event:15",
+            "type": "hold.opened",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "seat",
+            "actor_id": "$seat:agent",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_incomplete",
+            "cause_id": "@event:13",
+            "command_id": "$key:agent_add_2",
+            "payload": {
+              "reason": "contract_incomplete",
+              "rule_id": "$rule:acceptance_criteria",
+              "credential_id": null,
+              "rule_check_id": null
+            }
+          },
+          {
+            "ref": "@event:16",
+            "type": "inbox.opened",
+            "schema_version": 1,
+            "at": "@t:60",
+            "effective_at": "@t:60",
+            "actor_kind": "app",
+            "actor_id": null,
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t2_agent_task",
+            "cause_id": "@event:15",
+            "command_id": "$key:agent_add_2",
+            "payload": {
+              "kind": "agent_task_incomplete"
+            }
+          }
+        ],
+        "steps_opened": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_contract",
+            "step_class": "waiting",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "seat_id": null,
+            "cause_kind": null,
+            "cause_rule_id": null,
+            "opening_event_id": "@event:15"
+          }
+        ],
+        "steps_closed": []
+      }
+    },
+    {
+      "note": "The owner takes the item's Cancel; the hold and the item close with the task.",
+      "at": "@t:120",
+      "caller": "$user:owner",
+      "command": "cancel",
+      "operation_id": "cancel_task",
+      "key": "$key:t2_cancel",
+      "path_params": {
+        "id": "$task:2"
+      },
+      "body": {},
+      "expect": {
+        "outcome": "completed",
+        "refusal": null,
+        "events": [
+          {
+            "ref": "@event:17",
+            "type": "task.cancelled",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": null,
+            "subject_id": null,
+            "cause_id": null,
+            "command_id": "$key:t2_cancel",
+            "payload": {}
+          },
+          {
+            "ref": "@event:18",
+            "type": "hold.closed",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "hold",
+            "subject_id": "$hold:t2_incomplete",
+            "cause_id": null,
+            "command_id": "$key:t2_cancel",
+            "payload": {
+              "reason": "contract_incomplete",
+              "rule_id": "$rule:acceptance_criteria",
+              "credential_id": null,
+              "lease_seat_id": null,
+              "wait_cause": null
+            }
+          },
+          {
+            "ref": "@event:19",
+            "type": "inbox.resolved",
+            "schema_version": 1,
+            "at": "@t:120",
+            "effective_at": "@t:120",
+            "actor_kind": "owner",
+            "actor_id": "$user:owner",
+            "project_id": null,
+            "task_id": "$task:2",
+            "round": 0,
+            "subject_kind": "inbox_item",
+            "subject_id": "$inbox:t2_agent_task",
+            "cause_id": null,
+            "command_id": "$key:t2_cancel",
+            "payload": {
+              "choice": "cancel"
+            }
+          }
+        ],
+        "steps_opened": [],
+        "steps_closed": [
+          {
+            "task_id": "$task:2",
+            "kind": "wait_contract",
+            "closing_event_id": "@event:17"
+          }
+        ]
+      }
+    }
+  ]
+}

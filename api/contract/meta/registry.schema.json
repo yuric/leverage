@@ -77,7 +77,8 @@
         "required": ["reason", "chosen_by"],
         "properties": {
           "reason": {"$ref": "#/$defs/name"},
-          "chosen_by": {"enum": ["seat", "app"]}
+          "chosen_by": {"enum": ["seat", "app"]},
+          "note": {"description": "Why a reason is kept although no build writes it any more.", "type": "string", "minLength": 1}
         }
       }
     },

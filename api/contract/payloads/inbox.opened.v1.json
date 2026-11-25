@@ -7,7 +7,7 @@
   "properties": {
     "kind": {
       "description": "The item.",
-      "enum": ["question_passed_on", "approval", "stopped_action", "unconfirmed_action", "past_round_limit", "refused_for_every_agent", "check_past_rerun_limit", "check_could_not_run", "access_request", "task_budget_reached", "project_budget_reached", "account_signed_out", "limit_with_no_reset_time", "no_reviewer_eligible", "orchestrator_offline"]
+      "enum": ["question_passed_on", "approval", "stopped_action", "unconfirmed_action", "past_round_limit", "refused_for_every_agent", "check_past_rerun_limit", "check_could_not_run", "access_request", "task_budget_reached", "project_budget_reached", "account_signed_out", "limit_with_no_reset_time", "no_reviewer_eligible", "orchestrator_offline", "agent_task_incomplete", "agent_tasks_at_limit"]
     }
   },
   "required": ["kind"],

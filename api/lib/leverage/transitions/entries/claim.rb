@@ -87,7 +87,7 @@ module Leverage
         # The reserving seat may still claim the task it reserved.
         def still_eligible?(ctx)
           @seat.reload
-          @seat.enabled && !@seat.paused && @seat.removed_at.nil? &&
+          @seat.enabled && Permissions.builds?(@seat) && !@seat.paused && @seat.removed_at.nil? &&
             Finishing.waiting_for(@seat).empty? && Eligibility.placed_for?(@seat, @task, ctx.at) &&
             (@seat.role != "general" || Eligibility.claim_standing?(@seat, @task))
         end

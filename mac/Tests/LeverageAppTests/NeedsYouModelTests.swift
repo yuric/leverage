@@ -1120,3 +1120,42 @@ extension NeedsYouModelTests {
         expectCall(projectOwner, .resumeProject, id: Self.projectID)
     }
 }
+
+extension NeedsYouModelTests {
+    @Test("The items for agent-added tasks use their contract choices and report the workspace cap")
+    func agentAddedTasks() {
+        let incomplete = NeedsYouFixtures.item(.agentTaskIncomplete, seq: 1, choices: [.completeContract, .draftContract, .cancel])
+        let atLimit = NeedsYouFixtures.item(.agentTasksAtLimit, seq: 2, task: nil, about: .workspace)
+        let names = NeedsYouNames()
+        #expect(NeedsYouWords.heading(for: incomplete, names: names) == "A task an agent added needs its contract")
+        #expect(NeedsYouWords.buttons(for: incomplete, names: names).map(\.label) ==
+                ["Complete the contract", "Ask a planner to draft it", "Cancel task"])
+        #expect(NeedsYouWords.heading(for: atLimit, names: names) == "Agents have added 50 open tasks")
+        #expect(NeedsYouWords.buttons(for: atLimit, names: names).isEmpty)
+    }
+
+    @Test("Completing opens the editor, asking for a draft and cancelling use the correct task")
+    func actsOnAgentTask() async throws {
+        let item = NeedsYouFixtures.item(.agentTaskIncomplete, seq: 6, choices: [.completeContract, .draftContract, .cancel])
+        let owner = owner([item])
+        owner.script {
+            $0.draftContract = { _, key in .pending(key: key.value, command: .draftContract) }
+            $0.cancelTask = { _, key in AgentFixtures.plain(.cancel, key: key) }
+        }
+        let opened = Locked<[UUID]>([])
+        let model = makeModel(owner, opened: opened)
+        await model.load()
+        await model.perform(.completeContract, on: item.id)
+        #expect(opened.value == [item.aboutID])
+        await model.perform(.draftContract, on: item.id)
+        let draft = try #require(AgentFixtures.calls(owner, .draftContract).first)
+        #expect(draft.path["id"] == item.aboutID.contractString)
+        #expect(model.failure(for: item.id) == nil)
+        await model.perform(.cancelTask, on: item.id)
+        #expect(model.confirmingCancel == item.id)
+        await model.confirmCancel()
+        let cancel = try #require(AgentFixtures.calls(owner, .cancelTask).first)
+        #expect(cancel.path["id"] == item.aboutID.contractString)
+    }
+
+}
