@@ -14,7 +14,7 @@ struct ConnectAgentSheet: View {
     var body: some View {
         let model = box.model {
             ConnectAgentModel(
-                api: context.owner, copy: Pasteboard.copy, onConnected: connected,
+                api: context.owner, copy: { Pasteboard.copySecret($0) }, onConnected: connected,
                 preferredLoginID: SetupChecklistHelp.preferredLoginID(context.setup),
                 preferredName: SetupChecklistHelp.preferredAgentName(context.setup))
         }

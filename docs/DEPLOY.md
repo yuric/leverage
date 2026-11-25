@@ -119,7 +119,9 @@ How it connects, then connect the seat. Copy the one landing prompt and
 paste it into an agent on the same Mac. The prompt contains the seat's
 token and the loopback address. It tells the agent to fetch `GET /v1/join`
 using that token, then follow the instructions and keep polling for
-work. Keep the prompt private. The roster labels
+work. Keep the prompt private. Copy puts it on this Mac's clipboard only,
+not on the owner's other devices, and marks it so that clipboard-history
+tools that honour the mark skip it. The roster labels
 the seat "Connected by prompt."
 
 To give the agent another landing prompt, choose **Remove** in the roster
