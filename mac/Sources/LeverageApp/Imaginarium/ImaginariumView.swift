@@ -150,7 +150,12 @@ struct ImaginariumTrySheet: View {
     @State private var model: ImaginariumTryModel
 
     init(entry: ImaginariumCatalog.Entry, catalogVersion: Int, api: any OwnerAPI) {
-        _model = State(wrappedValue: ImaginariumTryModel(entry: entry, catalogVersion: catalogVersion, api: api))
+        self.init(model: ImaginariumTryModel(entry: entry, catalogVersion: catalogVersion, api: api))
+    }
+
+    /// The sheet on a model already in hand; the tests draw it in each state.
+    init(model: ImaginariumTryModel) {
+        _model = State(wrappedValue: model)
     }
 
     private var project: Project? {
