@@ -686,8 +686,10 @@ allows the recovery time ceiling to be cleared (AP-39).
   A reorder alone records the moved entries (AP-27, DB-41).
 - Complete contract and Edit contract close a budget hold when the new
   cap is empty or above the task's reported spending (AE-12). A report
-  opens no budget hold on a task the command just ended. Budget, cap and
-  spend requests accept at most 99,999,999.999999 dollars. A report whose
+  opens no budget hold on a task the command just ended. Budget and cap
+  requests accept at most 99,999,999.999999 dollars, the most a total
+  holds; one spend report (a cost report, a verdict or a job result)
+  carries at most 100,000 (DB-57). A report whose
   sum would overflow a task or project total returns `422 invalid`. The
   saved spend and its event use the same six-decimal precision. If a
   running gate's cost uses the capacity a waiting verdict needs, the

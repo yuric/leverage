@@ -467,6 +467,16 @@ Where two inventories chose differently, the decision names the conflict.
   version 2, DB-50's way, which leaves the version 2 events already
   stored with an unregistered version; or keep two live shapes, which
   changes the versioning rule and is the owner's to decide.
+- **DB-57** `[reading]` One spend report, a cost report, a verdict or a
+  job result, carries at most 100,000 US dollars (`422 invalid` above),
+  in the server (`Costs::MAX_REPORT_SPEND`) and in the interface schema.
+  A task's or a project's total still holds at most 99,999,999.999999
+  (`numeric(14,6)`, DB-1), and a report that would overflow it is still
+  `422 invalid`. Spend is self-reported and nothing lowers a total, so a
+  report at the total's own ceiling filled the project's totals in one
+  call, and every later report with a spend above zero in that project
+  was refused. Alternatives: a lower ceiling, or one set in workspace
+  settings; or a total that saturates instead of refusing.
 
 ## State machine (SM)
 
